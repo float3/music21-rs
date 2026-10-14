@@ -1,14 +1,14 @@
-# Open issues
+# open issues
 
-What is known to be wrong, unfinished or unverified. Every figure here was
+what is known to be wrong, unfinished or unverified. every figure here was
 measured rather than remembered; where a claim came out of a run, the run is
 named so it can be repeated. `DECISIONS.md` says which choices were
 deliberate.
 
-## Does the wheel depend on music21?
+## does the wheel depend on music21?
 
-No. `pip install music21-rs` pulls in nothing: the wheel declares no
-`Requires-Dist`, and `python/pyproject.toml` declares no `dependencies`. In a
+no. `pip install music21-rs` pulls in nothing: the wheel declares no
+`Requires-Dist`, and `python/pyproject.toml` declares no `dependencies`. in a
 virtualenv with no music21 present the wheel imports in 4ms without loading
 music21, builds chords and answers them, and its exception classes resolve —
 standing on a plain `Exception` where music21's own `Music21Exception` is not
@@ -18,31 +18,31 @@ music21 is an *optional* integration, used only when already installed:
 `install_into_music21()`, and the exception base so that music21's
 `except Music21Exception` catches what these classes raise.
 
-## The direction this is moving in
+## the direction this is moving in
 
-Two rules, set 2026-09-12, that most of the open work now serves:
+two rules, set 2026-09-12, that most of the open work now serves:
 
-- **The crate is meant to be a strict superset of the wheel**, caches aside.
+- **the crate is meant to be a strict superset of the wheel**, caches aside.
   As little as possible belongs in the facade — only what genuinely cannot
   live in Rust. 29 members answer in the wheel today with no crate function
   behind them; each is either work to move or a documented exception.
-- **The crate should have streams.** It has a `Stream` already
+- **the crate should have streams.** it has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
-  parts, measures, voices, `transpose`, and the `*_at` lookups). What it
+  parts, measures, voices, `transpose`, and the `*_at` lookups). what it
   lacks is what music21 uses to make an object a *member* of a stream —
   sites and contexts, derivations, `activeSite`, measure-relative offsets —
   and that gap is why the wheel still pays for music21's own object
-  machinery. See entry 7.
+  machinery. see entry 7.
 
-## Open
+## open
 
-1. **The meter partition tree — done.** `meter` passes **34 of 34 docstrings
+1. **the meter partition tree — done.** `meter` passes **34 of 34 docstrings
    and 387 of 387 examples**, from 11 and 288 when this started.
 
    `TimeSignature` carries all four of music21's `MeterSequence`s and builds
    them by music21's own rules (`431dcbf`), having given up `Copy` first
    (`0e14f8b`); `beat_count` reads the tree rather than working the count out
-   again (`8aa5882`). The wheel hands the four sequences back as music21's own
+   again (`8aa5882`). the wheel hands the four sequences back as music21's own
    two classes (`9b43d3d`), `beatCount` takes a number or a list, `setDisplay`
    and `setAccentWeight` are ported, `getAccentWeight` honours its level, the
    `divisions` argument partitions the beats, accents and beams alike
@@ -54,7 +54,7 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    The beaming walk is the crate's, at nine depths against the span each
    level covers; the wheel reads four things off each object — where it sits,
    how long it lasts, what it is written as, and whether it sounds — and hands
-   them over. Where it sits needed care: music21 reads `el.offset` and gets
+   them over. where it sits needed care: music21 reads `el.offset` and gets
    away with it for a bare list because it appends that list to a fresh
    `Measure` first, so the wheel lays a list end to end and reads a stream's
    own offsets.
@@ -68,20 +68,20 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    any of it.
 
    One thing the tree bought beyond the members it unblocks: the closed forms
-   it replaced were wrong where music21 is not, three times over. Compound
+   it replaced were wrong where music21 is not, three times over. compound
    threes were cut at a denominator over four, so `3/6` counted as one beat
    where music21 counts three; every beat lookup divided the bar evenly, so a
    bar written additively was counted along a beat that was not there; and
    `beatDuration` answered an average where music21 refuses
-   (`8aa5882`, `86c637d`, `cab6c97`). The 126-meter fixture could not catch
+   (`8aa5882`, `86c637d`, `cab6c97`). the 126-meter fixture could not catch
    any of them, because every meter in it divides evenly.
 
-2. **Streams in the crate.** Contexts, derivations and measure-relative
+2. **streams in the crate.** contexts, derivations and measure-relative
    offsets, so that an object can belong to a crate stream without
-   music21's half. Not sites: the crate keeps its stream a tree of plain
+   music21's half. not sites: the crate keeps its stream a tree of plain
    values and answers where an element sits with `Stream::placed`, the
    composite "Music21's Mistakes" (point 2) recommends over storing sites
-   on objects. The wheel still keeps music21's sites for compatibility. This is what would let the facade stop building
+   on objects. the wheel still keeps music21's sites for compatibility. this is what would let the facade stop building
    `Music21Object`s. `getMeasureOffsetOrMeterModulusOffset` has moved as far
    as it can without them: the arithmetic is the crate's
    `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
@@ -94,12 +94,12 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    read a stream. music21's own classes run on the crate's objects there
    meanwhile.
 
-3. **The 29 wheel-only members.** Caches (`cachedRealized`,
-   `cachedRealizedStr`) stay Python-side by design. The rest — observer
+3. **the 29 wheel-only members.** caches (`cachedRealized`,
+   `cachedRealizedStr`) stay Python-side by design. the rest — observer
    callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
    and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
    `Duration`'s component machinery — are either work to move into the crate
-   or exceptions that should say why in `data/feature_map.toml`. The count is
+   or exceptions that should say why in `data/feature_map.toml`. the count is
    read off the page `xtask report` writes, which is where it is made;
    `naiveBeams`, `getDynamicContext`, `getGrace`, `isConcrete` and meter's
    two exclusions are in it too.
@@ -107,19 +107,19 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    **One deviation that count cannot see.** `barDuration` reads as ported,
    because `bar_duration` exists — but its *setter* keeps music21's
    `_overriddenBarDuration` as a Python object in the wheel, and the crate
-   has nothing of the kind. A member can be ported and still carry state
+   has nothing of the kind. a member can be ported and still carry state
    that lives only in the facade, so 30 is a floor rather than the whole of
    what the rule has to answer for.
 
 4. **CI has now run all of this green**, music21's own suite and the docs
-   build included. Two things it caught that no local gate did: `cargo fmt`
+   build included. two things it caught that no local gate did: `cargo fmt`
    reaches only workspace members, so a hand-widened line in `python-parity`
    went unformatted through every local check and failed lint — formatting
    has to be asked of all three manifests — and a run is cancelled when
    another push supersedes it, so a green tick has to be read against the
    commit it actually covers.
 
-5. **Releases and the semver gate — done.** The breaking changes this entry
+5. **releases and the semver gate — done.** the breaking changes this entry
    listed shipped in 0.6.0, whose notes say so under "Breaking Changes",
    and the crate is at 0.7.1. `cargo semver-checks` now takes the last
    release tag as its baseline (`.github/workflows/ci.yml`), falling back to
@@ -127,35 +127,35 @@ Two rules, set 2026-09-12, that most of the open work now serves:
    there until the version is bumped rather than slipping past a
    documentation-only tip.
 
-6. **`sieve` — done.** It passes 25 of 25 docstrings and 107 of 107
+6. **`sieve` — done.** it passes 25 of 25 docstrings and 107 of 107
    examples, `Sieve.compressed` having brought in the compressed reading the
    last one wanted.
 
-7. **An installed chord costs what music21's does.** `Chord('C4 E4 G4')`
+7. **an installed chord costs what music21's does.** `Chord('C4 E4 G4')`
    through `install_into_music21` is ~30µs against music21's ~30µs, while the
-   bare wheel does it in 8.1µs. One chord builds eight objects through the
+   bare wheel does it in 8.1µs. one chord builds eight objects through the
    install helper — the chord, three notes, three pitches and a duration —
    and four of them run music21's `Music21Object.__init__` and
    `Sites.__init__` in Python, because music21 will not keep anything else in
    a `Stream` and construction cannot know whether the object will end up in
-   one. Two ways out: build fewer objects (lazy notes and pitches, which has
+   one. two ways out: build fewer objects (lazy notes and pitches, which has
    to keep `chord.pitches[0] is chord.root()` true), or give the crate
    streams so the wheel need not build music21's half at all — entry 2.
 
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
 
-## Closed
+## closed
 
-- **Random comparison with music21 found what the fixtures could not.**
+- **random comparison with music21 found what the fixtures could not.**
   Chords, pitches, intervals, keys, Roman numerals, meters and the
   analysis modules were asked the same questions as music21 over thousands
-  of random inputs. Eleven differences came out and are fixed: dissonance
+  of random inputs. eleven differences came out and are fixed: dissonance
   respelling (`[3, 6, 9]`), `closedPosition`'s bass, pitch frequency to the
   bit, augmented-sixth names in every voicing, four `RomanNumeral`
   properties, a key's scale members, a degree's case in modal keys,
   additive meters' divisions, and three wheel members that needed music21
-  installed. Then `ChordSymbol`: degrees read through Python's `int`, the
+  installed. then `ChordSymbol`: degrees read through Python's `int`, the
   voicing's root and bass objects moving with the chord, and
   `pitchedCommonName` asking the root a chord answers; 9,972 figures agree.
   One difference stays, deliberately: a scale's `nextPitch` takes
@@ -163,29 +163,29 @@ Two rules, set 2026-09-12, that most of the open work now serves:
 
 - **music21's own suite ran on all three sides** and behaves the same on the
   crate: 5,030 tests on music21, 4,526 on each Rust side, one known
-  divergence allowed. It also proved the timing rewrite in situ.
-- **Collector pauses are no longer counted as slowness.** Of the rows the
+  divergence allowed. it also proved the timing rewrite in situ.
+- **collector pauses are no longer counted as slowness.** of the rows the
   published page showed below a quarter of music21's speed, **14 became 0**;
-  below half, 28 became 1. Medians 1.004; 3,260 tests paired.
-- **Coverage was being measured against files that no longer exist.** Stale
+  below half, 28 became 1. medians 1.004; 3,260 tests paired.
+- **coverage was being measured against files that no longer exist.** stale
   objects from before three modules became directories made llvm-cov report
   them as covered by nothing, and its errors made the parity suite's row read
-  as a failure. Fixed (`5c6e3e1`): **96.56% of lines where it read 72.67%**,
+  as a failure. fixed (`5c6e3e1`): **96.56% of lines where it read 72.67%**,
   parity row green.
-- **The report no longer calls a documented divergence a regression**
-  (`14e0817`). The page said music21's suite was red while the command it
+- **the report no longer calls a documented divergence a regression**
+  (`14e0817`). the page said music21's suite was red while the command it
   names exits green.
-- **`getGrace` has a reason** (`a0ca9c3`). No member is missing without one.
-- **The benchmark and the report are regenerated** from today's runs, with
+- **`getGrace` has a reason** (`a0ca9c3`). no member is missing without one.
+- **the benchmark and the report are regenerated** from today's runs, with
   the crate column filled for every case that has a counterpart.
 
-## Smaller things
+## smaller things
 
-- The wheel suites (`Python wheel`, `Python wheel tests`) are skipped unless
+- the wheel suites (`Python wheel`, `Python wheel tests`) are skipped unless
   `maturin` and `pytest` are on PATH; they live in `.m21venv/Scripts` here.
   The report records the reason rather than failing, which is right, but the
   page then carries two skipped rows.
-- **The suite's workers start Python now — done.** They were started by
+- **the suite's workers start Python now — done.** they were started by
   running `sys.executable`, which under the embedded interpreter is
   `xtask.exe`, so each worker ran xtask with `-c`, xtask read `-c` as a
   command it does not have, and the worker died: **1,295** refusals in one
@@ -195,15 +195,15 @@ Two rules, set 2026-09-12, that most of the open work now serves:
   failures before and after — so it was a log that could not be read
   rather than a gap.
 
-## Deliberate, and not issues
+## deliberate, and not issues
 
-- **Three setters take whatever they are given** — `pitch._client`,
-  `key.tonic`, `scale.tonic`. Tightening the first broke twenty-nine of
+- **three setters take whatever they are given** — `pitch._client`,
+  `key.tonic`, `scale.tonic`. tightening the first broke twenty-nine of
   music21's own docstrings: the note written into `_client` is not always one
   of ours (`41e1937`).
-- **The install helper forgives three exceptions on copy** — `AttributeError`,
+- **the install helper forgives three exceptions on copy** — `AttributeError`,
   `TypeError` and `RecursionError`, narrowed from a bare `except Exception`
   (`7c8e4de`).
-- **`xtask bench` imports the installed wheel on purpose.** It measures the
+- **`xtask bench` imports the installed wheel on purpose.** it measures the
   artifact a caller installs; the guards against a second copy belong to the
   harnesses that test the linked crate (`1012c5e`, `47cb607`).

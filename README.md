@@ -1,29 +1,29 @@
 # music21-rs
 
 [![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
-[![Crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
+[![crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
 [![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
 [![music21 members in the crate](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-crate.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
-A Rust port of the analysis half of
+a rust port of the analysis half of
 [music21](https://github.com/cuthbertLab/music21): pitches, intervals, chords,
 keys, scales, roman numerals, chord symbols, figured bass and its realization,
 durations, meters, clefs, articulations, ornaments, tone rows, sieves, tempo
-marks and voice leading. It keeps music21's data
+marks and voice leading. it keeps music21's data
 model and answers, so a chord is named, a numeral realized and a scale spelled
-as music21 does it. The same code is also published as a Python package; see
+as music21 does it. the same code is also published as a Python package; see
 [python/README.md](./python/README.md).
 
-The [reports page](https://hilll.dev/music21-rs/reports/) has the full
+the [reports page](https://hilll.dev/music21-rs/reports/) has the full
 numbers: every music21 method and whether it is ported, the doctest and test
 suite results, coverage, benchmarks and sizes, refreshed on every push.
 
-## Coverage of music21
+## coverage of music21
 
 - 92% of the public methods of the ported music21 classes are in the crate.
-- The crate's own tests cover 95% of its lines and of its functions.
-- All 40 music21 modules whose doctests run against the port pass every
+- the crate's own tests cover 95% of its lines and of its functions.
+- all 40 music21 modules whose doctests run against the port pass every
   example, 9,185 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
@@ -43,20 +43,20 @@ suite results, coverage, benchmarks and sizes, refreshed on every push.
 - MusicXML import reads a file as music21's reader reads it: those same
   scores, read by the crate and written back, give the text music21 gives
   after reading them itself.
-- With `ExportOptions::make_notation` the export works out the notation a
+- with `ExportOptions::make_notation` the export works out the notation a
   score leaves unsaid first, as music21's does by default: measures, rests,
   ties, accidentals, beams, tuplet brackets. 244 subjects — MIDI files,
   ABC tunes with no barlines, loose notes, notated corpus scores — come out
   byte for byte as music21 writes them.
 
-Not ported: music21's sites and context search (a crate stream knows
+not ported: music21's sites and context search (a crate stream knows
 nothing outside itself, so what music21 finds in context is passed in),
 its plotting, recording from a microphone and following a score live, and
 the corpus.
 
-## Speed and size
+## speed and size
 
-Times per call, from the
+times per call, from the
 [benchmark](https://hilll.dev/music21-rs/reports/#speedups) against music21
 11 on Python 3.13.
 
@@ -72,18 +72,18 @@ Times per call, from the
 | `Pitch::get_enharmonic` | 22.7 us | 0.37 us | 62x |
 | `Interval::new(p1, p2)` | 9.7 us | 0.47 us | 21x |
 
-The published crate is 0.7 MB of source, with the chord tables and scale
-definitions compiled in and five small dependencies. A release binary that
+the published crate is 0.7 MB of source, with the chord tables and scale
+definitions compiled in and five small dependencies. a release binary that
 names chords and transposes pitches, the benchmark example, is 441 KB.
 music21 installs 105 MB.
 
-## Using the crate
+## using the crate
 
 ```bash
 cargo add music21-rs
 ```
 
-Default features are empty. `serde` adds `Serialize` and `Deserialize` to the
+default features are empty. `serde` adds `Serialize` and `Deserialize` to the
 public types; `scala-archive` bundles the Scala scale archive described below;
 `language-detection` bundles music21's excerpts in seven languages, about
 1.9 MB, for its language feature `TX1` and `features::language`;
@@ -97,9 +97,9 @@ Composer's `.nwctxt` and, uncompressed, `.nwc`), `musedata::from_musedata`
 and `capella::from_capella` (a `.capx`'s `score.xml`) each read
 what music21 reads into the score music21 makes of it. ABC is
 written as well: `abc::to_abc` writes a score as a tune music21's reader and
-the crate's both read back as the same score. So is MIDI: `midi::to_midi`
+the crate's both read back as the same score. so is MIDI: `midi::to_midi`
 writes the file music21's `streamToMidiFile` writes, byte for byte, its
-repeats played out first as `Stream::expand_repeats` plays them. Chant
+repeats played out first as `Stream::expand_repeats` plays them. chant
 written in Volpiano is read and written by `volpiano::from_volpiano` and
 `volpiano::to_volpiano`, as music21's `volpiano` module reads and writes it.
 A RomanText analysis is written back by `romantext::to_roman_text`, as
@@ -129,12 +129,12 @@ notes and rests whose lengths are quantized, the same notes music21 finds.
 MuseScore's own files are read with no feature and no MuseScore installed:
 `musescore::from_mscx` takes the text of a `.mscx`, as MuseScore 3 and 4 save
 it, and hands back the score, held to what MuseScore itself exports from the
-same file. It opens and unpacks nothing, so a `.mscz`, which is a zip archive
-holding a `.mscx`, is the caller's to unzip. Percussion and tablature staves
+same file. it opens and unpacks nothing, so a `.mscz`, which is a zip archive
+holding a `.mscx`, is the caller's to unzip. percussion and tablature staves
 and a few kinds of line are refused with an error rather than guessed at; the
 function's documentation lists them.
 
-Name a chord and read its set class:
+name a chord and read its set class:
 
 ```rust
 use music21_rs::Chord;
@@ -146,7 +146,7 @@ assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Spell and transpose pitches:
+spell and transpose pitches:
 
 ```rust
 use music21_rs::{Interval, Pitch};
@@ -161,7 +161,7 @@ assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Realize a roman numeral in a key, and analyse a chord as one:
+realize a roman numeral in a key, and analyse a chord as one:
 
 ```rust
 use music21_rs::{Chord, Key, RomanNumeral};
@@ -175,7 +175,7 @@ assert_eq!(analysed.map(|n| n.figure().to_string()), Some("iv".to_string()));
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Beats and accent weights of a time signature:
+beats and accent weights of a time signature:
 
 ```rust
 use music21_rs::TimeSignature;
@@ -186,7 +186,7 @@ assert_eq!(six_eight.accent_weight(1.5)?, 0.5);
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Write a score as MusicXML, with the `musicxml` feature:
+write a score as MusicXML, with the `musicxml` feature:
 
 ```rust
 # #[cfg(feature = "musicxml")] {
@@ -215,32 +215,32 @@ assert_eq!(read.parts()[0].measures()[0].pitches().len(), 3);
 # Ok::<(), music21_rs::Error>(())
 ```
 
-Full API documentation is on [docs.rs](https://docs.rs/music21-rs).
+full API documentation is on [docs.rs](https://docs.rs/music21-rs).
 
-## Beyond music21
+## beyond music21
 
-The tuning code has no counterpart in music21:
+the tuning code has no counterpart in music21:
 
 - 28 tuning systems as exact ratio tables: just intonation, meantone,
   Pythagorean, Bohlen-Pierce, the Carlos scales and 14 historical keyboard
   temperaments.
-- The complete Scala scale archive, 3,994 scales, bundled and searchable with
+- the complete Scala scale archive, 3,994 scales, bundled and searchable with
   the `scala-archive` feature.
-- Regular temperament theory from the Xenharmonic Wiki: monzos, vals, 95
+- regular temperament theory from the Xenharmonic Wiki: monzos, vals, 95
   temperaments with their commas and mappings, moments of symmetry, and equal
   divisions of any interval.
-- Adaptive tuning, where a pitch's frequency depends on the chord around it.
-- Polyrhythms, including the chord a rhythm's ratios give as pitches.
-- A check for the same scale filed under two names. Scales are compared by
+- adaptive tuning, where a pitch's frequency depends on the chord around it.
+- polyrhythms, including the chord a rhythm's ratios give as pitches.
+- a check for the same scale filed under two names. scales are compared by
   their cents, so one written as ratios and one written as cents still match.
   The Scala archive has 44 such groups.
 - Harte chord notation, `C:maj7/3` or `Bb:(b3,5,b7,9)`, as the
   [`harte`](harte/) crate beside this one: a port of
   [harte-library](https://github.com/andreamust/harte-library) that builds
   music21-rs chords, checked against every label in that library's
-  8,064-chord coverage set. It is not music21's, so it is not in this crate.
+  8,064-chord coverage set. it is not music21's, so it is not in this crate.
 
-## Browser demos
+## browser demos
 
 [hilll.dev/music21-rs](https://hilll.dev/music21-rs/) runs the crate in the
 browser via wasm, from [examples/web/](./examples/web/): a score editor that
@@ -255,10 +255,10 @@ division and Scala scale from the computer keyboard or a MIDI device.
 [examples/audio/](./examples/audio/) plays a polyrhythm through the default
 audio device.
 
-## Development
+## development
 
-Use the toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
-`cargo test` runs the crate's tests and needs nothing else. The full check
+use the toolchain pinned in [rust-toolchain.toml](./rust-toolchain.toml).
+`cargo test` runs the crate's tests and needs nothing else. the full check
 is several commands, because the parity suite lives in a crate outside the
 workspace:
 
@@ -298,7 +298,7 @@ cargo doc --workspace --no-deps
 cargo run --release -p xtask --features python -- report --features-only
 ```
 
-The parity suite runs music21's doctests against the crate through an
+the parity suite runs music21's doctests against the crate through an
 embedded interpreter, so it needs music21's dependencies:
 
 ```bash
@@ -306,41 +306,41 @@ uv venv .m21venv --python 3.12
 uv pip install --python .m21venv chardet joblib jsonpickle lark more_itertools numpy requests webcolors
 ```
 
-On Windows, pyo3 links against the first `python` on `PATH`. The Microsoft
+on Windows, pyo3 links against the first `python` on `PATH`. the Microsoft
 Store build does not work; set `PYO3_PYTHON` to another interpreter and put
 its directory first on `PATH`.
 
-Generated files are committed, so normal builds need only Rust. Each has
+generated files are committed, so normal builds need only Rust. each has
 `regenerate-*`, `emit-*` and `verify-*` commands in `xtask`;
 `regenerate-all` rebuilds all of them after a submodule bump. `nix develop`
 opens a shell with everything CI uses.
 
-## Credits and third-party data
+## credits and third-party data
 
-`music21-rs` is released under the [AGPL-3.0](./LICENSE). It ports behaviour
+`music21-rs` is released under the [AGPL-3.0](./LICENSE). it ports behaviour
 from, and bundles data from, the projects below, each under its own licence.
 
 ### music21
 
-The chord tables, scale definitions, time-signature behaviour, chord-symbol
+the chord tables, scale definitions, time-signature behaviour, chord-symbol
 kinds and every expectation fixture are derived from
 [music21](https://github.com/cuthbertLab/music21), the Python library for
 computational musicology by Michael Scott Asato Cuthbert and contributors,
 licensed [BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
 It is pinned as a git submodule, currently at 11.0.0b9, and is the source of
 truth for `data/chord_tables.toml`, `data/*_expectations.toml` and the Rust
-emitted from them. Thanks to Michael Scott Asato Cuthbert and all music21
+emitted from them. thanks to Michael Scott Asato Cuthbert and all music21
 contributors for the original library.
 
 ### harte-library
 
-The [`harte`](harte/) crate in this repository is a port of
+the [`harte`](harte/) crate in this repository is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and
 `harte/data/harte_expectations.toml` is generated from its test data.
 
-### The Scala scale archive
+### the Scala scale archive
 
 `data/scala_archive.toml` bundles 3,994 scales. 3,932 of them come from the
 [Scala](https://www.huygens-fokker.org/scala/) scale archive as distributed
@@ -353,14 +353,14 @@ Entries carry `source = "music21"`.
 
 ### Plainsound Hexatone
 
-The remaining 62 scales come from
+the remaining 62 scales come from
 [Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone), a microtonal
 MIDI isomorphic keyboard designed and programmed by
 [Marc Sabat](https://www.plainsound.org), licensed
-[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). They are curated
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). they are curated
 just intonation, harmonic-series, meantone and equal-division scales, several
 credited in their own descriptions to Wilson, Fokker, Vicentino, Farabi and
-others. Entries carry `source = "vendored"`. Those files remain under GPL-3.0
+others. entries carry `source = "vendored"`. those files remain under GPL-3.0
 within this work, as AGPL-3.0 section 13 provides for.
 
 ### MuseScore
@@ -369,26 +369,26 @@ within this work, as AGPL-3.0 section 13 provides for.
 `.mscx` that leaves beaming to it, is a port of
 [MuseScore](https://github.com/musescore/MuseScore)'s own beaming code,
 copyright MuseScore BVBA and others, licensed
-[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). That file remains
+[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). that file remains
 under GPL-3.0 within this work, as AGPL-3.0 section 13 provides for.
 
-### The Xenharmonic Wiki
+### the Xenharmonic Wiki
 
 `data/temperaments.toml` records the mapping, generators, commas and scales
 of 95 regular temperaments from the [Xenharmonic Wiki](https://en.xen.wiki),
-which is CC BY-SA. Only the numbers are used.
+which is CC BY-SA. only the numbers are used.
 
-### Language excerpts
+### language excerpts
 
 `src/features/language/` holds the seven excerpts music21's language
 detector compares lyrics with (`music21/languageExcerpts/trainingData`),
 public-domain texts from [Project Gutenberg](https://www.gutenberg.org) as
-music21 ships them. They are compiled in only with the `language-detection`
+music21 ships them. they are compiled in only with the `language-detection`
 feature.
 
-### Contributed back
+### contributed back
 
-Fixes found while porting went upstream:
+fixes found while porting went upstream:
 
 - [cuthbertLab/music21#1746](https://github.com/cuthbertLab/music21/pull/1746):
   the `Pitch` constructor's type annotation admits a `Pitch`.
@@ -428,5 +428,5 @@ Fixes found while porting went upstream:
   F#3 after C4 on a scale of major thirds from D3.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
-- Corrections to the Xenharmonic Wiki's temperament pages, found while
-  checking its infoboxes: [Special:Contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).
+- corrections to the Xenharmonic Wiki's temperament pages, found while
+  checking its infoboxes: [special:contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).

@@ -1,6 +1,6 @@
 # Unreleased
 
-## Added
+## added
 
 - `Stream` answers music21's questions of its layout: `find_gaps` and
   `is_gapless`, `overlaps` and `is_sequence` (music21's `getOverlaps`,
@@ -8,29 +8,29 @@
   the first it does not overlap), `simultaneous_attacks`,
   `playing_when_attacked`, `all_playing_while_sounding`, `offset_map`,
   `measure_offset_map`, `highest_offset`, `lowest_offset`, `has_measures`,
-  `has_voices` and `is_well_formed_notation`. Each answers as music21's
+  `has_voices` and `is_well_formed_notation`. each answers as music21's
   does on every MusicXML score of music21's corpus.
 - `Stream` cuts its notes and rests as music21's slicing does:
   `slice_by_quarter_lengths`, `slice_by_greatest_divisor` (by measure, and
   across a score's parts at each measure), `slice_at_offsets`,
   `slice_by_beat` and `split_by` (music21's `splitByClass`). Grace notes
   are left whole and a measure with nothing of its own to cut is left as
-  it is; a note in a voice is cut in its voice. Each cuts every MusicXML
+  it is; a note in a voice is cut in its voice. each cuts every MusicXML
   score of music21's corpus as music21 does.
 - `Stream` edits itself as music21's editing methods do: `extend_ties`,
   `scale_offsets` (from a `stream::Anchor`), `scale_durations`,
   `augment_or_diminish`, `invert_diatonic`, `shift_elements`,
   `repeat_append`, `repeat_insert`, `insert_and_shift`, and for a measure
-  `bar_duration_proportion` and `pad_as_anacrusis`. Each edits every
+  `bar_duration_proportion` and `pad_as_anacrusis`. each edits every
   MusicXML score of music21's corpus as music21 does.
 - `Stream` moves music between voices and parts as music21 does:
   `voices_to_parts` (by place, or with `separate_by_id` by voice id) and
   `explode` make a part of each voice, each with its part's instruments
   and the clef that best fits its notes; `parts_to_voices` (grouped by a
   `stream::VoiceAllocation`) and `implode` make the parts of each group
-  the voices of one part, stems set up and down if asked. As in music21,
+  the voices of one part, stems set up and down if asked. as in music21,
   `parts_to_voices` takes only the notes a measure holds itself, not those
-  already in its voices. Each moves every MusicXML score of music21's
+  already in its voices. each moves every MusicXML score of music21's
   corpus as music21 does.
 - `Stream` finds elements by where they stand as music21 does:
   `element_at_or_before`, `element_before_offset` and `element_after`
@@ -39,25 +39,25 @@
   `beat_and_measure_from_offset`, which counts a partial measure's beats
   on from the measure before it; and `time_signatures`, `instruments` and
   `instrument` (music21's `getTimeSignatures`, `getInstruments` and
-  `getInstrument`), which look within the stream. Each answers as
+  `getInstrument`), which look within the stream. each answers as
   music21's does on every MusicXML score of music21's corpus.
 - `Stream` keeps and takes out elements as music21 does:
   `extract_context` (the elements from some way before one to some way
   after it, bounded as music21 bounds them), `remove_by_class` and
   `remove_by_not_of_class`; and `harmonic_intervals` gives each note the
   interval to the first note of another stream sounding with it, which
-  music21's `attachIntervalsBetweenStreams` attaches. Each answers as
+  music21's `attachIntervalsBetweenStreams` attaches. each answers as
   music21's does on every MusicXML score of music21's corpus.
 - `Stream::split_at_quarter_length` cuts a stream in two, as music21's
   `splitAtQuarterLength` does: what sounds across the point is cut and
   tied, what follows moves to the second half, a voice is cut as a stream
   is, and the second half of a measure gets its time signature, the key
-  and clef in force at the point, and its right barline. What is in force
+  and clef in force at the point, and its right barline. what is in force
   before a measure, which music21 finds in its context, is given as a
   `stream::InForce`, which `Stream::in_force_before` reads off a part.
   Every measure of every MusicXML score of music21's corpus is cut as
   music21 cuts it.
-- The Python package's `Stream` gains music21's `sliceByQuarterLengths`,
+- the Python package's `Stream` gains music21's `sliceByQuarterLengths`,
   `sliceAtOffsets`, `sliceByBeat`, `sliceByGreatestDivisor`,
   `scaleOffsets`, `scaleDurations`, `augmentOrDiminish`, `invertDiatonic`,
   `voicesToParts`, `explode`, `partsToVoices` and `implode`, each handing
@@ -66,7 +66,7 @@
 - `Metadata::search` answers music21's `search`: a query, and a field that
   may be a unique name, one of music21's four grandfathered work ids or
   twenty Humdrum abbreviations (`OLD_MUSIC21_NAMES`), or any piece of a
-  name -- `compos` finds `composer`. A `MetadataQuery::Text` matches by
+  name -- `compos` finds `composer`. a `MetadataQuery::Text` matches by
   containment with either case ignored, as music21's plain string query
   does, and a `MetadataQuery::Matcher` stands in for the regular
   expression music21 reads out of a query holding `*.|+?{}`, since the
@@ -74,24 +74,24 @@
   in the order music21's `all` reads them.
 - `Stream` looks a score up in an opus as music21's `stream.Opus` does:
   `scores`, `score_numbers`, `score_by_number`, `score_by_title` and
-  `merge_scores`. Each answers as music21's does on every multi-tune ABC
+  `merge_scores`. each answers as music21's does on every multi-tune ABC
   file of music21's corpus.
 - `Stream::elements_in_span` is music21's `getElementsByOffset`, taking a
   `stream::OffsetSpan`: one offset or a stretch, with music21's four flags
   -- `include_end_boundary`, `must_finish_in_span`, `must_begin_in_span`
   and `include_elements_that_end_at_start` -- starting at music21's own
-  defaults, under which an element is found only where it *begins*. A span
+  defaults, under which an element is found only where it *begins*. a span
   of no length takes the snapped start as its end, as the fork's music21
   does, so a float a hair off the fraction an element stands at still
   finds it. `elements_of_class`, `elements_not_of_class` and
   `has_element_of_class` are music21's `getElementsByClass`,
-  `getElementsNotOfClass` and `hasElementOfClass`. Every measure of every
+  `getElementsNotOfClass` and `hasElementOfClass`. every measure of every
   MusicXML score of music21's corpus answers all thirty-eight spans as
   music21 answers them.
 - `Stream::seconds` is music21's `seconds`: how long a stream lasts at the
   tempi it holds, each holding until the next and the last to the end.
   Where the stream states no tempo, or none from its start, the tempo in
-  force is given to it, as music21 searches its context for one. A stream
+  force is given to it, as music21 searches its context for one. a stream
   holding nothing that lasts is nought seconds long and one holding
   something is `NaN`, which is music21's answer rather than a refusal.
   `Stream::metronome_mark_boundaries` is music21's
@@ -104,11 +104,11 @@
   writing one reaches the last measure of every part.
 - `Stream::staff_lines` is music21's `staffLines`: the lines named by the
   first staff layout standing at the start of the stream, however deep,
-  and five where none names any. Only the staff layouts are read, so a
+  and five where none names any. only the staff layouts are read, so a
   note or a measure standing later does not stop the search.
 - `Stream::extend_duration` is music21's `extendDuration`: a copy with
   each element of a class stretched to where the next one starts, the last
-  to the end of the stream. Only what the crate gives a length to is
+  to the end of the stream. only what the crate gives a length to is
   stretched -- a note, a rest, a chord, a chord symbol -- where music21
   stretches any element, everything there carrying a duration; the marks
   the crate keeps timeless have nothing to write.
@@ -121,22 +121,22 @@
 - `Stream::analyze` is music21's `analyze`, answering a `stream::Analysis`:
   `ambitus`, `span` and `range` give the interval from the lowest pitch
   sounding to the highest, and `key` and the names of music21's five key
-  weightings give the key the stream is most likely in. The name is read as
+  weightings give the key the stream is most likely in. the name is read as
   music21 reads it, three searches over and loosest last, so `kostka` finds
-  Temperley's profile and a bare `key` finds Aarden's. A stream with no
+  Temperley's profile and a bare `key` finds Aarden's. a stream with no
   pitches has no ambitus and answers nothing, where a key analysis of one
   refuses, which is what music21 answers and raises.
 - `Stream::is_twelve_tone` is music21's `isTwelveTone`, and
   `Stream::notes_and_rests` is its `flatten().notesAndRests`, where
-  `Stream::notes` leaves the rests out. What the stream holds itself is
+  `Stream::notes` leaves the rests out. what the stream holds itself is
   `elements_of_class` for `GeneralNote`.
 - `Stream::lyrics` is music21's `lyrics`, gathering the syllables sung in
   a stream by the number each is sung under, taking a
-  `stream::LyricsOptions`. Each number's line keeps one place for every
+  `stream::LyricsOptions`. each number's line keeps one place for every
   note read -- the lyric sung there, or `SungLyric::Unsung` where that
   note sings nothing under that number -- so the lines stay level with the
   notes, and a number first met partway through is padded with the notes
-  before it. As in music21, the notes of a measure are read through the
+  before it. as in music21, the notes of a measure are read through the
   barlines by default, every other nested stream only where asked, and
   each then answers a `SungLyric::Nested` list of its own.
 - `StreamElement::is_instance` and `StreamElement::music21_classes` are
@@ -152,31 +152,31 @@
   (`quantize_duration`, `quarter_length_estimation`, `histogram`,
   `notes_and_durations_to_stream`), and all of it at once as music21's
   transcriber does (`monophonic_stream_from_wav`); and the score
-  follower's `decision_process`. Every stage gives music21's answers, bit
+  follower's `decision_process`. every stage gives music21's answers, bit
   for bit, on music21's own test recording and on tones made for the
   test; the frequencies, which music21 finds by FFT, agree to within a
   millionth.
-- The `language-detection` feature brings music21's language feature,
+- the `language-detection` feature brings music21's language feature,
   `TX1`, which names the language of a piece's lyrics, last among
   `features::native::NATIVE` as it is in music21, and
   `features::language`, music21's `LanguageDetector` and `Trigram`:
   `most_likely_language` and `most_likely_language_numeric` compare a text
   with excerpts in English, French, Italian, German, Chinese, Latin and
-  Dutch by the letters that follow each pair of letters. The excerpts are
+  Dutch by the letters that follow each pair of letters. the excerpts are
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
 
-## Fixed
+## fixed
 
-- The feature map pointed music21's `Interval.name` at the crate's `name`,
+- the feature map pointed music21's `Interval.name` at the crate's `name`,
   which answers the long spelling, `Perfect Octave`; `short_name` is the
-  one that answers `P8`, and the map now says so. The count is unchanged:
+  one that answers `P8`, and the map now says so. the count is unchanged:
   the member was already read as ported, by the function that does not
   implement it.
 - `MetronomeMark::seconds_per_quarter` reads the speed a mark is *played*
   at, as music21's `secondsPerQuarter` does through a `getQuarterBPM()`
-  that takes `useNumberSounding=True`. A mark that says no number but
+  that takes `useNumberSounding=True`. a mark that says no number but
   carries a sounding one -- what a MusicXML `<sound tempo="96">` reads as,
   which much of music21's corpus carries -- was refused where music21
   answers, and so were `duration_to_seconds`, `quarter_length_to_seconds`
@@ -184,13 +184,13 @@
 
 - `Stream::has_part_like_streams` counts a `PartStaff` as a part and a
   stream of chord symbols or strokes as holding music, as music21 does.
-- An offset worked out to be negative is snapped to the fraction it stands
+- an offset worked out to be negative is snapped to the fraction it stands
   for, as a positive one is, as music21's `opFrac` snaps it.
-- Merging variants finds an element where an offset worked out in floats
+- merging variants finds an element where an offset worked out in floats
   falls a hair short of the fraction the element stands at, as music21
   does with its search for one offset fixed on the fork the crate is held
   to.
-- An ABC measure cut in two because it overflows its bar keeps its
+- an ABC measure cut in two because it overflows its bar keeps its
   closing barline at the end of the second measure, where it was put at
   the start, as music21 does with its `splitAtQuarterLength` fixed on the
   fork the crate is held to.
@@ -203,30 +203,30 @@
 - `Duration::augment_or_diminish` snaps the scaled length to the fraction
   it stands for, as music21 does; an unlinked duration stays unlinked,
   keeps its written values, and has its length scaled as it is, unsnapped.
-- The MusicXML reader pads a pickup measure by the share of its bar it
+- the MusicXML reader pads a pickup measure by the share of its bar it
   lacks, as music21's `padAsAnacrusis` works it out, and a measure cut
   short by what its exact length lacks, so the padding of a measure whose
   length is no binary fraction is music21's to the last bit.
 
 # music21-rs 0.9.0
 
-Every score format music21 reads is read -- Capella, MuseData and
+every score format music21 reads is read -- Capella, MuseData and
 NoteWorthy join the others -- and every one it writes is written: MusicXML,
 MIDI, RomanText, Volpiano, LilyPond and braille, and ABC besides, which
-music21 does not write. Most of music21's analysis beyond the chord is the crate's as well:
+music21 does not write. most of music21's analysis beyond the chord is the crate's as well:
 `chordify`, windowed and floating key analysis, the jSymbolic and native
 features and their data sets, the `search`, `tree`, `text`, `layout`,
 `variant` and `omr` modules, score reductions, `alpha.analysis`, and
-tablature. Each is held to music21 on its corpus, usually every MusicXML
+tablature. each is held to music21 on its corpus, usually every MusicXML
 score of it, output for output.
 
 ABC is written as well as read. music21 writes no ABC, so `abc::to_abc` is
 held to the two readers instead: on every tenth tune of music21's corpus,
 1,294 of 1,298 are read back by the crate as the score they were written
-from, and by music21 as the score it reads from the original. The other four
+from, and by music21 as the score it reads from the original. the other four
 are tunes whose own reading cannot be written back.
 
-## Breaking Changes
+## breaking changes
 
 - `StreamElement` has a `Break` variant, a manuscript's line, page or column
   break, and `SpannerKind` a `Neume` variant, so a `match` over either needs
@@ -241,7 +241,7 @@ are tunes whose own reading cannot be written back.
   none of `left`, `center`, `right` and `full`, a `<rehearsal>` enclosed in
   nothing music21 names, and a `<tremolo>` of more than eight strokes,
   which was read as eight.
-- `musicxml::ExportOptions` has a new public field, `make_notation`. Code
+- `musicxml::ExportOptions` has a new public field, `make_notation`. code
   building one with every field named needs it; code using
   `..ExportOptions::default()` does not.
 - `StreamElement` has a `Layout` variant, a page, system, staff or score
@@ -254,7 +254,7 @@ are tunes whose own reading cannot be written back.
   `include_id`, as music21's `getClassPositionLabels` does, and leaves the
   class's column out without it.
 
-## Added
+## added
 
 - `features` is music21's `features` package, begun: a `DataInstance`
   prepares a piece once -- ties stripped, each part and voice on its own --
@@ -267,9 +267,9 @@ are tunes whose own reading cannot be written back.
   vector, and `features::native::NATIVE` the 19 music21 adds of its own:
   the key's mode and tonal certainty, note lengths, the chords of the piece
   chordified, chord-symbol bass motion and the Landini cadence. music21's
-  language feature is not ported. Each value is a `features::Value`, a
-  whole number or a float as music21's is. Every one gives music21's
-  values on every MusicXML score of music21's corpus. A `features::DataSet`
+  language feature is not ported. each value is a `features::Value`, a
+  whole number or a float as music21's is. every one gives music21's
+  values on every MusicXML score of music21's corpus. a `features::DataSet`
   reads features of many pieces into one table, each row labelled with its
   piece's class, and writes it as tab-separated, CSV or ARFF text exactly
   as music21's `DataSet` does; `extractors_by_id`, `index_of`,
@@ -277,10 +277,10 @@ are tunes whose own reading cannot be written back.
   names.
 - `text` is music21's `text` module: `assemble_lyrics` and
   `assemble_all_lyrics` join a stream's lyrics into words and lines, and
-  `prepend_article` and `postpend_article` move a title's article. With it
+  `prepend_article` and `postpend_article` move a title's article. with it
   `Metadata::string_value` reads any attribute as music21's does --
   contributors summarised, titles with their articles put back in front --
-  and `Metadata::title` the title. Every MusicXML score of music21's corpus
+  and `Metadata::title` the title. every MusicXML score of music21's corpus
   gives music21's lyrics and metadata text.
 - `lily::to_lilypond` writes a stream as LilyPond, as music21's
   `LilypondConverter` writes it with `textFromMusic21Object`: parts on
@@ -288,33 +288,33 @@ are tunes whose own reading cannot be written back.
   meters, tempi, line and page breaks, notes, rests and chords with their
   beams, stems, ties, fermatas, tuplets and colours, and lyrics.
   `LilyOptions::version` is the LilyPond version the file says it is for,
-  which music21 asks of the LilyPond installed. Of the 654 MusicXML scores
+  which music21 asks of the LilyPond installed. of the 654 MusicXML scores
   in music21's corpus, 602 come out the same text as music21's, space for
   space, and the crate refuses the other 52 as music21 does: notes of no
   length, such as chord symbols and grace chords, and lengths no note value
-  writes. Running it does not need LilyPond.
+  writes. running it does not need LilyPond.
 - `search::LyricSearcher` is music21's `LyricSearcher`: a stream's lyrics
   read as text, verse by verse, and searched for a string, each match
-  giving the lyrics, notes and measures it spans. Every MusicXML score of
+  giving the lyrics, notes and measures it spans. every MusicXML score of
   music21's corpus indexes and searches as music21's does.
-- The rest of `search` is music21's `search.base`: `StreamSearcher` finds
+- the rest of `search` is music21's `search.base`: `StreamSearcher` finds
   runs of elements by a list of terms and algorithms -- wildcards, rhythm,
   note names, or one's own -- and `rhythmic_search`, `note_name_search`
-  and `note_name_rhythmic_search` do the same for the common cases. The
+  and `note_name_rhythmic_search` do the same for the common cases. the
   `translate_*` functions turn notes and rests into text as music21's do,
   and the approximate searches rank streams by how alike that text is,
   with Python's `difflib` ratio; `most_common_measure_rhythms` groups
-  measures by rhythm. Every MusicXML score of music21's corpus searches,
+  measures by rhythm. every MusicXML score of music21's corpus searches,
   translates and ranks as music21's does.
 - `search::index_score_parts` cuts each part of a score into overlapping
   stretches of its translated notes, as music21's `search.segment` does,
   and `score_similarity` compares every stretch of some scores with every
-  stretch of the scores after it by `difflib`'s ratio. Every MusicXML
+  stretch of the scores after it by `difflib`'s ratio. every MusicXML
   score of music21's corpus segments and compares as music21's does.
 - `analysis::correlate::pitch_to_dynamic` pairs each pitch of a stream's
   notes and chords with each dynamic it sounds under, as music21's
   `ActivityMatch.pitchToDynamic` does, and `pitch_to_dynamic_counts`
-  counts the pairs. Every MusicXML score of music21's corpus pairs as
+  counts the pairs. every MusicXML score of music21's corpus pairs as
   music21's does.
 - `search::ContiguousSegmentSearcher` finds every run of a stream's notes
   and chords holding a number of pitch classes, reading repetitions in each
@@ -331,7 +331,7 @@ are tunes whose own reading cannot be written back.
   or chord into what starts within its length, as music21's
   `insertIntoNoteOrChord` does, and `Stream::flatten_unnecessary_voices`
   takes out empty voices and the voice left alone, as music21's
-  `flattenUnnecessaryVoices` does. Every MusicXML score of music21's corpus
+  `flattenUnnecessaryVoices` does. every MusicXML score of music21's corpus
   gives music21's templates, merged notes and flattened measures.
 - `analysis::reduction` is music21's `analysis.reduction`: a lyric starting
   `::` marks its note for a reduction -- its pitch from a chord, octave,
@@ -342,7 +342,7 @@ are tunes whose own reading cannot be written back.
   their lyrics. `PartReduction` answers when, and how loudly, each part or
   group of parts plays, by measure or by run of notes, weighed by its
   dynamics, as music21's `PartReduction` does. `Duration::set_dots` is
-  music21's `dots` setter. Every MusicXML score of music21's corpus, its
+  music21's `dots` setter. every MusicXML score of music21's corpus, its
   notes marked, is reduced and weighed as music21 reduces and weighs it.
 - `braille` begins music21's `braille` package: `braille::lookup` holds
   the signs of braille music, and `braille::basic` writes one element at a
@@ -351,7 +351,7 @@ are tunes whose own reading cannot be written back.
   clefs, key and time signatures, barlines, dynamics, text expressions,
   tempo texts, metronome marks, instruments, headings, words and numbers --
   each with the English music21 writes beside it, and converts braille to
-  braille ASCII and dots and back. Every element of every MusicXML score of
+  braille ASCII and dots and back. every element of every MusicXML score of
   music21's corpus is written as music21 writes it.
 - `braille::translate` writes whole scores, parts and measures in braille
   as music21's `objectToBraille` does: `braille::segment` cuts a part into
@@ -361,7 +361,7 @@ are tunes whose own reading cannot be written back.
   piano's two staves side by side, and `braille::text` lays them out in
   lines with headings and measure numbers. `BrailleOptions` holds
   music21's keyword arguments, and its `debug` gives music21's English
-  listing of each segment instead. Every MusicXML score of music21's corpus
+  listing of each segment instead. every MusicXML score of music21's corpus
   is written as music21 writes it, in braille and in English.
 - `alpha` begins music21's experimental `alpha` package:
   `alpha::analysis::hasher::Hasher` hashes each note, rest and chord of a
@@ -371,7 +371,7 @@ are tunes whose own reading cannot be written back.
   chords with their normal order and prime form -- and
   `alpha::analysis::aligner::StreamAligner` aligns two streams by those
   hashes, with music21's edit distance, the insertions, deletions and
-  substitutions it takes, and how alike the streams are. Every MusicXML
+  substitutions it takes, and how alike the streams are. every MusicXML
   score of music21's corpus is hashed and aligned as music21 hashes and
   aligns it; the interval from the note before is compared on the scores
   of up to 600 notes and rests with no part split into staves, where
@@ -383,7 +383,7 @@ are tunes whose own reading cannot be written back.
   the whole or fractional number of tenths the file gave. `from_musicxml`
   reads them from `<defaults>`, `<print>` and `<staff-details>`, and
   `to_musicxml` writes them back as music21 does, with a measure's
-  `<measure-numbering>` (`Stream::measure_numbering`). Every MusicXML score
+  `<measure-numbering>` (`Stream::measure_numbering`). every MusicXML score
   of music21's corpus music21 can write is read and written with its
   layouts as music21 reads and writes it.
 - `text::TextBox` is music21's `TextBox`, text standing anywhere on a page,
@@ -400,7 +400,7 @@ are tunes whose own reading cannot be written back.
   one way through a scale, by name, name and octave, pitch class or letter;
   and `fixer` corrects a score read by optical music recognition by a
   performance of it aligned to it, respelling what it misspelled, taking out
-  the measures it read wrong, and writing the trills and turns played. Each
+  the measures it read wrong, and writing the trills and turns played. each
   answers as music21's does on thousands of runs, searches and readings
   built for it. `Stream::remove_event` is music21's `remove`.
 - `omr` is music21's `omr` package. `omr::correctors::ScoreCorrector`
@@ -412,11 +412,11 @@ are tunes whose own reading cannot be written back.
   the text both models compare. `omr::evaluators` measures a corrected
   score against its ground truth (`evaluate_correcting_model`,
   `OmrGroundTruthPair`) and counts the measures whose rhythm comes again
-  (`auto_correlation_best_measure`). Every MusicXML score of music21's
+  (`auto_correlation_best_measure`). every MusicXML score of music21's
   corpus is flagged, corrected and counted as music21 does it, measure for
   measure, and music21's own Mozart K. 525 pair evaluates the same.
   `Error::Omr` is what it refuses with.
-- `variant` is music21's `variant` module. A `Variant` holds another
+- `variant` is music21's `variant` module. a `Variant` holds another
   reading of a passage beside it, in named groups, standing in for as much
   of the stream as its replacement length says. `merge_variants` merges
   another version of a score, a stream of measures or a stretch of notes
@@ -426,10 +426,10 @@ are tunes whose own reading cannot be written back.
   `refine_variant`, `make_all_variants_replacements` and
   `make_variant_blocks` are music21's functions of those names, and
   `Stream::activate_variants` and `Stream::show_variant_as_ossialike_part`
-  music21's methods. They keep music21's slips: measures are found by
+  music21's methods. they keep music21's slips: measures are found by
   number where music21 finds them so, `refine_variant` works in place only,
   as music21's does, and `make_variant_blocks` fails where music21's does,
-  after moving the first variant. On every MusicXML score of music21's
+  after moving the first variant. on every MusicXML score of music21's
   corpus, merged with a version with a measure transposed, one taken out
   and one played twice, every function leaves the same measures, notes and
   variants as music21's, offsets and lengths bit for bit.
@@ -445,7 +445,7 @@ are tunes whose own reading cannot be written back.
   element of a stream, flat or semi-flat, as an `ElementTimespan`, and a
   `TimespanTree` answers what starts, stops or sounds across an offset and
   walks the `Verticality` at each offset something starts, with its
-  pitches, pitch classes, bass and the time to the next. Every MusicXML
+  pitches, pitch classes, bass and the time to the next. every MusicXML
   score of music21's corpus is read as music21 reads it.
   Each `Verticality` pairs its parts' motion and gathers voice-leading
   quartets, music21's `getPairedMotion` and `getAllVoiceLeadingQuartets`;
@@ -458,19 +458,19 @@ are tunes whose own reading cannot be written back.
   quarter note and runs any analysis over windows of each size, overlapping,
   side by side or averaged, as music21's `WindowedAnalysis` does; and
   `analysis::floating_key::KeyAnalyzer` reads a key for every measure and
-  smooths each by its neighbours, as music21's `floatingKey` does. Every
+  smooths each by its neighbours, as music21's `floatingKey` does. every
   MusicXML score of music21's corpus gives music21's windows and keys.
 - `Stream::find_consecutive_notes` and `melodic_intervals` find the notes
   of a stream that follow one another and the intervals between them, as
   music21's `findConsecutiveNotes` and `melodicIntervals` do, with its
-  options in `ConsecutiveOptions`. Four of music21's small analyses are
+  options in `ConsecutiveOptions`. four of music21's small analyses are
   built on them: `analysis::patel` (the rhythm's normalized pairwise
   variability and the melodic interval variability), `analysis::metrical`
   (the depth of the metrical hierarchy at each note, which
   `label_beat_depth` marks with stars as music21 does, and Thomassen's
   melodic accent), `analysis::segment_by_rests` and
-  `analysis::pitch_analysis`. Every MusicXML score of music21's corpus
-  gives music21's answers. The wheel's `Stream` has `findConsecutiveNotes`
+  `analysis::pitch_analysis`. every MusicXML score of music21's corpus
+  gives music21's answers. the wheel's `Stream` has `findConsecutiveNotes`
   and `melodicIntervals` too, answering with the objects it holds.
 - `Stream::chordify` and `chordify_with` make a score's parts one line of
   chords, as music21's `chordify` does: laid out as the first part is, with
@@ -478,44 +478,44 @@ are tunes whose own reading cannot be written back.
   a held note tied across, a pitch two parts share one note, the notes'
   articulations and expressions gathered onto the chord, and rests standing
   together joined. `ChordifyOptions` carries music21's `addTies`,
-  `removeRedundantPitches` and `toSoundingPitch`. Every MusicXML score of
+  `removeRedundantPitches` and `toSoundingPitch`. every MusicXML score of
   music21's corpus chordifies as music21 chordifies it, byte for byte as
-  MusicXML where music21 can write the result. The wheel's `Stream` has
+  MusicXML where music21 can write the result. the wheel's `Stream` has
   `chordify` too.
 - `romantext::to_roman_text` writes a score's roman numerals as a RomanText
   analysis, as music21's `romanText.writeRoman.RnWriter` does: the header,
   `Time Signature:` lines, and each measure's numerals at their beats with
-  the key where it changes, repeats included. Every analysis of music21's
-  corpus, read and written on both sides, comes out the same text. A chord
+  the key where it changes, repeats included. every analysis of music21's
+  corpus, read and written on both sides, comes out the same text. a chord
   now says which roman numeral it stands for (`Chord::numeral`,
   `set_numeral`, `with_numeral`), as music21's `RomanNumeral` is a chord;
   `from_roman_text` gives each chord its numeral, and transposing a chord
-  moves its numeral's key. The wheel has `to_roman_text`, and its
+  moves its numeral's key. the wheel has `to_roman_text`, and its
   `from_roman_text` hands back `RomanNumeral`s rather than plain `Chord`s.
 - `capella::from_capella` reads Capella's CapXML, the `score.xml` a `.capx`
   holds, as music21's `capella.fromCapellaXML` does: system by system, each
   staff's share put end to end into a part, clefs and key signatures that
-  restate the one before dropped, and each part cut into measures. Clefs,
+  restate the one before dropped, and each part cut into measures. clefs,
   keys, meters, notes and chords with their accidentals, ties, tuplets and
-  lyrics, rests and barlines are read. Held to music21 byte for byte as
+  lyrics, rests and barlines are read. held to music21 byte for byte as
   MusicXML on the `.capx` music21 carries and documents written for the
-  test. The wheel has `from_capella`, which unpacks a `.capx` itself.
+  test. the wheel has `from_capella`, which unpacks a `.capx` itself.
 - `musedata::from_musedata` reads a MuseData work, its files' texts in
   order, as music21's `musedata` and `musedata.translate` do, in both of the
   encoding's stages: a part for each part, measures with their barlines and
   repeats, notes, chords and rests, ties, voices, beams, the accidentals the
   encoding shows, articulations, fermatas, ornaments, dynamics, lyrics, the
   clef, key, meter and tempo word, a transposing part turned to the pitch
-  it sounds, and the work's title, number and movement. Held to music21 byte
+  it sounds, and the work's title, number and movement. held to music21 byte
   for byte as MusicXML on the work music21 carries, read whole and file by
-  file, and on parts written for the test in both stages. The wheel has
+  file, and on parts written for the test in both stages. the wheel has
   `from_musedata` too.
 - `noteworthy::from_nwc` reads NoteWorthy Composer's binary `.nwc`, as
   music21's `noteworthy.binaryTranslate` does: each staff and object written
   out as `.nwctxt` lines (`noteworthy::nwc_lines`, music21's
-  `dumpToNWCText`) and those read by the text reader. A compressed file
+  `dumpToNWCText`) and those read by the text reader. a compressed file
   must be inflated first, as the crate unpacks nothing; the wheel's
-  `from_nwc` inflates one itself. Held to music21 on its four `.nwc` files,
+  `from_nwc` inflates one itself. held to music21 on its four `.nwc` files,
   line for line and as MusicXML.
 - `noteworthy::from_noteworthy` reads NoteWorthy Composer's text format,
   `.nwctxt`, as music21's `noteworthy.translate` does: a part per staff,
@@ -524,15 +524,15 @@ are tunes whose own reading cannot be written back.
   notes, lyrics, barlines, repeats and endings, clefs, keys, meters, tempos,
   dynamics, words, *Coda* and *Segno* marks, instruments and the title.
   Every file music21 carries beside its reader is read into the score
-  music21 makes, held to it byte for byte as MusicXML. The wheel has
+  music21 makes, held to it byte for byte as MusicXML. the wheel has
   `from_noteworthy` too.
 - `volpiano::from_volpiano` and `volpiano::to_volpiano` read and write
   Volpiano, the notation of the chant font the CANTUS database is written
   in, as music21's `volpiano.toPart` and `fromStream` do: clefs, notes
   liquescent or not, flats and naturals on B and E, barlines, neumes and
-  line, page and column breaks. Held to music21 on music21's own examples
+  line, page and column breaks. held to music21 on music21's own examples
   and 300 generated strings, read both ways and written back, and on every
-  MusicXML score of its corpus written as Volpiano. The wheel has
+  MusicXML score of its corpus written as Volpiano. the wheel has
   `from_volpiano` and `to_volpiano` too.
 - `Stream::to_sounding_pitch` and `Stream::to_written_pitch` move the notes
   under an octave line, as music21's `Ottava.performTransposition` and
@@ -541,7 +541,7 @@ are tunes whose own reading cannot be written back.
   `ottavasToSounding`. `to_musicxml` writes the notes under a transposing
   line at the pitch they sound, as music21's writer does.
   `OctaveShift::interval` and `set_transposing` are new.
-- The wheel has `to_abc`, writing one of its streams or one of music21's as
+- the wheel has `to_abc`, writing one of its streams or one of music21's as
   ABC, which music21 has no writer for, with `unit_length` and
   `measures_per_line` as the crate's `abc::ExportOptions` has them.
 - `midi::to_midi` and `midi::ExportOptions` write a score as a standard MIDI
@@ -551,13 +551,13 @@ are tunes whose own reading cannot be written back.
   once, each note's velocity from the dynamic in force and its
   articulations, lyrics, chord symbols sounding, strokes on the drum
   channel, and a pitch between the keys bent on a channel of its own, its
-  repeats played out first. The wheel has `to_midi` too, taking music21's
+  repeats played out first. the wheel has `to_midi` too, taking music21's
   streams as readily as its own and handing back `bytes`.
 - `Stream::expand_repeats` plays a score's or a part's repeats out, as
   music21's `expandRepeats` does: passages between repeat barlines written
   out as often as they say, first and second endings in turn, and a *da
   capo* or *dal segno* taken to its *fine* or through its *coda*, numbered as
-  music21 numbers them and laid out where music21 lays them. Repeats music21
+  music21 numbers them and laid out where music21 lays them. repeats music21
   finds badly formed are refused.
 - `Stream::strip_ties` folds each run of tied notes into its first, as
   music21's `stripTies` does.
@@ -569,28 +569,28 @@ are tunes whose own reading cannot be written back.
   with their lengths, accidentals and octaves, ties, tuplets, grace notes
   with their decorations, slurs and hairpins, chord symbols, lyrics,
   dynamics, articulations, ornaments, fermatas and text, and changes of
-  meter, key and tempo. A note music21 cut at a barline when reading is
+  meter, key and tempo. a note music21 cut at a barline when reading is
   written whole, so a tune reads back into the measures it was read into.
   What ABC cannot say is refused with `Error::Abc`: a microtone, a tuplet
   inside a tuplet, unpitched strokes, pedals, octave lines, glissandi,
   tremolos between notes, rehearsal marks and metric modulations.
-- The wheel reads every format the crate reads: `from_abc(text)`,
+- the wheel reads every format the crate reads: `from_abc(text)`,
   `from_abc_number(text, number)`, `from_midi(data)` taking the file's
   `bytes`, `from_tiny_notation(text)`, `from_humdrum(text)`,
-  `from_mei(text)` and `from_roman_text(text)`, beside `from_musicxml`. Each
+  `from_mei(text)` and `from_roman_text(text)`, beside `from_musicxml`. each
   hands back the wheel's own streams: a `Score`, an `Opus` of scores for an
   ABC, Humdrum or RomanText file holding several, and a `Part` for
-  TinyNotation. A RomanText score's chords carry their numerals as lyrics.
+  TinyNotation. a RomanText score's chords carry their numerals as lyrics.
   What the wheel has no class for -- unpitched strokes, words, barlines,
-  spanners, metadata -- is read and left out. A reader that cannot read its
+  spanners, metadata -- is read and left out. a reader that cannot read its
   input raises `StreamException`, which the wheel now exports.
-- The web score editor opens MIDI (`.mid`, `.midi`), Humdrum (`.krn`), MEI
+- the web score editor opens MIDI (`.mid`, `.midi`), Humdrum (`.krn`), MEI
   (`.mei`), RomanText (`.rntxt`, each numeral written under its chord) and
   TinyNotation (`.tntxt`) through the crate's readers, by the same
-  conversion its MusicXML import uses. A MIDI file now keeps its meters,
+  conversion its MusicXML import uses. a MIDI file now keeps its meters,
   triplets, voices, tracks and instruments; the notes of a track that also
   plays the drums are kept and its strokes left out.
-- A figured bass is written out as a score, as music21's realizer writes
+- a figured bass is written out as a score, as music21's realizer writes
   one. `FiguredBassLine::generate_bass_line` is the bass with its figures
   under it as lyrics, in measures, and a `Realization` writes a way of
   voicing the line with `generate_realization_from_possibility_progression`
@@ -600,14 +600,14 @@ are tunes whose own reading cannot be written back.
   chooses with `generate_random_realization` and
   `generate_random_realizations`. `FiguredBassLine::overlay_part` lays a
   written part over the line for every realization to keep, and
-  `in_key_and_time` gives a line its meter. Nine lines are written by both,
+  `in_key_and_time` gives a line its meter. nine lines are written by both,
   112 scores in all, and each comes out the same MusicXML byte for byte.
-- What instruments do to a stream they stand in, music21's four functions:
+- what instruments do to a stream they stand in, music21's four functions:
   `instrument::unbundle_instruments` puts the instrument each note keeps as
   its own into the stream beside it, `bundle_instruments` takes them back,
   `deduplicate` folds together the instruments a part says more than once,
   and `partition_by_instrument` splits a score into a part for each
-  instrument playing in it. Fifteen streams built both as music21's and as
+  instrument playing in it. fifteen streams built both as music21's and as
   the crate's come out the same from each.
 - `volume::dynamic_context` is `Volume.getDynamicContext`: the dynamic a
   note is read against, searched for outwards from the stream holding the
@@ -623,26 +623,26 @@ are tunes whose own reading cannot be written back.
   of a split note keeps any expression.
 - `musescore::from_mscx` reads MuseScore's own uncompressed `.mscx` format,
   as MuseScore 4 saves it and MuseScore 3 where the two agree, into a score.
-  It needs no feature and no MuseScore installed, and builds for wasm. It
+  It needs no feature and no MuseScore installed, and builds for wasm. it
   takes the document's text: a `.mscz` is a zip archive holding a `.mscx`,
-  and unzipping it is the caller's. It reads parts and staves, measures and
+  and unzipping it is the caller's. it reads parts and staves, measures and
   their numbers, voices, notes as the file spells them, chords, rests, ties,
   dots, tuplets, grace notes, clefs, keys, meters, tempo marks, dynamics,
   text, lyrics, chord symbols, articulations, fingerings, fermatas,
   ornaments, arpeggios, barlines, repeats, endings, segno and coda signs and
   the jumps to them, slurs, hairpins, pedal lines, instruments and the
-  file's metadata. Beams, tuplet brackets and the clef and key a staff
+  file's metadata. beams, tuplet brackets and the clef and key a staff
   starts with are worked out as MuseScore works them out where the file
-  leaves them to its layout. Percussion and tablature staves, files older
+  leaves them to its layout. percussion and tablature staves, files older
   than MuseScore 3's, tremolos, trill, octave, glissando and text lines,
   measure repeats, fret diagrams and figured bass are refused with
   `Error::MuseScore` rather than dropped.
-- The reader is held to MuseScore itself, music21 having no reader of the
+- the reader is held to MuseScore itself, music21 having no reader of the
   format: `mscx_parity` reads sixteen `.mscx` files and the MusicXML
   MuseScore 4.7.5 exported from each, writes both with `to_musicxml`, and
-  compares the texts. Thirteen agree; the three that differ are places
+  compares the texts. thirteen agree; the three that differ are places
   where MuseScore's export says something other than its own file does, and
-  the reader follows the file. The test lists each with its reason.
+  the reader follows the file. the test lists each with its reason.
 - MusicXML, written and read as music21 writes and reads it, for what the
   writer refused and the reader passed over:
   - glissandi and slides: `SpannerKind::Glissando`, `Spanner::glissando`,
@@ -668,7 +668,7 @@ are tunes whose own reading cannot be written back.
     A file gives its two note values and no numbers; the writer gives each
     side its number from the tempo in force before it in the part, as
     music21's exporter does, and writes the speed the new side is played at.
-- The wheel's `to_musicxml` reads music21's own `Glissando`,
+- the wheel's `to_musicxml` reads music21's own `Glissando`,
   `TremoloSpanner`, `PedalBounce`, `PedalGapStart`, `PedalGapEnd`,
   `RehearsalMark` and `MetricModulation` and a barline inside a measure,
   where it refused a pedal object, a rehearsal mark and a metric modulation
@@ -676,21 +676,21 @@ are tunes whose own reading cannot be written back.
   justification, placement and `hideObjectOnPrint` the crate read.
 - `musicxml::ExportOptions::make_notation` writes a score as music21's
   exporter writes one by default, with `makeNotation=True`: the notation the
-  score leaves unsaid is worked out before it is written. Gaps are filled
+  score leaves unsaid is worked out before it is written. gaps are filled
   with rests that are not printed, a part of loose notes is cut into
   measures and its overlapping notes put in voices, notes running past a
   barline are cut and tied, accidentals are decided, tuplets a cut left
   unfinished are completed, notes are beamed and tuplets bracketed where the
   part has none yet, and lengths no single note value writes are cut into
   tied values. `to_musicxml` then takes a part or a plain stream as readily
-  as a score, and the score handed in is not changed. Off, which is the
+  as a score, and the score handed in is not changed. off, which is the
   default, the score is written as it stands, as before.
   It is held to music21 byte for byte on 244 subjects, each read by the
   crate's own reader and written by both: 15 TinyNotation lines and the same
   15 as loose notes, 9 parts built a note at a time, 29 MIDI files, 134 ABC
   tunes — every one of the 118 in music21's corpus that it reads into no
   measures, which could not be compared before — and 42 corpus scores kept
-  as MusicXML. Beyond those, 600 generated TinyNotation subjects, every
+  as MusicXML. beyond those, 600 generated TinyNotation subjects, every
   fortieth ABC tune of the corpus, 215 further corpus scores and every
   corpus score tried as MIDI that music21 can write agree.
 - `makenotation::make_notation` is music21's `makeNotation` on a stream:
@@ -699,15 +699,15 @@ are tunes whose own reading cannot be written back.
   `makenotation::split_at_durations` are music21's `makeTupletBrackets` and
   `splitAtDurations`.
 - `Duration::expression_is_inferred` and `set_expression_is_inferred`:
-  music21's `expressionIsInferred`. A duration made from a length may be
+  music21's `expressionIsInferred`. a duration made from a length may be
   written another way when notation is made; one made from a note value is
   left as written.
 - `Stream::padding_left` and `padding_right`: music21's `paddingLeft` and
   `paddingRight`, how much of its bar a pickup or a measure cut short leaves
-  unfilled. The MusicXML and ABC readers set them as music21's do.
+  unfilled. the MusicXML and ABC readers set them as music21's do.
 - `TimeSignature::is_restated`: whether a meter is an earlier measure's
   standing again, as music21's ABC reader leaves one object in two measures.
-- The wheel's `to_musicxml` takes `make_notation=True`.
+- the wheel's `to_musicxml` takes `make_notation=True`.
 - `to_musicxml` with `make_notation` writes a measure or a voice standing
   alone, as music21's `fromMeasure` and `fromVoice` do: the measure is
   filled out to its bar, given a meter and a clef its notes fit where it
@@ -720,11 +720,11 @@ are tunes whose own reading cannot be written back.
   transpose each part by its instruments' transpositions, each instrument
   moving the notes, chords, chord symbols and keys from where it stands to
   where the next one does, as music21's `toWrittenPitch` and
-  `toSoundingPitch` do. The wheel reads and sets `atSoundingPitch`.
+  `toSoundingPitch` do. the wheel reads and sets `atSoundingPitch`.
 
-## Changed
+## changed
 
-- The crate is held to music21 11.0.0b11 with the fixes sent upstream from
+- the crate is held to music21 11.0.0b11 with the fixes sent upstream from
   here, and stops copying the music21 bugs those fix:
   - `capella::from_capella` reads a `single` barline as a regular one, where
     it refused it, and reads a tuplet's `prolong`.
@@ -745,8 +745,8 @@ are tunes whose own reading cannot be written back.
   - `instrument::deduplicate`, and the MIDI reader with it, settle only the
     instruments standing at one offset together, so a program change later
     in a part is kept.
-  - A roman numeral past seven, `VIII`, is refused, where it read as `VII`.
-  - A trill takes its accidental's showing only where that is decided.
+  - a roman numeral past seven, `VIII`, is refused, where it read as `VII`.
+  - a trill takes its accidental's showing only where that is decided.
   - `to_musicxml` writes a chord's notes lowest first on the staff, its
     fingerings moving with their notes, and a chord whose fingered notes
     would not stay first as it stands; it joins a piano's staves where the
@@ -778,7 +778,7 @@ are tunes whose own reading cannot be written back.
   - `StepScale::octave_repeating` respells the last step of steps a whole
     octave wide spelled as something else, so `M3 M3 M3` closes on the
     tonic as `M3 M3 d4` rather than on `B#`.
-  - The Python package's `Accidental` reads a value as music21's lookup
+  - the Python package's `Accidental` reads a value as music21's lookup
     table does -- a name, modifier, alternate name or alter, a string tried
     again lowercased -- refusing `''` and `None`. With
     `allowNonStandardValue`, `set` sets the name or the alter alone, and a
@@ -786,12 +786,12 @@ are tunes whose own reading cannot be written back.
     not one letter of the scale, and is passed over where a name is given.
 - `abc::to_abc` says each voice's opening clef on its `V:` line, where it
   used to name it in the `K:` field, and says every clef but a treble clef
-  the notes fit, where it used to leave unsaid any clef the notes fit. A
+  the notes fit, where it used to leave unsaid any clef the notes fit. a
   renderer drawing the tune, whose default is treble, now draws a bass part
-  in the bass clef. A tune of one voice names its part on a `V:1` line, and
+  in the bass clef. a tune of one voice names its part on a `V:1` line, and
   a part opening with an instrument that has a General MIDI program says so
   with `%%MIDI program`.
-- The score editor writes an imported score as ABC with `abc::to_abc`, its
+- the score editor writes an imported score as ABC with `abc::to_abc`, its
   own ABC writer gone: what it reads is turned into the crate's score and
   written by the crate.
 - `to_musicxml` writes a part at written pitch, as music21's exporter
@@ -799,12 +799,12 @@ are tunes whose own reading cannot be written back.
   pitch before it is written. `from_musicxml` says a part is at sounding
   pitch unless the file gave it a `<transpose>`, and `from_mei` says its
   parts are at written pitch, as music21's readers do, so a part whose
-  instrument transposes is written as music21 writes it. With
+  instrument transposes is written as music21 writes it. with
   `make_notation` the part is turned to written pitch after the score's
   notation is made, and its accidentals are decided again at written pitch.
-- The score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
+- the score editor's own MIDI reader, `midi_to_abc`, is gone: MIDI is read
   by the crate's `from_midi` like the other formats.
-- The `musescore` module is always there, since reading a `.mscx` runs no
+- the `musescore` module is always there, since reading a `.mscx` runs no
   program. `musescore::MuseScore`, which finds and runs an installed
   MuseScore, is still behind the `musescore` feature and still left out of
   a wasm build.
@@ -820,55 +820,55 @@ are tunes whose own reading cannot be written back.
 - `Duration::from_type` and the named values (`Duration::quarter()` and the
   rest) say how they are written, so `expression_is_inferred` is false for
   them, as it is for music21's `Duration('quarter')`.
-- The places `Scale::places_of` counts are numbered by the degree each
+- the places `Scale::places_of` counts are numbered by the degree each
   stands on, lowest first, and `next_pitch_below` and `next_pitch_above`
   read a note the scale stands twice as the first of them: coming down from
   Rag Marwa's `D-`, its second degree, the next note is `C`, where it was
   `B`, as from the seventh.
-- The wheel answers the same on every run where music21 picks at random.
+- the wheel answers the same on every run where music21 picks at random.
   A pitch a scale stands on more than one degree is the lowest of them, in
-  `getScaleDegreeFromPitch` and in where `nextPitch` steps from: Rag
+  `getScaleDegreeFromPitch` and in where `nextPitch` steps from: rag
   Marwa's `A` is its fifth degree, not its fifth or its seventh by chance.
   `partIdRandomize` and `instrumentIdRandomize` count their ids up from one
   through the process, in the same `P` or `I` and thirty-two hex digits,
   where they drew them at random.
 
-## Fixed
+## fixed
 
 - `from_musicxml` puts each measure at the offset music21 does, the sum of
   the lengths before it snapped to a fraction: a measure after a run of
   triplet-length bars was a hair early.
-- A scale steps from a pitch on one of its degrees however the pitch is
+- a scale steps from a pitch on one of its degrees however the pitch is
   spelled, as music21 finds the degree by pitch space: told to start below
   `E#4` in C major, `next_pitch_beside` stepped up from `E4` to `F4`, where
   music21 steps from `F4` to `G4`.
-- A pitch built from a number keeps the natural music21 writes on it:
+- a pitch built from a number keeps the natural music21 writes on it:
   `Pitch(60)` has a natural, where only setting `ps` or `midi` leaves
   none.
-- Transposing a pitch moves its fundamental with it, as music21 does: a
+- transposing a pitch moves its fundamental with it, as music21 does: a
   diatonic interval dropped the fundamental, and one counted in semitones
   left it where it was.
-- A negative harmonic shift is written with music21's ordinal suffix:
+- a negative harmonic shift is written with music21's ordinal suffix:
   `-2th`, as Python takes the last digit of -2 modulo ten to be eight.
 - `Stream::flatten`, `recurse` and `leaves` snap each offset they add up
   as music21's `opFrac` does, so a note after three triplets stands on the
   beat rather than a hair before it, and lands in the measure it starts.
-- The key a stream is analysed in counts chord symbols and percussion
+- the key a stream is analysed in counts chord symbols and percussion
   chords among its notes, as music21's does, so a stretch holding only
   chord symbols lasting nothing is read, at nought, rather than not at all.
-- Transposing a `Key` or a `KeySignature` keeps the colour it is drawn in,
+- transposing a `Key` or a `KeySignature` keeps the colour it is drawn in,
   as music21's does; a score turned to sounding pitch lost it.
 - `from_roman_text` records a pickup's `padding_left`, and the last
   measure's `padding_right`, as music21 does; it moved the pickup's chords
   to the start of the measure and said nothing of what was left out, so
   their beats were read a beat or more early.
-- The figured-bass realizer's scores bracket and complete their tuplets and
+- the figured-bass realizer's scores bracket and complete their tuplets and
   join tied tuplet notes back up, as music21's `makeNotation` does when the
-  realizer writes a part. A line holding a triplet was written with its
+  realizer writes a part. a line holding a triplet was written with its
   tuplets unbracketed.
 - `abc::to_abc` no longer writes a bass clef that music21's reader, and the
   crate's, read as lowering every note two octaves: music21 takes a bass
-  clef named in the header's `K:` field that way. It also gives every voice
+  clef named in the header's `K:` field that way. it also gives every voice
   of a measure the measure's clef, key and meter, where only the first voice
   had them and the others were written with no meter.
 - `midi::to_midi` plays a chord whose notes each carry a volume as music21
@@ -880,43 +880,43 @@ are tunes whose own reading cannot be written back.
   float and anything else as an exact fraction, so where music21 adds a
   float span to a fractional start and the span ends a hair past the next
   dynamic, the earlier dynamic is in force there, as it is in music21.
-- A chord symbol of a kind music21 has no notation for, such as MusicXML's
+- a chord symbol of a kind music21 has no notation for, such as MusicXML's
   `minor-major`, sounds its root and its bass alone, as music21's does,
   rather than the chord the crate read its letters as.
 - `TimeSignature::average_beat_strength` weighs the stream's own elements
   only, as music21's `averageBeatStrength` does, and with `notes_only` its
-  notes and chords without its rests. It used to weigh everything inside
+  notes and chords without its rests. it used to weigh everything inside
   the measures and voices the stream held, so `best_time_signature` gave a
   measure whose notes stand in a voice three-four where music21 gives
   six-eight.
 - `from_musicxml` gives a hairpin, bracket, octave line or pedal started
   after the last note of a part the next part's first note, as music21
-  does. The note was taken from the queue and then lost, leaving the
+  does. the note was taken from the queue and then lost, leaving the
   spanner on the one note it ended on.
-- The score editor read a flat as a natural wherever it spelled a note
+- the score editor read a flat as a natural wherever it spelled a note
   itself -- an imported score, a note dragged or moved by the arrow keys,
   the comping part -- and decided which accidentals its MusicXML export
-  shows the same way, since pitch names came to write flats as `b`. A B flat
+  shows the same way, since pitch names came to write flats as `b`. a B flat
   in F major was written `=B`.
-- A figured bass line is realized as it is written. A bass note running
+- a figured bass line is realized as it is written. a bass note running
   past a barline is a segment for each of the two notes it is written as,
   as it is in music21, where it used to be one; a line in a meter its notes
   cross the barlines of now has the voicings music21 finds for it.
-- A note cut at a barline shares out its expressions as music21's
+- a note cut at a barline shares out its expressions as music21's
   `splitAtQuarterLength` does: a trill stays on the first piece, a fermata
-  goes to the last, and an ornament goes where its `tie_attach` says. Both
+  goes to the last, and an ornament goes where its `tie_attach` says. both
   pieces used to keep them all, so `make_ties` and the ABC reader's
   rebarring wrote a trill and a fermata twice.
 - `from_musicxml` reads words naming a coda or a segno as music21 does: the
   mark is drawn as its sign, which has no side of the staff, where the
   words' placement was kept and written on the sign.
-- A `MetronomeMark`'s number within a millionth of a whole number is that
+- a `MetronomeMark`'s number within a millionth of a whole number is that
   whole number, as music21 makes it: a dotted quarter at 110 counted in
   quarters is `165`, where `equivalent_by_referent` answered
   `165.00000000000003` and everything worked out from it carried the hair.
 - `abc::from_abc` transposes a tune whose key says `-8va` by semitones, as
   music21 does, which spells each note afresh and leaves how its accidental
-  is shown undecided. It kept each spelling and showing.
+  is shown undecided. it kept each spelling and showing.
 - `musicxml::from_musicxml` reads a Finale `<forward>` of no length as a
   quarter rest that is not printed, as music21 does.
 - `musicxml::to_musicxml` passes over an unprinted rest whose length no note
@@ -924,10 +924,10 @@ are tunes whose own reading cannot be written back.
 
 # music21-rs 0.8.0
 
-Four more of music21's analysis modules are the crate's—
+four more of music21's analysis modules are the crate's—
 `analysis.enharmonics`, `analysis.harmonicFunction`,
 `analysis.neoRiemannian` and `analysis.transposition`—and pass every
-example: 40 modules, 1,028 docstrings and 9,174 examples. Asking music21 and
+example: 40 modules, 1,028 docstrings and 9,174 examples. asking music21 and
 the crate the same questions over thousands of random inputs found eleven
 places where they answered differently; they agree now.
 
@@ -947,16 +947,16 @@ music21 reads. Humdrum, MEI and RomanText follow: `humdrum::from_humdrum`,
 `mei::from_mei` and `romantext::from_roman_text`, each held to music21's
 reader the same way, on scores from music21's corpus and its own tests.
 
-## Breaking Changes
+## breaking changes
 
 - Harte chord notation is the `harte` crate, a workspace member beside this
   one that depends on it, rather than the `harte` module: `harte::Harte`,
   `HarteInterval`, `SHORTHAND_DEGREES` and `convert_interval` moved there
   as they were, and it refuses a label with its own `harte::Error`, so
-  `Error::Harte` is gone from this crate. It is harte-library's notation,
+  `Error::Harte` is gone from this crate. it is harte-library's notation,
   not music21's, and music21's author asks for a small core with add-ons
   around it.
-- Flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
+- flats are written `b`: `Pitch::name` is `Bb`, `name_with_octave`
   `Bb4`, a flat's `Accidental::modifier` `b` and a double flat's `bb`, and
   so for every name built from them: key, scale and chord-symbol names,
   `CHROMATIC_PITCH_CLASS_NAMES`. `-` is still read everywhere a name is.
@@ -964,9 +964,9 @@ reader the same way, on scores from music21's corpus and its own tests.
   hands Python. Cuthbert's "Music21's Mistakes" regrets borrowing `-`.
   A pitch name and octave no longer collide: B-flat 1 is `Bb1`, B in octave
   -1 `B-1`.
-- Every pitch has an accidental. `Pitch::accidental` answers
+- every pitch has an accidental. `Pitch::accidental` answers
   `&Accidental`, a natural where none is written, so arithmetic on it
-  needs no `None` case. What was `accidental` is `written_accidental`,
+  needs no `None` case. what was `accidental` is `written_accidental`,
   and `accidental_mut` is `written_accidental_mut`: music21's view, where
   `D` has none and `Dn` a natural, which the wheel keeps.
   `set_accidental` takes an `Accidental`; `set_written_accidental` takes
@@ -975,7 +975,7 @@ reader the same way, on scores from music21's corpus and its own tests.
 - `Polyrhythm::ratio_pitches` and `ratio_chord` sound the ratios in tune:
   each pitch carries a microtone for the part of its ratio past the nearest
   semitone, so a 4:5:6 rhythm on `C4` is `C4 E4(-14c) G4(+2c)`.
-- `Polyrhythm::to_chord` and `to_polypitch` are gone. They mapped where each
+- `Polyrhythm::to_chord` and `to_polypitch` are gone. they mapped where each
   beat falls in the bar onto twelve semitones, which is no chord the rhythm
   implies; `ratio_chord` is the chord its ratios make.
 - `Interval::pythagorean_ratio` returns an error instead of panicking on an
@@ -983,7 +983,7 @@ reader the same way, on scores from music21's corpus and its own tests.
   answers for up to nineteen fifths where it stopped at eighteen.
 - `Pitch::frequency_hz_in` sounds the degree nearest each key in a system
   without twelve degrees to the octave, where it read the pitch-space number
-  as a degree: A4 in 19-EDO is 436.0 Hz, where it was degree 69, 101.3 Hz.
+  as a degree: a4 in 19-EDO is 436.0 Hz, where it was degree 69, 101.3 Hz.
 - `TuningSystem::label` names a degree by the pitch it sounds: `C-1` for
   `CN1`, `C♯/D♭4` for `C#/Db4`, `G0(+2c)` for Bohlen-Pierce's `T0O0`.
   `TWELVE_TONE_NAMES`, `TWELVE_TONE_NAMES_SHARP`, `TWELVE_TONE_NAMES_FLAT`
@@ -999,7 +999,7 @@ reader the same way, on scores from music21's corpus and its own tests.
 
 - `StreamElement` has eight more variants and `expressions::Expression` is
   new, so a `match` over either needs arms for them.
-## Added
+## added
 
 - `abc::from_abc` and `abc::from_abc_number`, music21's `abcFormat` and its
   translator: a tune as a score, a file of tunes as an opus, voices as
@@ -1013,7 +1013,7 @@ reader the same way, on scores from music21's corpus and its own tests.
 - `musescore::MuseScore`, behind the `musescore` feature: finds an installed
   MuseScore and runs it to convert a file, so anything MuseScore opens
   (`.mscz`, `.mscx`, Guitar Pro, MIDI, Capella...) can be read as a score
-  and a score written as anything it saves. It is the one part of the crate
+  and a score written as anything it saves. it is the one part of the crate
   that touches files and starts a process, and is not built for wasm.
 - `midi::from_midi`, music21's `midi.translate.midiFileToStream`: each
   track with notes a part, the tracks without the conductor whose meters,
@@ -1043,8 +1043,8 @@ reader the same way, on scores from music21's corpus and its own tests.
 - `makenotation::make_measures` and `make_measures_by`, `make_ties`,
   `make_rests`, `make_voices` and `quantize`: music21's `makeMeasures`,
   `makeTies`, `makeRests`, `makeVoices` and `quantize`.
-- A note may be named (`Note::id`), and MusicXML export writes the name.
-- A `Rest` may carry a tie, as music21's may.
+- a note may be named (`Note::id`), and MusicXML export writes the name.
+- a `Rest` may carry a tie, as music21's may.
 - `musicxml::to_musicxml` and `ExportOptions`: parts, measures, voices,
   notes, chords, rests, grace notes, ties, beams, tuplet brackets,
   accidentals, lyrics, fermatas, ornaments, articulations, slurs, hairpins,
@@ -1060,18 +1060,18 @@ reader the same way, on scores from music21's corpus and its own tests.
   fermatas, arpeggios, slurs, hairpins, octave lines, brackets, pedals,
   wavy lines, dynamics, tempo marks, words and repeat marks, chord symbols,
   barlines, repeats and endings, instruments and transpositions, staff
-  groups and metadata. It takes the document's text; unpacking a `.mxl`
+  groups and metadata. it takes the document's text; unpacking a `.mxl`
   is the caller's.
 - `SpannerKind::TrillExtension`, the wavy line carrying a trill on.
-- The wheel has `from_musicxml(text)` and `to_musicxml(score,
-  encoding_date=None, software=None)`. The writer takes the wheel's streams
+- the wheel has `from_musicxml(text)` and `to_musicxml(score,
+  encoding_date=None, software=None)`. the writer takes the wheel's streams
   or music21's; the reader hands back the wheel's own `Score`, holding what
   the wheel has classes for -- notes, chords, rests, clefs, keys, meters,
   tempo marks, dynamics, chord symbols, instruments -- with measure numbers
-  and part names as attributes. A wheel stream now takes attributes.
+  and part names as attributes. a wheel stream now takes attributes.
 - `metadata::Metadata`, music21's `Metadata`, with its 131-property
   vocabulary; a `Stream` carries one.
-- A `Stream` now carries what a score says of its measures and parts:
+- a `Stream` now carries what a score says of its measures and parts:
   measure numbers, part names, ids, staff groups (`StaffGroup`), barlines
   (`bar::Barline`), alternative endings (`bar::Ending`) and spanners.
 - `spanner::Spanner`: slurs, crescendos, diminuendos, octave lines
@@ -1090,7 +1090,7 @@ reader the same way, on scores from music21's corpus and its own tests.
   note the instrument that plays it.
 - `StreamElement::Clef`, `Instrument`, `Key`, `TempoText` and
   `TextExpression`.
-- A note, chord or rest carries its expressions (`expressions::Expression`:
+- a note, chord or rest carries its expressions (`expressions::Expression`:
   ornaments, `Fermata`, arpeggios) and articulations; a note or rest may be
   hidden from print, and a rest shifted off the middle line.
 - `Duration::grace` and `Grace`, what music21's `GraceDuration` says; a
@@ -1112,22 +1112,22 @@ reader the same way, on scores from music21's corpus and its own tests.
 - `analysis::neoriemannian`: `Transform` (L, P, R), `lrp_chain` and
   `lrp_combination`, `complete_hexatonic`, `hexatonic_system`,
   `chromatic_mediant`, `disjunct_mediant`, `slide`, `nebenverwandt`,
-  `is_neo_r` and `is_chromatic_mediant`. The wheel installs them over
+  `is_neo_r` and `is_chromatic_mediant`. the wheel installs them over
   music21's `analysis.neoRiemannian`.
 - `analysis::harmonic_function::HarmonicFunction`, the eighteen function
   labels, with `to_roman` and `from_roman`: music21's `functionToRoman`
-  and `romanToFunction`. The wheel installs them and the enum over
+  and `romanToFunction`. the wheel installs them and the enum over
   music21's `analysis.harmonicFunction`.
 - `analysis::transposition::TranspositionChecker`, a set of pitches in all
-  twelve transpositions and how many differ. The wheel installs it over
+  twelve transpositions and how many differ. the wheel installs it over
   music21's.
 - `chordsymbol::alter_to_chord_symbol_string`, music21's
   `alterToChordSymbolString`: `b` or `#` once per semitone.
 - `TimeSignature::offset_in_bar`, the arithmetic of music21's
   `getMeasureOffsetOrMeterModulusOffset`: where an element falls in the
-  bar, given its offset and the meter's. The wheel's member reads the two
+  bar, given its offset and the meter's. the wheel's member reads the two
   offsets off music21's stream and hands them over.
-- Analysis of a whole `Stream`: `analysis::stream_distribution` and
+- analysis of a whole `Stream`: `analysis::stream_distribution` and
   `estimate_key_of_stream`, music21's `KeyWeightKeyAnalysis` over a
   stream's duration-weighted pitch classes; `stream_pitch_span`, its
   `Ambitus`; and `melodic_lines`, the lines `MelodicIntervalDiversity`
@@ -1159,49 +1159,49 @@ reader the same way, on scores from music21's corpus and its own tests.
   frequency snapped to a tuning system and spelled.
 - `tuningsystem::Ratio::to_fraction`, `monzo` and `cents`.
 
-## Changed
+## changed
 - MusicXML export writes a chord's notes in the order the chord holds them,
   as music21 does, rather than lowest first.
 - MusicXML export names a part with no name after the first instrument it
   holds anywhere, inside its measures too, as music21's `partName` does.
 
-- The web score editor reads and writes MusicXML through the crate. Its
+- the web score editor reads and writes MusicXML through the crate. its
   export builds a score of the crate's and `to_musicxml` writes it, so the
   file is laid out as music21 lays one out; its import is `from_musicxml`,
   with the tablature tuning, rehearsal marks and drum channel the editor
   wants read off the document beside it.
 - `Stream::parts` includes a `PartStaff`, as music21's `.parts` does, and
   the wheel reads music21's `PartStaff` as one rather than as a `Part`.
-- The wheel keeps a tuplet's bracketing, a time signature's symbol and a
+- the wheel keeps a tuplet's bracketing, a time signature's symbol and a
   metronome mark's placement and parentheses in the crate's value.
-- A chord symbol's figure writes its added and omitted notes as degrees
+- a chord symbol's figure writes its added and omitted notes as degrees
   above the root, in order, with the bass last, as music21 now does:
   `G7addb9add11addb13`, `Am7add11/C`, `Dsusadd#3omit4`, where it wrote
   note names (`CaddD-`) that no chord-symbol parser reads back.
   `ChordSymbolFigure::additions` is a list of `ChordAlteration`s and
-  `omissions` of degrees. A figure read as music21 reads one takes any run
+  `omissions` of degrees. a figure read as music21 reads one takes any run
   of `b`, `-` and `#` after `add` or `omit` (`add-9`, `addbb9`), and the
   wheel's `findFigure` writes the bass after the modifications
   (`C add 2/B-`).
 - MusicXML is behind the `musicxml` feature, which `musescore` turns on.## Fixed
 
-- A lyric written as a hyphen alone is the middle of a word with nothing
+- a lyric written as a hyphen alone is the middle of a word with nothing
   sung to it, as music21 reads it, not the end of one; and a lyric of no
   text at all says nothing of where it falls in a word.
 
 - MusicXML export places a rest that is shifted off the middle line by the
   clef in force where the rest stands, not by the last clef written; and the
   wheel carries a chord's notes hidden one by one.
-- The voice-leading walk sorts a text expression ahead of everything at its
+- the voice-leading walk sorts a text expression ahead of everything at its
   offset, as music21's `classSortOrder` of -30 does; it was sorted with the
   notes.
 
-- `Accidental`'s ordering agrees with its equality. Equality compares
+- `Accidental`'s ordering agrees with its equality. equality compares
   names and ordering alterations, so a renamed natural ordered `Equal` to
-  `natural` while `!=` it, which `PartialOrd` forbids. Two accidentals of
-  one alteration and different names are now unordered. The wheel keeps
+  `natural` while `!=` it, which `PartialOrd` forbids. two accidentals of
+  one alteration and different names are now unordered. the wheel keeps
   music21's `<`, which compares alterations alone.
-- A chord symbol is voiced as music21 voices it, root and bass included.
+- a chord symbol is voiced as music21 voices it, root and bass included.
   music21 puts its own root and bass objects in the list it voices, so an
   octave pass moves them with the chord, a bass held twice moves twice,
   and the inversion reads a bass already moved: `C5/G` is `G3 G3 C4`,
@@ -1215,23 +1215,23 @@ reader the same way, on scores from music21's corpus and its own tests.
 - `ChordSymbol::parse_music21` reads a degree as music21 does, through
   what Python's `int` accepts once sharps and flats are off, so `Cb-7`
   adds a flat seventh where it was refused, and takes the first run of the
-  digits one to nine, so `C10` adds a one. A root no pitch spells, `C#-7`,
+  digits one to nine, so `C10` adds a one. a root no pitch spells, `C#-7`,
   raises music21's `AccidentalException`, where the wheel raised
   `ValueError`.
-- The report counted a wheel class that inherits its members, such as
-  `Trill` from `Ornament`, as lacking them. The wheel figure reads 94%
+- the report counted a wheel class that inherits its members, such as
+  `Trill` from `Ornament`, as lacking them. the wheel figure reads 94%
   where it read 89%.
-- A chord respelled by dissonance, as one built from pitch-class numbers
-  is, could be spelled otherwise than music21 spells it. The Pythagorean
+- a chord respelled by dissonance, as one built from pitch-class numbers
+  is, could be spelled otherwise than music21 spells it. the Pythagorean
   penalty gave a twelfth down 1/6 where music21 gives 1/3, and took the
   log of each prime apart where music21 takes one of the whole
   denominator, and a tolerance for ties then hid a difference music21's
-  `min` keeps. Pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
+  `min` keeps. pitch classes 3, 6 and 9 are `E- G- A` now, as in music21;
   every set of pitch classes and 6,000 respellings of named pitches agree.
-- An augmented sixth is named by its root and inversion, as music21 names
+- an augmented sixth is named by its root and inversion, as music21 names
   it, for every voicing: a table of spellings had pinned `A- C D F#` and
   six others to one inversion whatever note was in the bass, so nine of
-  ten voicings tried were misnamed. And a seventh built from pitch-class
+  ten voicings tried were misnamed. and a seventh built from pitch-class
   numbers is an enharmonic equivalent where music21 says so, since the
   fifth above its inferred root is respelled on the way.
 - `RomanNumeral`: `frontAlterationString` is what was written, so `It6`
@@ -1239,22 +1239,22 @@ reader the same way, on scores from music21's corpus and its own tests.
   raised bass; `functionalityScore` looks `V+` up as written; and a
   numeral that is neither a triad nor a seventh is never mixture. 1,185
   numerals now answer eighteen questions as music21's do.
-- The wheel's `Key` answers the scale questions music21's `Key` inherits
+- the wheel's `Key` answers the scale questions music21's `Key` inherits
   from `DiatonicScale`—`getPitches`, `getDominant`, `nextPitch`,
   `derive`, `romanNumeral` and the rest—as the scale of its mode does,
   where it raised `AttributeError`, installed or not. `derive` hands back
   keys, as music21's does.
-- A scale's `getChord` and an interval's `noteStart` and `noteEnd` built
+- a scale's `getChord` and an interval's `noteStart` and `noteEnd` built
   their objects from music21's classes even with no music21 installed,
-  and failed there; they use the wheel's own. Scales
+  and failed there; they use the wheel's own. scales
   have music21's `chord` and `usePitchDegreeCache`.
-- A Roman numeral made from a degree is written in capitals in a modal
+- a roman numeral made from a degree is written in capitals in a modal
   key, as music21 writes it: 2 in C dorian is `II`, a major triad, where
   it was `ii`.
 - `TimeSignature::beat_division_durations` and its subdivisions are read
   off the beat sequence as music21 reads them: the divisions of every beat
   must agree, not the beats, so `2+3/8` divides into eighths where it was
-  refused. The wheel raises music21's `TimeSignatureException` where the
+  refused. the wheel raises music21's `TimeSignatureException` where the
   divisions do differ. 110 meters agree with music21 on fifteen
   properties.
 - `Chord::closed_position` measured from the note sounding lowest where
@@ -1265,24 +1265,24 @@ reader the same way, on scores from music21's corpus and its own tests.
   root of two to the distance from A4, where it took two to the distance
   over twelve, and so differed from music21 in the last bits of nearly
   every pitch.
-- The report's coverage run instrumented only the workspace since
+- the report's coverage run instrumented only the workspace since
   cargo-llvm-cov 0.9, whose default wrapper skips `python-parity`: its
-  suites ran and wrote no profile. It passes `--no-rustc-wrapper` now, and
-  reads 95.2% of lines where it read 90.6%. A suite that did not pass is
+  suites ran and wrote no profile. it passes `--no-rustc-wrapper` now, and
+  reads 95.2% of lines where it read 90.6%. a suite that did not pass is
   named beside the figure, since it leaves the figure short.
 
 # music21-rs 0.7.1
 
-The wheel read the first item of a music21 stream iterator twice, so with it
+the wheel read the first item of a music21 stream iterator twice, so with it
 installed `chord.Chord(stream.notes)` held its first note twice; that is
-fixed. Besides, music21's key analysis is in the crate, weighted by duration
+fixed. besides, music21's key analysis is in the crate, weighted by duration
 and ranked, spelled and scored as music21 ranks, spells and scores it, and
 music21's own `analysis.discrete`, `figuredBass.checker` and
 `figuredBass.harmony` pass every example with the crate beneath them: 36
-modules, 1,004 docstrings and 9,008 examples. A figured-bass segment finds its
+modules, 1,004 docstrings and 9,008 examples. a figured-bass segment finds its
 voicings about eighteen times faster than it did in 0.7.0.
 
-## Added
+## added
 
 - `analysis::pitch_class_distribution`, how long each pitch class sounds,
   and `analysis::estimate_key_from_distribution`, every key ranked against
@@ -1293,24 +1293,24 @@ voicings about eighteen times faster than it did in 0.7.0.
   `analysis::melodic_interval_counts`, its
   `MelodicIntervalDiversity.countMelodicIntervals`.
 
-## Changed
+## changed
 
 - `estimate_key_from_pitches` and the rest rank keys as music21 does, ties
   and all, and spell them as music21 does: a minor key on the eighth pitch
   class is G-sharp minor, where it was A-flat minor.
-- A figured-bass segment walks its voicings as indices over each pitch's
+- a figured-bass segment walks its voicings as indices over each pitch's
   place and name, worked out once, and builds only the voicings it keeps: a
   seventh chord's 2,744 voicings are looked at in about 75 microseconds,
   where they took 1.3 milliseconds.
 
-## Fixed
+## fixed
 
-- The wheel read a music21 stream iterator's first item twice wherever it
+- the wheel read a music21 stream iterator's first item twice wherever it
   took a whole iterator at once, so `chord.Chord(stream.notes)` with the
-  wheel installed held its first note twice. Collecting asks an iterator for
+  wheel installed held its first note twice. collecting asks an iterator for
   its length, and music21's answers by walking itself from the start; the
   wheel no longer asks.
-- A figured-bass segment the wheel builds is made of the wheel's own rules,
+- a figured-bass segment the wheel builds is made of the wheel's own rules,
   scale, notes and chords wherever music21's are not replaced, not of
   music21's.
 
@@ -1321,25 +1321,25 @@ are the instruments and `AbstractScale`. `clef`, `articulations`,
 `TempoText` and music21's ornaments are ported and installed, and so is
 figured-bass realization: a bass line and its figures voiced in every way the
 rules allow. music21's own doctests pass every example of the modules that
-came with it: 33 modules, 963 docstrings and 8,760 examples in all. A note
-and a chord know the instrument they are played on. The `Tuplet` changes
+came with it: 33 modules, 963 docstrings and 8,760 examples in all. a note
+and a chord know the instrument they are played on. the `Tuplet` changes
 break its API, which is why this is a minor release.
 
-## Breaking Changes
+## breaking changes
 
-- A `Tuplet`'s written values may be unsaid, as music21's may:
+- a `Tuplet`'s written values may be unsaid, as music21's may:
   `duration_actual`, `duration_normal`, `tuplet_actual` and `tuplet_normal`
   answer an `Option`, and `Tuplet::ratio` is music21's `Tuplet(3, 2)`, with
   neither side counted in a note value. `duration_type`, `dots`,
   `normal_duration_type` and `normal_dots` still answer, with the eighth
   music21 assumes where nothing is said.
 - `Tuplet::multiplier` is music21's `tupletMultiplier`: how long the normal
-  side lasts over how long the actual notes would last unaltered. It used to
+  side lasts over how long the actual notes would last unaltered. it used to
   be the ratio of the counts alone, which is wrong wherever the two sides are
   counted in different values: three eighths in the time of one quarter
   multiplies each eighth by 2/3, not 1/3.
 
-## Added
+## added
 
 - `Tuplet::set_duration_actual`, `set_duration_normal`, and `augmented`,
   music21's `augmentOrDiminish`, which scales both written values and keeps
@@ -1352,17 +1352,17 @@ break its API, which is why this is a minor release.
 - `clef`: music21's clefs as `Clef` and `ClefKind` -- sign, line, octave
   change and the note on the lowest line for each of its 24 classes;
   `stem_direction_for_pitches`, `from_string` (`clefFromString`) and
-  `best_for` (`bestClef`). Checked against music21 by `clef_parity`, 796
+  `best_for` (`bestClef`). checked against music21 by `clef_parity`, 796
   cases.
 - `articulations`: music21's 52 articulation classes as `Articulation` and
   `ArticulationKind`, each with its volume shift, length shift, where it
   attaches after a tie split and the fields its class carries -- a
-  fingering's finger, a string or fret number, a bend. Checked by
+  fingering's finger, a string or fret number, a bend. checked by
   `articulation_parity`.
 - `tempo::TempoText`, a tempo said in words, with the metronome mark it
   implies and `is_common_tempo_text`.
 - `Instrument::set_percussion_pitch` and `set_in_percussion_map`.
-- Figured-bass realization, music21's `figuredBass` realizer:
+- figured-bass realization, music21's `figuredBass` realizer:
   `figuredbass::scale::FiguredBassScale` (`realizerScale`), the voicing rules
   in `figuredbass::possibility`, the resolutions of dominant sevenths,
   diminished sevenths and augmented sixths in `figuredbass::resolution`,
@@ -1380,20 +1380,20 @@ break its API, which is why this is a minor release.
   their ornamental pitches in a key and the notes each is played as, a
   nachschlag, a turn's delay and a tremolo's tied repeats included -- and
   `realize_ornaments`, and `Ornament::update_accidental_display`, which
-  decides whether each ornamental pitch shows its accidental. Checked against
+  decides whether each ornamental pitch shows its accidental. checked against
   music21 by `ornament_parity`, 1,368 cases over notes, lengths, keys and
   accidentals.
 
-## Changed
+## changed
 
-- The wheel's `Tuplet` takes music21's keyword-only arguments, leaves a
+- the wheel's `Tuplet` takes music21's keyword-only arguments, leaves a
   written value unset until something says it, refuses a change once frozen
   with music21's `TupletException`, and is installed over music21's, with
   that exception. music21's `duration` docstrings pass all 588 examples with
   it swapped in, where they lost 44 when it was last tried.
-- A note's or chord's `storedInstrument` refuses anything that is not an
+- a note's or chord's `storedInstrument` refuses anything that is not an
   instrument with music21's `TypeError`.
-- The wheel installs its instruments, clefs, articulations, ornaments,
+- the wheel installs its instruments, clefs, articulations, ornaments,
   `AbstractScale` and `TempoText` over music21's, with `ExpressionException`
   and `TremoloException`, and figured bass's `possibility`, `resolution`,
   `realizerScale`, `rules` and `segment`, which music21's own realizer then
@@ -1402,54 +1402,54 @@ break its API, which is why this is a minor release.
   (`fixDefaultOctaveForPitchList`), which is all it lacked: music21's `scale`
   doctests pass all 344 examples with it installed.
   An instrument or a clef the wheel builds is the installed class, as
-  music21 holds nothing else in a stream. With every one of them installed,
+  music21 holds nothing else in a stream. with every one of them installed,
   music21's suite fails the same fourteen tests as without.
 - `Scale::from_pitches` closes a collection as music21 does: not at all when
   the last note already carries the tonic's name, and otherwise on the first
   octave of the tonic past the last note in whichever direction the notes
-  went. It used to close only upward, and only by pitch space, so a
+  went. it used to close only upward, and only by pitch space, so a
   collection falling to its last note, or ending on `B#` above a `C`, closed
   somewhere music21 does not.
-- A tuplet frozen into a pickle keeps its bracket, its placement, how its
+- a tuplet frozen into a pickle keeps its bracket, its placement, how its
   numbers are shown, its nesting and whether it is frozen. music21 reads its
   corpus back out of pickles, so a score read from the cache had lost every
   tuplet bracket.
-- A tuplet's `bracket` takes `'slur'` as music21's does, and its written
+- a tuplet's `bracket` takes `'slur'` as music21's does, and its written
   values are music21's own `DurationTuple` wherever music21 is there, since
   music21's code asks for that class.
-- Installing a class replaces it in the tables music21 keeps of its classes,
+- installing a class replaces it in the tables music21 keeps of its classes,
   not only where a module names it, so music21 pickles and looks up the
   installed class wherever it goes by the table.
-- An accidental of music21's own handed to the wheel keeps whether it is
+- an accidental of music21's own handed to the wheel keeps whether it is
   shown, where the wheel used to read its name alone.
-- A quarter length whose float is written over more than 64 bits -- anything
+- a quarter length whose float is written over more than 64 bits -- anything
   as small as 1/10080 -- comes back as the `Fraction` music21's `opFrac`
-  makes of it rather than as a float. A fret bend's `release` read from
+  makes of it rather than as a float. a fret bend's `release` read from
   MusicXML is one.
 
 # music21-rs 0.6.0
 
-The stream learns two more things to hold, and with them the last of
-music21's stream walks the crate had left out. Every one of music21's own
+the stream learns two more things to hold, and with them the last of
+music21's stream walks the crate had left out. every one of music21's own
 examples now passes in all twenty-three modules under the harness — `sieve`,
 both halves of `meter`, `dynamics`, `scale.scala` and `instrument` included,
 802 docstrings and 7,467 examples — and 644 of the 691 members the feature map
-tracks are ported, up from 565 of 617. Every one of the 47 that are not has a
+tracks are ported, up from 565 of 617. every one of the 47 that are not has a
 reason written beside it, so the map no longer has an unexplained gap in it.
 
 music21's instruments and metric modulations are ported, and the wheel
 installs nine more classes over music21's own, with the exceptions they
 raise: `ChordSymbol`, `NoChord`, `ChordStepModification`, `Rest`,
 `MetricModulation`, `Sieve`, `TimeSignature`, `MeterTerminal` and
-`MeterSequence`. With every one of them installed, music21's own suite of
+`MeterSequence`. with every one of them installed, music21's own suite of
 5,038 tests fails the same fourteen as it does on its own.
 
-It is also the release that takes the breaking changes earlier ones held
+it is also the release that takes the breaking changes earlier ones held
 back: a tuning system that can repeat at any period, a pitch's accidental
 kept as music21 keeps it, one scale type where there were two, and no
 `#[non_exhaustive]` where it only hid new variants from a caller's `match`.
 
-## Breaking Changes
+## breaking changes
 
 - `TuningSystem::EqualTemperament { octave_size }`, `WholeTone` and
   `QuarterTone` are one variant, `TuningSystem::Equal(EqualDivision)`, so an
@@ -1462,17 +1462,17 @@ kept as music21 keeps it, one scale type where there were two, and no
   - `id`, `display_name` and `description` return `String`, and an equal
     system's id is its division, `19edo`. `EqualTemperament`, `WholeTone`
     and `QuarterTone` still parse.
-  - The `size` argument is gone from `AnyTuningSystem` and
+  - the `size` argument is gone from `AnyTuningSystem` and
     `AdaptiveTuningSystem`, and so are the free functions `get_ratio`,
     `get_fraction`, `get_label`, `get_frequency`, `get_frequency_at`,
     `get_cents` and `get_cents_at`; the methods remain.
   - `TuningSystem`, `AdaptiveTuningSystem` and `AnyTuningSystem` are
     `PartialEq` but no longer `Eq`.
 - `Pitch::accidental` returns `Option<&Accidental>`: `None` for a bare `D`
-  and a natural for `Dn`, as music21's `.accidental` does. It used to answer
+  and a natural for `Dn`, as music21's `.accidental` does. it used to answer
   a natural for both. `explicit_accidental`, `explicit_accidental_mut` and
   `has_accidental` are gone; `accidental_mut` edits in place, and
-  `Pitch::alter` is the alteration either way. Serialized pitches drop the
+  `Pitch::alter` is the alteration either way. serialized pitches drop the
   `has_accidental` field.
 - `Key::scale` returns a `Scale`, read off the key's signature so every key
   has one, and `Key::as_scale` is gone. `DiatonicScale` is gone.
@@ -1484,33 +1484,33 @@ kept as music21 keeps it, one scale type where there were two, and no
 - `MeterTerminal::division_options` is `partition_options` and
   `set_weights_at_level` is `set_level_weight`, music21's names for them.
 - `Pitch::from_name`, `Note::from_name` and `Interval::from_name` take
-  `impl AsRef<str>`. A `&str`,
+  `impl AsRef<str>`. a `&str`,
   a `String` or a `&String` passes as before; only a type that could be
   turned into a `String` without being one has to say so now.
 - `tuningsystem::FORTYTHREE_TONE`, an alias of `FORTY_THREE_TONE`, is gone.
-- `Duration::add_duration_tuple` keeps the values it is given. A quarter with
+- `Duration::add_duration_tuple` keeps the values it is given. a quarter with
   a half and a quarter tied on is three written values, and has no single
   type, until `consolidate` is called; it used only to lengthen the duration,
-  so `components` read back one whole note. This is what music21 does.
+  so `components` read back one whole note. this is what music21 does.
 
-## Added
+## added
 
 - `meter::MeterTerminal::from_partition_string` and `from_parts_given`, which
   read a span written as `2/4+2/4` or built out of the parts it holds;
   `offset_to_address`, every index down to the terminal sounding at an
   offset; `subdivide_nested_hierarchy`, a span nested to a depth; and
   `meter::partition_name`, what a partition of so many parts is called.
-- The rest of what music21 asks a span: `ratio_equal`, `flatten` and
+- the rest of what music21 asks a span: `ratio_equal`, `flatten` and
   `flat_weights`, `level_weight`, `partition_options`, `set_level_weight`,
-  `subdivide_by_other` and `partition_by_other`. A span flattens to what its
+  `subdivide_by_other` and `partition_by_other`. a span flattens to what its
   leaves come to, so a bar of four quarters divided into eighths flattens to
   `8/8`.
-- A meter sequence now weighs what its parts weigh, and sharing a weight out
-  among them follows how long each part is, as music21 does. A span used to
+- a meter sequence now weighs what its parts weigh, and sharing a weight out
+  among them follows how long each part is, as music21 does. a span used to
   keep one weight of its own and leave every part weighing one.
 - music21's own `meter.core` docstrings run against the crate, as
   `doctest_metercore`: all 386 of their examples and all 39 docstrings pass,
-  from 39 examples when the harness was first pointed at them. A
+  from 39 examples when the harness was first pointed at them. a
   `MeterSequence` holds its parts as the objects music21 hands back, adopts
   the spans it is built from, and carries music21's `_levelListCache`.
 - `ScalaScale` answers a Scala file the way music21's `ScalaData` does:
@@ -1519,21 +1519,21 @@ kept as music21 keeps it, one scale type where there were two, and no
   `from_adjacent_cents`, `from_interval_sequence` and `from_written_cents` for
   a scale built out of those, and `file_string` for the `.scl` text.
   `ScalaArchive::find` is the searching half of music21's `parse`: the one
-  scale a name names. A `ScalaDegree` reads and writes its own line,
-  through `FromStr` and `written`. A degree read as a
+  scale a name names. a `ScalaDegree` reads and writes its own line,
+  through `FromStr` and `written`. a degree read as a
   ratio is written back as that ratio, so a file read and written is the
   scale it was; music21 keeps cents alone and cannot.
 - `dynamics::Dynamic`: a dynamic mark and the loudness it stands for, with
   music21's tables for the marks, their Italian and English names and their
   scalars, and `dynamic_str_from_decimal` for the mark a loudness falls
-  under. A mark music21 has no loudness for is read without its `s` and its
-  closing `z`, so `sfz` is as loud as `f`. Checked against music21 by
+  under. a mark music21 has no loudness for is read without its `s` and its
+  closing `z`, so `sfz` is as loud as `f`. checked against music21 by
   `table_parity`.
 - `volume::realize_volume`: sets how loud every note and chord of a stream
   sounds from the dynamics in force, each until the next, and writes the
   answer back as an absolute velocity. `DynamicContext` is music21's
   `useDynamicContext`: the stream's own dynamics, none, or one for
-  everything. The expectations are music21's own `testRealizeVolumeA`.
+  everything. the expectations are music21's own `testRealizeVolumeA`.
 - `realize_chord_symbol_durations`: every chord symbol in a stream holds
   until the next one, wherever in the nesting that is, and the last to the
   end. `ChordSymbol` has a `duration`, nought until something says.
@@ -1542,13 +1542,13 @@ kept as music21 keeps it, one scale type where there were two, and no
   score itself rather than in a flattened copy.
 - `voiceleading::iterate_all_voice_leading_quartets`, with `QuartetOptions`:
   every `VoiceLeadingQuartet` in a score, as music21's walk over a timespan
-  tree finds them. Held to 4,451 quartets over three corpus scores by
+  tree finds them. held to 4,451 quartets over three corpus scores by
   `voice_leading_parity`. `verticality_at` is what is sounding in each part
   at an offset.
 - `tempo::interpolate_elements`: carries what lies between two points of one
   stream into another, keeping each thing's place between them.
 - `Sieve::compressed`: the compressed reading of a sieve, a union of residual
-  classes with the same members. A sieve of nothing but `&` and `|` is
+  classes with the same members. a sieve of nothing but `&` and `|` is
   compressed by intersecting its classes; one with a group, a `^` or a
   complemented group from its members over a range.
 - `instrument`: music21's 116 instrument classes as `Instrument::of_kind`,
@@ -1557,7 +1557,7 @@ kept as music21 keeps it, one scale type where there were two, and no
   `Instrument::from_name` is music21's `fromString`, reading a part name in
   six languages and their abbreviations along with the key a transposing
   instrument is in; `from_midi_program`, `all_names`,
-  `auto_assign_midi_channel` and `ensemble_name_by_size` are the rest. Every
+  `auto_assign_midi_channel` and `ensemble_name_by_size` are the rest. every
   kind, all 128 programs and 2,054 lookups are checked against music21 by
   `instrument_parity`. `string_pitches` is a string instrument's open strings
   and `set_modifier` says how unpitched percussion is played, choosing the
@@ -1571,7 +1571,7 @@ kept as music21 keeps it, one scale type where there were two, and no
   and `MsubN` residuals, `and` and `*`, `or` and `+`, and `not`.
   `Sieve::from_segment` builds a sieve from integers as music21's
   `CompressionSegment` does.
-- Scales that take their steps as an argument: `Scale::from_steps`, an
+- scales that take their steps as an argument: `Scale::from_steps`, an
   octave-repeating scale given by the steps between its notes;
   `Scale::from_cycle`, a cycle walked from its tonic both ways, for a cycle
   that does not come back at the octave; `Scale::from_scala`, a Scala file's
@@ -1580,18 +1580,18 @@ kept as music21 keeps it, one scale type where there were two, and no
   and `Simplification` with `with_simplification` says how a scale spells.
 - `ChordSymbol::parse_music21` reads a figure as music21's `_parseFigure`
   does, and `chordsymbol::sound_chord_notation` sounds it as `_updatePitches`
-  does, octaves, inversion and modifications included. All 524 figures of
+  does, octaves, inversion and modifications included. all 524 figures of
   the parity fixture agree note for note.
-- Every stream walk has a twin answering in positions in `Stream::leaves`:
+- every stream walk has a twin answering in positions in `Stream::leaves`:
   `volume::dynamics_in_force`, `chordsymbol::chord_symbol_durations`,
   `voiceleading::voice_leading_quartet_positions`,
   `voiceleading::verticality_positions_at` and `tempo::interpolated_offset`.
-- A `Rest` carries the words sung under it; the verse rules a note and a
+- a `Rest` carries the words sung under it; the verse rules a note and a
   rest share are `notation::verses`.
 - `TimeSignature::summed_numerator` and `MeterTerminal::summed_numerator`:
   whether a meter was written `3+2/8`, which beams in the parts it was
   written in.
-- A score editor at `/score/` on the site: ABC typed on the left is engraved
+- a score editor at `/score/` on the site: ABC typed on the left is engraved
   and played by abcjs, and everything musical about it — keys, harmony at
   every onset, parallel and hidden fifths and octaves, MIDI and MusicXML
   export, cents in any tuning system — is answered by the crate.
@@ -1599,23 +1599,23 @@ kept as music21 keeps it, one scale type where there were two, and no
   length: `consolidate`, `slice_component_at_position`, `set_dot_groups`,
   `split_dot_groups`, `linked` and `set_linked`, `grace_duration` and
   `written_values`, with `DurationTuple` for one written value and how long
-  it lasts. The two can disagree: a grace note is an eighth lasting nothing.
+  it lasts. the two can disagree: a grace note is an eighth lasting nothing.
 
-## Changed
+## changed
 
-- **A chord builds no Python object until something asks for one.** A chord
+- **a chord builds no Python object until something asks for one.** a chord
   holds a `Note` and a `Pitch` object per note so that an edit through one of
   them sticks, and it built every one of them on construction whether or not
-  anything ever looked. They are built a note at a time now, when that note is
+  anything ever looked. they are built a note at a time now, when that note is
   wanted, and `inner` is the chord meanwhile -- which is what it always was.
   Against music21 through the wheel, the median of the benchmark's 21 cases
   goes from 14.3x to 24.1x on one machine: `commonName` 36.9us to 18.9us,
   `forteClass` 30.9 to 14.1, `inversion` 28.1 to 11.4, `orderedPitchClasses`
-  29.0 to 11.9. Nothing a caller can see changes -- the same object still
+  29.0 to 11.9. nothing a caller can see changes -- the same object still
   comes back every time, and music21's own 7,315 examples pass as they did.
-- **Everything that reads a name or asks a chord a question is faster**, by
+- **everything that reads a name or asks a chord a question is faster**, by
   between two and thirty times, with no change to any answer -- music21's own
-  7,315 examples pass as they did. What it cost was allocation:
+  7,315 examples pass as they did. what it cost was allocation:
 
   | | before | after |
   | --- | --- | --- |
@@ -1627,28 +1627,28 @@ kept as music21 keeps it, one scale type where there were two, and no
   | `Chord::common_name` | 5025ns | 976ns |
   | `Chord::new("C4 E4 G4")` | 1340ns | 708ns |
 
-  An accidental borrows its name and its modifier from the table rather than
-  owning two strings, so copying a pitch no longer allocates. An ordinary
-  pitch name and an ordinary interval name are read where they stand. The
+  an accidental borrows its name and its modifier from the table rather than
+  owning two strings, so copying a pitch no longer allocates. an ordinary
+  pitch name and an ordinary interval name are read where they stand. the
   root search fits in an array of seven, there being seven letters, instead
-  of a set, a map and three vectors. A chord counts its distinct pitch names
-  without writing any of them. A pitch class is written as a character rather
-  than through the formatting machinery. And a specifier is compared without
-  lowercasing eleven prefixes and eleven names to do it. Naming a chord keeps
+  of a set, a map and three vectors. a chord counts its distinct pitch names
+  without writing any of them. a pitch class is written as a character rather
+  than through the formatting machinery. and a specifier is compared without
+  lowercasing eleven prefixes and eleven names to do it. naming a chord keeps
   the names a set class carries borrowed from the table until one of them is
   the answer, reads the spellings it checks for off the notes rather than out
   of a set of their names, and counts pitch classes in a bitmask.
 - `Pitch::from_name` and `Note::from_name` take `impl AsRef<str>` rather than
   `impl Into<String>`, so a name is read where the caller has it instead of
-  being copied first. Everything that could be passed before still can.
-- The report's headline speedup is the benchmark's median, with the median
+  being copied first. everything that could be passed before still can.
+- the report's headline speedup is the benchmark's median, with the median
   over music21's own suite beside it, and its tests tile no longer counts the
   tests music21 fails on its own as failing.
 - music21's own `dynamics` and `scale.scala` docstrings run against the
   crate, as `doctest_dynamics` and `doctest_scala`, and every docstring is now
   read the way music21's own runner reads it -- its `fixDoctests` rewrites an
   object's address to `0x...` before comparing anything, and forty-two of its
-  docstrings are written with an address in full. All 7,317 examples of the
+  docstrings are written with an address in full. all 7,317 examples of the
   twenty-two modules pass, with nothing left out.
 - `MeterSequence.offsetToDepth` takes music21's `index`, the hint its v7 added
   for which part of the finest level an offset falls in.
@@ -1656,56 +1656,56 @@ kept as music21 keeps it, one scale type where there were two, and no
   failed on music21 itself in CI -- 71 for want of matplotlib, 36 of
   LilyPond, 2 of a `~/Desktop` -- and the last one failed because the runner
   here ignored every warning, including the one music21's `deprecated`
-  doctest exists to show. With all of that provided, music21 fails none of its
-  own tests, so every test in the comparison now measures something. The
+  doctest exists to show. with all of that provided, music21 fails none of its
+  own tests, so every test in the comparison now measures something. the
   `dynamics` classes are installed by `install_into_music21` on the strength
   of it.
-- The report tracks three modules it could not see before: `meter.core`,
+- the report tracks three modules it could not see before: `meter.core`,
   whose two classes the whole meter tree is made of; `tie`, whose entire API
   is the names in its `__slots__`, which no scan for methods could find; and
-  `scale.scala`. A feature-map entry can now say `members = "slots"`.
-- **A scale is realized over a range as music21 walks it.** Going up, from
+  `scale.scala`. a feature-map entry can now say `members = "slots"`.
+- **a scale is realized over a range as music21 walks it.** going up, from
   the tonic moved by whole periods to the closest at or below the range;
   coming down, down the descending pattern from the closest at or above it,
-  each walk stopping at the first note past its end. A scale that respells
+  each walk stopping at the first note past its end. a scale that respells
   as it goes spells its descent differently, so Rag Asawari on B- comes down
-  through F#4 and C#4. The whole-tone and chromatic scales are cycles, as
+  through F#4 and C#4. the whole-tone and chromatic scales are cycles, as
   music21 builds them. `derive_ranked` realizes each candidate between the
   lowest and highest pitch it is given, as music21 does; the divergence this
   file used to record there was never shown by any input. 630 realizations
   over ten scale types, nine tonics and seven ranges agree with music21.
-- A time signature's counting word is read anywhere and in any case, so
+- a time signature's counting word is read anywhere and in any case, so
   `"6/8 fast"` is fast 6/8, and `subdivide_nested_hierarchy_by` loads a
   sequence's own uneven parts first, as music21 does for 11/8.
-- The wheel carries `Stream`, `Score`, `Part`, `PartStaff`, `Measure`,
+- the wheel carries `Stream`, `Score`, `Part`, `PartStaff`, `Measure`,
   `Voice` and `Opus`, with music21's five stream walks over them;
   `OctaveRepeatingScale`, `CyclicalScale`, `SieveScale` and `ScalaScale`;
   a class for every instrument kind; and a `Style` and `NoteStyle` of its
   own where music21 cannot be imported, so a wheel pickle reads back without
   music21.
-- An installed class compares and hashes equal to the class it replaces, so
+- an installed class compares and hashes equal to the class it replaces, so
   `classSet` holds one where it held two, and an exception is installed as
   the facade's own class, so music21's `except` clauses catch what the
   facade raises. music21's tests are gathered before anything is installed,
   and every side runs the same 5,038 under the same names.
-- Coverage is measured on nightly with cargo-llvm-cov's `--doctests`, so the
+- coverage is measured on nightly with cargo-llvm-cov's `--doctests`, so the
   rustdoc examples count; the report also clears the profiles earlier runs
   left, which it had been merging in.
-- The `music21` submodule points at `float3/music21` master, upstream with
+- the `music21` submodule points at `float3/music21` master, upstream with
   the fixes sent from here merged in, until they land upstream; every
   generated fixture is stamped with its commit. rustls is at 0.23.45 for
   RUSTSEC-2026-0285, and every GitHub Action is pinned to a commit.
 
 # music21-rs 0.5.0
 
-The release that finishes what 0.4.0 started: seventeen of music21's modules
+the release that finishes what 0.4.0 started: seventeen of music21's modules
 now pass every one of their own doctests, `harmony` among them, and 565 of
-the 617 members the feature map tracks are ported, up from 516. Nothing a
+the 617 members the feature map tracks are ported, up from 516. nothing a
 caller had changes shape; this is a minor bump for what was added and for
 the modules that moved into directories, every public path of which is
 re-exported where it was.
 
-## Added
+## added
 
 - `chordsymbol::ChordSymbolFigure`: a chord named as a lead-sheet symbol in
   the parts music21 writes it from — root, kind, abbreviation, bass,
@@ -1743,50 +1743,50 @@ re-exported where it was.
   `VoiceLeadingQuartet::opens_incorrectly` and `closes_incorrectly`;
   `ScalaScale::new`; `Stream::events_mut` and `StreamEvent::element_mut`.
 
-## Changed
+## changed
 
 - `chord`, `roman`, `chordsymbol`, `pitch`, `scale` and `serial` are
   directory modules split by concern; every public item is re-exported from
   where it was.
-- The Python wheel installs `harmony.chordSymbolFigureFromChord` and
+- the Python wheel installs `harmony.chordSymbolFigureFromChord` and
   `chordSymbolFromChord` over music21's own, honours `changeAbbreviationFor`,
   and reads a `ChordSymbol` by its pitches and the root its figure fixed.
   `duration` has a facade file of its own.
-- Comments and docs describe the behaviour as it stands rather than the
+- comments and docs describe the behaviour as it stands rather than the
   history behind it.
 
-## Internal
+## internal
 
-- The unit tests reach every public function of the crate; line coverage of
+- the unit tests reach every public function of the crate; line coverage of
   `src` by the unit tests alone is 95%, up from 90%.
-- The report generator is four files rather than one; the nineteen doctest
+- the report generator is four files rather than one; the nineteen doctest
   harness files are one `doctest_suite!` invocation each; the facade's error
   mappers are one macro; gcd and lcm come from the `num` crate.
 
 # music21-rs 0.4.0
 
-The release that makes the crate something music21 itself can be run on.
+the release that makes the crate something music21 itself can be run on.
 The classes ship as a Python wheel, `music21_rs`, and
 `install_into_music21()` puts them into an installed music21 in place of its
 own, so a program written against music21 runs on the crate without a line
 changed — checked against music21's whole test suite and against a library
-written by someone who had never heard of this crate. Fifteen of music21's
+written by someone who had never heard of this crate. fifteen of music21's
 modules pass every one of their own doctests, 5,460 examples in all.
 
-Beside that: roman numerals are figured bass over a scale rather than a
+beside that: roman numerals are figured bass over a scale rather than a
 stack of intervals, figured bass is a module of its own, durations carry
 what they are written as, notes and chords carry beams and lyrics, and the
 tuning half grew regular temperament theory and all 95 of the Xenharmonic
-Wiki's temperaments. Several signatures change, so this is a minor bump.
+Wiki's temperaments. several signatures change, so this is a minor bump.
 
-## Added
+## added
 
 - `Interval` gains music21's compact names (`short_name`, `simple_name`,
   `semi_simple_name`, `directed_name`), the `is_step`, `is_diatonic_step`,
   `is_chromatic_step`, `is_skip` and `is_consonant` predicates,
   `complement`, `interval_class`, and `Interval::sum` / `Interval::difference`
   for `interval.add` and `interval.subtract`.
-- The halves of an interval are public: `GenericInterval`, `DiatonicInterval`,
+- the halves of an interval are public: `GenericInterval`, `DiatonicInterval`,
   `ChromaticInterval` and `Specifier`, with music21's full method set —
   `simple_directed`, `semi_simple_undirected`, `octaves`, `staff_distance`,
   `mod7`, `mod7_inversion`, `complement`, `reverse`, `nice_name` and the
@@ -1802,13 +1802,13 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   from a key signature across, so `F` natural in G major steps up to `G-`.
   `GenericInterval::from_name` reads `"Third"`, `"3rd"` and
   `"Descending Fifth"`.
-- Accidentals carry music21's display state: `Pitch::update_accidental_display`
+- accidentals carry music21's display state: `Pitch::update_accidental_display`
   decides whether an accidental should be shown from the pitches before it,
   the key signature's altered pitches and the cautionary switches
   (`AccidentalDisplayOptions`), adding a cautionary natural where music21
   adds one. `Accidental::set_attribute_independently` writes one part of an
   accidental without the other two following, which is how a `sori` is built.
-- A pitch now knows whether it carries an accidental object at all:
+- a pitch now knows whether it carries an accidental object at all:
   `Pitch::has_accidental`, `explicit_accidental`, `explicit_accidental_mut`
   and `set_accidental`. music21 keeps no accidental on a bare `D` but does
   keep an explicit `Dn`, and the two are no longer equal.
@@ -1830,7 +1830,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   `pitchClasses`, in chord order with repeats kept.
 - `format_vector_string` writes a pitch-class list the way music21's
   `Chord.formatVectorString` does, with ten and eleven as `A` and `B`.
-- Notes and chords carry the notation music21 puts on them, in two new
+- notes and chords carry the notation music21 puts on them, in two new
   modules. `notation` holds `Tie` (with `TieType`, `TieStyle` and
   `Placement`), `Notehead`, `StemDirection` and `Lyric` (with `Syllabic`);
   `volume` holds `Volume`, which is a MIDI velocity and its 0-to-1 scalar
@@ -1846,13 +1846,13 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   writes those names on as lyrics.
 - `Chord::string_harmonic` reads a written string harmonic: a chord whose
   second note has a diamond head comes back with the pitch it actually
-  sounds added on top. This is music21's `Pitch.getStringHarmonic`, which
+  sounds added on top. this is music21's `Pitch.getStringHarmonic`, which
   was previously left out because it depends on noteheads.
 - `Chord::remove_redundant_pitches_reporting` and its name and pitch-class
   variants hand back the pitches they dropped, as music21's do in place.
 - `Accidental::set_attribute_independently` takes an `AccidentalAttribute`,
   so only the three parts music21 allows can be named.
-- The module functions `notes_to_generic`, `notes_to_chromatic`,
+- the module functions `notes_to_generic`, `notes_to_chromatic`,
   `intervals_to_diatonic`, `convert_diatonic_number_to_step`,
   `convert_semitone_to_specifier_generic`,
   `convert_semitone_to_specifier_generic_microtone`, `convert_generic` and
@@ -1892,7 +1892,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   `DEFAULT_TEMPO_VALUES` word table, verified against music21 by the parity
   fixture.
 - `Error::Duration`, `Error::Key`, `Error::Scale` and `Error::Tempo`
-  variants. Duration, mode and scale-degree errors used to be reported as
+  variants. duration, mode and scale-degree errors used to be reported as
   `Error::Ordinal`.
 - `Pitch::from_frequency`, `harmonic`, `harmonic_from_fundamental`,
   `harmonic_string`, `is_enharmonic`, `all_common_enharmonics`,
@@ -1914,7 +1914,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   search, `matrix` and `row_to_matrix`, `intervals_as_string`,
   `is_all_interval`, Link chord classification and hexachordal
   combinatoriality, plus the 71 historical rows as `HISTORICAL_ROWS` and
-  `historical_row_by_name`. Both tables are verified against music21 by a
+  `historical_row_by_name`. both tables are verified against music21 by a
   new `serial_expectations.toml` fixture.
 - `Error::Serial`.
 - `Chord::normal_order` and `normal_order_string` (music21's `normalOrder`,
@@ -1983,7 +1983,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `ChromaticInterval::from_int` and `whole_semitones`, and
   `Interval::whole_semitones`, for the whole-semitone count where the
   fractional one is not wanted.
-- The crate's classes ship as a Python wheel, `music21_rs`, built from
+- the crate's classes ship as a Python wheel, `music21_rs`, built from
   `python/` by maturin — music21-shaped `Pitch`, `Note`, `Chord`,
   `Duration`, `Interval`, `Key`, `RomanNumeral`, `MetronomeMark`, `ToneRow`
   and the rest, with music21's names, keyword arguments, properties and
@@ -1994,7 +1994,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   caller holding a cardinality and a Forte class number reads a prime form,
   an interval vector, a Forte name or the common names without building a
   chord to ask.
-- Regular temperament theory, the Xenharmonic Wiki's half of the subject, in
+- regular temperament theory, the Xenharmonic Wiki's half of the subject, in
   four new types under `tuningsystem`. `Monzo` is an interval as the
   exponents of the primes making up its ratio and `Val` is how many steps of
   a tuning each prime is worth, both reading and writing the wiki's bracket
@@ -2003,18 +2003,18 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   mapping onto a subgroup, built from the wiki's own infobox line by
   `from_mapping` and `from_published`; `EqualDivision` is an equal division
   of any interval, which is where Bohlen-Pierce and Carlos Alpha, Beta and
-  Gamma live. Rank is not fixed at two and the equave need not be the octave.
-- All 95 of the wiki's `Infobox regtemp` temperaments are carried as data, in
+  Gamma live. rank is not fixed at two and the equave need not be the octave.
+- all 95 of the wiki's `Infobox regtemp` temperaments are carried as data, in
   `data/temperaments.toml` and the `WIKI_TEMPERAMENTS` table emitted from it.
   Nothing in it is trusted: a test builds every entry, checks that each of the
   277 commas the wiki lists really does vanish under the mapping, and checks
   that each published MOS pattern really does come out of the generator.
-- The tuning collections are checked for holding the same scale twice, within
+- the tuning collections are checked for holding the same scale twice, within
   each of them and across them: nothing in `ALL_TUNING_SYSTEMS` or in
   `WIKI_TEMPERAMENTS` is a second name for anything else in it, 23 of the 28
   ratio tables are in the bundled Scala archive as well, and the archive holds
-  44 groups covering 54 redundant files out of 3,994. The comparison is by
-  sound rather than by spelling, and by multiset rather than by set. It is
+  44 groups covering 54 redundant files out of 3,994. the comparison is by
+  sound rather than by spelling, and by multiset rather than by set. it is
   compiled for the tests alone and is not public API — a caller wants a scale
   it can play, not a fingerprint it can only compare — so exporting it later,
   if anyone asks for it, stays an addition rather than a break.
@@ -2034,7 +2034,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   `Modifier` keeps the mark as written beside the accidental it means,
   because figured bass has marks no accidental name covers. `RomanNumeral`
   reads its own digits with it, so there is one shorthand table and not two.
-- Scales gained the whole of music21's `ConcreteScale` behaviour that needed
+- scales gained the whole of music21's `ConcreteScale` behaviour that needed
   more than a table: a scale given by its notes (`Scale::from_pitches`,
   filling in the octaves a caller left out), a scale that comes down a
   different way from the way it goes up, `derive_by_degree`,
@@ -2043,11 +2043,11 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   and `places_of`, since Rag Asawari's five notes stand on degrees 1, 2, 4, 5
   and 6 and Rag Marwa stands one note in two places. `is_realizable` says
   when a collection cannot be walked over a range at all.
-- Durations carry what they are written as, not only how long they sound:
+- durations carry what they are written as, not only how long they sound:
   components, tuplets, `appendTuplet` and `aggregateTupletMultiplier`,
   `quarterLengthNoTuplets`, the grace durations, and music21's full names for
   a tied, a tuplet and an unwritable length.
-- Notes and chords carry beams and lyrics as music21 models them.
+- notes and chords carry beams and lyrics as music21 models them.
   `notation::Beam` and `notation::Beams` are music21's `beam` module,
   including the unsaid beam type its `naiveBeams` builds and the list helpers
   that walk a run of notes; a lyric may have several components and may have
@@ -2061,12 +2061,12 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   score marked *Allegro* played at a hundred and forty-four.
 - `stream` grew enough to hold streams within streams and to answer what is
   in force at an offset.
-- A chord, a tone row and a stream are walked the way Rust walks a
+- a chord, a tone row and a stream are walked the way Rust walks a
   collection: each implements `IntoIterator`, by value and by reference.
-- The bundled Scala archive merges two submodules, music21's 3,932 scales and
-  hexatone's 62, every one of which parses. A zero-degree file is legal
+- the bundled Scala archive merges two submodules, music21's 3,932 scales and
+  hexatone's 62, every one of which parses. a zero-degree file is legal
   rather than malformed, and `bundled_with_failures()` now returns nothing.
-- A sieve says more than whether an integer is in it. `Sieve` gains a
+- a sieve says more than whether an integer is in it. `Sieve` gains a
   `Display` that writes the expression back out the way music21 does — each
   residual normalized, the groups it was written with kept, so `3@11` reads
   `3@2` and `(5|2)&4&8` reads `{5@0|2@0}&4@0&8@0` — together with music21's
@@ -2076,74 +2076,74 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `chordsymbol::chord_symbol_kind_from_chord` names the kind a figure is
   written with, which is what music21 answers beside the figure when
   `chordSymbolFigureFromChord` is asked to include the chord type.
-- The absent octave is readable both of music21 v11's ways —
+- the absent octave is readable both of music21 v11's ways —
   `Pitch::implicit_octave` and `octave_is_implicit` — and the default octave
   is read live from music21's `defaults.pitchOctave` where there is a music21
   to ask. `crate::Given` is the argument type that tells a deprecated `None`
   from an argument nobody wrote.
 
-## Bug Fixes
+## bug fixes
 
-- Pitches built from a name no longer count as having inferred spelling, so
+- pitches built from a name no longer count as having inferred spelling, so
   `Pitch::transpose` keeps `D-` a flat and `KeySignature::new(-7)` is C-flat
   major rather than B major.
 - `tuningsystem::C4` is `440 * 2^(-9/12)` to full precision rather than the
   rounded `261.6256`.
-- Transposing with no accidental limit errors past quadruple accidentals
+- transposing with no accidental limit errors past quadruple accidentals
   instead of silently respelling, as music21 does.
-- Microtonal intervals survive. `ChromaticInterval` counts fractional
+- microtonal intervals survive. `ChromaticInterval` counts fractional
   semitones as music21's does, and `notes_to_chromatic` no longer rounds the
   pitch-space distance away, so the interval between `C1` and a `C1`
   half-sharp is half a semitone rather than one, transposing by it lands on
   `C~1` rather than `C#1`, and `Interval::pythagorean_ratio` reports that a
   quarter tone has no Pythagorean ratio instead of answering `2187/2048`.
-- A `PitchOptions` with both a name and an accidental keeps the accidental
+- a `PitchOptions` with both a name and an accidental keeps the accidental
   (`name("D").accidental("--")` is `D--`, not `D`), and a pitch built from a
   number stays marked as having inferred spelling, so transposing it
   respells (`Pitch::from_number(6.0)` down a minor second is `F`, not `E#`).
 - `Pitch::midi` folds out-of-range pitches into 0 to 127 by octaves and
   rounds half up, as music21 does; `frequency_hz` is computed from A4 = 440
   exactly, so `A4` reads `440.0` rather than `439.99999999999994`.
-- Transposing keeps the pitch's fundamental, transposed with it, and can
+- transposing keeps the pitch's fundamental, transposed with it, and can
   reach octave -1 (`D2` down a minor 23rd is `C#-1`).
-- The pitch-language errors, `transposeAboveTarget`/`transposeBelowTarget`
+- the pitch-language errors, `transposeAboveTarget`/`transposeBelowTarget`
   and the unknown-accidental errors use music21's wording.
-- Doubled, tripled and quadrupled specifiers are spelled `Doubly-Diminished`,
+- doubled, tripled and quadrupled specifiers are spelled `Doubly-Diminished`,
   `Triply-Augmented` and so on in interval names, as music21 spells them,
-  rather than `Double Diminished`. The specifier fixture now checks the
+  rather than `Double Diminished`. the specifier fixture now checks the
   names as well as the semitone counts.
-- A minor key raises its sixth and seventh where the figure asks, which is
+- a minor key raises its sixth and seventh where the figure asks, which is
   music21's `_adjustMinorVIandVIIByQuality` at its default setting: `viio7`
   in A minor is `G# B D F`, where it used to keep the accidental as written
   and come out `G B- D- F-`. `VI` and `VII` ask for the natural degrees and
   still get them.
-- A microtonal interval says the cents itself. Transposition no longer
+- a microtonal interval says the cents itself. transposition no longer
   carries the cents a pitch came with across an interval measured in
   fractions of a semitone — the interval already says how far from its
   written value the answer sits — so a sieve scale realized in quarter tones
   comes out as pitches rather than as one note two octaves flat.
-- A scale realized from an octave-less tonic keeps its octaves:
+- a scale realized from an octave-less tonic keeps its octaves:
   `Scale::derive_by_degree` reads the interval to the requested degree off a
   realization in octave 4, where realizing from the octave-less tonic gave
   the degree pitch no octave, made the interval descending and put the tonic
   an octave high.
 - `ScaleType::pitch_on_degree` answers `None` for a degree a gapped scale has
   not got, rather than the note that happens to be that many notes along.
-- A pitch's chosen spelling is recorded on both halves of it at once, so a
+- a pitch's chosen spelling is recorded on both halves of it at once, so a
   respelling no longer half-applies.
-- A major seventh over a triad that is not major is a major seventh.
+- a major seventh over a triad that is not major is a major seventh.
   `ChordSymbol::parse` read the `M` of `mM7`, `+M9`, `minmaj11` and `m#7` as
   part of the triad and gave the seventh the triad's own quality, so `F#mM7`
   came out `F# A C# E` instead of `F# A C# E#` and `F+M7` lost its seventh
-  altogether. An altered degree now stands in place of the one the chord's
-  quality would give rather than sounding beside it. Found by running
+  altogether. an altered degree now stands in place of the one the chord's
+  quality would give rather than sounding beside it. found by running
   music21's own `harmony` doctests against the crate.
-- A zero-degree Scala file is read as a scale with no pitches rather than
+- a zero-degree Scala file is read as a scale with no pitches rather than
   rejected, which made `ScalaScale::is_empty` dead by construction;
   `ratio_at` answers `1.0` for one instead of dividing by a zero degree
   count.
 
-## Breaking Changes
+## breaking changes
 
 - `ChromaticInterval::semitones`, `directed`, `undirected` and
   `Interval::semitones` return `FloatType` rather than `IntegerType`, and
@@ -2159,11 +2159,11 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `Note::from_pitch` returns `Note` rather than `Result<Note>`, and
   `From<Pitch>` / `From<&Pitch>` replace the `TryFrom` impls that could not
   fail. `Note::from_number` is new and takes a pitch-space number.
-- Under the `serde` feature, `Pitch`, `Accidental`, `Microtone`, `Chord` and
+- under the `serde` feature, `Pitch`, `Accidental`, `Microtone`, `Chord` and
   `Note` no longer serialize their fields with a leading underscore
-  (`"step"` rather than `"_step"`). Data written by 0.3.0 will not
+  (`"step"` rather than `"_step"`). data written by 0.3.0 will not
   deserialize unchanged.
-- The `test` binary is gone. It was auto-discovered from `src/bin/test.rs`
+- the `test` binary is gone. it was auto-discovered from `src/bin/test.rs`
   and shipped with the crate; its checks are now a unit test.
 - `Interval::direction` is the direction of the chromatic interval, as
   music21's is: a diminished unison is `Descending` and an augmented one
@@ -2177,7 +2177,7 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `Chord::inversion_name` is music21's `inversionName`: the figured-bass
   number (`53`, `6`, `64`, `7`, `65`, `43`, `42`) as
   `Result<Option<IntegerType>>`, an error for a chord that is neither a triad
-  nor carries a seventh. The words it used to return are `inversion_text`.
+  nor carries a seventh. the words it used to return are `inversion_text`.
 - `Chord::closed_position` and `semi_closed_position` take
   `leave_redundant_pitches`, and `is_italian_augmented_sixth` takes
   `restrict_doublings`, matching music21's keyword arguments.
@@ -2188,14 +2188,14 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `Chord::common_name` names the augmented sixths that share a set class with
   a seventh chord, and prefixes `enharmonic equivalent to` where the spelling
   does not match the name, both as music21 does.
-- Pitch classes round half to even, as Python does, so the half-sharp `C~` is
+- pitch classes round half to even, as Python does, so the half-sharp `C~` is
   pitch class `0` rather than `1`.
 - `Chord::remove` reports a pitch that is not there with music21's message,
   which does not name the pitch.
 - `Specifier::parse` reports an unknown quality as
   `Cannot find a match for value: 'x'`, and a zero generic interval as
   `The Zeroth is not an interval`, music21's texts.
-- Two misnamed tuning systems are renamed, and one duplicate is gone.
+- two misnamed tuning systems are renamed, and one duplicate is gone.
   `TuningSystem::JustIntonation` held Wendy Carlos's Harmonic scale, reaching
   the 19-limit, and is now `CarlosHarmonic`; `FiveLimit` is the classical
   12-tone just scale. `Indian` held Ptolemy's intense diatonic, a European
@@ -2221,28 +2221,28 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
 - `MetronomeMark::set_number` takes an `Option<FloatType>`, since a mark may
   say a word and no number.
 
-## Internal
+## internal
 
 - `python-parity` now builds a pyo3 module, `music21_rs_facade`, of
   music21-shaped `Pitch`, `Accidental` and `Microtone` classes, and a test
   runs the doctests of music21's own `pitch.py` with those classes swapped
   in: 890 of the 920 examples pass, and `python-parity/doctest/pitch.toml`
-  pins the passing docstrings. Running them turned up the accidental,
+  pins the passing docstrings. running them turned up the accidental,
   inferred-spelling, MIDI-folding and negative-octave fixes above.
-- The same harness covers `interval.py` (759 of 771 examples), `chord.py`
+- the same harness covers `interval.py` (759 of 771 examples), `chord.py`
   (916 of 971), `key.py` (230 of 253) and `serial.py` (148 of 149), each with
-  a facade module and an expectation file under `python-parity/doctest/`. The
+  a facade module and an expectation file under `python-parity/doctest/`. the
   interval facade is what made the interval halves public and found the
   reversed `maxAccidental` and key-aware transposition fixes;
-  `IntervalBaseTrait`, which it replaced, is gone. The chord facade brought
+  `IntervalBaseTrait`, which it replaced, is gone. the chord facade brought
   `note.Note`, `duration.Duration`, `tie.Tie`, `note.Lyric`, `volume.Volume`
   and a colour-only `style.Style` with it, and found the `commonName`,
   `inversionName`, dotted-duration and pitch-class rounding fixes above.
-- The facade chord holds its notes as Python objects rather than values, so
+- the facade chord holds its notes as Python objects rather than values, so
   `chord[1].notehead = 'diamond'` sticks and `chord[1] is chord.notes[1]`
-  holds. Pitches are still values, which is what most of the remaining
+  holds. pitches are still values, which is what most of the remaining
   failures come down to: `chord.pitches[0].getEnharmonic(inPlace=True)` does
-  not reach the chord. The rest are music21 internals (`_overrides`,
+  not reach the chord. the rest are music21 internals (`_overrides`,
   `chordTablesAddress`, `client`) and stream context.
 - `cargo run -p xtask -- report` writes `target/reports`: the library's test
   coverage from `cargo llvm-cov`, and every public method of the music21
@@ -2257,16 +2257,16 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   interval and pitch instead of consuming them, and `Specifier` is `Copy`.
 - `interval_to_pythagorean_ratio` no longer keeps a process-wide
   `Mutex<HashMap>` of every ratio it has computed.
-- The chord root-finding walk lives once in `chord::root`; `Chord`,
+- the chord root-finding walk lives once in `chord::root`; `Chord`,
   `chordsymbol` and `roman` share it and its `pitch_class` helper.
-- Private fields drop their `_` prefix, and `spelling_is_infered` is spelled
+- private fields drop their `_` prefix, and `spelling_is_infered` is spelled
   correctly.
-- `Note` is a `Pitch` plus an `Option<Duration>`. The `GeneralNote` and
+- `Note` is a `Pitch` plus an `Option<Duration>`. the `GeneralNote` and
   `NotRest` wrapper structs and `GeneralNoteTrait`, mirrored from music21's
-  class hierarchy, are gone; nothing dispatched on them. Under `serde` a
+  class hierarchy, are gone; nothing dispatched on them. under `serde` a
   note now serializes as `{"pitch", "duration"}` rather than nesting the
   duration two wrappers deep.
-- The doctest harness now covers fifteen of music21's modules — `pitch`,
+- the doctest harness now covers fifteen of music21's modules — `pitch`,
   `interval`, `chord`, `note`, `duration`, `key`, `serial`, `scale`, `roman`,
   `beam`, `volume`, `tie`, `figuredBass.notation`, `tempo` and
   `chord.tables` — and every one of them passes every one of music21's own
@@ -2276,23 +2276,23 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   `xtask music21-suite` runs every `Test` class and every docstring in every
   music21 module twice — once on music21, once with `install_into_music21()`
   in front of it — and diffs the two, so only a test that fails under the
-  crate and not under music21 counts. Two divergences are listed by name with
+  crate and not under music21 counts. two divergences are listed by name with
   the reason for each, and a listed one that stops failing fails the run too,
   so the list cannot go stale. `xtask downstream` is the same idea against a
   library written by someone who had never heard of this crate: harte-library
   at a pinned commit, 8,116 tests, run both ways with the failures required
   to match exactly.
-- Three more of music21's modules are under the doctest harness:
+- three more of music21's modules are under the doctest harness:
   `music21.sieve` at 24 of 25 docstrings and 106 of 107 examples,
   `music21.harmony` at 22 of 25 and 346 of 361, and `music21.meter.base` at
-  6 of 34 and 239 of 387. Each replaces less than the whole module on
+  6 of 34 and 239 of 387. each replaces less than the whole module on
   purpose, so that music21's own `PitchSieve`, `ChordSymbol` and
   `bestTimeSignature` run over the crate's objects; none of the three is
   installed by `install_into_music21`, since music21's `Sieve` and
-  `TimeSignature` carry machinery the crate does not model. What the numbers
+  `TimeSignature` carry machinery the crate does not model. what the numbers
   say is not modelled: sieve compression, `MeterSequence`, and the
   augmented-sixth and Neapolitan chord figures.
-- Nothing that drives Python is written in Python any more. The benchmark,
+- nothing that drives Python is written in Python any more. the benchmark,
   music21's suite and the harte-library comparison were `bench.py`,
   `music21_suite.py` and `run.py`; each is now an `xtask` command driving
   music21 through pyo3, ported answer-for-answer and checked against the
@@ -2300,65 +2300,65 @@ Wiki's temperaments. Several signatures change, so this is a minor bump.
   was deleted.
 - `xtask report` writes the Pages report: coverage, every test suite and
   whether it ran or was skipped and why, the doctest scoreboard, the unit
-  tests music21's own suite runs per module, and the ported feature set. Its
+  tests music21's own suite runs per module, and the ported feature set. its
   layout is a stylesheet and a TypeScript file beside it, compiled and
   verified the way every other generated file here is.
-- The Xenharmonic Wiki temperaments, the Scala archive and the tuning tables
+- the Xenharmonic Wiki temperaments, the Scala archive and the tuning tables
   each have the three-stage `regenerate` / `emit` / `verify` shape the chord
   tables have, and `xtask regenerate-all` rebuilds every generated file from
   the submodules and stamps each with the version and commit it read.
-- The `music21` submodule moves to 11.0.0b9, which carries this repository's
+- the `music21` submodule moves to 11.0.0b9, which carries this repository's
   own fix to music21's Scala reader (cuthbertLab/music21#2026): 21 archive
   files raised on read and 2 more parsed to the wrong cents, because a
   comment after a degree's value had its digits spliced onto the number.
 
 # music21-rs 0.3.0
 
-This release removes a layer of music21's Python runtime that had been
+this release removes a layer of music21's Python runtime that had been
 transliterated into Rust without ever being connected to anything, and fixes
-two bugs that were hiding inside it. The minor bump is required because
+two bugs that were hiding inside it. the minor bump is required because
 `fraction` is a public dependency: `FractionType` is re-exported from the
 crate root and returned by `Interval::pythagorean_ratio`, so moving to
 `fraction` 0.16 is a breaking change for callers who name those types.
 
-## Breaking Changes
+## breaking changes
 
-- Updated `fraction` to 0.16 and `itertools` to 0.15. `FractionType`
+- updated `fraction` to 0.16 and `itertools` to 0.15. `FractionType`
   (`fraction::GenericFraction<IntegerType>`) appears in the public API, so
   downstream crates that mention it must move to `fraction` 0.16 as well.
 - `Interval::from_name` and `Interval::new` now return `Error::Interval` for
-  a name with no interval number in it, instead of panicking. Code that
+  a name with no interval number in it, instead of panicking. code that
   relied on the panic (`""`, `"X"`, `"perfect"`) now sees an `Err`.
 
-## Bug Fixes
+## bug fixes
 
-- Fixed `Chord::set_duration` and `Chord::with_duration`, which silently did
-  nothing on any chord that had notes in it. The chord's duration lived
+- fixed `Chord::set_duration` and `Chord::with_duration`, which silently did
+  nothing on any chord that had notes in it. the chord's duration lived
   behind an `Arc<ChordBase>` that every note in the chord also referenced, so
   the `Arc::get_mut` in the setter never succeeded. `Chord::new("C E G")
   .with_duration(Duration::whole())` returned a chord with no duration; only
-  the empty chord worked. The same reference cycle leaked each chord's
+  the empty chord worked. the same reference cycle leaked each chord's
   internal note list.
-- Fixed `Interval::from_name` panicking out of a `Result`-returning API on
+- fixed `Interval::from_name` panicking out of a `Result`-returning API on
   malformed interval names.
-- `PitchOptions::fundamental` now does something. The value was stored on
+- `PitchOptions::fundamental` now does something. the value was stored on
   `Pitch` and had no reader anywhere in the crate, so it could be set but
-  never observed. Added `Pitch::fundamental()`.
+  never observed. added `Pitch::fundamental()`.
 
-## Highlights
+## highlights
 
-- Added `Pitch::fundamental()`.
-- Pitch names are no longer formatted out of a `#[derive(Debug)]` impl.
+- added `Pitch::fundamental()`.
+- pitch names are no longer formatted out of a `#[derive(Debug)]` impl.
   `Pitch::name` and the ABC and scale helpers now spell the step letter
   explicitly, so the output no longer depends on `StepName`'s variant names.
-- Transposition no longer clones the interval. `Interval::transpose_pitch`
+- transposition no longer clones the interval. `Interval::transpose_pitch`
   and `Pitch::transpose` read the interval through a reference internally
   instead of taking it by value, so a `Chord` or scale walk no longer copies
-  a diatonic/chromatic pair per note. Public signatures are unchanged.
+  a diatonic/chromatic pair per note. public signatures are unchanged.
 - `interval_to_pythagorean_ratio` no longer holds its cache lock across the
   circle-of-fifths walk, so concurrent callers queue only on the map access,
   and no longer re-parses `"P5"`/`"-P5"` from strings on every call.
-- Removed roughly 600 lines of unreachable internals: the `_client` observer
+- removed roughly 600 lines of unreachable internals: the `_client` observer
   chains on `Pitch` and `Accidental` (only ever assigned `None`), the
   `HashMap<String, String>` caches on `Note` and `ChordBase` (never read),
   `ChordBase._overrides`, `Pitch._overriden_freq440`, and the `ChordBase` /
@@ -2366,137 +2366,137 @@ crate root and returned by `Interval::pythagorean_ratio`, so moving to
 
 # music21-rs 0.2.2
 
-This release reworks the tuning-system API around context-dependent tunings
+this release reworks the tuning-system API around context-dependent tunings
 and moves the Python parity suite out of the main workspace.
 
-## Breaking Changes
+## breaking changes
 
-- Removed the `TuningSystem::StepMethod` and
+- removed the `TuningSystem::StepMethod` and
   `TuningSystem::RecursiveEqualTemperament` variants, both of which computed
   plain equal temperament. `ALL_TUNING_SYSTEMS` is now 15 entries rather
   than 17.
 
-## Highlights
+## highlights
 
-- Added the `tuningsystem::adaptive` module and `AdaptiveTuningSystem` for
+- added the `tuningsystem::adaptive` module and `AdaptiveTuningSystem` for
   tunings whose frequencies depend on harmonic context, plus the
   `AnyTuningSystem` enum unifying those with the fixed ratio-table systems,
   with `frequency_at`, `cents_at`, and `is_adaptive`.
-- Added `TWELVE_TONE_NAMES_SHARP` and `TWELVE_TONE_NAMES_FLAT`.
-- Improved Just Intonation ratio accuracy.
-- Moved the Python parity tests into a separate `python-parity` package
+- added `TWELVE_TONE_NAMES_SHARP` and `TWELVE_TONE_NAMES_FLAT`.
+- improved just intonation ratio accuracy.
+- moved the Python parity tests into a separate `python-parity` package
   outside the cargo workspace, so `cargo test` and `cargo check` on the
   library no longer pull in pyo3.
-- Added `xtask verify-tables`, which CI runs to assert the committed chord
+- added `xtask verify-tables`, which CI runs to assert the committed chord
   table source still matches `data/chord_tables.toml`.
-- Removed the dormant internal `base` and `prebase` modules.
+- removed the dormant internal `base` and `prebase` modules.
 
 # music21-rs 0.2.1
 
-This patch release fixes a Pythagorean tuning table ordering issue and improves
+this patch release fixes a Pythagorean tuning table ordering issue and improves
 the Tuning Explorer browser workflow.
 
-## Highlights
+## highlights
 
-- Fixed the Pythagorean tuning ratios so the twelve-tone chromatic degrees stay
+- fixed the Pythagorean tuning ratios so the twelve-tone chromatic degrees stay
   in ascending frequency order, including `Bb` below `B`.
-- Added shareable URLs to the Tuning Explorer, preserving the selected tuning
+- added shareable URLs to the Tuning Explorer, preserving the selected tuning
   system, root frequency, and selected degree.
-- Added a major-scale playback button for twelve-tone tuning systems, with
+- added a major-scale playback button for twelve-tone tuning systems, with
   nearest-degree suggestions for non-twelve-tone systems.
-- Updated twelve-tone Tuning Explorer labels to use unambiguous flat spellings
+- updated twelve-tone Tuning Explorer labels to use unambiguous flat spellings
   such as `Bb4`.
 
 # music21-rs 0.2.0
 
-This release continues the browser-demo work from `0.1.x` and cleans up several
+this release continues the browser-demo work from `0.1.x` and cleans up several
 pre-1.0 pitch APIs so the Rust surface more closely resembles Python
 `music21`.
 
-## Breaking API Changes
+## breaking API changes
 
-- Removed the legacy `PitchAccidental` and `PitchMicrotone` builder wrapper
+- removed the legacy `PitchAccidental` and `PitchMicrotone` builder wrapper
   types.
-- Added public `Accidental`, `Microtone`, and `PitchClass` structs with
+- added public `Accidental`, `Microtone`, and `PitchClass` structs with
   companion `AccidentalSpecifier`, `MicrotoneSpecifier`, and
   `PitchClassSpecifier` input enums.
-- Updated `PitchOptions` and pitch builders to use those specifier types
+- updated `PitchOptions` and pitch builders to use those specifier types
   directly.
 
-## Highlights
+## highlights
 
-- Added `Pitch::accidental()`, `Pitch::microtone()`, and
+- added `Pitch::accidental()`, `Pitch::microtone()`, and
   `Pitch::pitch_class()` accessors.
-- Added public accidental helpers for names, modifiers, unicode display,
+- added public accidental helpers for names, modifiers, unicode display,
   non-standard values, and display metadata.
-- Added public microtone helpers for cents, harmonic shifts, and music21-style
+- added public microtone helpers for cents, harmonic shifts, and music21-style
   formatting.
-- Added normalized public pitch-class values with music21-style `A`/`B`
+- added normalized public pitch-class values with music21-style `A`/`B`
   display for pitch classes 10 and 11.
-- Added immediate playback when selecting a suggested resolution in the Chord
+- added immediate playback when selecting a suggested resolution in the Chord
   Inspector.
-- Added per-resolution preview buttons that play the current chord followed by
+- added per-resolution preview buttons that play the current chord followed by
   the suggested resolution without changing the page.
-- Added hover/focus notation previews for suggested resolutions, showing the
+- added hover/focus notation previews for suggested resolutions, showing the
   current chord and hovered resolution side by side on one ABCJS staff.
-- Added a CI TypeScript build step for the web demos and included generated web
+- added a CI TypeScript build step for the web demos and included generated web
   JavaScript in the GitHub Pages artifact checks.
 
 # music21-rs 0.1.1
 
-This patch release adds a few browser-facing theory workflow improvements on
+this patch release adds a few browser-facing theory workflow improvements on
 top of `0.1.0`.
 
-## Highlights
+## highlights
 
-- Added MIDI-number input support to the Chord Inspector. Inputs like
+- added MIDI-number input support to the Chord Inspector. inputs like
   `60 64 67`, `60,64,67`, and `midi: 60 64 67` analyze as MIDI notes.
-- Added Web MIDI support to the Chord Inspector so a connected MIDI device can
+- added web MIDI support to the Chord Inspector so a connected MIDI device can
   feed the currently held notes into the analyzer.
-- Added a MIDI column to the pitch table and changed pitch display spelling from
+- added a MIDI column to the pitch table and changed pitch display spelling from
   music21 flats such as `A-5` to browser-facing names such as `Ab5`.
-- Added a `Class` help widget in the Chord Inspector pitch table.
-- Added a Chord Browser at `/chords` listing all 351 unpitched entries in the
+- added a `Class` help widget in the Chord Inspector pitch table.
+- added a Chord Browser at `/chords` listing all 351 unpitched entries in the
   music21-derived chord table, with links back into the inspector.
-- Expanded the Chord Browser with a root selector, realized pitches, and
+- expanded the Chord Browser with a root selector, realized pitches, and
   per-inversion inspector links.
-- Added range filtering to the Chord Browser note-count control.
-- Listed directed dyad inversions such as major second and minor seventh as
+- added range filtering to the Chord Browser note-count control.
+- listed directed dyad inversions such as major second and minor seventh as
   separate Chord Browser rows, with interval-class labels kept as aliases.
-- Moved the Chord Browser frontend source to TypeScript, with browser-served
+- moved the Chord Browser frontend source to TypeScript, with browser-served
   JavaScript generated from that source.
-- Added resolution-chord links to Chord Browser rows when the realized chord has
+- added resolution-chord links to Chord Browser rows when the realized chord has
   suggestions.
 
 # music21-rs 0.1.0
 
-This release expands `music21-rs` from a chord-name port into a broader set of
+this release expands `music21-rs` from a chord-name port into a broader set of
 interactive music-theory tools and supporting Rust APIs.
 
-## Highlights
+## highlights
 
-- Added a browser demo suite published from `examples/web`:
-  - Chord Inspector at `/chord`
+- added a browser demo suite published from `examples/web`:
+  - chord inspector at `/chord`
   - Polyrhythm Lab at `/polyrhythm`
   - Tuning Explorer at `/tuning`
   - a root index page linking the demos and docs
-- Added simple chord-resolution suggestions to the Rust `Chord` API and the
+- added simple chord-resolution suggestions to the Rust `Chord` API and the
   Chord Inspector.
-- Added chord playback, ABC staff notation, random chord generation, clickable
+- added chord playback, ABC staff notation, random chord generation, clickable
   keyboard toggles, history controls, shareable URLs, and an "open as
   polyrhythm" bridge to the Chord Inspector.
-- Added a Polyrhythm Lab with playback, random rhythm settings, shareable URLs,
+- added a Polyrhythm Lab with playback, random rhythm settings, shareable URLs,
   history controls, track mute/edit/remove controls, ABC rhythm notation, and
   chord-equivalence links.
-- Added a Tuning Explorer for the tuning systems exposed by the crate, including
+- added a Tuning Explorer for the tuning systems exposed by the crate, including
   scale playback and per-degree ratio/frequency/cents data.
-- Updated CI to build and smoke-check the full browser demo site on every run.
-- Cleaned up the README and package description to reflect the current crate
+- updated CI to build and smoke-check the full browser demo site on every run.
+- cleaned up the README and package description to reflect the current crate
   scope.
 
-## Notes
+## notes
 
-- The browser demos share one WASM crate at `examples/web` rather than keeping
+- the browser demos share one WASM crate at `examples/web` rather than keeping
   the Rust glue under the chord demo.
 - APIs are still pre-1.0 and may continue to change as more of `music21` is
   ported.

@@ -1,7 +1,7 @@
-# Where these scores come from
+# where these scores come from
 
-Each score here is kept twice: as the `.mscx` MuseScore 4 saved and as the
-MusicXML MuseScore exported from that file (see `mscx_parity.rs`). Most were
+each score here is kept twice: as the `.mscx` MuseScore 4 saved and as the
+MusicXML MuseScore exported from that file (see `mscx_parity.rs`). most were
 made by opening a score from music21's corpus in MuseScore and saving it; the
 rest were written for these tests.
 
@@ -26,6 +26,6 @@ music21's corpus says of these encodings
 they are distributed with the permission of their encoders, the music is
 believed to be in the public domain, and some encodings may carry their own
 terms, such as a restriction on commercial use, stated in the composition or
-its directory. Where an encoding states terms, they are in the table above;
-the others state none. They are kept here, as converted by MuseScore, only as
+its directory. where an encoding states terms, they are in the table above;
+the others state none. they are kept here, as converted by MuseScore, only as
 test data for the MuseScore reader, and are not part of the published crate.

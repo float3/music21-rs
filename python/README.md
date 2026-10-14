@@ -7,16 +7,16 @@
 `music21_rs` is [music21](https://github.com/cuthbertLab/music21)'s analysis
 classes, `Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
 `RomanNumeral`, `TimeSignature`, `ToneRow` and others, implemented in Rust
-and packaged for Python. The classes have music21's names, arguments,
-properties and `repr`, and give music21's answers. The Rust half is the
+and packaged for Python. the classes have music21's names, arguments,
+properties and `repr`, and give music21's answers. the rust half is the
 [music21-rs](https://crates.io/crates/music21-rs) crate; the wheel needs no
 Rust toolchain and no music21 to run on its own. music21's stream
 machinery, its `converter` and the corpus are not included; those remain
-music21's. The package does read scores in seven formats into streams of its
+music21's. the package does read scores in seven formats into streams of its
 own, and writes MusicXML: see [Reading and writing
 scores](#reading-and-writing-scores).
 
-The [reports page](https://hilll.dev/music21-rs/reports/) has the full
+the [reports page](https://hilll.dev/music21-rs/reports/) has the full
 numbers: every music21 method and whether it is ported, the doctest and test
 suite results, benchmarks and sizes, refreshed on every push.
 
@@ -39,7 +39,7 @@ m.RomanNumeral("viio7", m.Key("c")).pitches
 m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
 ```
 
-## Reading and writing scores
+## reading and writing scores
 
 ```python
 import music21_rs as m
@@ -54,7 +54,7 @@ song = m.from_midi(open("song.mid", "rb").read())
 line = m.from_tiny_notation("tinyNotation: 3/4 E4 r f# g trip{b-8 a g} c'2.")
 ```
 
-Every format music21-rs reads is read as music21's `converter.parse` reads
+every format music21-rs reads is read as music21's `converter.parse` reads
 it, into this package's own streams:
 
 | function | format | hands back |
@@ -73,15 +73,15 @@ it, into this package's own streams:
 | `from_nwc(data)` | a NoteWorthy Composer `.nwc` file's `bytes`, compressed or not | `Score` |
 | `from_volpiano(text)` | Volpiano, the chant font's notation | `Part` |
 
-The streams hold measures of notes, chords, rests, clefs, keys, meters,
+the streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
-where a measure has more than one. A RomanText score's chords are
-`RomanNumeral`s, carrying their figures as lyrics. What the package has no class for -- words, barlines,
+where a measure has more than one. a RomanText score's chords are
+`RomanNumeral`s, carrying their figures as lyrics. what the package has no class for -- words, barlines,
 repeat marks, slurs and other spanners, unpitched percussion, metadata -- is
-read and left out. Input a reader cannot read raises `StreamException`. A
+read and left out. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
-The package's streams slice, scale, invert and regroup themselves as
+the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `sliceByGreatestDivisor`, `scaleOffsets`, `scaleDurations`,
 `augmentOrDiminish`, `invertDiatonic`, `voicesToParts`, `explode`,
@@ -92,7 +92,7 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `melodicIntervals`.
 
 `to_musicxml` takes one of this package's streams or one of music21's and
-writes what music21's exporter writes with `makeNotation=False`. With
+writes what music21's exporter writes with `makeNotation=False`. with
 `make_notation=True` it makes the notation first, as music21's exporter does
 by default, so a part of loose notes is written in measures, with its ties,
 rests, accidentals and beams.
@@ -107,7 +107,7 @@ music21's `RnWriter` does. `to_lilypond` writes it as LilyPond, as music21's
 `LilypondConverter` does, with no LilyPond installed: `version` is the
 LilyPond version the file says it is for, 2.24 unless given.
 
-## Using it inside music21
+## using it inside music21
 
 `install_into_music21()` replaces the classes of an installed music21 with
 these, so existing music21 code runs on the Rust implementation unchanged:
@@ -121,17 +121,17 @@ chord.Chord("C4 E4 G4").commonName          # 'major triad', out of Rust
 roman.RomanNumeral("V7", key.Key("G")).pitches
 ```
 
-It patches the live modules for the whole process, so call it before any
+it patches the live modules for the whole process, so call it before any
 `from music21.chord import Chord`; for a test suite, `conftest.py` is early
-enough. The installed classes are `Music21Object` subclasses, so music21 can
+enough. the installed classes are `Music21Object` subclasses, so music21 can
 hold them in streams, find them by class, pickle them and export them to
 MusicXML.
 
-## Coverage of music21
+## coverage of music21
 
 - 94% of the public methods of the ported music21 classes are reachable from
   this wheel.
-- All 40 music21 modules whose doctests run against the port pass every
+- all 40 music21 modules whose doctests run against the port pass every
   example, 9,185 of them: `pitch`, `interval`, `chord`, `chord.tables`,
   `note`, `duration`, `key`, `scale`, `scale.scala`, `roman`, `harmony`,
   `serial`, `sieve`, `meter.base`, `meter.core`, `beam`, `tie`, `volume`,
@@ -149,12 +149,12 @@ MusicXML.
   on both.
 
 `style.Style` is provided but not installed over music21's, whose
-version does more. Missing behaviour raises
+version does more. missing behaviour raises
 rather than falling back to music21.
 
-## Speed and size
+## speed and size
 
-Times per call, from the
+times per call, from the
 [benchmark](https://hilll.dev/music21-rs/reports/#speedups) against music21
 11 on Python 3.13.
 
@@ -171,14 +171,14 @@ Times per call, from the
 | `ToneRow.zeroCenteredTransformation` | 274 us | 0.37 us | 741x |
 | `pcToToneRow(...).matrix()` | 2.71 ms | 4.9 us | 547x |
 
-Repeated queries on the same chord are cached in both and cost the same. Over
+repeated queries on the same chord are cached in both and cost the same. over
 music21's own test suite the median test runs at the same speed, since most
 of a music21 test is music21's own code.
 
-The wheel is 1.7 MB, one compiled module with the chord tables and scale
+the wheel is 1.7 MB, one compiled module with the chord tables and scale
 definitions inside it and no dependencies. music21 installs 105 MB.
 
-## Building
+## building
 
 ```bash
 uvx maturin build --release --manifest-path python/Cargo.toml
@@ -186,7 +186,7 @@ uvx maturin develop --manifest-path python/Cargo.toml   # into the active venv
 pytest python/tests -q
 ```
 
-The wheel shares the crate's version number. Two further checks run it
+the wheel shares the crate's version number. two further checks run it
 against music21 itself, and need music21, `lark` and `pytest` installed
 beside it:
 
@@ -197,50 +197,50 @@ cargo run --release -p xtask --features python -- music21-suite
 cargo run --release -p xtask -- downstream
 ```
 
-## Credits and third-party data
+## credits and third-party data
 
 `music21_rs` is released under the
-[AGPL-3.0](https://github.com/float3/music21-rs/blob/master/LICENSE). It
+[AGPL-3.0](https://github.com/float3/music21-rs/blob/master/LICENSE). it
 ports behaviour from, and compiles in data from, the projects below, each
 under its own licence.
 
 ### music21
 
-The chord tables, scale definitions, time-signature behaviour and
+the chord tables, scale definitions, time-signature behaviour and
 chord-symbol kinds are derived from
 [music21](https://github.com/cuthbertLab/music21), the Python library for
 computational musicology by Michael Scott Asato Cuthbert and contributors,
 licensed [BSD-3-Clause](https://github.com/cuthbertLab/music21/blob/master/LICENSE).
 The wheel is built against music21 11.0.0b9, and its classes are checked
-against that version's own doctests and test suite. Thanks to Michael Scott
+against that version's own doctests and test suite. thanks to Michael Scott
 Asato Cuthbert and all music21 contributors for the original library.
 
 ### harte-library
 
-The `harte` crate beside this one, which `xtask downstream` runs
+the `harte` crate beside this one, which `xtask downstream` runs
 harte-library's own tests against, is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE).
 
-### The Scala scale archive
+### the Scala scale archive
 
-Thirteen of the tuning tables compiled in are transcribed from the
+thirteen of the tuning tables compiled in are transcribed from the
 [Scala](https://www.huygens-fokker.org/scala/) scale archive as distributed
-with music21, which includes it by kind permission of Manuel Op de Coul. The
+with music21, which includes it by kind permission of Manuel Op de Coul. the
 archive itself, 3,994 scales in the crate's `scala-archive` feature, and the
 62 [Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone) scales
 beside it are not in the wheel.
 
-### The Xenharmonic Wiki
+### the Xenharmonic Wiki
 
-The mapping, generators, commas and scales of 95 regular temperaments from
+the mapping, generators, commas and scales of 95 regular temperaments from
 the [Xenharmonic Wiki](https://en.xen.wiki), which is CC BY-SA, are compiled
-in. Only the numbers are used.
+in. only the numbers are used.
 
-### Contributed back
+### contributed back
 
-Fixes found while porting went upstream:
+fixes found while porting went upstream:
 
 - [cuthbertLab/music21#1746](https://github.com/cuthbertLab/music21/pull/1746):
   the `Pitch` constructor's type annotation admits a `Pitch`.
@@ -280,5 +280,5 @@ Fixes found while porting went upstream:
   F#3 after C4 on a scale of major thirds from D3.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
-- Corrections to the Xenharmonic Wiki's temperament pages, found while
-  checking its infoboxes: [Special:Contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).
+- corrections to the Xenharmonic Wiki's temperament pages, found while
+  checking its infoboxes: [special:contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).
