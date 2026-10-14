@@ -26,6 +26,7 @@ pub(crate) mod chordify;
 mod classes;
 mod consecutive;
 mod editing;
+mod ends;
 pub(crate) mod exact;
 mod lookups;
 mod opus;
