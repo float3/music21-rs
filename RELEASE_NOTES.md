@@ -36,6 +36,10 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `offsetMap`, music21's list of
+  `OffsetMap` named tuples -- the element, where it begins, where it ends
+  and which voice it is in -- a stream with voices read voice by voice as
+  music21 reads it.
 - The Python package's `Stream` answers `measures` and `measure`: the
   measures of a number range, the first at nought and before it what was
   in force where it begins -- the clef, meter, instrument, key signature

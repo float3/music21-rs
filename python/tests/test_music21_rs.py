@@ -2476,3 +2476,45 @@ def test_measures_are_taken_from_a_part_as_music21_takes_them():
         ["TrebleClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
         ["BassClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
     ]
+
+
+def test_a_stream_says_where_each_element_begins_and_ends():
+    """Every answer is music21's own for the same streams."""
+    line = m.Stream()
+    line.insert(0.0, m.TrebleClef())
+    for at, name in ((0.0, "C4"), (1.0, "D4"), (2.0, "E4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+
+    def shown(the_map):
+        return [
+            (type(e.element).__name__, e.offset, e.endTime, e.voiceIndex)
+            for e in the_map
+        ]
+
+    assert shown(line.offsetMap()) == [
+        ("TrebleClef", 0.0, 0.0, None),
+        ("Note", 0.0, 1.0, None),
+        ("Note", 1.0, 2.0, None),
+        ("Note", 2.0, 3.0, None),
+    ]
+    assert line.offsetMap()[0]._fields == ("element", "offset", "endTime", "voiceIndex")
+    # The element is the stream's own object.
+    assert line.offsetMap()[0].element is list(line)[0]
+
+    # A measure with voices is read voice by voice, what stands outside
+    # them first and with no voice of its own, as music21 reads it.
+    bar = m.Measure()
+    first = m.Voice()
+    first.insert(0.0, m.Note("C4", quarterLength=2.0))
+    second = m.Voice()
+    second.insert(0.0, m.Note("E4", quarterLength=1.0))
+    second.insert(1.0, m.Note("F4", quarterLength=1.0))
+    bar.insert(0.0, m.TrebleClef())
+    bar.insert(0.0, first)
+    bar.insert(0.0, second)
+    assert shown(bar.offsetMap()) == [
+        ("TrebleClef", 0.0, 0.0, None),
+        ("Note", 0.0, 2.0, 0),
+        ("Note", 0.0, 1.0, 1),
+        ("Note", 1.0, 2.0, 1),
+    ]

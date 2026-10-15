@@ -551,6 +551,73 @@ impl Stream {
         }
     }
 
+    /// Every element with where it begins, where it ends and which voice
+    /// it is in: music21's `offsetMap`, a list of its `OffsetMap`
+    /// named tuples -- `element`, `offset`, `endTime`, `voiceIndex`.
+    ///
+    /// A stream with voices is read voice by voice, each element's offset
+    /// counted from the voice's own start, as music21 reads it: the
+    /// elements standing outside the voices come first with no voice. A
+    /// barline is left out; this package holds none anyway.
+    #[pyo3(signature = (srcObj = None))]
+    fn offsetMap<'py>(
+        slf: &Bound<'py, Self>,
+        srcObj: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let py = slf.py();
+        let read = match srcObj.filter(|given| !given.is_none()) {
+            Some(given) => given.cast::<Stream>()?.clone(),
+            None => slf.clone(),
+        };
+        let entry = py.import("collections")?.call_method1(
+            "namedtuple",
+            (
+                "OffsetMap",
+                vec!["element", "offset", "endTime", "voiceIndex"],
+            ),
+        )?;
+        let voice = pyo3::types::PyString::new(py, "Voice");
+        let out = PyList::empty(py);
+        // Each group of elements with the voice it belongs to, music21's
+        // own order: what stands outside the voices first.
+        let mut groups: Vec<(Bound<'py, Stream>, Option<usize>)> = Vec::new();
+        let voices: Vec<Py<PyAny>> = read
+            .borrow()
+            .sorted()
+            .iter()
+            .filter(|one| is_of_class(one.object.bind(py), &voice).unwrap_or(false))
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        if voices.is_empty() {
+            groups.push((read.clone(), None));
+        } else {
+            let others = Self::picked(&read, Some(StreamKind::Stream), |object| {
+                is_of_class(object, &voice).map(|found| !found)
+            })?;
+            if !others.borrow().held.is_empty() {
+                groups.push((others, None));
+            }
+            for (index, object) in voices.into_iter().enumerate() {
+                let inner = object.into_bound(py).cast::<Stream>()?.clone();
+                groups.push((Self::flatten(&inner)?, Some(index)));
+            }
+        }
+        for (group, voiceIndex) in groups {
+            let listed: Vec<(f64, Py<PyAny>)> = group
+                .borrow()
+                .sorted()
+                .iter()
+                .map(|one| (one.offset, one.object.clone_ref(py)))
+                .collect();
+            for (offset, object) in listed {
+                let object = object.into_bound(py);
+                let end = offset + length_of(&object)?;
+                out.append(entry.call1((object, offset, end, voiceIndex))?)?;
+            }
+        }
+        Ok(out)
+    }
+
     /// The measures numbered from one number to another, in a stream of
     /// this one's class: music21's `measures`, whose range takes both ends
     /// in.
