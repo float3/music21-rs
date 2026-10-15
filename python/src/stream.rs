@@ -527,6 +527,80 @@ impl Stream {
         }
     }
 
+    /// The measures this stream holds, gathered by the offset each stands
+    /// at: music21's `measureOffsetMap`, whose answer a score builds out of
+    /// its parts, so measures standing together in different parts are
+    /// listed together.
+    ///
+    /// Only `Measure` is taken as a class to gather by: music21's other
+    /// classes are found by asking an element which measure holds it,
+    /// which needs the sites nothing here keeps.
+    #[pyo3(signature = (classFilterList = None))]
+    fn measureOffsetMap<'py>(
+        slf: &Bound<'py, Self>,
+        classFilterList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        if let Some(asked) = classFilterList.filter(|list| !list.is_none()) {
+            let names = class_names(asked)?;
+            if names.iter().any(|name| name != "Measure") {
+                return Err(StreamException::new_err(
+                    "only Measure is supported here: gathering by another class asks each element which measure holds it, which needs the sites nothing here keeps",
+                ));
+            }
+        }
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let part = pyo3::types::PyString::new(py, "Part");
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        // A score answers out of its parts, each measure at the offset it
+        // stands at *in its part*.
+        let mut gathered: Vec<(f64, Bound<'py, PyAny>)> = Vec::new();
+        let mut parts = false;
+        for (_, object) in &listed {
+            let object = object.bind(py);
+            if is_of_class(object, &part)? {
+                parts = true;
+                let inner = Self::measureOffsetMap(object.cast::<Stream>()?, None)?;
+                for (offset, measures) in inner.iter() {
+                    let offset: f64 = offset.extract()?;
+                    for held in measures.try_iter()? {
+                        gathered.push((offset, held?));
+                    }
+                }
+            }
+        }
+        if !parts {
+            for (offset, object) in &listed {
+                let object = object.bind(py);
+                if is_of_class(object, &measure)? {
+                    gathered.push((*offset, object.clone()));
+                }
+            }
+        }
+        let mut offsets: Vec<f64> = Vec::new();
+        for (offset, _) in &gathered {
+            if !offsets.contains(offset) {
+                offsets.push(*offset);
+            }
+        }
+        offsets.sort_by(f64::total_cmp);
+        let out = PyDict::new(py);
+        for offset in offsets {
+            let standing: Vec<&Bound<'py, PyAny>> = gathered
+                .iter()
+                .filter(|(at, _)| *at == offset)
+                .map(|(_, object)| object)
+                .collect();
+            out.set_item(offset, PyList::new(py, standing)?)?;
+        }
+        Ok(out)
+    }
+
     /// Appends a copy of an object this many times, each after the last:
     /// music21's `repeatAppend`.
     ///

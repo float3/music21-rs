@@ -2342,3 +2342,27 @@ def test_an_object_is_repeated_into_a_stream_as_copies():
     # And each copy is its own note.
     list(other)[0].pitch.name = "G"
     assert sorted(e.nameWithOctave for e in other) == ["E4", "E4", "G4"]
+
+
+def test_the_measures_of_a_score_are_gathered_by_offset():
+    """Every answer is music21's own for the same score."""
+    first = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    second = m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4 G4 A4 B4 c4")
+    whole = m.Score()
+    whole.insert(0.0, first)
+    whole.insert(0.0, second)
+
+    def shown(the_map):
+        return {at: [bar.number for bar in bars] for at, bars in the_map.items()}
+
+    assert shown(first.measureOffsetMap()) == {0.0: [1], 4.0: [2]}
+    # A score answers out of its parts, so the measures standing together
+    # in the two parts are listed together.
+    assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
+    assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # The measures are the parts' own objects.
+    assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
+    # Gathering by another class is refused rather than answered without
+    # the sites it would need.
+    with pytest.raises(m.StreamException):
+        whole.measureOffsetMap(["Note"])

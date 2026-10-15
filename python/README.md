@@ -105,7 +105,8 @@ themselves as copies (`repeatAppend`, `repeatInsert`) and answer `voices` and
 what they open with -- `clef`, `keySignature` and `timeSignature`, read
 and written as music21's are -- and the meters and instruments they hold,
 `getTimeSignatures`, `getInstruments` and `getInstrument`, which make up
-music21's default where a stream states none --
+music21's default where a stream states none -- and `measureOffsetMap`,
+which a score builds out of its parts --
 besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. a part written for a transposing instrument is turned
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --
