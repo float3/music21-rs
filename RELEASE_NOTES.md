@@ -36,6 +36,9 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` repeats an object into itself:
+  `repeatAppend` and `repeatInsert`, each putting in copies as music21's
+  `deepcopy` makes them.
 - The Python package's `Stream` looks elements up around an offset:
   `getElementAtOrBefore`, `getElementBeforeOffset` and
   `getElementAfterElement`, each handing back the stream's own object.

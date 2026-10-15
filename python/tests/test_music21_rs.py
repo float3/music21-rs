@@ -2323,3 +2323,22 @@ def test_an_element_is_found_at_or_before_an_offset():
     assert line.getElementAfterElement(line.notes[-1]) is None
     with pytest.raises(m.StreamException):
         line.getElementAfterElement(m.Note("C4"))
+
+
+def test_an_object_is_repeated_into_a_stream_as_copies():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    one = m.Note("C4", quarterLength=2.0)
+    assert line.repeatAppend(one, 3) is None
+    assert sorted(line.elementOffset(e) for e in line) == [0.0, 2.0, 4.0]
+    # Copies, as music21's deepcopy makes them: the object handed in is
+    # not one of the three.
+    assert not any(e is one for e in line)
+    assert [e.nameWithOctave for e in line] == ["C4", "C4", "C4"]
+
+    other = m.Stream()
+    other.repeatInsert(m.Note("E4", quarterLength=1.0), [0.0, 4.0, 8.0])
+    assert sorted(other.elementOffset(e) for e in other) == [0.0, 4.0, 8.0]
+    # And each copy is its own note.
+    list(other)[0].pitch.name = "G"
+    assert sorted(e.nameWithOctave for e in other) == ["E4", "E4", "G4"]

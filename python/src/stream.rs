@@ -527,6 +527,40 @@ impl Stream {
         }
     }
 
+    /// Appends a copy of an object this many times, each after the last:
+    /// music21's `repeatAppend`.
+    ///
+    /// The copies are copies, as music21's `deepcopy` makes them, so the
+    /// object handed in is not the one the stream ends up holding.
+    fn repeatAppend(
+        slf: &Bound<'_, Self>,
+        item: &Bound<'_, PyAny>,
+        numberOfTimes: usize,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        for _ in 0..numberOfTimes {
+            let copy = py.import("copy")?.call_method1("deepcopy", (item,))?;
+            let at = slf.borrow().end(py)?;
+            slf.borrow_mut().put(at, &copy);
+        }
+        Ok(())
+    }
+
+    /// Puts a copy of an object at each of these offsets: music21's
+    /// `repeatInsert`.
+    fn repeatInsert(
+        slf: &Bound<'_, Self>,
+        item: &Bound<'_, PyAny>,
+        offsets: Vec<f64>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        for offset in offsets {
+            let copy = py.import("copy")?.call_method1("deepcopy", (item,))?;
+            slf.borrow_mut().put(offset, &copy);
+        }
+        Ok(())
+    }
+
     /// The element standing at or before an offset, the last of the
     /// stream's order where several stand there: music21's
     /// `getElementAtOrBefore`.
