@@ -2119,6 +2119,21 @@ def test_notes_struck_twice_are_tied_in_place():
     with pytest.raises(m.StreamException):
         again.extendTies(pitchAttr="name")
 
+    # And across the measures of a part, where the clef and the meter
+    # stand among the elements the positions are counted over.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 c2 c2 g4 g4")
+    part.extendTies()
+    notes = [e for e in part.recurse() if getattr(e, "isNote", False)]
+    assert [n.tie.type if n.tie else None for n in notes] == [
+        None,
+        None,
+        None,
+        "start",
+        "stop",
+        "start",
+        "stop",
+    ]
+
 
 def test_elements_are_shifted_and_voices_flattened():
     """Every answer is music21's own for the same streams."""
