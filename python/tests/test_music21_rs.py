@@ -2564,3 +2564,26 @@ def test_what_stands_around_an_element_is_extracted():
     ]
     with pytest.raises(m.StreamException):
         line.extractContext(m.Note("C4"))
+
+
+def test_a_measure_is_filled_out_with_rests():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    bar = m.Measure()
+    bar.insert(0.0, m.TimeSignature("4/4"))
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+    bar.insert(3.0, m.Note("D4", quarterLength=1.0))
+    line.insert(0.0, bar)
+
+    filled = line.makeRests(fillGaps=True, timeRangeFromBarDuration=True)
+    assert [
+        (type(e).__name__, getattr(e, "quarterLength", 0.0))
+        for e in filled.recurse()
+        if not getattr(e, "isStream", False)
+    ] == [("TimeSignature", 0.0), ("Note", 1.0), ("Rest", 2.0), ("Note", 1.0)]
+
+    # That one combination of music21's keywords is what the crate
+    # answers, so its defaults are refused rather than answered as though
+    # they had been asked for.
+    with pytest.raises(m.StreamException):
+        line.makeRests()

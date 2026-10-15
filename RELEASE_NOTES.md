@@ -95,8 +95,8 @@
   same offset and length.
 - The Python package's `Stream` notates itself as music21's does:
   `makeMeasures` -- taking a `meterStream`, as music21 does --
-  `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
-  `makeNotation`. Each step is taken at music21's own defaults and a
+  `makeRests`, `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices`
+  and `makeNotation`. Each step is taken at music21's own defaults and a
   keyword asking for anything else is refused rather than answered
   differently; `makeVoices` fills no gaps, which is why music21's own
   `fillGaps=True` is refused.

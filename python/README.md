@@ -90,7 +90,7 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `partsToVoices`, `implode`, `transpose`, `stripTies`, `quantize` and
 `template` -- each handing back a new stream, so `inPlace=True` and a
 `target` are refused. they notate themselves too -- `makeMeasures`,
-`makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
+`makeRests`, `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
 `makeNotation`, each step at music21's own defaults, a keyword asking for
 anything else refused rather than answered differently.
 `splitAtQuarterLength` cuts a stream in two at a length from its start,

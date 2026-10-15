@@ -2458,6 +2458,36 @@ impl Stream {
         })
     }
 
+    /// A copy with every measure filled out to its bar with rests, its
+    /// voices too, and the gaps inside it filled: music21's `makeRests`
+    /// with `fillGaps=True` and `timeRangeFromBarDuration=True`.
+    ///
+    /// That one combination is what the crate answers, so music21's
+    /// defaults are refused rather than answered as though they had been
+    /// asked for.
+    #[pyo3(signature = (refStreamOrTimeRange = None, *, fillGaps = false, timeRangeFromBarDuration = false, inPlace = false, hideRests = false))]
+    fn makeRests<'py>(
+        slf: &Bound<'py, Self>,
+        refStreamOrTimeRange: Option<&Bound<'py, PyAny>>,
+        fillGaps: bool,
+        timeRangeFromBarDuration: bool,
+        inPlace: bool,
+        hideRests: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if !fillGaps || !timeRangeFromBarDuration {
+            return Err(StreamException::new_err(
+                "makeRests here fills the gaps and takes the bar's length, so fillGaps=True and timeRangeFromBarDuration=True are what it answers",
+            ));
+        }
+        if hideRests || refStreamOrTimeRange.is_some_and(|given| !given.is_none()) {
+            return Err(StreamException::new_err(
+                "hideRests and refStreamOrTimeRange are not supported here",
+            ));
+        }
+        remade(slf, music21_rs_crate::makenotation::make_rests)
+    }
+
     /// A copy with what runs past a barline cut there and tied: music21's
     /// `makeTies`.
     #[pyo3(signature = (meterStream = None, *, inPlace = false, displayTiedAccidentals = false, classFilterList = None))]
