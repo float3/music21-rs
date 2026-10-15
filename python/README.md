@@ -103,6 +103,13 @@ refused and nothing here is installed over music21's own `metadata`. an
 `Opus` -- what a multi-tune ABC or Essen file reads as -- answers `scores`,
 `getNumbers`, `getScoreByNumber`, `getScoreByTitle` and `mergeScores`.
 
+`analyze` asks a stream one question, as music21's does: `ambitus`, `span`
+and `range` give the interval from the lowest pitch sounding to the
+highest, and `key` and the names of music21's five key weightings give the
+key the stream is most likely in. the name need not be exact -- `kostka`
+finds Temperley's profile, a bare `key` finds Aarden's -- and a stream with
+no pitches has no ambitus, answering `None` as music21 does.
+
 `to_musicxml` takes one of this package's streams or one of music21's and
 writes what music21's exporter writes with `makeNotation=False`. with
 `make_notation=True` it makes the notation first, as music21's exporter does

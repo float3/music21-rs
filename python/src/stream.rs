@@ -443,6 +443,43 @@ impl Stream {
         Ok(())
     }
 
+    /// The analysis a method name asks for: music21's `analyze`.
+    ///
+    /// `ambitus`, `span` and `range` give the interval from the lowest
+    /// pitch sounding to the highest; `key` and the names of music21's
+    /// five key weightings give the key the stream is most likely in. The
+    /// name is read as music21 reads it, loosest last, so `kostka` finds
+    /// Temperley's profile and a bare `key` finds Aarden's.
+    ///
+    /// A stream with no pitches has no ambitus and answers nothing, as
+    /// music21 answers `None`; a key analysis of one raises, as music21
+    /// raises.
+    #[pyo3(signature = (method, **_keywords))]
+    fn analyze<'py>(
+        slf: &Bound<'py, Self>,
+        method: &str,
+        _keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        use music21_rs_crate::stream::Analysis;
+
+        let py = slf.py();
+        let stream = crate_stream(slf.as_any())?;
+        let found = stream.analyze(method).map_err(|error| {
+            // music21 raises its discrete-analysis class for a method
+            // nobody answers to and for a stream with nothing to analyse.
+            crate::discrete::DiscreteAnalysisException::new_err(crate::pitch::message(&error))
+        })?;
+        match found {
+            None => Ok(None),
+            Some(Analysis::Key(key)) => {
+                Ok(Some(crate::key::Key::object(py, key)?.bind(py).clone()))
+            }
+            Some(Analysis::Ambitus(span)) => Ok(Some(
+                Bound::new(py, crate::interval::Interval::wrap(span))?.into_any(),
+            )),
+        }
+    }
+
     /// The scores this opus holds: music21's `Opus.scores`.
     #[getter]
     fn scores<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {

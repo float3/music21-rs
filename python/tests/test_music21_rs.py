@@ -1559,3 +1559,23 @@ def test_a_read_collection_is_looked_up_by_number_and_title():
     merged = opus.mergeScores()
     assert len(merged.parts) == 2
     assert merged.metadata.title == "One"
+
+
+def test_a_stream_is_analyzed_as_music21_analyzes_it():
+    """Every answer is music21's own for the same stream."""
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 e4 g4 c'4")
+    assert str(part.analyze("key")) == "C major"
+    # The name need not be exact: music21 reads its own names loosest last.
+    assert str(part.analyze("kostka")) == "C major"
+    assert str(part.analyze("krumhansl")) == "C major"
+    for name in ("ambitus", "span", "range"):
+        assert part.analyze(name).name == "P8", name
+    assert repr(part.analyze("ambitus")) == "<music21.interval.Interval P8>"
+
+    # A stream with no pitches has no ambitus, and a key analysis of one
+    # raises, which is what music21 answers and raises.
+    assert m.Stream().analyze("ambitus") is None
+    with pytest.raises(m.DiscreteAnalysisException):
+        m.Stream().analyze("key")
+    with pytest.raises(m.DiscreteAnalysisException):
+        part.analyze("nonsense")

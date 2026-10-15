@@ -37,6 +37,7 @@ pub mod articulations;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
+pub mod discrete;
 pub mod duration;
 pub mod dynamics;
 pub mod enharmonics;
@@ -1316,6 +1317,11 @@ exceptions![
         metadata::MetadataException,
         Some("music21.metadata")
     ),
+    (
+        "DiscreteAnalysisException",
+        discrete::DiscreteAnalysisException,
+        Some("music21.analysis.discrete")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
@@ -1403,6 +1409,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     harmonicfunction::register(m)?;
     transposition::register(m)?;
     segment::register(m)?;
+    discrete::register(m)?;
     metadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
