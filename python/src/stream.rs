@@ -253,6 +253,45 @@ impl Stream {
         slf.borrow().end(slf.py())
     }
 
+    /// What of a class stands at the very start of this stream, the first
+    /// where there are several: music21's `clef`, `keySignature` and
+    /// `timeSignature` are each this of their own class.
+    fn opening<'py>(slf: &Bound<'py, Self>, class: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let named = pyo3::types::PyString::new(py, class);
+        let standing: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .filter(|held| held.offset == 0.0)
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        for object in standing {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &named)? {
+                return Ok(Some(object));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Writes what the stream opens with, taking out the one of that class
+    /// it had: music21's own setters do exactly that, and take `None` as
+    /// leaving the stream with none.
+    fn set_opening(
+        slf: &Bound<'_, Self>,
+        class: &str,
+        value: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        if let Some(standing) = Self::opening(slf, class)? {
+            slf.borrow_mut().remove(&standing)?;
+        }
+        if let Some(value) = value.filter(|value| !value.is_none()) {
+            slf.borrow_mut().put(0.0, value);
+        }
+        Ok(())
+    }
+
     /// Takes out what answers to these classes, or what does not.
     fn remove_where(
         slf: &Bound<'_, Self>,
@@ -449,6 +488,46 @@ impl Stream {
                 target.repr()?
             ))),
         }
+    }
+
+    /// The clef standing at the start of this stream, or `None`: music21's
+    /// `clef`, which a measure's own is.
+    #[getter]
+    fn get_clef<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::opening(slf, "Clef")
+    }
+
+    /// Writes the clef the stream opens with, taking out the one it had, as
+    /// music21's setter does; `None` leaves it with none.
+    #[setter]
+    fn set_clef(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        Self::set_opening(slf, "Clef", value)
+    }
+
+    /// The key signature standing at the start of this stream, or `None`:
+    /// music21's `keySignature`.
+    #[getter]
+    fn get_keySignature<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::opening(slf, "KeySignature")
+    }
+
+    /// Writes the key signature the stream opens with.
+    #[setter]
+    fn set_keySignature(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        Self::set_opening(slf, "KeySignature", value)
+    }
+
+    /// The meter standing at the start of this stream, or `None`:
+    /// music21's `timeSignature`.
+    #[getter]
+    fn get_timeSignature<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::opening(slf, "TimeSignature")
+    }
+
+    /// Writes the meter the stream opens with.
+    #[setter]
+    fn set_timeSignature(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        Self::set_opening(slf, "TimeSignature", value)
     }
 
     /// Takes the object at an index out and hands it back, the last where

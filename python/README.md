@@ -100,7 +100,9 @@ nothing, as music21's do -- the ties written onto its own notes. and they answer
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, `hasPartLikeStreams`, `findGaps` and
 `simultaneousAttacks`, and they take elements out by class or by index
-(`removeByClass`, `removeByNotOfClass`, `pop`) and answer `voices`,
+(`removeByClass`, `removeByNotOfClass`, `pop`) and answer `voices` and
+what they open with -- `clef`, `keySignature` and `timeSignature`, read
+and written as music21's are --
 besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. a part written for a transposing instrument is turned
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --

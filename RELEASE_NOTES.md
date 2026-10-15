@@ -36,6 +36,12 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` reads and writes what it opens with:
+  `clef`, `keySignature` and `timeSignature`, each the one of its class
+  standing at the very start, and writing one takes out the one it had, as
+  music21's setters do. The crate answers the clef *in force* instead
+  (`in_force_before`), a stream of values having no object to hand back;
+  these are the package's own.
 - The Python package's `Stream` takes elements out by class and by index
   (`removeByClass`, `removeByNotOfClass`, `pop`) and answers `voices`,
   the voices it holds being its own objects.

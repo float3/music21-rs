@@ -2218,3 +2218,38 @@ def test_the_voices_a_stream_holds_are_its_own():
     assert len(voices) == 2
     # The voices handed back are the stream's own, as music21's are.
     assert voices[0] is first and voices[1] is second
+
+
+def test_what_a_stream_opens_with_is_read_and_written():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    assert (bar.clef, bar.keySignature, bar.timeSignature) == (None, None, None)
+
+    first = m.TrebleClef()
+    bar.clef = first
+    bar.keySignature = m.KeySignature(2)
+    bar.timeSignature = m.TimeSignature("3/4")
+    bar.append(m.Note("C4", quarterLength=1.0))
+    assert bar.clef.sign == "G"
+    assert bar.keySignature.sharps == 2
+    assert bar.timeSignature.ratioString == "3/4"
+    # The clef handed back is the measure's own object.
+    assert bar.clef is first
+
+    # Writing another takes the first out, as music21's setter does.
+    bar.clef = m.BassClef()
+    assert bar.clef.sign == "F"
+    assert [type(e).__name__ for e in bar] == [
+        "BassClef",
+        "KeySignature",
+        "TimeSignature",
+        "Note",
+    ]
+    bar.clef = None
+    assert bar.clef is None
+    assert len(bar) == 3
+
+    # Only what stands at the very start is what the stream opens with.
+    later = m.Measure()
+    later.insert(2.0, m.TrebleClef())
+    assert later.clef is None
