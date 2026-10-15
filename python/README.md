@@ -95,8 +95,10 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 anything else refused rather than answered differently. and they answer
 `highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
-`isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
-`melodicIntervals`. they are asked for elements by class and by offset --
+`isWellFormedNotation`, `hasPartLikeStreams`, `findGaps` and
+`simultaneousAttacks`, besides `chordify`, `findConsecutiveNotes` and
+`melodicIntervals`. a part written for a transposing instrument is turned
+to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
 is found only where it *begins* -- and they answer `isTwelveTone` and

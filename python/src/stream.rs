@@ -1387,6 +1387,62 @@ impl Stream {
         from_crate(slf.py(), &stream.template(&options))
     }
 
+    /// A copy with every note where it sounds rather than where it is
+    /// written: music21's `toSoundingPitch`, which moves each stretch by
+    /// the transposition of the instrument playing it.
+    #[pyo3(signature = (*, inPlace = false))]
+    fn toSoundingPitch<'py>(slf: &Bound<'py, Self>, inPlace: bool) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        edited(slf, RsStream::to_sounding_pitch)
+    }
+
+    /// A copy with every note where it is written for its instrument:
+    /// music21's `toWrittenPitch`. `ottavasToSounding` leaves the notes
+    /// under an octave line where they sound, which is how music21's own
+    /// MusicXML writer asks for it.
+    #[pyo3(signature = (*, inPlace = false, ottavasToSounding = false))]
+    fn toWrittenPitch<'py>(
+        slf: &Bound<'py, Self>,
+        inPlace: bool,
+        ottavasToSounding: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        edited(slf, |stream| stream.to_written_pitch_by(ottavasToSounding))
+    }
+
+    /// The offsets where something in this stream and something in
+    /// another both start, each stream's own elements: music21's
+    /// `simultaneousAttacks`.
+    fn simultaneousAttacks(
+        slf: &Bound<'_, Self>,
+        stream2: &Bound<'_, PyAny>,
+    ) -> PyResult<Vec<f64>> {
+        let ours = crate_stream(slf.as_any())?;
+        let theirs = crate_stream(stream2)?;
+        Ok(ours.simultaneous_attacks(&theirs))
+    }
+
+    /// Whether this stream holds parts, or streams standing side by side
+    /// as parts do: music21's `hasPartLikeStreams`.
+    fn hasPartLikeStreams(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.has_part_like_streams())
+    }
+
+    /// A stream standing for the gaps in this one, or `None` where there
+    /// are none: music21's `findGaps`.
+    ///
+    /// Each gap is a rest from where it begins for as long as it lasts,
+    /// where music21 answers bare `Music21Object`s carrying the same
+    /// offset and length; a rest is the thing this package has for a
+    /// stretch of nothing.
+    fn findGaps<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let stream = crate_stream(slf.as_any())?;
+        match stream.find_gaps() {
+            Some(gaps) => Ok(Some(from_crate(slf.py(), &gaps)?)),
+            None => Ok(None),
+        }
+    }
+
     /// A copy cut into measures by the meters it states: music21's
     /// `makeMeasures`.
     ///

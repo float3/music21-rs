@@ -36,6 +36,11 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` turns itself to sounding and to written
+  pitch (`toSoundingPitch`, `toWrittenPitch`), and answers
+  `simultaneousAttacks`, `hasPartLikeStreams` and `findGaps` -- whose
+  gaps are rests here, where music21 answers bare objects carrying the
+  same offset and length.
 - The Python package's `Stream` notates itself as music21's does:
   `makeMeasures` -- taking a `meterStream`, as music21 does --
   `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and

@@ -2016,3 +2016,60 @@ def test_a_stream_is_notated_as_music21_notates_it():
     # is refused.
     with pytest.raises(m.StreamException):
         raw.makeNotation(bestClef=True)
+
+
+def test_a_part_is_turned_to_sounding_and_written_pitch():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    line.insert(0.0, m.Clarinet())
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.atSoundingPitch = False
+
+    def names(stream):
+        return [n.nameWithOctave for n in stream.recurse() if getattr(n, "isNote", False)]
+
+    # A clarinet in B flat sounds a tone below what it reads.
+    sounding = line.toSoundingPitch()
+    assert names(sounding) == ["B-3", "C4", "D4"]
+    assert sounding.atSoundingPitch is True
+    assert names(sounding.toWrittenPitch()) == ["C4", "D4", "E4"]
+    # The answer is a copy, as music21's is unless asked for inPlace.
+    assert names(line) == ["C4", "D4", "E4"]
+
+
+def test_two_streams_are_asked_where_they_strike_together():
+    """Every answer is music21's own for the same streams."""
+    first = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        first.insert(at, m.Note("C4", quarterLength=1.0))
+    second = m.Stream()
+    for at in (1.0, 3.0):
+        second.insert(at, m.Note("E4", quarterLength=1.0))
+    assert first.simultaneousAttacks(second) == [1.0]
+
+    score = m.Stream()
+    score.insert(0.0, m.Part())
+    score.insert(0.0, m.Part())
+    assert score.hasPartLikeStreams()
+    assert not first.hasPartLikeStreams()
+
+
+def test_the_gaps_in_a_stream_are_found_as_music21_finds_them():
+    """Every answer is music21's own for the same stream."""
+    gappy = m.Stream()
+    gappy.insert(1.0, m.Note("E4", quarterLength=2.0))
+    gappy.insert(5.0, m.Note("F4", quarterLength=4.0))
+
+    gaps = gappy.findGaps()
+    # A quarter before the first note, and two between the two, each a
+    # rest here where music21 answers a bare object of the same length.
+    assert [(gaps.elementOffset(e), e.quarterLength) for e in gaps] == [
+        (0.0, 1.0),
+        (3.0, 2.0),
+    ]
+    assert m.Stream().findGaps() is None
+    full = m.Stream()
+    for at in (0.0, 1.0):
+        full.insert(at, m.Note("C4", quarterLength=1.0))
+    assert full.findGaps() is None
