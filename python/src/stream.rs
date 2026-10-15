@@ -551,6 +551,60 @@ impl Stream {
         }
     }
 
+    /// Everything this stream holds that sounds while another element
+    /// sounds, each at its offset from where that element stands:
+    /// music21's `allPlayingWhileSounding`.
+    ///
+    /// The element searched for stands in `elStream` where one is given,
+    /// else at the offset it is found at here; the elements handed back
+    /// are this stream's own.
+    #[pyo3(signature = (el, elStream = None))]
+    fn allPlayingWhileSounding<'py>(
+        slf: &Bound<'py, Self>,
+        el: &Bound<'py, PyAny>,
+        elStream: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
+        let offset = match elStream.filter(|given| !given.is_none()) {
+            Some(given) => given
+                .call_method1("elementOffset", (el,))?
+                .extract::<f64>()?,
+            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+        };
+        let length = length_of(el)?;
+        let end = offset + length;
+        // The span the crate reads this by: anything sounding anywhere in
+        // the element's own stretch, and a search at one offset where the
+        // element lasts no time.
+        let span = if end == offset {
+            music21_rs_crate::stream::OffsetSpan {
+                must_begin_in_span: false,
+                ..music21_rs_crate::stream::OffsetSpan::at(offset)
+            }
+        } else {
+            music21_rs_crate::stream::OffsetSpan {
+                must_begin_in_span: false,
+                include_end_boundary: false,
+                include_elements_that_end_at_start: false,
+                ..music21_rs_crate::stream::OffsetSpan::between(offset, end)
+            }
+        };
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| (one.offset, one.object.clone_ref(py)))
+            .collect();
+        let mut out = Self::empty(slf.borrow().kind);
+        for (at, object) in listed {
+            let object = object.into_bound(py);
+            if span.takes_at(at, length_of(&object)?) {
+                out.put(at - offset, &object);
+            }
+        }
+        Bound::new(py, out)
+    }
+
     /// What the stream holds around one of its elements -- from `before`
     /// quarters before it begins to `after` quarters past where it ends:
     /// music21's `extractContext`.

@@ -2587,3 +2587,29 @@ def test_a_measure_is_filled_out_with_rests():
     # they had been asked for.
     with pytest.raises(m.StreamException):
         line.makeRests()
+
+
+def test_what_sounds_while_another_part_sounds_is_found():
+    """Every answer is music21's own for the same two streams."""
+    upper = m.Stream()
+    upper.insert(0.0, m.Note("C5", quarterLength=2.0))
+    upper.insert(2.0, m.Note("D5", quarterLength=2.0))
+    lower = m.Stream()
+    for at, name in enumerate(["C3", "D3", "E3", "F3"]):
+        lower.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    held = list(upper)[1]
+    found = lower.allPlayingWhileSounding(held, upper)
+    # Each at its offset from where the note searched for stands.
+    assert [(found.elementOffset(e), e.nameWithOctave) for e in found] == [
+        (0.0, "E3"),
+        (1.0, "F3"),
+    ]
+    # And they are the lower stream's own notes.
+    assert list(found)[0] is list(lower)[2]
+
+    found = lower.allPlayingWhileSounding(list(upper)[0], upper)
+    assert [(found.elementOffset(e), e.nameWithOctave) for e in found] == [
+        (0.0, "C3"),
+        (1.0, "D3"),
+    ]
