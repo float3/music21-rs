@@ -2295,3 +2295,31 @@ def test_the_meters_and_instruments_a_stream_holds_are_found():
     assert list(default)[0].partName == ""
     assert len(none.getInstruments(returnDefault=False)) == 0
     assert none.getInstrument(returnDefault=False) is None
+
+
+def test_an_element_is_found_at_or_before_an_offset():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in ((0.0, "C4"), (10.0, "D4"), (20.0, "E4"), (30.0, "F4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+    clef = m.BassClef()
+    line.insert(20.0, clef)
+
+    assert line.getElementAtOrBefore(21).nameWithOctave == "E4"
+    # Of two things standing at one offset the later in the listing wins,
+    # which is the note rather than the clef sorting before it.
+    assert line.getElementAtOrBefore(20).nameWithOctave == "E4"
+    assert line.getElementAtOrBefore(20, ["Note"]).nameWithOctave == "E4"
+    assert line.getElementAtOrBefore(0).nameWithOctave == "C4"
+    assert line.getElementAtOrBefore(-1) is None
+    # What stands at the offset itself does not count here.
+    assert line.getElementBeforeOffset(20).nameWithOctave == "D4"
+    assert line.getElementBeforeOffset(20, ["Note"]).nameWithOctave == "D4"
+
+    first = line.notes[0]
+    assert line.getElementAfterElement(first).nameWithOctave == "D4"
+    assert line.getElementAfterElement(clef).nameWithOctave == "E4"
+    assert line.getElementAfterElement(first, ["Clef"]) is clef
+    assert line.getElementAfterElement(line.notes[-1]) is None
+    with pytest.raises(m.StreamException):
+        line.getElementAfterElement(m.Note("C4"))

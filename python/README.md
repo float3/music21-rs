@@ -110,7 +110,9 @@ besides `chordify`, `findConsecutiveNotes` and
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
-is found only where it *begins* -- and they answer `isTwelveTone` and
+is found only where it *begins*, `getElementAtOrBefore`,
+`getElementBeforeOffset` and `getElementAfterElement` -- and they answer
+`isTwelveTone` and
 `staffLines`. they stretch, take in and empty themselves as well:
 `extendDuration` gives each element of a class the time up to the next one,
 `mergeElements` takes in everything another stream holds, each at the offset

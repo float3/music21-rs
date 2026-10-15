@@ -253,6 +253,43 @@ impl Stream {
         slf.borrow().end(slf.py())
     }
 
+    /// The element nearest before an offset: those standing at or before
+    /// it, the greatest offset of them, and of those the last in the
+    /// stream's own order -- which is what music21's `max` over the sort
+    /// tuples picks. `strictly` leaves out what stands at the offset
+    /// itself, which is `getElementBeforeOffset`.
+    fn nearest_before<'py>(
+        slf: &Bound<'py, Self>,
+        offset: f64,
+        classes: Option<&Bound<'py, PyAny>>,
+        strictly: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        let mut nearest: Option<(f64, Bound<'py, PyAny>)> = None;
+        for (at, object) in listed {
+            if at > offset || (strictly && at == offset) {
+                continue;
+            }
+            let object = object.into_bound(py);
+            if let Some(classes) = classes.filter(|list| !list.is_none())
+                && !is_of_any(&object, classes)?
+            {
+                continue;
+            }
+            // Later in the listing at the same offset wins, so `>=`.
+            if nearest.as_ref().is_none_or(|(held, _)| at >= *held) {
+                nearest = Some((at, object));
+            }
+        }
+        Ok(nearest.map(|(_, object)| object))
+    }
+
     /// What of a class stands at the very start of this stream, the first
     /// where there are several: music21's `clef`, `keySignature` and
     /// `timeSignature` are each this of their own class.
@@ -488,6 +525,57 @@ impl Stream {
                 target.repr()?
             ))),
         }
+    }
+
+    /// The element standing at or before an offset, the last of the
+    /// stream's order where several stand there: music21's
+    /// `getElementAtOrBefore`.
+    #[pyo3(signature = (offset, classList = None))]
+    fn getElementAtOrBefore<'py>(
+        slf: &Bound<'py, Self>,
+        offset: f64,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::nearest_before(slf, offset, classList, false)
+    }
+
+    /// The element standing before an offset, nothing standing at it
+    /// counting: music21's `getElementBeforeOffset`.
+    #[pyo3(signature = (offset, classList = None))]
+    fn getElementBeforeOffset<'py>(
+        slf: &Bound<'py, Self>,
+        offset: f64,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::nearest_before(slf, offset, classList, true)
+    }
+
+    /// The element after one this stream holds, in the order the stream is
+    /// listed in: music21's `getElementAfterElement`.
+    #[pyo3(signature = (element, classList = None))]
+    fn getElementAfterElement<'py>(
+        slf: &Bound<'py, Self>,
+        element: &Bound<'py, PyAny>,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let listed: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        let Some(at) = listed.iter().position(|held| held.bind(py).is(element)) else {
+            return Err(StreamException::new_err("the object is not in this stream"));
+        };
+        for object in listed.into_iter().skip(at + 1) {
+            let object = object.into_bound(py);
+            match classList.filter(|list| !list.is_none()) {
+                Some(list) if !is_of_any(&object, list)? => continue,
+                _ => return Ok(Some(object)),
+            }
+        }
+        Ok(None)
     }
 
     /// The meters this stream holds, each where it stands, the stream's

@@ -36,6 +36,11 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` looks elements up around an offset:
+  `getElementAtOrBefore`, `getElementBeforeOffset` and
+  `getElementAfterElement`, each handing back the stream's own object.
+  Of two things standing at one offset the later in the listing is the
+  answer, which is music21's `max` over the sort tuples.
 - The Python package's `Stream` answers `getTimeSignatures`,
   `getInstruments` and `getInstrument`, each handing back the stream's own
   objects, and making up music21's default -- a four-four, a bare
