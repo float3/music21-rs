@@ -1299,6 +1299,37 @@ impl Stream {
         Ok(out)
     }
 
+    /// The lyrics sung in the stream, gathered by the number each is sung
+    /// under: music21's `lyrics`.
+    ///
+    /// Each number's line has a place for every note read, holding the
+    /// lyric sung there or `None` where that note sings nothing under that
+    /// number, so the lines stay level with the notes; a number first met
+    /// partway through is padded with the notes before it. The lyric
+    /// handed back is the note's own object, as music21's is. `recurse`
+    /// answers a list of its own per nested stream, as music21's
+    /// `RecursiveLyricList` does.
+    #[pyo3(signature = (*, ignoreBarlines = true, recurse = false, skipTies = false))]
+    fn lyrics<'py>(
+        slf: &Bound<'py, Self>,
+        ignoreBarlines: bool,
+        recurse: bool,
+        skipTies: bool,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let options = music21_rs_crate::stream::LyricsOptions {
+            ignore_barlines: ignoreBarlines,
+            recurse,
+            skip_ties: skipTies,
+        };
+        let py = slf.py();
+        let read = read_values(slf.as_any())?;
+        let out = PyDict::new(py);
+        for (number, line) in read.stream.lyric_positions(&options) {
+            out.set_item(number, sung_line(py, &line, &read.leaves)?)?;
+        }
+        Ok(out)
+    }
+
     /// How long the stream lasts in seconds: music21's `seconds`.
     ///
     /// Only the tempi the stream holds itself count, each from where it
@@ -1414,6 +1445,29 @@ fn anchor_of(name: Option<&str>) -> PyResult<music21_rs_crate::stream::Anchor> {
             "an anchorZero value is not supported: {other}"
         ))),
     }
+}
+
+/// One line of lyrics as music21 answers it: the note's own `Lyric` where
+/// one is sung, `None` where that note sings nothing under the number, and
+/// a list of its own for a nested stream.
+fn sung_line<'py>(
+    py: Python<'py>,
+    line: &[music21_rs_crate::stream::SungAt],
+    leaves: &[Py<PyAny>],
+) -> PyResult<Bound<'py, PyList>> {
+    use music21_rs_crate::stream::SungAt;
+    let out = PyList::empty(py);
+    for sung in line {
+        match sung {
+            SungAt::Lyric(place) => {
+                let lyrics = leaves[place.position].bind(py).getattr("lyrics")?;
+                out.append(lyrics.get_item(place.index)?)?;
+            }
+            SungAt::Unsung => out.append(py.None())?,
+            SungAt::Nested(inner) => out.append(sung_line(py, inner, leaves)?)?,
+        }
+    }
+    Ok(out)
 }
 
 /// The stream edited by the crate, as a new stream of this package's.

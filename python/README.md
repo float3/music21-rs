@@ -104,7 +104,9 @@ the same class holding nothing. `seconds` says how long a stream lasts and
 handing back the stream's own mark wherever it holds one; where a stream
 states no tempo a quarter at 120 is counted, as upstream, and `seconds` is
 `nan`, which is music21's answer for a stream whose own search finds no
-tempo.
+tempo. `lyrics` gathers every line sung, by the number it is sung under,
+with a place for each note read so the lines stay level with the notes and
+the note's own `Lyric` in it.
 
 a score carries its `metadata`, music21's `Metadata`, whose names are read
 and written as music21 reads them -- by a unique name, by one of the four

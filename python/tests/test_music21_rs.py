@@ -1750,3 +1750,57 @@ def test_the_tempo_in_force_through_each_stretch_is_music21s():
     [(start, end, mark)] = bare.metronomeMarkBoundaries()
     assert (start, end, mark.number) == (0.0, 4.0, 120.0)
     assert mark not in list(bare.elements)
+
+
+def test_the_lyrics_are_gathered_as_music21_gathers_them():
+    """Every answer is music21's own for the same part."""
+
+    def sung(name, words):
+        note = m.Note(name)
+        for number, text in words:
+            note.lyrics.append(m.Lyric(text=text, number=number))
+        return note
+
+    def shown(line):
+        return [
+            "-" if each is None else shown(each) if isinstance(each, list) else each.text
+            for each in line
+        ]
+
+    part = m.Part()
+    first = m.Measure()
+    first.append(m.TrebleClef())
+    first.append(m.Rest(quarterLength=1.0))
+    first.append(sung("C4", [(1, "first"), (2, "below")]))
+    second = m.Measure()
+    second.append(sung("D4", [(1, "second")]))
+    second.append(sung("E4", []))
+    part.append(first)
+    part.append(second)
+
+    found = part.lyrics()
+    assert sorted(found) == [1, 2]
+    # Every note read keeps a place in each line, so the lines stay level
+    # with the notes: the clef and the rest sing nothing and keep none.
+    assert shown(found[1]) == ["first", "second", "-"]
+    assert shown(found[2]) == ["below", "-", "-"]
+    # The lyric handed back is the note's own object, as music21's is.
+    assert found[1][0] is first.notes[0].lyrics[0]
+
+    # Asked to recurse rather than to read through the barlines, each
+    # measure answers a list of its own, padded within itself.
+    recursed = part.lyrics(ignoreBarlines=False, recurse=True)
+    assert {n: shown(line) for n, line in recursed.items()} == {
+        1: [["first"], ["second", "-"]],
+        2: [["below"]],
+    }
+    # Neither, and the measures are not read at all.
+    assert part.lyrics(ignoreBarlines=False) == {}
+
+    tied = m.Part()
+    tied.append(sung("C4", [(1, "held")]))
+    over = sung("C4", [(1, "over")])
+    over.tie = m.Tie("stop")
+    tied.append(over)
+    assert shown(tied.lyrics()[1]) == ["held", "over"]
+    assert shown(tied.lyrics(skipTies=True)[1]) == ["held"]
