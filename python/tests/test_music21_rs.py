@@ -2366,3 +2366,24 @@ def test_the_measures_of_a_score_are_gathered_by_offset():
     # the sites it would need.
     with pytest.raises(m.StreamException):
         whole.measureOffsetMap(["Note"])
+
+
+def test_an_object_is_inserted_and_what_follows_shifted():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in ((0.0, "C4"), (1.0, "D4"), (2.0, "E4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+
+    def shown(stream):
+        return sorted((stream.elementOffset(e), e.nameWithOctave) for e in stream)
+
+    # Everything from the element nearest after the offset is moved far
+    # enough that it starts where the new note ends.
+    assert line.insertAndShift(1.0, m.Note("F4", quarterLength=2.0)) is None
+    assert shown(line) == [(0.0, "C4"), (1.0, "F4"), (3.0, "D4"), (4.0, "E4")]
+
+    # Nothing standing after the offset means nothing to move.
+    tail = m.Stream()
+    tail.insert(0.0, m.Note("C4", quarterLength=1.0))
+    tail.insertAndShift(4.0, m.Note("A4", quarterLength=1.0))
+    assert shown(tail) == [(0.0, "C4"), (4.0, "A4")]

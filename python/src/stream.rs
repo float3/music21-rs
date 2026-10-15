@@ -527,6 +527,56 @@ impl Stream {
         }
     }
 
+    /// Puts an object at an offset, first moving everything from the
+    /// element nearest after that offset onwards far enough that it starts
+    /// where the new one ends: music21's `insertAndShift`, which changes
+    /// the stream and answers nothing.
+    ///
+    /// Where a thing stands is the stream's own to say, so the offsets are
+    /// moved here; which of them move, and by how much, is the rule
+    /// `Stream::insert_and_shift` follows.
+    #[pyo3(signature = (offsetOrItemOrList, itemOrNone = None))]
+    fn insertAndShift(
+        slf: &Bound<'_, Self>,
+        offsetOrItemOrList: &Bound<'_, PyAny>,
+        itemOrNone: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        // music21 takes an offset and an object, or an object standing at
+        // the offset it says itself.
+        let (offset, item) = match itemOrNone.filter(|item| !item.is_none()) {
+            Some(item) => (offsetOrItemOrList.extract::<f64>()?, item.clone()),
+            None => {
+                let at = offsetOrItemOrList
+                    .getattr("offset")
+                    .and_then(|offset| offset.extract::<f64>())
+                    .unwrap_or(0.0);
+                (at, offsetOrItemOrList.clone())
+            }
+        };
+        let end = offset + length_of(&item)?;
+        let nearest = slf
+            .borrow()
+            .held
+            .iter()
+            .map(|held| held.offset)
+            .filter(|at| *at >= offset)
+            .fold(None, |best: Option<f64>, at| {
+                Some(best.map_or(at, |best| if at < best { at } else { best }))
+            });
+        if let Some(nearest) = nearest {
+            let shift = end - nearest;
+            if shift > 0.0 {
+                for one in &mut slf.borrow_mut().held {
+                    if one.offset >= offset {
+                        one.offset += shift;
+                    }
+                }
+            }
+        }
+        slf.borrow_mut().put(offset, &item);
+        Ok(())
+    }
+
     /// The measures this stream holds, gathered by the offset each stands
     /// at: music21's `measureOffsetMap`, whose answer a score builds out of
     /// its parts, so measures standing together in different parts are
