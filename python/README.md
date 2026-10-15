@@ -92,7 +92,10 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `target` are refused. they notate themselves too -- `makeMeasures`,
 `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
 `makeNotation`, each step at music21's own defaults, a keyword asking for
-anything else refused rather than answered differently. and they answer
+anything else refused rather than answered differently.
+`splitAtQuarterLength` cuts a stream in two at a length from its start,
+and `extendTies` and `shiftElements` change the stream and answer
+nothing, as music21's do -- the ties written onto its own notes. and they answer
 `highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, `hasPartLikeStreams`, `findGaps` and

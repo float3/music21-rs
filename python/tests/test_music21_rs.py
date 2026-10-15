@@ -2073,3 +2073,70 @@ def test_the_gaps_in_a_stream_are_found_as_music21_finds_them():
     for at in (0.0, 1.0):
         full.insert(at, m.Note("C4", quarterLength=1.0))
     assert full.findGaps() is None
+
+
+def test_a_measure_is_cut_in_two_as_music21_cuts_it():
+    """Every answer is music21's own for the same measure."""
+    whole = m.from_tiny_notation("tinyNotation: 4/4 c2 d2")
+    bar = [e for e in whole if getattr(e, "isStream", False)][0]
+
+    first, second = bar.splitAtQuarterLength(1.0)
+    assert outline(first) == [
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+    ]
+    # The second piece opens with the clef and meter in force, as
+    # music21's searchContext finds them, and the half note is tied.
+    assert outline(second) == [
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=2.0",
+    ]
+    notes = [e for e in first.recurse() if getattr(e, "isNote", False)]
+    assert notes[0].tie.type == "start"
+    assert [e for e in second.recurse() if getattr(e, "isNote", False)][0].tie.type == (
+        "stop"
+    )
+
+
+def test_notes_struck_twice_are_tied_in_place():
+    """Every answer is music21's own for the same stream."""
+    again = m.Stream()
+    again.insert(0.0, m.Note("C4", quarterLength=1.0))
+    again.insert(1.0, m.Note("C4", quarterLength=1.0))
+    again.insert(2.0, m.Note("D4", quarterLength=1.0))
+
+    # music21 writes the ties onto the notes it was given and answers
+    # nothing, and the notes here are the stream's own.
+    assert again.extendTies() is None
+    assert [n.tie.type if n.tie else None for n in again.notes] == [
+        "start",
+        "stop",
+        None,
+    ]
+    with pytest.raises(m.StreamException):
+        again.extendTies(pitchAttr="name")
+
+
+def test_elements_are_shifted_and_voices_flattened():
+    """Every answer is music21's own for the same streams."""
+    shifted = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        shifted.insert(at, m.Note("C4", quarterLength=1.0))
+    # In place and answering nothing, as music21's does, and only what
+    # starts at or after the offset given moves.
+    assert shifted.shiftElements(2.0, startOffset=1.0) is None
+    assert sorted(shifted.elementOffset(e) for e in shifted) == [0.0, 3.0, 4.0]
+
+    holder = m.Measure()
+    inner = m.Voice()
+    inner.insert(0.0, m.Note("C4", quarterLength=1.0))
+    inner.insert(1.0, m.Note("D4", quarterLength=1.0))
+    holder.insert(0.0, inner)
+    # One voice in a measure is dissolved into the measure itself.
+    assert outline(holder.flattenUnnecessaryVoices()) == [
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+    ]

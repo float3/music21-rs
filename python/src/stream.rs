@@ -1387,6 +1387,117 @@ impl Stream {
         from_crate(slf.py(), &stream.template(&options))
     }
 
+    /// The stream cut in two at a length from its start, each piece a new
+    /// stream: music21's `splitAtQuarterLength`, whose answer unpacks as a
+    /// pair.
+    ///
+    /// A measure's clef, key and meter stand in the second piece as they
+    /// do in the first, which is what music21's `searchContext` finds.
+    #[pyo3(signature = (quarterLength, *, retainOrigin = true, addTies = true, displayTiedAccidentals = false, searchContext = true))]
+    fn splitAtQuarterLength<'py>(
+        slf: &Bound<'py, Self>,
+        quarterLength: f64,
+        retainOrigin: bool,
+        addTies: bool,
+        displayTiedAccidentals: bool,
+        searchContext: bool,
+    ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+        let _ = (displayTiedAccidentals, searchContext);
+        refuse_unported(false, !addTies, false)?;
+        if !retainOrigin {
+            return Err(StreamException::new_err(
+                "retainOrigin=False is not supported here: both pieces are new streams",
+            ));
+        }
+        let stream = crate_stream(slf.as_any())?;
+        let (first, second) = stream
+            .split_at_quarter_length(quarterLength, &music21_rs_crate::stream::InForce::default())
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        let py = slf.py();
+        Ok((from_crate(py, &first)?, from_crate(py, &second)?))
+    }
+
+    /// Ties each run of notes of one note together, where one ends where
+    /// the next begins: music21's `extendTies`, which writes the ties onto
+    /// the notes the stream holds and answers nothing.
+    ///
+    /// The tie is written onto the stream's own notes, as music21 writes
+    /// it: the crate is asked which notes are tied and the answer is
+    /// carried back by position.
+    #[pyo3(signature = (ignoreRests = false, pitchAttr = "nameWithOctave"))]
+    fn extendTies(slf: &Bound<'_, Self>, ignoreRests: bool, pitchAttr: &str) -> PyResult<()> {
+        if pitchAttr != "nameWithOctave" {
+            return Err(StreamException::new_err(
+                "a pitchAttr other than 'nameWithOctave' is not supported here: notes are tied where they are the same note",
+            ));
+        }
+        let py = slf.py();
+        let read = read_values(slf.as_any())?;
+        let mut tied = read.stream;
+        tied.extend_ties(ignoreRests);
+        for (position, (_, element)) in tied.leaves().iter().enumerate() {
+            let Some(tie) = tie_of(element) else { continue };
+            let object = read.leaves[position].bind(py);
+            let made = crate::installed_new(
+                py,
+                "music21.tie",
+                "Tie",
+                crate::notation::Tie::wrap(tie.clone()),
+            )?;
+            object.setattr("tie", made)?;
+        }
+        Ok(())
+    }
+
+    /// Moves the elements this stream holds itself by an offset, those
+    /// starting at or after `startOffset` and before `endOffset` where
+    /// either is given: music21's `shiftElements`, which moves what the
+    /// stream holds and answers nothing.
+    ///
+    /// Where a thing stands is the stream's own to say, so the offsets are
+    /// moved here rather than read back out of the crate; which of them
+    /// move is music21's rule, the same one `Stream::shift_elements`
+    /// follows.
+    #[pyo3(signature = (offset, startOffset = None, endOffset = None, classFilterList = None))]
+    fn shiftElements(
+        slf: &Bound<'_, Self>,
+        offset: f64,
+        startOffset: Option<f64>,
+        endOffset: Option<f64>,
+        classFilterList: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        refuse_unported(
+            classFilterList.is_some_and(|list| !list.is_none()),
+            false,
+            false,
+        )?;
+        let mut held = slf.borrow_mut();
+        for one in &mut held.held {
+            let moved = startOffset.is_none_or(|start| one.offset >= start)
+                && endOffset.is_none_or(|end| one.offset < end);
+            if moved {
+                one.offset += offset;
+            }
+        }
+        Ok(())
+    }
+
+    /// A copy with a measure's one voice dissolved into the measure
+    /// itself: music21's `flattenUnnecessaryVoices`, which `force` applies
+    /// to every voice however many there are.
+    #[pyo3(signature = (*, force = false, inPlace = false))]
+    fn flattenUnnecessaryVoices<'py>(
+        slf: &Bound<'py, Self>,
+        force: bool,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        remade(slf, |stream| {
+            stream.flatten_unnecessary_voices(force);
+            Ok(())
+        })
+    }
+
     /// A copy with every note where it sounds rather than where it is
     /// written: music21's `toSoundingPitch`, which moves each stretch by
     /// the transposition of the instrument playing it.
@@ -1740,6 +1851,16 @@ fn anchor_of(name: Option<&str>) -> PyResult<music21_rs_crate::stream::Anchor> {
         Some(other) => Err(StreamException::new_err(format!(
             "an anchorZero value is not supported: {other}"
         ))),
+    }
+}
+
+/// The tie an element carries, where it is one that can carry one.
+fn tie_of(element: &StreamElement) -> Option<&music21_rs_crate::notation::Tie> {
+    match element {
+        StreamElement::Note(note) => note.tie(),
+        StreamElement::Chord(chord) => chord.tie(),
+        StreamElement::Rest(rest) => rest.tie(),
+        _ => None,
     }
 }
 
