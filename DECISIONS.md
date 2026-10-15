@@ -132,6 +132,22 @@ note (`2/4+3/8` counts `{{1/4+1/4}+{1/8+1/8+1/8}}`).
 
 ## the Python facade
 
+**the package keeps no sites, as the crate keeps none.** a stream of the
+package's holds objects, so it *could* write itself onto each of them and let
+an element answer `offset`, `activeSite` and `getContextByClass` as music21's
+does. it does not: where a thing stands is the stream's own to say, which is
+the crate's rule carried all the way out, and the members that need a site are
+refused or left out with the reason said -- `beatDuration`, and the context an
+element would walk outwards through. what a stream can answer *about* where
+something stands it does answer, by asking the crate and handing back its own
+objects: `beatAndMeasureFromOffset`, `getElementAtOrBefore`, `measures`
+collecting the clef and meter in force.
+
+*costs:* code written against music21 that reads `n.offset` or walks contexts
+has to ask the stream instead. the gain is that nothing holds a reference back
+to what holds it, so there are no cycles for the garbage collector to break
+and no object that is in two streams at two offsets.
+
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
 from the pyo3 class and from music21's own, so music21 will keep it in a
