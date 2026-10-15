@@ -95,7 +95,16 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
 is found only where it *begins* -- and they answer `isTwelveTone` and
-`staffLines`.
+`staffLines`. they stretch, take in and empty themselves as well:
+`extendDuration` gives each element of a class the time up to the next one,
+`mergeElements` takes in everything another stream holds, each at the offset
+it stands at there and the object itself, and `cloneEmpty` is a stream of
+the same class holding nothing. `seconds` says how long a stream lasts and
+`metronomeMarkBoundaries` which tempo holds through each stretch of it,
+handing back the stream's own mark wherever it holds one; where a stream
+states no tempo a quarter at 120 is counted, as upstream, and `seconds` is
+`nan`, which is music21's answer for a stream whose own search finds no
+tempo.
 
 a score carries its `metadata`, music21's `Metadata`, whose names are read
 and written as music21 reads them -- by a unique name, by one of the four

@@ -346,24 +346,7 @@ pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocit
 pub fn dynamics_in_force(stream: &Stream) -> Vec<Option<usize>> {
     let leaves = stream.leaves();
     // The leaves in the order music21's `flatten` gives them.
-    let mut order: Vec<usize> = (0..leaves.len()).collect();
-    order.sort_by(|left, right| {
-        let (left_offset, left_element) = leaves[*left];
-        let (right_offset, right_element) = leaves[*right];
-        let grace = |element: &StreamElement| {
-            element
-                .duration()
-                .is_some_and(crate::duration::Duration::is_grace)
-        };
-        left_offset
-            .total_cmp(&right_offset)
-            .then(
-                left_element
-                    .class_sort_order()
-                    .cmp(&right_element.class_sort_order()),
-            )
-            .then(grace(right_element).cmp(&grace(left_element)))
-    });
+    let order = Stream::flatten_order(&leaves);
     let dynamics: Vec<(Held, usize)> = order
         .iter()
         .filter(|position| matches!(leaves[**position].1, StreamElement::Dynamic(_)))
