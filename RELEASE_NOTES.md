@@ -8,7 +8,14 @@
   as music21 reads it. A method nobody answers to, and a key analysis of a
   stream with no pitches, raise `DiscreteAnalysisException`, which is the
   class music21 raises.
-
+- The Python package's `Stream` answers `getElementsByOffset` with
+  music21's four keywords and a `classList`, `getElementsNotOfClass`,
+  `hasElementOfClass`, `isTwelveTone` and `staffLines`. The offset filter
+  asks the crate's `OffsetSpan` of each element the stream holds rather
+  than keeping a second copy of music21's rules.
+- `stream::OffsetSpan::takes_at` is public: whether something standing at
+  an offset and lasting so long is in the span, which is all the decision
+  turns on.
 - The Python package gains `Metadata`, music21's `metadata.Metadata`: a
   name is read and written as music21's `__getattr__` reads one, by its
   unique name, by one of the four grandfathered work ids or by one of the

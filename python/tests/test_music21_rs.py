@@ -1579,3 +1579,46 @@ def test_a_stream_is_analyzed_as_music21_analyzes_it():
         m.Stream().analyze("key")
     with pytest.raises(m.DiscreteAnalysisException):
         part.analyze("nonsense")
+
+
+def test_elements_are_found_by_offset_as_music21_finds_them():
+    """Every answer is music21's own for the same flattened part."""
+    flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
+
+    def offsets(found):
+        return [round(flat.elementOffset(e), 4) for e in found.elements]
+
+    # Under music21's defaults an element is found only where it begins,
+    # so the half note at nought is not found at 1.
+    assert offsets(flat.getElementsByOffset(1.0)) == []
+    assert offsets(flat.getElementsByOffset(1.0, mustBeginInSpan=False)) == [0.0]
+    assert offsets(flat.getElementsByOffset(0.0, 2.0)) == [0.0, 0.0, 0.0, 2.0]
+    assert offsets(flat.getElementsByOffset(0.0, 2.0, includeEndBoundary=False)) == [
+        0.0,
+        0.0,
+        0.0,
+    ]
+    # A class list narrows it, as music21's does.
+    assert offsets(flat.getElementsByOffset(0.0, 4.0, classList="Note")) == [
+        0.0,
+        2.0,
+        3.0,
+    ]
+
+
+def test_a_stream_is_asked_what_classes_it_holds():
+    flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
+    assert flat.hasElementOfClass("Note")
+    assert flat.hasElementOfClass("Clef")
+    assert not flat.hasElementOfClass("Dynamic")
+    # The clef and the meter, where music21 also holds the final barline
+    # it keeps among the elements and this package keeps on the measure.
+    assert len(flat.getElementsNotOfClass("Note").elements) == 2
+    assert len(flat.getElementsByClass("Note").elements) == 3
+
+
+def test_a_stream_answers_for_its_pitches_and_its_staff():
+    part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4")
+    assert part.isTwelveTone()
+    # Five lines where no layout says otherwise, as music21 answers.
+    assert part.staffLines == 5

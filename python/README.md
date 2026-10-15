@@ -91,7 +91,11 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `inPlace=True` and a `target` are refused; and they answer `highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
-`melodicIntervals`.
+`melodicIntervals`. they are asked for elements by class and by offset --
+`getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
+`getElementsByOffset` with music21's four keywords, under which an element
+is found only where it *begins* -- and they answer `isTwelveTone` and
+`staffLines`.
 
 a score carries its `metadata`, music21's `Metadata`, whose names are read
 and written as music21 reads them -- by a unique name, by one of the four
