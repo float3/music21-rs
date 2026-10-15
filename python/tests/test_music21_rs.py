@@ -2423,3 +2423,56 @@ def test_a_stream_is_divided_by_what_a_function_says():
     every, none = line.splitByClass(None, lambda e: True)
     assert len(every) == 5
     assert len(none) == 0
+
+
+def test_measures_are_taken_from_a_part_as_music21_takes_them():
+    """Every answer is music21's own for the same part and score."""
+    line = m.from_tiny_notation(
+        "tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4 d'4 e'4 f'4 g'4"
+    )
+
+    def shown(stream):
+        out = []
+        for element in stream:
+            at = stream.elementOffset(element)
+            if getattr(element, "isStream", False):
+                out.append(f"[{type(element).__name__} {element.number}@{at}]")
+            else:
+                out.append(f"{type(element).__name__}@{at}")
+        return out
+
+    # The first measure stands at nought, and before it what was in force
+    # where it begins: the clef and the meter, which music21 puts first by
+    # giving them the measure's priority less one.
+    assert shown(line.measures(2, 3)) == [
+        "TrebleClef@0.0",
+        "TimeSignature@0.0",
+        "[Measure 2@0.0]",
+        "[Measure 3@4.0]",
+    ]
+    assert shown(line.measures(3, 3)) == [
+        "TrebleClef@0.0",
+        "TimeSignature@0.0",
+        "[Measure 3@0.0]",
+    ]
+    # With indices music21 slices, so the end is left out.
+    assert shown(line.measures(0, 1, indicesNotNumbers=True)) == ["[Measure 1@0.0]"]
+    assert shown(line.measures(9, 10)) == []
+
+    one = line.measure(2)
+    assert one.number == 2
+    assert [n.nameWithOctave for n in one.notes] == ["G4", "A4", "B4", "C5"]
+    # The measure is the part's own object.
+    assert one is line.getElementsByClass("Measure")[1]
+    assert line.measure(9) is None
+
+    # A score answers a score of each part's measures of that number.
+    whole = m.Score()
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4"))
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4 G4 A4 B4 c4"))
+    cut = whole.measures(2, 2)
+    assert isinstance(cut, m.Score)
+    assert [shown(part) for part in cut] == [
+        ["TrebleClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
+        ["BassClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
+    ]

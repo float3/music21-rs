@@ -48,6 +48,10 @@ pyo3::create_exception!(music21_rs_facade, StreamException, crate::Music21Except
 /// for it, the order it was put in, and the object itself.
 struct Held {
     offset: f64,
+    /// music21's `priority`, which comes before `classSortOrder` in its
+    /// sort: a caller, or `measures` collecting what was in force, writes
+    /// it to put something first whatever its class says.
+    priority: i64,
     order: i64,
     index: u64,
     object: Py<PyAny>,
@@ -124,6 +128,16 @@ fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<
     }
     Ok(false)
 }
+
+/// What music21's `measures` collects into the first measure it answers,
+/// where that measure does not state it itself: its `collect` default.
+const COLLECTED_BY_MEASURES: [&str; 5] = [
+    "Clef",
+    "TimeSignature",
+    "Instrument",
+    "KeySignature",
+    "MetronomeMark",
+];
 
 /// The names a class filter names: a string as it stands, a class by its
 /// `__name__`, or a list of either -- which is what the crate's own walks
@@ -219,8 +233,17 @@ impl Stream {
     }
 
     fn put(&mut self, offset: f64, object: &Bound<'_, PyAny>) {
+        self.put_with_priority(offset, object, 0);
+    }
+
+    /// Puts an object in with music21's `priority`, which comes before
+    /// `classSortOrder` in the order a stream lists what stands at one
+    /// offset: `measures` gives what it collects the priority music21
+    /// gives it, so the clef it found is listed before the measure.
+    fn put_with_priority(&mut self, offset: f64, object: &Bound<'_, PyAny>, priority: i64) {
         self.held.push(Held {
             offset,
+            priority,
             order: sort_order(object),
             index: self.next,
             object: object.clone().unbind(),
@@ -234,6 +257,7 @@ impl Stream {
         sorted.sort_by(|left, right| {
             left.offset
                 .total_cmp(&right.offset)
+                .then(left.priority.cmp(&right.priority))
                 .then(left.order.cmp(&right.order))
                 .then(left.index.cmp(&right.index))
         });
@@ -525,6 +549,172 @@ impl Stream {
                 target.repr()?
             ))),
         }
+    }
+
+    /// The measures numbered from one number to another, in a stream of
+    /// this one's class: music21's `measures`, whose range takes both ends
+    /// in.
+    ///
+    /// The first measure stands at nought and the rest keep their distance
+    /// from it. Before them stands what was in force where the first
+    /// begins and the first does not state itself -- the clef, meter,
+    /// instrument, key signature and tempo mark music21's `collect` names
+    /// -- found by looking back through the stream. A score answers a
+    /// score of each of its parts' measures, as music21's override does.
+    ///
+    /// The measures and the collected marks are the stream's own objects.
+    /// `gatherSpanners` has nothing to do here, the package keeping no
+    /// spanners.
+    #[pyo3(signature = (numberStart, numberEnd, collect = None, gatherSpanners = true, indicesNotNumbers = false))]
+    fn measures<'py>(
+        slf: &Bound<'py, Self>,
+        numberStart: &Bound<'py, PyAny>,
+        numberEnd: &Bound<'py, PyAny>,
+        collect: Option<&Bound<'py, PyAny>>,
+        gatherSpanners: bool,
+        indicesNotNumbers: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let _ = gatherSpanners;
+        let py = slf.py();
+        let asked: Vec<String> = match collect.filter(|list| !list.is_none()) {
+            Some(list) => class_names(list)?,
+            None => COLLECTED_BY_MEASURES
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+        };
+        let first: isize = numberStart.extract()?;
+        let last: isize = numberEnd.extract()?;
+
+        // A score answers out of its parts, each measured the same way.
+        let part = pyo3::types::PyString::new(py, "Part");
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        let parts: Vec<Bound<'py, PyAny>> = held
+            .iter()
+            .map(|object| object.bind(py).clone())
+            .filter(|object| is_of_class(object, &part).unwrap_or(false))
+            .collect();
+        if !parts.is_empty() {
+            let out = Self::cloneEmpty(slf, None)?;
+            for inner in parts {
+                let measured = Self::measures(
+                    inner.cast::<Stream>()?,
+                    numberStart,
+                    numberEnd,
+                    collect,
+                    gatherSpanners,
+                    indicesNotNumbers,
+                )?;
+                out.cast::<Stream>()?.borrow_mut().put(0.0, &measured);
+            }
+            return Ok(out);
+        }
+
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let mut found: Vec<(f64, Bound<'py, PyAny>)> = Vec::new();
+        let mut index: isize = 0;
+        for one in slf.borrow().sorted() {
+            let object = one.object.bind(py).clone();
+            if !is_of_class(&object, &measure)? {
+                continue;
+            }
+            let number = if indicesNotNumbers {
+                index
+            } else {
+                object
+                    .getattr("number")
+                    .and_then(|number| number.extract::<isize>())
+                    .unwrap_or(0)
+            };
+            index += 1;
+            // With indices music21 slices, so the end is left out;
+            // with numbers both ends are taken in.
+            let inside = if indicesNotNumbers {
+                number >= first && number < last
+            } else {
+                number >= first && number <= last
+            };
+            if inside {
+                found.push((one.offset, object));
+            }
+        }
+        let out = Self::cloneEmpty(slf, None)?;
+        let kept = out.cast::<Stream>()?;
+        let Some((start, opening)) = found.first().map(|(at, object)| (*at, object.clone())) else {
+            return Ok(out);
+        };
+        // What was in force where the first measure begins, which that
+        // measure does not say itself.
+        let opening = opening.cast::<Stream>()?;
+        let flat = Self::flatten(slf)?;
+        for name in &asked {
+            if Self::opening(opening, name)?.is_some() {
+                continue;
+            }
+            let named = PyList::new(py, [name.as_str()])?;
+            if let Some(standing) = Self::nearest_before(&flat, start, Some(named.as_any()), false)?
+            {
+                // music21 gives what it collects the measure's priority
+                // less one, which sorts it before the measure at the same
+                // offset whatever its class says.
+                kept.borrow_mut().put_with_priority(0.0, &standing, -1);
+            }
+        }
+        for (at, object) in found {
+            kept.borrow_mut().put(at - start, &object);
+        }
+        Ok(out)
+    }
+
+    /// The measure of a number, or `None`: music21's `measure`, which a
+    /// score answers as a score of its parts' measures of that number.
+    #[pyo3(signature = (measureNumber, collect = None, gatherSpanners = true, indicesNotNumbers = false))]
+    fn measure<'py>(
+        slf: &Bound<'py, Self>,
+        measureNumber: &Bound<'py, PyAny>,
+        collect: Option<&Bound<'py, PyAny>>,
+        gatherSpanners: bool,
+        indicesNotNumbers: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let measured = Self::measures(
+            slf,
+            measureNumber,
+            measureNumber,
+            collect,
+            gatherSpanners,
+            indicesNotNumbers,
+        )?;
+        let part = pyo3::types::PyString::new(py, "Part");
+        if slf
+            .borrow()
+            .sorted()
+            .iter()
+            .any(|one| is_of_class(one.object.bind(py), &part).unwrap_or(false))
+        {
+            // A score answers the slice of its parts, as music21's does.
+            return Ok(Some(measured));
+        }
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let cell = measured.cast::<Stream>()?;
+        let objects: Vec<Py<PyAny>> = cell
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        for object in objects {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &measure)? {
+                return Ok(Some(object));
+            }
+        }
+        Ok(None)
     }
 
     /// The elements of a class divided in two by what a function says of

@@ -36,6 +36,13 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `measures` and `measure`: the
+  measures of a number range, the first at nought and before it what was
+  in force where it begins -- the clef, meter, instrument, key signature
+  and tempo mark music21's `collect` names -- and a score answers a score
+  of each part's. The package's streams sort by music21's `priority`
+  before `classSortOrder` now, which is what puts those collected marks
+  before the measure they head.
 - The Python package's `Stream` answers `splitByClass`, dividing the
   elements of a class in two by what a function says of each.
 - The Python package's `Stream` answers `insertAndShift`, moving
