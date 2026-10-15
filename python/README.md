@@ -98,8 +98,8 @@ and `extendTies` and `shiftElements` change the stream and answer
 nothing, as music21's do -- the ties written onto its own notes. and they answer
 `highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
-`isWellFormedNotation`, `hasPartLikeStreams`, `findGaps` and
-`simultaneousAttacks`, and they take elements out by class or by index
+`isWellFormedNotation`, `hasPartLikeStreams`, `findGaps`, `getOverlaps`
+and `simultaneousAttacks`, and they take elements out by class or by index
 (`removeByClass`, `removeByNotOfClass`, `pop`), repeat an object into
 themselves as copies (`repeatAppend`, `repeatInsert`), make room for one
 (`insertAndShift`), divide themselves by what a function says of each

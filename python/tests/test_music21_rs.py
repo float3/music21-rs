@@ -2750,3 +2750,37 @@ def test_a_thing_says_what_it_is_as_music21_says_it():
     line = m.Stream()
     line.insert(0.0, m.Key("G"))
     assert len(line.getElementsByClass("Scale").elements) == 1
+
+
+def test_the_overlaps_in_a_stream_are_gathered_by_offset():
+    """Every answer is music21's own for the same streams."""
+
+    def shown(found):
+        return {
+            at: [e.nameWithOctave for e in held] for at, held in sorted(found.items())
+        }
+
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insert(1.0, m.Note("E4", quarterLength=1.0))
+    line.insert(3.0, m.Note("G4", quarterLength=1.0))
+    # The one overlapped is listed before the one that found it, which is
+    # the order music21's own dictionary takes them in.
+    assert shown(line.getOverlaps()) == {0.0: ["E4", "C4"]}
+
+    none = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        none.insert(at, m.Note("C4", quarterLength=1.0))
+    assert none.getOverlaps() == {}
+    assert none.isSequence()
+
+    # The stream is read flattened, so notes overlapping inside a measure
+    # are found from the part, and they are the measure's own objects.
+    held = m.Part()
+    first = m.Measure()
+    first.insert(0.0, m.Note("C4", quarterLength=4.0))
+    first.insert(0.0, m.Note("E4", quarterLength=1.0))
+    first.insert(2.0, m.Note("G4", quarterLength=1.0))
+    held.insert(0.0, first)
+    assert shown(held.getOverlaps()) == {0.0: ["E4", "G4", "C4"]}
+    assert held.getOverlaps()[0.0][0] is list(first)[1]

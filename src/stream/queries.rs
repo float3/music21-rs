@@ -196,6 +196,64 @@ impl Stream {
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
     pub fn overlaps(&self) -> Vec<(FloatType, Vec<StreamEvent>)> {
+        let flat = self.flatten();
+        self.overlap_groups()
+            .into_iter()
+            .map(|(offset, members)| {
+                (
+                    offset,
+                    members
+                        .into_iter()
+                        .map(|index| flat.events[index].clone())
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// [`Stream::overlaps`], each group's members by their position among
+    /// [`Stream::leaves`] rather than as values.
+    ///
+    /// music21 hands back the elements themselves, so a caller keeping an
+    /// object per element -- a binding keeping what it read the stream
+    /// from -- finds each again by that position.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// let mut measure = Stream::with_kind(StreamKind::Measure);
+    /// measure.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
+    /// measure.insert(1.0, Note::from_name("E4")?);
+    /// part.insert(0.0, measure);
+    ///
+    /// // The two notes overlap, and are the part's first two leaves. The
+    /// // one overlapped is listed before the one looking on from itself,
+    /// // which is the order music21's own dictionary takes them in.
+    /// let found = part.overlap_positions();
+    /// assert_eq!(found.len(), 1);
+    /// assert_eq!(found[0], (0.0, vec![1, 0]));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn overlap_positions(&self) -> Vec<(FloatType, Vec<usize>)> {
+        let leaves = self.leaves();
+        // The flattened stream is the leaves in `flatten`'s order, so the
+        // nth element of it is the leaf that order puts nth.
+        let order = Stream::flatten_order(&leaves);
+        self.overlap_groups()
+            .into_iter()
+            .map(|(offset, members)| {
+                (
+                    offset,
+                    members.into_iter().map(|index| order[index]).collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// The groups [`Stream::overlaps`] finds, each holding indices into the
+    /// flattened stream, in the order music21's dictionary takes them.
+    fn overlap_groups(&self) -> Vec<(FloatType, Vec<usize>)> {
         let (flat, spans) = self.spans();
         let map = Self::layering(&spans);
         // Each group by its offset, holding indices of the flattened stream,
@@ -236,17 +294,6 @@ impl Stream {
             }
         }
         groups
-            .into_iter()
-            .map(|(offset, members)| {
-                (
-                    offset,
-                    members
-                        .into_iter()
-                        .map(|index| flat.events[index].clone())
-                        .collect(),
-                )
-            })
-            .collect()
     }
 
     /// Whether no element of the flattened stream overlaps another, as

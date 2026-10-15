@@ -291,6 +291,12 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- `Stream::overlap_positions` is the by-position twin of
+  `Stream::overlaps`, each group's members by their position among
+  `Stream::leaves`, and the Python package's `Stream` answers
+  `getOverlaps` on it -- the overlaps gathered by the offset each begins
+  at, holding the stream's own elements, the one overlapped before the one
+  that found it as music21's dictionary takes them.
 - The Python package's classes answer `classes`, music21's own chain of
   what a thing is: a note is a `NotRest`, a `GeneralNote`, a
   `Music21Object`, a `ProtoM21Object` and an `object`; an ocarina is a

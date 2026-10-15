@@ -1248,6 +1248,27 @@ impl Stream {
         Ok(())
     }
 
+    /// Everything in the stream that overlaps something else, gathered by
+    /// the offset each overlap begins at: music21's `getOverlaps`.
+    ///
+    /// The stream is read flattened, as music21 reads it, and the
+    /// elements handed back are its own. Each group lists the element
+    /// overlapped before the one that found it, which is the order
+    /// music21's own dictionary takes them in.
+    fn getOverlaps<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        let read = read_values(slf.as_any())?;
+        let out = PyDict::new(py);
+        for (offset, members) in read.stream.overlap_positions() {
+            let held = PyList::empty(py);
+            for position in members {
+                held.append(read.leaves[position].bind(py))?;
+            }
+            out.set_item(offset, held)?;
+        }
+        Ok(out)
+    }
+
     /// The element standing at or before an offset, the last of the
     /// stream's order where several stand there: music21's
     /// `getElementAtOrBefore`.
