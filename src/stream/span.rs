@@ -124,7 +124,13 @@ impl Stream {
                 // in the span either: music21's `stopAfterEnd`.
                 break;
             }
-            if span.takes(event, offset, start, end) {
+            if span.takes(
+                event.offset(),
+                event.element().quarter_length(),
+                offset,
+                start,
+                end,
+            ) {
                 found.push(event);
             }
         }
@@ -177,15 +183,51 @@ fn is_of_class(event: &StreamEvent, classes: &[&str]) -> bool {
 }
 
 impl OffsetSpan {
+    /// Whether something standing at `offset` and lasting `quarter_length`
+    /// is in the span: music21's `isElementOffsetInRange`.
+    ///
+    /// The decision turns on nothing else, which is why a caller holding
+    /// its own elements -- the Python package holds music21's objects --
+    /// can ask this of each rather than keep a second copy of the rules.
+    ///
+    /// ```
+    /// use music21_rs::stream::OffsetSpan;
+    ///
+    /// // A half note at nought does not begin in a span of no length at
+    /// // 1, which is what music21's `mustBeginInSpan` asks by default.
+    /// let at_one = OffsetSpan::at(1.0);
+    /// assert!(!at_one.takes_at(0.0, 2.0));
+    /// assert!(at_one.takes_at(1.0, 1.0));
+    ///
+    /// let mut sounding = OffsetSpan::at(1.0);
+    /// sounding.must_begin_in_span = false;
+    /// assert!(sounding.takes_at(0.0, 2.0));
+    /// ```
+    pub fn takes_at(&self, offset: FloatType, quarter_length: FloatType) -> bool {
+        let start = Exact::held(self.start);
+        let end = self.end_held();
+        let held = Exact::held(offset);
+        if held.cmp(end) == std::cmp::Ordering::Greater {
+            return false;
+        }
+        self.takes(offset, quarter_length, held, start, end)
+    }
+
     /// Whether one element standing at an offset is in the span, which is
     /// music21's `isElementOffsetInRange` once the elements past the end
     /// have been left behind.
-    fn takes(&self, event: &StreamEvent, offset: Exact, start: Exact, end: Exact) -> bool {
+    fn takes(
+        &self,
+        event_offset: FloatType,
+        length: FloatType,
+        offset: Exact,
+        start: Exact,
+        end: Exact,
+    ) -> bool {
         use std::cmp::Ordering::{Equal, Greater, Less};
 
-        let length = event.element().quarter_length();
         // music21 snaps the sum, not the two numbers it adds.
-        let element_end = Exact::held(event.offset() + length);
+        let element_end = Exact::held(event_offset + length);
         if element_end.cmp(start) == Less {
             // It finishes before the span starts.
             return false;

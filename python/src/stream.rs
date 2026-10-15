@@ -1034,6 +1034,119 @@ impl Stream {
         })
     }
 
+    /// The elements answering to none of these classes: music21's
+    /// `getElementsNotOfClass`.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsNotOfClass<'py>(
+        slf: &Bound<'py, Self>,
+        classFilterList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Stream>> {
+        Self::picked(slf, Some(StreamKind::Stream), |object| {
+            is_of_any(object, classFilterList).map(|found| !found)
+        })
+    }
+
+    /// Whether any element answers to one of these classes: music21's
+    /// `hasElementOfClass`.
+    #[pyo3(signature = (className, forceFlat = false))]
+    fn hasElementOfClass(
+        slf: &Bound<'_, Self>,
+        className: &Bound<'_, PyAny>,
+        forceFlat: bool,
+    ) -> PyResult<bool> {
+        let _ = forceFlat;
+        let py = slf.py();
+        let objects: Vec<Py<PyAny>> = slf
+            .borrow()
+            .held
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        for object in objects {
+            if is_of_any(&object.into_bound(py), className)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// The elements standing in a span of offsets: music21's
+    /// `getElementsByOffset`, with its four keywords.
+    ///
+    /// Under music21's defaults an element is found only where it
+    /// *begins*, so a half note at nought is not found at the offset
+    /// halfway through it; `mustBeginInSpan=False` reaches back to what
+    /// sounds at a point.
+    #[pyo3(signature = (
+        offsetStart,
+        offsetEnd = None,
+        *,
+        includeEndBoundary = true,
+        mustFinishInSpan = false,
+        mustBeginInSpan = true,
+        includeElementsThatEndAtStart = true,
+        classList = None
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn getElementsByOffset<'py>(
+        slf: &Bound<'py, Self>,
+        offsetStart: f64,
+        offsetEnd: Option<f64>,
+        includeEndBoundary: bool,
+        mustFinishInSpan: bool,
+        mustBeginInSpan: bool,
+        includeElementsThatEndAtStart: bool,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, Stream>> {
+        let span = music21_rs_crate::stream::OffsetSpan {
+            start: offsetStart,
+            end: offsetEnd,
+            include_end_boundary: includeEndBoundary,
+            must_finish_in_span: mustFinishInSpan,
+            must_begin_in_span: mustBeginInSpan,
+            include_elements_that_end_at_start: includeElementsThatEndAtStart,
+        };
+        // The offsets live beside the objects, so the span is asked of
+        // each rather than read into the crate.
+        let placed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(slf.py())))
+            .collect();
+        let py = slf.py();
+        let mut out = Self::empty(slf.borrow().kind);
+        for (offset, object) in placed {
+            let object = object.into_bound(py);
+            if let Some(classList) = classList.filter(|list| !list.is_none())
+                && !is_of_any(&object, classList)?
+            {
+                continue;
+            }
+            let length: f64 = object
+                .getattr("quarterLength")
+                .and_then(|value| value.extract())
+                .unwrap_or(0.0);
+            if span.takes_at(offset, length) {
+                out.put(offset, &object);
+            }
+        }
+        Bound::new(py, out)
+    }
+
+    /// Whether every pitch sounding is one of the twelve of equal
+    /// temperament: music21's `isTwelveTone`.
+    fn isTwelveTone(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(crate_stream(slf.as_any())?.is_twelve_tone())
+    }
+
+    /// How many lines this stream's staff has: music21's `staffLines`,
+    /// read from the first staff layout standing at its start.
+    #[getter]
+    fn staffLines(slf: &Bound<'_, Self>) -> PyResult<i64> {
+        Ok(crate_stream(slf.as_any())?.staff_lines())
+    }
+
     /// The parts this stream holds directly.
     #[getter]
     fn parts<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
