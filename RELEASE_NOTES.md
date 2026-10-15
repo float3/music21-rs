@@ -2,6 +2,13 @@
 
 ## added
 
+- The Python package's `Stream` answers `analyze`, music21's own: the
+  ambitus as the interval from the lowest pitch sounding to the highest, or
+  the key one of music21's five weightings settles on, the method name read
+  as music21 reads it. A method nobody answers to, and a key analysis of a
+  stream with no pitches, raise `DiscreteAnalysisException`, which is the
+  class music21 raises.
+
 - The Python package gains `Metadata`, music21's `metadata.Metadata`: a
   name is read and written as music21's `__getattr__` reads one, by its
   unique name, by one of the four grandfathered work ids or by one of the

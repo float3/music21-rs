@@ -87,12 +87,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
    `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
    element and the meter sit.
 
-   It is also what the wheel waits on to carry the last 15 members the
-   crate has and it does not: `FiguredBassLine` and `Realization`, which
-   build their bass line and realizations as music21 parts, and
-   `KeyWeightKeyAnalysis`, `Ambitus` and `MelodicIntervalDiversity`, which
-   read a stream. music21's own classes run on the crate's objects there
-   meanwhile.
+   It is also what the wheel waits on to carry `FiguredBassLine` and
+   `Realization`, which build their bass line and realizations as music21
+   parts. music21's own classes run on the crate's objects there meanwhile.
+
+   **It is not what the analyses waited on.** `KeyWeightKeyAnalysis`,
+   `Ambitus` and `MelodicIntervalDiversity` only read a stream, and the
+   wheel has read one into the crate since `chordify`: the package's
+   `Stream.analyze` answers both the key and the ambitus over that bridge,
+   with no contexts anywhere. What is left of them in the wheel is the
+   classes themselves and `MelodicIntervalDiversity`'s counts.
 
 3. **the 29 wheel-only members.** caches (`cachedRealized`,
    `cachedRealizedStr`) stay Python-side by design. the rest — observer
