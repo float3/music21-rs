@@ -1,84 +1,11 @@
 //! What a stream holds and where: music21's questions of a stream's layout
 //! -- its gaps and overlaps, what sounds when, its measures by offset.
 
+use super::span::OffsetSpan;
 use super::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::defaults::FloatType;
 use crate::makenotation::op_frac;
 use crate::rest::Rest;
-
-/// How music21's `getElementsByOffset` decides what is in a span: its
-/// keyword arguments, music21's defaults by [`Default`].
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct OffsetSpan {
-    pub(crate) start: FloatType,
-    /// The end, or the start again for a search at one offset.
-    pub(crate) end: Option<FloatType>,
-    pub(crate) include_end_boundary: bool,
-    pub(crate) must_finish_in_span: bool,
-    pub(crate) must_begin_in_span: bool,
-    pub(crate) include_elements_that_end_at_start: bool,
-}
-
-impl OffsetSpan {
-    /// A span with music21's defaults.
-    pub(crate) fn new(start: FloatType, end: Option<FloatType>) -> Self {
-        Self {
-            start,
-            end,
-            include_end_boundary: true,
-            must_finish_in_span: false,
-            must_begin_in_span: true,
-            include_elements_that_end_at_start: true,
-        }
-    }
-
-    /// Whether an element at `offset` lasting `length` is in the span:
-    /// music21's `OffsetFilter.isElementOffsetInRange`.
-    pub(crate) fn holds(&self, offset: FloatType, length: FloatType) -> bool {
-        let start = op_frac(self.start);
-        let (end, zero_length_search) = match self.end {
-            None => (self.start, true),
-            // No later end is a search at one offset, as music21 has it.
-            Some(end) => (
-                op_frac(end),
-                end.partial_cmp(&self.start) != Some(std::cmp::Ordering::Greater),
-            ),
-        };
-        if offset > end {
-            return false;
-        }
-        let element_end = op_frac(offset + length);
-        if element_end < start {
-            return false;
-        }
-        let zero_length = length == 0.0;
-        if zero_length_search && zero_length {
-            return true;
-        }
-        if self.must_finish_in_span {
-            if element_end > end {
-                return false;
-            }
-            if !self.include_end_boundary && element_end == end {
-                return false;
-            }
-        }
-        if self.must_begin_in_span {
-            if offset < start {
-                return false;
-            }
-            if !self.include_end_boundary && offset == end {
-                return false;
-            }
-        } else if !zero_length && element_end == end && zero_length_search {
-            return false;
-        }
-        if !self.include_end_boundary && offset == end {
-            return false;
-        }
-        !(!self.include_elements_that_end_at_start && element_end == start)
-    }
-}
 
 /// One element of a stream with where it starts and ends and the voice it
 /// is in: music21's `OffsetMap`.
@@ -356,12 +283,12 @@ impl Stream {
         element: &StreamElement,
         offset: FloatType,
     ) -> Option<&StreamEvent> {
-        let mut span = OffsetSpan::new(offset, None);
+        let mut span = OffsetSpan::at(offset);
         span.must_begin_in_span = false;
         let there: Vec<&StreamEvent> = self
             .events
             .iter()
-            .filter(|event| span.holds(event.offset(), event.element().quarter_length()))
+            .filter(|event| span.takes_at(event.offset(), event.element().quarter_length()))
             .collect();
         match there.as_slice() {
             [] => None,
@@ -386,19 +313,19 @@ impl Stream {
                 must_begin_in_span: false,
                 include_end_boundary: false,
                 include_elements_that_end_at_start: false,
-                ..OffsetSpan::new(offset, Some(end))
+                ..OffsetSpan::between(offset, end)
             }
         } else {
             OffsetSpan {
                 must_begin_in_span: false,
-                ..OffsetSpan::new(offset, None)
+                ..OffsetSpan::at(offset)
             }
         };
         let mut out = Stream::with_kind(self.kind());
         out.events = self
             .events
             .iter()
-            .filter(|event| span.holds(event.offset(), event.element().quarter_length()))
+            .filter(|event| span.takes_at(event.offset(), event.element().quarter_length()))
             .map(|event| {
                 StreamEvent::new(op_frac(event.offset() - offset), event.element().clone())
             })

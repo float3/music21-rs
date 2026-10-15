@@ -306,6 +306,16 @@
 
 ## fixed
 
+- `OffsetSpan` was two types of the same name and the same meaning: a
+  private one in `stream::queries` with a predicate comparing raw floats,
+  and the public `stream::span` one whose predicate compares through
+  `Exact`, which is how music21 holds an offset -- a float or a
+  `Fraction`. Both were music21's `isElementOffsetInRange`, line for line
+  the same otherwise, and the six searches going through the private one
+  (the consecutive walk, `shift_elements`, `playing_when_attacked`,
+  `all_playing_while_sounding` and the two in `split_at_quarter_length`)
+  could in principle answer a triplet offset the other way. The private
+  type is gone; there is one span and one predicate.
 - `StreamElement::music21_classes` said a `Key` was a `Key` and a
   `KeySignature` and no more, where music21's is a `DiatonicScale`, a
   `ConcreteScale` and a `Scale` besides -- which is where everything it
