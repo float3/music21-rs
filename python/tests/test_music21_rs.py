@@ -2693,3 +2693,60 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
     assert len(holder.getElementsByClass("Stream").elements) == 1
     assert len(holder.getElementsByClass("Measure").elements) == 1
     assert len(holder.getElementsByClass("Voice").elements) == 0
+
+
+def test_a_thing_says_what_it_is_as_music21_says_it():
+    """Every chain is music21's own `classes` for the same object."""
+    assert m.Note("C4").classes == [
+        "Note",
+        "NotRest",
+        "GeneralNote",
+        "Music21Object",
+        "ProtoM21Object",
+        "object",
+    ]
+    assert m.Rest().classes == [
+        "Rest",
+        "GeneralNote",
+        "Music21Object",
+        "ProtoM21Object",
+        "object",
+    ]
+    assert m.Chord(["C4", "E4"]).classes[:3] == ["Chord", "ChordBase", "NotRest"]
+    assert m.ChordSymbol("C").classes[:4] == [
+        "ChordSymbol",
+        "Harmony",
+        "Chord",
+        "ChordBase",
+    ]
+    # A clef of a kind, an instrument of a kind and a key carry the chains
+    # music21 gives them, which the crate's lineage table says and
+    # `class_lineage_parity` holds to music21.
+    assert m.TrebleClef().classes[:4] == ["TrebleClef", "GClef", "PitchClef", "Clef"]
+    assert m.Ocarina().classes[:4] == [
+        "Ocarina",
+        "Flute",
+        "WoodwindInstrument",
+        "Instrument",
+    ]
+    assert m.Key("G").classes[:5] == [
+        "Key",
+        "KeySignature",
+        "DiatonicScale",
+        "ConcreteScale",
+        "Scale",
+    ]
+    # A stream is a `Generic` to music21, being typed by what it holds.
+    assert m.Measure().classes == [
+        "Measure",
+        "Stream",
+        "StreamCore",
+        "Music21Object",
+        "ProtoM21Object",
+        "Generic",
+        "object",
+    ]
+    # And what a thing says it is, a filter finds it by.
+    line = m.Stream()
+    line.insert(0.0, m.Key("G"))
+    assert len(line.getElementsByClass("Scale").elements) == 1

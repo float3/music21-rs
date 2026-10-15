@@ -104,16 +104,45 @@ fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<
                 return Ok(true);
             }
         }
-        if let Ok(classes) = object.getattr("classes") {
-            for each in classes.walk()? {
-                if each?.extract::<String>().is_ok_and(|each| each == name) {
-                    return Ok(true);
-                }
-            }
-        }
         return Ok(false);
     }
     object.is_instance(class)
+}
+
+/// What music21 says an object *is*: its own class and every class it is a
+/// kind of, in music21's order, which is what its `classes` answers.
+///
+/// The crate carries the hierarchy and `class_lineage_parity` holds it to
+/// music21's own, down to `Music21Object`. What follows that is the
+/// plumbing every music21 object is built on and nothing here models:
+/// `ProtoM21Object` and `object`, and `typing.Generic` before `object` for
+/// a stream, which music21's `Stream` is one of.
+pub fn lineage_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    let stream = object
+        .getattr("isStream")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(false);
+    let value = if stream {
+        Some(StreamElement::Stream(Box::new(RsStream::with_kind(
+            kind_of(object)?,
+        ))))
+    } else {
+        element_value(object, false)?
+    };
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let mut names: Vec<String> = value
+        .music21_classes()
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    names.push("ProtoM21Object".to_string());
+    if stream {
+        names.push("Generic".to_string());
+    }
+    names.push("object".to_string());
+    Ok(names)
 }
 
 /// Whether an object is of a class, as music21 reads the question: by its
@@ -139,6 +168,18 @@ fn answers_to(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<b
     let Ok(name) = class.extract::<String>() else {
         return Ok(false);
     };
+    // What the object says it is, which is music21's whole chain for one
+    // of its objects and for one of this package's alike. The readers do
+    // not ask this -- `is_of_class` matches the class names themselves --
+    // because answering it builds a value, and building a value asks what
+    // the thing is.
+    if let Ok(classes) = object.getattr("classes") {
+        for each in classes.walk()? {
+            if each?.extract::<String>().is_ok_and(|each| each == name) {
+                return Ok(true);
+            }
+        }
+    }
     // A stream is asked by its kind alone, which costs nothing: what it
     // holds has no bearing on what it is.
     if object
@@ -473,6 +514,12 @@ impl Stream {
 
 #[pymethods]
 impl Stream {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
     #[new]
     #[pyo3(signature = (givenElements = None, *_arguments, **keywords))]
     fn new(

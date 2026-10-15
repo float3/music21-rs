@@ -116,7 +116,8 @@ besides `chordify`, `findConsecutiveNotes` and
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset -- a class being read
 as music21 reads it, by its own name or by anything it is a kind of, so
 `getElementsByClass('GeneralNote')` finds the notes, the chords and the
-rests --
+rests -- which is what every object's `classes` says of itself, music21's
+own chain down to `object` --
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
 is found only where it *begins*, `getElementAtOrBefore`,

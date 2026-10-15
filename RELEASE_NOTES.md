@@ -291,6 +291,12 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's classes answer `classes`, music21's own chain of
+  what a thing is: a note is a `NotRest`, a `GeneralNote`, a
+  `Music21Object`, a `ProtoM21Object` and an `object`; an ocarina is a
+  `Flute` and a `WoodwindInstrument`; a measure is a `Generic`, music21's
+  streams being typed by what they hold. The crate's lineage is what
+  answers, which `class_lineage_parity` holds to music21's.
 - `class_lineage_parity` holds `StreamElement::music21_classes` -- what
   the crate says a thing *is*, which every class filter in the crate and
   in the Python package reads -- to music21's own `classes`, for all 34

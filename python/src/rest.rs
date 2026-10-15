@@ -168,6 +168,13 @@ pub(crate) fn rest_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsRest> {
 
 #[pymethods]
 impl Rest {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
     fn __traverse__(
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
