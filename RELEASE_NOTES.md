@@ -31,6 +31,16 @@
   A lookup hands back the score the opus holds, and asks the metadata
   itself, so music21's own answers where music21 is installed and the
   package's own where it is not.
+- The Python package's `Stream` stretches, takes in and empties itself as
+  music21's does: `extendDuration`, `mergeElements` -- which takes in the
+  other stream's own objects, as music21 does, so both hold the same notes
+  -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
+  too, handing back the stream's own mark wherever it holds one.
+- `Stream::metronome_mark_positions` is the by-position twin of
+  `metronome_mark_boundaries`: each stretch with the position among
+  `Stream::leaves` of the mark it was read off, which is how a caller
+  keeping an object per element finds the very mark music21 hands back.
+  `stream::TempoSpan` is its answer.
 - `metadata::unique_name_of` is public: the unique name an attribute name
   stands for, which music21 reads through `__getattr__`.
 
@@ -201,6 +211,12 @@
 
 ## fixed
 
+- `Stream::clone_empty` kept a stream's id alone, where music21's
+  `cloneEmpty` merges the attributes of the class as well: a part's name
+  and abbreviation (`Part.mergeAttributes`), a measure's number, suffix and
+  padding (`Measure.mergeAttributes`), and whether the stream is at
+  sounding pitch (`Stream.mergeAttributes`). `extractContext` had the right
+  list in a copy of its own, and the two are one implementation now.
 - the feature map pointed music21's `Interval.name` at the crate's `name`,
   which answers the long spelling, `Perfect Octave`; `short_name` is the
   one that answers `P8`, and the map now says so. the count is unchanged:

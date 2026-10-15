@@ -6,10 +6,29 @@
 //! start; a crate stream knows nothing outside itself, so the tempo in
 //! force is given to it.
 
-use super::{Stream, StreamElement, StreamEvent};
+use super::{Stream, StreamElement};
 use crate::defaults::FloatType;
 use crate::error::{Error, Result};
 use crate::tempo::MetronomeMark;
+
+/// One stretch of a stream and the tempo sounding through it: a boundary
+/// of music21's `metronomeMarkBoundaries`.
+#[derive(Clone, Debug, PartialEq)]
+#[must_use]
+pub struct TempoSpan {
+    /// Where the stretch begins.
+    pub start: FloatType,
+    /// Where it ends, which is where the next tempo stands, or the end of
+    /// the stream for the last.
+    pub end: FloatType,
+    /// The tempo sounding through it.
+    pub mark: MetronomeMark,
+    /// The position among [`Stream::leaves`] of the mark the stream holds,
+    /// where the tempo is one of its own: nothing for the quarter at 120
+    /// standing in for a stream that states none, and nothing for what a
+    /// tempo word or a metric modulation means.
+    pub position: Option<usize>,
+}
 
 impl Stream {
     /// The stretches of the stream each tempo holds, start, end and the
@@ -23,37 +42,82 @@ impl Stream {
     ///
     /// A metric modulation whose new tempo cannot be worked out.
     pub fn metronome_mark_boundaries(&self) -> Result<Vec<(FloatType, FloatType, MetronomeMark)>> {
-        let flat = self.flatten();
-        let highest = flat.end_offset();
-        let lowest = flat.events().first().map_or(0.0, StreamEvent::offset);
-        let mut marks: Vec<(FloatType, MetronomeMark)> = Vec::new();
-        for event in flat.events() {
-            let previous = marks.last().map(|(_, mark)| mark.clone());
-            let Some(sounding) = sounding_mark(event.element(), previous.as_ref())? else {
+        Ok(self
+            .metronome_mark_positions()?
+            .into_iter()
+            .map(|boundary| (boundary.start, boundary.end, boundary.mark))
+            .collect())
+    }
+
+    /// [`Stream::metronome_mark_boundaries`], each stretch also saying
+    /// which element the tempo was read off, by its position among
+    /// [`Stream::leaves`].
+    ///
+    /// music21 hands back the mark objects the stream holds, so a caller
+    /// keeping something of its own beside each element -- a binding
+    /// keeping the object it was handed -- finds the mark again by that
+    /// position. A stretch standing under no mark of the stream's carries
+    /// none: the quarter at 120 standing in for a stream that states no
+    /// tempo, and the mark a tempo word or a metric modulation *means*,
+    /// which music21 builds afresh as well.
+    ///
+    /// # Errors
+    ///
+    /// A metric modulation whose new tempo cannot be worked out.
+    pub fn metronome_mark_positions(&self) -> Result<Vec<TempoSpan>> {
+        let leaves = self.leaves();
+        // The leaves as `flatten` orders them: the stream is read
+        // flattened, so a tempo written on a part is found from the score.
+        let order = Stream::flatten_order(&leaves);
+        let highest = crate::makenotation::op_frac(
+            leaves
+                .iter()
+                .map(|(offset, element)| offset + element.quarter_length())
+                .fold(0.0, FloatType::max),
+        );
+        let lowest = order.first().map_or(0.0, |place| leaves[*place].0);
+        let mut marks: Vec<(FloatType, MetronomeMark, Option<usize>)> = Vec::new();
+        for place in order {
+            let (offset, element) = leaves[place];
+            let previous = marks.last().map(|(_, mark, _)| mark.clone());
+            let Some(sounding) = sounding_mark(element, previous.as_ref())? else {
                 continue;
             };
-            marks.push((event.offset(), sounding));
+            // Only a mark of the stream's own is the object music21 hands
+            // back; what a tempo word or a modulation means is built here.
+            let held = matches!(element, StreamElement::MetronomeMark(_)).then_some(place);
+            marks.push((offset, sounding, held));
         }
-        let default = || MetronomeMark::new(120.0);
+        let default = |start, end| TempoSpan {
+            start,
+            end,
+            mark: MetronomeMark::new(120.0),
+            position: None,
+        };
+        let span = |(offset, mark, position): &(FloatType, MetronomeMark, Option<usize>),
+                    end: FloatType| TempoSpan {
+            start: *offset,
+            end,
+            mark: mark.clone(),
+            position: *position,
+        };
         let mut boundaries = Vec::new();
         match marks.as_slice() {
-            [] => boundaries.push((lowest, highest, default())),
-            [(offset, mark)] => {
-                if *offset > lowest {
-                    boundaries.push((lowest, *offset, default()));
-                    boundaries.push((*offset, highest, mark.clone()));
-                } else {
-                    boundaries.push((lowest, highest, mark.clone()));
+            [] => boundaries.push(default(lowest, highest)),
+            [only] => {
+                if only.0 > lowest {
+                    boundaries.push(default(lowest, only.0));
                 }
+                boundaries.push(span(only, highest));
             }
             _ => {
                 if marks[0].0 > lowest {
-                    boundaries.push((lowest, marks[0].0, default()));
+                    boundaries.push(default(lowest, marks[0].0));
                 }
-                boundaries.push((marks[0].0, marks[1].0, marks[0].1.clone()));
+                boundaries.push(span(&marks[0], marks[1].0));
                 for index in 1..marks.len() {
-                    let end = marks.get(index + 1).map_or(highest, |(offset, _)| *offset);
-                    boundaries.push((marks[index].0, end, marks[index].1.clone()));
+                    let end = marks.get(index + 1).map_or(highest, |next| next.0);
+                    boundaries.push(span(&marks[index], end));
                 }
             }
         }
@@ -224,6 +288,42 @@ mod tests {
         let empty = Stream::new();
         assert_eq!(empty.seconds(None).expect("seconds"), 0.0);
         assert!(four_quarters().seconds(None).expect("seconds").is_nan());
+    }
+
+    /// The positions are how a caller holding an object per element finds
+    /// the very mark music21 would have handed back.
+    #[test]
+    fn a_boundary_says_which_mark_of_the_streams_own_sounds_through_it() {
+        let mut part = four_quarters();
+        part.insert(2.0, MetronomeMark::new(90.0));
+        let spans = part.metronome_mark_positions().expect("boundaries");
+        assert_eq!(spans.len(), 2);
+
+        // The quarter at 120 standing in for the tempo the stream says
+        // nothing of up to offset 2 is nobody's mark.
+        assert_eq!((spans[0].start, spans[0].end), (0.0, 2.0));
+        assert_eq!(spans[0].mark.number(), Some(120.0));
+        assert_eq!(spans[0].position, None);
+
+        assert_eq!((spans[1].start, spans[1].end), (2.0, 4.0));
+        let leaves = part.leaves();
+        let position = spans[1].position.expect("the mark the stream holds");
+        assert!(matches!(
+            leaves[position].1,
+            StreamElement::MetronomeMark(mark) if mark.number() == Some(90.0)
+        ));
+    }
+
+    /// A tempo word *means* a tempo rather than holding one, as a metric
+    /// modulation does, so there is no object to point at.
+    #[test]
+    fn the_mark_a_tempo_word_means_is_nobodys() {
+        let mut part = four_quarters();
+        part.insert(0.0, crate::tempo::TempoText::new("adagio"));
+        let spans = part.metronome_mark_positions().expect("boundaries");
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].mark.number(), Some(56.0));
+        assert_eq!(spans[0].position, None);
     }
 
     #[test]

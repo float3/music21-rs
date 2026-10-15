@@ -53,6 +53,7 @@ pub use editing::Anchor;
 pub use lyrics::{LyricsOptions, SungLyric};
 pub use placed::Placed;
 pub use queries::OffsetMapEntry;
+pub use seconds::TempoSpan;
 pub use span::OffsetSpan;
 pub use splitting::InForce;
 pub use template::{TemplateOptions, removed_by_default};
@@ -1101,6 +1102,32 @@ impl Stream {
             }
         }
         out
+    }
+
+    /// The positions among [`Stream::leaves`] in the order
+    /// [`Stream::flatten`] puts them: by offset, then by class order, a
+    /// grace note ahead of the rest of its class, and otherwise as the walk
+    /// met them.
+    ///
+    /// The two walks are the same walk, so the *n*th leaf is the *n*th
+    /// element the flattening read; this says where each of those stands
+    /// once sorted, which is how a walk reading a flattened stream answers
+    /// in positions a caller can look up.
+    pub(crate) fn flatten_order(leaves: &[(FloatType, &StreamElement)]) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..leaves.len()).collect();
+        order.sort_by(|left, right| {
+            let (left_offset, left_element) = leaves[*left];
+            let (right_offset, right_element) = leaves[*right];
+            left_offset
+                .total_cmp(&right_offset)
+                .then(
+                    left_element
+                        .class_sort_order()
+                        .cmp(&right_element.class_sort_order()),
+                )
+                .then(is_grace(right_element).cmp(&is_grace(left_element)))
+        });
+        order
     }
 
     fn leaves_into<'a>(&'a self, base: FloatType, out: &mut Vec<(FloatType, &'a StreamElement)>) {

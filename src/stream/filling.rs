@@ -1,8 +1,8 @@
 //! Filling a stream from another, stretching what it holds, and emptying
 //! it: music21's `Stream.extendDuration`, `mergeElements` and `cloneEmpty`.
 
-use super::Stream;
 use super::editing::map_duration;
+use super::{Stream, StreamKind};
 use crate::defaults::FloatType;
 use crate::duration::Duration;
 use crate::error::Result;
@@ -117,11 +117,12 @@ impl Stream {
 
     /// A stream like this one holding nothing: music21's `cloneEmpty`.
     ///
-    /// It is of the same kind and carries the same id, which is what
-    /// music21's `mergeAttributes` copies -- and only where an id was
-    /// given, music21 leaving an object's own address behind, which a
-    /// crate stream has nothing of. Nothing else comes: not the metadata,
-    /// the barlines or the spanners, which
+    /// It is of the same kind and carries what music21's `mergeAttributes`
+    /// copies: the id -- and only where one was given, music21 leaving an
+    /// object's own address behind, which a crate stream has nothing of --
+    /// whether the stream is at sounding pitch, a measure's number, suffix
+    /// and padding, and a part's name and abbreviation. Nothing else
+    /// comes: not the metadata, the barlines or the spanners, which
     /// [`Stream::template`](Self::template) keeps.
     ///
     /// ```
@@ -129,17 +130,33 @@ impl Stream {
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// part.set_id(Some("hi".to_string()));
+    /// part.set_name(Some("Flute".to_string()));
     /// part.insert(0.0, Note::from_name("C4")?);
     ///
     /// let empty = part.clone_empty();
     /// assert_eq!(empty.kind(), StreamKind::Part);
     /// assert_eq!(empty.id(), Some("hi"));
+    /// assert_eq!(empty.name(), Some("Flute"));
     /// assert!(empty.is_empty());
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
     pub fn clone_empty(&self) -> Stream {
         let mut empty = Stream::with_kind(self.kind());
-        empty.set_id(self.id().map(str::to_string));
+        empty.labels.id = self.labels.id.clone();
+        empty.labels.at_sounding_pitch = self.labels.at_sounding_pitch;
+        match self.kind() {
+            StreamKind::Measure => {
+                empty.labels.number = self.labels.number;
+                empty.labels.number_suffix = self.labels.number_suffix.clone();
+                empty.labels.padding_left = self.labels.padding_left;
+                empty.labels.padding_right = self.labels.padding_right;
+            }
+            StreamKind::Part | StreamKind::PartStaff => {
+                empty.labels.name = self.labels.name.clone();
+                empty.labels.abbreviation = self.labels.abbreviation.clone();
+            }
+            _ => {}
+        }
         empty
     }
 }
@@ -223,8 +240,12 @@ mod tests {
         assert_eq!(dynamics_only.len(), 1);
     }
 
+    /// Every answer here is music21's own for the same streams: a part's
+    /// `mergeAttributes` copies `_partName` and `_partAbbreviation`, and a
+    /// measure's its number, suffix and padding, on top of the id and the
+    /// groups the base class copies.
     #[test]
-    fn an_emptied_copy_keeps_its_kind_and_its_id_alone() {
+    fn an_emptied_copy_keeps_what_merging_a_streams_attributes_copies() {
         let mut part = Stream::with_kind(StreamKind::Part);
         part.set_id(Some("hi".to_string()));
         part.set_name(Some("Flute".to_string()));
@@ -233,9 +254,19 @@ mod tests {
         let empty = part.clone_empty();
         assert_eq!(empty.kind(), StreamKind::Part);
         assert_eq!(empty.id(), Some("hi"));
+        assert_eq!(empty.name(), Some("Flute"));
         assert!(empty.is_empty());
-        // music21's mergeAttributes copies the id and the groups, nothing
-        // else, so the name does not come.
-        assert_eq!(empty.name(), None);
+
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(4);
+        measure.set_number_suffix(Some("a".to_string()));
+        measure.set_padding_left(1.0);
+        measure.push(Note::from_name("C4").expect("a note name"));
+
+        let empty = measure.clone_empty();
+        assert_eq!(empty.number(), 4);
+        assert_eq!(empty.number_suffix(), Some("a"));
+        assert_eq!(empty.padding_left(), 1.0);
+        assert!(empty.is_empty());
     }
 }

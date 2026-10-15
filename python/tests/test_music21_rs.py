@@ -1622,3 +1622,131 @@ def test_a_stream_answers_for_its_pitches_and_its_staff():
     assert part.isTwelveTone()
     # Five lines where no layout says otherwise, as music21 answers.
     assert part.staffLines == 5
+
+
+def test_elements_are_stretched_to_the_next_as_music21_stretches_them():
+    """Every length here is music21's own for the same stream."""
+    spread = m.Stream()
+    for place in (0.0, 10.0, 20.0):
+        spread.insert(place, m.Note("C4"))
+    spread.insert(15.0, m.Dynamic("ff"))
+
+    def lengths(stream):
+        return [e.quarterLength for e in stream.getElementsByClass("Note")]
+
+    # Ten to the next note, ten again past the dynamic, and the last keeps
+    # the length it came with to the end of the stream.
+    assert lengths(spread.extendDuration("GeneralNote")) == [10.0, 10.0, 1.0]
+    # A class answers as its name does.
+    assert lengths(spread.extendDuration(m.Note)) == [10.0, 10.0, 1.0]
+    # The answer is a copy: music21 deep-copies unless asked for inPlace.
+    assert lengths(spread) == [1.0, 1.0, 1.0]
+    with pytest.raises(m.StreamException):
+        spread.extendDuration("Note", inPlace=True)
+
+
+def test_a_stream_takes_in_what_another_holds():
+    """Every answer is music21's own for the same streams."""
+    spread = m.Stream()
+    for place in (0.0, 10.0, 20.0):
+        spread.insert(place, m.Note("C4"))
+    spread.insert(15.0, m.Dynamic("ff"))
+
+    into = m.Stream()
+    assert into.mergeElements(spread) is None
+    assert len(into) == 4
+    assert [into.elementOffset(e) for e in into] == [0.0, 10.0, 15.0, 20.0]
+    # The objects themselves come, as music21's do, so both streams hold
+    # the same notes.
+    assert all(a is b for a, b in zip(list(into), list(spread)))
+
+    notes_only = m.Stream()
+    notes_only.mergeElements(spread, classFilterList=("Note",))
+    assert len(notes_only) == 3
+
+
+def test_an_emptied_copy_keeps_what_music21_keeps():
+    """What music21's three `mergeAttributes` copy, of what this keeps."""
+    part = m.Part()
+    part.id = "hi"
+    part.partName = "Flute"
+    part.insert(0.0, m.Note("C4"))
+
+    empty = part.cloneEmpty()
+    assert isinstance(empty, m.Part)
+    assert empty.id == "hi"
+    assert empty.partName == "Flute"
+    assert len(empty) == 0
+
+    # A measure's number, suffix and padding, which music21's
+    # `Measure.mergeAttributes` copies. They are set here rather than given
+    # to the constructor, which this package does not read them from.
+    measure = m.Measure()
+    measure.number = 4
+    measure.numberSuffix = "a"
+    measure.paddingLeft = 1.0
+    measure.insert(0.0, m.Note("C4"))
+
+    empty = measure.cloneEmpty()
+    assert (empty.number, empty.numberSuffix, empty.paddingLeft) == (4, "a", 1.0)
+    assert len(empty) == 0
+
+
+def tempo_line():
+    """A part of four quarters, at sixty and then at a hundred and twenty."""
+    part = m.Part()
+    for place in range(4):
+        part.insert(float(place), m.Note("C4", quarterLength=1.0))
+    part.insert(0.0, m.MetronomeMark(number=60))
+    part.insert(2.0, m.MetronomeMark(number=120))
+    return part
+
+
+def test_a_stream_says_how_long_it_lasts_in_seconds():
+    """Every answer is music21's own for the same stream."""
+    # Two quarters at sixty and two at a hundred and twenty.
+    assert tempo_line().seconds == 3.0
+
+    bare = m.Part()
+    for place in range(4):
+        bare.insert(float(place), m.Note("C4", quarterLength=1.0))
+    # music21 answers nan where its own search for a tempo finds nothing,
+    # and nought where nothing in the stream lasts.
+    assert math.isnan(bare.seconds)
+    assert m.Part().seconds == 0.0
+
+    # Only the tempi a stream holds itself count, so a score whose tempo is
+    # written on a part has none of its own -- which is nan upstream too.
+    score = m.Score()
+    score.insert(0.0, tempo_line())
+    assert math.isnan(score.seconds)
+
+
+def test_the_tempo_in_force_through_each_stretch_is_music21s():
+    """Every answer is music21's own for the same stream."""
+    part = tempo_line()
+    boundaries = part.metronomeMarkBoundaries()
+    assert [(start, end, mark.number) for start, end, mark in boundaries] == [
+        (0.0, 2.0, 60.0),
+        (2.0, 4.0, 120.0),
+    ]
+    # The mark handed back is the stream's own object, as music21's is.
+    held = [e for e in part.elements if isinstance(e, m.MetronomeMark)]
+    assert all(mark is held[at] for at, (_, _, mark) in enumerate(boundaries))
+
+    # The stream is read flattened, so a tempo written on a part is found
+    # from the score.
+    score = m.Score()
+    score.insert(0.0, part)
+    assert [(s, e, mark.number) for s, e, mark in score.metronomeMarkBoundaries()] == [
+        (0.0, 2.0, 60.0),
+        (2.0, 4.0, 120.0),
+    ]
+
+    # A stream that states no tempo is counted at a quarter at 120, which
+    # is nobody's mark: music21 builds that one afresh as well.
+    bare = m.Part()
+    bare.insert(0.0, m.Note("C4", quarterLength=4.0))
+    [(start, end, mark)] = bare.metronomeMarkBoundaries()
+    assert (start, end, mark.number) == (0.0, 4.0, 120.0)
+    assert mark not in list(bare.elements)

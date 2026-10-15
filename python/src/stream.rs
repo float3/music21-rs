@@ -125,6 +125,22 @@ fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<
     Ok(false)
 }
 
+/// The names a class filter names: a string as it stands, a class by its
+/// `__name__`, or a list of either -- which is what the crate's own walks
+/// match an element against.
+fn class_names(classes: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    let one = |class: &Bound<'_, PyAny>| -> PyResult<String> {
+        match class.extract::<String>() {
+            Ok(name) => Ok(name),
+            Err(_) => class.getattr("__name__")?.extract(),
+        }
+    };
+    if classes.extract::<String>().is_ok() || classes.is_instance_of::<pyo3::types::PyType>() {
+        return Ok(vec![one(classes)?]);
+    }
+    classes.walk()?.map(|class| one(&class?)).collect()
+}
+
 impl Stream {
     fn empty(kind: StreamKind) -> Self {
         Self {
@@ -1138,6 +1154,165 @@ impl Stream {
     /// temperament: music21's `isTwelveTone`.
     fn isTwelveTone(slf: &Bound<'_, Self>) -> PyResult<bool> {
         Ok(crate_stream(slf.as_any())?.is_twelve_tone())
+    }
+
+    /// A copy with each element of a class stretched to where the next one
+    /// starts, the last to the end of the stream: music21's
+    /// `extendDuration`.
+    ///
+    /// Only what the crate gives a length to is stretched -- a note, a
+    /// rest, a chord or a chord symbol. music21 would stretch anything,
+    /// every object of its own carrying a duration, where the marks saying
+    /// what is in force from a point are timeless here, so asking for one
+    /// of those classes leaves the lengths as they stand.
+    #[pyo3(signature = (objName, *, inPlace = false))]
+    fn extendDuration<'py>(
+        slf: &Bound<'py, Self>,
+        objName: &Bound<'py, PyAny>,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        let names = class_names(objName)?;
+        let asked: Vec<&str> = names.iter().map(String::as_str).collect();
+        edited(slf, |stream| stream.extend_duration(&asked))
+    }
+
+    /// Takes in everything another stream holds, each at the offset it
+    /// stands at there: music21's `mergeElements`.
+    ///
+    /// With `classFilterList`, only the elements answering to one of those
+    /// classes come. The objects themselves come, as music21's do, so a
+    /// note is then held by both streams.
+    #[pyo3(signature = (other, classFilterList = None))]
+    fn mergeElements(
+        slf: &Bound<'_, Self>,
+        other: &Bound<'_, PyAny>,
+        classFilterList: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let placed: Vec<(f64, Py<PyAny>)> = match other.cast::<Stream>() {
+            Ok(stream) => stream
+                .borrow()
+                .held
+                .iter()
+                .map(|held| (held.offset, held.object.clone_ref(py)))
+                .collect(),
+            // music21's own stream, which says where it holds each thing.
+            Err(_) => {
+                let mut placed = Vec::new();
+                for element in other.getattr("elements")?.walk()? {
+                    let element = element?;
+                    let offset: f64 = other
+                        .call_method1("elementOffset", (&element,))?
+                        .extract()?;
+                    placed.push((offset, element.unbind()));
+                }
+                placed
+            }
+        };
+        for (offset, object) in placed {
+            let object = object.into_bound(py);
+            if let Some(classes) = classFilterList.filter(|list| !list.is_none())
+                && !is_of_any(&object, classes)?
+            {
+                continue;
+            }
+            slf.borrow_mut().put(offset, &object);
+        }
+        Ok(())
+    }
+
+    /// A stream like this one holding nothing: music21's `cloneEmpty`.
+    ///
+    /// It is of the same class and carries what music21's `mergeAttributes`
+    /// copies, of what this package keeps: the id, whether the stream is at
+    /// sounding pitch, a measure's number, suffix and padding, and a part's
+    /// name and abbreviation. An attribute the stream was never given is
+    /// not copied, as music21's own `hasattr` does not copy one.
+    #[pyo3(signature = (derivationMethod = None))]
+    fn cloneEmpty<'py>(
+        slf: &Bound<'py, Self>,
+        derivationMethod: Option<&str>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // Derivations say where a stream came from, which this package
+        // keeps nothing of.
+        let _ = derivationMethod;
+        let made = slf.get_type().call0()?;
+        if let Some(id) = &slf.borrow().id {
+            made.setattr("id", id.bind(slf.py()))?;
+        }
+        let kept: &[&str] = match slf.borrow().kind {
+            StreamKind::Measure => &[
+                "atSoundingPitch",
+                "number",
+                "numberSuffix",
+                "paddingLeft",
+                "paddingRight",
+            ],
+            StreamKind::Part | StreamKind::PartStaff => {
+                &["atSoundingPitch", "partName", "partAbbreviation"]
+            }
+            _ => &["atSoundingPitch"],
+        };
+        for name in kept {
+            if let Ok(value) = slf.as_any().getattr(*name) {
+                made.setattr(*name, value)?;
+            }
+        }
+        Ok(made)
+    }
+
+    /// The stretches of the stream each tempo holds, each a tuple of where
+    /// it begins, where it ends and the tempo sounding through it:
+    /// music21's `metronomeMarkBoundaries`.
+    ///
+    /// The stream is read flattened, so a tempo written on a part is found
+    /// from the score, and the mark handed back is the stream's own object
+    /// wherever it holds one. Where it states no tempo, or none from its
+    /// start, a quarter at 120 holds, as it does upstream; so does the
+    /// tempo a word or a metric modulation *means*, which music21 builds
+    /// afresh too.
+    fn metronomeMarkBoundaries<'py>(
+        slf: &Bound<'py, Self>,
+    ) -> PyResult<Vec<(f64, f64, Bound<'py, PyAny>)>> {
+        let py = slf.py();
+        let read = read_values(slf.as_any())?;
+        let spans = read
+            .stream
+            .metronome_mark_positions()
+            .map_err(|error| TempoException::new_err(crate::pitch::message(&error)))?;
+        let mut out = Vec::new();
+        for span in spans {
+            let mark = match span.position {
+                Some(position) => read.leaves[position].bind(py).clone(),
+                None => crate::installed_new(
+                    py,
+                    "music21.tempo",
+                    "MetronomeMark",
+                    MetronomeMark::wrap(span.mark),
+                )?
+                .into_bound(py)
+                .into_any(),
+            };
+            out.push((span.start, span.end, mark));
+        }
+        Ok(out)
+    }
+
+    /// How long the stream lasts in seconds: music21's `seconds`.
+    ///
+    /// Only the tempi the stream holds itself count, each from where it
+    /// stands until the next and the last to the end. music21 searches a
+    /// stream's context for a tempo where it states none from its start;
+    /// nothing here holds a stream's containers, so a stream with no tempo
+    /// of its own answers `nan` -- which is what music21 answers for a
+    /// stream whose search finds nothing -- and nought where it holds
+    /// nothing that lasts.
+    #[getter]
+    fn seconds(slf: &Bound<'_, Self>) -> PyResult<f64> {
+        crate_stream(slf.as_any())?
+            .seconds(None)
+            .map_err(|error| TempoException::new_err(crate::pitch::message(&error)))
     }
 
     /// How many lines this stream's staff has: music21's `staffLines`,

@@ -1,35 +1,12 @@
 //! Keeping or taking out a stream's elements: music21's `extractContext`,
 //! `removeByClass` and `removeByNotOfClass`.
 
-use super::{Stream, StreamElement, StreamEvent, StreamKind};
+use super::{Stream, StreamElement, StreamEvent};
 use crate::defaults::FloatType;
 use crate::error::{Error, Result};
 use std::cmp::Ordering;
 
 use super::exact::Exact;
-
-/// An empty stream of the same kind, with what music21's `cloneEmpty`
-/// keeps: its id and, for a measure, its number and padding, for a part,
-/// its name.
-fn clone_empty(stream: &Stream) -> Stream {
-    let mut out = Stream::with_kind(stream.kind());
-    out.labels.id = stream.labels.id.clone();
-    out.labels.at_sounding_pitch = stream.labels.at_sounding_pitch;
-    match stream.kind() {
-        StreamKind::Measure => {
-            out.labels.number = stream.labels.number;
-            out.labels.number_suffix = stream.labels.number_suffix.clone();
-            out.labels.padding_left = stream.labels.padding_left;
-            out.labels.padding_right = stream.labels.padding_right;
-        }
-        StreamKind::Part | StreamKind::PartStaff => {
-            out.labels.name = stream.labels.name.clone();
-            out.labels.abbreviation = stream.labels.abbreviation.clone();
-        }
-        _ => {}
-    }
-    out
-}
 
 impl Stream {
     /// A stream of the elements this stream holds itself that start from
@@ -72,7 +49,7 @@ impl Stream {
             let offset = Exact::held(offset);
             start.cmp(offset) != Ordering::Greater && offset.cmp(end) == Ordering::Less
         };
-        let mut out = clone_empty(self);
+        let mut out = self.clone_empty();
         out.labels.spanners = self.labels.spanners.clone();
         if within(0.0) {
             out.labels.left_barline = self.labels.left_barline.clone();
