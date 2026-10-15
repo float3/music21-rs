@@ -551,6 +551,42 @@ impl Stream {
         }
     }
 
+    /// Every pitch of everything the stream holds, in order: music21's
+    /// `pitches`, which gathers a note's one pitch, a chord's several and
+    /// a nested stream's own, each the very object that note holds.
+    ///
+    /// A key is passed over, as music21 passes it over: it has pitches but
+    /// they are not the music's.
+    #[getter]
+    fn pitches<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let key = pyo3::types::PyString::new(py, "Key");
+        let listed: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        let mut out = Vec::new();
+        for object in listed {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &key)? {
+                continue;
+            }
+            // music21 gathers from its `GeneralNote`s and its streams,
+            // which is everything carrying pitches once a key is passed
+            // over; the package's classes do not answer to music21's
+            // class names above their own, so the attribute is the test.
+            let Ok(pitches) = object.getattr("pitches") else {
+                continue;
+            };
+            for pitch in pitches.walk()? {
+                out.push(pitch?);
+            }
+        }
+        Ok(out)
+    }
+
     /// Every element with where it begins, where it ends and which voice
     /// it is in: music21's `offsetMap`, a list of its `OffsetMap`
     /// named tuples -- `element`, `offset`, `endTime`, `voiceIndex`.

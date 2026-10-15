@@ -2518,3 +2518,23 @@ def test_a_stream_says_where_each_element_begins_and_ends():
         ("Note", 0.0, 1.0, 1),
         ("Note", 1.0, 2.0, 1),
     ]
+
+
+def test_every_pitch_a_stream_holds_is_gathered():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    line.insert(0.0, m.Key("G"))
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(1.0, m.Chord(["E4", "G4"]))
+    line.insert(2.0, m.Rest(quarterLength=1.0))
+
+    # A note's one pitch and a chord's two; the key's are not the music's
+    # and music21 passes it over.
+    assert [p.nameWithOctave for p in line.pitches] == ["C4", "E4", "G4"]
+    # Each is the very object the note holds.
+    assert line.pitches[0] is line.notes[0].pitch
+
+    # The pitches of a nested stream come too, so a part answers for its
+    # measures without being flattened.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    assert [p.nameWithOctave for p in part.pitches] == ["C4", "D4", "E4", "F4"]
