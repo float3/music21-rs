@@ -2253,3 +2253,45 @@ def test_what_a_stream_opens_with_is_read_and_written():
     later = m.Measure()
     later.insert(2.0, m.TrebleClef())
     assert later.clef is None
+
+
+def test_the_meters_and_instruments_a_stream_holds_are_found():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    first = m.Measure()
+    first.insert(0.0, m.TimeSignature("3/4"))
+    first.append(m.Note("C4", quarterLength=1.0))
+    second = m.Measure()
+    second.insert(0.0, m.TimeSignature("2/2"))
+    second.append(m.Note("D4", quarterLength=1.0))
+    line.insert(0.0, first)
+    line.insert(3.0, second)
+
+    found = line.getTimeSignatures()
+    assert [(found.elementOffset(t), t.ratioString) for t in found] == [
+        (0.0, "3/4"),
+        (3.0, "2/2"),
+    ]
+    # The meters handed back are the measures' own objects.
+    assert list(found)[0] is first.timeSignature
+    # The part itself states none, so nothing is found without recursing.
+    assert len(line.getTimeSignatures(recurse=False, returnDefault=False)) == 0
+    # And a four-four is made up where one is asked for, as music21 does.
+    assert [t.ratioString for t in line.getTimeSignatures(recurse=False)] == ["4/4"]
+
+    played = m.Part()
+    flute = m.Flute()
+    played.insert(0.0, flute)
+    played.append(m.Note("C4", quarterLength=1.0))
+    assert list(played.getInstruments())[0] is flute
+    assert played.getInstrument() is flute
+
+    none = m.Part()
+    none.append(m.Note("C4", quarterLength=1.0))
+    default = none.getInstruments()
+    assert [type(i).__name__ for i in default] == ["Instrument"]
+    # music21 gives the one it makes up the default part name, which is
+    # the empty string.
+    assert list(default)[0].partName == ""
+    assert len(none.getInstruments(returnDefault=False)) == 0
+    assert none.getInstrument(returnDefault=False) is None

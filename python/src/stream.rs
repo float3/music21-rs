@@ -490,6 +490,93 @@ impl Stream {
         }
     }
 
+    /// The meters this stream holds, each where it stands, the stream's
+    /// own objects: music21's `getTimeSignatures`.
+    ///
+    /// With `returnDefault`, a stream stating none answers a four-four of
+    /// its own, as music21's does. There is no context to search outside
+    /// the stream here, so `searchContext` reaches no further than it.
+    #[pyo3(signature = (*, searchContext = true, returnDefault = true, recurse = true, sortByCreationTime = true))]
+    fn getTimeSignatures<'py>(
+        slf: &Bound<'py, Self>,
+        searchContext: bool,
+        returnDefault: bool,
+        recurse: bool,
+        sortByCreationTime: bool,
+    ) -> PyResult<Bound<'py, Stream>> {
+        let _ = (searchContext, sortByCreationTime);
+        let py = slf.py();
+        let read = if recurse {
+            Self::flatten(slf)?
+        } else {
+            slf.clone()
+        };
+        let named = pyo3::types::PyString::new(py, "TimeSignature");
+        let found = Self::picked(&read, Some(StreamKind::Stream), |object| {
+            is_of_class(object, &named)
+        })?;
+        if returnDefault && found.borrow().held.is_empty() {
+            let made = py
+                .get_type::<crate::meter::TimeSignature>()
+                .call1(("4/4",))?;
+            found.borrow_mut().put(0.0, &made);
+        }
+        Ok(found)
+    }
+
+    /// The instruments this stream holds, the stream's own objects:
+    /// music21's `getInstruments`.
+    ///
+    /// With `returnDefault`, a stream naming no instrument answers a bare
+    /// `Instrument` of its own, as music21's does. Nothing here holds the
+    /// streams a stream sits in, so `searchActiveSite` reaches no further
+    /// than this one.
+    #[pyo3(signature = (*, searchActiveSite = true, returnDefault = true, recurse = true))]
+    fn getInstruments<'py>(
+        slf: &Bound<'py, Self>,
+        searchActiveSite: bool,
+        returnDefault: bool,
+        recurse: bool,
+    ) -> PyResult<Bound<'py, Stream>> {
+        let _ = searchActiveSite;
+        let py = slf.py();
+        let read = if recurse {
+            Self::flatten(slf)?
+        } else {
+            slf.clone()
+        };
+        let named = pyo3::types::PyString::new(py, "Instrument");
+        let found = Self::picked(&read, Some(StreamKind::Stream), |object| {
+            is_of_class(object, &named)
+        })?;
+        if returnDefault && found.borrow().held.is_empty() {
+            let made = py.get_type::<crate::instrument::Instrument>().call0()?;
+            // music21 gives the one it makes up the default part name,
+            // which is the empty string.
+            made.setattr("partName", "")?;
+            found.borrow_mut().put(0.0, &made);
+        }
+        Ok(found)
+    }
+
+    /// The first instrument this stream holds, or `None`: music21's
+    /// `getInstrument`.
+    #[pyo3(signature = (*, searchActiveSite = true, returnDefault = true, recurse = false))]
+    fn getInstrument<'py>(
+        slf: &Bound<'py, Self>,
+        searchActiveSite: bool,
+        returnDefault: bool,
+        recurse: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let found = Self::getInstruments(slf, searchActiveSite, returnDefault, recurse)?;
+        let py = slf.py();
+        Ok(found
+            .borrow()
+            .sorted()
+            .first()
+            .map(|held| held.object.bind(py).clone()))
+    }
+
     /// The clef standing at the start of this stream, or `None`: music21's
     /// `clef`, which a measure's own is.
     #[getter]

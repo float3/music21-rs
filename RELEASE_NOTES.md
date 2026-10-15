@@ -36,6 +36,10 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `getTimeSignatures`,
+  `getInstruments` and `getInstrument`, each handing back the stream's own
+  objects, and making up music21's default -- a four-four, a bare
+  `Instrument` -- where the stream states none and one is asked for.
 - The Python package's `Stream` reads and writes what it opens with:
   `clef`, `keySignature` and `timeSignature`, each the one of its class
   standing at the very start, and writing one takes out the one it had, as

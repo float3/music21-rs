@@ -102,7 +102,9 @@ nothing, as music21's do -- the ties written onto its own notes. and they answer
 `simultaneousAttacks`, and they take elements out by class or by index
 (`removeByClass`, `removeByNotOfClass`, `pop`) and answer `voices` and
 what they open with -- `clef`, `keySignature` and `timeSignature`, read
-and written as music21's are --
+and written as music21's are -- and the meters and instruments they hold,
+`getTimeSignatures`, `getInstruments` and `getInstrument`, which make up
+music21's default where a stream states none --
 besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. a part written for a transposing instrument is turned
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --
