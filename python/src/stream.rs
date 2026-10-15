@@ -443,6 +443,87 @@ impl Stream {
         Ok(())
     }
 
+    /// The scores this opus holds: music21's `Opus.scores`.
+    #[getter]
+    fn scores<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let mut found = Vec::new();
+        for held in &slf.borrow().held {
+            let object = held.object.bind(py);
+            if kind_of(object).is_ok_and(|kind| kind == StreamKind::Score) {
+                found.push(object.clone());
+            }
+        }
+        Ok(found)
+    }
+
+    /// Each score's number, as its metadata gives it: music21's
+    /// `Opus.getNumbers`.
+    fn getNumbers(slf: &Bound<'_, Self>) -> PyResult<Vec<Option<String>>> {
+        Self::scores(slf)?
+            .into_iter()
+            .map(|score| match score.getattr("metadata") {
+                Ok(metadata) if !metadata.is_none() => metadata.getattr("number")?.extract(),
+                _ => Ok(None),
+            })
+            .collect()
+    }
+
+    /// The first score whose number a query matches: music21's
+    /// `Opus.getScoreByNumber`.
+    fn getScoreByNumber<'py>(
+        slf: &Bound<'py, Self>,
+        opusMatch: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::score_by(slf, opusMatch, "number")
+    }
+
+    /// The first score whose title a query matches: music21's
+    /// `Opus.getScoreByTitle`.
+    fn getScoreByTitle<'py>(
+        slf: &Bound<'py, Self>,
+        titleMatch: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Self::score_by(slf, titleMatch, "title")
+    }
+
+    /// One score of the opus's scores laid out as its parts: music21's
+    /// `Opus.mergeScores`.
+    fn mergeScores<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let stream = crate_stream(slf.as_any())?;
+        let merged = stream
+            .merge_scores()
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        from_crate(slf.py(), &merged)
+    }
+
+    /// The score's metadata: music21's `metadata`, which is whatever
+    /// `Metadata` the stream holds, music21 keeping it among the elements
+    /// rather than beside them.
+    #[getter]
+    fn get_metadata(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.held
+            .iter()
+            .map(|held| held.object.bind(py))
+            .find(|object| object.is_instance_of::<crate::metadata::Metadata>())
+            .map(|found| found.clone().unbind())
+    }
+
+    /// Writes the metadata, which goes at the start as music21 inserts it,
+    /// and takes the place of any the stream already held.
+    #[setter]
+    fn set_metadata(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) {
+        self.held.retain(|held| {
+            !held
+                .object
+                .bind(py)
+                .is_instance_of::<crate::metadata::Metadata>()
+        });
+        if let Some(value) = value.filter(|value| !value.is_none()) {
+            self.put(0.0, value);
+        }
+    }
+
     /// The offset just past the last thing held.
     #[getter]
     fn highestTime(slf: &Bound<'_, Self>) -> PyResult<f64> {
@@ -1056,6 +1137,11 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
             held.id = Some(pyo3::types::PyString::new(py, id).into_any().unbind());
         }
     }
+    // The metadata a reader found, which music21 keeps among the elements.
+    if let Some(metadata) = stream.metadata() {
+        let carried = Bound::new(py, crate::metadata::Metadata::wrap(metadata.clone()))?;
+        made.setattr("metadata", carried)?;
+    }
     if let Some(at) = stream.at_sounding_pitch() {
         made.setattr("atSoundingPitch", at)?;
     }
@@ -1252,6 +1338,35 @@ stream_kinds!(
         "music21's `Opus`: a collection of scores."
     ),
 );
+
+impl Stream {
+    /// The first score whose metadata answers a query in one field, asked
+    /// of the metadata itself so that music21's own answers where it is
+    /// installed and the package's own where it is not.
+    fn score_by<'py>(
+        slf: &Bound<'py, Self>,
+        query: &Bound<'_, PyAny>,
+        field: &str,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        for score in Self::scores(slf)? {
+            let Ok(metadata) = score.getattr("metadata") else {
+                continue;
+            };
+            if metadata.is_none() {
+                continue;
+            }
+            let keywords = pyo3::types::PyDict::new(slf.py());
+            keywords.set_item("field", field)?;
+            let (found, _): (bool, Option<String>) = metadata
+                .call_method("search", (query,), Some(&keywords))?
+                .extract()?;
+            if found {
+                return Ok(Some(score));
+            }
+        }
+        Ok(None)
+    }
+}
 
 /// A stream read into the crate, beside the objects standing at each of the
 /// crate stream's positions (`music21_rs::Stream::leaves`).
@@ -2278,6 +2393,11 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
 /// A music21 `Metadata`, name by name in the order music21 keeps them.
 fn metadata_value(metadata: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Metadata> {
     use music21_rs_crate::MetadataValue;
+    // The package's own metadata is already the crate's, and answers no
+    // `Text` or `Contributor` to walk.
+    if let Ok(ours) = metadata.cast::<crate::metadata::Metadata>() {
+        return Ok(ours.borrow().inner.clone());
+    }
     let kwargs = PyDict::new(metadata.py());
     kwargs.set_item("returnPrimitives", true)?;
     kwargs.set_item("returnSorted", false)?;

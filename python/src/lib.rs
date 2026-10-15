@@ -50,6 +50,7 @@ pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
 pub mod key;
+pub mod metadata;
 pub mod meter;
 pub mod neoriemannian;
 pub mod notation;
@@ -1310,6 +1311,11 @@ exceptions![
         dynamics::DynamicException,
         Some("music21.dynamics")
     ),
+    (
+        "MetadataException",
+        metadata::MetadataException,
+        Some("music21.metadata")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
@@ -1397,6 +1403,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     harmonicfunction::register(m)?;
     transposition::register(m)?;
     segment::register(m)?;
+    metadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
     serial::register(m)?;

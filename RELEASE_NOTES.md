@@ -2,6 +2,24 @@
 
 ## added
 
+- The Python package gains `Metadata`, music21's `metadata.Metadata`: a
+  name is read and written as music21's `__getattr__` reads one, by its
+  unique name, by one of the four grandfathered work ids or by one of the
+  twenty Humdrum abbreviations, so `md.otl` and `md.title` are the same
+  title. `search`, `all` and `md['title']` answer as music21's do. What a
+  name answers is a **string**, where music21 answers its own `Text` and
+  `Contributor`, so `all(returnPrimitives=True)` is refused; that is also
+  why nothing here is installed over music21's own `metadata`, where being
+  silently different would be worse than being absent.
+- The package's `Stream` carries `metadata`, which music21 keeps among the
+  elements rather than beside them, and its `Opus` gains `scores`,
+  `getNumbers`, `getScoreByNumber`, `getScoreByTitle` and `mergeScores`.
+  A lookup hands back the score the opus holds, and asks the metadata
+  itself, so music21's own answers where music21 is installed and the
+  package's own where it is not.
+- `metadata::unique_name_of` is public: the unique name an attribute name
+  stands for, which music21 reads through `__getattr__`.
+
 - `Stream` answers music21's questions of its layout: `find_gaps` and
   `is_gapless`, `overlaps` and `is_sequence` (music21's `getOverlaps`,
   which gathers only the overlaps found looking on from each element until
