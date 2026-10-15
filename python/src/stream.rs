@@ -527,6 +527,40 @@ impl Stream {
         }
     }
 
+    /// The elements of a class divided in two by what a function says of
+    /// each: music21's `splitByClass`, a pair of streams, the first of
+    /// those the function answers true for.
+    ///
+    /// `classObj` of `None` takes everything the stream holds, as music21
+    /// does. The objects divided are the stream's own.
+    fn splitByClass<'py>(
+        slf: &Bound<'py, Self>,
+        classObj: &Bound<'py, PyAny>,
+        fx: &Bound<'py, PyAny>,
+    ) -> PyResult<(Bound<'py, Stream>, Bound<'py, Stream>)> {
+        let py = slf.py();
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        let mut yes = Self::empty(slf.borrow().kind);
+        let mut no = Self::empty(slf.borrow().kind);
+        for (offset, object) in listed {
+            let object = object.into_bound(py);
+            if !classObj.is_none() && !is_of_any(&object, classObj)? {
+                continue;
+            }
+            if fx.call1((&object,))?.is_truthy()? {
+                yes.put(offset, &object);
+            } else {
+                no.put(offset, &object);
+            }
+        }
+        Ok((Bound::new(py, yes)?, Bound::new(py, no)?))
+    }
+
     /// Puts an object at an offset, first moving everything from the
     /// element nearest after that offset onwards far enough that it starts
     /// where the new one ends: music21's `insertAndShift`, which changes

@@ -2387,3 +2387,24 @@ def test_an_object_is_inserted_and_what_follows_shifted():
     tail.insert(0.0, m.Note("C4", quarterLength=1.0))
     tail.insertAndShift(4.0, m.Note("A4", quarterLength=1.0))
     assert shown(tail) == [(0.0, "C4"), (4.0, "A4")]
+
+
+def test_a_stream_is_divided_by_what_a_function_says():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "G5", "E4", "B5"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.insert(0.0, m.TrebleClef())
+
+    high, low = line.splitByClass("Note", lambda n: n.octave > 4)
+    assert [e.nameWithOctave for e in high] == ["G5", "B5"]
+    assert [e.nameWithOctave for e in low] == ["C4", "E4"]
+    # Each keeps the offset it stood at, and the objects are the stream's
+    # own, so the clef -- of another class -- is in neither.
+    assert [high.elementOffset(e) for e in high] == [1.0, 3.0]
+    assert list(low)[0] is line.notes[0]
+
+    # No class at all takes everything the stream holds, as music21 does.
+    every, none = line.splitByClass(None, lambda e: True)
+    assert len(every) == 5
+    assert len(none) == 0

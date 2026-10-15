@@ -36,6 +36,8 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `splitByClass`, dividing the
+  elements of a class in two by what a function says of each.
 - The Python package's `Stream` answers `insertAndShift`, moving
   everything from the element nearest after the offset far enough that it
   starts where the new one ends, as music21's does.

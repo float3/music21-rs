@@ -102,7 +102,8 @@ nothing, as music21's do -- the ties written onto its own notes. and they answer
 `simultaneousAttacks`, and they take elements out by class or by index
 (`removeByClass`, `removeByNotOfClass`, `pop`), repeat an object into
 themselves as copies (`repeatAppend`, `repeatInsert`), make room for one
-(`insertAndShift`) and answer `voices` and
+(`insertAndShift`), divide themselves by what a function says of each
+element (`splitByClass`) and answer `voices` and
 what they open with -- `clef`, `keySignature` and `timeSignature`, read
 and written as music21's are -- and the meters and instruments they hold,
 `getTimeSignatures`, `getInstruments` and `getInstrument`, which make up
