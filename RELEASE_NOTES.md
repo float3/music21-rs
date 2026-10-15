@@ -291,9 +291,24 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- `class_lineage_parity` holds `StreamElement::music21_classes` -- what
+  the crate says a thing *is*, which every class filter in the crate and
+  in the Python package reads -- to music21's own `classes`, for all 34
+  kinds a stream can hold, music21's chain cut at `Music21Object` where
+  the crate's stops. The table had been transcribed by hand and never
+  checked.
 
 ## fixed
 
+- `StreamElement::music21_classes` said a `Key` was a `Key` and a
+  `KeySignature` and no more, where music21's is a `DiatonicScale`, a
+  `ConcreteScale` and a `Scale` besides -- which is where everything it
+  answers about degrees comes from -- and said every instrument was an
+  `Instrument` and nothing else, where music21 gives each its families: a
+  flute is a `WoodwindInstrument`, an ocarina a `Flute`. The crate had the
+  family chain all along (`Instrument::families`), unread by the lineage.
+  `Instrument::class_name` is music21's own name for a kind, which is what
+  the chain starts with.
 - a class filter in the Python package matched a class by its own name
   and by the classes it extends, which are the ones music21 itself has a
   class for -- so `getElementsByClass('GeneralNote')` found nothing where
