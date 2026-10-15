@@ -257,6 +257,14 @@
 
 ## fixed
 
+- the report counted nothing of `Measure`, `Part`, `Score` and `Opus` as
+  carried by the wheel, because it looked for each member in a wheel class
+  of that name and the package puts every stream method on one `Stream`
+  class the kinds extend. The four say `facade = "Stream"` now, so what an
+  `Opus` really does answer -- `getNumbers`, `getScoreByNumber`,
+  `getScoreByTitle`, `scores`, `mergeScores` -- is counted. Only members
+  the `Stream` body actually defines are credited, which is what an
+  instance of those classes answers.
 - The Python package's `Clef`, `KeySignature`, `TimeSignature`,
   `Instrument`, `Dynamic`, `MetronomeMark`, `Metadata` and `Voice` carry
   music21's `classSortOrder`, which they were missing: what stands at one
