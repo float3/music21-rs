@@ -36,6 +36,12 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `transpose`, `stripTies`,
+  `quantize` and `template` as well, each handing back a new stream as the
+  package's other edits do. `transpose` takes an `Interval`, a name or a
+  count of semitones; `template`'s `removeClasses` and `exemptFromRemove`
+  are refused, the classes taken out being music21's own default set, and
+  `removeAll=True` takes out everything.
 - The Python package's `Stream` answers `lyrics`, music21's own: every
   line gathered by the number it is sung under, with a place for each note
   read so the lines stay level with the notes, and the note's own `Lyric`

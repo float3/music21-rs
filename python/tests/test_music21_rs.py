@@ -1804,3 +1804,95 @@ def test_the_lyrics_are_gathered_as_music21_gathers_them():
     tied.append(over)
     assert shown(tied.lyrics()[1]) == ["held", "over"]
     assert shown(tied.lyrics(skipTies=True)[1]) == ["held"]
+
+
+def outline(stream):
+    """Every element of a stream in order, as a line apiece."""
+    out = []
+    for element in stream.recurse():
+        if getattr(element, "isStream", False):
+            out.append(f"[{type(element).__name__}]")
+        else:
+            pitches = " ".join(p.nameWithOctave for p in getattr(element, "pitches", ()))
+            length = getattr(element, "quarterLength", 0.0)
+            out.append(f"{type(element).__name__} {pitches} ql={length}")
+    return out
+
+
+def test_a_stream_is_transposed_as_music21_transposes_it():
+    """Every answer is music21's own for the same part."""
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    assert outline(part.transpose("P5"))[3:] == [
+        "Note G4 ql=1.0",
+        "Note A4 ql=1.0",
+        "Note B4 ql=1.0",
+        "Note C5 ql=1.0",
+    ]
+    # A count of semitones, which music21 reads as an interval too.
+    assert outline(part.transpose(2))[3:] == [
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "Note F#4 ql=1.0",
+        "Note G4 ql=1.0",
+    ]
+    # The answer is a copy, as music21's is unless asked for inPlace.
+    assert outline(part)[3] == "Note C4 ql=1.0"
+    with pytest.raises(m.StreamException):
+        part.transpose("P5", inPlace=True)
+
+
+def test_tied_notes_are_joined_as_music21_joins_them():
+    """Every answer is music21's own for the same part."""
+    tied = m.from_tiny_notation("tinyNotation: 4/4 c2~ c2 d4 e4 f4 g4")
+    stripped = outline(tied.stripTies())
+    # The two halves across the barline are one whole note.
+    assert stripped[3] == "Note C4 ql=4.0"
+    assert stripped[4] == "[Measure]"
+    assert stripped[5:] == [
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "Note F4 ql=1.0",
+        "Note G4 ql=1.0",
+    ]
+
+
+def test_a_template_keeps_the_skeleton_as_music21_keeps_it():
+    """Every answer is music21's own for the same part."""
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    # The clef and the meter stay; the notes become one rest as long as
+    # the run they filled.
+    assert outline(part.template()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Rest  ql=4.0",
+    ]
+    assert outline(part.template(removeAll=True)) == ["[Measure]", "Rest  ql=4.0"]
+    assert outline(part.template(fillWithRests=False)) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+    ]
+    # The classes taken out are music21's own default set here, so naming
+    # others is refused rather than answered differently.
+    with pytest.raises(m.StreamException):
+        part.template(removeClasses=["Clef"])
+
+
+def test_offsets_are_quantized_as_music21_quantizes_them():
+    """Every answer is music21's own for the same stream."""
+    loose = m.Stream()
+    for name, offset, length in (
+        ("C4", 0.0, 0.26),
+        ("D4", 0.48, 0.52),
+        ("E4", 1.01, 0.99),
+    ):
+        loose.insert(offset, m.Note(name, quarterLength=length))
+
+    quantized = loose.quantize()
+    assert [
+        (quantized.elementOffset(e), e.quarterLength) for e in quantized.notes
+    ] == [(0.0, 0.25), (0.5, 0.5), (1.0, 1.0)]
+    # Quantizing part of a stream, or only its offsets, is refused.
+    with pytest.raises(m.StreamException):
+        loose.quantize(processDurations=False)

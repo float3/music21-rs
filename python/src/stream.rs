@@ -1299,6 +1299,94 @@ impl Stream {
         Ok(out)
     }
 
+    /// A copy with every note, chord, chord symbol and key moved by an
+    /// interval: music21's `transpose`, which takes an `Interval`, a name
+    /// or a count of semitones.
+    #[pyo3(signature = (value, *, inPlace = false, classFilterList = None))]
+    fn transpose<'py>(
+        slf: &Bound<'py, Self>,
+        value: &Bound<'py, PyAny>,
+        inPlace: bool,
+        classFilterList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(
+            classFilterList.is_some_and(|list| !list.is_none()),
+            false,
+            inPlace,
+        )?;
+        let interval = crate::interval::interval_from_any(value)?;
+        edited(slf, |stream| stream.transpose(&interval))
+    }
+
+    /// A copy with each run of tied notes joined into one: music21's
+    /// `stripTies`.
+    #[pyo3(signature = (*, matchByPitch = true, inPlace = false))]
+    fn stripTies<'py>(
+        slf: &Bound<'py, Self>,
+        matchByPitch: bool,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        remade(slf, |stream| stream.strip_ties(matchByPitch))
+    }
+
+    /// A copy with every offset and length moved onto the nearest place a
+    /// quarter divides into: music21's `quantize`. The divisors are the
+    /// ways a quarter may be divided, `[4, 3]` -- sixteenths and triplets
+    /// -- where none are given, as music21's are.
+    #[pyo3(signature = (quarterLengthDivisors = None, *, processOffsets = true, processDurations = true, inPlace = false, recurse = true))]
+    fn quantize<'py>(
+        slf: &Bound<'py, Self>,
+        quarterLengthDivisors: Option<Vec<u32>>,
+        processOffsets: bool,
+        processDurations: bool,
+        inPlace: bool,
+        recurse: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if !processOffsets || !processDurations || !recurse {
+            return Err(StreamException::new_err(
+                "quantize here moves both the offsets and the lengths, everywhere in the stream",
+            ));
+        }
+        let divisors = quarterLengthDivisors.unwrap_or_default();
+        remade(slf, |stream| {
+            music21_rs_crate::makenotation::quantize(stream, &divisors)
+        })
+    }
+
+    /// The stream with its notes taken out and a rest standing in for each
+    /// stretch of them: music21's `template`.
+    #[pyo3(signature = (*, fillWithRests = true, removeClasses = None, retainVoices = true, removeAll = false, exemptFromRemove = None))]
+    fn template<'py>(
+        slf: &Bound<'py, Self>,
+        fillWithRests: bool,
+        removeClasses: Option<&Bound<'py, PyAny>>,
+        retainVoices: bool,
+        removeAll: bool,
+        exemptFromRemove: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // The classes taken out, and the ones kept whatever else says, are
+        // a rule the crate takes as a function, which nothing here can
+        // write at run time; what it answers is music21's own default set.
+        let given = |asked: Option<&Bound<'py, PyAny>>| {
+            asked.is_some_and(|asked| !asked.is_none() && asked.len().unwrap_or(1) > 0)
+        };
+        if given(removeClasses) || given(exemptFromRemove) {
+            return Err(StreamException::new_err(
+                "removeClasses and exemptFromRemove are not supported here: the classes taken out are music21's own default set, and removeAll=True takes out everything",
+            ));
+        }
+        let options = music21_rs_crate::stream::TemplateOptions {
+            fill_with_rests: fillWithRests,
+            retain_voices: retainVoices,
+            remove_all: removeAll,
+            ..music21_rs_crate::stream::TemplateOptions::default()
+        };
+        let stream = crate_stream(slf.as_any())?;
+        from_crate(slf.py(), &stream.template(&options))
+    }
+
     /// The lyrics sung in the stream, gathered by the number each is sung
     /// under: music21's `lyrics`.
     ///
@@ -1445,6 +1533,18 @@ fn anchor_of(name: Option<&str>) -> PyResult<music21_rs_crate::stream::Anchor> {
             "an anchorZero value is not supported: {other}"
         ))),
     }
+}
+
+/// The stream changed in place by the crate, as a new stream of this
+/// package's: the crate's own answer is a change to a stream it is given,
+/// and music21 hands back a copy unless asked for `inPlace`.
+fn remade<'py>(
+    slf: &Bound<'py, Stream>,
+    change: impl FnOnce(&mut RsStream) -> music21_rs_crate::Result<()>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let mut stream = crate_stream(slf.as_any())?;
+    change(&mut stream).map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    from_crate(slf.py(), &stream)
 }
 
 /// One line of lyrics as music21 answers it: the note's own `Lyric` where

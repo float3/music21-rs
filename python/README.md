@@ -87,8 +87,9 @@ the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `sliceByGreatestDivisor`, `scaleOffsets`, `scaleDurations`,
 `augmentOrDiminish`, `invertDiatonic`, `voicesToParts`, `explode`,
-`partsToVoices`, `implode` -- each handing back a new stream, so
-`inPlace=True` and a `target` are refused; and they answer `highestOffset`,
+`partsToVoices`, `implode`, `transpose`, `stripTies`, `quantize` and
+`template` -- each handing back a new stream, so `inPlace=True` and a
+`target` are refused; and they answer `highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. they are asked for elements by class and by offset --
