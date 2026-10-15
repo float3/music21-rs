@@ -1248,6 +1248,64 @@ impl Stream {
         Ok(())
     }
 
+    /// Which beat of which measure an offset falls on: music21's
+    /// `beatAndMeasureFromOffset`, a pair of the beat and the measure.
+    ///
+    /// The measure is this stream's own object, found as music21 finds
+    /// it -- the last one standing at or before the offset, in the stream
+    /// itself or in the first of its parts that has measures -- and the
+    /// beat is the crate's arithmetic over the meter in force, `fixZeros`
+    /// counting the second half of a measure cut in two as part of the
+    /// measure before it.
+    #[pyo3(signature = (searchOffset, fixZeros = true))]
+    fn beatAndMeasureFromOffset<'py>(
+        slf: &Bound<'py, Self>,
+        searchOffset: f64,
+        fixZeros: bool,
+    ) -> PyResult<(f64, Option<Bound<'py, PyAny>>)> {
+        let py = slf.py();
+        let stream = crate_stream(slf.as_any())?;
+        let (beat, _) = stream
+            .beat_and_measure_from_offset(searchOffset, fixZeros)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        // Where music21 looks for the measure: this stream if it holds
+        // measures itself, else the first of its parts that does.
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let mut holder = slf.clone();
+        if Self::opening(slf, "Measure")?.is_none()
+            && !slf
+                .borrow()
+                .held
+                .iter()
+                .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false))
+        {
+            let inner: Vec<Py<PyAny>> = slf
+                .borrow()
+                .sorted()
+                .iter()
+                .map(|one| one.object.clone_ref(py))
+                .collect();
+            for object in inner {
+                let object = object.into_bound(py);
+                let Ok(cell) = object.cast::<Stream>() else {
+                    continue;
+                };
+                let holds = cell
+                    .borrow()
+                    .held
+                    .iter()
+                    .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false));
+                if holds {
+                    holder = cell.clone();
+                    break;
+                }
+            }
+        }
+        let named = PyList::new(py, ["Measure"])?;
+        let found = Self::nearest_before(&holder, searchOffset, Some(named.as_any()), false)?;
+        Ok((beat, found))
+    }
+
     /// Everything in the stream that overlaps something else, gathered by
     /// the offset each overlap begins at: music21's `getOverlaps`.
     ///

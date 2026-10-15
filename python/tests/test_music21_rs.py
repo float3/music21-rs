@@ -2784,3 +2784,28 @@ def test_the_overlaps_in_a_stream_are_gathered_by_offset():
     held.insert(0.0, first)
     assert shown(held.getOverlaps()) == {0.0: ["E4", "G4", "C4"]}
     assert held.getOverlaps()[0.0][0] is list(first)[1]
+
+
+def test_which_beat_of_which_measure_an_offset_falls_on():
+    """Every answer is music21's own for the same part and score."""
+    line = m.from_tiny_notation("tinyNotation: 3/4 c4 d4 e4 f4 g4 a4 b4 c'4 d'4")
+
+    def asked(at):
+        beat, measure = line.beatAndMeasureFromOffset(at)
+        return (beat, measure.number)
+
+    assert [asked(at) for at in (0.0, 1.0, 2.5)] == [(1.0, 1), (2.0, 1), (3.5, 1)]
+    assert [asked(at) for at in (3.0, 4.0)] == [(1.0, 2), (2.0, 2)]
+    assert [asked(at) for at in (6.0, 8.5)] == [(1.0, 3), (3.5, 3)]
+    # Past the end music21 refuses, and so does this.
+    with pytest.raises(m.StreamException):
+        line.beatAndMeasureFromOffset(99.0)
+
+    # A score is asked through the first of its parts that has measures,
+    # and the measure handed back is that part's own object.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    whole = m.Score()
+    whole.insert(0.0, part)
+    assert whole.beatAndMeasureFromOffset(2.0)[0] == 3.0
+    assert whole.beatAndMeasureFromOffset(5.0)[1].number == 2
+    assert whole.beatAndMeasureFromOffset(0.0)[1] is part.getElementsByClass("Measure")[0]

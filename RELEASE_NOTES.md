@@ -291,6 +291,11 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Stream` answers `beatAndMeasureFromOffset`: the
+  beat is the crate's arithmetic over the meter in force, and the measure
+  is the stream's own object, found where music21 looks for it -- the last
+  one standing at or before the offset, in the stream itself or in the
+  first of its parts that has measures.
 - `Stream::overlap_positions` is the by-position twin of
   `Stream::overlaps`, each group's members by their position among
   `Stream::leaves`, and the Python package's `Stream` answers
