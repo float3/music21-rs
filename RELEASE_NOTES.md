@@ -36,6 +36,15 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `lyrics`, music21's own: every
+  line gathered by the number it is sung under, with a place for each note
+  read so the lines stay level with the notes, and the note's own `Lyric`
+  object in it. `ignoreBarlines`, `recurse` and `skipTies` answer as
+  music21's do.
+- `Stream::lyric_positions` is the by-position twin of `Stream::lyrics`,
+  answering `stream::SungAt` and `stream::SungPlace`: where each lyric is
+  sung, as a position among `Stream::leaves` and an index among that
+  note's lyrics.
 - `Stream::metronome_mark_positions` is the by-position twin of
   `metronome_mark_boundaries`: each stretch with the position among
   `Stream::leaves` of the mark it was read off, which is how a caller

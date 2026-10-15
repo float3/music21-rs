@@ -50,7 +50,7 @@ pub use analyze::Analysis;
 pub use chordify::ChordifyOptions;
 pub use consecutive::{ConsecutiveOptions, MelodicInterval};
 pub use editing::Anchor;
-pub use lyrics::{LyricsOptions, SungLyric};
+pub use lyrics::{LyricsOptions, SungAt, SungLyric, SungPlace};
 pub use placed::Placed;
 pub use queries::OffsetMapEntry;
 pub use seconds::TempoSpan;
