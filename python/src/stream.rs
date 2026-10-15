@@ -551,6 +551,45 @@ impl Stream {
         }
     }
 
+    /// What the stream holds around one of its elements -- from `before`
+    /// quarters before it begins to `after` quarters past where it ends:
+    /// music21's `extractContext`.
+    ///
+    /// The elements are the stream's own. `maxBefore` and `maxAfter` go
+    /// unread here, as they do upstream.
+    #[pyo3(signature = (searchElement, before = 4.0, after = 4.0, maxBefore = None, maxAfter = None))]
+    fn extractContext<'py>(
+        slf: &Bound<'py, Self>,
+        searchElement: &Bound<'py, PyAny>,
+        before: f64,
+        after: f64,
+        maxBefore: Option<f64>,
+        maxAfter: Option<f64>,
+    ) -> PyResult<Bound<'py, Stream>> {
+        // music21 takes both and reads neither.
+        let _ = (maxBefore, maxAfter);
+        let py = slf.py();
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| (one.offset, one.object.clone_ref(py)))
+            .collect();
+        let found = listed
+            .iter()
+            .find(|(_, object)| object.bind(py).is(searchElement))
+            .ok_or_else(|| StreamException::new_err("Could not find the element in the stream"))?;
+        let start = found.0;
+        let end = start + length_of(&found.1.bind(py).clone())?;
+        let mut out = Self::empty(slf.borrow().kind);
+        for (at, object) in &listed {
+            if start - before <= *at && *at < end + after {
+                out.put(*at, &object.bind(py).clone());
+            }
+        }
+        Bound::new(py, out)
+    }
+
     /// Every pitch of everything the stream holds, in order: music21's
     /// `pitches`, which gathers a note's one pitch, a chord's several and
     /// a nested stream's own, each the very object that note holds.

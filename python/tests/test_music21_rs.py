@@ -2538,3 +2538,29 @@ def test_every_pitch_a_stream_holds_is_gathered():
     # measures without being flattened.
     part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
     assert [p.nameWithOctave for p in part.pitches] == ["C4", "D4", "E4", "F4"]
+
+
+def test_what_stands_around_an_element_is_extracted():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "c5"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    middle = list(line)[4]
+
+    around = line.extractContext(middle, 2.0, 2.0)
+    # From two quarters before it begins to two past where it ends, the
+    # elements keeping the offsets they stood at.
+    assert [(around.elementOffset(e), e.nameWithOctave) for e in around] == [
+        (2.0, "E4"),
+        (3.0, "F4"),
+        (4.0, "G4"),
+        (5.0, "A4"),
+        (6.0, "B4"),
+    ]
+    assert list(around)[0] is list(line)[2]
+    assert [e.nameWithOctave for e in line.extractContext(middle, 0.0, 1.0)] == [
+        "G4",
+        "A4",
+    ]
+    with pytest.raises(m.StreamException):
+        line.extractContext(m.Note("C4"))

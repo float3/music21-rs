@@ -36,6 +36,8 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` answers `extractContext`, what it holds
+  around one of its elements, the elements being its own.
 - The Python package's `Stream` answers `pitches`, every pitch of
   everything it holds -- a note's one, a chord's several, a nested
   stream's own, each the very object that note holds -- with a key passed

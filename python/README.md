@@ -110,7 +110,7 @@ and written as music21's are -- and the meters and instruments they hold,
 music21's default where a stream states none -- `measures` and `measure` -- the measures of a number range, the first at
 nought and before it what was in force where it begins -- and
 `measureOffsetMap`, which a score builds out of its parts, and
-`offsetMap`, music21's named tuple per element, and `pitches` --
+`offsetMap`, music21's named tuple per element, `pitches` and `extractContext` --
 besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. a part written for a transposing instrument is turned
 to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset --
