@@ -2140,3 +2140,81 @@ def test_elements_are_shifted_and_voices_flattened():
         "Note C4 ql=1.0",
         "Note D4 ql=1.0",
     ]
+
+
+def test_what_stands_at_one_offset_is_listed_in_music21s_order():
+    """Every order here is music21's own `classSortOrder`."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    # Put in last and listed first, the clef sorting before a note.
+    line.insert(0.0, m.TrebleClef())
+    assert [type(e).__name__ for e in line] == ["TrebleClef", "Note", "Note", "Note"]
+
+    opening = m.Measure()
+    for element in (
+        m.Note("C4", quarterLength=1.0),
+        m.TimeSignature("4/4"),
+        m.MetronomeMark(number=120),
+        m.KeySignature(2),
+        m.TrebleClef(),
+        m.Piano(),
+    ):
+        opening.insert(0.0, element)
+    assert [type(e).__name__ for e in opening] == [
+        "Piano",
+        "TrebleClef",
+        "MetronomeMark",
+        "KeySignature",
+        "TimeSignature",
+        "Note",
+    ]
+    # A voice sorts after its measure's clef, key and meter, where every
+    # other stream sorts before them.
+    assert m.Voice().classSortOrder == 5
+    assert m.Part().classSortOrder == -20
+
+
+def test_elements_are_taken_out_by_class_and_by_index():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.insert(0.0, m.TrebleClef())
+
+    # pop answers the object itself, by its place in `elements`.
+    assert type(line.pop(0)).__name__ == "TrebleClef"
+    assert line.pop().nameWithOctave == "E4"
+    assert type(line.pop(-1)).__name__ == "Note"
+    assert len(line) == 1
+    with pytest.raises(IndexError):
+        m.Stream().pop()
+
+    held = m.Stream()
+    held.insert(0.0, m.TrebleClef())
+    for at, name in enumerate(["C4", "D4"]):
+        held.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert held.removeByClass("Note") is None
+    assert [type(e).__name__ for e in held] == ["TrebleClef"]
+
+    other = m.Stream()
+    other.insert(0.0, m.TrebleClef())
+    for at, name in enumerate(["C4", "D4"]):
+        other.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert other.removeByNotOfClass("Note") is None
+    assert [type(e).__name__ for e in other] == ["Note", "Note"]
+
+
+def test_the_voices_a_stream_holds_are_its_own():
+    holder = m.Stream()
+    first = m.Voice()
+    first.insert(0.0, m.Note("C4", quarterLength=1.0))
+    second = m.Voice()
+    second.insert(0.0, m.Note("E4", quarterLength=1.0))
+    holder.insert(0.0, first)
+    holder.insert(0.0, second)
+
+    voices = list(holder.voices)
+    assert len(voices) == 2
+    # The voices handed back are the stream's own, as music21's are.
+    assert voices[0] is first and voices[1] is second

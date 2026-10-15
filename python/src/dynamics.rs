@@ -78,6 +78,13 @@ impl Dynamic {
 
 #[pymethods]
 impl Dynamic {
+    /// music21's sort order for a dynamic among things at one offset:
+    /// after the clef, key and meter and before the notes.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        10
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.

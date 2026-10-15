@@ -69,6 +69,13 @@ impl Clef {
 
 #[pymethods]
 impl Clef {
+    /// music21's sort order for a clef among things at one offset: before
+    /// everything else written at the start of a measure.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        0
+    }
+
     #[new]
     #[pyo3(signature = (**_keywords))]
     fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {

@@ -253,6 +253,32 @@ impl Stream {
         slf.borrow().end(slf.py())
     }
 
+    /// Takes out what answers to these classes, or what does not.
+    fn remove_where(
+        slf: &Bound<'_, Self>,
+        classes: &Bound<'_, PyAny>,
+        matching: bool,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let objects: Vec<Py<PyAny>> = slf
+            .borrow()
+            .held
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        let mut going = Vec::new();
+        for object in objects {
+            let object = object.into_bound(py);
+            if is_of_any(&object, classes)? == matching {
+                going.push(object);
+            }
+        }
+        for object in going {
+            slf.borrow_mut().remove(&object)?;
+        }
+        Ok(())
+    }
+
     /// A stream of this one's class holding what is picked, at the offsets
     /// it stands at here.
     fn picked<'py>(
@@ -423,6 +449,57 @@ impl Stream {
                 target.repr()?
             ))),
         }
+    }
+
+    /// Takes the object at an index out and hands it back, the last where
+    /// no index is given: music21's `pop`, whose indices are those of
+    /// `elements` and so in the order the stream is listed in.
+    #[pyo3(signature = (index = None))]
+    fn pop<'py>(slf: &Bound<'py, Self>, index: Option<isize>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let listed: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        let count = listed.len();
+        let at = match index {
+            None => count.checked_sub(1),
+            // Python counts backwards from the end for a negative index.
+            Some(index) if index < 0 => count.checked_sub(index.unsigned_abs()),
+            Some(index) => Some(index.unsigned_abs()).filter(|at| *at < count),
+        }
+        .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("stream index out of range"))?;
+        let taken = listed[at].bind(py).clone();
+        slf.borrow_mut().remove(&taken)?;
+        Ok(taken)
+    }
+
+    /// Takes out everything answering to one of these classes: music21's
+    /// `removeByClass`.
+    fn removeByClass(slf: &Bound<'_, Self>, classFilterList: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::remove_where(slf, classFilterList, true)
+    }
+
+    /// Takes out everything answering to none of these classes: music21's
+    /// `removeByNotOfClass`.
+    fn removeByNotOfClass(
+        slf: &Bound<'_, Self>,
+        classFilterList: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::remove_where(slf, classFilterList, false)
+    }
+
+    /// The voices this stream holds directly, the stream's own objects:
+    /// music21's `voices`.
+    #[getter]
+    fn voices<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
+        let voice = pyo3::types::PyString::new(py, "Voice");
+        Self::picked(slf, Some(StreamKind::Stream), |object| {
+            is_of_class(object, &voice)
+        })
     }
 
     /// Everything held, in order.
@@ -2090,7 +2167,7 @@ fn element_object<'py>(
 
 /// music21's other stream classes, each the same `Stream` under its name.
 macro_rules! stream_kinds {
-    ($(($class:ident, $name:literal, $kind:expr, $doc:literal)),* $(,)?) => {
+    ($(($class:ident, $name:literal, $kind:expr, $order:literal, $doc:literal)),* $(,)?) => {
         $(
             #[doc = $doc]
             #[pyclass(name = $name, module = "music21.stream", extends = Stream, subclass)]
@@ -2098,6 +2175,15 @@ macro_rules! stream_kinds {
 
             #[pymethods]
             impl $class {
+                /// music21's sort order for this kind of stream among the
+                /// things standing at one offset. A voice sorts after the
+                /// clef, key and meter of the measure holding it, where
+                /// every other stream sorts before them.
+                #[classattr]
+                fn classSortOrder() -> i64 {
+                    $order
+                }
+
                 #[new]
                 #[pyo3(signature = (givenElements = None, *_arguments, **keywords))]
                 fn new(
@@ -2129,36 +2215,42 @@ stream_kinds!(
         Score,
         "Score",
         StreamKind::Score,
+        -20,
         "music21's `Score`: parts at one time."
     ),
     (
         Part,
         "Part",
         StreamKind::Part,
+        -20,
         "music21's `Part`: one voice's line through the piece."
     ),
     (
         PartStaff,
         "PartStaff",
         StreamKind::PartStaff,
+        -20,
         "music21's `PartStaff`: one staff of a part written on several."
     ),
     (
         Measure,
         "Measure",
         StreamKind::Measure,
+        -20,
         "music21's `Measure`: one bar."
     ),
     (
         Voice,
         "Voice",
         StreamKind::Voice,
+        5,
         "music21's `Voice`: one line inside a bar."
     ),
     (
         Opus,
         "Opus",
         StreamKind::Opus,
+        -20,
         "music21's `Opus`: a collection of scores."
     ),
 );

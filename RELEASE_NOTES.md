@@ -36,6 +36,9 @@
   other stream's own objects, as music21 does, so both hold the same notes
   -- and `cloneEmpty`. It answers `seconds` and `metronomeMarkBoundaries`
   too, handing back the stream's own mark wherever it holds one.
+- The Python package's `Stream` takes elements out by class and by index
+  (`removeByClass`, `removeByNotOfClass`, `pop`) and answers `voices`,
+  the voices it holds being its own objects.
 - The Python package's `Stream` cuts itself in two at a length
   (`splitAtQuarterLength`), ties each run of one note together
   (`extendTies`), moves what it holds (`shiftElements`) and dissolves a
@@ -244,6 +247,14 @@
 
 ## fixed
 
+- The Python package's `Clef`, `KeySignature`, `TimeSignature`,
+  `Instrument`, `Dynamic`, `MetronomeMark`, `Metadata` and `Voice` carry
+  music21's `classSortOrder`, which they were missing: what stands at one
+  offset is listed in the order music21 lists it in, so a clef written
+  after a note at the same offset is still listed first. Everything that
+  reads a stream in order was affected -- `elements`, `getElementsByOffset`
+  and the new `pop` among them -- and a stream built by one of the readers
+  was not, its elements arriving in the crate's order already.
 - `Stream::clone_empty` kept a stream's id alone, where music21's
   `cloneEmpty` merges the attributes of the class as well: a part's name
   and abbreviation (`Part.mergeAttributes`), a measure's number, suffix and

@@ -130,6 +130,13 @@ impl Clone for TimeSignature {
 
 #[pymethods]
 impl TimeSignature {
+    /// music21's sort order for a meter among things at one offset: after
+    /// the clef and the key signature.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        4
+    }
+
     #[new]
     #[pyo3(signature = (value = "4/4".to_string(), divisions = None, **keywords))]
     fn new(

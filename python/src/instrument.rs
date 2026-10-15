@@ -130,6 +130,13 @@ fn language(value: Option<&str>) -> PyResult<SearchLanguage> {
 
 #[pymethods]
 impl Instrument {
+    /// music21's sort order for an instrument among things at one offset:
+    /// before everything else, the part being for whoever plays it.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        -25
+    }
+
     #[new]
     #[pyo3(signature = (instrumentName = None, **_keywords))]
     fn new(
