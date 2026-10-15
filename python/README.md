@@ -89,7 +89,11 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `augmentOrDiminish`, `invertDiatonic`, `voicesToParts`, `explode`,
 `partsToVoices`, `implode`, `transpose`, `stripTies`, `quantize` and
 `template` -- each handing back a new stream, so `inPlace=True` and a
-`target` are refused; and they answer `highestOffset`,
+`target` are refused. they notate themselves too -- `makeMeasures`,
+`makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
+`makeNotation`, each step at music21's own defaults, a keyword asking for
+anything else refused rather than answered differently. and they answer
+`highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. they are asked for elements by class and by offset --

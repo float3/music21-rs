@@ -1387,6 +1387,158 @@ impl Stream {
         from_crate(slf.py(), &stream.template(&options))
     }
 
+    /// A copy cut into measures by the meters it states: music21's
+    /// `makeMeasures`.
+    ///
+    /// `meterStream` is read for the meters and where each stands, as
+    /// music21 reads it. A barline the measures are closed with is not
+    /// kept here, the package having no class for one.
+    #[pyo3(signature = (meterStream = None, *, refStreamOrTimeRange = None, searchContext = false, innerBarline = None, finalBarline = Some("final".to_string()), bestClef = false, inPlace = false))]
+    #[allow(clippy::too_many_arguments)]
+    fn makeMeasures<'py>(
+        slf: &Bound<'py, Self>,
+        meterStream: Option<&Bound<'py, PyAny>>,
+        refStreamOrTimeRange: Option<&Bound<'py, PyAny>>,
+        searchContext: bool,
+        innerBarline: Option<&Bound<'py, PyAny>>,
+        finalBarline: Option<String>,
+        bestClef: bool,
+        inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if refStreamOrTimeRange.is_some_and(|given| !given.is_none())
+            || searchContext
+            || innerBarline.is_some_and(|given| !given.is_none())
+            || bestClef
+        {
+            return Err(StreamException::new_err(
+                "refStreamOrTimeRange, searchContext, innerBarline and bestClef are not supported here",
+            ));
+        }
+        // The package keeps no barlines, so the one the measures are closed
+        // with cannot be answered either way; `final` is music21's default
+        // and anything else asks for what cannot be seen here.
+        if finalBarline.as_deref().is_some_and(|kind| kind != "final") {
+            return Err(StreamException::new_err(
+                "a finalBarline other than 'final' is not supported here: this package has no class for a barline",
+            ));
+        }
+        let meters = match meterStream.filter(|given| !given.is_none()) {
+            Some(given) => meters_of(given)?,
+            None => Vec::new(),
+        };
+        edited(slf, |stream| {
+            if meters.is_empty() {
+                music21_rs_crate::makenotation::make_measures(stream)
+            } else {
+                music21_rs_crate::makenotation::make_measures_by(stream, &meters)
+            }
+        })
+    }
+
+    /// A copy with what runs past a barline cut there and tied: music21's
+    /// `makeTies`.
+    #[pyo3(signature = (meterStream = None, *, inPlace = false, displayTiedAccidentals = false, classFilterList = None))]
+    fn makeTies<'py>(
+        slf: &Bound<'py, Self>,
+        meterStream: Option<&Bound<'py, PyAny>>,
+        inPlace: bool,
+        displayTiedAccidentals: bool,
+        classFilterList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(
+            classFilterList.is_some_and(|list| !list.is_none()),
+            false,
+            inPlace,
+        )?;
+        if meterStream.is_some_and(|given| !given.is_none()) || displayTiedAccidentals {
+            return Err(StreamException::new_err(
+                "a meterStream and displayTiedAccidentals are not supported here: the meters are the stream's own",
+            ));
+        }
+        remade(slf, music21_rs_crate::makenotation::make_ties)
+    }
+
+    /// A copy with its notes beamed by the meter in force, and each beamed
+    /// group's stems pointed one way: music21's `makeBeams`.
+    #[pyo3(signature = (*, inPlace = false, setStemDirections = true, failOnNoTimeSignature = false))]
+    fn makeBeams<'py>(
+        slf: &Bound<'py, Self>,
+        inPlace: bool,
+        setStemDirections: bool,
+        failOnNoTimeSignature: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if !setStemDirections || failOnNoTimeSignature {
+            return Err(StreamException::new_err(
+                "setStemDirections=False and failOnNoTimeSignature=True are not supported here: beaming always points a group's stems, and a stream with no meter is left unbeamed",
+            ));
+        }
+        remade(slf, music21_rs_crate::makenotation::make_beams)
+    }
+
+    /// A copy with each accidental's showing decided: music21's
+    /// `makeAccidentals`, at its own defaults.
+    #[pyo3(signature = (*, inPlace = false, **keywords))]
+    fn makeAccidentals<'py>(
+        slf: &Bound<'py, Self>,
+        inPlace: bool,
+        keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if keywords.is_some_and(|keywords| !keywords.is_empty()) {
+            return Err(StreamException::new_err(
+                "the accidental keywords are not supported here: what is decided is music21's own defaults",
+            ));
+        }
+        remade(slf, |stream| {
+            music21_rs_crate::makenotation::make_accidentals(stream);
+            Ok(())
+        })
+    }
+
+    /// A copy with each stretch of overlapping notes put into voices:
+    /// music21's `makeVoices` with `fillGaps=False`.
+    ///
+    /// music21 fills the gaps its voices leave by default; nothing here
+    /// does, so `fillGaps=True` is refused rather than answered without
+    /// the rests.
+    #[pyo3(signature = (*, inPlace = false, fillGaps = true))]
+    fn makeVoices<'py>(
+        slf: &Bound<'py, Self>,
+        inPlace: bool,
+        fillGaps: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if fillGaps {
+            return Err(StreamException::new_err(
+                "fillGaps=True is not supported here: the voices are made without the rests that fill their gaps",
+            ));
+        }
+        remade(slf, |stream| {
+            music21_rs_crate::makenotation::make_voices(stream);
+            Ok(())
+        })
+    }
+
+    /// A copy notated as music21's exporter would notate it before
+    /// writing: music21's `makeNotation`, which is measures, accidentals,
+    /// ties, beams and tuplet brackets in music21's own order.
+    #[pyo3(signature = (*, inPlace = false, **keywords))]
+    fn makeNotation<'py>(
+        slf: &Bound<'py, Self>,
+        inPlace: bool,
+        keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        refuse_unported(false, false, inPlace)?;
+        if keywords.is_some_and(|keywords| !keywords.is_empty()) {
+            return Err(StreamException::new_err(
+                "the makeNotation keywords are not supported here: each step is taken at music21's own defaults",
+            ));
+        }
+        remade(slf, music21_rs_crate::makenotation::make_notation)
+    }
+
     /// The lyrics sung in the stream, gathered by the number each is sung
     /// under: music21's `lyrics`.
     ///
@@ -1533,6 +1685,22 @@ fn anchor_of(name: Option<&str>) -> PyResult<music21_rs_crate::stream::Anchor> {
             "an anchorZero value is not supported: {other}"
         ))),
     }
+}
+
+/// The meters a `meterStream` holds, each where it stands: music21 reads
+/// one for the measures it cuts a stream into.
+fn meters_of(
+    stream: &Bound<'_, PyAny>,
+) -> PyResult<Vec<(f64, music21_rs_crate::meter::TimeSignature)>> {
+    let read = crate_stream(stream)?;
+    Ok(read
+        .events()
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some((event.offset(), meter.clone())),
+            _ => None,
+        })
+        .collect())
 }
 
 /// The stream changed in place by the crate, as a new stream of this

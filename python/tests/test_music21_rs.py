@@ -1896,3 +1896,123 @@ def test_offsets_are_quantized_as_music21_quantizes_them():
     # Quantizing part of a stream, or only its offsets, is refused.
     with pytest.raises(m.StreamException):
         loose.quantize(processDurations=False)
+
+
+def test_a_stream_is_cut_into_measures_as_music21_cuts_it():
+    """Every answer is music21's own for the same part."""
+    loose = m.Part()
+    loose.insert(0.0, m.TimeSignature("3/4"))
+    for at, name in enumerate(["C4", "D4", "E4", "F4", "G4", "A4"]):
+        loose.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    assert outline(loose.makeMeasures()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "[Measure]",
+        "Note F4 ql=1.0",
+        "Note G4 ql=1.0",
+        "Note A4 ql=1.0",
+    ]
+
+    # The meters may be given in a stream of their own, as music21 takes
+    # them: two-four here rather than the stream's own four-four.
+    given = m.Stream()
+    given.insert(0.0, m.TimeSignature("2/4"))
+    bare = m.Part()
+    for at, name in enumerate(["C4", "D4", "E4", "F4"]):
+        bare.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert outline(bare.makeMeasures(given)) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "[Measure]",
+        "Note E4 ql=1.0",
+        "Note F4 ql=1.0",
+    ]
+
+
+def test_what_runs_past_a_barline_is_cut_and_tied():
+    """Every answer is music21's own for the same part."""
+    over = m.Part()
+    over.insert(0.0, m.TimeSignature("4/4"))
+    over.insert(0.0, m.Note("C4", quarterLength=6.0))
+    over.insert(6.0, m.Note("D4", quarterLength=2.0))
+
+    tied = over.makeMeasures().makeTies()
+    notes = [e for e in tied.recurse() if getattr(e, "isNote", False)]
+    assert [(n.nameWithOctave, n.quarterLength) for n in notes] == [
+        ("C4", 4.0),
+        ("C4", 2.0),
+        ("D4", 2.0),
+    ]
+    assert [n.tie.type if n.tie else None for n in notes] == ["start", "stop", None]
+
+
+def test_notes_are_beamed_and_accidentals_decided_as_music21_does():
+    """Every answer is music21's own for the same part."""
+    eighths = m.from_tiny_notation("tinyNotation: 4/4 c8 d8 e8 f8 g8 a8 b8 c'8")
+    beamed = [e for e in eighths.makeBeams().recurse() if getattr(e, "isNote", False)]
+    # Beamed in pairs by the beat, as music21 beams them.
+    assert [str(n.beams) for n in beamed[:4]] == [
+        "<music21.beam.Beams <music21.beam.Beam 1/start>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/start>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>>",
+    ]
+
+    # The second sharp in the measure is not written again.
+    sharps = m.from_tiny_notation("tinyNotation: 4/4 c#4 c#4 d4 e4")
+    decided = [
+        e for e in sharps.makeAccidentals().recurse() if getattr(e, "isNote", False)
+    ]
+    assert [
+        (n.nameWithOctave, n.pitch.accidental.displayStatus if n.pitch.accidental else None)
+        for n in decided
+    ] == [("C#4", True), ("C#4", False), ("D4", None), ("E4", None)]
+
+
+def test_overlapping_notes_go_into_voices():
+    """Every answer is music21's own for the same stream."""
+    together = m.Stream()
+    together.insert(0.0, m.Note("C4", quarterLength=4.0))
+    together.insert(0.0, m.Note("E4", quarterLength=2.0))
+
+    assert outline(together.makeVoices(fillGaps=False)) == [
+        "[Voice]",
+        "Note C4 ql=4.0",
+        "[Voice]",
+        "Note E4 ql=2.0",
+    ]
+    # music21 fills the gaps its voices leave by default; nothing here
+    # does, so that is refused rather than answered without the rests.
+    with pytest.raises(m.StreamException):
+        together.makeVoices()
+
+
+def test_a_stream_is_notated_as_music21_notates_it():
+    """Every answer is music21's own for the same part."""
+    raw = m.Part()
+    raw.insert(0.0, m.TimeSignature("3/4"))
+    for at, name in enumerate(["C4", "D4", "E4", "F4"]):
+        raw.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    assert outline(raw.makeNotation()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "[Measure]",
+        "Note F4 ql=1.0",
+    ]
+    # Each step is taken at music21's own defaults, so asking for others
+    # is refused.
+    with pytest.raises(m.StreamException):
+        raw.makeNotation(bestClef=True)
