@@ -116,13 +116,54 @@ fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<
     object.is_instance(class)
 }
 
-/// Whether an object is of any of a list of classes, or of the one given.
+/// Whether an object is of a class, as music21 reads the question: by its
+/// own name or by the name of anything it is a kind of.
+///
+/// A class of this package's answers to its own name and to the names of
+/// the classes it extends, which are the ones music21 itself has a class
+/// for. The rest of what music21 says a thing *is* -- a `GeneralNote`, a
+/// `NotRest`, a `ChordBase`, a `Music21Object` -- is a class nothing here
+/// is named after, so `getElementsByClass('GeneralNote')` used to find
+/// nothing where music21 finds every note. The crate carries that
+/// hierarchy (`StreamElement::music21_classes`), so whatever it has a
+/// value for is asked of it.
+///
+/// It is asked last: reading the value is the costly part of this, and
+/// every name a class is actually named after has already answered. The
+/// readers do not come through here -- `element_value` itself asks
+/// `is_of_class` -- so nothing reads a value to read a value.
+fn answers_to(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if is_of_class(object, class)? {
+        return Ok(true);
+    }
+    let Ok(name) = class.extract::<String>() else {
+        return Ok(false);
+    };
+    // A stream is asked by its kind alone, which costs nothing: what it
+    // holds has no bearing on what it is.
+    if object
+        .getattr("isStream")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(false)
+    {
+        let kind = kind_of(object)?;
+        let empty = StreamElement::Stream(Box::new(RsStream::with_kind(kind)));
+        return Ok(empty.is_instance(&name));
+    }
+    match element_value(object, false) {
+        Ok(Some(value)) => Ok(value.is_instance(&name)),
+        _ => Ok(false),
+    }
+}
+
+/// Whether an object is of any of a list of classes, or of the one given,
+/// each read as music21 reads it.
 fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<bool> {
     if classes.extract::<String>().is_ok() || classes.is_instance_of::<pyo3::types::PyType>() {
-        return is_of_class(object, classes);
+        return answers_to(object, classes);
     }
     for class in classes.walk()? {
-        if is_of_class(object, &class?)? {
+        if answers_to(object, &class?)? {
             return Ok(true);
         }
     }

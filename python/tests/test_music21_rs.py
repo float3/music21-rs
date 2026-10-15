@@ -2636,3 +2636,60 @@ def test_what_sounds_where_a_note_is_struck_is_found():
     mixed.insert(0.0, m.Note("E3", quarterLength=1.0))
     assert mixed.playingWhenAttacked(list(upper)[0], upper).nameWithOctave == "E3"
     assert m.Stream().playingWhenAttacked(list(upper)[0], upper) is None
+
+
+def test_a_class_filter_reads_what_music21_says_a_thing_is():
+    """Every count is music21's own for the same stream.
+
+    A class of this package's answers to its own name and to the classes
+    it extends; what music21 says a thing *is* besides -- a `GeneralNote`,
+    a `NotRest`, a `Music21Object` -- is a class nothing here is named
+    after, and the crate's hierarchy is what answers for it.
+    """
+    line = m.Stream()
+    for at, element in enumerate(
+        (
+            m.TrebleClef(),
+            m.KeySignature(2),
+            m.TimeSignature("4/4"),
+            m.MetronomeMark(number=96),
+            m.Dynamic("mf"),
+            m.Note("C4"),
+            m.Chord(["E4", "G4"]),
+            m.Rest(quarterLength=1.0),
+            m.ChordSymbol("C"),
+        )
+    ):
+        line.insert(float(at), element)
+
+    def count(name):
+        return len(line.getElementsByClass(name).elements)
+
+    # The leaves of music21's hierarchy, which the class names alone answer.
+    assert (count("Note"), count("Rest"), count("Dynamic")) == (1, 1, 1)
+    assert (count("TrebleClef"), count("MetronomeMark")) == (1, 1)
+    # And the classes above them, which they do not.
+    assert count("GeneralNote") == 4
+    assert count("NotRest") == 3
+    assert count("ChordBase") == 2
+    assert count("Chord") == 2
+    assert count("Harmony") == 1
+    assert count("TempoIndication") == 1
+    assert count("TimeSignatureBase") == 1
+    assert count("Music21Object") == 9
+    # A list of classes takes anything answering to one of them.
+    assert len(line.getElementsByClass(["Clef", "NotRest"]).elements) == 4
+    assert sorted(
+        type(e).__name__ for e in line.getElementsNotOfClass("GeneralNote")
+    ) == ["Dynamic", "KeySignature", "MetronomeMark", "TimeSignature", "TrebleClef"]
+    assert line.hasElementOfClass("NotRest")
+    assert not line.hasElementOfClass("Unpitched")
+
+    # A stream is asked by its kind, and is a Music21Object like anything
+    # else the stream holds.
+    holder = m.Part()
+    holder.insert(0.0, m.Measure())
+    assert len(holder.getElementsByClass("Music21Object").elements) == 1
+    assert len(holder.getElementsByClass("Stream").elements) == 1
+    assert len(holder.getElementsByClass("Measure").elements) == 1
+    assert len(holder.getElementsByClass("Voice").elements) == 0

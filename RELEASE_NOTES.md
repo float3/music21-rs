@@ -294,6 +294,19 @@
 
 ## fixed
 
+- a class filter in the Python package matched a class by its own name
+  and by the classes it extends, which are the ones music21 itself has a
+  class for -- so `getElementsByClass('GeneralNote')` found nothing where
+  music21 finds every note, and `('Music21Object')` nothing at all. What
+  music21 says a thing *is* besides is answered by the crate's hierarchy
+  (`StreamElement::music21_classes`) now, which every class filter goes
+  through: `getElementsByClass`, `getElementsNotOfClass`,
+  `hasElementOfClass`, `getElementsByOffset`'s `classList`,
+  `removeByClass`, `splitByClass`, `mergeElements` and
+  `measureOffsetMap`. A stream is asked by its kind, which costs nothing;
+  anything else is read as the value it is, and only once every name a
+  class is named after has failed -- the readers themselves do not come
+  through it, so nothing reads a value to read a value.
 - the report counted nothing of `Measure`, `Part`, `Score` and `Opus` as
   carried by the wheel, because it looked for each member in a wheel class
   of that name and the package puts every stream method on one `Stream`
