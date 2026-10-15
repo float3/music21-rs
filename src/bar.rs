@@ -167,6 +167,25 @@ impl Barline {
     pub fn repeat_times(&self) -> Option<u32> {
         self.repeat.and_then(|(_, times)| times)
     }
+
+    /// The words a repeat's count is written as, for a caller that wants
+    /// them over the staff: music21's `Repeat.getTextExpression`, which
+    /// writes the times between a prefix and a postfix -- `3x` by
+    /// default.
+    ///
+    /// music21 writes the count whatever it is, so a repeat that says no
+    /// count is written `Nonex`; this answers nothing instead, there
+    /// being nothing to say.
+    pub fn repeat_text_expression(
+        &self,
+        prefix: &str,
+        postfix: &str,
+    ) -> Option<crate::expressions::TextExpression> {
+        let times = self.repeat_times()?;
+        Some(crate::expressions::TextExpression::new(format!(
+            "{prefix}{times}{postfix}"
+        )))
+    }
 }
 
 /// Where a measure stands in an alternative ending: music21's
@@ -228,6 +247,27 @@ impl Ending {
 
 #[cfg(test)]
 mod tests {
+
+    /// music21's own answers: `3x` by default, and what the prefix and
+    /// postfix make of it.
+    #[test]
+    fn a_repeats_count_is_written_as_music21_writes_it() {
+        let twice = Barline::repeat(RepeatDirection::End, Some(3));
+        let said = twice
+            .repeat_text_expression("", "x")
+            .expect("a count to write");
+        assert_eq!(said.content(), "3x");
+        let longer = twice
+            .repeat_text_expression("repeat ", " times")
+            .expect("a count to write");
+        assert_eq!(longer.content(), "repeat 3 times");
+        // A repeat that says no count has nothing to write.
+        assert!(
+            Barline::repeat(RepeatDirection::End, None)
+                .repeat_text_expression("", "x")
+                .is_none()
+        );
+    }
     use super::*;
 
     #[test]

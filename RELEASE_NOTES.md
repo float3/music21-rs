@@ -291,6 +291,21 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package gains `Barline`, `Repeat` and `TextExpression`,
+  music21's `bar.Barline`, `bar.Repeat` and
+  `expressions.TextExpression`. A measure carries its `leftBarline` and
+  `rightBarline`, a stream answers `finalBarline` (a list, for one holding
+  parts) and `expandRepeats`, and a repeat says its count in words with
+  `getTextExpression`. The readers carry barlines, repeats and words
+  through now, where before they were read into the crate and left out of
+  what the package handed back -- so a score read with `from_musicxml`
+  kept its repeats only as far as writing it again.
+- `Barline::repeat_text_expression` is music21's
+  `Repeat.getTextExpression`: the count written between a prefix and a
+  postfix, `3x` by default. A repeat that says no count answers nothing,
+  where music21 writes the word `None` into the text.
+- `data/feature_map.toml` tracks music21's `bar` module: `Barline` 2 of 2
+  and `Repeat` 2 of 2 ported, all of them in the package.
 - The Python package's `Stream` answers `insertIntoNoteOrChord`: a note
   or chord put in where something already starts within its length, the
   two becoming one chord, the merging being the crate's. Where nothing
@@ -327,6 +342,9 @@
 
 ## fixed
 
+- `StreamElement::music21_classes` said a repeat barline was a `Barline`
+  and no more, where music21's `Repeat` is a `RepeatMark` and a `Barline`
+  in that order. `class_lineage_parity` covers both barlines now.
 - the Python package's readers dropped a note's articulations and
   ornaments: the crate read them and the writers wrote them, so a score
   read and written again carried them, but `note.articulations` and

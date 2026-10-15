@@ -927,6 +927,26 @@ python = "analysis/floatingKey.py"
 rust = ["src/analysis/floating_key.rs"]
 
 [[class]]
+python = "bar.py"
+name = "Barline"
+rust = ["src/bar.rs"]
+note = "How a measure is closed. A crate measure keeps one as its own `left_barline` or `right_barline`, and a barline standing inside a measure is an element of the stream."
+
+[class.renames]
+type = "bar_type"
+musicXMLBarStyle = "musicxml_bar_style"
+
+[[class]]
+python = "bar.py"
+name = "Repeat"
+rust = ["src/bar.rs"]
+note = "A barline that says which way the music goes back. A crate barline carries the direction and the times, so a repeat is a barline that has them."
+
+[class.renames]
+direction = "repeat_direction"
+times = "repeat_times"
+
+[[class]]
 python = "stream/base.py"
 name = "Stream"
 rust = [

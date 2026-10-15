@@ -1269,8 +1269,15 @@ def test_volpiano_is_read_and_written_back():
     part = m.from_volpiano("1---c--d---fg---3--wE")
     assert type(part).__name__ == "Part"
     assert pitches_of(part) == ["C4", "D4", "F4", "G4", "E-4"]
-    # This package's streams keep no neumes or barlines to write.
-    assert m.to_volpiano(part) == "1---c-d-f-g-wE-"
+    # The barline comes with it, where music21 writes `----3` too; what
+    # is still lost is the neume joining `fg`, this package keeping no
+    # spanners, so music21 writes `fg` where this writes `f-g`.
+    assert m.to_volpiano(part) == "1---c-d-f-g----3wE-"
+    bars = part.getElementsByClass("Measure")
+    assert [b.rightBarline.type if b.rightBarline else None for b in bars] == [
+        "regular",
+        None,
+    ]
 
 
 def test_a_score_is_written_as_midi_and_read_back():
@@ -2937,3 +2944,168 @@ def test_a_reader_carries_the_articulations_and_ornaments_through():
     assert [type(a).__name__ for a in notes[0].articulations] == ["Staccato", "Accent"]
     assert [type(e).__name__ for e in notes[0].expressions] == ["Trill"]
     assert notes[1].articulations == []
+
+
+REPEATED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <barline location="left">
+        <bar-style>heavy-light</bar-style>
+        <repeat direction="forward"/>
+      </barline>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <barline location="right">
+        <bar-style>light-heavy</bar-style>
+        <repeat direction="backward"/>
+      </barline>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_barline_says_what_music21s_says():
+    """Every answer, and every refusal, is music21's own."""
+    assert m.Barline().type == "regular"
+    assert m.Barline().location is None
+    # A name is read as music21's standardizeBarType reads it, MusicXML's
+    # two spellings included.
+    assert m.Barline("double").type == "double"
+    assert m.Barline("light-heavy").type == "final"
+    assert m.Barline("double").musicXMLBarStyle() == "light-light"
+    assert m.Barline("final").musicXMLBarStyle() == "light-heavy"
+    assert repr(m.Barline("double")) == "<music21.bar.Barline type=double>"
+    with pytest.raises(m.BarException):
+        m.Barline("junk")
+
+    # A repeat is drawn as its direction says: heavy-light where a repeat
+    # starts, final where it ends.
+    one = m.Repeat()
+    assert (one.direction, one.times, one.type) == ("start", None, "heavy-light")
+    assert repr(one) == "<music21.bar.Repeat direction=start>"
+    other = m.Repeat(direction="end", times=3)
+    assert (other.direction, other.times, other.type) == ("end", 3, "final")
+    assert repr(other) == "<music21.bar.Repeat direction=end times=3>"
+    # Turning it round turns the drawing round, as music21's setter does.
+    other.direction = "start"
+    assert other.type == "heavy-light"
+    with pytest.raises(m.BarException):
+        m.Repeat(direction="sideways")
+    # And a repeat is a RepeatMark and a Barline, in music21's order,
+    # which is what a filter finds it by.
+    assert m.Repeat().classes[:3] == ["Repeat", "RepeatMark", "Barline"]
+    assert m.Barline().classes[:1] == ["Barline"]
+
+
+def test_a_measure_keeps_its_two_barlines():
+    """Every answer is music21's own for the same measure and part."""
+    bar = m.Measure()
+    bar.append(m.Note("C4", quarterLength=1.0))
+    assert (bar.leftBarline, bar.rightBarline) == (None, None)
+    bar.rightBarline = m.Barline("final")
+    assert bar.rightBarline.type == "final"
+    # A name is taken as the type, as music21's setter takes one.
+    bar.rightBarline = "double"
+    assert bar.rightBarline.type == "double"
+    bar.rightBarline = None
+    assert bar.rightBarline is None
+
+    # finalBarline is the last measure's right barline, and a score
+    # answers one for each of its parts.
+    line = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    assert line.finalBarline.type == "final"
+    line.finalBarline = "double"
+    assert line.finalBarline.type == "double"
+    whole = m.Score()
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4"))
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4"))
+    whole.finalBarline = "double"
+    assert [b.type for b in whole.finalBarline] == ["double", "double"]
+
+
+def test_repeats_are_read_and_played_out():
+    """Every answer is music21's own for the same document."""
+    read = m.from_musicxml(REPEATED)
+    part = read.parts[0]
+    bars = list(part.getElementsByClass("Measure"))
+    assert [b.number for b in bars] == [1, 2]
+    assert bars[0].leftBarline.direction == "start"
+    assert bars[0].rightBarline is None
+    assert bars[1].rightBarline.direction == "end"
+
+    played = part.expandRepeats()
+    assert [
+        (measure.number, measure.numberSuffix, [n.nameWithOctave for n in measure.notes])
+        for measure in played.getElementsByClass("Measure")
+    ] == [
+        (1, None, ["C4", "D4"]),
+        (2, None, ["E4", "F4"]),
+        (1, "a", ["C4", "D4"]),
+        (2, "a", ["E4", "F4"]),
+    ]
+
+
+WORDED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="above"><direction-type><words>dolce</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_words_are_read_and_carried_through():
+    """music21 answers the same for the same document."""
+    read = m.from_musicxml(WORDED)
+    words = [e for e in read.recurse() if isinstance(e, m.TextExpression)]
+    assert [(w.content, w.placement) for w in words] == [("dolce", "above")]
+    # What music21 says it is, and how it writes it.
+    assert words[0].classes[:2] == ["TextExpression", "Expression"]
+    assert repr(m.TextExpression("dolce")) == (
+        "<music21.expressions.TextExpression 'dolce'>"
+    )
+    # Long words are cut short in a repr, as music21 cuts them.
+    assert repr(m.TextExpression("repeat 3 times")) == (
+        "<music21.expressions.TextExpression 'repeat 3 t...'>"
+    )
+
+    # A repeat says its count in words: music21's getTextExpression.
+    said = m.Repeat(direction="end", times=3).getTextExpression()
+    assert said.content == "3x"
+    assert m.Repeat(direction="end", times=3).getTextExpression(
+        prefix="repeat ", postfix=" times"
+    ).content == "repeat 3 times"
+    # A repeat with no count has nothing to say; music21 writes the word
+    # None into the text there, which is not worth reproducing.
+    assert m.Repeat(direction="end").getTextExpression() is None

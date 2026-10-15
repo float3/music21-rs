@@ -75,6 +75,11 @@ pub struct Stream {
     /// they sound. `None` is music21's `'unknown'`, which is what a stream
     /// says before anything has been decided.
     sounding: Option<bool>,
+    /// music21's `leftBarline` and `rightBarline`, which a measure keeps
+    /// beside its elements rather than among them. The objects given, as
+    /// music21 keeps the ones it is given.
+    left_barline: Option<Py<PyAny>>,
+    right_barline: Option<Py<PyAny>>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -215,6 +220,23 @@ fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<
     Ok(false)
 }
 
+/// The barline a caller gave, as music21's `rightBarline` setter takes
+/// one: a barline object, a name read as a type -- `'final'`, `'double'`
+/// -- or nothing, which takes the barline away.
+fn barline_given(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Py<PyAny>>> {
+    let Some(value) = value.filter(|value| !value.is_none()) else {
+        return Ok(None);
+    };
+    if let Ok(named) = value.extract::<String>() {
+        let py = value.py();
+        let kind = music21_rs_crate::bar::BarlineType::from_name(&named)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        let made = crate::bar::Barline::object(py, music21_rs_crate::Barline::new(kind))?;
+        return Ok(Some(made));
+    }
+    Ok(Some(value.clone().unbind()))
+}
+
 /// What music21's `measures` collects into the first measure it answers,
 /// where that measure does not state it itself: its `collect` default.
 const COLLECTED_BY_MEASURES: [&str; 5] = [
@@ -249,6 +271,8 @@ impl Stream {
             next: 0,
             id: None,
             sounding: None,
+            left_barline: None,
+            right_barline: None,
         }
     }
 
@@ -399,6 +423,53 @@ impl Stream {
             }
         }
         Ok(nearest.map(|(_, object)| object))
+    }
+
+    /// The parts this stream holds, where it holds any: what music21's
+    /// `hasPartLikeStreams` answers of it.
+    fn part_like<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        if !crate_stream(slf.as_any())?.has_part_like_streams() {
+            return Ok(Vec::new());
+        }
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        let mut parts = Vec::new();
+        for object in held {
+            let object = object.into_bound(py);
+            if object
+                .getattr("isStream")
+                .and_then(|flag| flag.is_truthy())
+                .unwrap_or(false)
+            {
+                parts.push(object);
+            }
+        }
+        Ok(parts)
+    }
+
+    /// The last measure this stream holds, where it holds any.
+    fn last_measure<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        let mut last = None;
+        for object in held {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &measure)? {
+                last = Some(object);
+            }
+        }
+        Ok(last)
     }
 
     /// What of a class stands at the very start of this stream, the first
@@ -561,6 +632,36 @@ impl Stream {
     #[classattr]
     fn classSortOrder() -> i64 {
         -20
+    }
+
+    /// The barline closing the left side of this measure, or `None`:
+    /// music21's `leftBarline`, which a measure keeps beside its elements
+    /// rather than among them.
+    #[getter]
+    fn get_leftBarline(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.left_barline.as_ref().map(|bar| bar.clone_ref(py))
+    }
+
+    /// Writes the barline on the left of this measure. A name is read as
+    /// music21 reads one, so `'final'` is a final barline.
+    #[setter]
+    fn set_leftBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.left_barline = barline_given(value)?;
+        Ok(())
+    }
+
+    /// The barline closing this measure, or `None`: music21's
+    /// `rightBarline`.
+    #[getter]
+    fn get_rightBarline(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.right_barline.as_ref().map(|bar| bar.clone_ref(py))
+    }
+
+    /// Writes the barline closing this measure.
+    #[setter]
+    fn set_rightBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.right_barline = barline_given(value)?;
+        Ok(())
     }
 
     /// Whether the notes are written where they sound: music21's
@@ -1426,6 +1527,92 @@ impl Stream {
         let named = PyList::new(py, ["Measure"])?;
         let found = Self::nearest_before(&holder, searchOffset, Some(named.as_any()), false)?;
         Ok((beat, found))
+    }
+
+    /// A copy with its repeats played out: music21's `expandRepeats`,
+    /// which a score answers for each of its parts.
+    ///
+    /// The repeats are the ones the measures' barlines say, so a stream
+    /// whose measures carry none is answered unchanged -- and a repeat
+    /// music21 itself refuses to expand is refused here too.
+    #[pyo3(signature = (copySpanners = true))]
+    fn expandRepeats<'py>(
+        slf: &Bound<'py, Self>,
+        copySpanners: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // The package keeps no spanners, so there are none to copy.
+        let _ = copySpanners;
+        edited(slf, RsStream::expand_repeats)
+    }
+
+    /// The barline closing the last measure of this stream: music21's
+    /// `finalBarline`, which a stream holding parts answers for each of
+    /// them, as a list.
+    ///
+    /// A stream with no measures answers its own `rightBarline`, and a
+    /// stream with neither answers nothing, as music21 does.
+    #[getter]
+    fn get_finalBarline<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let parts = Self::part_like(slf)?;
+        if !parts.is_empty() {
+            let held = PyList::empty(py);
+            for part in parts {
+                let answer = Self::get_finalBarline(part.cast::<Stream>()?)?;
+                match answer {
+                    Some(barline) => held.append(barline)?,
+                    None => held.append(py.None())?,
+                }
+            }
+            return Ok(Some(held.into_any()));
+        }
+        match Self::last_measure(slf)? {
+            Some(measure) => Ok(measure
+                .cast::<Stream>()?
+                .borrow()
+                .get_rightBarline(py)
+                .map(|bar| bar.into_bound(py))),
+            None => Ok(slf
+                .borrow()
+                .get_rightBarline(py)
+                .map(|bar| bar.into_bound(py))),
+        }
+    }
+
+    /// Writes the barline closing the last measure, or each part's where
+    /// the stream holds parts -- taking one barline for all of them or a
+    /// list, as music21 does. A name is read as a type.
+    #[setter]
+    fn set_finalBarline(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let parts = Self::part_like(slf)?;
+        if !parts.is_empty() {
+            let given: Vec<Bound<'_, PyAny>> =
+                if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
+                    value.try_iter()?.collect::<PyResult<_>>()?
+                } else {
+                    vec![value.clone()]
+                };
+            if given.is_empty() {
+                return Ok(());
+            }
+            // music21 goes round the list where there are more parts
+            // than barlines given.
+            for (at, part) in parts.iter().enumerate() {
+                let said = &given[at % given.len()];
+                Self::set_finalBarline(part.cast::<Stream>()?, said)?;
+            }
+            return Ok(());
+        }
+        let made = barline_given(Some(value))?;
+        match Self::last_measure(slf)? {
+            Some(measure) => {
+                measure.cast::<Stream>()?.borrow_mut().right_barline = made;
+            }
+            None => slf.borrow_mut().right_barline = made,
+        }
+        let _ = py;
+        Ok(())
     }
 
     /// Everything in the stream that overlaps something else, gathered by
@@ -3254,6 +3441,20 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
     }
     match stream.kind() {
         StreamKind::Measure => {
+            // music21 keeps these beside a measure's elements, not among
+            // them, and so does this package.
+            if let Some(left) = stream.left_barline() {
+                made.setattr(
+                    "leftBarline",
+                    crate::bar::Barline::object(py, left.clone())?,
+                )?;
+            }
+            if let Some(right) = stream.right_barline() {
+                made.setattr(
+                    "rightBarline",
+                    crate::bar::Barline::object(py, right.clone())?,
+                )?;
+            }
             made.setattr("number", stream.number())?;
             made.setattr("numberSuffix", stream.number_suffix())?;
             made.setattr("paddingLeft", stream.padding_left())?;
@@ -3331,6 +3532,9 @@ fn element_object<'py>(
         )?
         .into_bound(py)
         .into_any(),
+        StreamElement::Barline(barline) => {
+            crate::bar::Barline::object(py, barline.clone())?.into_bound(py)
+        }
         StreamElement::Dynamic(dynamic) => crate::installed_new(
             py,
             "music21.dynamics",
@@ -3355,12 +3559,13 @@ fn element_object<'py>(
                 class_named("ChordSymbol")?.call((), Some(&keywords))?
             }
         }
+        StreamElement::TextExpression(text) => {
+            crate::expressions::TextExpression::object(py, text.clone())?.into_bound(py)
+        }
         StreamElement::TempoText(_)
-        | StreamElement::TextExpression(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
         | StreamElement::PercussionChord(_)
-        | StreamElement::Barline(_)
         | StreamElement::PedalObject(_)
         | StreamElement::RehearsalMark(_)
         | StreamElement::MetricModulation(_)
@@ -3757,6 +3962,11 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
             text.set_placement(placement_of(&expression));
         }
         return Ok(Some(StreamElement::TempoText(text)));
+    }
+    // A barline, which a measure keeps beside its elements and a stream
+    // may hold among them.
+    if object.cast::<crate::bar::Barline>().is_ok() {
+        return Ok(Some(StreamElement::Barline(barline_value(object)?)));
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "Clef"))? {
         return clef_value(object).map(|clef| Some(StreamElement::Clef(clef)));

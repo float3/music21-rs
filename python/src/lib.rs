@@ -34,6 +34,7 @@ macro_rules! error_into {
 }
 
 pub mod articulations;
+pub mod bar;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
@@ -1162,6 +1163,7 @@ exceptions![
         pitch::AccidentalException,
         Some("music21.pitch")
     ),
+    ("BarException", bar::BarException, Some("music21.bar")),
     (
         "BeamException",
         notation::BeamException,
@@ -1410,6 +1412,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     transposition::register(m)?;
     segment::register(m)?;
     discrete::register(m)?;
+    bar::register(m)?;
     metadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
