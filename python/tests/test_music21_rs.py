@@ -8,8 +8,10 @@ handful of behaviours a caller reaches for first are right.
 """
 
 import gc
+import os
 import copy
 import math
+import pathlib
 import subprocess
 import sys
 import weakref
@@ -642,6 +644,26 @@ def test_importing_the_package_imports_no_music21():
     )
     assert done.stdout.strip() == "False"
 
+    # Where music21 cannot be imported at all, as in this suite, an
+    # exception stands on a plain `Exception` and importing nothing is no
+    # feat. The submodule is where the question has teeth, so ask it there
+    # too whenever it is checked out.
+    submodule = pathlib.Path(__file__).resolve().parents[2] / "music21"
+    if not (submodule / "music21" / "__init__.py").exists():
+        return
+    environment = dict(os.environ, PYTHONPATH=str(submodule))
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environment,
+    )
+    assert done.stdout.strip() == "False", (
+        "importing the package pulled music21 in, which it must not do: "
+        "something builds an exception, or reaches music21, at import time"
+    )
+
 
 def test_an_exception_is_the_class_music21_keeps_under_that_name():
     # The module string is what `install_into_music21` leaves music21 holding,
@@ -1146,8 +1168,9 @@ def test_midi_is_read_from_bytes_into_measures_of_notes_and_chords():
 def test_a_score_is_written_as_abc_and_read_back():
     tune = "X:1\nT:Scale\nM:4/4\nL:1/4\nK:G\nGABc|defg|a4|]\n"
     written = m.to_abc(m.from_abc(tune))
-    # This package's streams keep no title or barline style to write.
-    assert written.startswith("X:1\nM:4/4\nL:1/4\nK:G\n"), written
+    # The title comes back now that a score carries its metadata; the
+    # barline style is still not kept.
+    assert written.startswith("X:1\nT:Scale\nM:4/4\nL:1/4\nK:G\n"), written
     assert "G A B c | d e f g | a4 |" in written
     assert m.to_abc(m.from_abc(written)) == written
     assert "L:1/8" in m.to_abc(m.from_abc(tune), unit_length=(1, 8))
@@ -1450,3 +1473,89 @@ def test_parts_become_voices_and_voices_parts_as_music21_does():
     assert len(score.implode().parts) == 1
     assert len(score.partsToVoices(1, permitOneVoicePerPart=True).parts) == 2
     assert len(score.partsToVoices([[1, 0]]).parts) == 1
+
+
+def test_metadata_carries_its_names_as_music21_does():
+    """Every value here is music21's own answer for the same metadata."""
+    md = m.Metadata(title="Maple Leaf Rag")
+    md.addContributor("composer", "Joplin, Scott")
+    assert md.title == "Maple Leaf Rag"
+    # A name is read by its unique name, its work id or its abbreviation.
+    assert md.otl == "Maple Leaf Rag"
+    assert md.composer == "Joplin, Scott"
+    assert md["title"] == ("Maple Leaf Rag",)
+    assert md.all() == (("composer", "Joplin, Scott"), ("title", "Maple Leaf Rag"))
+    assert md.all(skipContributors=True) == (("title", "Maple Leaf Rag"),)
+
+    md.number = "3"
+    assert md.number == "3"
+    assert md.onm == "3"
+    # A name outside music21's vocabulary is no attribute at all.
+    with pytest.raises(AttributeError):
+        md.madeUp
+    # The primitives music21 hands back are not here to hand back.
+    with pytest.raises(Exception):
+        md.all(returnPrimitives=True)
+
+
+def test_metadata_is_searched_as_music21_searches_it():
+    md = m.Metadata(title="Maple Leaf Rag")
+    md.addContributor("composer", "Joplin, Scott")
+    assert md.search("joplin", field="composer") == (True, "composer")
+    assert md.search("joplin", field="compos") == (True, "composer")
+    assert md.search("leaf") == (True, "title")
+    assert md.search("leaf", field="composer") == (False, None)
+    assert md.search("Wagner") == (False, None)
+    assert md.search(composer="Joplin") == (True, "composer")
+    assert md.search() == (False, None)
+
+
+def test_an_opus_looks_up_its_scores_as_music21_does():
+    opus = m.Opus()
+    for number, title in (("1", "Vrienden, kommt alle gaere"), ("2", "O Venus bant")):
+        score = m.Score()
+        score.metadata = m.Metadata(title=title, number=number)
+        opus.insert(0.0, score)
+
+    assert len(opus.scores) == 2
+    assert opus.getNumbers() == ["1", "2"]
+    assert opus.getScoreByNumber("2").metadata.title == "O Venus bant"
+    assert opus.getScoreByTitle("kommt").metadata.title == "Vrienden, kommt alle gaere"
+    assert opus.getScoreByNumber("9") is None
+    # The score handed back is the one the opus holds, not a copy.
+    assert opus.getScoreByNumber("1") is opus.scores[0]
+
+
+def test_a_stream_keeps_its_metadata_among_its_elements():
+    score = m.Score()
+    assert score.metadata is None
+    md = m.Metadata(title="Wer nur den lieben Gott")
+    score.metadata = md
+    assert score.metadata is md
+    # music21 keeps it among the elements, at the start.
+    assert md in list(score.elements)
+    # Writing another takes the place of the first.
+    score.metadata = m.Metadata(title="Another")
+    assert score.metadata.title == "Another"
+    assert len([e for e in score.elements if isinstance(e, m.Metadata)]) == 1
+    score.metadata = None
+    assert score.metadata is None
+
+
+def test_a_read_collection_is_looked_up_by_number_and_title():
+    """Every answer is music21's own for the same ABC."""
+    text = (
+        "X:1\nT:One\nM:2/4\nL:1/4\nK:C\nC D | E F |]\n\n"
+        "X:2\nT:Two\nM:2/4\nL:1/4\nK:C\nG A | B c |]\n"
+    )
+    opus = m.from_abc(text)
+    assert isinstance(opus, m.Opus)
+    # The reader fills the metadata in, so a tune can be asked for.
+    assert opus.getNumbers() == ["1", "2"]
+    assert [score.metadata.title for score in opus.scores] == ["One", "Two"]
+    assert opus.getScoreByTitle("Two").metadata.title == "Two"
+    assert opus.getScoreByNumber("1").metadata.title == "One"
+
+    merged = opus.mergeScores()
+    assert len(merged.parts) == 2
+    assert merged.metadata.title == "One"

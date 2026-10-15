@@ -340,6 +340,35 @@ fn contributor_answers_to(role: Option<&str>, field: Option<&str>) -> bool {
     }
 }
 
+/// The unique name an attribute name stands for: the name itself, one of
+/// music21's four grandfathered work ids, or one of its twenty Humdrum
+/// abbreviations. Nothing for a name outside the vocabulary.
+///
+/// Spelling counts, as it does for music21's own attribute access: `otl`
+/// and `title` both name the title, `OTL` names nothing.
+///
+/// ```
+/// use music21_rs::metadata::unique_name_of;
+///
+/// assert_eq!(unique_name_of("title"), Some("title"));
+/// assert_eq!(unique_name_of("otl"), Some("title"));
+/// assert_eq!(unique_name_of("dedication"), Some("dedicatedTo"));
+/// assert_eq!(unique_name_of("OTL"), None);
+/// assert_eq!(unique_name_of("madeUp"), None);
+/// ```
+pub fn unique_name_of(name: &str) -> Option<&'static str> {
+    if let Some((found, _, _)) = STANDARD_PROPERTIES
+        .iter()
+        .find(|(unique, _, _)| *unique == name)
+    {
+        return Some(found);
+    }
+    OLD_MUSIC21_NAMES
+        .iter()
+        .find(|(_, abbreviation, work_id)| *abbreviation == Some(name) || *work_id == Some(name))
+        .map(|(unique, _, _)| *unique)
+}
+
 /// The unique name a search field stands for where it names one outright,
 /// with the spelling it was asked for: the name itself, one of music21's
 /// grandfathered work ids, or one of its Humdrum abbreviations. The field

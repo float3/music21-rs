@@ -76,9 +76,11 @@ it, into this package's own streams:
 the streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
 where a measure has more than one. a RomanText score's chords are
-`RomanNumeral`s, carrying their figures as lyrics. what the package has no class for -- words, barlines,
-repeat marks, slurs and other spanners, unpitched percussion, metadata -- is
-read and left out. input a reader cannot read raises `StreamException`. a
+`RomanNumeral`s, carrying their figures as lyrics. a score's metadata comes
+with it, as a `Metadata`, so a collection read from one file can be asked
+for a tune by its number or its title. what the package has no class for --
+words, barlines, repeat marks, slurs and other spanners, unpitched
+percussion -- is read and left out. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 the package's streams slice, scale, invert and regroup themselves as
@@ -90,6 +92,16 @@ music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
 `isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`.
+
+a score carries its `metadata`, music21's `Metadata`, whose names are read
+and written as music21 reads them -- by a unique name, by one of the four
+grandfathered work ids, or by one of the twenty Humdrum abbreviations, so
+`md.otl` and `md.title` are the same title -- and which answers `search`,
+`all` and `md['title']`. what a name answers is a string, where music21
+answers its own `Text` and `Contributor`, so `all(returnPrimitives=True)` is
+refused and nothing here is installed over music21's own `metadata`. an
+`Opus` -- what a multi-tune ABC or Essen file reads as -- answers `scores`,
+`getNumbers`, `getScoreByNumber`, `getScoreByTitle` and `mergeScores`.
 
 `to_musicxml` takes one of this package's streams or one of music21's and
 writes what music21's exporter writes with `makeNotation=False`. with
