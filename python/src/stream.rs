@@ -551,6 +551,61 @@ impl Stream {
         }
     }
 
+    /// The element of this stream sounding where another element starts:
+    /// music21's `playingWhenAttacked`, which answers the one sounding
+    /// there, or of several the first of that element's own class, and
+    /// failing that the first.
+    ///
+    /// The element handed back is this stream's own. Where music21 asks
+    /// `isinstance`, the class is read as the name of the element's own
+    /// class: nothing in this package answers to music21's class names
+    /// above its own.
+    #[pyo3(signature = (el, elStream = None))]
+    fn playingWhenAttacked<'py>(
+        slf: &Bound<'py, Self>,
+        el: &Bound<'py, PyAny>,
+        elStream: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let offset = match elStream.filter(|given| !given.is_none()) {
+            Some(given) => given
+                .call_method1("elementOffset", (el,))?
+                .extract::<f64>()?,
+            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+        };
+        let span = music21_rs_crate::stream::OffsetSpan {
+            must_begin_in_span: false,
+            ..music21_rs_crate::stream::OffsetSpan::at(offset)
+        };
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| (one.offset, one.object.clone_ref(py)))
+            .collect();
+        let mut there = Vec::new();
+        for (at, object) in listed {
+            let object = object.into_bound(py);
+            if span.takes_at(at, length_of(&object)?) {
+                there.push(object);
+            }
+        }
+        if there.len() < 2 {
+            return Ok(there.into_iter().next());
+        }
+        let class = el.get_type().name()?;
+        let same = there
+            .iter()
+            .find(|object| {
+                object
+                    .get_type()
+                    .name()
+                    .is_ok_and(|name| name.to_string() == class.to_string())
+            })
+            .cloned();
+        Ok(same.or_else(|| there.into_iter().next()))
+    }
+
     /// Everything this stream holds that sounds while another element
     /// sounds, each at its offset from where that element stands:
     /// music21's `allPlayingWhileSounding`.

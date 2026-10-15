@@ -2613,3 +2613,26 @@ def test_what_sounds_while_another_part_sounds_is_found():
         (0.0, "C3"),
         (1.0, "D3"),
     ]
+
+
+def test_what_sounds_where_a_note_is_struck_is_found():
+    """Every answer is music21's own for the same two streams."""
+    upper = m.Stream()
+    upper.insert(0.0, m.Note("C5", quarterLength=2.0))
+    upper.insert(2.0, m.Note("D5", quarterLength=2.0))
+    lower = m.Stream()
+    lower.insert(0.0, m.Note("C3", quarterLength=3.0))
+    lower.insert(3.0, m.Note("D3", quarterLength=1.0))
+
+    # The long note below is sounding where each of the two above starts.
+    assert lower.playingWhenAttacked(list(upper)[0], upper).nameWithOctave == "C3"
+    assert lower.playingWhenAttacked(list(upper)[1], upper).nameWithOctave == "C3"
+    assert lower.playingWhenAttacked(list(upper)[0], upper) is list(lower)[0]
+
+    # Of several standing there the first of the searched element's class
+    # wins, so the note rather than the clef.
+    mixed = m.Stream()
+    mixed.insert(0.0, m.TrebleClef())
+    mixed.insert(0.0, m.Note("E3", quarterLength=1.0))
+    assert mixed.playingWhenAttacked(list(upper)[0], upper).nameWithOctave == "E3"
+    assert m.Stream().playingWhenAttacked(list(upper)[0], upper) is None
