@@ -291,6 +291,11 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Stream` answers `insertIntoNoteOrChord`: a note
+  or chord put in where something already starts within its length, the
+  two becoming one chord, the merging being the crate's. Where nothing
+  stands there the object handed in is the one the stream then holds, as
+  music21 does.
 - The Python package's `Stream` carries `atSoundingPitch` as music21's
   own property: `True`, `False` or `'unknown'`, `'unknown'` until
   something says, and anything else refused with music21's sentence. It
@@ -322,6 +327,12 @@
 
 ## fixed
 
+- the Python package's readers dropped a note's articulations and
+  ornaments: the crate read them and the writers wrote them, so a score
+  read and written again carried them, but `note.articulations` and
+  `note.expressions` were empty on the objects handed back. Every object
+  the package builds from a crate value carries them now. A fermata and an
+  arpeggio are still left behind, the package having no class for either.
 - `OffsetSpan` was two types of the same name and the same meaning: a
   private one in `stream::queries` with a predicate comparing raw floats,
   and the public `stream::span` one whose predicate compares through

@@ -1288,6 +1288,88 @@ impl Stream {
         Ok(())
     }
 
+    /// Adds a note or chord where something already starts within its
+    /// length, the two becoming one chord: music21's
+    /// `insertIntoNoteOrChord`.
+    ///
+    /// Where a rest stands there it gives way; where nothing does, the
+    /// note or chord handed in is simply put in, and is the very object
+    /// the stream then holds. A merged chord is a new object, as
+    /// music21's is, keeping the length, articulations, expressions,
+    /// lyrics, stem and notehead of what stood there; with `chordsOnly`
+    /// a merge of one pitch is still a chord.
+    #[pyo3(signature = (offset, noteOrChord, *, chordsOnly = false))]
+    fn insertIntoNoteOrChord(
+        slf: &Bound<'_, Self>,
+        offset: f64,
+        noteOrChord: &Bound<'_, PyAny>,
+        chordsOnly: bool,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let Some(added) = element_value(noteOrChord, false)? else {
+            return Err(StreamException::new_err(
+                "this package has no value for what was handed in",
+            ));
+        };
+        // The span music21 looks in: from the offset to where the new
+        // element ends, taking what begins in it and not what starts
+        // exactly at the end.
+        let span = music21_rs_crate::stream::OffsetSpan {
+            include_end_boundary: false,
+            ..music21_rs_crate::stream::OffsetSpan::between(offset, offset + added.quarter_length())
+        };
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| (one.offset, one.object.clone_ref(py)))
+            .collect();
+        let mut targets: Vec<(f64, Bound<'_, PyAny>, StreamElement)> = Vec::new();
+        for (at, object) in listed {
+            let object = object.into_bound(py);
+            if !span.takes_at(at, length_of(&object)?) {
+                continue;
+            }
+            // Only a note, a chord or a rest is something to merge with.
+            let Some(value) = element_value(&object, false)? else {
+                continue;
+            };
+            if value.is_instance("GeneralNote") {
+                targets.push((at, object, value));
+            }
+        }
+        match targets.len() {
+            0 => {
+                slf.borrow_mut().put(offset, noteOrChord);
+                Ok(())
+            }
+            1 => {
+                let (at, object, value) = targets.remove(0);
+                // The merging is the crate's: a stream of the one thing
+                // standing there, asked to take the new one in.
+                let mut one = RsStream::new();
+                one.insert(at, value);
+                one.insert_into_note_or_chord(offset, added, chordsOnly)
+                    .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+                let mut made = Vec::new();
+                for event in one.events() {
+                    if let Some(built) = element_object(py, event.element())? {
+                        made.push((event.offset(), built));
+                    }
+                }
+                slf.borrow_mut().remove(&object)?;
+                let mut held = slf.borrow_mut();
+                for (at, built) in made {
+                    held.put(at, &built);
+                }
+                Ok(())
+            }
+            _ => Err(StreamException::new_err(
+                "more than one element found at the specified offset",
+            )),
+        }
+    }
+
     /// Which beat of which measure an offset falls on: music21's
     /// `beatAndMeasureFromOffset`, a pair of the beat and the measure.
     ///
@@ -3197,7 +3279,7 @@ fn element_object<'py>(
             .or_else(|_| py.import("music21_rs_facade"))?
             .getattr(name)
     };
-    Ok(Some(match element {
+    let made = match element {
         StreamElement::Stream(inner) => from_crate(py, inner)?,
         StreamElement::Note(note) => {
             crate::installed_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
@@ -3286,7 +3368,57 @@ fn element_object<'py>(
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
         | StreamElement::Variant(_) => return Ok(None),
-    }))
+    };
+    carry_notation(py, element, &made)?;
+    Ok(Some(made))
+}
+
+/// Puts what a note or chord carries besides its pitches onto the object
+/// built for it: the articulations and the ornaments.
+///
+/// The crate reads these and the writers write them, so a score read here
+/// carries them; without this they lived in the value alone and
+/// `note.articulations` was empty. A fermata and an arpeggio are left
+/// behind: this package has no class for either, and building music21's
+/// would be depending on music21, which it does not.
+fn carry_notation(
+    py: Python<'_>,
+    element: &StreamElement,
+    made: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let (articulations, expressions) = match element {
+        StreamElement::Note(note) => (note.articulations(), note.expressions()),
+        StreamElement::Chord(chord) => (chord.articulations(), chord.expressions()),
+        StreamElement::Rest(rest) => (rest.articulations(), rest.expressions()),
+        _ => return Ok(()),
+    };
+    if !articulations.is_empty() {
+        let held = PyList::empty(py);
+        for articulation in articulations {
+            held.append(crate::articulations::Articulation::object(
+                py,
+                articulation.clone(),
+            )?)?;
+        }
+        made.setattr("articulations", held)?;
+    }
+    let ornaments: Vec<_> = expressions
+        .iter()
+        .filter_map(|expression| match expression {
+            music21_rs_crate::expressions::Expression::Ornament(ornament) => {
+                Some((**ornament).clone())
+            }
+            _ => None,
+        })
+        .collect();
+    if !ornaments.is_empty() {
+        let held = PyList::empty(py);
+        for ornament in ornaments {
+            held.append(crate::expressions::Ornament::object(py, ornament)?)?;
+        }
+        made.setattr("expressions", held)?;
+    }
+    Ok(())
 }
 
 /// music21's other stream classes, each the same `Stream` under its name.

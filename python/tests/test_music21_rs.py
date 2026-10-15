@@ -2830,3 +2830,110 @@ def test_whether_a_stream_is_at_sounding_pitch_is_said_as_music21_says_it():
     assert read.parts[0].atSoundingPitch is True
     written = read.parts[0].toWrittenPitch()
     assert written.atSoundingPitch is False
+
+
+ARTICULATED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations>
+          <articulations><staccato/><accent/></articulations>
+          <ornaments><trill-mark/></ornaments>
+        </notations>
+        <lyric number="1"><syllabic>single</syllabic><text>sung</text></lyric>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>3</duration><type>half</type><dot/>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_note_is_inserted_into_what_already_stands_there():
+    """Every answer is music21's own for the same streams."""
+
+    def shown(line):
+        return [
+            (
+                line.elementOffset(e),
+                type(e).__name__,
+                " ".join(p.nameWithOctave for p in getattr(e, "pitches", ())),
+                e.quarterLength,
+            )
+            for e in line
+        ]
+
+    # A note where a note stands makes a chord as long as what stood there.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4", 2.0)]
+
+    # A chord into a note, and a note into a chord.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Chord(["E4", "G4"], quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4 G4", 2.0)]
+    line = m.Stream()
+    line.insert(0.0, m.Chord(["C4", "E4"], quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4 G4", 2.0)]
+
+    # A rest gives way, and one pitch is a note unless chords are asked for.
+    line = m.Stream()
+    line.insert(0.0, m.Rest(quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Note", "G4", 2.0)]
+    line = m.Stream()
+    line.insert(0.0, m.Rest(quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0), chordsOnly=True)
+    assert shown(line) == [(0.0, "Chord", "G4", 2.0)]
+
+    # Where nothing stands, the object handed in is the one held.
+    line = m.Stream()
+    given = m.Note("A4", quarterLength=1.0)
+    line.insertIntoNoteOrChord(2.0, given)
+    assert list(line)[0] is given
+
+    # Two things starting in the span is what music21 refuses.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(0.5, m.Note("D4", quarterLength=1.0))
+    with pytest.raises(m.StreamException):
+        line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=2.0))
+
+    # The merged chord keeps what stood there carried: its articulations
+    # and its lyrics.
+    line = m.Stream()
+    held = m.Note("C4", quarterLength=2.0)
+    held.articulations = [m.Staccato()]
+    held.lyric = "sung"
+    line.insert(0.0, held)
+    line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=1.0))
+    made = list(line)[0]
+    assert [type(a).__name__ for a in made.articulations] == ["Staccato"]
+    assert [ly.text for ly in made.lyrics] == ["sung"]
+
+
+def test_a_reader_carries_the_articulations_and_ornaments_through():
+    """music21 answers the same for the same document."""
+    read = m.from_musicxml(ARTICULATED)
+    notes = [e for e in read.recurse() if getattr(e, "isNote", False)]
+    assert [type(a).__name__ for a in notes[0].articulations] == ["Staccato", "Accent"]
+    assert [type(e).__name__ for e in notes[0].expressions] == ["Trill"]
+    assert notes[1].articulations == []

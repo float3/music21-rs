@@ -80,7 +80,8 @@ where a measure has more than one. a RomanText score's chords are
 with it, as a `Metadata`, so a collection read from one file can be asked
 for a tune by its number or its title. what the package has no class for --
 words, barlines, repeat marks, slurs and other spanners, unpitched
-percussion -- is read and left out. input a reader cannot read raises `StreamException`. a
+percussion, a fermata -- is read and left out. a note's articulations and
+its ornaments come with it. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 the package's streams slice, scale, invert and regroup themselves as
@@ -102,8 +103,9 @@ nothing, as music21's do -- the ties written onto its own notes. and they answer
 and `simultaneousAttacks`, and they take elements out by class or by index
 (`removeByClass`, `removeByNotOfClass`, `pop`), repeat an object into
 themselves as copies (`repeatAppend`, `repeatInsert`), make room for one
-(`insertAndShift`), divide themselves by what a function says of each
-element (`splitByClass`) and answer `voices` and
+(`insertAndShift`), merge a note into what already stands at an offset
+(`insertIntoNoteOrChord`), divide themselves by what a function says of
+each element (`splitByClass`) and answer `voices` and
 what they open with -- `clef`, `keySignature` and `timeSignature`, read
 and written as music21's are -- and the meters and instruments they hold,
 `getTimeSignatures`, `getInstruments` and `getInstrument`, which make up
