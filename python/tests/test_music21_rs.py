@@ -2809,3 +2809,24 @@ def test_which_beat_of_which_measure_an_offset_falls_on():
     assert whole.beatAndMeasureFromOffset(2.0)[0] == 3.0
     assert whole.beatAndMeasureFromOffset(5.0)[1].number == 2
     assert whole.beatAndMeasureFromOffset(0.0)[1] is part.getElementsByClass("Measure")[0]
+
+
+def test_whether_a_stream_is_at_sounding_pitch_is_said_as_music21_says_it():
+    """Every answer, and the refusal, is music21's own."""
+    part = m.Part()
+    # Nothing has decided, which music21 calls 'unknown'.
+    assert part.atSoundingPitch == "unknown"
+    part.atSoundingPitch = True
+    assert part.atSoundingPitch is True
+    part.atSoundingPitch = False
+    assert part.atSoundingPitch is False
+    part.atSoundingPitch = "unknown"
+    assert part.atSoundingPitch == "unknown"
+    with pytest.raises(m.StreamException):
+        part.atSoundingPitch = "junk"
+
+    # A reader says it, and turning the part to sounding pitch says so.
+    read = m.from_musicxml(MUSICXML)
+    assert read.parts[0].atSoundingPitch is True
+    written = read.parts[0].toWrittenPitch()
+    assert written.atSoundingPitch is False

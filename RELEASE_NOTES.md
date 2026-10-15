@@ -291,6 +291,11 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Stream` carries `atSoundingPitch` as music21's
+  own property: `True`, `False` or `'unknown'`, `'unknown'` until
+  something says, and anything else refused with music21's sentence. It
+  was an attribute the readers wrote and nothing declared, so a stream
+  nobody had told had none at all.
 - The Python package's `Stream` answers `beatAndMeasureFromOffset`: the
   beat is the crate's arithmetic over the meter in force, and the measure
   is the stream's own object, found where music21 looks for it -- the last

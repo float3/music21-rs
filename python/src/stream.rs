@@ -71,6 +71,10 @@ pub struct Stream {
     next: u64,
     /// music21's `id`, where a caller gave one.
     id: Option<Py<PyAny>>,
+    /// music21's `atSoundingPitch`: whether the notes are written where
+    /// they sound. `None` is music21's `'unknown'`, which is what a stream
+    /// says before anything has been decided.
+    sounding: Option<bool>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -244,6 +248,7 @@ impl Stream {
             held: Vec::new(),
             next: 0,
             id: None,
+            sounding: None,
         }
     }
 
@@ -556,6 +561,41 @@ impl Stream {
     #[classattr]
     fn classSortOrder() -> i64 {
         -20
+    }
+
+    /// Whether the notes are written where they sound: music21's
+    /// `atSoundingPitch`, which is `True`, `False` or `'unknown'`, and
+    /// `'unknown'` until something says.
+    ///
+    /// Writing it says nothing about the notes themselves;
+    /// `toSoundingPitch` and `toWrittenPitch` move them.
+    #[getter]
+    fn get_atSoundingPitch<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match self.sounding {
+            Some(at) => Ok(pyo3::types::PyBool::new(py, at).to_owned().into_any()),
+            None => Ok(pyo3::types::PyString::new(py, "unknown").into_any()),
+        }
+    }
+
+    /// Says whether the notes are written where they sound: music21's
+    /// setter, which refuses anything but `True`, `False` and `'unknown'`.
+    #[setter]
+    fn set_atSoundingPitch(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_instance_of::<pyo3::types::PyBool>() {
+            self.sounding = Some(value.extract()?);
+            return Ok(());
+        }
+        if value
+            .extract::<String>()
+            .is_ok_and(|said| said == "unknown")
+        {
+            self.sounding = None;
+            return Ok(());
+        }
+        Err(StreamException::new_err(format!(
+            "not a valid at sounding pitch value: {}",
+            value.str()?
+        )))
     }
 
     #[getter]

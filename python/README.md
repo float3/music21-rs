@@ -113,7 +113,9 @@ nought and before it what was in force where it begins -- and
 `offsetMap`, music21's named tuple per element, `pitches`, `extractContext`, `playingWhenAttacked` and `allPlayingWhileSounding` --
 besides `chordify`, `findConsecutiveNotes` and
 `melodicIntervals`. a part written for a transposing instrument is turned
-to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`. they are asked for elements by class and by offset -- a class being read
+to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`,
+and says which it is with `atSoundingPitch` -- `True`, `False` or
+`'unknown'`, as music21's does. they are asked for elements by class and by offset -- a class being read
 as music21 reads it, by its own name or by anything it is a kind of, so
 `getElementsByClass('GeneralNote')` finds the notes, the chords and the
 rests -- which is what every object's `classes` says of itself, music21's
