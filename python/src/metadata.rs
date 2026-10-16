@@ -64,6 +64,13 @@ impl Metadata {
 
 #[pymethods]
 impl Metadata {
+    /// music21's sort order for metadata among the things standing at one
+    /// offset: before the parts of the score it heads.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        -30
+    }
+
     /// music21's `Metadata(**keywords)`, each keyword a name of the
     /// vocabulary.
     ///

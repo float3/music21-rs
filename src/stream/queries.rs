@@ -1,84 +1,11 @@
 //! What a stream holds and where: music21's questions of a stream's layout
 //! -- its gaps and overlaps, what sounds when, its measures by offset.
 
+use super::span::OffsetSpan;
 use super::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::defaults::FloatType;
 use crate::makenotation::op_frac;
 use crate::rest::Rest;
-
-/// How music21's `getElementsByOffset` decides what is in a span: its
-/// keyword arguments, music21's defaults by [`Default`].
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct OffsetSpan {
-    pub(crate) start: FloatType,
-    /// The end, or the start again for a search at one offset.
-    pub(crate) end: Option<FloatType>,
-    pub(crate) include_end_boundary: bool,
-    pub(crate) must_finish_in_span: bool,
-    pub(crate) must_begin_in_span: bool,
-    pub(crate) include_elements_that_end_at_start: bool,
-}
-
-impl OffsetSpan {
-    /// A span with music21's defaults.
-    pub(crate) fn new(start: FloatType, end: Option<FloatType>) -> Self {
-        Self {
-            start,
-            end,
-            include_end_boundary: true,
-            must_finish_in_span: false,
-            must_begin_in_span: true,
-            include_elements_that_end_at_start: true,
-        }
-    }
-
-    /// Whether an element at `offset` lasting `length` is in the span:
-    /// music21's `OffsetFilter.isElementOffsetInRange`.
-    pub(crate) fn holds(&self, offset: FloatType, length: FloatType) -> bool {
-        let start = op_frac(self.start);
-        let (end, zero_length_search) = match self.end {
-            None => (self.start, true),
-            // No later end is a search at one offset, as music21 has it.
-            Some(end) => (
-                op_frac(end),
-                end.partial_cmp(&self.start) != Some(std::cmp::Ordering::Greater),
-            ),
-        };
-        if offset > end {
-            return false;
-        }
-        let element_end = op_frac(offset + length);
-        if element_end < start {
-            return false;
-        }
-        let zero_length = length == 0.0;
-        if zero_length_search && zero_length {
-            return true;
-        }
-        if self.must_finish_in_span {
-            if element_end > end {
-                return false;
-            }
-            if !self.include_end_boundary && element_end == end {
-                return false;
-            }
-        }
-        if self.must_begin_in_span {
-            if offset < start {
-                return false;
-            }
-            if !self.include_end_boundary && offset == end {
-                return false;
-            }
-        } else if !zero_length && element_end == end && zero_length_search {
-            return false;
-        }
-        if !self.include_end_boundary && offset == end {
-            return false;
-        }
-        !(!self.include_elements_that_end_at_start && element_end == start)
-    }
-}
 
 /// One element of a stream with where it starts and ends and the voice it
 /// is in: music21's `OffsetMap`.
@@ -269,6 +196,64 @@ impl Stream {
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
     pub fn overlaps(&self) -> Vec<(FloatType, Vec<StreamEvent>)> {
+        let flat = self.flatten();
+        self.overlap_groups()
+            .into_iter()
+            .map(|(offset, members)| {
+                (
+                    offset,
+                    members
+                        .into_iter()
+                        .map(|index| flat.events[index].clone())
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// [`Stream::overlaps`], each group's members by their position among
+    /// [`Stream::leaves`] rather than as values.
+    ///
+    /// music21 hands back the elements themselves, so a caller keeping an
+    /// object per element -- a binding keeping what it read the stream
+    /// from -- finds each again by that position.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// let mut measure = Stream::with_kind(StreamKind::Measure);
+    /// measure.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
+    /// measure.insert(1.0, Note::from_name("E4")?);
+    /// part.insert(0.0, measure);
+    ///
+    /// // The two notes overlap, and are the part's first two leaves. The
+    /// // one overlapped is listed before the one looking on from itself,
+    /// // which is the order music21's own dictionary takes them in.
+    /// let found = part.overlap_positions();
+    /// assert_eq!(found.len(), 1);
+    /// assert_eq!(found[0], (0.0, vec![1, 0]));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn overlap_positions(&self) -> Vec<(FloatType, Vec<usize>)> {
+        let leaves = self.leaves();
+        // The flattened stream is the leaves in `flatten`'s order, so the
+        // nth element of it is the leaf that order puts nth.
+        let order = Stream::flatten_order(&leaves);
+        self.overlap_groups()
+            .into_iter()
+            .map(|(offset, members)| {
+                (
+                    offset,
+                    members.into_iter().map(|index| order[index]).collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// The groups [`Stream::overlaps`] finds, each holding indices into the
+    /// flattened stream, in the order music21's dictionary takes them.
+    fn overlap_groups(&self) -> Vec<(FloatType, Vec<usize>)> {
         let (flat, spans) = self.spans();
         let map = Self::layering(&spans);
         // Each group by its offset, holding indices of the flattened stream,
@@ -309,17 +294,6 @@ impl Stream {
             }
         }
         groups
-            .into_iter()
-            .map(|(offset, members)| {
-                (
-                    offset,
-                    members
-                        .into_iter()
-                        .map(|index| flat.events[index].clone())
-                        .collect(),
-                )
-            })
-            .collect()
     }
 
     /// Whether no element of the flattened stream overlaps another, as
@@ -356,12 +330,12 @@ impl Stream {
         element: &StreamElement,
         offset: FloatType,
     ) -> Option<&StreamEvent> {
-        let mut span = OffsetSpan::new(offset, None);
+        let mut span = OffsetSpan::at(offset);
         span.must_begin_in_span = false;
         let there: Vec<&StreamEvent> = self
             .events
             .iter()
-            .filter(|event| span.holds(event.offset(), event.element().quarter_length()))
+            .filter(|event| span.takes_at(event.offset(), event.element().quarter_length()))
             .collect();
         match there.as_slice() {
             [] => None,
@@ -386,19 +360,19 @@ impl Stream {
                 must_begin_in_span: false,
                 include_end_boundary: false,
                 include_elements_that_end_at_start: false,
-                ..OffsetSpan::new(offset, Some(end))
+                ..OffsetSpan::between(offset, end)
             }
         } else {
             OffsetSpan {
                 must_begin_in_span: false,
-                ..OffsetSpan::new(offset, None)
+                ..OffsetSpan::at(offset)
             }
         };
         let mut out = Stream::with_kind(self.kind());
         out.events = self
             .events
             .iter()
-            .filter(|event| span.holds(event.offset(), event.element().quarter_length()))
+            .filter(|event| span.takes_at(event.offset(), event.element().quarter_length()))
             .map(|event| {
                 StreamEvent::new(op_frac(event.offset() - offset), event.element().clone())
             })

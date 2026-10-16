@@ -80,21 +80,54 @@ where a measure has more than one. a RomanText score's chords are
 with it, as a `Metadata`, so a collection read from one file can be asked
 for a tune by its number or its title. what the package has no class for --
 words, barlines, repeat marks, slurs and other spanners, unpitched
-percussion -- is read and left out. input a reader cannot read raises `StreamException`. a
+percussion, a fermata -- is read and left out. a note's articulations and
+its ornaments come with it. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `sliceByGreatestDivisor`, `scaleOffsets`, `scaleDurations`,
 `augmentOrDiminish`, `invertDiatonic`, `voicesToParts`, `explode`,
-`partsToVoices`, `implode` -- each handing back a new stream, so
-`inPlace=True` and a `target` are refused; and they answer `highestOffset`,
+`partsToVoices`, `implode`, `transpose`, `stripTies`, `quantize` and
+`template` -- each handing back a new stream, so `inPlace=True` and a
+`target` are refused. they notate themselves too -- `makeMeasures`,
+`makeRests`, `makeTies`, `makeBeams`, `makeAccidentals`, `makeVoices` and
+`makeNotation`, each step at music21's own defaults, a keyword asking for
+anything else refused rather than answered differently.
+`splitAtQuarterLength` cuts a stream in two at a length from its start,
+and `extendTies` and `shiftElements` change the stream and answer
+nothing, as music21's do -- the ties written onto its own notes. and they answer
+`highestOffset`,
 `lowestOffset`, `hasMeasures`, `hasVoices`, `isGapless`, `isSequence` and
-`isWellFormedNotation`, besides `chordify`, `findConsecutiveNotes` and
-`melodicIntervals`. they are asked for elements by class and by offset --
+`isWellFormedNotation`, `hasPartLikeStreams`, `findGaps`, `getOverlaps`
+and `simultaneousAttacks`, and they take elements out by class or by index
+(`removeByClass`, `removeByNotOfClass`, `pop`), repeat an object into
+themselves as copies (`repeatAppend`, `repeatInsert`), make room for one
+(`insertAndShift`), merge a note into what already stands at an offset
+(`insertIntoNoteOrChord`), divide themselves by what a function says of
+each element (`splitByClass`) and answer `voices` and
+what they open with -- `clef`, `keySignature` and `timeSignature`, read
+and written as music21's are -- and the meters and instruments they hold,
+`getTimeSignatures`, `getInstruments` and `getInstrument`, which make up
+music21's default where a stream states none -- `measures` and `measure` -- the measures of a number range, the first at
+nought and before it what was in force where it begins -- and
+`measureOffsetMap`, which a score builds out of its parts, and
+`offsetMap`, music21's named tuple per element, `pitches`, `extractContext`, `playingWhenAttacked` and `allPlayingWhileSounding` --
+besides `chordify`, `findConsecutiveNotes` and
+`melodicIntervals`. a part written for a transposing instrument is turned
+to sounding pitch and back with `toSoundingPitch` and `toWrittenPitch`,
+and says which it is with `atSoundingPitch` -- `True`, `False` or
+`'unknown'`, as music21's does. they are asked for elements by class and by offset -- a class being read
+as music21 reads it, by its own name or by anything it is a kind of, so
+`getElementsByClass('GeneralNote')` finds the notes, the chords and the
+rests -- which is what every object's `classes` says of itself, music21's
+own chain down to `object` --
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
-is found only where it *begins* -- and they answer `isTwelveTone` and
+is found only where it *begins*, `getElementAtOrBefore`,
+`getElementBeforeOffset`, `getElementAfterElement` and
+`beatAndMeasureFromOffset` -- and they answer
+`isTwelveTone` and
 `staffLines`. they stretch, take in and empty themselves as well:
 `extendDuration` gives each element of a class the time up to the next one,
 `mergeElements` takes in everything another stream holds, each at the offset

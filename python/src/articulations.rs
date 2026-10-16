@@ -30,6 +30,23 @@ pub struct Articulation {
 }
 
 impl Articulation {
+    /// The object for an articulation of the crate's: the class installed
+    /// over music21's where there is one, since music21 holds nothing else
+    /// on a note, and this package's own where not.
+    pub(crate) fn object(py: Python<'_>, inner: RsArticulation) -> PyResult<Py<PyAny>> {
+        let name = inner.kind().class_name();
+        let class = match crate::installed_class(py, "music21.articulations", name) {
+            Some(class) => class,
+            None => py
+                .import("music21_rs")
+                .or_else(|_| py.import("music21_rs_facade"))?
+                .getattr(name)?,
+        };
+        let made = class.call0()?;
+        made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
+        Ok(made.unbind())
+    }
+
     /// An articulation of music21's `class`, with the one positional
     /// argument its constructor takes -- a string or fret indication's
     /// number, or a fingering's finger -- and the keywords beside it.

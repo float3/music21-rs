@@ -1015,6 +1015,7 @@ python = "stream/base.py"
 name = "Measure"
 rust = ["src/stream.rs", "src/stream/editing.rs", "src/makenotation/score.rs", "src/meter/mod.rs"]
 note = "A bar of music. A crate stream of kind `Measure` carries its own barlines and padding, and what a bar and a beat last is read off the metre."
+facade = "Stream"
 
 [class.renames]
 measureNumberWithSuffix = "number_with_suffix"
@@ -1027,6 +1028,7 @@ python = "stream/base.py"
 name = "Part"
 rust = ["src/stream.rs", "src/makenotation/mod.rs"]
 note = "One player's line. A crate stream of kind `Part` or `PartStaff` carries the name and abbreviation music21 keeps as `partName` and `partAbbreviation`."
+facade = "Stream"
 
 [class.renames]
 partName = "name"
@@ -1047,6 +1049,7 @@ rust = [
   "src/makenotation/score.rs",
 ]
 note = "Every part of a piece together."
+facade = "Stream"
 
 [class.excluded]
 measure = "one measure by its number; `measures` answers them all, each carrying its own `number`"
@@ -1056,6 +1059,7 @@ python = "stream/base.py"
 name = "Opus"
 rust = ["src/stream/opus.rs"]
 note = "The scores a multi-work file holds, which many an ABC or Essen collection is."
+facade = "Stream"
 
 [class.renames]
 getNumbers = "score_numbers"

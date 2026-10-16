@@ -78,6 +78,20 @@ impl Dynamic {
 
 #[pymethods]
 impl Dynamic {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+    /// music21's sort order for a dynamic among things at one offset:
+    /// after the clef, key and meter and before the notes.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        10
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.

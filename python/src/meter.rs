@@ -130,6 +130,20 @@ impl Clone for TimeSignature {
 
 #[pymethods]
 impl TimeSignature {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+    /// music21's sort order for a meter among things at one offset: after
+    /// the clef and the key signature.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        4
+    }
+
     #[new]
     #[pyo3(signature = (value = "4/4".to_string(), divisions = None, **keywords))]
     fn new(

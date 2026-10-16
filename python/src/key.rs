@@ -130,6 +130,20 @@ fn tonic_name(value: &Bound<'_, PyAny>) -> PyResult<String> {
 
 #[pymethods]
 impl KeySignature {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+    /// music21's sort order for a key signature among things at one offset:
+    /// after the clef and before the meter.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        2
+    }
+
     /// A key signature is written out as text and read back.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         crate::pickled(slf, &slf.borrow().signature)

@@ -122,18 +122,18 @@ impl Stream {
         if quarter_length > highest {
             return Ok((left, right));
         }
-        let span = super::queries::OffsetSpan {
+        let span = super::span::OffsetSpan {
             include_end_boundary: true,
             must_finish_in_span: false,
             include_elements_that_end_at_start: false,
             must_begin_in_span: false,
-            ..super::queries::OffsetSpan::new(quarter_length, Some(highest))
+            ..super::span::OffsetSpan::between(quarter_length, highest)
         };
         let mut kept: Vec<(StreamEvent, Option<usize>)> = Vec::new();
         let mut moved: Vec<StreamEvent> = Vec::new();
         for (index, event) in self.events().iter().enumerate() {
             let length = event.element().quarter_length();
-            if !span.holds(event.offset(), length) {
+            if !span.takes_at(event.offset(), length) {
                 kept.push((event.clone(), Some(index)));
                 continue;
             }
@@ -157,7 +157,7 @@ impl Stream {
             }
         }
         left.replace_events(kept);
-        if left.right_barline().is_some() && span.holds(highest, 0.0) {
+        if left.right_barline().is_some() && span.takes_at(highest, 0.0) {
             right.set_right_barline(left.right_barline().cloned());
             left.set_right_barline(None);
         }

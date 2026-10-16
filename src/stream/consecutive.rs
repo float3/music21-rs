@@ -323,15 +323,15 @@ impl Stream {
                 _ => None,
             })
             .map(|(index, offset, note)| {
-                let sounding = super::queries::OffsetSpan {
+                let sounding = super::span::OffsetSpan {
                     must_begin_in_span: false,
-                    ..super::queries::OffsetSpan::new(offset, None)
+                    ..super::span::OffsetSpan::at(offset)
                 };
                 let interval = other
                     .events
                     .iter()
                     .filter(|event| {
-                        sounding.holds(event.offset(), event.element().quarter_length())
+                        sounding.takes_at(event.offset(), event.element().quarter_length())
                     })
                     .filter_map(|event| match event.element() {
                         StreamElement::Note(other) => Interval::between_notes(note, other).ok(),

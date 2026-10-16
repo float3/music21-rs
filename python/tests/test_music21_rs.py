@@ -1804,3 +1804,1136 @@ def test_the_lyrics_are_gathered_as_music21_gathers_them():
     tied.append(over)
     assert shown(tied.lyrics()[1]) == ["held", "over"]
     assert shown(tied.lyrics(skipTies=True)[1]) == ["held"]
+
+
+def outline(stream):
+    """Every element of a stream in order, as a line apiece."""
+    out = []
+    for element in stream.recurse():
+        if getattr(element, "isStream", False):
+            out.append(f"[{type(element).__name__}]")
+        else:
+            pitches = " ".join(p.nameWithOctave for p in getattr(element, "pitches", ()))
+            length = getattr(element, "quarterLength", 0.0)
+            out.append(f"{type(element).__name__} {pitches} ql={length}")
+    return out
+
+
+def test_a_stream_is_transposed_as_music21_transposes_it():
+    """Every answer is music21's own for the same part."""
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    assert outline(part.transpose("P5"))[3:] == [
+        "Note G4 ql=1.0",
+        "Note A4 ql=1.0",
+        "Note B4 ql=1.0",
+        "Note C5 ql=1.0",
+    ]
+    # A count of semitones, which music21 reads as an interval too.
+    assert outline(part.transpose(2))[3:] == [
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "Note F#4 ql=1.0",
+        "Note G4 ql=1.0",
+    ]
+    # The answer is a copy, as music21's is unless asked for inPlace.
+    assert outline(part)[3] == "Note C4 ql=1.0"
+    with pytest.raises(m.StreamException):
+        part.transpose("P5", inPlace=True)
+
+
+def test_tied_notes_are_joined_as_music21_joins_them():
+    """Every answer is music21's own for the same part."""
+    tied = m.from_tiny_notation("tinyNotation: 4/4 c2~ c2 d4 e4 f4 g4")
+    stripped = outline(tied.stripTies())
+    # The two halves across the barline are one whole note.
+    assert stripped[3] == "Note C4 ql=4.0"
+    assert stripped[4] == "[Measure]"
+    assert stripped[5:] == [
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "Note F4 ql=1.0",
+        "Note G4 ql=1.0",
+    ]
+
+
+def test_a_template_keeps_the_skeleton_as_music21_keeps_it():
+    """Every answer is music21's own for the same part."""
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    # The clef and the meter stay; the notes become one rest as long as
+    # the run they filled.
+    assert outline(part.template()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Rest  ql=4.0",
+    ]
+    assert outline(part.template(removeAll=True)) == ["[Measure]", "Rest  ql=4.0"]
+    assert outline(part.template(fillWithRests=False)) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+    ]
+    # The classes taken out are music21's own default set here, so naming
+    # others is refused rather than answered differently.
+    with pytest.raises(m.StreamException):
+        part.template(removeClasses=["Clef"])
+
+
+def test_offsets_are_quantized_as_music21_quantizes_them():
+    """Every answer is music21's own for the same stream."""
+    loose = m.Stream()
+    for name, offset, length in (
+        ("C4", 0.0, 0.26),
+        ("D4", 0.48, 0.52),
+        ("E4", 1.01, 0.99),
+    ):
+        loose.insert(offset, m.Note(name, quarterLength=length))
+
+    quantized = loose.quantize()
+    assert [
+        (quantized.elementOffset(e), e.quarterLength) for e in quantized.notes
+    ] == [(0.0, 0.25), (0.5, 0.5), (1.0, 1.0)]
+    # Quantizing part of a stream, or only its offsets, is refused.
+    with pytest.raises(m.StreamException):
+        loose.quantize(processDurations=False)
+
+
+def test_a_stream_is_cut_into_measures_as_music21_cuts_it():
+    """Every answer is music21's own for the same part."""
+    loose = m.Part()
+    loose.insert(0.0, m.TimeSignature("3/4"))
+    for at, name in enumerate(["C4", "D4", "E4", "F4", "G4", "A4"]):
+        loose.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    assert outline(loose.makeMeasures()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "[Measure]",
+        "Note F4 ql=1.0",
+        "Note G4 ql=1.0",
+        "Note A4 ql=1.0",
+    ]
+
+    # The meters may be given in a stream of their own, as music21 takes
+    # them: two-four here rather than the stream's own four-four.
+    given = m.Stream()
+    given.insert(0.0, m.TimeSignature("2/4"))
+    bare = m.Part()
+    for at, name in enumerate(["C4", "D4", "E4", "F4"]):
+        bare.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert outline(bare.makeMeasures(given)) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "[Measure]",
+        "Note E4 ql=1.0",
+        "Note F4 ql=1.0",
+    ]
+
+
+def test_what_runs_past_a_barline_is_cut_and_tied():
+    """Every answer is music21's own for the same part."""
+    over = m.Part()
+    over.insert(0.0, m.TimeSignature("4/4"))
+    over.insert(0.0, m.Note("C4", quarterLength=6.0))
+    over.insert(6.0, m.Note("D4", quarterLength=2.0))
+
+    tied = over.makeMeasures().makeTies()
+    notes = [e for e in tied.recurse() if getattr(e, "isNote", False)]
+    assert [(n.nameWithOctave, n.quarterLength) for n in notes] == [
+        ("C4", 4.0),
+        ("C4", 2.0),
+        ("D4", 2.0),
+    ]
+    assert [n.tie.type if n.tie else None for n in notes] == ["start", "stop", None]
+
+
+def test_notes_are_beamed_and_accidentals_decided_as_music21_does():
+    """Every answer is music21's own for the same part."""
+    eighths = m.from_tiny_notation("tinyNotation: 4/4 c8 d8 e8 f8 g8 a8 b8 c'8")
+    beamed = [e for e in eighths.makeBeams().recurse() if getattr(e, "isNote", False)]
+    # Beamed in pairs by the beat, as music21 beams them.
+    assert [str(n.beams) for n in beamed[:4]] == [
+        "<music21.beam.Beams <music21.beam.Beam 1/start>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/start>>",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>>",
+    ]
+
+    # The second sharp in the measure is not written again.
+    sharps = m.from_tiny_notation("tinyNotation: 4/4 c#4 c#4 d4 e4")
+    decided = [
+        e for e in sharps.makeAccidentals().recurse() if getattr(e, "isNote", False)
+    ]
+    assert [
+        (n.nameWithOctave, n.pitch.accidental.displayStatus if n.pitch.accidental else None)
+        for n in decided
+    ] == [("C#4", True), ("C#4", False), ("D4", None), ("E4", None)]
+
+
+def test_overlapping_notes_go_into_voices():
+    """Every answer is music21's own for the same stream."""
+    together = m.Stream()
+    together.insert(0.0, m.Note("C4", quarterLength=4.0))
+    together.insert(0.0, m.Note("E4", quarterLength=2.0))
+
+    assert outline(together.makeVoices(fillGaps=False)) == [
+        "[Voice]",
+        "Note C4 ql=4.0",
+        "[Voice]",
+        "Note E4 ql=2.0",
+    ]
+    # music21 fills the gaps its voices leave by default; nothing here
+    # does, so that is refused rather than answered without the rests.
+    with pytest.raises(m.StreamException):
+        together.makeVoices()
+
+
+def test_a_stream_is_notated_as_music21_notates_it():
+    """Every answer is music21's own for the same part."""
+    raw = m.Part()
+    raw.insert(0.0, m.TimeSignature("3/4"))
+    for at, name in enumerate(["C4", "D4", "E4", "F4"]):
+        raw.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    assert outline(raw.makeNotation()) == [
+        "[Measure]",
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+        "Note E4 ql=1.0",
+        "[Measure]",
+        "Note F4 ql=1.0",
+    ]
+    # Each step is taken at music21's own defaults, so asking for others
+    # is refused.
+    with pytest.raises(m.StreamException):
+        raw.makeNotation(bestClef=True)
+
+
+def test_a_part_is_turned_to_sounding_and_written_pitch():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    line.insert(0.0, m.Clarinet())
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.atSoundingPitch = False
+
+    def names(stream):
+        return [n.nameWithOctave for n in stream.recurse() if getattr(n, "isNote", False)]
+
+    # A clarinet in B flat sounds a tone below what it reads.
+    sounding = line.toSoundingPitch()
+    assert names(sounding) == ["B-3", "C4", "D4"]
+    assert sounding.atSoundingPitch is True
+    assert names(sounding.toWrittenPitch()) == ["C4", "D4", "E4"]
+    # The answer is a copy, as music21's is unless asked for inPlace.
+    assert names(line) == ["C4", "D4", "E4"]
+
+
+def test_two_streams_are_asked_where_they_strike_together():
+    """Every answer is music21's own for the same streams."""
+    first = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        first.insert(at, m.Note("C4", quarterLength=1.0))
+    second = m.Stream()
+    for at in (1.0, 3.0):
+        second.insert(at, m.Note("E4", quarterLength=1.0))
+    assert first.simultaneousAttacks(second) == [1.0]
+
+    score = m.Stream()
+    score.insert(0.0, m.Part())
+    score.insert(0.0, m.Part())
+    assert score.hasPartLikeStreams()
+    assert not first.hasPartLikeStreams()
+
+
+def test_the_gaps_in_a_stream_are_found_as_music21_finds_them():
+    """Every answer is music21's own for the same stream."""
+    gappy = m.Stream()
+    gappy.insert(1.0, m.Note("E4", quarterLength=2.0))
+    gappy.insert(5.0, m.Note("F4", quarterLength=4.0))
+
+    gaps = gappy.findGaps()
+    # A quarter before the first note, and two between the two, each a
+    # rest here where music21 answers a bare object of the same length.
+    assert [(gaps.elementOffset(e), e.quarterLength) for e in gaps] == [
+        (0.0, 1.0),
+        (3.0, 2.0),
+    ]
+    assert m.Stream().findGaps() is None
+    full = m.Stream()
+    for at in (0.0, 1.0):
+        full.insert(at, m.Note("C4", quarterLength=1.0))
+    assert full.findGaps() is None
+
+
+def test_a_measure_is_cut_in_two_as_music21_cuts_it():
+    """Every answer is music21's own for the same measure."""
+    whole = m.from_tiny_notation("tinyNotation: 4/4 c2 d2")
+    bar = [e for e in whole if getattr(e, "isStream", False)][0]
+
+    first, second = bar.splitAtQuarterLength(1.0)
+    assert outline(first) == [
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+    ]
+    # The second piece opens with the clef and meter in force, as
+    # music21's searchContext finds them, and the half note is tied.
+    assert outline(second) == [
+        "TrebleClef  ql=0.0",
+        "TimeSignature  ql=0.0",
+        "Note C4 ql=1.0",
+        "Note D4 ql=2.0",
+    ]
+    notes = [e for e in first.recurse() if getattr(e, "isNote", False)]
+    assert notes[0].tie.type == "start"
+    assert [e for e in second.recurse() if getattr(e, "isNote", False)][0].tie.type == (
+        "stop"
+    )
+
+
+def test_notes_struck_twice_are_tied_in_place():
+    """Every answer is music21's own for the same stream."""
+    again = m.Stream()
+    again.insert(0.0, m.Note("C4", quarterLength=1.0))
+    again.insert(1.0, m.Note("C4", quarterLength=1.0))
+    again.insert(2.0, m.Note("D4", quarterLength=1.0))
+
+    # music21 writes the ties onto the notes it was given and answers
+    # nothing, and the notes here are the stream's own.
+    assert again.extendTies() is None
+    assert [n.tie.type if n.tie else None for n in again.notes] == [
+        "start",
+        "stop",
+        None,
+    ]
+    with pytest.raises(m.StreamException):
+        again.extendTies(pitchAttr="name")
+
+    # And across the measures of a part, where the clef and the meter
+    # stand among the elements the positions are counted over.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 c2 c2 g4 g4")
+    part.extendTies()
+    notes = [e for e in part.recurse() if getattr(e, "isNote", False)]
+    assert [n.tie.type if n.tie else None for n in notes] == [
+        None,
+        None,
+        None,
+        "start",
+        "stop",
+        "start",
+        "stop",
+    ]
+
+
+def test_elements_are_shifted_and_voices_flattened():
+    """Every answer is music21's own for the same streams."""
+    shifted = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        shifted.insert(at, m.Note("C4", quarterLength=1.0))
+    # In place and answering nothing, as music21's does, and only what
+    # starts at or after the offset given moves.
+    assert shifted.shiftElements(2.0, startOffset=1.0) is None
+    assert sorted(shifted.elementOffset(e) for e in shifted) == [0.0, 3.0, 4.0]
+
+    holder = m.Measure()
+    inner = m.Voice()
+    inner.insert(0.0, m.Note("C4", quarterLength=1.0))
+    inner.insert(1.0, m.Note("D4", quarterLength=1.0))
+    holder.insert(0.0, inner)
+    # One voice in a measure is dissolved into the measure itself.
+    assert outline(holder.flattenUnnecessaryVoices()) == [
+        "Note C4 ql=1.0",
+        "Note D4 ql=1.0",
+    ]
+
+
+def test_what_stands_at_one_offset_is_listed_in_music21s_order():
+    """Every order here is music21's own `classSortOrder`."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    # Put in last and listed first, the clef sorting before a note.
+    line.insert(0.0, m.TrebleClef())
+    assert [type(e).__name__ for e in line] == ["TrebleClef", "Note", "Note", "Note"]
+
+    opening = m.Measure()
+    for element in (
+        m.Note("C4", quarterLength=1.0),
+        m.TimeSignature("4/4"),
+        m.MetronomeMark(number=120),
+        m.KeySignature(2),
+        m.TrebleClef(),
+        m.Piano(),
+    ):
+        opening.insert(0.0, element)
+    assert [type(e).__name__ for e in opening] == [
+        "Piano",
+        "TrebleClef",
+        "MetronomeMark",
+        "KeySignature",
+        "TimeSignature",
+        "Note",
+    ]
+    # A voice sorts after its measure's clef, key and meter, where every
+    # other stream sorts before them.
+    assert m.Voice().classSortOrder == 5
+    assert m.Part().classSortOrder == -20
+
+
+def test_elements_are_taken_out_by_class_and_by_index():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.insert(0.0, m.TrebleClef())
+
+    # pop answers the object itself, by its place in `elements`.
+    assert type(line.pop(0)).__name__ == "TrebleClef"
+    assert line.pop().nameWithOctave == "E4"
+    assert type(line.pop(-1)).__name__ == "Note"
+    assert len(line) == 1
+    with pytest.raises(IndexError):
+        m.Stream().pop()
+
+    held = m.Stream()
+    held.insert(0.0, m.TrebleClef())
+    for at, name in enumerate(["C4", "D4"]):
+        held.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert held.removeByClass("Note") is None
+    assert [type(e).__name__ for e in held] == ["TrebleClef"]
+
+    other = m.Stream()
+    other.insert(0.0, m.TrebleClef())
+    for at, name in enumerate(["C4", "D4"]):
+        other.insert(float(at), m.Note(name, quarterLength=1.0))
+    assert other.removeByNotOfClass("Note") is None
+    assert [type(e).__name__ for e in other] == ["Note", "Note"]
+
+
+def test_the_voices_a_stream_holds_are_its_own():
+    holder = m.Stream()
+    first = m.Voice()
+    first.insert(0.0, m.Note("C4", quarterLength=1.0))
+    second = m.Voice()
+    second.insert(0.0, m.Note("E4", quarterLength=1.0))
+    holder.insert(0.0, first)
+    holder.insert(0.0, second)
+
+    voices = list(holder.voices)
+    assert len(voices) == 2
+    # The voices handed back are the stream's own, as music21's are.
+    assert voices[0] is first and voices[1] is second
+
+
+def test_what_a_stream_opens_with_is_read_and_written():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    assert (bar.clef, bar.keySignature, bar.timeSignature) == (None, None, None)
+
+    first = m.TrebleClef()
+    bar.clef = first
+    bar.keySignature = m.KeySignature(2)
+    bar.timeSignature = m.TimeSignature("3/4")
+    bar.append(m.Note("C4", quarterLength=1.0))
+    assert bar.clef.sign == "G"
+    assert bar.keySignature.sharps == 2
+    assert bar.timeSignature.ratioString == "3/4"
+    # The clef handed back is the measure's own object.
+    assert bar.clef is first
+
+    # Writing another takes the first out, as music21's setter does.
+    bar.clef = m.BassClef()
+    assert bar.clef.sign == "F"
+    assert [type(e).__name__ for e in bar] == [
+        "BassClef",
+        "KeySignature",
+        "TimeSignature",
+        "Note",
+    ]
+    bar.clef = None
+    assert bar.clef is None
+    assert len(bar) == 3
+
+    # Only what stands at the very start is what the stream opens with.
+    later = m.Measure()
+    later.insert(2.0, m.TrebleClef())
+    assert later.clef is None
+
+
+def test_the_meters_and_instruments_a_stream_holds_are_found():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    first = m.Measure()
+    first.insert(0.0, m.TimeSignature("3/4"))
+    first.append(m.Note("C4", quarterLength=1.0))
+    second = m.Measure()
+    second.insert(0.0, m.TimeSignature("2/2"))
+    second.append(m.Note("D4", quarterLength=1.0))
+    line.insert(0.0, first)
+    line.insert(3.0, second)
+
+    found = line.getTimeSignatures()
+    assert [(found.elementOffset(t), t.ratioString) for t in found] == [
+        (0.0, "3/4"),
+        (3.0, "2/2"),
+    ]
+    # The meters handed back are the measures' own objects.
+    assert list(found)[0] is first.timeSignature
+    # The part itself states none, so nothing is found without recursing.
+    assert len(line.getTimeSignatures(recurse=False, returnDefault=False)) == 0
+    # And a four-four is made up where one is asked for, as music21 does.
+    assert [t.ratioString for t in line.getTimeSignatures(recurse=False)] == ["4/4"]
+
+    played = m.Part()
+    flute = m.Flute()
+    played.insert(0.0, flute)
+    played.append(m.Note("C4", quarterLength=1.0))
+    assert list(played.getInstruments())[0] is flute
+    assert played.getInstrument() is flute
+
+    none = m.Part()
+    none.append(m.Note("C4", quarterLength=1.0))
+    default = none.getInstruments()
+    assert [type(i).__name__ for i in default] == ["Instrument"]
+    # music21 gives the one it makes up the default part name, which is
+    # the empty string.
+    assert list(default)[0].partName == ""
+    assert len(none.getInstruments(returnDefault=False)) == 0
+    assert none.getInstrument(returnDefault=False) is None
+
+
+def test_an_element_is_found_at_or_before_an_offset():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in ((0.0, "C4"), (10.0, "D4"), (20.0, "E4"), (30.0, "F4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+    clef = m.BassClef()
+    line.insert(20.0, clef)
+
+    assert line.getElementAtOrBefore(21).nameWithOctave == "E4"
+    # Of two things standing at one offset the later in the listing wins,
+    # which is the note rather than the clef sorting before it.
+    assert line.getElementAtOrBefore(20).nameWithOctave == "E4"
+    assert line.getElementAtOrBefore(20, ["Note"]).nameWithOctave == "E4"
+    assert line.getElementAtOrBefore(0).nameWithOctave == "C4"
+    assert line.getElementAtOrBefore(-1) is None
+    # What stands at the offset itself does not count here.
+    assert line.getElementBeforeOffset(20).nameWithOctave == "D4"
+    assert line.getElementBeforeOffset(20, ["Note"]).nameWithOctave == "D4"
+
+    first = line.notes[0]
+    assert line.getElementAfterElement(first).nameWithOctave == "D4"
+    assert line.getElementAfterElement(clef).nameWithOctave == "E4"
+    assert line.getElementAfterElement(first, ["Clef"]) is clef
+    assert line.getElementAfterElement(line.notes[-1]) is None
+    with pytest.raises(m.StreamException):
+        line.getElementAfterElement(m.Note("C4"))
+
+
+def test_an_object_is_repeated_into_a_stream_as_copies():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    one = m.Note("C4", quarterLength=2.0)
+    assert line.repeatAppend(one, 3) is None
+    assert sorted(line.elementOffset(e) for e in line) == [0.0, 2.0, 4.0]
+    # Copies, as music21's deepcopy makes them: the object handed in is
+    # not one of the three.
+    assert not any(e is one for e in line)
+    assert [e.nameWithOctave for e in line] == ["C4", "C4", "C4"]
+
+    other = m.Stream()
+    other.repeatInsert(m.Note("E4", quarterLength=1.0), [0.0, 4.0, 8.0])
+    assert sorted(other.elementOffset(e) for e in other) == [0.0, 4.0, 8.0]
+    # And each copy is its own note.
+    list(other)[0].pitch.name = "G"
+    assert sorted(e.nameWithOctave for e in other) == ["E4", "E4", "G4"]
+
+
+def test_the_measures_of_a_score_are_gathered_by_offset():
+    """Every answer is music21's own for the same score."""
+    first = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    second = m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4 G4 A4 B4 c4")
+    whole = m.Score()
+    whole.insert(0.0, first)
+    whole.insert(0.0, second)
+
+    def shown(the_map):
+        return {at: [bar.number for bar in bars] for at, bars in the_map.items()}
+
+    assert shown(first.measureOffsetMap()) == {0.0: [1], 4.0: [2]}
+    # A score answers out of its parts, so the measures standing together
+    # in the two parts are listed together.
+    assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
+    assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # The measures are the parts' own objects.
+    assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
+    # Gathering by another class is refused rather than answered without
+    # the sites it would need.
+    with pytest.raises(m.StreamException):
+        whole.measureOffsetMap(["Note"])
+
+
+def test_an_object_is_inserted_and_what_follows_shifted():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in ((0.0, "C4"), (1.0, "D4"), (2.0, "E4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+
+    def shown(stream):
+        return sorted((stream.elementOffset(e), e.nameWithOctave) for e in stream)
+
+    # Everything from the element nearest after the offset is moved far
+    # enough that it starts where the new note ends.
+    assert line.insertAndShift(1.0, m.Note("F4", quarterLength=2.0)) is None
+    assert shown(line) == [(0.0, "C4"), (1.0, "F4"), (3.0, "D4"), (4.0, "E4")]
+
+    # Nothing standing after the offset means nothing to move.
+    tail = m.Stream()
+    tail.insert(0.0, m.Note("C4", quarterLength=1.0))
+    tail.insertAndShift(4.0, m.Note("A4", quarterLength=1.0))
+    assert shown(tail) == [(0.0, "C4"), (4.0, "A4")]
+
+
+def test_a_stream_is_divided_by_what_a_function_says():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "G5", "E4", "B5"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    line.insert(0.0, m.TrebleClef())
+
+    high, low = line.splitByClass("Note", lambda n: n.octave > 4)
+    assert [e.nameWithOctave for e in high] == ["G5", "B5"]
+    assert [e.nameWithOctave for e in low] == ["C4", "E4"]
+    # Each keeps the offset it stood at, and the objects are the stream's
+    # own, so the clef -- of another class -- is in neither.
+    assert [high.elementOffset(e) for e in high] == [1.0, 3.0]
+    assert list(low)[0] is line.notes[0]
+
+    # No class at all takes everything the stream holds, as music21 does.
+    every, none = line.splitByClass(None, lambda e: True)
+    assert len(every) == 5
+    assert len(none) == 0
+
+
+def test_measures_are_taken_from_a_part_as_music21_takes_them():
+    """Every answer is music21's own for the same part and score."""
+    line = m.from_tiny_notation(
+        "tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4 d'4 e'4 f'4 g'4"
+    )
+
+    def shown(stream):
+        out = []
+        for element in stream:
+            at = stream.elementOffset(element)
+            if getattr(element, "isStream", False):
+                out.append(f"[{type(element).__name__} {element.number}@{at}]")
+            else:
+                out.append(f"{type(element).__name__}@{at}")
+        return out
+
+    # The first measure stands at nought, and before it what was in force
+    # where it begins: the clef and the meter, which music21 puts first by
+    # giving them the measure's priority less one.
+    assert shown(line.measures(2, 3)) == [
+        "TrebleClef@0.0",
+        "TimeSignature@0.0",
+        "[Measure 2@0.0]",
+        "[Measure 3@4.0]",
+    ]
+    assert shown(line.measures(3, 3)) == [
+        "TrebleClef@0.0",
+        "TimeSignature@0.0",
+        "[Measure 3@0.0]",
+    ]
+    # With indices music21 slices, so the end is left out.
+    assert shown(line.measures(0, 1, indicesNotNumbers=True)) == ["[Measure 1@0.0]"]
+    assert shown(line.measures(9, 10)) == []
+
+    one = line.measure(2)
+    assert one.number == 2
+    assert [n.nameWithOctave for n in one.notes] == ["G4", "A4", "B4", "C5"]
+    # The measure is the part's own object.
+    assert one is line.getElementsByClass("Measure")[1]
+    assert line.measure(9) is None
+
+    # A score answers a score of each part's measures of that number.
+    whole = m.Score()
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4"))
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4 G4 A4 B4 c4"))
+    cut = whole.measures(2, 2)
+    assert isinstance(cut, m.Score)
+    assert [shown(part) for part in cut] == [
+        ["TrebleClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
+        ["BassClef@0.0", "TimeSignature@0.0", "[Measure 2@0.0]"],
+    ]
+
+
+def test_a_stream_says_where_each_element_begins_and_ends():
+    """Every answer is music21's own for the same streams."""
+    line = m.Stream()
+    line.insert(0.0, m.TrebleClef())
+    for at, name in ((0.0, "C4"), (1.0, "D4"), (2.0, "E4")):
+        line.insert(at, m.Note(name, quarterLength=1.0))
+
+    def shown(the_map):
+        return [
+            (type(e.element).__name__, e.offset, e.endTime, e.voiceIndex)
+            for e in the_map
+        ]
+
+    assert shown(line.offsetMap()) == [
+        ("TrebleClef", 0.0, 0.0, None),
+        ("Note", 0.0, 1.0, None),
+        ("Note", 1.0, 2.0, None),
+        ("Note", 2.0, 3.0, None),
+    ]
+    assert line.offsetMap()[0]._fields == ("element", "offset", "endTime", "voiceIndex")
+    # The element is the stream's own object.
+    assert line.offsetMap()[0].element is list(line)[0]
+
+    # A measure with voices is read voice by voice, what stands outside
+    # them first and with no voice of its own, as music21 reads it.
+    bar = m.Measure()
+    first = m.Voice()
+    first.insert(0.0, m.Note("C4", quarterLength=2.0))
+    second = m.Voice()
+    second.insert(0.0, m.Note("E4", quarterLength=1.0))
+    second.insert(1.0, m.Note("F4", quarterLength=1.0))
+    bar.insert(0.0, m.TrebleClef())
+    bar.insert(0.0, first)
+    bar.insert(0.0, second)
+    assert shown(bar.offsetMap()) == [
+        ("TrebleClef", 0.0, 0.0, None),
+        ("Note", 0.0, 2.0, 0),
+        ("Note", 0.0, 1.0, 1),
+        ("Note", 1.0, 2.0, 1),
+    ]
+
+
+def test_every_pitch_a_stream_holds_is_gathered():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    line.insert(0.0, m.Key("G"))
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(1.0, m.Chord(["E4", "G4"]))
+    line.insert(2.0, m.Rest(quarterLength=1.0))
+
+    # A note's one pitch and a chord's two; the key's are not the music's
+    # and music21 passes it over.
+    assert [p.nameWithOctave for p in line.pitches] == ["C4", "E4", "G4"]
+    # Each is the very object the note holds.
+    assert line.pitches[0] is line.notes[0].pitch
+
+    # The pitches of a nested stream come too, so a part answers for its
+    # measures without being flattened.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4")
+    assert [p.nameWithOctave for p in part.pitches] == ["C4", "D4", "E4", "F4"]
+
+
+def test_what_stands_around_an_element_is_extracted():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    for at, name in enumerate(["C4", "D4", "E4", "F4", "G4", "A4", "B4", "c5"]):
+        line.insert(float(at), m.Note(name, quarterLength=1.0))
+    middle = list(line)[4]
+
+    around = line.extractContext(middle, 2.0, 2.0)
+    # From two quarters before it begins to two past where it ends, the
+    # elements keeping the offsets they stood at.
+    assert [(around.elementOffset(e), e.nameWithOctave) for e in around] == [
+        (2.0, "E4"),
+        (3.0, "F4"),
+        (4.0, "G4"),
+        (5.0, "A4"),
+        (6.0, "B4"),
+    ]
+    assert list(around)[0] is list(line)[2]
+    assert [e.nameWithOctave for e in line.extractContext(middle, 0.0, 1.0)] == [
+        "G4",
+        "A4",
+    ]
+    with pytest.raises(m.StreamException):
+        line.extractContext(m.Note("C4"))
+
+
+def test_a_measure_is_filled_out_with_rests():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    bar = m.Measure()
+    bar.insert(0.0, m.TimeSignature("4/4"))
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+    bar.insert(3.0, m.Note("D4", quarterLength=1.0))
+    line.insert(0.0, bar)
+
+    filled = line.makeRests(fillGaps=True, timeRangeFromBarDuration=True)
+    assert [
+        (type(e).__name__, getattr(e, "quarterLength", 0.0))
+        for e in filled.recurse()
+        if not getattr(e, "isStream", False)
+    ] == [("TimeSignature", 0.0), ("Note", 1.0), ("Rest", 2.0), ("Note", 1.0)]
+
+    # That one combination of music21's keywords is what the crate
+    # answers, so its defaults are refused rather than answered as though
+    # they had been asked for.
+    with pytest.raises(m.StreamException):
+        line.makeRests()
+
+
+def test_what_sounds_while_another_part_sounds_is_found():
+    """Every answer is music21's own for the same two streams."""
+    upper = m.Stream()
+    upper.insert(0.0, m.Note("C5", quarterLength=2.0))
+    upper.insert(2.0, m.Note("D5", quarterLength=2.0))
+    lower = m.Stream()
+    for at, name in enumerate(["C3", "D3", "E3", "F3"]):
+        lower.insert(float(at), m.Note(name, quarterLength=1.0))
+
+    held = list(upper)[1]
+    found = lower.allPlayingWhileSounding(held, upper)
+    # Each at its offset from where the note searched for stands.
+    assert [(found.elementOffset(e), e.nameWithOctave) for e in found] == [
+        (0.0, "E3"),
+        (1.0, "F3"),
+    ]
+    # And they are the lower stream's own notes.
+    assert list(found)[0] is list(lower)[2]
+
+    found = lower.allPlayingWhileSounding(list(upper)[0], upper)
+    assert [(found.elementOffset(e), e.nameWithOctave) for e in found] == [
+        (0.0, "C3"),
+        (1.0, "D3"),
+    ]
+
+
+def test_what_sounds_where_a_note_is_struck_is_found():
+    """Every answer is music21's own for the same two streams."""
+    upper = m.Stream()
+    upper.insert(0.0, m.Note("C5", quarterLength=2.0))
+    upper.insert(2.0, m.Note("D5", quarterLength=2.0))
+    lower = m.Stream()
+    lower.insert(0.0, m.Note("C3", quarterLength=3.0))
+    lower.insert(3.0, m.Note("D3", quarterLength=1.0))
+
+    # The long note below is sounding where each of the two above starts.
+    assert lower.playingWhenAttacked(list(upper)[0], upper).nameWithOctave == "C3"
+    assert lower.playingWhenAttacked(list(upper)[1], upper).nameWithOctave == "C3"
+    assert lower.playingWhenAttacked(list(upper)[0], upper) is list(lower)[0]
+
+    # Of several standing there the first of the searched element's class
+    # wins, so the note rather than the clef.
+    mixed = m.Stream()
+    mixed.insert(0.0, m.TrebleClef())
+    mixed.insert(0.0, m.Note("E3", quarterLength=1.0))
+    assert mixed.playingWhenAttacked(list(upper)[0], upper).nameWithOctave == "E3"
+    assert m.Stream().playingWhenAttacked(list(upper)[0], upper) is None
+
+
+def test_a_class_filter_reads_what_music21_says_a_thing_is():
+    """Every count is music21's own for the same stream.
+
+    A class of this package's answers to its own name and to the classes
+    it extends; what music21 says a thing *is* besides -- a `GeneralNote`,
+    a `NotRest`, a `Music21Object` -- is a class nothing here is named
+    after, and the crate's hierarchy is what answers for it.
+    """
+    line = m.Stream()
+    for at, element in enumerate(
+        (
+            m.TrebleClef(),
+            m.KeySignature(2),
+            m.TimeSignature("4/4"),
+            m.MetronomeMark(number=96),
+            m.Dynamic("mf"),
+            m.Note("C4"),
+            m.Chord(["E4", "G4"]),
+            m.Rest(quarterLength=1.0),
+            m.ChordSymbol("C"),
+        )
+    ):
+        line.insert(float(at), element)
+
+    def count(name):
+        return len(line.getElementsByClass(name).elements)
+
+    # The leaves of music21's hierarchy, which the class names alone answer.
+    assert (count("Note"), count("Rest"), count("Dynamic")) == (1, 1, 1)
+    assert (count("TrebleClef"), count("MetronomeMark")) == (1, 1)
+    # And the classes above them, which they do not.
+    assert count("GeneralNote") == 4
+    assert count("NotRest") == 3
+    assert count("ChordBase") == 2
+    assert count("Chord") == 2
+    assert count("Harmony") == 1
+    assert count("TempoIndication") == 1
+    assert count("TimeSignatureBase") == 1
+    assert count("Music21Object") == 9
+    # A list of classes takes anything answering to one of them.
+    assert len(line.getElementsByClass(["Clef", "NotRest"]).elements) == 4
+    assert sorted(
+        type(e).__name__ for e in line.getElementsNotOfClass("GeneralNote")
+    ) == ["Dynamic", "KeySignature", "MetronomeMark", "TimeSignature", "TrebleClef"]
+    assert line.hasElementOfClass("NotRest")
+    assert not line.hasElementOfClass("Unpitched")
+
+    # A stream is asked by its kind, and is a Music21Object like anything
+    # else the stream holds.
+    holder = m.Part()
+    holder.insert(0.0, m.Measure())
+    assert len(holder.getElementsByClass("Music21Object").elements) == 1
+    assert len(holder.getElementsByClass("Stream").elements) == 1
+    assert len(holder.getElementsByClass("Measure").elements) == 1
+    assert len(holder.getElementsByClass("Voice").elements) == 0
+
+
+def test_a_thing_says_what_it_is_as_music21_says_it():
+    """Every chain is music21's own `classes` for the same object."""
+    assert m.Note("C4").classes == [
+        "Note",
+        "NotRest",
+        "GeneralNote",
+        "Music21Object",
+        "ProtoM21Object",
+        "object",
+    ]
+    assert m.Rest().classes == [
+        "Rest",
+        "GeneralNote",
+        "Music21Object",
+        "ProtoM21Object",
+        "object",
+    ]
+    assert m.Chord(["C4", "E4"]).classes[:3] == ["Chord", "ChordBase", "NotRest"]
+    assert m.ChordSymbol("C").classes[:4] == [
+        "ChordSymbol",
+        "Harmony",
+        "Chord",
+        "ChordBase",
+    ]
+    # A clef of a kind, an instrument of a kind and a key carry the chains
+    # music21 gives them, which the crate's lineage table says and
+    # `class_lineage_parity` holds to music21.
+    assert m.TrebleClef().classes[:4] == ["TrebleClef", "GClef", "PitchClef", "Clef"]
+    assert m.Ocarina().classes[:4] == [
+        "Ocarina",
+        "Flute",
+        "WoodwindInstrument",
+        "Instrument",
+    ]
+    assert m.Key("G").classes[:5] == [
+        "Key",
+        "KeySignature",
+        "DiatonicScale",
+        "ConcreteScale",
+        "Scale",
+    ]
+    # A stream is a `Generic` to music21, being typed by what it holds.
+    assert m.Measure().classes == [
+        "Measure",
+        "Stream",
+        "StreamCore",
+        "Music21Object",
+        "ProtoM21Object",
+        "Generic",
+        "object",
+    ]
+    # And what a thing says it is, a filter finds it by.
+    line = m.Stream()
+    line.insert(0.0, m.Key("G"))
+    assert len(line.getElementsByClass("Scale").elements) == 1
+
+
+def test_the_overlaps_in_a_stream_are_gathered_by_offset():
+    """Every answer is music21's own for the same streams."""
+
+    def shown(found):
+        return {
+            at: [e.nameWithOctave for e in held] for at, held in sorted(found.items())
+        }
+
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insert(1.0, m.Note("E4", quarterLength=1.0))
+    line.insert(3.0, m.Note("G4", quarterLength=1.0))
+    # The one overlapped is listed before the one that found it, which is
+    # the order music21's own dictionary takes them in.
+    assert shown(line.getOverlaps()) == {0.0: ["E4", "C4"]}
+
+    none = m.Stream()
+    for at in (0.0, 1.0, 2.0):
+        none.insert(at, m.Note("C4", quarterLength=1.0))
+    assert none.getOverlaps() == {}
+    assert none.isSequence()
+
+    # The stream is read flattened, so notes overlapping inside a measure
+    # are found from the part, and they are the measure's own objects.
+    held = m.Part()
+    first = m.Measure()
+    first.insert(0.0, m.Note("C4", quarterLength=4.0))
+    first.insert(0.0, m.Note("E4", quarterLength=1.0))
+    first.insert(2.0, m.Note("G4", quarterLength=1.0))
+    held.insert(0.0, first)
+    assert shown(held.getOverlaps()) == {0.0: ["E4", "G4", "C4"]}
+    assert held.getOverlaps()[0.0][0] is list(first)[1]
+
+
+def test_which_beat_of_which_measure_an_offset_falls_on():
+    """Every answer is music21's own for the same part and score."""
+    line = m.from_tiny_notation("tinyNotation: 3/4 c4 d4 e4 f4 g4 a4 b4 c'4 d'4")
+
+    def asked(at):
+        beat, measure = line.beatAndMeasureFromOffset(at)
+        return (beat, measure.number)
+
+    assert [asked(at) for at in (0.0, 1.0, 2.5)] == [(1.0, 1), (2.0, 1), (3.5, 1)]
+    assert [asked(at) for at in (3.0, 4.0)] == [(1.0, 2), (2.0, 2)]
+    assert [asked(at) for at in (6.0, 8.5)] == [(1.0, 3), (3.5, 3)]
+    # Past the end music21 refuses, and so does this.
+    with pytest.raises(m.StreamException):
+        line.beatAndMeasureFromOffset(99.0)
+
+    # A score is asked through the first of its parts that has measures,
+    # and the measure handed back is that part's own object.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    whole = m.Score()
+    whole.insert(0.0, part)
+    assert whole.beatAndMeasureFromOffset(2.0)[0] == 3.0
+    assert whole.beatAndMeasureFromOffset(5.0)[1].number == 2
+    assert whole.beatAndMeasureFromOffset(0.0)[1] is part.getElementsByClass("Measure")[0]
+
+
+def test_whether_a_stream_is_at_sounding_pitch_is_said_as_music21_says_it():
+    """Every answer, and the refusal, is music21's own."""
+    part = m.Part()
+    # Nothing has decided, which music21 calls 'unknown'.
+    assert part.atSoundingPitch == "unknown"
+    part.atSoundingPitch = True
+    assert part.atSoundingPitch is True
+    part.atSoundingPitch = False
+    assert part.atSoundingPitch is False
+    part.atSoundingPitch = "unknown"
+    assert part.atSoundingPitch == "unknown"
+    with pytest.raises(m.StreamException):
+        part.atSoundingPitch = "junk"
+
+    # A reader says it, and turning the part to sounding pitch says so.
+    read = m.from_musicxml(MUSICXML)
+    assert read.parts[0].atSoundingPitch is True
+    written = read.parts[0].toWrittenPitch()
+    assert written.atSoundingPitch is False
+
+
+ARTICULATED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations>
+          <articulations><staccato/><accent/></articulations>
+          <ornaments><trill-mark/></ornaments>
+        </notations>
+        <lyric number="1"><syllabic>single</syllabic><text>sung</text></lyric>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>3</duration><type>half</type><dot/>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_note_is_inserted_into_what_already_stands_there():
+    """Every answer is music21's own for the same streams."""
+
+    def shown(line):
+        return [
+            (
+                line.elementOffset(e),
+                type(e).__name__,
+                " ".join(p.nameWithOctave for p in getattr(e, "pitches", ())),
+                e.quarterLength,
+            )
+            for e in line
+        ]
+
+    # A note where a note stands makes a chord as long as what stood there.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4", 2.0)]
+
+    # A chord into a note, and a note into a chord.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Chord(["E4", "G4"], quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4 G4", 2.0)]
+    line = m.Stream()
+    line.insert(0.0, m.Chord(["C4", "E4"], quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Chord", "C4 E4 G4", 2.0)]
+
+    # A rest gives way, and one pitch is a note unless chords are asked for.
+    line = m.Stream()
+    line.insert(0.0, m.Rest(quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0))
+    assert shown(line) == [(0.0, "Note", "G4", 2.0)]
+    line = m.Stream()
+    line.insert(0.0, m.Rest(quarterLength=2.0))
+    line.insertIntoNoteOrChord(0.0, m.Note("G4", quarterLength=1.0), chordsOnly=True)
+    assert shown(line) == [(0.0, "Chord", "G4", 2.0)]
+
+    # Where nothing stands, the object handed in is the one held.
+    line = m.Stream()
+    given = m.Note("A4", quarterLength=1.0)
+    line.insertIntoNoteOrChord(2.0, given)
+    assert list(line)[0] is given
+
+    # Two things starting in the span is what music21 refuses.
+    line = m.Stream()
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(0.5, m.Note("D4", quarterLength=1.0))
+    with pytest.raises(m.StreamException):
+        line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=2.0))
+
+    # The merged chord keeps what stood there carried: its articulations
+    # and its lyrics.
+    line = m.Stream()
+    held = m.Note("C4", quarterLength=2.0)
+    held.articulations = [m.Staccato()]
+    held.lyric = "sung"
+    line.insert(0.0, held)
+    line.insertIntoNoteOrChord(0.0, m.Note("E4", quarterLength=1.0))
+    made = list(line)[0]
+    assert [type(a).__name__ for a in made.articulations] == ["Staccato"]
+    assert [ly.text for ly in made.lyrics] == ["sung"]
+
+
+def test_a_reader_carries_the_articulations_and_ornaments_through():
+    """music21 answers the same for the same document."""
+    read = m.from_musicxml(ARTICULATED)
+    notes = [e for e in read.recurse() if getattr(e, "isNote", False)]
+    assert [type(a).__name__ for a in notes[0].articulations] == ["Staccato", "Accent"]
+    assert [type(e).__name__ for e in notes[0].expressions] == ["Trill"]
+    assert notes[1].articulations == []

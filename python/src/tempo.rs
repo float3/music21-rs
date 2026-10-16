@@ -162,6 +162,20 @@ impl MetronomeMark {
 
 #[pymethods]
 impl MetronomeMark {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+    /// music21's sort order for a tempo indication among the things
+    /// standing at one offset: after the clef and before the meter and the
+    /// notes it governs, which `TempoIndication` sets for all of them.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        1
+    }
+
     /// The Python objects this holds, shown to the cycle collector. A note
     /// and the pitch it hands out point at each other through Rust, and
     /// without this neither of them is ever freed.
@@ -1074,6 +1088,12 @@ impl MetricModulation {
 
 #[pymethods]
 impl MetricModulation {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
     #[new]
     #[pyo3(signature = (*_arguments, **_keywords))]
     fn new(

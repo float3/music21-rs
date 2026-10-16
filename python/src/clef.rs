@@ -69,6 +69,20 @@ impl Clef {
 
 #[pymethods]
 impl Clef {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+    /// music21's sort order for a clef among things at one offset: before
+    /// everything else written at the start of a measure.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        0
+    }
+
     #[new]
     #[pyo3(signature = (**_keywords))]
     fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {

@@ -315,6 +315,13 @@ impl Instrument {
         &self.kind
     }
 
+    /// music21's own name for this kind of instrument, where it is one
+    /// music21 has a class for: the name as the table spells it, which is
+    /// what `is_a` and the class lineage answer with.
+    pub fn class_name(&self) -> Option<&'static str> {
+        kind_named(&self.kind).map(|kind| kind.class)
+    }
+
     /// The families this kind belongs to, nearest first and ending with
     /// `Instrument`: a clarinet is a `WoodwindInstrument`.
     pub fn families(&self) -> &'static [&'static str] {

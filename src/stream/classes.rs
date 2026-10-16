@@ -56,9 +56,29 @@ impl StreamElement {
                 }
                 names
             }
-            StreamElement::Instrument(_) => vec!["Instrument"],
+            StreamElement::Instrument(instrument) => {
+                // An instrument is of its own class and of every family
+                // above it: a flute is a `WoodwindInstrument`.
+                let mut names: Vec<&'static str> = Vec::new();
+                if let Some(class) = instrument.class_name() {
+                    names.push(class);
+                }
+                names.extend(instrument.families().iter().copied());
+                if !names.contains(&"Instrument") {
+                    names.push("Instrument");
+                }
+                names
+            }
             StreamElement::KeySignature(_) => vec!["KeySignature"],
-            StreamElement::Key(_) => vec!["Key", "KeySignature"],
+            // music21's `Key` is a `DiatonicScale`, which is where
+            // everything it answers about degrees comes from.
+            StreamElement::Key(_) => vec![
+                "Key",
+                "KeySignature",
+                "DiatonicScale",
+                "ConcreteScale",
+                "Scale",
+            ],
             StreamElement::TimeSignature(_) => vec!["TimeSignature", "TimeSignatureBase"],
             StreamElement::MetronomeMark(_) => vec!["MetronomeMark", "TempoIndication"],
             StreamElement::TempoText(_) => vec!["TempoText", "TempoIndication"],
