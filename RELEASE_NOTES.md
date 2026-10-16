@@ -1,3 +1,64 @@
+# Unreleased
+
+## added
+
+- **The feature map now tracks every music21 file the crate ports**, where
+  it tracked 44 of them: `percussion.py`, `tablature.py`, `text.py`,
+  `layout.py`, `style.py`, `spanner.py`, `repeat.py`, `variant.py`,
+  `metadata/__init__.py`, the `search` package, the `tree` package,
+  `analysis/reduction.py`, `analysis/correlate.py`, `features/base.py`, the
+  `braille` package, `alpha/analysis`, `omr` and `audioSearch`. The map is
+  the report's ported table and the crate's to-do list, and all of that was
+  ported and untracked -- so the report said nothing about any of it and
+  nothing said what was left in it. It is 76 classes and 533 members more,
+  of which the crate answers 365, and **every member left out carries its
+  reason**, so nothing in the whole map is missing with no reason given.
+  What the widening says: `variant.py` is ported whole, all ten of its
+  functions, as are `search/base.py`'s eighteen, `analysis/correlate.py`,
+  `Horizontality` and `LyricSearcher`; the braille transcription, the OMR
+  correction and the audio search are ported nearly whole; `Spanner`
+  answers 3 of music21's 14 members, the other eleven being object and
+  site machinery a spanner naming positions needs none of; and
+  `Verticality` answers 13 of 14. The 72 jSymbolic extractors and the 24
+  native ones are rows of a generated table rather than a class each, which
+  `features_parity` checks against music21's live classes. The map's header
+  now also says what it deliberately leaves out and why -- the readers and
+  the writers, which are one function in and one out and are held to
+  music21 by parity tests over whole documents; music21's small helper
+  modules, whose content the crate ports where it uses it; and what the
+  crate does not model at all.
+- The Python package's `Dynamic` says what it is -- `<music21.dynamics
+  .Dynamic mf>`, and the class alone where it says nothing, which is what
+  music21's own `__repr__` writes of `_reprInternal`. It was the last class
+  of the package whose repr differed from music21's with music21 absent;
+  every other one already answers what music21 answers, the module each
+  class names being music21's own.
+- `Metadata::best_title` is music21's `bestTitle` -- the first of `title`,
+  `popularTitle`, `alternativeTitle` and `movementName` that says anything
+  -- and `Metadata::contributors_by_role` is its `getContributorsByRole`,
+  which answers the contributors with no role of their own when asked for
+  none, as a MusicXML file may name one. Both were found by widening the
+  map, which is what the map is for.
+- The report writes a note or a reason the way the map writes it: a name
+  in backticks is `<code>` on the page, as the suite notes already were.
+  There were 500-odd literal backticks on the published page, and the
+  widened map would have added hundreds more.
+- **Three fixes to how the map reads a class, each found by the new
+  entries.** A name in a comment is not a port: the match was the word
+  anywhere in the Rust, and every file here opens by naming the music21
+  class it ports, so `repeat.Expander` and the four `*FretBoard`s read as
+  ported where the crate merely mentioned them; the source is read with its
+  line comments taken out now, and no entry already in the map changes,
+  which says the map was honest before. A class body ends at the next
+  function written against the left margin: a module-level function
+  standing after a class gave the class the functions it defines *inside
+  itself*, so music21's `prepareBeamedNotes` lent three filters to the
+  `BrailleGrandSegment` above it and `StaffGroup` and `StreamSearcher` each
+  carried one such ghost -- three members music21 never had are off the
+  map. And a public field is a definition, since a value type answers with
+  one where a method would be ceremony: `TextBox.content` is `pub content:
+  String` here.
+
 # music21-rs 0.10.0
 
 The Python package stops being a stream of notes and becomes a package: it

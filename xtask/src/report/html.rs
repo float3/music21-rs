@@ -1065,7 +1065,7 @@ pub(super) fn render_beyond(beyond: &[BeyondReport], modules: &[BeyondModule]) -
                             </tr>
 "#,
             name = escape(&entry.name),
-            note = escape(&entry.note),
+            note = prose(&entry.note),
         );
     }
     html.push_str(
@@ -1510,7 +1510,7 @@ fn wheel_pill(in_wheel: bool) -> &'static str {
 fn crate_cell(member: &MemberReport) -> String {
     match (member.status, member.detail.as_deref()) {
         (Status::Ported, detail) => format!("<code>{}</code>", escape(detail.unwrap_or(""))),
-        (Status::Missing, Some(reason)) => escape(reason),
+        (Status::Missing, Some(reason)) => prose(reason),
         (Status::Missing, None) => "<span class=\"of\">no reason given</span>".to_string(),
     }
 }
@@ -1647,7 +1647,7 @@ pub(super) fn render_features(features: &[ClassReport], view: View) -> String {
             let _ = writeln!(
                 html,
                 "                            <p class=\"note\">{}</p>",
-                escape(note)
+                prose(note)
             );
         }
         html.push_str("                            <table>\n                                <thead><tr><th>music21</th>");

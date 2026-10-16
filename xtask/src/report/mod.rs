@@ -1249,6 +1249,44 @@ class Plain:
         assert!(!defines(rust, "Minor", Members::Classes));
     }
 
+    /// A module-level function standing after a class is not part of it,
+    /// nor are the functions it defines inside itself.
+    #[test]
+    fn a_class_body_ends_at_the_next_function_at_the_margin() {
+        let python = concat!(
+            "class Held:
+",
+            "    def mine(self):
+",
+            "        pass
+",
+            "
+",
+            "def loose(x):
+",
+            "    def nested(y):
+",
+            "        pass
+",
+            "    return nested
+",
+        );
+        assert_eq!(class_methods(python, "Held"), ["mine"]);
+    }
+
+    /// A value type's public field answers the question music21 asks of a
+    /// property, so the map counts one.
+    #[test]
+    fn a_public_field_is_a_definition() {
+        let rust = "pub struct TextBox {
+    pub content: String,
+    page: i64,
+}
+";
+        assert!(defines(rust, "content", Members::Methods));
+        assert!(!defines(rust, "page", Members::Methods));
+    }
+
     /// music21's `Tie` written as music21 writes it: a class whose whole API
     /// is the attributes it declares, and not a `def` in sight.
     #[test]
