@@ -329,7 +329,11 @@ impl StreamElement {
             Self::KeySignature(_) | Self::Key(_) => 2,
             Self::TimeSignature(_) => 4,
             Self::Dynamic(_) => 10,
+            // music21's `RomanNumeral` is a `Harmony`, which sorts before
+            // the notes standing at the same offset as a chord symbol
+            // does; a chord carrying a numeral is one of those.
             Self::ChordSymbol(_) => 19,
+            Self::Chord(chord) if chord.numeral().is_some() => 19,
             _ => 20,
         }
     }

@@ -4072,3 +4072,47 @@ def test_a_dynamic_says_what_it_is():
     assert repr(m.Dynamic("")) == "<music21.dynamics.Dynamic>"
     # Nothing said is music21's `n`, as the value itself says.
     assert repr(m.Dynamic()) == "<music21.dynamics.Dynamic n>"
+
+
+def test_a_humdrum_harm_spine_is_read():
+    """The figures and the notes are music21's own for the same file."""
+    score = m.from_humdrum(
+        "**kern\t**harm\n"
+        "*staff1\t*staff1\n"
+        "*M4/4\t*\n"
+        "*C:\t*C:\n"
+        "=1\t=1\n"
+        "4c\tI\n"
+        "4d\tV7b\n"
+        "4e\t.\n"
+        "4f\t(V)\n"
+        "=\t=\n"
+        "*-\t*-\n"
+    )
+    numerals = [
+        element
+        for element in score.recurse()
+        if type(element).__name__ == "RomanNumeral"
+    ]
+    # `V7b` in **harm is a `V65` to a roman numeral, the letter standing for
+    # the figured bass; a dot is nothing, and harmony in parentheses is the
+    # figure without them.
+    assert [numeral.figure for numeral in numerals] == ["I", "V65", "V"]
+    assert [p.nameWithOctave for p in numerals[1].pitches] == ["B4", "D5", "F5", "G5"]
+    assert str(numerals[0].key) == "C major"
+
+    # Each stands where the note of its line stands, and sorts before it, as
+    # music21 sorts a harmony.
+    measure = score.getElementsByClass("Part")[0].getElementsByClass("Measure")[0]
+    kinds = [type(element).__name__ for element in measure]
+    assert kinds == [
+        "Key",
+        "TimeSignature",
+        "RomanNumeral",
+        "Note",
+        "RomanNumeral",
+        "Note",
+        "Note",
+        "RomanNumeral",
+        "Note",
+    ]

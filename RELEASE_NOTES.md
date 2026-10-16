@@ -2,6 +2,24 @@
 
 ## added
 
+- A `**harm` spine is read as the roman numerals it annotates:
+  `humdrum::harm`, music21's `humdrum.harmParser`, and `from_humdrum`
+  putting each numeral where the staff's element of that line stands. A
+  token is a degree with what is written round it -- `V7b`, `#IVo7`,
+  `Gnd`, `V/V/V`, `(I)`, `I[V]` -- and the two notations are not the same:
+  the inversion letter stands for the figured bass, so `V7b` is a `V65`,
+  and a German or French sixth is read as a seventh chord whatever
+  intervals are written. music21 reads a token with a regular expression
+  and the crate has none, so `Harm::parse` reads it by hand in the same
+  order; every one of 120 tokens agrees with music21, its own tests' and
+  docstrings' among them. No corpus file has such a spine, so
+  `humdrum_parity` reads one written for it, outline and MusicXML both,
+  and the Python package reads it too, since `from_humdrum` hands back the
+  numerals as `RomanNumeral`s.
+- A chord carrying a roman numeral sorts where music21 sorts a
+  `RomanNumeral`, which is a `Harmony`: at 19, before the notes standing
+  at the same offset. Nothing but a `**harm` spine had ever put one beside
+  a note.
 - **The feature map now tracks every music21 file the crate ports**, where
   it tracked 44 of them: `percussion.py`, `tablature.py`, `text.py`,
   `layout.py`, `style.py`, `spanner.py`, `repeat.py`, `variant.py`,

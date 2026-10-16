@@ -11,9 +11,10 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 //!
-//! A file is named by its path in music21's corpus. `HUMDRUM_PARITY_FILES`,
-//! a `;`-separated list of such names or `@` and the path of a file of them,
-//! runs those instead of the ones below.
+//! A file is named by its path in music21's corpus, or by `written:` and
+//! the name of a file under `tests/humdrum/` for what the corpus has none
+//! of. `HUMDRUM_PARITY_FILES`, a `;`-separated list of such names or `@`
+//! and the path of a file of them, runs those instead of the ones below.
 
 use music21_rs::humdrum::from_humdrum;
 use music21_rs::metadata::MetadataValue;
@@ -41,6 +42,10 @@ const FILES: &[(&str, &str)] = &[
         "a mass movement in long values, with words",
     ),
     ("palestrina/Kyrie_00.krn", "another, in another meter"),
+    (
+        "written:harm.krn",
+        "a `**harm` spine: triads, sevenths, inversions, a secondary function,          implied harmony and the special chords, which no corpus file has",
+    ),
 ];
 
 #[test]
@@ -86,12 +91,19 @@ fn the_crate_reads_humdrum_as_music21_does() {
         let mut failures = Vec::new();
         let mut outline_only = 0;
         for line in &chosen {
-            let index = line.replace(['/', '.'], "_");
-            let path = root
-                .join("music21")
-                .join("music21")
-                .join("corpus")
-                .join(line);
+            let index = line.replace(['/', '.', ':'], "_");
+            let path = match line.strip_prefix("written:") {
+                Some(name) => root
+                    .join("python-parity")
+                    .join("tests")
+                    .join("humdrum")
+                    .join(name),
+                None => root
+                    .join("music21")
+                    .join("music21")
+                    .join("corpus")
+                    .join(line),
+            };
             let text = String::from_utf8_lossy(
                 &std::fs::read(&path).unwrap_or_else(|error| panic!("reading {line}: {error}")),
             )
