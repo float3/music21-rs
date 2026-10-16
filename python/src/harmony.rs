@@ -177,6 +177,15 @@ fn getAbbreviationListGivenChordType(chordType: String) -> PyResult<Vec<String>>
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
 
+/// music21's `alterToChordSymbolString`: how an alteration in semitones is
+/// written in a chord symbol, a flat or a sharp for each semitone and
+/// nothing at all for none.
+#[pyfunction]
+#[pyo3(name = "alterToChordSymbolString")]
+fn alterToChordSymbolString(alter: i32) -> String {
+    alter_to_chord_symbol_string(alter)
+}
+
 /// music21's `getCurrentAbbreviationFor`: the abbreviation a kind is written
 /// with.
 #[pyfunction]
@@ -1508,6 +1517,7 @@ fn numeral_class(py: Python<'_>) -> Bound<'_, PyAny> {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getAbbreviationListGivenChordType, m)?)?;
     m.add_function(wrap_pyfunction!(getCurrentAbbreviationFor, m)?)?;
+    m.add_function(wrap_pyfunction!(alterToChordSymbolString, m)?)?;
     m.add_function(wrap_pyfunction!(getNotationStringGivenChordType, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFigureFromChord, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFromChord, m)?)?;

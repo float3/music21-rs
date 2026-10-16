@@ -241,6 +241,27 @@ pub(crate) fn installed_class<'py>(
     installed.get_item((module, name)).ok()
 }
 
+/// The class a module of music21's names: the installed one where this
+/// package stands in for music21's, and the package's own otherwise.
+///
+/// Building an object by *calling* the class rather than filling a blank
+/// one in is how a member hands back something a caller built: music21's
+/// `Interval(n1, n2)` reads the two notes and keeps them, and that is the
+/// object `Segmenter.getIntervalList` answers with.
+pub(crate) fn class_of<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    match installed_class(py, module, name) {
+        Some(class) => Ok(class),
+        None => py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr(name),
+    }
+}
+
 /// A Python object's items, one at a time, never asking how many there are.
 ///
 /// Collecting pyo3's own iterator asks the object for its length after the

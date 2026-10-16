@@ -154,6 +154,11 @@ another part onto its notes with `attachIntervalsBetweenStreams`. each
 leaves its answer on the note's `editorial`, music21's dictionary-with-attributes for what an analysis
 found.
 
+`analysis.segmentByRests.Segmenter` cuts a line into the runs of notes
+between its rests, each run the stream's own notes and each interval built
+on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
+property of every pitch into a `Counter`.
+
 music21's four instrument stream functions are here too --
 `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
 `deduplicate` -- each handing back a new stream.

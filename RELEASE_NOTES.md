@@ -300,6 +300,12 @@
   `analysis.metrical`: `nPVI` and `melodicIntervalVariability` -- which
   take `findConsecutiveNotes`' keywords, as music21 passes them on --
   `labelBeatDepth` and `thomassenMelodicAccent`.
+- The Python package answers `analysis.segmentByRests.Segmenter`,
+  `analysis.pitchAnalysis.pitchAttributeCount` and
+  `harmony.alterToChordSymbolString`. A segment is the stream's own notes
+  and an interval is built on two of them, so `noteStart` is one of the
+  score's notes; a count is a `collections.Counter` of whatever property
+  of a pitch was named, as music21 counts one.
 - The Python package gains `Editorial`, music21's `editorial.Editorial`:
   the dictionary with attribute access where an analysis leaves what it
   worked out, which a note answers as its `editorial` -- the same object

@@ -3450,3 +3450,67 @@ def test_a_part_is_named_as_music21_names_it():
     bar.insert(0.0, m.Note("C4", quarterLength=1.0))
     nested.insert(0.0, bar)
     assert nested.partName == "Flute"
+
+
+def test_a_line_is_cut_into_its_runs_of_notes():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 C4 r D E r r F r G r A B r c")
+    runs = m.Segmenter.getSegmentsList(line)
+    assert [[n.nameWithOctave for n in run] for run in runs] == [
+        ["C3"],
+        ["D3", "E3"],
+        ["F3"],
+        ["G3"],
+        ["A3", "B3"],
+        ["C4"],
+    ]
+
+    # A rest standing after another gives an empty run, as music21's does.
+    kept = m.Segmenter.getSegmentsList(line, removeEmptyLists=False)
+    assert [len(run) for run in kept] == [0, 1, 2, 0, 1, 1, 2, 1]
+
+    # A run is the stream's own notes, and an interval is built on two of
+    # them, so it keeps the very notes it was measured between.
+    notes = [n for n in line.recurse() if getattr(n, "isNote", False)]
+    assert runs[1][0] is notes[1]
+    intervals = m.Segmenter.getIntervalList(line)
+    assert [i.name for i in intervals] == ["M2", "M2"]
+    assert intervals[0].noteStart is notes[1]
+    assert intervals[0].noteEnd is notes[2]
+
+
+def test_a_property_of_every_pitch_is_counted():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 c4 d c e f# g a b-")
+    assert sorted(m.pitchAttributeCount(line).items()) == [
+        ("A", 1),
+        ("B-", 1),
+        ("C", 2),
+        ("D", 1),
+        ("E", 1),
+        ("F#", 1),
+        ("G", 1),
+    ]
+    assert sorted(m.pitchAttributeCount(line, "pitchClass").items()) == [
+        (0, 2),
+        (2, 1),
+        (4, 1),
+        (6, 1),
+        (7, 1),
+        (9, 1),
+        (10, 1),
+    ]
+    # A Counter, as music21 answers, so ties order by what was met first.
+    counted = m.pitchAttributeCount(m.from_tiny_notation("4/4 c4 c d d d e"))
+    assert counted.most_common(2) == [("D", 3), ("C", 2)]
+
+
+def test_an_alteration_is_written_as_a_chord_symbol_writes_it():
+    """Every answer is music21's own."""
+    assert [m.alterToChordSymbolString(n) for n in (-2, -1, 0, 1, 2)] == [
+        "bb",
+        "b",
+        "",
+        "#",
+        "##",
+    ]
