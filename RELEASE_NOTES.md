@@ -377,6 +377,10 @@ music21's class was given the job back wherever music21 is there to ask.
   which answers the contributors with no role of their own when asked for
   none, as a MusicXML file may name one. Both were found by widening the
   map, which is what the map is for.
+- The report writes a note or a reason the way the map writes it: a name
+  in backticks is `<code>` on the page, as the suite notes already were.
+  There were 500-odd literal backticks on the published page, and the
+  widened map would have added hundreds more.
 - **Three fixes to how the map reads a class, each found by the new
   entries.** A name in a comment is not a port: the match was the word
   anywhere in the Rust, and every file here opens by naming the music21
