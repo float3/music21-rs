@@ -1,4 +1,26 @@
-# Unreleased
+# music21-rs 0.10.0
+
+The Python package stops being a stream of notes and becomes a package: it
+holds what a score says. Barlines and repeats, the words over the staff,
+the eleven spanners music21 has classes for and the bundle beside them, a
+note's and a chord's editorial, a score's metadata -- and every analysis
+member the crate had ported and the package did not answer, which is
+`analysis.patel`, `analysis.metrical`, `analysis.discrete`,
+`analysis.floatingKey`, `analysis.windowed`, `analysis.segmentByRests`,
+`analysis.pitchAnalysis`, the four instrument stream functions and the
+figured-bass realizer. Its `Stream` answers 99 of music21's 131 members,
+every one the crate has ported but five, and each of those five is left
+out with its reason said. The readers carry all of it through now: a score
+read with `from_musicxml` had no repeats and no slurs a caller could see.
+
+Four classes of defect were found and fixed on the way, each by a test
+that now holds it: `clone_empty` dropped a measure's number and a part's
+name, so a template lost both; two gaps in what a class answers to (`Key`
+and `Instrument`) meant `getElementsByClass('KeySignature')` found nothing
+where music21 finds the signature; one `OffsetSpan` existed twice with two
+different readings of music21's own rule; and the package's `Editorial`
+stood in for music21's, which cost 34 of music21's own tests until
+music21's class was given the job back wherever music21 is there to ask.
 
 ## added
 
