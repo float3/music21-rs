@@ -130,6 +130,13 @@ fn language(value: Option<&str>) -> PyResult<SearchLanguage> {
 
 #[pymethods]
 impl Instrument {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers -- so a note is a
+    /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
     /// music21's sort order for an instrument among things at one offset:
     /// before everything else, the part being for whoever plays it.
     #[classattr]

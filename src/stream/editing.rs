@@ -526,15 +526,15 @@ impl Stream {
             };
             shift += length;
             if shift != 0.0 {
-                let span = super::queries::OffsetSpan {
+                let span = super::span::OffsetSpan {
                     include_end_boundary: false,
-                    ..super::queries::OffsetSpan::new(region_start, Some(region_end))
+                    ..super::span::OffsetSpan::between(region_start, region_end)
                 };
                 for (index, at) in offsets.iter_mut().enumerate() {
                     if gone[index] {
                         continue;
                     }
-                    if span.holds(*at, self.events[index].element().quarter_length()) {
+                    if span.takes_at(*at, self.events[index].element().quarter_length()) {
                         *at = op_frac(*at - shift);
                     }
                 }

@@ -71,6 +71,10 @@ pub struct Stream {
     next: u64,
     /// music21's `id`, where a caller gave one.
     id: Option<Py<PyAny>>,
+    /// music21's `atSoundingPitch`: whether the notes are written where
+    /// they sound. `None` is music21's `'unknown'`, which is what a stream
+    /// says before anything has been decided.
+    sounding: Option<bool>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -104,25 +108,107 @@ fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<
                 return Ok(true);
             }
         }
-        if let Ok(classes) = object.getattr("classes") {
-            for each in classes.walk()? {
-                if each?.extract::<String>().is_ok_and(|each| each == name) {
-                    return Ok(true);
-                }
-            }
-        }
         return Ok(false);
     }
     object.is_instance(class)
 }
 
-/// Whether an object is of any of a list of classes, or of the one given.
+/// What music21 says an object *is*: its own class and every class it is a
+/// kind of, in music21's order, which is what its `classes` answers.
+///
+/// The crate carries the hierarchy and `class_lineage_parity` holds it to
+/// music21's own, down to `Music21Object`. What follows that is the
+/// plumbing every music21 object is built on and nothing here models:
+/// `ProtoM21Object` and `object`, and `typing.Generic` before `object` for
+/// a stream, which music21's `Stream` is one of.
+pub fn lineage_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    let stream = object
+        .getattr("isStream")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(false);
+    let value = if stream {
+        Some(StreamElement::Stream(Box::new(RsStream::with_kind(
+            kind_of(object)?,
+        ))))
+    } else {
+        element_value(object, false)?
+    };
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let mut names: Vec<String> = value
+        .music21_classes()
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect();
+    names.push("ProtoM21Object".to_string());
+    if stream {
+        names.push("Generic".to_string());
+    }
+    names.push("object".to_string());
+    Ok(names)
+}
+
+/// Whether an object is of a class, as music21 reads the question: by its
+/// own name or by the name of anything it is a kind of.
+///
+/// A class of this package's answers to its own name and to the names of
+/// the classes it extends, which are the ones music21 itself has a class
+/// for. The rest of what music21 says a thing *is* -- a `GeneralNote`, a
+/// `NotRest`, a `ChordBase`, a `Music21Object` -- is a class nothing here
+/// is named after, so `getElementsByClass('GeneralNote')` used to find
+/// nothing where music21 finds every note. The crate carries that
+/// hierarchy (`StreamElement::music21_classes`), so whatever it has a
+/// value for is asked of it.
+///
+/// It is asked last: reading the value is the costly part of this, and
+/// every name a class is actually named after has already answered. The
+/// readers do not come through here -- `element_value` itself asks
+/// `is_of_class` -- so nothing reads a value to read a value.
+fn answers_to(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if is_of_class(object, class)? {
+        return Ok(true);
+    }
+    let Ok(name) = class.extract::<String>() else {
+        return Ok(false);
+    };
+    // What the object says it is, which is music21's whole chain for one
+    // of its objects and for one of this package's alike. The readers do
+    // not ask this -- `is_of_class` matches the class names themselves --
+    // because answering it builds a value, and building a value asks what
+    // the thing is.
+    if let Ok(classes) = object.getattr("classes") {
+        for each in classes.walk()? {
+            if each?.extract::<String>().is_ok_and(|each| each == name) {
+                return Ok(true);
+            }
+        }
+    }
+    // A stream is asked by its kind alone, which costs nothing: what it
+    // holds has no bearing on what it is.
+    if object
+        .getattr("isStream")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(false)
+    {
+        let kind = kind_of(object)?;
+        let empty = StreamElement::Stream(Box::new(RsStream::with_kind(kind)));
+        return Ok(empty.is_instance(&name));
+    }
+    match element_value(object, false) {
+        Ok(Some(value)) => Ok(value.is_instance(&name)),
+        _ => Ok(false),
+    }
+}
+
+/// Whether an object is of any of a list of classes, or of the one given,
+/// each read as music21 reads it.
 fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<bool> {
     if classes.extract::<String>().is_ok() || classes.is_instance_of::<pyo3::types::PyType>() {
-        return is_of_class(object, classes);
+        return answers_to(object, classes);
     }
     for class in classes.walk()? {
-        if is_of_class(object, &class?)? {
+        if answers_to(object, &class?)? {
             return Ok(true);
         }
     }
@@ -162,6 +248,7 @@ impl Stream {
             held: Vec::new(),
             next: 0,
             id: None,
+            sounding: None,
         }
     }
 
@@ -432,6 +519,12 @@ impl Stream {
 
 #[pymethods]
 impl Stream {
+    /// What music21 says this is: its own class and every class it is a
+    /// kind of, as music21's `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
     #[new]
     #[pyo3(signature = (givenElements = None, *_arguments, **keywords))]
     fn new(
@@ -468,6 +561,41 @@ impl Stream {
     #[classattr]
     fn classSortOrder() -> i64 {
         -20
+    }
+
+    /// Whether the notes are written where they sound: music21's
+    /// `atSoundingPitch`, which is `True`, `False` or `'unknown'`, and
+    /// `'unknown'` until something says.
+    ///
+    /// Writing it says nothing about the notes themselves;
+    /// `toSoundingPitch` and `toWrittenPitch` move them.
+    #[getter]
+    fn get_atSoundingPitch<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        match self.sounding {
+            Some(at) => Ok(pyo3::types::PyBool::new(py, at).to_owned().into_any()),
+            None => Ok(pyo3::types::PyString::new(py, "unknown").into_any()),
+        }
+    }
+
+    /// Says whether the notes are written where they sound: music21's
+    /// setter, which refuses anything but `True`, `False` and `'unknown'`.
+    #[setter]
+    fn set_atSoundingPitch(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_instance_of::<pyo3::types::PyBool>() {
+            self.sounding = Some(value.extract()?);
+            return Ok(());
+        }
+        if value
+            .extract::<String>()
+            .is_ok_and(|said| said == "unknown")
+        {
+            self.sounding = None;
+            return Ok(());
+        }
+        Err(StreamException::new_err(format!(
+            "not a valid at sounding pitch value: {}",
+            value.str()?
+        )))
     }
 
     #[getter]
@@ -1158,6 +1286,167 @@ impl Stream {
             slf.borrow_mut().put(offset, &copy);
         }
         Ok(())
+    }
+
+    /// Adds a note or chord where something already starts within its
+    /// length, the two becoming one chord: music21's
+    /// `insertIntoNoteOrChord`.
+    ///
+    /// Where a rest stands there it gives way; where nothing does, the
+    /// note or chord handed in is simply put in, and is the very object
+    /// the stream then holds. A merged chord is a new object, as
+    /// music21's is, keeping the length, articulations, expressions,
+    /// lyrics, stem and notehead of what stood there; with `chordsOnly`
+    /// a merge of one pitch is still a chord.
+    #[pyo3(signature = (offset, noteOrChord, *, chordsOnly = false))]
+    fn insertIntoNoteOrChord(
+        slf: &Bound<'_, Self>,
+        offset: f64,
+        noteOrChord: &Bound<'_, PyAny>,
+        chordsOnly: bool,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let Some(added) = element_value(noteOrChord, false)? else {
+            return Err(StreamException::new_err(
+                "this package has no value for what was handed in",
+            ));
+        };
+        // The span music21 looks in: from the offset to where the new
+        // element ends, taking what begins in it and not what starts
+        // exactly at the end.
+        let span = music21_rs_crate::stream::OffsetSpan {
+            include_end_boundary: false,
+            ..music21_rs_crate::stream::OffsetSpan::between(offset, offset + added.quarter_length())
+        };
+        let listed: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| (one.offset, one.object.clone_ref(py)))
+            .collect();
+        let mut targets: Vec<(f64, Bound<'_, PyAny>, StreamElement)> = Vec::new();
+        for (at, object) in listed {
+            let object = object.into_bound(py);
+            if !span.takes_at(at, length_of(&object)?) {
+                continue;
+            }
+            // Only a note, a chord or a rest is something to merge with.
+            let Some(value) = element_value(&object, false)? else {
+                continue;
+            };
+            if value.is_instance("GeneralNote") {
+                targets.push((at, object, value));
+            }
+        }
+        match targets.len() {
+            0 => {
+                slf.borrow_mut().put(offset, noteOrChord);
+                Ok(())
+            }
+            1 => {
+                let (at, object, value) = targets.remove(0);
+                // The merging is the crate's: a stream of the one thing
+                // standing there, asked to take the new one in.
+                let mut one = RsStream::new();
+                one.insert(at, value);
+                one.insert_into_note_or_chord(offset, added, chordsOnly)
+                    .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+                let mut made = Vec::new();
+                for event in one.events() {
+                    if let Some(built) = element_object(py, event.element())? {
+                        made.push((event.offset(), built));
+                    }
+                }
+                slf.borrow_mut().remove(&object)?;
+                let mut held = slf.borrow_mut();
+                for (at, built) in made {
+                    held.put(at, &built);
+                }
+                Ok(())
+            }
+            _ => Err(StreamException::new_err(
+                "more than one element found at the specified offset",
+            )),
+        }
+    }
+
+    /// Which beat of which measure an offset falls on: music21's
+    /// `beatAndMeasureFromOffset`, a pair of the beat and the measure.
+    ///
+    /// The measure is this stream's own object, found as music21 finds
+    /// it -- the last one standing at or before the offset, in the stream
+    /// itself or in the first of its parts that has measures -- and the
+    /// beat is the crate's arithmetic over the meter in force, `fixZeros`
+    /// counting the second half of a measure cut in two as part of the
+    /// measure before it.
+    #[pyo3(signature = (searchOffset, fixZeros = true))]
+    fn beatAndMeasureFromOffset<'py>(
+        slf: &Bound<'py, Self>,
+        searchOffset: f64,
+        fixZeros: bool,
+    ) -> PyResult<(f64, Option<Bound<'py, PyAny>>)> {
+        let py = slf.py();
+        let stream = crate_stream(slf.as_any())?;
+        let (beat, _) = stream
+            .beat_and_measure_from_offset(searchOffset, fixZeros)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        // Where music21 looks for the measure: this stream if it holds
+        // measures itself, else the first of its parts that does.
+        let measure = pyo3::types::PyString::new(py, "Measure");
+        let mut holder = slf.clone();
+        if Self::opening(slf, "Measure")?.is_none()
+            && !slf
+                .borrow()
+                .held
+                .iter()
+                .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false))
+        {
+            let inner: Vec<Py<PyAny>> = slf
+                .borrow()
+                .sorted()
+                .iter()
+                .map(|one| one.object.clone_ref(py))
+                .collect();
+            for object in inner {
+                let object = object.into_bound(py);
+                let Ok(cell) = object.cast::<Stream>() else {
+                    continue;
+                };
+                let holds = cell
+                    .borrow()
+                    .held
+                    .iter()
+                    .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false));
+                if holds {
+                    holder = cell.clone();
+                    break;
+                }
+            }
+        }
+        let named = PyList::new(py, ["Measure"])?;
+        let found = Self::nearest_before(&holder, searchOffset, Some(named.as_any()), false)?;
+        Ok((beat, found))
+    }
+
+    /// Everything in the stream that overlaps something else, gathered by
+    /// the offset each overlap begins at: music21's `getOverlaps`.
+    ///
+    /// The stream is read flattened, as music21 reads it, and the
+    /// elements handed back are its own. Each group lists the element
+    /// overlapped before the one that found it, which is the order
+    /// music21's own dictionary takes them in.
+    fn getOverlaps<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        let read = read_values(slf.as_any())?;
+        let out = PyDict::new(py);
+        for (offset, members) in read.stream.overlap_positions() {
+            let held = PyList::empty(py);
+            for position in members {
+                held.append(read.leaves[position].bind(py))?;
+            }
+            out.set_item(offset, held)?;
+        }
+        Ok(out)
     }
 
     /// The element standing at or before an offset, the last of the
@@ -2990,7 +3279,7 @@ fn element_object<'py>(
             .or_else(|_| py.import("music21_rs_facade"))?
             .getattr(name)
     };
-    Ok(Some(match element {
+    let made = match element {
         StreamElement::Stream(inner) => from_crate(py, inner)?,
         StreamElement::Note(note) => {
             crate::installed_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
@@ -3079,7 +3368,57 @@ fn element_object<'py>(
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
         | StreamElement::Variant(_) => return Ok(None),
-    }))
+    };
+    carry_notation(py, element, &made)?;
+    Ok(Some(made))
+}
+
+/// Puts what a note or chord carries besides its pitches onto the object
+/// built for it: the articulations and the ornaments.
+///
+/// The crate reads these and the writers write them, so a score read here
+/// carries them; without this they lived in the value alone and
+/// `note.articulations` was empty. A fermata and an arpeggio are left
+/// behind: this package has no class for either, and building music21's
+/// would be depending on music21, which it does not.
+fn carry_notation(
+    py: Python<'_>,
+    element: &StreamElement,
+    made: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let (articulations, expressions) = match element {
+        StreamElement::Note(note) => (note.articulations(), note.expressions()),
+        StreamElement::Chord(chord) => (chord.articulations(), chord.expressions()),
+        StreamElement::Rest(rest) => (rest.articulations(), rest.expressions()),
+        _ => return Ok(()),
+    };
+    if !articulations.is_empty() {
+        let held = PyList::empty(py);
+        for articulation in articulations {
+            held.append(crate::articulations::Articulation::object(
+                py,
+                articulation.clone(),
+            )?)?;
+        }
+        made.setattr("articulations", held)?;
+    }
+    let ornaments: Vec<_> = expressions
+        .iter()
+        .filter_map(|expression| match expression {
+            music21_rs_crate::expressions::Expression::Ornament(ornament) => {
+                Some((**ornament).clone())
+            }
+            _ => None,
+        })
+        .collect();
+    if !ornaments.is_empty() {
+        let held = PyList::empty(py);
+        for ornament in ornaments {
+            held.append(crate::expressions::Ornament::object(py, ornament)?)?;
+        }
+        made.setattr("expressions", held)?;
+    }
+    Ok(())
 }
 
 /// music21's other stream classes, each the same `Stream` under its name.
