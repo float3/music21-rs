@@ -365,6 +365,12 @@ music21's class was given the job back wherever music21 is there to ask.
   music21 by parity tests over whole documents; music21's small helper
   modules, whose content the crate ports where it uses it; and what the
   crate does not model at all.
+- The Python package's `Dynamic` says what it is -- `<music21.dynamics
+  .Dynamic mf>`, and the class alone where it says nothing, which is what
+  music21's own `__repr__` writes of `_reprInternal`. It was the last class
+  of the package whose repr differed from music21's with music21 absent;
+  every other one already answers what music21 answers, the module each
+  class names being music21's own.
 - `Metadata::best_title` is music21's `bestTitle` -- the first of `title`,
   `popularTitle`, `alternativeTitle` and `movementName` that says anything
   -- and `Metadata::contributors_by_role` is its `getContributorsByRole`,

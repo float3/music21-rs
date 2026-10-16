@@ -177,6 +177,22 @@ impl Dynamic {
         self.inner.value().to_string()
     }
 
+    /// How music21 writes a dynamic: `<music21.dynamics.Dynamic mf>`, and
+    /// the class alone where it says nothing.
+    ///
+    /// Installed over music21's, the class answers through music21's own
+    /// `Music21Object.__repr__`, which writes `_reprInternal` after the
+    /// class name and leaves the space out where it is empty -- the same
+    /// string this writes. Without it a dynamic read as the object it is at
+    /// an address for a caller who has no music21.
+    fn __repr__(&self) -> String {
+        let value = self.inner.value();
+        if value.is_empty() {
+            return "<music21.dynamics.Dynamic>".to_string();
+        }
+        format!("<music21.dynamics.Dynamic {value}>")
+    }
+
     /// music21's `value`: the mark as written, which names the dynamic and
     /// says how loud it is where nothing louder or softer was asked for.
     #[getter]

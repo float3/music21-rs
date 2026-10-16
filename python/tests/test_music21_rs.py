@@ -4064,3 +4064,11 @@ def test_an_analysis_run_over_windows_of_a_stream():
 
     with pytest.raises(m.WindowedAnalysisException):
         m.WindowedAnalysis("C4", _Counter())
+
+
+def test_a_dynamic_says_what_it_is():
+    """music21 writes a dynamic as its mark, and the class alone for none."""
+    assert repr(m.Dynamic("mf")) == "<music21.dynamics.Dynamic mf>"
+    assert repr(m.Dynamic("")) == "<music21.dynamics.Dynamic>"
+    # Nothing said is music21's `n`, as the value itself says.
+    assert repr(m.Dynamic()) == "<music21.dynamics.Dynamic n>"
