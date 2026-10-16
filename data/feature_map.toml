@@ -948,6 +948,17 @@ python = "analysis/floatingKey.py"
 rust = ["src/analysis/floating_key.rs"]
 
 [[class]]
+python = "humdrum/harmParser.py"
+rust = ["src/humdrum/harm.rs"]
+note = "The harmonic annotations a `**harm` spine carries, read as the roman numerals they stand for."
+
+[[class]]
+python = "humdrum/harmParser.py"
+name = "HarmParser"
+rust = ["src/humdrum/harm.rs"]
+note = "A `**harm` token read: the accidental, the degree, the quality, the intervals, the inversion, an alternative reading and a secondary function. music21 reads it with the regular expressions of its `HarmDefs`, which the crate has none of -- `Harm::parse` reads the token by hand in the same order, and `ROOTS` is the table of degrees."
+
+[[class]]
 python = "bar.py"
 name = "Barline"
 rust = ["src/bar.rs"]

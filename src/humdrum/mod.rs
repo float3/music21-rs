@@ -5,9 +5,10 @@
 //! middle C), a barline (`=12`), an instruction (`*clefG2`, `*M3/4`) or a
 //! dot where nothing new happens. A spine may split into two voices (`*^`)
 //! and come together again (`*v`). `**dynam` spines carry dynamics and
-//! `**text` spines the words sung, each said by `*staff` to belong to a
-//! `**kern` spine.
+//! `**text` spines the words sung, and `**harm` spines the harmony read
+//! into the music, each said by `*staff` to belong to a `**kern` spine.
 
+pub mod harm;
 mod tables;
 
 use std::collections::BTreeMap;
@@ -30,6 +31,7 @@ use crate::notation::{BeamDirection, BeamType, StemDirection, Tie, TieType};
 use crate::note::Note;
 use crate::pitch::{Accidental, PitchOptions};
 use crate::rest::Rest;
+use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
@@ -780,6 +782,55 @@ fn parse_other(events: &[(String, usize)], dynamics: bool) -> Vec<Placed> {
     stream
 }
 
+/// music21's `HarmSpine.parse`: the harmonic annotations of a `**harm`
+/// spine, each read as a roman numeral in the key the spine last named.
+///
+/// A chord carries the numeral, as every numeral this crate reads does, so
+/// the notes are the ones the figure stands for in that key. The minor
+/// sixth and seventh are read as music21 reads them here -- the sixth flat
+/// and the seventh sharp -- and a token that is no `**harm` token is passed
+/// over, which is what music21 does after warning about it.
+fn parse_harm(events: &[(String, usize)]) -> Result<Vec<Placed>> {
+    let mut stream = Vec::new();
+    // music21's `HarmSpine` starts in C major and takes every later key
+    // from the spine's own tandems.
+    let mut key = Key::from_tonic("C")?;
+    for (contents, line) in events {
+        if contents == "." || contents.is_empty() {
+            continue;
+        }
+        if contents.starts_with('*') {
+            if SPINE_PATHS.contains(&contents.as_str()) {
+                continue;
+            }
+            match contents.strip_suffix(':') {
+                Some(named) => key = Key::from_tonic(&named[1..])?,
+                // Anything else is kept as it stands, `*staff` among it,
+                // which is what says whose harmony this is.
+                None => {
+                    append(&mut stream, *line, 0, Thing::Tandem(contents.clone()));
+                }
+            }
+            continue;
+        }
+        if contents.starts_with('=') || contents.starts_with('!') {
+            continue;
+        }
+        let Some(figure) = harm::convert_harm_to_roman(contents) else {
+            continue;
+        };
+        let numeral = RomanNumeral::with_minor_defaults(
+            &figure,
+            key.clone(),
+            Minor67Default::Flat,
+            Minor67Default::Sharp,
+        )?;
+        let chord = numeral.to_chord()?.with_numeral(numeral);
+        append(&mut stream, *line, 0, Thing::Element(chord.into()));
+    }
+    Ok(stream)
+}
+
 /// music21's `createHumdrumSpines`: the spines a table's columns run
 /// through, splitting, joining and changing places as the table says.
 fn spines_of(lines: &[(usize, Vec<String>)], width: usize) -> Result<Vec<Spine>> {
@@ -1223,6 +1274,7 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
         spine.stream = match spine.kind.as_str() {
             "kern" => parse_kern(&spine.events),
             "dynam" => parse_other(&spine.events, true),
+            "harm" => parse_harm(&spine.events)?,
             _ => parse_other(&spine.events, false),
         };
     }
@@ -1256,7 +1308,8 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
     {
         let staves = staves_of(&spine.stream);
         let is_words = matches!(spine.kind.as_str(), "lyrics" | "text");
-        if spine.kind != "dynam" && !is_words {
+        let is_marks = matches!(spine.kind.as_str(), "dynam" | "harm");
+        if !is_marks && !is_words {
             continue;
         }
         for staff in staves {
@@ -1264,8 +1317,11 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
                 .iter_mut()
                 .find(|(_, _, loose)| staff_of(loose) == Some(staff))
             else {
-                if spine.kind == "dynam" {
-                    return Err(humdrum_error(format!("no staff {staff} for the dynamics")));
+                if is_marks {
+                    return Err(humdrum_error(format!(
+                        "no staff {staff} for the {} spine",
+                        spine.kind
+                    )));
                 }
                 continue;
             };
@@ -1276,14 +1332,28 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
                         .iter()
                         .position(|held| held.priority == thing.line);
                     match (&thing.thing, found) {
-                        (Thing::Element(dynamic @ StreamElement::Dynamic(_)), Some(found)) => {
+                        (
+                            Thing::Element(
+                                mark @ (StreamElement::Dynamic(_) | StreamElement::Chord(_)),
+                            ),
+                            Some(found),
+                        ) => {
                             let offset = measure.things[found].offset;
+                            // music21's `HarmSpine` gives its numerals the
+                            // line they were written on as their priority,
+                            // which sorts them after the meter and the key
+                            // standing at the same offset; its `DynamSpine`
+                            // gives a dynamic none.
+                            let priority = match mark {
+                                StreamElement::Chord(_) => thing.line,
+                                _ => 0,
+                            };
                             measure.things.push(Placed {
                                 offset,
                                 line: thing.line,
-                                priority: 0,
+                                priority,
                                 voice: None,
-                                thing: Thing::Element(dynamic.clone()),
+                                thing: Thing::Element(mark.clone()),
                             });
                             break;
                         }
