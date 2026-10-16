@@ -3514,3 +3514,103 @@ def test_an_alteration_is_written_as_a_chord_symbol_writes_it():
         "#",
         "##",
     ]
+
+
+def test_a_key_is_read_for_every_measure():
+    """Every answer is music21's own for the same line."""
+    assert [m.divide(4.0, -1), m.divide(3.0, 0), m.divide(6.0, 2)] == [2.0, 3.0, 2.0]
+
+    with pytest.raises(m.FloatingKeyException):
+        m.KeyAnalyzer()
+    bare = m.Part()
+    bare.insert(0.0, m.Note("C4"))
+    with pytest.raises(m.FloatingKeyException):
+        m.KeyAnalyzer(bare)
+
+    line = m.from_tiny_notation(
+        "4/4 c4 e g c' c e g c' g b d' g d f# a d' e g# b e' a c# e a'"
+    )
+    analyzer = m.KeyAnalyzer(line)
+    assert (analyzer.numMeasures, analyzer.windowSize) == (6, 4)
+    assert analyzer.stream is line
+
+    # Each measure on its own, by the Aarden-Essen weighting music21's
+    # analyze('key') reads with, each key carrying how well it fitted and
+    # the twenty-three that fitted less well.
+    raw = analyzer.getRawKeyByMeasure()
+    assert [str(k) for k in raw] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "E major",
+        "A major",
+    ]
+    assert len(raw[0].alternateInterpretations) == 23
+    assert round(raw[0].correlationCoefficient, 6) == 0.71926
+    assert len(analyzer.rawKeyByMeasure) == 6
+
+    # The readings of one measure, spelled as music21 spells a key.
+    readings = analyzer.getInterpretationByMeasure(0)
+    assert sorted((n, round(v, 6)) for n, v in readings.items())[:4] == [
+        ("A", -0.174943),
+        ("A-", 0.18564),
+        ("B", -0.351549),
+        ("B-", 0.081055),
+    ]
+
+    # Smoothed by the measures around each, through the window said.
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "C major",
+        "G major",
+        "a minor",
+        "A major",
+    ]
+    analyzer.windowSize = 1
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "A major",
+        "A major",
+    ]
+
+    # The weighting is a function, as music21's is, so a caller may weigh
+    # the window however it likes.
+    analyzer.windowSize = 2
+    analyzer.weightAlgorithm = lambda coefficient, distance: coefficient / (
+        (abs(distance) + 1) ** 2
+    )
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "E major",
+        "A major",
+    ]
+
+    # A measure with no notes has no reading and no key of its own, so the
+    # keys answered are one short, as music21's are.
+    quiet = m.from_tiny_notation("4/4 c4 e g c' r1 d f a d'")
+    hushed = m.KeyAnalyzer(quiet)
+    hushed.windowSize = 1
+    assert [None if k is None else str(k) for k in hushed.getRawKeyByMeasure()] == [
+        "C major",
+        None,
+        "G major",
+        "B- major",
+        "D major",
+        "G major",
+    ]
+    assert hushed.getInterpretationByMeasure(1) is None
+    assert [str(k) for k in hushed.run()] == [
+        "C major",
+        "B- major",
+        "d minor",
+        "d minor",
+        "d minor",
+    ]

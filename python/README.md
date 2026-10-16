@@ -157,7 +157,9 @@ found.
 `analysis.segmentByRests.Segmenter` cuts a line into the runs of notes
 between its rests, each run the stream's own notes and each interval built
 on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
-property of every pitch into a `Counter`.
+property of every pitch into a `Counter`. `analysis.floatingKey.KeyAnalyzer`
+reads a key for every measure and smooths each by the measures around it,
+through a window and a weighting the caller may say.
 
 music21's four instrument stream functions are here too --
 `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and

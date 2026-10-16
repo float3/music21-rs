@@ -9,16 +9,24 @@
 //! rests. A segment is the stream's own notes, as every lookup here hands
 //! back what the stream holds.
 //!
+//! `analysis.floatingKey`'s `KeyAnalyzer` is here too: a key for every
+//! measure, each measure's own reading smoothed by its neighbours'. Its
+//! `weightAlgorithm` is a Python function, as music21's is, so the
+//! smoothing is done here over the readings the crate works out rather
+//! than in the crate, which takes a function of its own.
+//!
 //! The classes still outside it (`KeyWeightKeyAnalysis`, `Ambitus`,
-//! `WindowedAnalysis`, `KeyAnalyzer`) are colour tables and logs of
-//! solutions around arithmetic the crate already has; `Stream.analyze` is
-//! the way to the key and the ambitus.
+//! `WindowedAnalysis`) are colour tables and logs of solutions around
+//! arithmetic the crate already has; `Stream.analyze` is the way to the
+//! key and the ambitus.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+
+use music21_rs_crate::analysis::KeyEstimate;
 
 use crate::Walkable;
 
@@ -30,7 +38,20 @@ pub const NAMES: &[&str] = &[
     "thomassenMelodicAccent",
     "pitchAttributeCount",
     "Segmenter",
+    "divide",
+    "KeyAnalyzer",
+    "FloatingKeyException",
 ];
+
+// music21's own `FloatingKeyException` is an `AnalysisException`, which is
+// a `Music21Exception`; this one is the base alone, there being no type
+// here for the class in between. Nothing in music21 catches the middle
+// one, and nothing here is installed over `analysis.floatingKey`.
+pyo3::create_exception!(
+    music21_rs_facade,
+    FloatingKeyException,
+    crate::Music21Exception
+);
 
 /// music21's `analysis.patel.nPVI`: the normalized pairwise variability
 /// index of a line's note lengths, which says how even its rhythm is.
@@ -190,6 +211,237 @@ impl Segmenter {
     }
 }
 
+/// music21's `analysis.floatingKey.divide`: how much a neighbouring
+/// measure's reading counts at a distance, its coefficient over the
+/// distance plus one.
+#[pyfunction]
+fn divide(coefficient: f64, distance: i32) -> f64 {
+    music21_rs_crate::analysis::floating_key::divide(coefficient, distance)
+}
+
+/// music21's `analysis.floatingKey.KeyAnalyzer`: the key of every measure,
+/// read one measure at a time and then smoothed by the measures around it.
+///
+/// A measure is read as every part's measure at that place, by the
+/// Aarden-Essen weighting music21's `analyze('key')` reads with, and a
+/// measure with no notes has no reading. `windowSize` is how many measures
+/// either side count, and `weightAlgorithm` how much each counts at its
+/// distance -- a Python function, as music21's is, so a caller may weigh
+/// the window however it likes.
+///
+/// music21 keeps each measure's readings once asked for; this reads them
+/// again, so a stream edited between two questions is answered as it
+/// stands.
+#[pyclass(
+    name = "KeyAnalyzer",
+    module = "music21.analysis.floatingKey",
+    subclass,
+    skip_from_py_object
+)]
+pub struct KeyAnalyzer {
+    /// The stream being read, as music21's `stream` attribute.
+    stream: Py<PyAny>,
+    /// How many measures either side of each are taken into account.
+    #[pyo3(get, set)]
+    windowSize: usize,
+    /// How many measures there are to read.
+    #[pyo3(get, set)]
+    numMeasures: usize,
+    /// What the last `getRawKeyByMeasure` found, as music21 keeps it.
+    rawKeyByMeasure: Py<PyAny>,
+    /// How a neighbour's reading is weighed at its distance.
+    weightAlgorithm: Py<PyAny>,
+}
+
+#[pymethods]
+impl KeyAnalyzer {
+    /// music21's `KeyAnalyzer(s)`, which refuses a stream with no measures
+    /// in it and nothing at all.
+    #[new]
+    #[pyo3(signature = (s = None))]
+    fn make(py: Python<'_>, s: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let Some(s) = s.filter(|given| !given.is_none()) else {
+            return Err(FloatingKeyException::new_err("Need a Stream to initialize"));
+        };
+        let stream = crate::stream::crate_stream(s)?;
+        let analyzer = music21_rs_crate::analysis::floating_key::KeyAnalyzer::new(&stream)
+            .map_err(|error| FloatingKeyException::new_err(crate::pitch::message(&error)))?;
+        Ok(Self {
+            stream: s.clone().unbind(),
+            windowSize: analyzer.window_size,
+            numMeasures: analyzer.measure_count(),
+            rawKeyByMeasure: pyo3::types::PyList::empty(py).into_any().unbind(),
+            weightAlgorithm: crate::class_of(py, "music21.analysis.floatingKey", "divide")?
+                .unbind(),
+        })
+    }
+
+    #[getter]
+    fn get_stream(&self, py: Python<'_>) -> Py<PyAny> {
+        self.stream.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_stream(&mut self, value: &Bound<'_, PyAny>) {
+        self.stream = value.clone().unbind();
+    }
+
+    #[getter]
+    fn get_rawKeyByMeasure(&self, py: Python<'_>) -> Py<PyAny> {
+        self.rawKeyByMeasure.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_rawKeyByMeasure(&mut self, value: &Bound<'_, PyAny>) {
+        self.rawKeyByMeasure = value.clone().unbind();
+    }
+
+    #[getter]
+    fn get_weightAlgorithm(&self, py: Python<'_>) -> Py<PyAny> {
+        self.weightAlgorithm.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_weightAlgorithm(&mut self, value: &Bound<'_, PyAny>) {
+        self.weightAlgorithm = value.clone().unbind();
+    }
+
+    /// Every measure's reading on its own, nothing for a measure with no
+    /// notes: music21's `getRawKeyByMeasure`. Each key carries how well it
+    /// fitted and the keys that fitted less well, as music21's does.
+    fn getRawKeyByMeasure<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let found = pyo3::types::PyList::empty(py);
+        for reading in slf.borrow().readings(py)? {
+            match reading {
+                None => found.append(py.None())?,
+                Some(estimates) => found.append(key_of(py, &estimates)?)?,
+            }
+        }
+        let answer = found.into_any();
+        slf.borrow_mut().rawKeyByMeasure = answer.clone().unbind();
+        Ok(answer)
+    }
+
+    /// A measure's readings as a dictionary of each key's name with case
+    /// against its coefficient, nothing for a measure with none: music21's
+    /// `getInterpretationByMeasure`.
+    fn getInterpretationByMeasure<'py>(
+        slf: &Bound<'py, Self>,
+        mIndex: usize,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let readings = slf.borrow().readings(py)?;
+        let Some(Some(estimates)) = readings.get(mIndex) else {
+            return Ok(None);
+        };
+        let found = PyDict::new(py);
+        for estimate in estimates {
+            found.set_item(
+                crate::spelling::music21_name(&estimate.key().tonic_pitch_name_with_case()),
+                estimate.score(),
+            )?;
+        }
+        Ok(Some(found.into_any()))
+    }
+
+    /// The key of every measure that has a reading, each smoothed by the
+    /// readings of the measures around it: music21's
+    /// `smoothInterpretationByMeasure`.
+    ///
+    /// A measure with no reading has no key and is left out, and each
+    /// measure is smoothed by its neighbours' own readings rather than
+    /// their smoothed ones, as music21 smooths them.
+    fn smoothInterpretationByMeasure<'py>(
+        slf: &Bound<'py, Self>,
+    ) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let me = slf.borrow();
+        let raw = me.readings(py)?;
+        let weigh = me.weightAlgorithm.bind(py);
+        let window = me.windowSize as isize;
+        let class = crate::class_of(py, "music21.key", "Key")?;
+        let mut smoothed = Vec::new();
+        for index in 0..raw.len() {
+            let Some(estimates) = &raw[index] else {
+                continue;
+            };
+            let mut readings: Vec<(String, f64)> = estimates.iter().map(named).collect();
+            for distance in -window..=window {
+                let neighbour = index as isize + distance;
+                if distance == 0 || neighbour < 0 || neighbour as usize >= raw.len() {
+                    continue;
+                }
+                let Some(theirs) = &raw[neighbour as usize] else {
+                    continue;
+                };
+                for (name, value) in readings.iter_mut() {
+                    let Some(found) = theirs.iter().find(|estimate| named(estimate).0 == *name)
+                    else {
+                        continue;
+                    };
+                    *value += weigh.call1((found.score(), distance))?.extract::<f64>()?;
+                }
+            }
+            let mut best: Option<&(String, f64)> = None;
+            for reading in readings.iter() {
+                if best.is_none_or(|(_, value)| reading.1 > *value) {
+                    best = Some(reading);
+                }
+            }
+            if let Some((name, _)) = best {
+                smoothed.push(class.call1((name.as_str(),))?);
+            }
+        }
+        Ok(smoothed)
+    }
+
+    /// Every measure's key, smoothed: music21's `run`, which reads the
+    /// measures and then smooths them.
+    fn run<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        Self::getRawKeyByMeasure(slf)?;
+        Self::smoothInterpretationByMeasure(slf)
+    }
+}
+
+impl KeyAnalyzer {
+    /// Every measure's readings, best first, as the crate reads them.
+    fn readings(&self, py: Python<'_>) -> PyResult<Vec<Option<Vec<KeyEstimate>>>> {
+        let stream = crate::stream::crate_stream(self.stream.bind(py))?;
+        let mut analyzer = music21_rs_crate::analysis::floating_key::KeyAnalyzer::new(&stream)
+            .map_err(|error| FloatingKeyException::new_err(crate::pitch::message(&error)))?;
+        analyzer.window_size = self.windowSize;
+        Ok(analyzer.raw_key_by_measure())
+    }
+}
+
+/// A reading as its key's name with case, spelled as music21 spells one --
+/// `A-` rather than the crate's own `Ab` -- beside its coefficient.
+fn named(estimate: &KeyEstimate) -> (String, f64) {
+    (
+        crate::spelling::music21_name(&estimate.key().tonic_pitch_name_with_case()),
+        estimate.score(),
+    )
+}
+
+/// The key a measure's readings settle on, carrying how well it fitted and
+/// the keys that fitted less well, as music21's analysis answers one.
+fn key_of<'py>(py: Python<'py>, estimates: &[KeyEstimate]) -> PyResult<Bound<'py, PyAny>> {
+    let Some((best, rest)) = estimates.split_first() else {
+        return Ok(py.None().into_bound(py));
+    };
+    let found = crate::key::Key::object(py, best.key().clone())?.into_bound(py);
+    found.setattr("correlationCoefficient", best.score())?;
+    let others = pyo3::types::PyList::empty(py);
+    for estimate in rest {
+        let other = crate::key::Key::object(py, estimate.key().clone())?.into_bound(py);
+        other.setattr("correlationCoefficient", estimate.score())?;
+        others.append(other)?;
+    }
+    found.setattr("alternateInterpretations", others)?;
+    Ok(found)
+}
+
 /// Adds the analysis functions and classes to a module.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(nPVI, m)?)?;
@@ -197,6 +449,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(labelBeatDepth, m)?)?;
     m.add_function(wrap_pyfunction!(thomassenMelodicAccent, m)?)?;
     m.add_function(wrap_pyfunction!(pitchAttributeCount, m)?)?;
+    m.add_function(wrap_pyfunction!(divide, m)?)?;
     m.add_class::<Segmenter>()?;
+    m.add_class::<KeyAnalyzer>()?;
     Ok(())
 }

@@ -306,6 +306,14 @@
   and an interval is built on two of them, so `noteStart` is one of the
   score's notes; a count is a `collections.Counter` of whatever property
   of a pitch was named, as music21 counts one.
+- The Python package gains `analysis.floatingKey`'s `KeyAnalyzer` and
+  `divide`: the key of every measure, read one measure at a time by the
+  Aarden-Essen weighting and then smoothed by the measures around it. Each
+  raw key carries how well it fitted and the keys that fitted less well,
+  as music21's does, and `weightAlgorithm` is a Python function, so a
+  caller may weigh the window however it likes. music21 keeps each
+  measure's readings once asked for; the package reads them again, so a
+  stream edited between two questions is answered as it stands.
 - The Python package gains `Editorial`, music21's `editorial.Editorial`:
   the dictionary with attribute access where an analysis leaves what it
   worked out, which a note answers as its `editorial` -- the same object

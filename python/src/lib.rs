@@ -1353,6 +1353,11 @@ exceptions![
         discrete::DiscreteAnalysisException,
         Some("music21.analysis.discrete")
     ),
+    (
+        "FloatingKeyException",
+        analysis::FloatingKeyException,
+        Some("music21.analysis.floatingKey")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
