@@ -168,6 +168,10 @@ any part laid over the line kept as it stands. where music21 chooses at
 random this chooses through Python's own `random`, so a caller who seeds it
 gets the same realization twice.
 
+`analysis.windowed.WindowedAnalysis` runs a processor's own analysis over
+windows of a stream, a quarter note long and up, each window handed over as
+a stream of the package's; the answer and the colour are the processor's.
+
 `analysis.discrete`'s classes are here too -- `Ambitus`, the five key
 weightings and `MelodicIntervalDiversity` -- each handing back what the
 stream holds: a span is its own pitch objects, and a counted interval is

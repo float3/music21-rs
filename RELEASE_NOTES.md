@@ -306,6 +306,18 @@
   and an interval is built on two of them, so `noteStart` is one of the
   score's notes; a count is a `collections.Counter` of whatever property
   of a pitch was named, as music21 counts one.
+- The Python package gains `analysis.windowed.WindowedAnalysis`:
+  `getMinimumWindowStream`, `analyze` and `process`. The windows are the
+  crate's -- the stream cut into quarter-note measures with what runs past
+  a barline tied, and the windows of each size put end to end -- and each
+  is handed to the processor's own `process` as a stream of the package's.
+  The colour is the processor's, which is why this carries `analyze` and
+  `process` where `discrete`'s own classes do not: music21's processors
+  work unchanged where music21 is installed, and so does a processor a
+  caller wrote. A window the processor cannot read answers
+  `((None, None, 0), '#ffffff')`, music21 warns where the windows do not
+  divide evenly, and a score is flattened first -- all three as music21
+  does them.
 - `Chord::is_sorted_diatonic_ascending` is music21's
   `isSortedDiatonicAscending`, new in music21 11: whether the notes
   already stand lowest to highest on the staff, which is where its own

@@ -77,6 +77,7 @@ pub mod stream;
 pub mod tempo;
 pub mod transposition;
 pub mod voiceleading;
+pub mod windowed;
 
 pub use pitch::{Accidental, Microtone, Pitch};
 
@@ -1364,6 +1365,11 @@ exceptions![
         realizer::FiguredBassLineException,
         Some("music21.figuredBass.realizer")
     ),
+    (
+        "WindowedAnalysisException",
+        windowed::WindowedAnalysisException,
+        Some("music21.analysis.windowed")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
@@ -1453,6 +1459,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     segment::register(m)?;
     discrete::register(m)?;
     realizer::register(m)?;
+    windowed::register(m)?;
     analysis::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;

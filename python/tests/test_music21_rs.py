@@ -3959,3 +3959,108 @@ def test_a_part_laid_over_a_figured_bass_line():
         "m1[BassClef KeySignature TimeSignature "
         "Note(C3,1.0) Note(D3,1.0) Note(E3,2.0)] m2[Note(E3,2.0)]",
     ]
+
+
+class _Counter:
+    """A processor of the shape music21's WindowedAnalysis asks for."""
+
+    def process(self, window):
+        names = [
+            n.nameWithOctave for n in window.recurse() if getattr(n, "isNote", False)
+        ]
+        if not names:
+            raise m.DiscreteAnalysisException("nothing to analyse")
+        return "+".join(names), "#%02x0000" % min(len(names), 255)
+
+
+def test_an_analysis_run_over_windows_of_a_stream():
+    """Every answer is music21's own for the same line and the same processor.
+
+    The processor is the test's own, which is how the colour comes to be
+    answered at all: a window's answer is (data, colour), and nothing in
+    the package knows the colour a key or a pitch span is drawn in.
+    """
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c'")
+    analysis = m.WindowedAnalysis(line, _Counter())
+
+    # The stream cut into measures a quarter note long, and into any other
+    # length the caller says.
+    assert len(analysis.getMinimumWindowStream().getElementsByClass("Measure")) == 8
+    assert len(analysis.getMinimumWindowStream("1/2").getElementsByClass("Measure")) == 4
+
+    # One window at a time, then two, overlapping as music21 overlaps them.
+    data, colours = analysis.analyze(1)
+    assert data == ["C4", "E4", "G4", "C5", "C4", "E4", "G4", "C5"]
+    assert colours == ["#010000"] * 8
+    data, colours = analysis.analyze(2)
+    assert data == ["C4+E4", "E4+G4", "G4+C5", "C5+C4", "C4+E4", "E4+G4", "G4+C5"]
+
+    # Side by side, with music21's own warning where the windows do not
+    # divide evenly, and the last window short.
+    with pytest.warns(UserWarning, match="not divisible by windowSize"):
+        data, colours = analysis.analyze(3, windowType="noOverlap")
+    assert data == ["C4+E4+G4", "C5+C4+E4", "G4+C5"]
+
+    # Averaged: for each quarter, every overlapping window holding it, put
+    # end to end.
+    data, colours = analysis.analyze(2, windowType="adjacentAverage")
+    assert data == [
+        "C4+E4",
+        "C4+E4+E4+G4",
+        "E4+G4+G4+C5",
+        "G4+C5+C5+C4",
+        "C5+C4+C4+E4",
+        "C4+E4+E4+G4",
+        "E4+G4+G4+C5",
+        "G4+C5",
+    ]
+
+    # A window type nobody answers to is refused, as music21 refuses it.
+    with pytest.raises(Exception):
+        analysis.analyze(1, windowType="sideways")
+
+    # Every window size, each with its answers, its colours and a note of
+    # the size.
+    solutions, colours, meta = analysis.process(1, 3, includeTotalWindow=False)
+    assert [len(row) for row in solutions] == [8, 7, 6]
+    assert [len(row) for row in colours] == [8, 7, 6]
+    assert meta == [{"windowSize": 1}, {"windowSize": 2}, {"windowSize": 3}]
+    # The whole stream is one of the sizes unless it is asked not to be.
+    assert analysis.process(1, 2)[2] == [
+        {"windowSize": 1},
+        {"windowSize": 2},
+        {"windowSize": 8},
+    ]
+    # A step written as a string doubles the size, as music21 reads it.
+    assert analysis.process(1, 8, "2x", includeTotalWindow=False)[2] == [
+        {"windowSize": 1},
+        {"windowSize": 2},
+        {"windowSize": 4},
+    ]
+    # `process` reads the window type loosely where `analyze` reads it
+    # exactly, as music21 reads them.
+    assert analysis.process(2, 2, 1, "nonoverlapping")[2] == [
+        {"windowSize": 2},
+        {"windowSize": 8},
+    ]
+
+    # A window the processor cannot read answers music21's own pair.
+    quiet = m.WindowedAnalysis(m.from_tiny_notation("4/4 c4 r r e"), _Counter())
+    data, colours = quiet.analyze(1)
+    assert data == ["C4", (None, None, 0), (None, None, 0), "E4"]
+    assert colours == ["#010000", "#ffffff", "#ffffff", "#010000"]
+
+    # A score is flattened, as music21 flattens it: part-like substreams
+    # are not supported there either.
+    scored = m.Score()
+    scored.insert(0.0, m.from_tiny_notation("4/4 c4 e g c'"))
+    scored.insert(0.0, m.from_tiny_notation("4/4 e4 g c' e'"))
+    assert m.WindowedAnalysis(scored, _Counter()).analyze(1)[0] == [
+        "C4+E4",
+        "E4+G4",
+        "G4+C5",
+        "C5+E5",
+    ]
+
+    with pytest.raises(m.WindowedAnalysisException):
+        m.WindowedAnalysis("C4", _Counter())
