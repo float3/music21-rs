@@ -210,6 +210,25 @@ written through one of them sticks.
 fields — every such class implements `__traverse__`/`__clear__` for exactly
 this reason, and before that every note that went into a stream leaked.
 
+**where music21's class is the better one, music21's is the one that
+answers.** `style.Style` is the long-standing example -- a note's `style` is
+music21's own object inside music21 and the package's only without it,
+because music21's exporters read a page off it and its subclasses carry more
+than one class of ours would. `editorial.Editorial` is the same bargain, and
+it was learnt the hard way: the package's stand-in is a dictionary with
+attribute access, music21's is a `dict` subclass with the whole dict API that
+music21's own copying carries along, and standing in for it cost 34 of
+music21's own tests -- a copied note lost what an analysis had written on it,
+and music21's figured-bass realizer could not read back the `notationString`
+it had just written. so a note's and a chord's `editorial` is music21's
+wherever music21 can be imported, and the package's `Editorial` answers only
+for a caller who has no music21 at all.
+
+*costs:* two behaviours for one member, told apart by whether music21 is
+importable, and a class of the package's that music21's own suite never
+exercises. the gain is that nothing quietly worse than music21 stands in
+music21's place.
+
 **some setters take whatever they are given.** `pitch._client`, `key.tonic`
 and `scale.tonic` keep a facade object where the value is one and record
 nothing where it is not, rather than raising. the note written into
