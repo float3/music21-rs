@@ -306,6 +306,15 @@
   and an interval is built on two of them, so `noteStart` is one of the
   score's notes; a count is a `collections.Counter` of whatever property
   of a pitch was named, as music21 counts one.
+- `Chord::is_sorted_diatonic_ascending` is music21's
+  `isSortedDiatonicAscending`, new in music21 11: whether the notes
+  already stand lowest to highest on the staff, which is where its own
+  sort asks before it copies anything. Staff position decides first, so
+  `B#3 C4` is sorted and `C4 B#3` is not. The facade answered it with a
+  walk of its own and the crate did not answer it at all; it is the
+  crate's now, and `Repeat::repeat_text_expression` is credited in the
+  feature map, which leaves nothing in the whole map missing with no
+  reason given.
 - The Python package gains the figured-bass realizer: `FiguredBassLine`
   and `Realization`, music21's `figuredBass.realizer`. A line is bass notes
   with their figures in a key and a meter -- `addElement`,

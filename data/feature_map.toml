@@ -945,6 +945,7 @@ note = "A barline that says which way the music goes back. A crate barline carri
 [class.renames]
 direction = "repeat_direction"
 times = "repeat_times"
+getTextExpression = "repeat_text_expression"
 
 [[class]]
 python = "stream/base.py"

@@ -2177,14 +2177,10 @@ impl Chord {
 
     /// Whether the notes stand lowest to highest on the staff, as
     /// `sortDiatonicAscending` puts them: music21's
-    /// `isSortedDiatonicAscending`.
+    /// `isSortedDiatonicAscending`, which is the crate's own answer now
+    /// rather than the same walk written out here.
     fn isSortedDiatonicAscending(&self) -> bool {
-        let notes = self.inner.notes();
-        notes.windows(2).all(|pair| {
-            let key = |note: &RsNote| (note.pitch().diatonic_note_number(), note.pitch().ps());
-            let (lower, higher) = (key(&pair[0]), key(&pair[1]));
-            lower.0 < higher.0 || (lower.0 == higher.0 && lower.1 <= higher.1)
-        })
+        self.inner.is_sorted_diatonic_ascending()
     }
 
     fn inversionName(&self) -> PyResult<Option<i32>> {
