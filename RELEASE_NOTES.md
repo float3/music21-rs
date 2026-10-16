@@ -318,6 +318,16 @@
   `((None, None, 0), '#ffffff')`, music21 warns where the windows do not
   divide evenly, and a score is flattened first -- all three as music21
   does them.
+- A note's and a chord's `editorial` is **music21's own** wherever music21
+  can be imported, and the package's own `Editorial` only for a caller who
+  has no music21 at all. music21's is a dict subclass with the whole dict
+  API -- its `tsvConverter` calls `update` on one -- and music21 keeps it
+  where its copying carries it along; the package's stand-in had neither,
+  so a copied note lost what an analysis had written on it and music21's
+  own figured-bass realizer could not read back the `notationString` it
+  had just written. music21's own suite is what found it: 34 of its tests
+  failed under the crate and none on music21. Same bargain `style.Style`
+  strikes, and for the same reason.
 - `Chord::is_sorted_diatonic_ascending` is music21's
   `isSortedDiatonicAscending`, new in music21 11: whether the notes
   already stand lowest to highest on the staff, which is where its own

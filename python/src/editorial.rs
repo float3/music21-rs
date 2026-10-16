@@ -13,6 +13,15 @@
 //! and what an analysis found is the answer it hands back. It is here
 //! because music21's analyses put their answers on the note and a caller
 //! reads them there.
+//!
+//! **This is the lesser class, and it only answers where music21 is not
+//! there to.** music21's own `Editorial` is a dict subclass with the whole
+//! dict API, and music21 keeps it where its copying carries it along; a
+//! note or a chord of this package's therefore answers with music21's
+//! wherever music21 can be imported (`crate::music21_editorial`), and with
+//! one of these only for a caller who has no music21 at all. The same
+//! bargain `style.Style` strikes, and for the same reason: being quietly
+//! worse would be worse than being absent.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]

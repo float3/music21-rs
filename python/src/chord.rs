@@ -2765,6 +2765,11 @@ impl Chord {
     #[getter]
     fn get_editorial(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
+        // Where this class stands in for music21's, music21's own is the
+        // one that answers: see `music21_editorial`.
+        if let Some(found) = crate::music21_editorial(slf.as_any())? {
+            return Ok(found.unbind());
+        }
         if let Some(held) = &slf.borrow().editorial {
             return Ok(held.clone_ref(py));
         }
