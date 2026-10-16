@@ -291,6 +291,11 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Stream` answers
+  `attachIntervalsBetweenStreams`: the interval to what sounds against
+  each of its notes in another stream, written onto the note's
+  `editorial.harmonicInterval` where music21 writes it, and cleared
+  first, so a note asked twice never keeps the older answer.
 - The Python package answers music21's `analysis.patel` and
   `analysis.metrical`: `nPVI` and `melodicIntervalVariability` -- which
   take `findConsecutiveNotes`' keywords, as music21 passes them on --

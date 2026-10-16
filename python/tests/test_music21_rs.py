@@ -3407,3 +3407,21 @@ def test_a_notes_editorial_holds_what_an_analysis_found():
     # Anything else raises until written, as music21's does.
     with pytest.raises(AttributeError):
         m.Editorial().nonsense
+
+
+def test_the_interval_against_another_part_is_written_on_each_note():
+    """Every answer is music21's own for the same two parts."""
+    upper = m.from_tiny_notation("tinyNotation: 4/4 e'2 d'2 c'2 b2").flatten()
+    lower = m.from_tiny_notation("tinyNotation: 4/4 c1 g1").flatten()
+    assert upper.attachIntervalsBetweenStreams(lower) is None
+
+    notes = [n for n in upper if getattr(n, "isNote", False)]
+    assert [
+        (n.nameWithOctave, n.editorial.harmonicInterval.name) for n in notes
+    ] == [("E5", "M10"), ("D5", "M9"), ("C5", "P4"), ("B4", "M3")]
+
+    # Asked again against a part of rests, every note's answer is cleared
+    # rather than kept, which is what music21 does first thing.
+    rests = m.from_tiny_notation("tinyNotation: 4/4 r1 r1").flatten()
+    upper.attachIntervalsBetweenStreams(rests)
+    assert [n.editorial.harmonicInterval for n in notes] == [None] * 4

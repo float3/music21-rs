@@ -148,8 +148,9 @@ the note's own `Lyric` in it.
 
 music21's `analysis.patel` and `analysis.metrical` are here -- `nPVI`,
 `melodicIntervalVariability`, `labelBeatDepth` and
-`thomassenMelodicAccent`, which leaves its answer on each note's
-`editorial`, music21's dictionary-with-attributes for what an analysis
+`thomassenMelodicAccent` -- and a stream writes the interval against
+another part onto its notes with `attachIntervalsBetweenStreams`. each
+leaves its answer on the note's `editorial`, music21's dictionary-with-attributes for what an analysis
 found.
 
 music21's four instrument stream functions are here too --

@@ -1037,6 +1037,56 @@ impl Stream {
         Bound::new(py, out)
     }
 
+    /// Writes onto each of this stream's notes the interval to what
+    /// sounds against it in another stream: music21's
+    /// `attachIntervalsBetweenStreams`.
+    ///
+    /// The interval goes on the note's `editorial.harmonicInterval`,
+    /// where music21 puts it, and is `None` for a note with nothing
+    /// sounding against it -- music21 clears it first, so a note asked
+    /// twice never keeps the older answer. The notes written on are this
+    /// stream's own, and only the ones it holds itself, as music21's
+    /// `getElementsByClass` there is not recursive.
+    fn attachIntervalsBetweenStreams(
+        slf: &Bound<'_, Self>,
+        cmpStream: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let read = crate_stream(slf.as_any())?;
+        let other = crate_stream(cmpStream)?;
+        // The objects the crate counted: everything the stream holds in
+        // its own order, the spanners left out as the reading leaves
+        // them out.
+        let spanner = pyo3::types::PyString::new(py, "Spanner");
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        let mut listed = Vec::new();
+        for object in held {
+            let object = object.into_bound(py);
+            if !is_of_class(&object, &spanner)? {
+                listed.push(object);
+            }
+        }
+        for (position, interval) in read.harmonic_intervals(&other) {
+            let Some(object) = listed.get(position) else {
+                continue;
+            };
+            let editorial = object.getattr("editorial")?;
+            match interval {
+                Some(interval) => {
+                    let made = Bound::new(py, crate::interval::Interval::wrap(interval))?;
+                    editorial.setattr("harmonicInterval", made)?;
+                }
+                None => editorial.setattr("harmonicInterval", py.None())?,
+            }
+        }
+        Ok(())
+    }
+
     /// Every pitch of everything the stream holds, in order: music21's
     /// `pitches`, which gathers a note's one pitch, a chord's several and
     /// a nested stream's own, each the very object that note holds.
