@@ -33,13 +33,16 @@ macro_rules! error_into {
     };
 }
 
+pub mod analysis;
 pub mod articulations;
+pub mod bar;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
+pub mod editorial;
 pub mod enharmonics;
 pub mod expressions;
 pub mod fbrules;
@@ -58,6 +61,7 @@ pub mod notation;
 pub mod note;
 pub mod pitch;
 pub mod possibility;
+pub mod realizer;
 pub mod realizerscale;
 pub mod resolution;
 pub mod rest;
@@ -67,11 +71,13 @@ pub mod scale;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
+pub mod spanner;
 mod spelling;
 pub mod stream;
 pub mod tempo;
 pub mod transposition;
 pub mod voiceleading;
+pub mod windowed;
 
 pub use pitch::{Accidental, Microtone, Pitch};
 
@@ -235,6 +241,60 @@ pub(crate) fn installed_class<'py>(
 ) -> Option<Bound<'py, PyAny>> {
     let installed = built_helper(py)?.getattr("installed").ok()?;
     installed.get_item((module, name)).ok()
+}
+
+/// music21's own `editorial` for an object that really is one of its
+/// `Music21Object`s, which is what an installed class's object is.
+///
+/// **music21's `Editorial` is the better class and must be the one that
+/// answers wherever music21 is there to ask.** It is a dict subclass
+/// carrying the whole dict API -- music21's own `tsvConverter` calls
+/// `update` on one -- and music21 keeps it in `_editorial`, which its
+/// copying carries along; the package's own stand-in has neither, so a
+/// copied note lost what was written on it and music21's figured-bass
+/// realizer could not read back the `notationString` it had just written.
+/// The package's `Editorial` is for a caller with no music21 at all, which
+/// is the same bargain `style.Style` strikes.
+pub(crate) fn music21_editorial<'py>(
+    object: &Bound<'py, PyAny>,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let py = object.py();
+    let Ok(base) = py.import("music21.base") else {
+        return Ok(None);
+    };
+    let class = base.getattr("Music21Object")?;
+    if !object.is_instance(&class)? {
+        return Ok(None);
+    }
+    // The property itself, read off the class, so music21's getter runs
+    // rather than whichever member stands first in the installed class's
+    // own chain -- which is this package's.
+    Ok(Some(
+        class
+            .getattr("editorial")?
+            .call_method1("__get__", (object,))?,
+    ))
+}
+
+/// The class a module of music21's names: the installed one where this
+/// package stands in for music21's, and the package's own otherwise.
+///
+/// Building an object by *calling* the class rather than filling a blank
+/// one in is how a member hands back something a caller built: music21's
+/// `Interval(n1, n2)` reads the two notes and keeps them, and that is the
+/// object `Segmenter.getIntervalList` answers with.
+pub(crate) fn class_of<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+) -> PyResult<Bound<'py, PyAny>> {
+    match installed_class(py, module, name) {
+        Some(class) => Ok(class),
+        None => py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr(name),
+    }
 }
 
 /// A Python object's items, one at a time, never asking how many there are.
@@ -1162,6 +1222,12 @@ exceptions![
         pitch::AccidentalException,
         Some("music21.pitch")
     ),
+    ("BarException", bar::BarException, Some("music21.bar")),
+    (
+        "SpannerException",
+        spanner::SpannerException,
+        Some("music21.spanner")
+    ),
     (
         "BeamException",
         notation::BeamException,
@@ -1322,6 +1388,21 @@ exceptions![
         discrete::DiscreteAnalysisException,
         Some("music21.analysis.discrete")
     ),
+    (
+        "FloatingKeyException",
+        analysis::FloatingKeyException,
+        Some("music21.analysis.floatingKey")
+    ),
+    (
+        "FiguredBassLineException",
+        realizer::FiguredBassLineException,
+        Some("music21.figuredBass.realizer")
+    ),
+    (
+        "WindowedAnalysisException",
+        windowed::WindowedAnalysisException,
+        Some("music21.analysis.windowed")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
@@ -1410,6 +1491,12 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     transposition::register(m)?;
     segment::register(m)?;
     discrete::register(m)?;
+    realizer::register(m)?;
+    windowed::register(m)?;
+    analysis::register(m)?;
+    bar::register(m)?;
+    editorial::register(m)?;
+    spanner::register(m)?;
     metadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;

@@ -1102,6 +1102,30 @@ impl Chord {
         self.sort_ascending()
     }
 
+    /// Whether the notes already stand in the order
+    /// [`Self::sort_diatonic_ascending`] puts them in, lowest to highest on
+    /// the staff: music21's `isSortedDiatonicAscending`.
+    ///
+    /// Staff position decides first, so `B#3 C4` is sorted and `C4 B#3` is
+    /// not though both sound the same two notes, and `C4 D#4 E-4` is sorted
+    /// where `C4 E-4 D#4` is not. A chord of one note, or of none, is
+    /// sorted.
+    ///
+    /// ```
+    /// use music21_rs::Chord;
+    ///
+    /// assert!(Chord::new("C4 E4 G4")?.is_sorted_diatonic_ascending());
+    /// assert!(!Chord::new("E4 C4 G4")?.is_sorted_diatonic_ascending());
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn is_sorted_diatonic_ascending(&self) -> bool {
+        self.notes.windows(2).all(|pair| {
+            let (left, right) = (&pair[0].pitch, &pair[1].pitch);
+            let step = root::diatonic_note_number(left).cmp(&root::diatonic_note_number(right));
+            step.then(left.ps().total_cmp(&right.ps())).is_le()
+        })
+    }
+
     /// Returns a copy sorted by frequency: music21's `sortFrequencyAscending`.
     pub fn sort_frequency_ascending(&self) -> Self {
         let mut chord = self.clone();
@@ -1547,6 +1571,36 @@ mod tests {
             ["C3", "G3", "E4", "C5"]
         );
         assert_eq!(chord.pitch_names(), ["B#", "C", "E", "Gb", "F#"]);
+    }
+
+    /// Every answer here is music21's own for the same chord.
+    #[test]
+    fn a_chord_says_whether_it_is_already_sorted() {
+        for (notes, sorted) in [
+            ("C4 E4 G4", true),
+            ("E4 C4 G4", false),
+            // Staff position decides before pitch space, so two notes that
+            // sound alike are sorted one way round and not the other.
+            ("C4 D#4 E-4", true),
+            ("C4 E-4 D#4", false),
+            ("B#3 C4", true),
+            ("C4 B#3", false),
+            ("C4 C4", true),
+            ("C4", true),
+        ] {
+            let chord = Chord::new(notes).unwrap();
+            assert_eq!(
+                chord.is_sorted_diatonic_ascending(),
+                sorted,
+                "{notes} sorted?"
+            );
+            // Sorting it says so, whatever it said before.
+            assert!(
+                chord
+                    .sort_diatonic_ascending()
+                    .is_sorted_diatonic_ascending()
+            );
+        }
     }
 
     #[test]

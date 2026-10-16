@@ -79,9 +79,15 @@ where a measure has more than one. a RomanText score's chords are
 `RomanNumeral`s, carrying their figures as lyrics. a score's metadata comes
 with it, as a `Metadata`, so a collection read from one file can be asked
 for a tune by its number or its title. what the package has no class for --
-words, barlines, repeat marks, slurs and other spanners, unpitched
-percussion, a fermata -- is read and left out. a note's articulations and
-its ornaments come with it. input a reader cannot read raises `StreamException`. a
+repeat marks, unpitched percussion, a fermata -- is read and left out. a
+note's articulations and its ornaments come with it, and so do barlines,
+repeats, words and the spanners: a measure carries its `leftBarline` and
+`rightBarline`, its `number`, `numberSuffix` and padding, and answers
+`barDuration`, `barDurationProportion`, `bestTimeSignature` and
+`padAsAnacrusis`; a part carries its `partName` and `partAbbreviation`,
+answering for the first instrument it holds where nothing says them; a stream answers `finalBarline`, `spanners` and
+`spannerBundle` and plays its repeats out with `expandRepeats`; and a
+slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 the package's streams slice, scale, invert and regroup themselves as
@@ -140,6 +146,42 @@ states no tempo a quarter at 120 is counted, as upstream, and `seconds` is
 tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
+
+music21's `analysis.patel` and `analysis.metrical` are here -- `nPVI`,
+`melodicIntervalVariability`, `labelBeatDepth` and
+`thomassenMelodicAccent` -- and a stream writes the interval against
+another part onto its notes with `attachIntervalsBetweenStreams`. each
+leaves its answer on the note's `editorial`, music21's dictionary-with-attributes for what an analysis
+found.
+
+`analysis.segmentByRests.Segmenter` cuts a line into the runs of notes
+between its rests, each run the stream's own notes and each interval built
+on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
+property of every pitch into a `Counter`. `analysis.floatingKey.KeyAnalyzer`
+reads a key for every measure and smooths each by the measures around it,
+through a window and a weighting the caller may say.
+the figured-bass realizer is here as `FiguredBassLine` and `Realization`:
+a line of bass notes and figures in a key and a meter, written out as a
+part, and every voicing of it that keeps the rules -- counted, listed,
+chosen from and written out as a score in keyboard or chorale style, with
+any part laid over the line kept as it stands. where music21 chooses at
+random this chooses through Python's own `random`, so a caller who seeds it
+gets the same realization twice.
+
+`analysis.windowed.WindowedAnalysis` runs a processor's own analysis over
+windows of a stream, a quarter note long and up, each window handed over as
+a stream of the package's; the answer and the colour are the processor's.
+
+`analysis.discrete`'s classes are here too -- `Ambitus`, the five key
+weightings and `MelodicIntervalDiversity` -- each handing back what the
+stream holds: a span is its own pitch objects, and a counted interval is
+built on the two notes it was measured between. `process` is left out for
+`Ambitus` and for a key weighting, answering a colour out of music21's
+colour tables, which the crate does not carry.
+
+music21's four instrument stream functions are here too --
+`partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
+`deduplicate` -- each handing back a new stream.
 
 a score carries its `metadata`, music21's `Metadata`, whose names are read
 and written as music21 reads them -- by a unique name, by one of the four

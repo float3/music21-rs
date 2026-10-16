@@ -10,6 +10,7 @@ handful of behaviours a caller reaches for first are right.
 import gc
 import os
 import copy
+import random
 import math
 import pathlib
 import subprocess
@@ -1269,8 +1270,16 @@ def test_volpiano_is_read_and_written_back():
     part = m.from_volpiano("1---c--d---fg---3--wE")
     assert type(part).__name__ == "Part"
     assert pitches_of(part) == ["C4", "D4", "F4", "G4", "E-4"]
-    # This package's streams keep no neumes or barlines to write.
-    assert m.to_volpiano(part) == "1---c-d-f-g-wE-"
+    # Written back whole: the barline as `----3` and the neume joining
+    # `fg`, which is music21's own answer for the same string. Both were
+    # lost before the package had a class for a barline or a spanner.
+    assert m.to_volpiano(part) == "1---c-d-fg----3wE-"
+    assert [type(s).__name__ for s in part.spannerBundle] == ["Neume"]
+    bars = part.getElementsByClass("Measure")
+    assert [b.rightBarline.type if b.rightBarline else None for b in bars] == [
+        "regular",
+        None,
+    ]
 
 
 def test_a_score_is_written_as_midi_and_read_back():
@@ -2937,3 +2946,1121 @@ def test_a_reader_carries_the_articulations_and_ornaments_through():
     assert [type(a).__name__ for a in notes[0].articulations] == ["Staccato", "Accent"]
     assert [type(e).__name__ for e in notes[0].expressions] == ["Trill"]
     assert notes[1].articulations == []
+
+
+REPEATED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef>
+      </attributes>
+      <barline location="left">
+        <bar-style>heavy-light</bar-style>
+        <repeat direction="forward"/>
+      </barline>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <barline location="right">
+        <bar-style>light-heavy</bar-style>
+        <repeat direction="backward"/>
+      </barline>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_barline_says_what_music21s_says():
+    """Every answer, and every refusal, is music21's own."""
+    assert m.Barline().type == "regular"
+    assert m.Barline().location is None
+    # A name is read as music21's standardizeBarType reads it, MusicXML's
+    # two spellings included.
+    assert m.Barline("double").type == "double"
+    assert m.Barline("light-heavy").type == "final"
+    assert m.Barline("double").musicXMLBarStyle() == "light-light"
+    assert m.Barline("final").musicXMLBarStyle() == "light-heavy"
+    assert repr(m.Barline("double")) == "<music21.bar.Barline type=double>"
+    with pytest.raises(m.BarException):
+        m.Barline("junk")
+
+    # A repeat is drawn as its direction says: heavy-light where a repeat
+    # starts, final where it ends.
+    one = m.Repeat()
+    assert (one.direction, one.times, one.type) == ("start", None, "heavy-light")
+    assert repr(one) == "<music21.bar.Repeat direction=start>"
+    other = m.Repeat(direction="end", times=3)
+    assert (other.direction, other.times, other.type) == ("end", 3, "final")
+    assert repr(other) == "<music21.bar.Repeat direction=end times=3>"
+    # Turning it round turns the drawing round, as music21's setter does.
+    other.direction = "start"
+    assert other.type == "heavy-light"
+    with pytest.raises(m.BarException):
+        m.Repeat(direction="sideways")
+    # And a repeat is a RepeatMark and a Barline, in music21's order,
+    # which is what a filter finds it by.
+    assert m.Repeat().classes[:3] == ["Repeat", "RepeatMark", "Barline"]
+    assert m.Barline().classes[:1] == ["Barline"]
+
+
+def test_a_measure_keeps_its_two_barlines():
+    """Every answer is music21's own for the same measure and part."""
+    bar = m.Measure()
+    bar.append(m.Note("C4", quarterLength=1.0))
+    assert (bar.leftBarline, bar.rightBarline) == (None, None)
+    bar.rightBarline = m.Barline("final")
+    assert bar.rightBarline.type == "final"
+    # A name is taken as the type, as music21's setter takes one.
+    bar.rightBarline = "double"
+    assert bar.rightBarline.type == "double"
+    bar.rightBarline = None
+    assert bar.rightBarline is None
+
+    # finalBarline is the last measure's right barline, and a score
+    # answers one for each of its parts.
+    line = m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4 g4 a4 b4 c'4")
+    assert line.finalBarline.type == "final"
+    line.finalBarline = "double"
+    assert line.finalBarline.type == "double"
+    whole = m.Score()
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 c4 d4 e4 f4"))
+    whole.insert(0.0, m.from_tiny_notation("tinyNotation: 4/4 C4 D4 E4 F4"))
+    whole.finalBarline = "double"
+    assert [b.type for b in whole.finalBarline] == ["double", "double"]
+
+
+def test_repeats_are_read_and_played_out():
+    """Every answer is music21's own for the same document."""
+    read = m.from_musicxml(REPEATED)
+    part = read.parts[0]
+    bars = list(part.getElementsByClass("Measure"))
+    assert [b.number for b in bars] == [1, 2]
+    assert bars[0].leftBarline.direction == "start"
+    assert bars[0].rightBarline is None
+    assert bars[1].rightBarline.direction == "end"
+
+    played = part.expandRepeats()
+    assert [
+        (measure.number, measure.numberSuffix, [n.nameWithOctave for n in measure.notes])
+        for measure in played.getElementsByClass("Measure")
+    ] == [
+        (1, None, ["C4", "D4"]),
+        (2, None, ["E4", "F4"]),
+        (1, "a", ["C4", "D4"]),
+        (2, "a", ["E4", "F4"]),
+    ]
+
+
+WORDED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+        <time><beats>2</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="above"><direction-type><words>dolce</words></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_words_are_read_and_carried_through():
+    """music21 answers the same for the same document."""
+    read = m.from_musicxml(WORDED)
+    words = [e for e in read.recurse() if isinstance(e, m.TextExpression)]
+    assert [(w.content, w.placement) for w in words] == [("dolce", "above")]
+    # What music21 says it is, and how it writes it.
+    assert words[0].classes[:2] == ["TextExpression", "Expression"]
+    assert repr(m.TextExpression("dolce")) == (
+        "<music21.expressions.TextExpression 'dolce'>"
+    )
+    # Long words are cut short in a repr, as music21 cuts them.
+    assert repr(m.TextExpression("repeat 3 times")) == (
+        "<music21.expressions.TextExpression 'repeat 3 t...'>"
+    )
+
+    # A repeat says its count in words: music21's getTextExpression.
+    said = m.Repeat(direction="end", times=3).getTextExpression()
+    assert said.content == "3x"
+    assert m.Repeat(direction="end", times=3).getTextExpression(
+        prefix="repeat ", postfix=" times"
+    ).content == "repeat 3 times"
+    # A repeat with no count has nothing to say; music21 writes the word
+    # None into the text there, which is not worth reproducing.
+    assert m.Repeat(direction="end").getTextExpression() is None
+
+
+SLURRED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations><slur number="1" placement="above" type="start"/></notations></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations><slur number="1" type="stop"/></notations></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_spanner_joins_the_notes_a_stream_holds():
+    """Every answer is music21's own for the same document and stream."""
+    read = m.from_musicxml(SLURRED)
+    # Asked of the whole tree, which is how music21's own code asks: the
+    # crate's readers gather a part's spanners onto the score, where
+    # music21's reader leaves them on the part, so `spanners` differs of
+    # the two while the bundle does not.
+    found = list(read.spannerBundle)
+    assert [type(s).__name__ for s in found] == ["Slur"]
+    slur = found[0]
+    joined = slur.getSpannedElements()
+    assert [n.nameWithOctave for n in joined] == ["C4", "E4"]
+    # The notes it joins are the score's own.
+    notes = [e for e in read.recurse() if getattr(e, "isNote", False)]
+    assert joined[0] is notes[0]
+    assert (slur.getFirst(), slur.getLast()) == (joined[0], joined[1])
+    assert len(slur) == 2
+    assert slur.placement == "above"
+    assert slur.classes[:2] == ["Slur", "Spanner"]
+    assert slur.hasSpannedElement(notes[0])
+    assert not slur.hasSpannedElement(notes[1])
+
+    # A slur built here reaches the writer, which is what one is for.
+    bar = m.Measure()
+    bar.insert(0.0, m.TimeSignature("4/4"))
+    notes = [m.Note(name, quarterLength=1.0) for name in ("C4", "D4", "E4", "F4")]
+    for at, note in enumerate(notes):
+        bar.insert(float(at), note)
+    part = m.Part()
+    part.insert(0.0, bar)
+    part.insert(0.0, m.Slur(notes[0], notes[2]))
+    whole = m.Score()
+    whole.insert(0.0, part)
+    assert len(whole.spannerBundle) == 1
+    # Two tags, a start and a stop, which is music21's count for the same
+    # score.
+    assert m.to_musicxml(whole).count("<slur") == 2
+
+    # The bundle answers getByClass, as music21's does.
+    assert len(whole.spannerBundle.getByClass("Slur")) == 1
+    assert len(whole.spannerBundle.getByClass("Crescendo")) == 0
+    # And every kind music21 has a class for has one here.
+    for kind in (
+        m.Slur,
+        m.Crescendo,
+        m.Diminuendo,
+        m.Ottava,
+        m.Line,
+        m.Glissando,
+        m.TrillExtension,
+        m.TremoloSpanner,
+        m.ArpeggioMarkSpanner,
+        m.PedalMark,
+        m.Neume,
+    ):
+        one = kind(notes[0], notes[1])
+        assert len(one) == 2
+        assert one.classes[-4:] == [
+            "Spanner",
+            "Music21Object",
+            "ProtoM21Object",
+            "object",
+        ]
+    # A hairpin is a DynamicWedge to music21 before it is a Spanner.
+    assert m.Crescendo().classes[:3] == ["Crescendo", "DynamicWedge", "Spanner"]
+
+
+def test_a_slur_is_read_from_abc_as_music21_reads_it():
+    """music21 answers the same for the same tune."""
+    read = m.from_abc("X:1\nT:Slurred\nM:4/4\nL:1/4\nK:C\n(CDE) F |]\n")
+    found = list(read.spannerBundle)
+    assert [type(s).__name__ for s in found] == ["Slur"]
+    assert [n.nameWithOctave for n in found[0].getSpannedElements()] == [
+        "C4",
+        "D4",
+        "E4",
+    ]
+
+
+def test_a_measure_answers_for_its_bar():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    bar.number = 14
+    bar.numberSuffix = "a"
+    bar.insert(0.0, m.TimeSignature("3/4"))
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+
+    assert bar.measureNumberWithSuffix() == "14a"
+    assert bar.barDuration.quarterLength == 3.0
+    # A third of its bar. music21 answers the Fraction 1/3 where this
+    # answers the float, as it does for every length and offset.
+    assert bar.barDurationProportion() == pytest.approx(1 / 3)
+    # The meter its one quarter note best fits.
+    assert bar.bestTimeSignature().ratioString == "1/4"
+
+    # A pickup is padded on the left by what it lacks of its bar.
+    pickup = m.Measure()
+    pickup.insert(0.0, m.TimeSignature("4/4"))
+    pickup.insert(0.0, m.Note("C4", quarterLength=1.0))
+    padded = pickup.padAsAnacrusis()
+    assert padded.paddingLeft == 3.0
+    # music21 changes the measure it is given; the answer here is a new
+    # one, as every other edit in this package is.
+    assert pickup.paddingLeft == 0.0
+
+    # With useInitialRests the rests it starts with go, and what follows
+    # moves back, which is music21's own answer for the same measure.
+    resty = m.Measure()
+    resty.insert(0.0, m.TimeSignature("4/4"))
+    resty.insert(0.0, m.Rest(quarterLength=2.0))
+    resty.insert(2.0, m.Note("C4", quarterLength=1.0))
+    used = resty.padAsAnacrusis(useInitialRests=True)
+    assert used.paddingLeft == 3.0
+    assert [type(e).__name__ for e in used] == ["TimeSignature", "Note"]
+
+
+def test_a_measure_is_numbered_and_padded_as_music21_does():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    # What music21's own `Measure.__init__` gives every measure.
+    assert (bar.number, bar.numberSuffix) == (0, None)
+    assert (bar.paddingLeft, bar.paddingRight) == (0.0, 0.0)
+
+    # The constructor reads a name as music21 reads one.
+    assert (m.Measure(number="12b").number, m.Measure(number="12b").numberSuffix) == (
+        12,
+        "b",
+    )
+    assert (m.Measure(number=7).number, m.Measure(number=7).numberSuffix) == (7, None)
+
+    # A number leaves the suffix as it stands, as music21's attribute
+    # does. Assigning a *name* splits it here, where music21 would keep
+    # the whole string as the number -- the number is a number here.
+    bar.number = 14
+    bar.numberSuffix = "a"
+    assert bar.measureNumberWithSuffix() == "14a"
+    bar.number = 15
+    assert (bar.number, bar.numberSuffix) == (15, "a")
+    bar.number = "16c"
+    assert (bar.number, bar.numberSuffix) == (16, "c")
+
+
+def test_instruments_rearrange_a_stream_as_music21s_do():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    line.insert(0.0, m.Flute())
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(1.0, m.Note("D4", quarterLength=1.0))
+    line.insert(2.0, m.Violin())
+    line.insert(2.0, m.Note("E4", quarterLength=1.0))
+    line.insert(3.0, m.Note("F4", quarterLength=1.0))
+
+    # A part per instrument, each holding what that instrument plays.
+    score = m.partitionByInstrument(line)
+    assert [
+        (
+            [type(i).__name__ for i in part.recurse() if hasattr(i, "instrumentName")],
+            [n.nameWithOctave for n in part.recurse() if getattr(n, "isNote", False)],
+        )
+        for part in score
+    ] == [(["Flute"], ["C4", "D4"]), (["Violin"], ["E4", "F4"])]
+
+    # Bundling puts the instrument onto the notes that sound it, so
+    # nothing but notes is left standing in the stream.
+    bundled = m.bundleInstruments(line)
+    assert [type(e).__name__ for e in bundled] == ["Note"] * 4
+
+    # Unbundling takes each note's own instrument back out beside it.
+    stored = m.Part()
+    for at, (name, kind) in enumerate((("C4", m.Flute), ("D4", m.Violin))):
+        one = m.Note(name, quarterLength=1.0)
+        one.storedInstrument = kind()
+        stored.insert(float(at), one)
+    assert [type(e).__name__ for e in m.unbundleInstruments(stored)] == [
+        "Flute",
+        "Note",
+        "Violin",
+        "Note",
+    ]
+
+    # Two instruments of a kind at one offset settle into one.
+    twice = m.Part()
+    twice.insert(0.0, m.Flute())
+    twice.insert(0.0, m.Flute())
+    twice.insert(0.0, m.Note("C4", quarterLength=1.0))
+    assert [type(e).__name__ for e in m.deduplicate(twice)] == ["Flute", "Note"]
+
+    # Each answers a new stream, as every edit in this package does, so
+    # music21's inPlace is refused rather than answered differently.
+    with pytest.raises(m.StreamException):
+        m.deduplicate(twice, inPlace=True)
+
+
+def test_a_line_is_measured_as_music21_measures_it():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    at = 0.0
+    for name, length in (
+        ("C4", 1.0),
+        ("D4", 0.5),
+        ("E4", 0.5),
+        ("F4", 2.0),
+        ("G4", 1.0),
+        ("A4", 1.0),
+        ("B4", 2.0),
+    ):
+        line.insert(at, m.Note(name, quarterLength=length))
+        at += length
+
+    # To nine places, which is as far as music21's own answer goes.
+    assert round(m.nPVI(line), 9) == 53.333333333
+    assert round(m.melodicIntervalVariability(line), 9) == 22.268088571
+    # The keywords are findConsecutiveNotes', which music21 passes on.
+    assert round(m.melodicIntervalVariability(line, skipUnisons=True), 9) == (
+        22.268088571
+    )
+
+    # nPVI counts every element, clefs and all, as music21's docstring
+    # says: so a flattened part answers differently of the two, this
+    # package keeping a measure's barline on the measure where music21
+    # holds it among the elements. 3.2 over nine elements against eight.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d8 e8 f2 g4 a4 b2")
+    assert round(m.nPVI(part.flatten()), 6) == 40.0
+
+    # A lyric under each note saying how deep in the beat it falls.
+    labelled = m.labelBeatDepth(
+        m.from_tiny_notation("tinyNotation: 4/4 c8 d8 e8 f8 g8 a8 b8 c'8")
+    )
+    assert [
+        "".join(ly.text for ly in n.lyrics)
+        for n in labelled.recurse()
+        if getattr(n, "isNote", False)
+    ] == ["****", "*", "**", "*", "***", "*", "**", "*"]
+
+    # Thomassen's melodic accent goes onto each note's editorial, which is
+    # where music21 writes it, and answers nothing.
+    notes = [m.Note(name, quarterLength=1.0) for name in ("C4", "E4", "G4", "C5")]
+    holder = m.Stream()
+    for at, note in enumerate(notes):
+        holder.insert(float(at), note)
+    assert m.thomassenMelodicAccent(holder) is None
+    assert [round(n.editorial.melodicAccent, 6) for n in notes] == [
+        1.0,
+        0.33,
+        0.2211,
+        0.67,
+    ]
+
+
+def test_a_notes_editorial_holds_what_an_analysis_found():
+    """music21's own `Editorial` behaves this way."""
+    note = m.Note("C4")
+    # The same object every time, so what is written on it stays.
+    assert note.editorial is note.editorial
+    note.editorial.melodicAccent = 0.5
+    assert note.editorial.melodicAccent == 0.5
+    assert "melodicAccent" in note.editorial
+    assert note.editorial["melodicAccent"] == 0.5
+
+    # Three names answer None before anything writes them and two answer
+    # an empty list, which is music21's own predefined set.
+    assert m.Editorial().harmonicInterval is None
+    assert m.Editorial().melodicInterval is None
+    assert m.Editorial().ficta is None
+    assert m.Editorial().footnotes == []
+    assert m.Editorial().comments == []
+    # Anything else raises until written, as music21's does.
+    with pytest.raises(AttributeError):
+        m.Editorial().nonsense
+
+
+def test_the_interval_against_another_part_is_written_on_each_note():
+    """Every answer is music21's own for the same two parts."""
+    upper = m.from_tiny_notation("tinyNotation: 4/4 e'2 d'2 c'2 b2").flatten()
+    lower = m.from_tiny_notation("tinyNotation: 4/4 c1 g1").flatten()
+    assert upper.attachIntervalsBetweenStreams(lower) is None
+
+    notes = [n for n in upper if getattr(n, "isNote", False)]
+    assert [
+        (n.nameWithOctave, n.editorial.harmonicInterval.name) for n in notes
+    ] == [("E5", "M10"), ("D5", "M9"), ("C5", "P4"), ("B4", "M3")]
+
+    # Asked again against a part of rests, every note's answer is cleared
+    # rather than kept, which is what music21 does first thing.
+    rests = m.from_tiny_notation("tinyNotation: 4/4 r1 r1").flatten()
+    upper.attachIntervalsBetweenStreams(rests)
+    assert [n.editorial.harmonicInterval for n in notes] == [None] * 4
+
+
+def test_a_part_is_named_as_music21_names_it():
+    """Every answer is music21's own for the same part."""
+    bare = m.Part()
+    assert (bare.partName, bare.partAbbreviation) == (None, None)
+
+    named = m.Part()
+    named.partName = "Flauto"
+    assert named.partName == "Flauto"
+
+    # Unsaid, a part answers for the first instrument it holds: its own
+    # partName, else its instrumentName, and the abbreviation likewise.
+    played = m.Part()
+    played.insert(0.0, m.Flute())
+    assert (played.partName, played.partAbbreviation) == ("Flute", "Fl")
+
+    # music21 looks into the substreams too, a part's instrument often
+    # standing in its first measure.
+    nested = m.Part()
+    bar = m.Measure()
+    bar.insert(0.0, m.Flute())
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+    nested.insert(0.0, bar)
+    assert nested.partName == "Flute"
+
+
+def test_a_line_is_cut_into_its_runs_of_notes():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 C4 r D E r r F r G r A B r c")
+    runs = m.Segmenter.getSegmentsList(line)
+    assert [[n.nameWithOctave for n in run] for run in runs] == [
+        ["C3"],
+        ["D3", "E3"],
+        ["F3"],
+        ["G3"],
+        ["A3", "B3"],
+        ["C4"],
+    ]
+
+    # A rest standing after another gives an empty run, as music21's does.
+    kept = m.Segmenter.getSegmentsList(line, removeEmptyLists=False)
+    assert [len(run) for run in kept] == [0, 1, 2, 0, 1, 1, 2, 1]
+
+    # A run is the stream's own notes, and an interval is built on two of
+    # them, so it keeps the very notes it was measured between.
+    notes = [n for n in line.recurse() if getattr(n, "isNote", False)]
+    assert runs[1][0] is notes[1]
+    intervals = m.Segmenter.getIntervalList(line)
+    assert [i.name for i in intervals] == ["M2", "M2"]
+    assert intervals[0].noteStart is notes[1]
+    assert intervals[0].noteEnd is notes[2]
+
+
+def test_a_property_of_every_pitch_is_counted():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 c4 d c e f# g a b-")
+    assert sorted(m.pitchAttributeCount(line).items()) == [
+        ("A", 1),
+        ("B-", 1),
+        ("C", 2),
+        ("D", 1),
+        ("E", 1),
+        ("F#", 1),
+        ("G", 1),
+    ]
+    assert sorted(m.pitchAttributeCount(line, "pitchClass").items()) == [
+        (0, 2),
+        (2, 1),
+        (4, 1),
+        (6, 1),
+        (7, 1),
+        (9, 1),
+        (10, 1),
+    ]
+    # A Counter, as music21 answers, so ties order by what was met first.
+    counted = m.pitchAttributeCount(m.from_tiny_notation("4/4 c4 c d d d e"))
+    assert counted.most_common(2) == [("D", 3), ("C", 2)]
+
+
+def test_an_alteration_is_written_as_a_chord_symbol_writes_it():
+    """Every answer is music21's own."""
+    assert [m.alterToChordSymbolString(n) for n in (-2, -1, 0, 1, 2)] == [
+        "bb",
+        "b",
+        "",
+        "#",
+        "##",
+    ]
+
+
+def test_a_key_is_read_for_every_measure():
+    """Every answer is music21's own for the same line."""
+    assert [m.divide(4.0, -1), m.divide(3.0, 0), m.divide(6.0, 2)] == [2.0, 3.0, 2.0]
+
+    with pytest.raises(m.FloatingKeyException):
+        m.KeyAnalyzer()
+    bare = m.Part()
+    bare.insert(0.0, m.Note("C4"))
+    with pytest.raises(m.FloatingKeyException):
+        m.KeyAnalyzer(bare)
+
+    line = m.from_tiny_notation(
+        "4/4 c4 e g c' c e g c' g b d' g d f# a d' e g# b e' a c# e a'"
+    )
+    analyzer = m.KeyAnalyzer(line)
+    assert (analyzer.numMeasures, analyzer.windowSize) == (6, 4)
+    assert analyzer.stream is line
+
+    # Each measure on its own, by the Aarden-Essen weighting music21's
+    # analyze('key') reads with, each key carrying how well it fitted and
+    # the twenty-three that fitted less well.
+    raw = analyzer.getRawKeyByMeasure()
+    assert [str(k) for k in raw] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "E major",
+        "A major",
+    ]
+    assert len(raw[0].alternateInterpretations) == 23
+    assert round(raw[0].correlationCoefficient, 6) == 0.71926
+    assert len(analyzer.rawKeyByMeasure) == 6
+
+    # The readings of one measure, spelled as music21 spells a key.
+    readings = analyzer.getInterpretationByMeasure(0)
+    assert sorted((n, round(v, 6)) for n, v in readings.items())[:4] == [
+        ("A", -0.174943),
+        ("A-", 0.18564),
+        ("B", -0.351549),
+        ("B-", 0.081055),
+    ]
+
+    # Smoothed by the measures around each, through the window said.
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "C major",
+        "G major",
+        "a minor",
+        "A major",
+    ]
+    analyzer.windowSize = 1
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "A major",
+        "A major",
+    ]
+
+    # The weighting is a function, as music21's is, so a caller may weigh
+    # the window however it likes.
+    analyzer.windowSize = 2
+    analyzer.weightAlgorithm = lambda coefficient, distance: coefficient / (
+        (abs(distance) + 1) ** 2
+    )
+    assert [str(k) for k in analyzer.run()] == [
+        "C major",
+        "C major",
+        "G major",
+        "D major",
+        "E major",
+        "A major",
+    ]
+
+    # A measure with no notes has no reading and no key of its own, so the
+    # keys answered are one short, as music21's are.
+    quiet = m.from_tiny_notation("4/4 c4 e g c' r1 d f a d'")
+    hushed = m.KeyAnalyzer(quiet)
+    hushed.windowSize = 1
+    assert [None if k is None else str(k) for k in hushed.getRawKeyByMeasure()] == [
+        "C major",
+        None,
+        "G major",
+        "B- major",
+        "D major",
+        "G major",
+    ]
+    assert hushed.getInterpretationByMeasure(1) is None
+    assert [str(k) for k in hushed.run()] == [
+        "C major",
+        "B- major",
+        "d minor",
+        "d minor",
+        "d minor",
+    ]
+
+
+def test_the_span_of_what_a_stream_sounds():
+    """Every answer is music21's own for the same stream."""
+    ambitus = m.Ambitus()
+    assert (ambitus.name, list(ambitus.identifiers)) == (
+        "Ambitus Analysis",
+        ["ambitus", "span"],
+    )
+
+    held = m.Chord(["a2", "b4", "c8"])
+    stream = m.Stream()
+    stream.append(held)
+    low, high = ambitus.getPitchSpan(stream)
+    assert (str(low), str(high)) == ("A2", "C8")
+    # The stream's own pitch objects, not copies of them.
+    assert low is held.pitches[0] and high is held.pitches[2]
+
+    span = ambitus.getSolution(stream)
+    assert span.name == "m38"
+    assert span.pitchStart is held.pitches[0]
+
+    # Nothing where the stream sounds nothing, and a chord symbol is
+    # passed over, as music21 passes it over.
+    quiet = m.Stream()
+    quiet.append(m.Rest())
+    assert ambitus.getPitchSpan(quiet) is None
+    assert ambitus.getSolution(quiet) is None
+    symbols = m.Stream()
+    symbols.append(m.ChordSymbol("C6"))
+    assert ambitus.getPitchSpan(symbols) is None
+
+    # `process` answers a solution and a colour upstream, and the colour is
+    # a keyscape's; the package leaves it out rather than answer half.
+    assert not hasattr(ambitus, "process")
+
+
+def test_the_key_a_stream_is_most_likely_in():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c' g b d' g")
+
+    weighings = {
+        "KeyWeightKeyAnalysis": ("KeyWeightKeyAnalysis Base Class", 0.873542),
+        "KrumhanslSchmuckler": (
+            "Krumhansl Schmuckler/Kessler Key Analysis",
+            0.873542,
+        ),
+        "AardenEssen": ("Aarden Essen Key Analysis", 0.821518),
+        "SimpleWeights": ("Simple Weight Key Analysis", 0.862911),
+        "BellmanBudge": ("Bellman Budge Key Analysis", 0.836727),
+        "TemperleyKostkaPayne": ("Temperley Kostka Payne Key Analysis", 0.843534),
+    }
+    for kind, (name, coefficient) in weighings.items():
+        weigher = getattr(m, kind)()
+        assert weigher.name == name
+        assert len(weigher.getWeights("major")) == 12
+        assert weigher.getWeights("MAJOR") == weigher.getWeights("major")
+        with pytest.raises(m.DiscreteAnalysisException):
+            weigher.getWeights("lydian")
+        found = weigher.getSolution(line)
+        assert str(found) == "C major"
+        assert round(found.correlationCoefficient, 6) == coefficient
+        assert len(found.alternateInterpretations) == 23
+        # The base class weighs as Krumhansl-Schmuckler does, as music21's
+        # does, and the subclasses by their own profile.
+        assert not hasattr(weigher, "process")
+
+    # The weights themselves are music21's, Krumhansl-Schmuckler for the
+    # base class.
+    assert m.KeyWeightKeyAnalysis().getWeights("major") == [
+        6.35,
+        2.23,
+        3.48,
+        2.33,
+        4.38,
+        4.09,
+        2.52,
+        5.19,
+        2.39,
+        3.66,
+        2.29,
+        2.88,
+    ]
+    assert m.SimpleWeights().getWeights("minor")[:3] == [2.0, 0.0, 1.0]
+    assert [str(k) for k in m.AardenEssen().getSolution(line).alternateInterpretations[:3]] == [
+        "G major",
+        "c minor",
+        "a minor",
+    ]
+
+    nothing = m.Stream()
+    nothing.append(m.Rest())
+    with pytest.raises(m.DiscreteAnalysisException):
+        m.KrumhanslSchmuckler().getSolution(nothing)
+
+
+def test_how_many_melodic_intervals_a_stream_uses():
+    """Every count is music21's own for the same line."""
+    diversity = m.MelodicIntervalDiversity()
+    assert (diversity.name, list(diversity.identifiers)) == (
+        "Interval Diversity",
+        ["interval.diversity", "intervals"],
+    )
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c' g b d' g")
+    found = diversity.countMelodicIntervals(line)
+    assert sorted((k, v[1]) for k, v in found.items()) == [
+        ("M3", 3),
+        ("P4", 3),
+        ("P5", 1),
+        ("P8", 1),
+        ("m3", 3),
+    ]
+    # An interval is built on the notes the stream holds, as music21 builds
+    # it, so the count carries the score's own notes.
+    notes = [n for n in line.recurse() if getattr(n, "isNote", False)]
+    assert found["M3"][0].noteStart is notes[0]
+
+    # Direction counts where music21 counts it, and a unison is passed over
+    # unless it is asked for.
+    assert sorted(
+        (k, v[1]) for k, v in diversity.countMelodicIntervals(line, ignoreDirection=False).items()
+    ) == [("M3", 3), ("P-4", 1), ("P-5", 1), ("P-8", 1), ("P4", 2), ("m3", 3)]
+    unisons = diversity.countMelodicIntervals(
+        m.from_tiny_notation("4/4 c4 c d d e e"), ignoreUnison=False
+    )
+    assert sorted((k, v[1]) for k, v in unisons.items()) == [("M2", 2), ("P1", 3)]
+
+    # A dictionary given is counted into and handed back.
+    again = diversity.countMelodicIntervals(line, found=dict(found))
+    assert sorted((k, v[1]) for k, v in again.items()) == [
+        ("M3", 6),
+        ("P4", 6),
+        ("P5", 2),
+        ("P8", 2),
+        ("m3", 6),
+    ]
+
+    # music21's own `process` passes `ignoreDirection` where `found` goes,
+    # so it raises for any line of two notes; this does what its docstring
+    # says, and its colour is the one white string music21 answers.
+    assert diversity.process(line) == (5, "#ffffff")
+    assert diversity.getSolution(line) == 5
+    assert diversity.solutionToColor(5) == "#ffffff"
+
+
+def outline_of(score):
+    """Every part of a score, and in each the elements measure by measure."""
+    out = []
+    for part in score.getElementsByClass("Part"):
+        written = []
+        for measure in part.getElementsByClass("Measure"):
+            held = []
+            for element in measure:
+                kind = type(element).__name__
+                if getattr(element, "pitches", None):
+                    names = "+".join(p.nameWithOctave for p in element.pitches)
+                    held.append(f"{kind}({names},{element.quarterLength})")
+                else:
+                    held.append(kind)
+            written.append(f"m{measure.number}[" + " ".join(held) + "]")
+        out.append(" ".join(written))
+    return out
+
+
+def test_a_figured_bass_line_is_written_out():
+    """Every answer is music21's own for the same line."""
+    line = m.FiguredBassLine(m.Key("B"), m.TimeSignature("3/4"))
+    assert (str(line.inKey), str(line.inTime)) == (
+        "B major",
+        "<music21.meter.TimeSignature 3/4>",
+    )
+
+    # As music21 does, the figures are written onto the note handed in.
+    bass = m.Note("B2")
+    line.addElement(bass)
+    line.addElement(m.Note("C#3"), "6")
+    line.addElement(m.Note("D#3"), "6")
+    assert [lyric.text for lyric in bass.lyrics] == [""]
+    assert bass.editorial.notationString is None
+
+    written = line.generateBassLine()
+    score = m.Score()
+    score.insert(0.0, written)
+    assert outline_of(score) == [
+        "m1[BassClef KeySignature TimeSignature "
+        "Note(B2,1.0) Note(C#3,1.0) Note(D#3,1.0)]"
+    ]
+    # The crate keeps a barline on the measure rather than among its
+    # elements, which is why the outline above shows none; music21's own
+    # measure holds a Barline there, and says the same thing.
+    assert [
+        str(bar.rightBarline) for bar in written.getElementsByClass("Measure")
+    ] == ["<music21.bar.Barline type=final>"]
+    assert [
+        [lyric.text for lyric in note.lyrics]
+        for note in written.recurse()
+        if getattr(note, "isNote", False)
+    ] == [[""], ["6"], ["6"]]
+
+    # Anything that is not a bass object is refused where music21 refuses
+    # it: on reading the editorial it writes the figures onto.
+    with pytest.raises(AttributeError):
+        m.FiguredBassLine().addElement("C3")
+
+
+def test_a_figured_bass_line_is_realized():
+    """Every count and every voicing is music21's own for the same line."""
+    line = m.FiguredBassLine()
+    line.addElement(m.Note("C3", quarterLength=2.0))
+    line.addElement(m.Note("G2", quarterLength=2.0), "7")
+    line.addElement(m.Note("C3", quarterLength=4.0))
+
+    segments = line.retrieveSegments()
+    assert [
+        (str(s.bassNote.pitch), s.bassNote.quarterLength, list(s.pitchNamesInChord))
+        for s in segments
+    ] == [
+        ("C3", 2.0, ["C", "E", "G"]),
+        ("G2", 2.0, ["G", "B", "D", "F"]),
+        ("C3", 4.0, ["C", "E", "G"]),
+    ]
+    assert [(s.numParts, str(s._maxPitch)) for s in segments] == [(4, "B5")] * 3
+
+    realization = line.realize()
+    assert realization.getNumSolutions() == 20
+    progressions = realization.getAllPossibilityProgressions()
+    assert len(progressions) == 20
+    assert [tuple(str(p) for p in voicing) for voicing in progressions[0]] == [
+        ("G3", "E3", "C3", "C3"),
+        ("B3", "F3", "D3", "G2"),
+        ("C4", "E3", "C3", "C3"),
+    ]
+
+    # Keyboard style to begin with, as music21's is: the upper parts as
+    # chords over the bass.
+    assert realization.keyboardStyleOutput
+    score = realization.generateRealizationFromPossibilityProgression(progressions[0])
+    assert outline_of(score) == [
+        "m1[TrebleClef KeySignature TimeSignature "
+        "Chord(G3+E3+C3,2.0) Chord(B3+F3+D3,2.0)] m2[Chord(C4+E3+C3,4.0)]",
+        "m1[BassClef KeySignature TimeSignature Note(C3,2.0) Note(G2,2.0)] "
+        "m2[Note(C3,4.0)]",
+    ]
+    realization.keyboardStyleOutput = False
+    chorale = realization.generateRealizationFromPossibilityProgression(progressions[0])
+    assert len(outline_of(chorale)) == 4
+    realization.keyboardStyleOutput = True
+
+    # The rules and the parts are the caller's to say.
+    loose = m.Rules()
+    loose.forbidVoiceCrossing = False
+    assert line.realize(loose).getNumSolutions() == 20
+    assert line.realize(None, 3).getNumSolutions() == 0
+    assert line.realize(None, 4, "F5").getNumSolutions() == 18
+
+    # A line of one segment, and a line of chord symbols.
+    short = m.FiguredBassLine()
+    short.addElement(m.Note("C3", quarterLength=4.0))
+    assert short.realize().getNumSolutions() == 21
+    chords = m.FiguredBassLine()
+    chords.addElement(m.ChordSymbol("C"))
+    chords.addElement(m.ChordSymbol("G"))
+    assert chords.realize().getNumSolutions() == 31
+
+    # music21's own retrieveSegments raises an IndexError for a line with
+    # nothing in it; this answers what realize's own docstring says.
+    with pytest.raises(m.FiguredBassLineException):
+        m.FiguredBassLine().realize()
+
+
+def test_a_realization_chosen_at_random():
+    """Chosen through Python's own random, which is where music21 chooses."""
+    line = m.FiguredBassLine()
+    line.addElement(m.Note("C3", quarterLength=2.0))
+    line.addElement(m.Note("G2", quarterLength=2.0), "7")
+    realization = line.realize()
+    every = [
+        [[p.nameWithOctave for p in voicing] for voicing in progression]
+        for progression in realization.getAllPossibilityProgressions()
+    ]
+
+    random.seed(7)
+    chosen = realization.getRandomPossibilityProgression()
+    names = [[p.nameWithOctave for p in voicing] for voicing in chosen]
+    assert names in every
+    # A caller who seeds random gets the same realization twice.
+    random.seed(7)
+    again = realization.getRandomPossibilityProgression()
+    assert [[p.nameWithOctave for p in voicing] for voicing in again] == names
+
+    random.seed(7)
+    assert len(outline_of(realization.generateRandomRealization())) == 2
+    random.seed(7)
+    assert len(outline_of(realization.generateRandomRealizations(2))) == 2
+    # Asked for more than there are, it answers every one of them.
+    asked = outline_of(realization.generateRandomRealizations(1000))
+    assert len(asked) == len(outline_of(realization.generateAllRealizations()))
+
+
+def test_a_part_laid_over_a_figured_bass_line():
+    """Every answer is music21's own for the same line."""
+
+    def overlaid():
+        # A fresh line each time: music21's own retrieveSegments appends
+        # the bass line to its overlaid parts, so asking it twice is not
+        # asking the same thing twice. This one reads the line and leaves
+        # it as it was.
+        line = m.FiguredBassLine()
+        line.addElement(m.Note("C3", quarterLength=1.0))
+        line.addElement(m.Note("D3", quarterLength=1.0), "6")
+        line.addElement(m.Note("E3", quarterLength=2.0), "6")
+        top = m.Part()
+        for name in ("E5", "F5", "G5", "C5"):
+            top.append(m.Note(name, quarterLength=1.0))
+        line.overlayPart(top)
+        return line
+
+    segments = overlaid().retrieveSegments()
+    # Four segments for three bass notes: where the melody moves and the
+    # bass holds, music21 makes a segment of no length whose other parts
+    # must stay where they are.
+    assert [float(s.quarterLength) for s in segments] == [1.0, 1.0, 2.0, 0.0]
+    assert [
+        [(part, str(held)) for part, held in s.fbRules._partPitchLimits]
+        for s in segments
+    ] == [
+        [],
+        [(1, "<music21.note.Note F>")],
+        [(1, "<music21.note.Note G>")],
+        [(1, "<music21.note.Note C>")],
+    ]
+    assert [list(s.fbRules._partsToCheck) for s in segments] == [[], [], [2, 3, 4], []]
+
+    realization = overlaid().realize()
+    assert realization.getNumSolutions() == 9
+    score = realization.generateRealizationFromPossibilityProgression(
+        realization.getAllPossibilityProgressions()[0]
+    )
+    assert outline_of(score) == [
+        "m1[TrebleClef KeySignature TimeSignature "
+        "Chord(E5+C5+G4,1.0) Chord(F5+B4+B4,1.0) Chord(G5+C5+G4,2.0)]",
+        "m1[BassClef KeySignature TimeSignature "
+        "Note(C3,1.0) Note(D3,1.0) Note(E3,2.0)] m2[Note(E3,2.0)]",
+    ]
+
+
+class _Counter:
+    """A processor of the shape music21's WindowedAnalysis asks for."""
+
+    def process(self, window):
+        names = [
+            n.nameWithOctave for n in window.recurse() if getattr(n, "isNote", False)
+        ]
+        if not names:
+            raise m.DiscreteAnalysisException("nothing to analyse")
+        return "+".join(names), "#%02x0000" % min(len(names), 255)
+
+
+def test_an_analysis_run_over_windows_of_a_stream():
+    """Every answer is music21's own for the same line and the same processor.
+
+    The processor is the test's own, which is how the colour comes to be
+    answered at all: a window's answer is (data, colour), and nothing in
+    the package knows the colour a key or a pitch span is drawn in.
+    """
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c'")
+    analysis = m.WindowedAnalysis(line, _Counter())
+
+    # The stream cut into measures a quarter note long, and into any other
+    # length the caller says.
+    assert len(analysis.getMinimumWindowStream().getElementsByClass("Measure")) == 8
+    assert len(analysis.getMinimumWindowStream("1/2").getElementsByClass("Measure")) == 4
+
+    # One window at a time, then two, overlapping as music21 overlaps them.
+    data, colours = analysis.analyze(1)
+    assert data == ["C4", "E4", "G4", "C5", "C4", "E4", "G4", "C5"]
+    assert colours == ["#010000"] * 8
+    data, colours = analysis.analyze(2)
+    assert data == ["C4+E4", "E4+G4", "G4+C5", "C5+C4", "C4+E4", "E4+G4", "G4+C5"]
+
+    # Side by side, with music21's own warning where the windows do not
+    # divide evenly, and the last window short.
+    with pytest.warns(UserWarning, match="not divisible by windowSize"):
+        data, colours = analysis.analyze(3, windowType="noOverlap")
+    assert data == ["C4+E4+G4", "C5+C4+E4", "G4+C5"]
+
+    # Averaged: for each quarter, every overlapping window holding it, put
+    # end to end.
+    data, colours = analysis.analyze(2, windowType="adjacentAverage")
+    assert data == [
+        "C4+E4",
+        "C4+E4+E4+G4",
+        "E4+G4+G4+C5",
+        "G4+C5+C5+C4",
+        "C5+C4+C4+E4",
+        "C4+E4+E4+G4",
+        "E4+G4+G4+C5",
+        "G4+C5",
+    ]
+
+    # A window type nobody answers to is refused, as music21 refuses it.
+    with pytest.raises(Exception):
+        analysis.analyze(1, windowType="sideways")
+
+    # Every window size, each with its answers, its colours and a note of
+    # the size.
+    solutions, colours, meta = analysis.process(1, 3, includeTotalWindow=False)
+    assert [len(row) for row in solutions] == [8, 7, 6]
+    assert [len(row) for row in colours] == [8, 7, 6]
+    assert meta == [{"windowSize": 1}, {"windowSize": 2}, {"windowSize": 3}]
+    # The whole stream is one of the sizes unless it is asked not to be.
+    assert analysis.process(1, 2)[2] == [
+        {"windowSize": 1},
+        {"windowSize": 2},
+        {"windowSize": 8},
+    ]
+    # A step written as a string doubles the size, as music21 reads it.
+    assert analysis.process(1, 8, "2x", includeTotalWindow=False)[2] == [
+        {"windowSize": 1},
+        {"windowSize": 2},
+        {"windowSize": 4},
+    ]
+    # `process` reads the window type loosely where `analyze` reads it
+    # exactly, as music21 reads them.
+    assert analysis.process(2, 2, 1, "nonoverlapping")[2] == [
+        {"windowSize": 2},
+        {"windowSize": 8},
+    ]
+
+    # A window the processor cannot read answers music21's own pair.
+    quiet = m.WindowedAnalysis(m.from_tiny_notation("4/4 c4 r r e"), _Counter())
+    data, colours = quiet.analyze(1)
+    assert data == ["C4", (None, None, 0), (None, None, 0), "E4"]
+    assert colours == ["#010000", "#ffffff", "#ffffff", "#010000"]
+
+    # A score is flattened, as music21 flattens it: part-like substreams
+    # are not supported there either.
+    scored = m.Score()
+    scored.insert(0.0, m.from_tiny_notation("4/4 c4 e g c'"))
+    scored.insert(0.0, m.from_tiny_notation("4/4 e4 g c' e'"))
+    assert m.WindowedAnalysis(scored, _Counter()).analyze(1)[0] == [
+        "C4+E4",
+        "E4+G4",
+        "G4+C5",
+        "C5+E5",
+    ]
+
+    with pytest.raises(m.WindowedAnalysisException):
+        m.WindowedAnalysis("C4", _Counter())

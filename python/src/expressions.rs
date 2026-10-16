@@ -19,6 +19,7 @@ use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
 use music21_rs_crate::expressions::{
     Ornament as RsOrnament, OrnamentDelay, OrnamentKind, Realization,
+    TextExpression as RsTextExpression,
 };
 use music21_rs_crate::{
     Duration as RsDuration, IntervalDirection, KeySignature as RsKeySignature, Note as RsNote,
@@ -1179,6 +1180,12 @@ macro_rules! ornament_kinds {
         }
 
         /// The names this facade replaces in `music21.expressions`.
+        // `TextExpression` is deliberately not here. It is registered on
+        // the module, so a caller with no music21 has one, but installing
+        // it over music21's would be swapping in a class implemented less
+        // well: music21's carries an `enclosure`, a `style` and its
+        // position on the page, which nothing here reads, and its own
+        // `enclosure` docstring is the one that said so.
         pub const NAMES: &[&str] = &[
             "Ornament",
             "ExpressionException",
@@ -1316,8 +1323,122 @@ impl Trill {
     }
 }
 
+/// music21's `expressions.TextExpression`: words written over or under
+/// the staff.
+///
+/// The crate reads one and the writers write it, so a score read here
+/// carries its words; without a class for it they were read and left out.
+///
+/// **Nothing is installed over music21's own.** A text expression there
+/// carries an `enclosure`, a `style` and where it sits on the page, none
+/// of which this reads -- its own `enclosure` docstring is what said so,
+/// by failing the moment this class stood in for it.
+#[pyclass(
+    name = "TextExpression",
+    module = "music21.expressions",
+    subclass,
+    skip_from_py_object
+)]
+pub struct TextExpression {
+    pub(crate) inner: RsTextExpression,
+}
+
+impl TextExpression {
+    /// The facade around a text expression of the crate's.
+    pub(crate) fn wrap(inner: RsTextExpression) -> Self {
+        Self { inner }
+    }
+
+    /// The object for one of the crate's: the class installed over
+    /// music21's where there is one, and this package's own where not.
+    pub(crate) fn object(py: Python<'_>, inner: RsTextExpression) -> PyResult<Py<PyAny>> {
+        let class = match crate::installed_class(py, "music21.expressions", "TextExpression") {
+            Some(class) => class,
+            None => py
+                .import("music21_rs")
+                .or_else(|_| py.import("music21_rs_facade"))?
+                .getattr("TextExpression")?,
+        };
+        let made = class.call0()?;
+        made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
+        Ok(made.unbind())
+    }
+}
+
+#[pymethods]
+impl TextExpression {
+    /// music21's `TextExpression(content=None)`.
+    #[new]
+    #[pyo3(signature = (content = None, **_keywords))]
+    fn new(content: Option<String>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
+        Self::wrap(RsTextExpression::new(content.unwrap_or_default()))
+    }
+
+    /// What music21 says this is, as its `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+
+    /// music21's sort order for words among the things at one offset:
+    /// before everything else written there.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        -30
+    }
+
+    /// The words: music21's `content`.
+    #[getter]
+    fn get_content(&self) -> &str {
+        self.inner.content()
+    }
+
+    #[setter]
+    fn set_content(&mut self, value: &str) {
+        self.inner.set_content(value);
+    }
+
+    /// Which side of the staff they are written on, where the score says:
+    /// music21's `placement`.
+    #[getter]
+    fn get_placement(&self) -> Option<&'static str> {
+        self.inner.placement().map(|placement| placement.as_str())
+    }
+
+    #[setter]
+    fn set_placement(&mut self, value: Option<&str>) -> PyResult<()> {
+        let placement = match value.filter(|said| !said.is_empty()) {
+            Some(said) => Some(
+                music21_rs_crate::notation::Placement::from_name(said)
+                    .map_err(|error| ExpressionException::new_err(crate::pitch::message(&error)))?,
+            ),
+            None => None,
+        };
+        self.inner.set_placement(placement);
+        Ok(())
+    }
+
+    fn __repr__(&self) -> String {
+        // music21 cuts the words short in a repr, as it does for a lyric.
+        let content = self.inner.content();
+        let shown = if content.chars().count() > 10 {
+            format!("{}...", content.chars().take(10).collect::<String>())
+        } else {
+            content.to_string()
+        };
+        // music21 writes the words as Python writes a string, in single
+        // quotes.
+        format!("<music21.expressions.TextExpression '{shown}'>")
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Ornament>()?;
+    m.add_class::<TextExpression>()?;
     m.add_class::<Trill>()?;
     register_kinds(m)
 }

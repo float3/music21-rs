@@ -132,6 +132,22 @@ note (`2/4+3/8` counts `{{1/4+1/4}+{1/8+1/8+1/8}}`).
 
 ## the Python facade
 
+**the package keeps no sites, as the crate keeps none.** a stream of the
+package's holds objects, so it *could* write itself onto each of them and let
+an element answer `offset`, `activeSite` and `getContextByClass` as music21's
+does. it does not: where a thing stands is the stream's own to say, which is
+the crate's rule carried all the way out, and the members that need a site are
+refused or left out with the reason said -- `beatDuration`, and the context an
+element would walk outwards through. what a stream can answer *about* where
+something stands it does answer, by asking the crate and handing back its own
+objects: `beatAndMeasureFromOffset`, `getElementAtOrBefore`, `measures`
+collecting the clef and meter in force.
+
+*costs:* code written against music21 that reads `n.offset` or walks contexts
+has to ask the stream instead. the gain is that nothing holds a reference back
+to what holds it, so there are no cycles for the garbage collector to break
+and no object that is in two streams at two offsets.
+
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
 from the pyo3 class and from music21's own, so music21 will keep it in a
@@ -193,6 +209,25 @@ written through one of them sticks.
 *costs:* reference cycles that Python's collector cannot see through Rust
 fields — every such class implements `__traverse__`/`__clear__` for exactly
 this reason, and before that every note that went into a stream leaked.
+
+**where music21's class is the better one, music21's is the one that
+answers.** `style.Style` is the long-standing example -- a note's `style` is
+music21's own object inside music21 and the package's only without it,
+because music21's exporters read a page off it and its subclasses carry more
+than one class of ours would. `editorial.Editorial` is the same bargain, and
+it was learnt the hard way: the package's stand-in is a dictionary with
+attribute access, music21's is a `dict` subclass with the whole dict API that
+music21's own copying carries along, and standing in for it cost 34 of
+music21's own tests -- a copied note lost what an analysis had written on it,
+and music21's figured-bass realizer could not read back the `notationString`
+it had just written. so a note's and a chord's `editorial` is music21's
+wherever music21 can be imported, and the package's `Editorial` answers only
+for a caller who has no music21 at all.
+
+*costs:* two behaviours for one member, told apart by whether music21 is
+importable, and a class of the package's that music21's own suite never
+exercises. the gain is that nothing quietly worse than music21 stands in
+music21's place.
 
 **some setters take whatever they are given.** `pitch._client`, `key.tonic`
 and `scale.tonic` keep a facade object where the value is one and record

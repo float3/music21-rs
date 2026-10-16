@@ -86,7 +86,15 @@ impl StreamElement {
             StreamElement::TextExpression(_) => vec!["TextExpression", "Expression"],
             StreamElement::RepeatExpression(_) => vec!["RepeatExpression", "Expression"],
             StreamElement::Dynamic(_) => vec!["Dynamic"],
-            StreamElement::Barline(_) => vec!["Barline"],
+            // music21's `Repeat` is a `RepeatMark` and a `Barline`, in
+            // that order, where a plain barline is only itself.
+            StreamElement::Barline(barline) => {
+                if barline.repeat_direction().is_some() {
+                    vec!["Repeat", "RepeatMark", "Barline"]
+                } else {
+                    vec!["Barline"]
+                }
+            }
             StreamElement::PedalObject(_) => vec!["PedalObject"],
             StreamElement::RehearsalMark(_) => vec!["RehearsalMark"],
             StreamElement::Break(_) => vec!["Break"],

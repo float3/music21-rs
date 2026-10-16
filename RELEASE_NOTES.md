@@ -291,6 +291,155 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Stream` answers
+  `attachIntervalsBetweenStreams`: the interval to what sounds against
+  each of its notes in another stream, written onto the note's
+  `editorial.harmonicInterval` where music21 writes it, and cleared
+  first, so a note asked twice never keeps the older answer.
+- The Python package answers music21's `analysis.patel` and
+  `analysis.metrical`: `nPVI` and `melodicIntervalVariability` -- which
+  take `findConsecutiveNotes`' keywords, as music21 passes them on --
+  `labelBeatDepth` and `thomassenMelodicAccent`.
+- The Python package answers `analysis.segmentByRests.Segmenter`,
+  `analysis.pitchAnalysis.pitchAttributeCount` and
+  `harmony.alterToChordSymbolString`. A segment is the stream's own notes
+  and an interval is built on two of them, so `noteStart` is one of the
+  score's notes; a count is a `collections.Counter` of whatever property
+  of a pitch was named, as music21 counts one.
+- The Python package gains `analysis.windowed.WindowedAnalysis`:
+  `getMinimumWindowStream`, `analyze` and `process`. The windows are the
+  crate's -- the stream cut into quarter-note measures with what runs past
+  a barline tied, and the windows of each size put end to end -- and each
+  is handed to the processor's own `process` as a stream of the package's.
+  The colour is the processor's, which is why this carries `analyze` and
+  `process` where `discrete`'s own classes do not: music21's processors
+  work unchanged where music21 is installed, and so does a processor a
+  caller wrote. A window the processor cannot read answers
+  `((None, None, 0), '#ffffff')`, music21 warns where the windows do not
+  divide evenly, and a score is flattened first -- all three as music21
+  does them.
+- A note's and a chord's `editorial` is **music21's own** wherever music21
+  can be imported, and the package's own `Editorial` only for a caller who
+  has no music21 at all. music21's is a dict subclass with the whole dict
+  API -- its `tsvConverter` calls `update` on one -- and music21 keeps it
+  where its copying carries it along; the package's stand-in had neither,
+  so a copied note lost what an analysis had written on it and music21's
+  own figured-bass realizer could not read back the `notationString` it
+  had just written. music21's own suite is what found it: 34 of its tests
+  failed under the crate and none on music21. Same bargain `style.Style`
+  strikes, and for the same reason.
+- `Chord::is_sorted_diatonic_ascending` is music21's
+  `isSortedDiatonicAscending`, new in music21 11: whether the notes
+  already stand lowest to highest on the staff, which is where its own
+  sort asks before it copies anything. Staff position decides first, so
+  `B#3 C4` is sorted and `C4 B#3` is not. The facade answered it with a
+  walk of its own and the crate did not answer it at all; it is the
+  crate's now, and `Repeat::repeat_text_expression` is credited in the
+  feature map, which leaves nothing in the whole map missing with no
+  reason given.
+- The Python package gains the figured-bass realizer: `FiguredBassLine`
+  and `Realization`, music21's `figuredBass.realizer`. A line is bass notes
+  with their figures in a key and a meter -- `addElement`,
+  `generateBassLine`, `overlayPart`, `retrieveSegments`, `realize` -- and a
+  realization is every voicing that keeps the rules: `getNumSolutions`,
+  `getAllPossibilityProgressions`, `getRandomPossibilityProgression`,
+  `generateRealizationFromPossibilityProgression`,
+  `generateAllRealizations`, `generateRandomRealization` and
+  `generateRandomRealizations`, in keyboard or chorale style.
+  Where music21 chooses at random this chooses through Python's own
+  `random`, which is what music21 draws from, so a caller who seeds it gets
+  the same realization twice. A voicing is a tuple of pitches, as music21's
+  is, and a score is this package's own streams. music21's own
+  `retrieveSegments` appends the bass line to its overlaid parts, so asking
+  it twice is not asking the same thing twice; this reads the line and
+  leaves it as it was. `addLyricsToBassNote` is here too, and a chord now
+  carries an `editorial`, which is where the realizer writes the figures it
+  was added with.
+- The Python package's `TimeSignature` says what it is: `<music21.meter
+  .TimeSignature 3/4>`. Installed over music21's, a class answers through
+  music21's own `Music21Object.__repr__`; this one is installed over
+  nothing, so without it a meter read as the object it is at an address.
+- The Python package gains the `analysis.discrete` classes: `Ambitus`, the
+  five key weightings (`KeyWeightKeyAnalysis` and the `KrumhanslSchmuckler`,
+  `AardenEssen`, `SimpleWeights`, `BellmanBudge` and
+  `TemperleyKostkaPayne` subclasses) and `MelodicIntervalDiversity`. A span
+  is the stream's own pitch objects and the interval built on them, a key
+  carries how well it fitted and the twenty-three that fitted less well,
+  and a counted interval is built on the two notes it was measured
+  between. `process` is left out for `Ambitus` and for a key weighting,
+  since it answers a solution *and* a colour out of music21's colour
+  dictionaries, which are presentation and no part of the crate;
+  `MelodicIntervalDiversity.process` is answered, its colour being the one
+  white string music21 has not worked out yet -- and music21's own raises
+  there, passing `ignoreDirection` where `found` goes.
+- `analysis::melodic_line_positions` is the by-position twin
+  `analysis::melodic_lines` now reads its own answer off: the note a count
+  was taken from is the note the stream holds, so the package can hand back
+  its own. `KeyProfile::music21_name` and `identifiers` are public, being
+  the table `Stream::analyze` reads a method name against.
+- The Python package gains `analysis.floatingKey`'s `KeyAnalyzer` and
+  `divide`: the key of every measure, read one measure at a time by the
+  Aarden-Essen weighting and then smoothed by the measures around it. Each
+  raw key carries how well it fitted and the keys that fitted less well,
+  as music21's does, and `weightAlgorithm` is a Python function, so a
+  caller may weigh the window however it likes. music21 keeps each
+  measure's readings once asked for; the package reads them again, so a
+  stream edited between two questions is answered as it stands.
+- The Python package gains `Editorial`, music21's `editorial.Editorial`:
+  the dictionary with attribute access where an analysis leaves what it
+  worked out, which a note answers as its `editorial` -- the same object
+  every time, so what is written on it stays. `ficta`,
+  `harmonicInterval` and `melodicInterval` answer `None` before anything
+  writes them and `footnotes` and `comments` an empty list, which is
+  music21's own predefined set, and anything else raises until written.
+  `thomassenMelodicAccent` writes its answer there, where music21 writes
+  it.
+- The Python package answers music21's four instrument stream functions:
+  `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
+  `deduplicate`, each handing back a new stream as every edit here does.
+- The Python package's `Measure` answers everything the crate has ported
+  for one: `measureNumberWithSuffix`, `barDuration`,
+  `barDurationProportion`, `bestTimeSignature` and `padAsAnacrusis`. It
+  carries `number`, `numberSuffix`, `paddingLeft` and `paddingRight` as
+  music21's own properties, with music21's defaults, and its constructor
+  reads `Measure(number='14a')` as music21 reads it -- all four were
+  attributes the readers wrote and nothing declared, so a measure built by
+  hand had none of them.
+- The Python package's `Part` carries `partName` and `partAbbreviation`,
+  music21's own properties: the name said of the part, and where nothing
+  is said the first instrument standing anywhere in it -- its `partName`,
+  else its `instrumentName`, and the abbreviation likewise -- which is
+  where music21 looks too, a part's instrument often standing in its
+  first measure. music21 keeps what it found; the package looks again,
+  so a part given an instrument afterwards answers for it.
+- The Python package gains the spanners: `Spanner` and the eleven kinds
+  music21 has classes for -- `Slur`, `Crescendo`, `Diminuendo`, `Ottava`,
+  `Line`, `Glissando`, `TrillExtension`, `TremoloSpanner`,
+  `ArpeggioMarkSpanner`, `PedalMark` and volpiano's `Neume` -- with
+  `getSpannedElements`, `addSpannedElements`, `getFirst`, `getLast`,
+  `hasSpannedElement`, `replaceSpannedElement` and `placement`. A stream
+  answers `spanners` and `spannerBundle`, and `SpannerBundle` answers
+  `getByClass`. The readers carry them through now, so a slur read with
+  `from_musicxml` or `from_abc` names the score's own notes, and a slur
+  built here reaches `to_musicxml`. The crate's readers gather a part's
+  spanners onto the score where music21's reader leaves them on the part,
+  so `spanners` answers differently of those two while `spannerBundle`,
+  which asks the whole tree, answers the same.
+- The Python package gains `Barline`, `Repeat` and `TextExpression`,
+  music21's `bar.Barline`, `bar.Repeat` and
+  `expressions.TextExpression`. A measure carries its `leftBarline` and
+  `rightBarline`, a stream answers `finalBarline` (a list, for one holding
+  parts) and `expandRepeats`, and a repeat says its count in words with
+  `getTextExpression`. The readers carry barlines, repeats and words
+  through now, where before they were read into the crate and left out of
+  what the package handed back -- so a score read with `from_musicxml`
+  kept its repeats only as far as writing it again.
+- `Barline::repeat_text_expression` is music21's
+  `Repeat.getTextExpression`: the count written between a prefix and a
+  postfix, `3x` by default. A repeat that says no count answers nothing,
+  where music21 writes the word `None` into the text.
+- `data/feature_map.toml` tracks music21's `bar` module: `Barline` 2 of 2
+  and `Repeat` 2 of 2 ported, all of them in the package.
 - The Python package's `Stream` answers `insertIntoNoteOrChord`: a note
   or chord put in where something already starts within its length, the
   two becoming one chord, the merging being the crate's. Where nothing
@@ -327,6 +476,9 @@
 
 ## fixed
 
+- `StreamElement::music21_classes` said a repeat barline was a `Barline`
+  and no more, where music21's `Repeat` is a `RepeatMark` and a `Barline`
+  in that order. `class_lineage_parity` covers both barlines now.
 - the Python package's readers dropped a note's articulations and
   ornaments: the crate read them and the writers wrote them, so a score
   read and written again carried them, but `note.articulations` and

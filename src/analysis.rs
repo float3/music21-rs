@@ -95,6 +95,86 @@ impl KeyProfile {
         }
     }
 
+    /// The name music21's class for this profile calls itself by: its
+    /// `name`, which `Stream::analyze` matches a method name against.
+    pub fn music21_name(self) -> &'static str {
+        match self {
+            Self::KrumhanslSchmuckler => "Krumhansl Schmuckler/Kessler Key Analysis",
+            Self::AardenEssen => "Aarden Essen Key Analysis",
+            Self::SimpleWeights => "Simple Weight Key Analysis",
+            Self::BellmanBudge => "Bellman Budge Key Analysis",
+            Self::TemperleyKostkaPayne => "Temperley Kostka Payne Key Analysis",
+        }
+    }
+
+    /// The names a method name may ask for this profile by: music21's
+    /// `identifiers`, which `Stream::analyze` matches loosely.
+    pub fn identifiers(self) -> &'static [&'static str] {
+        match self {
+            Self::KrumhanslSchmuckler => &[
+                "key.krumhansl",
+                "key.schmuckler",
+                "key.krumhansl-schmuckler",
+                "key.krumhanslschmuckler",
+                "krumhansl",
+                "schmuckler",
+                "krumhansl-schmuckler",
+                "krumhanslschmuckler",
+                "key.kessler",
+                "key.krumhansl-kessler",
+                "key.krumhanslkessler",
+                "kessler",
+                "krumhansl-kessler",
+                "krumhanslkessler",
+            ],
+            Self::AardenEssen => &[
+                "key.aarden",
+                "key.essen",
+                "key.aarden-essen",
+                "key.aardenessen",
+                "aarden",
+                "essen",
+                "aarden-essen",
+                "aardenessen",
+                // These make this the analysis a bare `key` asks for.
+                "key",
+                "keyscape",
+            ],
+            Self::SimpleWeights => &[
+                "key.simple",
+                "key.weight",
+                "key.simple-weight",
+                "key.simpleweight",
+                "simple",
+                "weight",
+                "simple-weight",
+                "simpleweight",
+            ],
+            Self::BellmanBudge => &[
+                "key.bellman",
+                "key.budge",
+                "key.bellman-budge",
+                "key.bellmanbudge",
+                "bellman",
+                "budge",
+                "bellman-budge",
+                "bellmanbudge",
+            ],
+            Self::TemperleyKostkaPayne => &[
+                "key.temperley",
+                "key.kostka",
+                "key.payne",
+                "key.temperley-kostka-payne",
+                "key.temperleykostkapayne",
+                "temperley",
+                "kostka",
+                "payne",
+                "temperley-kostka-payne",
+                "temperleykostkapayne",
+            ],
+        }
+    }
+
     /// The name of the music21 class carrying these weights.
     pub fn music21_class_name(self) -> &'static str {
         match self {
@@ -235,28 +315,84 @@ pub fn stream_pitch_span(stream: &Stream) -> Option<(Pitch, Pitch)> {
 /// one line where it holds none; the notes of each in order, chords and
 /// rests left out, and a note continuing a tie heard once.
 pub fn melodic_lines(stream: &Stream) -> Vec<Vec<Pitch>> {
-    let parts: Vec<&Stream> = if stream.has_part_like_streams() {
-        stream
-            .events()
-            .iter()
-            .filter_map(|event| event.element().as_stream())
-            .collect()
-    } else {
-        vec![stream]
-    };
-    parts
+    let leaves = stream.leaves();
+    melodic_line_positions(stream)
         .into_iter()
-        .map(|part| {
-            part.flatten()
-                .events()
-                .iter()
-                .filter_map(|event| match event.element() {
-                    StreamElement::Note(note) if !continues_tie(note) => Some(note.pitch().clone()),
+        .map(|line| {
+            line.into_iter()
+                .filter_map(|position| match leaves.get(position).map(|leaf| leaf.1) {
+                    Some(StreamElement::Note(note)) => Some(note.pitch().clone()),
                     _ => None,
                 })
                 .collect()
         })
         .collect()
+}
+
+/// The same lines as positions in [`Stream::leaves`], which is the by-position
+/// twin [`melodic_lines`] reads its own answer off: the note a count was
+/// taken from is the note the stream holds, so a caller handing back objects
+/// can hand back its own.
+///
+/// ```
+/// use music21_rs::analysis::melodic_line_positions;
+/// use music21_rs::stream::StreamElement;
+/// use music21_rs::tinynotation::from_tiny_notation;
+///
+/// let line = from_tiny_notation("4/4 c4 r d e")?;
+/// let leaves = line.leaves();
+/// // The clef, the meter and the rest are leaves too; only the notes
+/// // make a line.
+/// let names: Vec<Vec<String>> = melodic_line_positions(&line)
+///     .into_iter()
+///     .map(|line| {
+///         line.into_iter()
+///             .map(|position| match leaves[position].1 {
+///                 StreamElement::Note(note) => note.pitch().name(),
+///                 _ => unreachable!(),
+///             })
+///             .collect()
+///     })
+///     .collect();
+/// assert_eq!(names, [vec!["C", "D", "E"]]);
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+pub fn melodic_line_positions(stream: &Stream) -> Vec<Vec<usize>> {
+    let leaves = stream.leaves();
+    let tops: Option<Vec<usize>> = stream.has_part_like_streams().then(|| {
+        stream
+            .events()
+            .iter()
+            .enumerate()
+            .filter(|(_, event)| event.element().as_stream().is_some())
+            .map(|(index, _)| index)
+            .collect()
+    });
+    // A line is read in the order a flattening reads it, as music21 reads
+    // each part flattened.
+    let order = Stream::flatten_order(&leaves);
+    let under = stream.leaves_under_top();
+    let of_line = |top: Option<usize>| -> Vec<usize> {
+        order
+            .iter()
+            .copied()
+            .filter(|position| match (top, under.get(*position)) {
+                (Some(top), Some((held, _, _))) => *held == top,
+                (None, _) => true,
+                _ => false,
+            })
+            .filter(|position| {
+                matches!(
+                    leaves.get(*position).map(|leaf| leaf.1),
+                    Some(StreamElement::Note(note)) if !continues_tie(note)
+                )
+            })
+            .collect()
+    };
+    match tops {
+        Some(tops) => tops.into_iter().map(|top| of_line(Some(top))).collect(),
+        None => vec![of_line(None)],
+    }
 }
 
 /// Whether a note carries on a tie from the one before, as music21's

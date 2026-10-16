@@ -116,6 +116,14 @@ fn subjects() -> Vec<(&'static str, StreamElement)> {
             Barline::new(music21_rs::bar::BarlineType::Regular).into(),
         ),
         (
+            "bar.Repeat()",
+            Barline::repeat(music21_rs::bar::RepeatDirection::Start, None).into(),
+        ),
+        (
+            "bar.Repeat(direction='end', times=2)",
+            Barline::repeat(music21_rs::bar::RepeatDirection::End, Some(2)).into(),
+        ),
+        (
             "layout.StaffLayout()",
             StreamElement::Layout(Layout::Staff(StaffLayout::default())),
         ),

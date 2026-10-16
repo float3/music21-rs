@@ -226,6 +226,18 @@ impl TimeSignature {
         Ok(())
     }
 
+    /// How music21 writes a meter: `<music21.meter.TimeSignature 3/4>`.
+    ///
+    /// Installed over music21's, a class answers through music21's own
+    /// `Music21Object.__repr__`; this one is installed over nothing, so
+    /// without it a meter read as the object it is at an address.
+    fn __repr__(&self) -> String {
+        format!(
+            "<music21.meter.TimeSignature {}>",
+            self.inner.ratio_string()
+        )
+    }
+
     #[getter]
     fn get_ratioString(&self) -> String {
         self.inner.ratio_string()

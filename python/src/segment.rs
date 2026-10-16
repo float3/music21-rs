@@ -55,7 +55,7 @@ fn pitch_object(py: Python<'_>, pitch: RsPitch) -> PyResult<Py<PyAny>> {
 
 /// Rules as the crate holds them, read off the wheel's rules or off
 /// music21's own by attribute.
-fn rules_of(rules: &Bound<'_, PyAny>) -> PyResult<RsRules> {
+pub(crate) fn rules_of(rules: &Bound<'_, PyAny>) -> PyResult<RsRules> {
     let py = rules.py();
     if let Ok(ours) = rules.extract::<PyRef<'_, crate::fbrules::Rules>>() {
         return ours.synced(py);
@@ -162,7 +162,14 @@ impl Segment {
     fn value(slf: &Bound<'_, PyAny>) -> PyResult<RsSegment> {
         let bass_note = slf.getattr("bassNote")?;
         let bass = pitch_from_any(&bass_note.getattr("pitch")?)?;
-        let quarter_length: f64 = bass_note.getattr("quarterLength")?.extract()?;
+        // music21's realizer writes `quarterLength` onto the segment,
+        // which is how a segment of no length says so while its bass note
+        // still lasts what it lasts; a segment nobody has written one onto
+        // lasts what its bass note does.
+        let quarter_length: f64 = match slf.getattr("quarterLength") {
+            Ok(said) => said.extract()?,
+            Err(_) => bass_note.getattr("quarterLength")?.extract()?,
+        };
         let names = slf
             .getattr("pitchNamesInChord")?
             .walk()?
@@ -259,6 +266,53 @@ impl Segment {
             .call0()?),
         }
     }
+}
+
+/// The wheel's segment standing for one of the crate's: an
+/// `OverlaidSegment`, which is what music21's `retrieveSegments` builds
+/// whether anything is laid over the line or not.
+///
+/// It holds the bass note, the names its figures spell and the rules it was
+/// read under -- which carry where the parts laid over the line hold the
+/// upper parts (`_partPitchLimits`) and which parts must stay where they
+/// are (`_partsToCheck`). A segment of no length, the fictitious one
+/// music21 makes where a part laid over moves and the bass does not, is one
+/// whose bass note lasts nothing, since that is where this reads the length
+/// back from.
+pub(crate) fn segment_object<'py>(
+    py: Python<'py>,
+    value: &RsSegment,
+) -> PyResult<Bound<'py, PyAny>> {
+    let note_class = class_of(
+        py,
+        "music21.note",
+        "Note",
+        py.get_type::<crate::note::Note>(),
+    );
+    let bass = note_class.call1((pitch_object(py, value.bass().clone())?,))?;
+    bass.setattr("quarterLength", value.quarter_length())?;
+    let length = value.quarter_length();
+    let rules = crate::installed_new(
+        py,
+        "music21.figuredBass.rules",
+        "Rules",
+        crate::fbrules::Rules::of(py, &value.rules)?,
+    )?;
+    let keywords = PyDict::new(py);
+    keywords.set_item("bassNote", bass)?;
+    keywords.set_item("listOfPitches", PyList::new(py, value.pitch_names())?)?;
+    keywords.set_item("fbRules", rules)?;
+    keywords.set_item("numParts", value.num_parts())?;
+    keywords.set_item("maxPitch", pitch_object(py, value.max_pitch().clone())?)?;
+    let made = class_of(
+        py,
+        "music21.figuredBass.segment",
+        "OverlaidSegment",
+        py.get_type::<OverlaidSegment>(),
+    )
+    .call((), Some(&keywords))?;
+    made.setattr("quarterLength", length)?;
+    Ok(made)
 }
 
 /// Says what music21's segment warns, where music21's environment is there
