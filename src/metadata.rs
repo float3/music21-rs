@@ -186,6 +186,37 @@ impl Metadata {
         self.string_value("title")
     }
 
+    /// The title, or the next best thing the score says: music21's
+    /// `bestTitle`, which takes the first of `title`, `popularTitle`,
+    /// `alternativeTitle` and `movementName` that says anything.
+    ///
+    /// ```
+    /// use music21_rs::metadata::Metadata;
+    ///
+    /// let mut said = Metadata::new();
+    /// said.add_text("popularTitle", "Eroica");
+    /// assert_eq!(said.best_title().as_deref(), Some("Eroica"));
+    /// said.add_text("title", "Third Symphony");
+    /// assert_eq!(said.best_title().as_deref(), Some("Third Symphony"));
+    /// assert_eq!(Metadata::new().best_title(), None);
+    /// ```
+    pub fn best_title(&self) -> Option<String> {
+        ["title", "popularTitle", "alternativeTitle", "movementName"]
+            .into_iter()
+            .find_map(|name| self.string_value(name).filter(|text| !text.is_empty()))
+    }
+
+    /// The contributors in a role, or the ones with no role of their own
+    /// where none is asked for: music21's `getContributorsByRole`, which a
+    /// MusicXML file needs because some of them name a contributor and no
+    /// role.
+    pub fn contributors_by_role(&self, role: Option<&str>) -> Vec<&MetadataValue> {
+        self.contributors()
+            .filter(|(_, value)| value.role() == role)
+            .map(|(_, value)| value)
+            .collect()
+    }
+
     /// Whether nothing is in it.
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
@@ -660,6 +691,65 @@ pub const STANDARD_PROPERTIES: [(&str, &str, bool); 131] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every answer here is music21's own for the same metadata.
+    #[test]
+    fn the_best_title_is_the_first_one_said() {
+        let title = |name: &str, text: &str| {
+            let mut said = Metadata::new();
+            said.add_text(name, text);
+            said.best_title()
+        };
+        assert_eq!(
+            title("title", "Third Symphony").as_deref(),
+            Some("Third Symphony")
+        );
+        assert_eq!(title("popularTitle", "Eroica").as_deref(), Some("Eroica"));
+        assert_eq!(
+            title("alternativeTitle", "Bonaparte").as_deref(),
+            Some("Bonaparte")
+        );
+        assert_eq!(title("movementName", "Allegro").as_deref(), Some("Allegro"));
+        assert_eq!(Metadata::new().best_title(), None);
+
+        // The title itself wins over the one it is popularly called.
+        let mut both = Metadata::new();
+        both.add_text("popularTitle", "Eroica");
+        both.add_text("title", "Third Symphony");
+        assert_eq!(both.best_title().as_deref(), Some("Third Symphony"));
+    }
+
+    /// Every answer here is music21's own for the same contributors.
+    #[test]
+    fn contributors_are_found_by_their_role() {
+        let mut said = Metadata::new();
+        said.add_text("title", "Violin Concerto");
+        said.add_contributor("composer", "Price, Florence");
+        // A contributor with no role of its own, as a MusicXML file may
+        // name one: music21 files it under `otherContributor`.
+        said.add("otherContributor", MetadataValue::new("Baron van Swieten"));
+
+        let names = |role: Option<&str>| -> Vec<String> {
+            said.contributors_by_role(role)
+                .iter()
+                .map(|value| value.text().to_string())
+                .collect()
+        };
+        assert_eq!(names(Some("composer")), ["Price, Florence"]);
+        assert_eq!(names(None), ["Baron van Swieten"]);
+        assert!(names(Some("lyricist")).is_empty());
+
+        let mut two = Metadata::new();
+        two.add_contributor("composer", "A");
+        two.add_contributor("composer", "B");
+        assert_eq!(
+            two.contributors_by_role(Some("composer"))
+                .iter()
+                .map(|value| value.text())
+                .collect::<Vec<&str>>(),
+            ["A", "B"]
+        );
+    }
 
     #[test]
     fn names_keep_the_order_they_were_first_given() {
