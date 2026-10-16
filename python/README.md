@@ -146,6 +146,12 @@ tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
 
+music21's `analysis.patel` and `analysis.metrical` are here -- `nPVI`,
+`melodicIntervalVariability`, `labelBeatDepth` and
+`thomassenMelodicAccent`, which leaves its answer on each note's
+`editorial`, music21's dictionary-with-attributes for what an analysis
+found.
+
 music21's four instrument stream functions are here too --
 `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
 `deduplicate` -- each handing back a new stream.

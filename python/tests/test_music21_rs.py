@@ -3329,3 +3329,81 @@ def test_instruments_rearrange_a_stream_as_music21s_do():
     # music21's inPlace is refused rather than answered differently.
     with pytest.raises(m.StreamException):
         m.deduplicate(twice, inPlace=True)
+
+
+def test_a_line_is_measured_as_music21_measures_it():
+    """Every answer is music21's own for the same stream."""
+    line = m.Stream()
+    at = 0.0
+    for name, length in (
+        ("C4", 1.0),
+        ("D4", 0.5),
+        ("E4", 0.5),
+        ("F4", 2.0),
+        ("G4", 1.0),
+        ("A4", 1.0),
+        ("B4", 2.0),
+    ):
+        line.insert(at, m.Note(name, quarterLength=length))
+        at += length
+
+    # To nine places, which is as far as music21's own answer goes.
+    assert round(m.nPVI(line), 9) == 53.333333333
+    assert round(m.melodicIntervalVariability(line), 9) == 22.268088571
+    # The keywords are findConsecutiveNotes', which music21 passes on.
+    assert round(m.melodicIntervalVariability(line, skipUnisons=True), 9) == (
+        22.268088571
+    )
+
+    # nPVI counts every element, clefs and all, as music21's docstring
+    # says: so a flattened part answers differently of the two, this
+    # package keeping a measure's barline on the measure where music21
+    # holds it among the elements. 3.2 over nine elements against eight.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 d8 e8 f2 g4 a4 b2")
+    assert round(m.nPVI(part.flatten()), 6) == 40.0
+
+    # A lyric under each note saying how deep in the beat it falls.
+    labelled = m.labelBeatDepth(
+        m.from_tiny_notation("tinyNotation: 4/4 c8 d8 e8 f8 g8 a8 b8 c'8")
+    )
+    assert [
+        "".join(ly.text for ly in n.lyrics)
+        for n in labelled.recurse()
+        if getattr(n, "isNote", False)
+    ] == ["****", "*", "**", "*", "***", "*", "**", "*"]
+
+    # Thomassen's melodic accent goes onto each note's editorial, which is
+    # where music21 writes it, and answers nothing.
+    notes = [m.Note(name, quarterLength=1.0) for name in ("C4", "E4", "G4", "C5")]
+    holder = m.Stream()
+    for at, note in enumerate(notes):
+        holder.insert(float(at), note)
+    assert m.thomassenMelodicAccent(holder) is None
+    assert [round(n.editorial.melodicAccent, 6) for n in notes] == [
+        1.0,
+        0.33,
+        0.2211,
+        0.67,
+    ]
+
+
+def test_a_notes_editorial_holds_what_an_analysis_found():
+    """music21's own `Editorial` behaves this way."""
+    note = m.Note("C4")
+    # The same object every time, so what is written on it stays.
+    assert note.editorial is note.editorial
+    note.editorial.melodicAccent = 0.5
+    assert note.editorial.melodicAccent == 0.5
+    assert "melodicAccent" in note.editorial
+    assert note.editorial["melodicAccent"] == 0.5
+
+    # Three names answer None before anything writes them and two answer
+    # an empty list, which is music21's own predefined set.
+    assert m.Editorial().harmonicInterval is None
+    assert m.Editorial().melodicInterval is None
+    assert m.Editorial().ficta is None
+    assert m.Editorial().footnotes == []
+    assert m.Editorial().comments == []
+    # Anything else raises until written, as music21's does.
+    with pytest.raises(AttributeError):
+        m.Editorial().nonsense

@@ -291,6 +291,19 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package answers music21's `analysis.patel` and
+  `analysis.metrical`: `nPVI` and `melodicIntervalVariability` -- which
+  take `findConsecutiveNotes`' keywords, as music21 passes them on --
+  `labelBeatDepth` and `thomassenMelodicAccent`.
+- The Python package gains `Editorial`, music21's `editorial.Editorial`:
+  the dictionary with attribute access where an analysis leaves what it
+  worked out, which a note answers as its `editorial` -- the same object
+  every time, so what is written on it stays. `ficta`,
+  `harmonicInterval` and `melodicInterval` answer `None` before anything
+  writes them and `footnotes` and `comments` an empty list, which is
+  music21's own predefined set, and anything else raises until written.
+  `thomassenMelodicAccent` writes its answer there, where music21 writes
+  it.
 - The Python package answers music21's four instrument stream functions:
   `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
   `deduplicate`, each handing back a new stream as every edit here does.

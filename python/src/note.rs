@@ -419,6 +419,10 @@ pub struct Note {
     /// wrote. Once the object exists it is what the note's beams are, and
     /// `synced` writes it into the value.
     beams: Option<Py<Beams>>,
+    /// music21's `editorial`, where an analysis leaves what it worked
+    /// out about this note. Built when it is first asked for, and the
+    /// same object after that, since what is written on it must stay.
+    editorial: Option<Py<PyAny>>,
 }
 
 impl Note {
@@ -442,6 +446,7 @@ impl Note {
             chord: None,
             expressions: None,
             articulations: None,
+            editorial: None,
             lyrics: None,
             tie: None,
             style: None,
@@ -474,6 +479,7 @@ impl Note {
                 chord: None,
                 expressions: None,
                 articulations: None,
+                editorial: None,
                 lyrics: None,
                 tie: None,
                 style: None,
@@ -1438,6 +1444,29 @@ impl Note {
     /// The text of every verse, one per line, or `None` when there is none.
     /// Assigning a string sets one verse per line, a `Lyric` sets the one
     /// verse, and `None` clears them.
+    /// Where an analysis leaves what it worked out about this note:
+    /// music21's `editorial`, the same object every time it is asked for,
+    /// built when it is first wanted.
+    #[getter]
+    fn get_editorial(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(held) = &slf.borrow().editorial {
+            return Ok(held.clone_ref(py));
+        }
+        let made = Bound::new(py, crate::editorial::Editorial::new(py))?
+            .into_any()
+            .unbind();
+        slf.borrow_mut().editorial = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_editorial(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.editorial = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
+    }
+
     #[getter]
     fn get_lyric(&self, py: Python<'_>) -> Option<String> {
         // Through the value as it stands: a verse appended to the list the

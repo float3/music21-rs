@@ -3587,6 +3587,43 @@ fn meters_of(
         .collect())
 }
 
+/// A crate stream and the objects at each position, for a caller that
+/// carries an answer back onto them: what `read_values` reads.
+pub(crate) fn read_with_leaves(stream: &Bound<'_, PyAny>) -> PyResult<(RsStream, Vec<Py<PyAny>>)> {
+    let read = read_values(stream)?;
+    Ok((read.stream, read.leaves))
+}
+
+/// music21's error for what a stream cannot answer, out of the crate's.
+pub(crate) fn stream_error(error: &music21_rs_crate::Error) -> PyErr {
+    StreamException::new_err(crate::pitch::message(error))
+}
+
+/// music21's `findConsecutiveNotes` keywords, which its own analysis
+/// functions pass on.
+pub(crate) fn consecutive_options(
+    keywords: Option<&Bound<'_, PyDict>>,
+) -> PyResult<music21_rs_crate::stream::ConsecutiveOptions> {
+    let flag = |name: &str| -> PyResult<bool> {
+        match keywords {
+            Some(keywords) => match keywords.get_item(name)? {
+                Some(value) => value.is_truthy(),
+                None => Ok(false),
+            },
+            None => Ok(false),
+        }
+    };
+    Ok(music21_rs_crate::stream::ConsecutiveOptions {
+        skip_rests: flag("skipRests")?,
+        skip_chords: flag("skipChords")?,
+        skip_unisons: flag("skipUnisons")?,
+        skip_octaves: flag("skipOctaves")?,
+        skip_gaps: flag("skipGaps")?,
+        get_overlaps: flag("getOverlaps")?,
+        no_none: flag("noNone")?,
+    })
+}
+
 /// A stream some module-level function of music21's changes, answered as
 /// a new stream of this package's: the shape `instrument`'s four take.
 ///

@@ -33,6 +33,7 @@ macro_rules! error_into {
     };
 }
 
+pub mod analysis;
 pub mod articulations;
 pub mod bar;
 pub mod chord;
@@ -41,6 +42,7 @@ pub mod clef;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
+pub mod editorial;
 pub mod enharmonics;
 pub mod expressions;
 pub mod fbrules;
@@ -1418,7 +1420,9 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     transposition::register(m)?;
     segment::register(m)?;
     discrete::register(m)?;
+    analysis::register(m)?;
     bar::register(m)?;
+    editorial::register(m)?;
     spanner::register(m)?;
     metadata::register(m)?;
     tempo::register(m)?;
