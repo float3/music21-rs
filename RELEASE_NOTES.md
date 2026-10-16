@@ -2,6 +2,22 @@
 
 ## added
 
+- The feature map tracks `search/serial.py`, music21's serial search,
+  which the crate had ported with a parity test over corpus scores and the
+  map listed nowhere: 41 members over five entries, of which the crate
+  answers 19 and every one left out carries its reason -- the five matcher
+  subclasses are `Matching`'s kinds rather than classes of their own, the
+  twelve methods music21 dispatches between for each way of reading
+  repetitions are one walk here, and the six `label*` functions are
+  `SegmentMatcher::label` given the `Matching` each name says. The map's
+  header now also accounts for the three files it is right to list as
+  nothing: `features/jSymbolic.py`'s 72 extractors and
+  `features/native.py`'s 24, which are rows of a generated table rather
+  than a class each; `midi/percussion.py`, whose mapping between a
+  percussion key and the instrument that plays it lives inside the MIDI
+  port; and `figuredBass/rules.py`, whose `Rules` is nineteen switches with
+  no member a scan can see. So the map now really does name every music21
+  file the crate ports.
 - A `**harm` spine is read as the roman numerals it annotates:
   `humdrum::harm`, music21's `humdrum.harmParser`, and `from_humdrum`
   putting each numeral where the staff's element of that line stands. A

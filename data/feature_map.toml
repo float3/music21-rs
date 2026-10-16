@@ -21,7 +21,10 @@
 # Listing their hundreds of private steps would say nothing a reader does
 # not already know from "every corpus file agrees". The same goes for
 # music21's own small helper modules (`meter/tools.py`, `musedata/base40.py`,
-# `chord/tools.py`, `sorting.py`, `common/numberTools.py`), whose content
+# `chord/tools.py`, `sorting.py`, `common/numberTools.py`,
+# `midi/percussion.py`, whose mapping between a percussion key and the
+# instrument that plays it is `percussion_instrument` in the MIDI reader and
+# `Instrument::percussion_pitch` in its writer), whose content
 # the crate ports where it uses it rather than as a module of its own; and
 # for what the crate does not model at all: the page (`graph`), the
 # environment and the corpus cache (`environment.py`, `configure.py`,
@@ -29,6 +32,17 @@
 # (`converter`), and music21's own object machinery (`base.py`,
 # `prebase.py`, `sites.py`, `derivation.py`, `freezeThaw.py`,
 # `stream/iterator.py`, `stream/filters.py`).
+#
+# Two more files are ported and deliberately not listed as classes.
+# `features/jSymbolic.py`'s 72 extractors and `features/native.py`'s 24 are
+# rows of a table generated from music21's own classes rather than a class
+# each -- id, name, description, size, flags and a function writing the
+# vector -- which `features_parity` checks against those live classes and
+# every vector on corpus scores. And `figuredBass/rules.py`'s `Rules` is
+# twelve switches with no method on it at all and no `__slots__` to read
+# them off, so a scan finds nothing to track; it is `figuredbass::Rules`
+# here, every switch of it, and music21's own `figuredBass.rules`
+# docstrings run against it (`doctest_rules`).
 
 [[class]]
 python = "chord/__init__.py"
@@ -2111,3 +2125,80 @@ getFrequenciesFromAudioFile = "frequencies_from_wav"
 [class.excluded]
 getFrequenciesFromMicrophone = "listens to a microphone, which the library does not do"
 getFrequenciesFromPartialAudioFile = "reads part of a file as it is being recorded"
+
+[[class]]
+python = "search/serial.py"
+members = "classes"
+rust = ["src/search/serial.rs"]
+note = "The classes music21's serial search is written as. The crate has one matcher taking `Matching`, since the five subclasses differ only in how a run is normalized before it is compared."
+
+[class.renames]
+ContiguousSegmentOfNotes = "ContiguousSegment"
+
+[class.excluded]
+TransposedSegmentMatcher = "one of `Matching`'s six kinds rather than a class of its own: `Matching::Transposed`, which compares the intervals a run makes"
+TransformedSegmentMatcher = "`Matching::Transformed`, which compares the rows a transposition, inversion, retrograde or retrograde inversion takes one to the other"
+MultisetSegmentMatcher = "`Matching::Multiset`, which compares the pitch classes in any order"
+TransposedMultisetMatcher = "`Matching::TransposedMultiset`"
+TransposedInvertedMultisetMatcher = "`Matching::TransposedInvertedMultiset`"
+
+[[class]]
+python = "search/serial.py"
+name = "ContiguousSegmentOfNotes"
+rust = ["src/search/serial.rs"]
+note = "A run of a stream's notes and chords a search found: where it starts, the pitch classes it was read as, and the segment it was matched to."
+
+[class.renames]
+startMeasureNumber = "start_measure"
+readPitchClassesFromBottom = "pitch_classes_from_bottom"
+
+[class.excluded]
+getActiveMatchedRows = "two `ToneRow`s built from the `active` and `matched` fields, which a caller builds itself; what music21 uses them for is the transformations between them, which `zero_centered_transformations_from_matched` and its original-centred twin answer"
+
+[[class]]
+python = "search/serial.py"
+name = "ContiguousSegmentSearcher"
+rust = ["src/search/serial.rs"]
+note = "Every run of a given length in a stream, read in one of music21's ways of reading repetitions, chords in or out."
+
+[class.excluded]
+getSearchBoundMethod = "music21 chooses a method by name for each way of reading repetitions; the crate's one walk takes `Repetitions` as an argument"
+searchIncludeAllExclude = "one of the twelve methods that choice picks between, which the one walk answers for"
+searchIncludeAllInclude = "as `searchIncludeAllExclude`"
+searchSkipConsecutiveExclude = "as `searchIncludeAllExclude`"
+searchSkipConsecutiveInclude = "as `searchIncludeAllExclude`"
+searchIgnoreAllExclude = "as `searchIncludeAllExclude`"
+searchIgnoreAllInclude = "as `searchIncludeAllExclude`"
+searchRowsOnlyExclude = "as `searchIncludeAllExclude`"
+searchRowsOnlyInclude = "as `searchIncludeAllExclude`"
+addActiveChords = "a step inside that walk: the crate reads a chord's pitch classes where it meets one"
+
+[[class]]
+python = "search/serial.py"
+name = "SegmentMatcher"
+rust = ["src/search/serial.rs"]
+note = "The runs of a stream that are segments searched for, and the stream with each marked by a lyric. `Matching` says how a run is told the same as a segment, which is music21's five subclasses."
+
+[class.renames]
+reps = "repetitions"
+
+[class.excluded]
+getContiguousSegmentsByLength = "the searcher's `by_length`, which `find` asks for itself"
+findOneIgnoreAll = "one of the two branches of music21's `find`, which it picks by how repetitions are read; the crate's `find` is the one walk"
+findOneOtherReps = "the other branch of `find`"
+normalize = "how a run is read before it is compared, which is what `Matching` says: the pitch classes, the intervals they make, or the row they are"
+equalSubset = "the comparison `Matching` decides, which the crate does inside `find`"
+checkSearchedAlready = "whether a segment the same as one already searched for is to be passed over, which `find` keeps as it goes"
+
+[[class]]
+python = "search/serial.py"
+rust = ["src/search/serial.rs"]
+note = "Module-level: the six functions marking a stream's runs with the name of the segment each matched. Each is `SegmentMatcher::label` given the `Matching` that function's name says."
+
+[class.renames]
+labelSegments = "label"
+labelTransposedSegments = "label"
+labelTransformedSegments = "label"
+labelMultisets = "label"
+labelTransposedMultisets = "label"
+labelTransposedAndInvertedMultisets = "label"
