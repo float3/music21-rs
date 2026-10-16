@@ -3215,3 +3215,66 @@ def test_a_slur_is_read_from_abc_as_music21_reads_it():
         "D4",
         "E4",
     ]
+
+
+def test_a_measure_answers_for_its_bar():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    bar.number = 14
+    bar.numberSuffix = "a"
+    bar.insert(0.0, m.TimeSignature("3/4"))
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+
+    assert bar.measureNumberWithSuffix() == "14a"
+    assert bar.barDuration.quarterLength == 3.0
+    # A third of its bar. music21 answers the Fraction 1/3 where this
+    # answers the float, as it does for every length and offset.
+    assert bar.barDurationProportion() == pytest.approx(1 / 3)
+    # The meter its one quarter note best fits.
+    assert bar.bestTimeSignature().ratioString == "1/4"
+
+    # A pickup is padded on the left by what it lacks of its bar.
+    pickup = m.Measure()
+    pickup.insert(0.0, m.TimeSignature("4/4"))
+    pickup.insert(0.0, m.Note("C4", quarterLength=1.0))
+    padded = pickup.padAsAnacrusis()
+    assert padded.paddingLeft == 3.0
+    # music21 changes the measure it is given; the answer here is a new
+    # one, as every other edit in this package is.
+    assert pickup.paddingLeft == 0.0
+
+    # With useInitialRests the rests it starts with go, and what follows
+    # moves back, which is music21's own answer for the same measure.
+    resty = m.Measure()
+    resty.insert(0.0, m.TimeSignature("4/4"))
+    resty.insert(0.0, m.Rest(quarterLength=2.0))
+    resty.insert(2.0, m.Note("C4", quarterLength=1.0))
+    used = resty.padAsAnacrusis(useInitialRests=True)
+    assert used.paddingLeft == 3.0
+    assert [type(e).__name__ for e in used] == ["TimeSignature", "Note"]
+
+
+def test_a_measure_is_numbered_and_padded_as_music21_does():
+    """Every answer is music21's own for the same measure."""
+    bar = m.Measure()
+    # What music21's own `Measure.__init__` gives every measure.
+    assert (bar.number, bar.numberSuffix) == (0, None)
+    assert (bar.paddingLeft, bar.paddingRight) == (0.0, 0.0)
+
+    # The constructor reads a name as music21 reads one.
+    assert (m.Measure(number="12b").number, m.Measure(number="12b").numberSuffix) == (
+        12,
+        "b",
+    )
+    assert (m.Measure(number=7).number, m.Measure(number=7).numberSuffix) == (7, None)
+
+    # A number leaves the suffix as it stands, as music21's attribute
+    # does. Assigning a *name* splits it here, where music21 would keep
+    # the whole string as the number -- the number is a number here.
+    bar.number = 14
+    bar.numberSuffix = "a"
+    assert bar.measureNumberWithSuffix() == "14a"
+    bar.number = 15
+    assert (bar.number, bar.numberSuffix) == (15, "a")
+    bar.number = "16c"
+    assert (bar.number, bar.numberSuffix) == (16, "c")

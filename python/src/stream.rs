@@ -80,6 +80,13 @@ pub struct Stream {
     /// music21 keeps the ones it is given.
     left_barline: Option<Py<PyAny>>,
     right_barline: Option<Py<PyAny>>,
+    /// What a measure is called and how much of its bar is missing:
+    /// music21's `number`, `numberSuffix`, `paddingLeft` and
+    /// `paddingRight`, which its `Measure.__init__` gives every measure.
+    number: i32,
+    number_suffix: Option<String>,
+    padding_left: f64,
+    padding_right: f64,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -227,6 +234,17 @@ fn is_of_any(object: &Bound<'_, PyAny>, classes: &Bound<'_, PyAny>) -> PyResult<
     Ok(false)
 }
 
+/// A measure's number as music21's `Measure('14a')` reads one: the digits
+/// it starts with, and what follows as the suffix.
+fn read_measure_number(said: &str) -> (i32, Option<String>) {
+    let digits: String = said.chars().take_while(char::is_ascii_digit).collect();
+    let suffix: String = said.chars().skip(digits.chars().count()).collect();
+    (
+        digits.parse().unwrap_or(0),
+        Some(suffix).filter(|suffix| !suffix.is_empty()),
+    )
+}
+
 /// The barline a caller gave, as music21's `rightBarline` setter takes
 /// one: a barline object, a name read as a type -- `'final'`, `'double'`
 /// -- or nothing, which takes the barline away.
@@ -280,6 +298,10 @@ impl Stream {
             sounding: None,
             left_barline: None,
             right_barline: None,
+            number: 0,
+            number_suffix: None,
+            padding_left: 0.0,
+            padding_right: 0.0,
         }
     }
 
@@ -294,10 +316,31 @@ impl Stream {
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         let mut stream = Self::empty(kind);
-        if let Some(keywords) = keywords
-            && let Some(id) = keywords.get_item("id")?
-        {
-            stream.id = Some(id.unbind());
+        if let Some(keywords) = keywords {
+            if let Some(id) = keywords.get_item("id")? {
+                stream.id = Some(id.unbind());
+            }
+            // What music21's own `Measure.__init__` takes, read the way it
+            // reads it: `Measure('14a')` is measure 14 with the suffix a.
+            if let Some(number) = keywords.get_item("number")? {
+                match number.extract::<String>() {
+                    Ok(said) => {
+                        let (number, suffix) = read_measure_number(&said);
+                        stream.number = number;
+                        stream.number_suffix = suffix;
+                    }
+                    Err(_) => stream.number = number.extract()?,
+                }
+            }
+            if let Some(suffix) = keywords.get_item("numberSuffix")? {
+                stream.number_suffix = suffix.extract::<Option<String>>()?;
+            }
+            if let Some(padding) = keywords.get_item("paddingLeft")? {
+                stream.padding_left = padding.extract()?;
+            }
+            if let Some(padding) = keywords.get_item("paddingRight")? {
+                stream.padding_right = padding.extract()?;
+            }
         }
         let Some(given) = given.filter(|given| !given.is_none()) else {
             return Ok(stream);
@@ -639,6 +682,65 @@ impl Stream {
     #[classattr]
     fn classSortOrder() -> i64 {
         -20
+    }
+
+    /// What this measure is called: music21's `number`, nought until
+    /// something says, as music21's `Measure.__init__` leaves it.
+    #[getter]
+    fn get_number(&self) -> i32 {
+        self.number
+    }
+
+    /// Numbers the measure. A number leaves the suffix as it stands, as
+    /// music21's own attribute does; a name is read as music21's
+    /// `Measure('14a')` is, the digits as the number and the rest as the
+    /// suffix, since the number is kept as a number here.
+    #[setter]
+    fn set_number(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Ok(said) = value.extract::<String>() {
+            let (number, suffix) = read_measure_number(&said);
+            self.number = number;
+            self.number_suffix = suffix;
+            return Ok(());
+        }
+        self.number = value.extract()?;
+        Ok(())
+    }
+
+    /// What follows the number, as the `a` of a measure numbered `14a`:
+    /// music21's `numberSuffix`.
+    #[getter]
+    fn get_numberSuffix(&self) -> Option<&str> {
+        self.number_suffix.as_deref()
+    }
+
+    #[setter]
+    fn set_numberSuffix(&mut self, value: Option<String>) {
+        self.number_suffix = value.filter(|suffix| !suffix.is_empty());
+    }
+
+    /// How much of the bar is missing from the start of this measure:
+    /// music21's `paddingLeft`, which is what makes a pickup a pickup.
+    #[getter]
+    fn get_paddingLeft(&self) -> f64 {
+        self.padding_left
+    }
+
+    #[setter]
+    fn set_paddingLeft(&mut self, value: f64) {
+        self.padding_left = value;
+    }
+
+    /// How much of the bar is missing from the end of this measure:
+    /// music21's `paddingRight`.
+    #[getter]
+    fn get_paddingRight(&self) -> f64 {
+        self.padding_right
+    }
+
+    #[setter]
+    fn set_paddingRight(&mut self, value: f64) {
+        self.padding_right = value;
     }
 
     /// The barline closing the left side of this measure, or `None`:
@@ -1893,6 +1995,86 @@ impl Stream {
         }
         let held: Vec<Py<PyAny>> = out.iter().map(|one| one.unbind()).collect();
         Ok(Bound::new(py, crate::spanner::SpannerBundle::of(held))?.into_any())
+    }
+
+    /// The number this measure is written with, its suffix and all:
+    /// music21's `measureNumberWithSuffix`, so a measure numbered `14a`
+    /// says `14a`.
+    fn measureNumberWithSuffix(slf: &Bound<'_, Self>) -> PyResult<String> {
+        Ok(crate_stream(slf.as_any())?.number_with_suffix())
+    }
+
+    /// How long this measure's bar is, whatever it holds: music21's
+    /// `barDuration`, the length of the meter standing in the measure or,
+    /// failing that, of the one `bestTimeSignature` makes of its notes.
+    #[getter]
+    fn barDuration<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let stream = crate_stream(slf.as_any())?;
+        let meter = match stream.time_signature_at(0.0) {
+            Some(meter) => meter.clone(),
+            None => music21_rs_crate::meter::best_time_signature(&stream)
+                .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?,
+        };
+        let made = crate::duration::Duration::object(py, meter.bar_duration())?;
+        Ok(made.into_bound(py))
+    }
+
+    /// How much of its bar this measure fills, as a proportion: music21's
+    /// `barDurationProportion`, so a pickup of one quarter in four-four
+    /// answers a quarter.
+    ///
+    /// A float, where music21 answers a `Fraction` for a proportion no
+    /// binary fraction says exactly -- a third of a three-four bar. Every
+    /// length and offset in this package is a float, as the crate keeps
+    /// them.
+    #[pyo3(signature = (barDuration = None))]
+    fn barDurationProportion(
+        slf: &Bound<'_, Self>,
+        barDuration: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<f64> {
+        // music21 takes a bar length to measure against; the meter the
+        // measure states is what it uses where none is given, which is
+        // what the crate reads.
+        if barDuration.is_some_and(|given| !given.is_none()) {
+            return Err(StreamException::new_err(
+                "a barDuration of its own is not supported here: the bar is the measure's own meter",
+            ));
+        }
+        crate_stream(slf.as_any())?
+            .bar_duration_proportion(None)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))
+    }
+
+    /// The meter that best fits what this measure holds: music21's
+    /// `bestTimeSignature`.
+    fn bestTimeSignature<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let stream = crate_stream(slf.as_any())?;
+        let meter = music21_rs_crate::meter::best_time_signature(&stream)
+            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+        py.get_type::<crate::meter::TimeSignature>()
+            .call1((meter.ratio_string(),))
+    }
+
+    /// A copy of this measure padded on the left by what it lacks of its
+    /// bar, as a pickup: music21's `padAsAnacrusis`.
+    ///
+    /// music21 changes the measure it is given; the answer here is a new
+    /// one, as every other edit in this package is. `useGaps` is music21's
+    /// default and the only reading here.
+    #[pyo3(signature = (*, useGaps = true, useInitialRests = false))]
+    fn padAsAnacrusis<'py>(
+        slf: &Bound<'py, Self>,
+        useGaps: bool,
+        useInitialRests: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        if !useGaps {
+            return Err(StreamException::new_err(
+                "useGaps=False is not supported here: the bar is measured as music21 measures it by default",
+            ));
+        }
+        remade(slf, |stream| stream.pad_as_anacrusis(None, useInitialRests))
     }
 
     /// The spanners this stream holds, the stream's own objects:

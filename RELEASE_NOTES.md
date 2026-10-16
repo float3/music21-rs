@@ -291,6 +291,14 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package's `Measure` answers everything the crate has ported
+  for one: `measureNumberWithSuffix`, `barDuration`,
+  `barDurationProportion`, `bestTimeSignature` and `padAsAnacrusis`. It
+  carries `number`, `numberSuffix`, `paddingLeft` and `paddingRight` as
+  music21's own properties, with music21's defaults, and its constructor
+  reads `Measure(number='14a')` as music21 reads it -- all four were
+  attributes the readers wrote and nothing declared, so a measure built by
+  hand had none of them.
 - The Python package gains the spanners: `Spanner` and the eleven kinds
   music21 has classes for -- `Slur`, `Crescendo`, `Diminuendo`, `Ottava`,
   `Line`, `Glissando`, `TrillExtension`, `TremoloSpanner`,

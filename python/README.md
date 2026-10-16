@@ -82,8 +82,10 @@ for a tune by its number or its title. what the package has no class for --
 repeat marks, unpitched percussion, a fermata -- is read and left out. a
 note's articulations and its ornaments come with it, and so do barlines,
 repeats, words and the spanners: a measure carries its `leftBarline` and
-`rightBarline`, a stream answers `finalBarline`, `spanners` and
-`spannerBundle` and plays its repeats out with `expandRepeats`, and a
+`rightBarline`, its `number`, `numberSuffix` and padding, and answers
+`barDuration`, `barDurationProportion`, `bestTimeSignature` and
+`padAsAnacrusis`; a stream answers `finalBarline`, `spanners` and
+`spannerBundle` and plays its repeats out with `expandRepeats`; and a
 slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
