@@ -68,6 +68,7 @@ pub mod scale;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
+pub mod spanner;
 mod spelling;
 pub mod stream;
 pub mod tempo;
@@ -1165,6 +1166,11 @@ exceptions![
     ),
     ("BarException", bar::BarException, Some("music21.bar")),
     (
+        "SpannerException",
+        spanner::SpannerException,
+        Some("music21.spanner")
+    ),
+    (
         "BeamException",
         notation::BeamException,
         Some("music21.beam")
@@ -1413,6 +1419,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     segment::register(m)?;
     discrete::register(m)?;
     bar::register(m)?;
+    spanner::register(m)?;
     metadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;

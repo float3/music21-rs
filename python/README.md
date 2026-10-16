@@ -79,11 +79,12 @@ where a measure has more than one. a RomanText score's chords are
 `RomanNumeral`s, carrying their figures as lyrics. a score's metadata comes
 with it, as a `Metadata`, so a collection read from one file can be asked
 for a tune by its number or its title. what the package has no class for --
-repeat marks, slurs and other spanners, unpitched percussion, a fermata
--- is read and left out. a note's articulations and its ornaments come
-with it, and so do barlines, repeats and words: a measure carries its
-`leftBarline` and `rightBarline`, and a stream answers `finalBarline` and
-plays its repeats out with `expandRepeats`. input a reader cannot read raises `StreamException`. a
+repeat marks, unpitched percussion, a fermata -- is read and left out. a
+note's articulations and its ornaments come with it, and so do barlines,
+repeats, words and the spanners: a measure carries its `leftBarline` and
+`rightBarline`, a stream answers `finalBarline`, `spanners` and
+`spannerBundle` and plays its repeats out with `expandRepeats`, and a
+slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
 the package's streams slice, scale, invert and regroup themselves as

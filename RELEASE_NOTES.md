@@ -291,6 +291,19 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package gains the spanners: `Spanner` and the eleven kinds
+  music21 has classes for -- `Slur`, `Crescendo`, `Diminuendo`, `Ottava`,
+  `Line`, `Glissando`, `TrillExtension`, `TremoloSpanner`,
+  `ArpeggioMarkSpanner`, `PedalMark` and volpiano's `Neume` -- with
+  `getSpannedElements`, `addSpannedElements`, `getFirst`, `getLast`,
+  `hasSpannedElement`, `replaceSpannedElement` and `placement`. A stream
+  answers `spanners` and `spannerBundle`, and `SpannerBundle` answers
+  `getByClass`. The readers carry them through now, so a slur read with
+  `from_musicxml` or `from_abc` names the score's own notes, and a slur
+  built here reaches `to_musicxml`. The crate's readers gather a part's
+  spanners onto the score where music21's reader leaves them on the part,
+  so `spanners` answers differently of those two while `spannerBundle`,
+  which asks the whole tree, answers the same.
 - The Python package gains `Barline`, `Repeat` and `TextExpression`,
   music21's `bar.Barline`, `bar.Repeat` and
   `expressions.TextExpression`. A measure carries its `leftBarline` and

@@ -170,6 +170,13 @@ pub fn lineage_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
 /// every name a class is actually named after has already answered. The
 /// readers do not come through here -- `element_value` itself asks
 /// `is_of_class` -- so nothing reads a value to read a value.
+pub(crate) fn answers_to_class(
+    object: &Bound<'_, PyAny>,
+    class: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    answers_to(object, class)
+}
+
 fn answers_to(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
     if is_of_class(object, class)? {
         return Ok(true);
@@ -1854,6 +1861,54 @@ impl Stream {
         Self::remove_where(slf, classFilterList, false)
     }
 
+    /// Every spanner in this stream and in the streams it holds:
+    /// music21's `spannerBundle`, which gathers them from the whole tree.
+    ///
+    /// A list here, where music21 answers its own `SpannerBundle`;
+    /// iterating it and counting it are what its own code does with one.
+    /// This is the way to ask for a slur whichever stream it was put on:
+    /// the crate's readers gather a part's spanners onto the score, where
+    /// music21's reader leaves them on the part, so `spanners` answers
+    /// differently of the two while this answers the same.
+    #[getter]
+    fn spannerBundle<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let out = PyList::empty(py);
+        let spanner = pyo3::types::PyString::new(py, "Spanner");
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        for object in held {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &spanner)? {
+                out.append(&object)?;
+            } else if let Ok(inner) = object.cast::<Stream>() {
+                for deeper in Self::spannerBundle(inner)?.try_iter()? {
+                    out.append(deeper?)?;
+                }
+            }
+        }
+        let held: Vec<Py<PyAny>> = out.iter().map(|one| one.unbind()).collect();
+        Ok(Bound::new(py, crate::spanner::SpannerBundle::of(held))?.into_any())
+    }
+
+    /// The spanners this stream holds, the stream's own objects:
+    /// music21's `spanners`.
+    ///
+    /// A spanner is an element of the stream whose notes it joins, as
+    /// music21 keeps one, standing at nought whatever the notes' offsets.
+    #[getter]
+    fn spanners<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
+        let spanner = pyo3::types::PyString::new(py, "Spanner");
+        Self::picked(slf, Some(StreamKind::Stream), |object| {
+            is_of_class(object, &spanner)
+        })
+    }
+
     /// The voices this stream holds directly, the stream's own objects:
     /// music21's `voices`.
     #[getter]
@@ -3431,6 +3486,27 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
             held.id = Some(pyo3::types::PyString::new(py, id).into_any().unbind());
         }
     }
+    // The spanners, which name the leaves they join by position: each
+    // goes in at nought, as music21 keeps one, holding the very objects
+    // just built.
+    if !stream.spanners().is_empty() {
+        let leaves: Vec<Py<PyAny>> = {
+            let cell = made.cast::<Stream>()?;
+            let held = cell.borrow();
+            leaves_of(py, &held)?
+        };
+        for spanner in stream.spanners() {
+            let joined: Vec<Py<PyAny>> = spanner
+                .spanned()
+                .iter()
+                .filter_map(|place| place.and_then(|place| leaves.get(place)))
+                .map(|object| object.clone_ref(py))
+                .collect();
+            let built = crate::spanner::Spanner::object(py, spanner, joined)?;
+            let cell = made.cast::<Stream>()?;
+            cell.borrow_mut().put(0.0, built.bind(py));
+        }
+    }
     // The metadata a reader found, which music21 keeps among the elements.
     if let Some(metadata) = stream.metadata() {
         let carried = Bound::new(py, crate::metadata::Metadata::wrap(metadata.clone()))?;
@@ -3467,6 +3543,22 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
         _ => {}
     }
     Ok(made)
+}
+
+/// Every leaf of a stream of this package's, in the order the crate
+/// counts them: a nested stream's leaves where it holds one, itself
+/// otherwise. A spanner names what it joins by that position.
+fn leaves_of(py: Python<'_>, stream: &Stream) -> PyResult<Vec<Py<PyAny>>> {
+    let mut out = Vec::new();
+    for one in stream.sorted() {
+        let object = one.object.bind(py);
+        if let Ok(inner) = object.cast::<Stream>() {
+            out.extend(leaves_of(py, &inner.borrow())?);
+        } else {
+            out.push(one.object.clone_ref(py));
+        }
+    }
+    Ok(out)
 }
 
 /// The wheel's object for one element of a crate stream, where it has a
@@ -4816,10 +4908,20 @@ fn metadata_value(metadata: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Met
 /// stream's leaves.
 pub fn crate_stream(stream: &Bound<'_, PyAny>) -> PyResult<RsStream> {
     let mut leaves = Vec::new();
-    let mut read = read_into(stream, &mut leaves, false)?;
+    let mut held = Vec::new();
+    let mut read = read_into_with(stream, &mut leaves, false, &mut held)?;
     if let Ok(bundle) = stream.getattr("spannerBundle") {
         for spanner in bundle.walk()? {
             if let Some(value) = spanner_value(&spanner?, &leaves)? {
+                read.add_spanner(value);
+            }
+        }
+    } else {
+        // This package's own streams hold their spanners among their
+        // elements, as music21's do, and have no bundle to ask.
+        let py = stream.py();
+        for spanner in held {
+            if let Some(value) = spanner_value(spanner.bind(py), &leaves)? {
                 read.add_spanner(value);
             }
         }
@@ -4847,6 +4949,18 @@ fn read_into(
     leaves: &mut Vec<Py<PyAny>>,
     stand_ins: bool,
 ) -> PyResult<RsStream> {
+    let mut spanners = Vec::new();
+    read_into_with(stream, leaves, stand_ins, &mut spanners)
+}
+
+/// [`read_into`], gathering the spanners it meets: they join the leaves,
+/// so they can only be read once every leaf has a position.
+fn read_into_with(
+    stream: &Bound<'_, PyAny>,
+    leaves: &mut Vec<Py<PyAny>>,
+    stand_ins: bool,
+    spanners: &mut Vec<Py<PyAny>>,
+) -> PyResult<RsStream> {
     let mut placed: Vec<(f64, Bound<'_, PyAny>)> = Vec::new();
     for element in stream.getattr("elements")?.walk()? {
         let element = element?;
@@ -4864,15 +4978,17 @@ fn read_into(
             .getattr("isStream")
             .and_then(|flag| flag.is_truthy())
             .unwrap_or(false);
-        // A spanner is read from the score's bundle, beside the stream.
+        // A spanner joins the leaves rather than standing among them:
+        // it is read beside the stream, once every leaf is known.
         if is_of_class(
             &element,
             &pyo3::types::PyString::new(element.py(), "Spanner"),
         )? {
+            spanners.push(element.clone().unbind());
             continue;
         }
         if is_stream {
-            let mut inner = read_into(&element, leaves, stand_ins)?;
+            let mut inner = read_into_with(&element, leaves, stand_ins, spanners)?;
             inner.set_kind(kind_of(&element)?);
             events.push(StreamEvent::new(
                 offset,

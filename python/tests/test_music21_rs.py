@@ -1269,10 +1269,11 @@ def test_volpiano_is_read_and_written_back():
     part = m.from_volpiano("1---c--d---fg---3--wE")
     assert type(part).__name__ == "Part"
     assert pitches_of(part) == ["C4", "D4", "F4", "G4", "E-4"]
-    # The barline comes with it, where music21 writes `----3` too; what
-    # is still lost is the neume joining `fg`, this package keeping no
-    # spanners, so music21 writes `fg` where this writes `f-g`.
-    assert m.to_volpiano(part) == "1---c-d-f-g----3wE-"
+    # Written back whole: the barline as `----3` and the neume joining
+    # `fg`, which is music21's own answer for the same string. Both were
+    # lost before the package had a class for a barline or a spanner.
+    assert m.to_volpiano(part) == "1---c-d-fg----3wE-"
+    assert [type(s).__name__ for s in part.spannerBundle] == ["Neume"]
     bars = part.getElementsByClass("Measure")
     assert [b.rightBarline.type if b.rightBarline else None for b in bars] == [
         "regular",
@@ -3109,3 +3110,108 @@ def test_words_are_read_and_carried_through():
     # A repeat with no count has nothing to say; music21 writes the word
     # None into the text there, which is not worth reproducing.
     assert m.Repeat(direction="end").getTextExpression() is None
+
+
+SLURRED = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN"
+  "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+        <time><beats>4</beats><beat-type>4</beat-type></time>
+        <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations><slur number="1" placement="above" type="start"/></notations></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type>
+        <notations><slur number="1" type="stop"/></notations></note>
+      <note><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+
+
+def test_a_spanner_joins_the_notes_a_stream_holds():
+    """Every answer is music21's own for the same document and stream."""
+    read = m.from_musicxml(SLURRED)
+    # Asked of the whole tree, which is how music21's own code asks: the
+    # crate's readers gather a part's spanners onto the score, where
+    # music21's reader leaves them on the part, so `spanners` differs of
+    # the two while the bundle does not.
+    found = list(read.spannerBundle)
+    assert [type(s).__name__ for s in found] == ["Slur"]
+    slur = found[0]
+    joined = slur.getSpannedElements()
+    assert [n.nameWithOctave for n in joined] == ["C4", "E4"]
+    # The notes it joins are the score's own.
+    notes = [e for e in read.recurse() if getattr(e, "isNote", False)]
+    assert joined[0] is notes[0]
+    assert (slur.getFirst(), slur.getLast()) == (joined[0], joined[1])
+    assert len(slur) == 2
+    assert slur.placement == "above"
+    assert slur.classes[:2] == ["Slur", "Spanner"]
+    assert slur.hasSpannedElement(notes[0])
+    assert not slur.hasSpannedElement(notes[1])
+
+    # A slur built here reaches the writer, which is what one is for.
+    bar = m.Measure()
+    bar.insert(0.0, m.TimeSignature("4/4"))
+    notes = [m.Note(name, quarterLength=1.0) for name in ("C4", "D4", "E4", "F4")]
+    for at, note in enumerate(notes):
+        bar.insert(float(at), note)
+    part = m.Part()
+    part.insert(0.0, bar)
+    part.insert(0.0, m.Slur(notes[0], notes[2]))
+    whole = m.Score()
+    whole.insert(0.0, part)
+    assert len(whole.spannerBundle) == 1
+    # Two tags, a start and a stop, which is music21's count for the same
+    # score.
+    assert m.to_musicxml(whole).count("<slur") == 2
+
+    # The bundle answers getByClass, as music21's does.
+    assert len(whole.spannerBundle.getByClass("Slur")) == 1
+    assert len(whole.spannerBundle.getByClass("Crescendo")) == 0
+    # And every kind music21 has a class for has one here.
+    for kind in (
+        m.Slur,
+        m.Crescendo,
+        m.Diminuendo,
+        m.Ottava,
+        m.Line,
+        m.Glissando,
+        m.TrillExtension,
+        m.TremoloSpanner,
+        m.ArpeggioMarkSpanner,
+        m.PedalMark,
+        m.Neume,
+    ):
+        one = kind(notes[0], notes[1])
+        assert len(one) == 2
+        assert one.classes[-4:] == [
+            "Spanner",
+            "Music21Object",
+            "ProtoM21Object",
+            "object",
+        ]
+    # A hairpin is a DynamicWedge to music21 before it is a Spanner.
+    assert m.Crescendo().classes[:3] == ["Crescendo", "DynamicWedge", "Spanner"]
+
+
+def test_a_slur_is_read_from_abc_as_music21_reads_it():
+    """music21 answers the same for the same tune."""
+    read = m.from_abc("X:1\nT:Slurred\nM:4/4\nL:1/4\nK:C\n(CDE) F |]\n")
+    found = list(read.spannerBundle)
+    assert [type(s).__name__ for s in found] == ["Slur"]
+    assert [n.nameWithOctave for n in found[0].getSpannedElements()] == [
+        "C4",
+        "D4",
+        "E4",
+    ]
