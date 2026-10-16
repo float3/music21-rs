@@ -306,6 +306,24 @@
   and an interval is built on two of them, so `noteStart` is one of the
   score's notes; a count is a `collections.Counter` of whatever property
   of a pitch was named, as music21 counts one.
+- The Python package gains the `analysis.discrete` classes: `Ambitus`, the
+  five key weightings (`KeyWeightKeyAnalysis` and the `KrumhanslSchmuckler`,
+  `AardenEssen`, `SimpleWeights`, `BellmanBudge` and
+  `TemperleyKostkaPayne` subclasses) and `MelodicIntervalDiversity`. A span
+  is the stream's own pitch objects and the interval built on them, a key
+  carries how well it fitted and the twenty-three that fitted less well,
+  and a counted interval is built on the two notes it was measured
+  between. `process` is left out for `Ambitus` and for a key weighting,
+  since it answers a solution *and* a colour out of music21's colour
+  dictionaries, which are presentation and no part of the crate;
+  `MelodicIntervalDiversity.process` is answered, its colour being the one
+  white string music21 has not worked out yet -- and music21's own raises
+  there, passing `ignoreDirection` where `found` goes.
+- `analysis::melodic_line_positions` is the by-position twin
+  `analysis::melodic_lines` now reads its own answer off: the note a count
+  was taken from is the note the stream holds, so the package can hand back
+  its own. `KeyProfile::music21_name` and `identifiers` are public, being
+  the table `Stream::analyze` reads a method name against.
 - The Python package gains `analysis.floatingKey`'s `KeyAnalyzer` and
   `divide`: the key of every measure, read one measure at a time by the
   Aarden-Essen weighting and then smoothed by the measures around it. Each

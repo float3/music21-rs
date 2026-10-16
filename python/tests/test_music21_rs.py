@@ -3614,3 +3614,146 @@ def test_a_key_is_read_for_every_measure():
         "d minor",
         "d minor",
     ]
+
+
+def test_the_span_of_what_a_stream_sounds():
+    """Every answer is music21's own for the same stream."""
+    ambitus = m.Ambitus()
+    assert (ambitus.name, list(ambitus.identifiers)) == (
+        "Ambitus Analysis",
+        ["ambitus", "span"],
+    )
+
+    held = m.Chord(["a2", "b4", "c8"])
+    stream = m.Stream()
+    stream.append(held)
+    low, high = ambitus.getPitchSpan(stream)
+    assert (str(low), str(high)) == ("A2", "C8")
+    # The stream's own pitch objects, not copies of them.
+    assert low is held.pitches[0] and high is held.pitches[2]
+
+    span = ambitus.getSolution(stream)
+    assert span.name == "m38"
+    assert span.pitchStart is held.pitches[0]
+
+    # Nothing where the stream sounds nothing, and a chord symbol is
+    # passed over, as music21 passes it over.
+    quiet = m.Stream()
+    quiet.append(m.Rest())
+    assert ambitus.getPitchSpan(quiet) is None
+    assert ambitus.getSolution(quiet) is None
+    symbols = m.Stream()
+    symbols.append(m.ChordSymbol("C6"))
+    assert ambitus.getPitchSpan(symbols) is None
+
+    # `process` answers a solution and a colour upstream, and the colour is
+    # a keyscape's; the package leaves it out rather than answer half.
+    assert not hasattr(ambitus, "process")
+
+
+def test_the_key_a_stream_is_most_likely_in():
+    """Every answer is music21's own for the same line."""
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c' g b d' g")
+
+    weighings = {
+        "KeyWeightKeyAnalysis": ("KeyWeightKeyAnalysis Base Class", 0.873542),
+        "KrumhanslSchmuckler": (
+            "Krumhansl Schmuckler/Kessler Key Analysis",
+            0.873542,
+        ),
+        "AardenEssen": ("Aarden Essen Key Analysis", 0.821518),
+        "SimpleWeights": ("Simple Weight Key Analysis", 0.862911),
+        "BellmanBudge": ("Bellman Budge Key Analysis", 0.836727),
+        "TemperleyKostkaPayne": ("Temperley Kostka Payne Key Analysis", 0.843534),
+    }
+    for kind, (name, coefficient) in weighings.items():
+        weigher = getattr(m, kind)()
+        assert weigher.name == name
+        assert len(weigher.getWeights("major")) == 12
+        assert weigher.getWeights("MAJOR") == weigher.getWeights("major")
+        with pytest.raises(m.DiscreteAnalysisException):
+            weigher.getWeights("lydian")
+        found = weigher.getSolution(line)
+        assert str(found) == "C major"
+        assert round(found.correlationCoefficient, 6) == coefficient
+        assert len(found.alternateInterpretations) == 23
+        # The base class weighs as Krumhansl-Schmuckler does, as music21's
+        # does, and the subclasses by their own profile.
+        assert not hasattr(weigher, "process")
+
+    # The weights themselves are music21's, Krumhansl-Schmuckler for the
+    # base class.
+    assert m.KeyWeightKeyAnalysis().getWeights("major") == [
+        6.35,
+        2.23,
+        3.48,
+        2.33,
+        4.38,
+        4.09,
+        2.52,
+        5.19,
+        2.39,
+        3.66,
+        2.29,
+        2.88,
+    ]
+    assert m.SimpleWeights().getWeights("minor")[:3] == [2.0, 0.0, 1.0]
+    assert [str(k) for k in m.AardenEssen().getSolution(line).alternateInterpretations[:3]] == [
+        "G major",
+        "c minor",
+        "a minor",
+    ]
+
+    nothing = m.Stream()
+    nothing.append(m.Rest())
+    with pytest.raises(m.DiscreteAnalysisException):
+        m.KrumhanslSchmuckler().getSolution(nothing)
+
+
+def test_how_many_melodic_intervals_a_stream_uses():
+    """Every count is music21's own for the same line."""
+    diversity = m.MelodicIntervalDiversity()
+    assert (diversity.name, list(diversity.identifiers)) == (
+        "Interval Diversity",
+        ["interval.diversity", "intervals"],
+    )
+    line = m.from_tiny_notation("4/4 c4 e g c' c e g c' g b d' g")
+    found = diversity.countMelodicIntervals(line)
+    assert sorted((k, v[1]) for k, v in found.items()) == [
+        ("M3", 3),
+        ("P4", 3),
+        ("P5", 1),
+        ("P8", 1),
+        ("m3", 3),
+    ]
+    # An interval is built on the notes the stream holds, as music21 builds
+    # it, so the count carries the score's own notes.
+    notes = [n for n in line.recurse() if getattr(n, "isNote", False)]
+    assert found["M3"][0].noteStart is notes[0]
+
+    # Direction counts where music21 counts it, and a unison is passed over
+    # unless it is asked for.
+    assert sorted(
+        (k, v[1]) for k, v in diversity.countMelodicIntervals(line, ignoreDirection=False).items()
+    ) == [("M3", 3), ("P-4", 1), ("P-5", 1), ("P-8", 1), ("P4", 2), ("m3", 3)]
+    unisons = diversity.countMelodicIntervals(
+        m.from_tiny_notation("4/4 c4 c d d e e"), ignoreUnison=False
+    )
+    assert sorted((k, v[1]) for k, v in unisons.items()) == [("M2", 2), ("P1", 3)]
+
+    # A dictionary given is counted into and handed back.
+    again = diversity.countMelodicIntervals(line, found=dict(found))
+    assert sorted((k, v[1]) for k, v in again.items()) == [
+        ("M3", 6),
+        ("P4", 6),
+        ("P5", 2),
+        ("P8", 2),
+        ("m3", 6),
+    ]
+
+    # music21's own `process` passes `ignoreDirection` where `found` goes,
+    # so it raises for any line of two notes; this does what its docstring
+    # says, and its colour is the one white string music21 answers.
+    assert diversity.process(line) == (5, "#ffffff")
+    assert diversity.getSolution(line) == 5
+    assert diversity.solutionToColor(5) == "#ffffff"

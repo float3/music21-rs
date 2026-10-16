@@ -160,6 +160,12 @@ on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
 property of every pitch into a `Counter`. `analysis.floatingKey.KeyAnalyzer`
 reads a key for every measure and smooths each by the measures around it,
 through a window and a weighting the caller may say.
+`analysis.discrete`'s classes are here too -- `Ambitus`, the five key
+weightings and `MelodicIntervalDiversity` -- each handing back what the
+stream holds: a span is its own pitch objects, and a counted interval is
+built on the two notes it was measured between. `process` is left out for
+`Ambitus` and for a key weighting, answering a colour out of music21's
+colour tables, which the crate does not carry.
 
 music21's four instrument stream functions are here too --
 `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and

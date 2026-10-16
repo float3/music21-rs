@@ -426,7 +426,10 @@ fn named(estimate: &KeyEstimate) -> (String, f64) {
 
 /// The key a measure's readings settle on, carrying how well it fitted and
 /// the keys that fitted less well, as music21's analysis answers one.
-fn key_of<'py>(py: Python<'py>, estimates: &[KeyEstimate]) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn key_of<'py>(
+    py: Python<'py>,
+    estimates: &[KeyEstimate],
+) -> PyResult<Bound<'py, PyAny>> {
     let Some((best, rest)) = estimates.split_first() else {
         return Ok(py.None().into_bound(py));
     };

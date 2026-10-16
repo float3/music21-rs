@@ -44,85 +44,25 @@ impl Method {
     /// The name music21 calls it by, matched against next.
     fn spoken_name(self) -> &'static str {
         match self {
-            Self::Ambitus => "Ambitus Analysis",
-            Self::Key(KeyProfile::KrumhanslSchmuckler) => {
-                "Krumhansl Schmuckler/Kessler Key Analysis"
-            }
-            Self::Key(KeyProfile::AardenEssen) => "Aarden Essen Key Analysis",
-            Self::Key(KeyProfile::SimpleWeights) => "Simple Weight Key Analysis",
-            Self::Key(KeyProfile::BellmanBudge) => "Bellman Budge Key Analysis",
-            Self::Key(KeyProfile::TemperleyKostkaPayne) => "Temperley Kostka Payne Key Analysis",
+            Self::Ambitus => AMBITUS_NAME,
+            Self::Key(profile) => profile.music21_name(),
         }
     }
 
     /// The names it answers to: music21's `identifiers`.
     fn identifiers(self) -> &'static [&'static str] {
         match self {
-            Self::Ambitus => &["ambitus", "span"],
-            Self::Key(KeyProfile::KrumhanslSchmuckler) => &[
-                "key.krumhansl",
-                "key.schmuckler",
-                "key.krumhansl-schmuckler",
-                "key.krumhanslschmuckler",
-                "krumhansl",
-                "schmuckler",
-                "krumhansl-schmuckler",
-                "krumhanslschmuckler",
-                "key.kessler",
-                "key.krumhansl-kessler",
-                "key.krumhanslkessler",
-                "kessler",
-                "krumhansl-kessler",
-                "krumhanslkessler",
-            ],
-            Self::Key(KeyProfile::AardenEssen) => &[
-                "key.aarden",
-                "key.essen",
-                "key.aarden-essen",
-                "key.aardenessen",
-                "aarden",
-                "essen",
-                "aarden-essen",
-                "aardenessen",
-                // These make this the analysis a bare `key` asks for.
-                "key",
-                "keyscape",
-            ],
-            Self::Key(KeyProfile::SimpleWeights) => &[
-                "key.simple",
-                "key.weight",
-                "key.simple-weight",
-                "key.simpleweight",
-                "simple",
-                "weight",
-                "simple-weight",
-                "simpleweight",
-            ],
-            Self::Key(KeyProfile::BellmanBudge) => &[
-                "key.bellman",
-                "key.budge",
-                "key.bellman-budge",
-                "key.bellmanbudge",
-                "bellman",
-                "budge",
-                "bellman-budge",
-                "bellmanbudge",
-            ],
-            Self::Key(KeyProfile::TemperleyKostkaPayne) => &[
-                "key.temperley",
-                "key.kostka",
-                "key.payne",
-                "key.temperley-kostka-payne",
-                "key.temperleykostkapayne",
-                "temperley",
-                "kostka",
-                "payne",
-                "temperley-kostka-payne",
-                "temperleykostkapayne",
-            ],
+            Self::Ambitus => AMBITUS_IDENTIFIERS,
+            Self::Key(profile) => profile.identifiers(),
         }
     }
 }
+
+/// The name music21's `Ambitus` class calls itself by.
+const AMBITUS_NAME: &str = "Ambitus Analysis";
+
+/// The names music21's `Ambitus` answers to: its `identifiers`.
+const AMBITUS_IDENTIFIERS: &[&str] = &["ambitus", "span"];
 
 /// Every analysis a method name may ask for, in the order music21 searches
 /// them, which decides which one a loose name finds first.
