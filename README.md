@@ -104,7 +104,14 @@ written in Volpiano is read and written by `volpiano::from_volpiano` and
 `volpiano::to_volpiano`, as music21's `volpiano` module reads and writes it.
 A RomanText analysis is written back by `romantext::to_roman_text`, as
 music21's `RnWriter` writes one: every analysis of music21's corpus comes
-out the same text on both sides. `lily::to_lilypond` writes a score as
+out the same text on both sides. The two tabular analysis formats beside it
+are read as well: `romantext::tsv::from_tsv` reads one of the Digital and
+Cognitive Musicology Lab's tables in either of its standards and
+`tsv::to_tsv` writes one back, column for column; and
+`romantext::clercq_temperley::from_clercq_temperley` reads a de
+Clercq-Temperley analysis of the rock corpus -- rules of chords a measure
+at a time, played through by a song rule -- as music21's `CTSong.toPart`
+reads it. `lily::to_lilypond` writes a score as
 LilyPond, as music21's `LilypondConverter` writes it: every MusicXML score
 of music21's corpus that music21 can write comes out the same text, space
 for space.
