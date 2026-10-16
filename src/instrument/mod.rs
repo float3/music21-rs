@@ -653,6 +653,46 @@ pub fn ensemble_name_by_size(players: usize) -> Option<&'static str> {
     tables::ENSEMBLE_NAMES.get(players).copied()
 }
 
+/// The instrument a key of the General MIDI percussion map plays, played
+/// the way that key says: music21's
+/// `midi.percussion.PercussionMapper.midiPitchToInstrument`.
+///
+/// A key is 0 to 127 and the map runs from 35 to 81; a key outside it, or
+/// one of the eleven inside it music21 has no instrument for, is an error,
+/// as it raises there. Where the instrument is played more than one way the
+/// modifier is the one that key plays, so key 36 is a bass drum played
+/// `"1"` and key 35 the same drum played `"acoustic"`.
+///
+/// ```
+/// use music21_rs::instrument::for_percussion_key;
+///
+/// let drum = for_percussion_key(36)?;
+/// assert_eq!(drum.kind(), "BassDrum");
+/// assert_eq!(drum.modifier(), Some("1"));
+/// assert_eq!(drum.percussion_pitch(), Some(36));
+/// assert!(for_percussion_key(69).is_err());
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A key the map does not name an instrument for.
+pub fn for_percussion_key(key: u8) -> Result<Instrument> {
+    let (_, kind) = tables::PERCUSSION_KEYS
+        .iter()
+        .find(|(named, _)| *named == key)
+        .ok_or_else(|| Error::Instrument(format!("{key} does not map to a valid instrument!")))?;
+    let mut instrument = Instrument::of_kind(kind)?;
+    // music21 writes the modifier that key plays onto the instrument it
+    // built, which moves the drum it plays with it.
+    if let Some((_, _, _, by_key)) = tables::MODIFIERS.iter().find(|(named, ..)| named == kind)
+        && let Some((_, modifier)) = by_key.iter().find(|(drum, _)| *drum == key)
+    {
+        instrument.set_modifier(modifier);
+    }
+    Ok(instrument)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -45,6 +45,15 @@
   music21 by parity tests over whole documents; music21's small helper
   modules, whose content the crate ports where it uses it; and what the
   crate does not model at all.
+- **The General MIDI percussion map is `instrument::for_percussion_key`**,
+  music21's `midi.percussion.PercussionMapper.midiPitchToInstrument`: the
+  instrument a drum key plays, played the way that key says -- key 36 is a
+  bass drum played `1` where key 35 is the same drum played `acoustic` --
+  with music21's own refusal for a key its map names no instrument for.
+  `Instrument::percussion_pitch` is the other direction, its
+  `midiInstrumentToPitch`. `percussion_parity` holds both to music21: all
+  128 keys and all 116 instrument classes agree, down to the modifier and
+  the drum it plays.
 - The Python package's `Dynamic` says what it is -- `<music21.dynamics
   .Dynamic mf>`, and the class alone where it says nothing, which is what
   music21's own `__repr__` writes of `_reprInternal`. It was the last class
@@ -76,6 +85,26 @@
   map. And a public field is a definition, since a value type answers with
   one where a method would be ceremony: `TextBox.content` is `pub content:
   String` here.
+
+## fixed
+
+- **A drum struck on a key other than its instrument's own default was read
+  as that default**, and so written back as the wrong key: the MIDI reader
+  built the instrument of a percussion key without the modifier the key
+  says, so a bass drum on key 36 came back as key 35, a closed hi-hat (42)
+  and an open one (46) both as the pedal (44), every tom-tom as the low
+  floor tom (41), and the low bongo, woodblock and timbale as the high one.
+  The reader goes through `instrument::for_percussion_key` now, as
+  music21's goes through its mapper, and a stroke read from a file comes
+  back played the way the key says.
+  Nothing caught it: the outline the reader tests compare named the
+  instrument's class and not how it is played, and `demos/drum_sample.xml`,
+  the one drum subject either test had, strikes only default keys. The
+  outline says the modifier now; `written:percussion.mid`, a file written
+  for the test holding all 35 mapped keys and four music21 has no
+  instrument for, is a subject of `midi_read_parity` and catches it; and
+  `built:percussion` in `midi_write_parity` is a stroke of each of fifteen
+  drums played its own way, whose keys both writers write alike.
 
 # music21-rs 0.10.0
 

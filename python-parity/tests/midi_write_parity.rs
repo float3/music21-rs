@@ -60,6 +60,10 @@ const SUBJECTS: &[(&str, &str)] = &[
         "built:microtones",
         "overlapping notes between the keys, each bent on a channel of its own",
     ),
+    (
+        "built:percussion",
+        "drum strokes whose keys are the ones their instruments are played by",
+    ),
 ];
 
 const HELPERS: &str = r#"
@@ -92,8 +96,29 @@ def read(kind, name):
     return converter.parse('tinyNotation: ' + name)
 
 def built(name):
-    from music21 import note, stream
+    from music21 import instrument, note, stream
     part = stream.Part()
+    if name == 'percussion':
+        # Each stroke is played the way its modifier says, which is the key
+        # the writer has to find: a bass drum played `1` is key 36 where the
+        # same drum played `acoustic` is 35.
+        for class_name, modifier in [
+            ('BassDrum', 'acoustic'), ('BassDrum', '1'),
+            ('SnareDrum', 'acoustic'), ('HiHatCymbal', 'closed'),
+            ('HiHatCymbal', 'open'), ('HiHatCymbal', 'pedal'),
+            ('TomTom', 'high'), ('TomTom', 'low floor'),
+            ('BongoDrums', 'low'), ('Woodblock', 'low'),
+            ('Triangle', 'mute'), ('CrashCymbals', '2'),
+            ('CongaDrum', 'high'), ('Timbales', 'low'),
+            ('Agogo', 'low'),
+        ]:
+            played = getattr(instrument, class_name)()
+            played.modifier = modifier
+            stroke = note.Unpitched()
+            stroke.storedInstrument = played
+            stroke.quarterLength = 1
+            part.append(stroke)
+        return part
     if name == 'microtones':
         for offset, written, cents, length in [
             (0, 'C4', 50, 2), (1, 'E4', -30, 2), (1, 'G4', 0, 1), (3, 'A4', 25, 1)
@@ -239,6 +264,35 @@ fn the_crate_writes_midi_as_music21_does() {
 fn built(name: &str) -> music21_rs::Result<music21_rs::Stream> {
     use music21_rs::{Duration, Note, Stream, StreamKind};
     let mut part = Stream::with_kind(StreamKind::Part);
+    if name == "percussion" {
+        let mut at = 0.0;
+        for (class, modifier) in [
+            ("BassDrum", "acoustic"),
+            ("BassDrum", "1"),
+            ("SnareDrum", "acoustic"),
+            ("HiHatCymbal", "closed"),
+            ("HiHatCymbal", "open"),
+            ("HiHatCymbal", "pedal"),
+            ("TomTom", "high"),
+            ("TomTom", "low floor"),
+            ("BongoDrums", "low"),
+            ("Woodblock", "low"),
+            ("Triangle", "mute"),
+            ("CrashCymbals", "2"),
+            ("CongaDrum", "high"),
+            ("Timbales", "low"),
+            ("Agogo", "low"),
+        ] {
+            let mut played = music21_rs::Instrument::of_kind(class)?;
+            played.set_modifier(modifier);
+            let mut stroke = music21_rs::percussion::Unpitched::new();
+            stroke.written_mut().set_duration(Duration::new(1.0)?);
+            stroke.written_mut().set_stored_instrument(Some(played));
+            part.insert(at, stroke);
+            at += 1.0;
+        }
+        return Ok(part);
+    }
     if name == "microtones" {
         for (offset, written, cents, length) in [
             (0.0, "C4", 50.0, 2.0),

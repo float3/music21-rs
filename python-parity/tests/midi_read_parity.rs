@@ -15,10 +15,11 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 //!
-//! A file is named by its path under the music21 package, or by
-//! `corpus:` and a corpus score, which music21 first writes as MIDI.
-//! `MIDI_PARITY_FILES`, a `;`-separated list, runs those instead of the ones
-//! below.
+//! A file is named by its path under the music21 package, by `corpus:` and
+//! a corpus score, which music21 first writes as MIDI, or by `written:` and
+//! a file under `python-parity/tests/midi/` written for this test, for what
+//! no file either side ships holds. `MIDI_PARITY_FILES`, a `;`-separated
+//! list, runs those instead of the ones below.
 
 use music21_rs::midi::from_midi;
 use music21_rs::musicxml::{ExportOptions, to_musicxml};
@@ -80,6 +81,10 @@ const FILES: &[(&str, &str)] = &[
         "a chorale written as MIDI by music21",
     ),
     ("corpus:demos/drum_sample.xml", "a drum part on channel 10"),
+    (
+        "written:percussion.mid",
+        "every key of the General MIDI percussion map, and four it has no instrument for",
+    ),
     (
         "corpus:schoenberg/opus19/movement6",
         "chords held under moving notes",
@@ -155,8 +160,17 @@ fn the_crate_reads_midi_as_music21_does() {
                         continue;
                     }
                 },
-                None => std::fs::read(root.join("music21").join("music21").join(name))
-                    .unwrap_or_else(|error| panic!("reading {name}: {error}")),
+                None => {
+                    let path = match name.strip_prefix("written:") {
+                        Some(written) => root
+                            .join("python-parity")
+                            .join("tests")
+                            .join("midi")
+                            .join(written),
+                        None => root.join("music21").join("music21").join(name),
+                    };
+                    std::fs::read(&path).unwrap_or_else(|error| panic!("reading {name}: {error}"))
+                }
             };
             let kwargs = pyo3::types::PyDict::new(py);
             kwargs.set_item("format", "midi")?;

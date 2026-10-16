@@ -738,7 +738,9 @@ def number(value):
 def describe(e):
     classes = e.classes
     if 'Unpitched' in classes:
-        return f'Unpitched {e.storedInstrument.classes[0] if e.storedInstrument else None}'
+        drum = e.storedInstrument
+        played = getattr(drum, 'modifier', None) if drum is not None else None
+        return f'Unpitched {drum.classes[0] if drum is not None else None} {played}'
     if 'PercussionChord' in classes:
         return 'PercussionChord ' + ' '.join(
             str(n.storedInstrument.classes[0]) for n in e.notes)
@@ -834,11 +836,18 @@ fn describe(element: &StreamElement) -> String {
     let tie = |note: &music21_rs::Note| option(note.tie().map(|tie| tie.tie_type().as_str()));
     match element {
         StreamElement::Unpitched(stroke) => format!(
-            "Unpitched {}",
+            "Unpitched {} {}",
             option(
                 stroke
                     .stored_instrument()
                     .map(|instrument| instrument.kind())
+            ),
+            // How the drum is played, which is the key a MIDI file struck
+            // it with.
+            option(
+                stroke
+                    .stored_instrument()
+                    .and_then(|instrument| instrument.modifier())
             )
         ),
         StreamElement::PercussionChord(chord) => format!(

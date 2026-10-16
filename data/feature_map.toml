@@ -265,6 +265,16 @@ instrumentFromMidiProgram = "from_midi_program"
 getAllNamesForInstrument = "all_names"
 
 [[class]]
+python = "midi/percussion.py"
+name = "PercussionMapper"
+rust = ["src/instrument/mod.rs"]
+note = "The General MIDI percussion map, both ways: the instrument a key plays, played the way that key says, and the key an instrument is played by. music21's `reverseInstrumentMapping` is `tables::PERCUSSION_KEYS`."
+
+[class.renames]
+midiPitchToInstrument = "for_percussion_key"
+midiInstrumentToPitch = "percussion_pitch"
+
+[[class]]
 python = "duration.py"
 name = "Duration"
 rust = ["src/duration.rs"]
