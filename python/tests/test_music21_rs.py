@@ -1068,6 +1068,7 @@ def test_every_reader_is_exported():
         "from_humdrum",
         "from_mei",
         "from_roman_text",
+        "from_tsv",
         "from_noteworthy",
         "from_nwc",
         "from_musedata",
@@ -1380,6 +1381,32 @@ def test_roman_text_is_read_as_chords_carrying_their_figures():
     assert [type(element).__name__ for element in third] == ["NoChord", "Rest"]
     assert [type(chord).__name__ for chord in chords] == ["RomanNumeral", "RomanNumeral"]
     assert [chord.figure for chord in chords] == ["I", "V6"]
+
+
+def test_a_dcml_table_is_read_and_written():
+    table = (
+        "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n"
+        "I\t1\t1.0\t4/4\tC\tC\tI\n"
+        "V\t1\t3.0\t4/4\tC\tC\tV\n"
+        "I\t2\t1.0\t4/4\tC\tC\tI\n"
+    )
+    score = m.from_tsv(table)
+    (part,) = score.parts
+    first, second = measures_of(part)
+    chords = list(first.getElementsByClass("Chord"))
+    assert [chord.figure for chord in chords] == ["I", "V"]
+    assert [first.elementOffset(chord) for chord in chords] == [0.0, 2.0]
+    assert [chord.quarterLength for chord in chords] == [2.0, 2.0]
+    assert [pitch.name for pitch in chords[1].pitches] == ["G", "B", "D"]
+    # music21 gives the last chord what is left of the part, which for a
+    # table whose last measure holds one chord is nothing at all.
+    assert second.getElementsByClass("Chord")[0].quarterLength == 0.0
+    written = m.to_tsv(score, dcml_version=1).splitlines()
+    assert written[0].split("\t")[:3] == ["chord", "altchord", "measure"]
+    assert written[1].split("\t")[:6] == ["I", "", "1", "1.0", "", "4/4"]
+    assert len(written) == 4
+    with pytest.raises(ValueError):
+        m.from_tsv(table, dcml_version=3)
 
 
 def test_roman_numerals_are_written_as_roman_text():

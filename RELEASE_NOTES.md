@@ -20,6 +20,27 @@
   `RomanNumeral`, which is a `Harmony`: at 19, before the notes standing
   at the same offset. Nothing but a `**harm` spine had ever put one beside
   a note.
+- **The lab's tabular analyses, read and written** (`romantext::tsv`):
+  music21's `romanText.tsvConverter`, the format the Digital and Cognitive
+  Musicology Lab annotates its corpora in. `from_tsv` reads a table into a
+  score of `RomanNumeral`s -- the measures prepared from the table's own
+  numbers and meters, each numeral inserted at its beat and lasting until
+  the next, and a repeat bracket over the measures a volta marks -- and
+  `to_tsv` writes a score back out as a table, column for column. Both of
+  the lab's standards are read: version 1 as the Annotated Beethoven Corpus
+  was first released, and version 2, whose columns are named differently and
+  whose labels carry the added tones in parentheses -- `V(64)` is music21's
+  `Cad64` and `i(4+2)` its `i[no3][add4][add2]`. The cells music21 keeps on
+  a numeral's `editorial`, which are the columns its reader did not read,
+  are the caller's here: `to_tsv_with_extra` takes back what
+  `tsv_to_chords` read them into, since a chord of the crate's keeps
+  nothing of the kind. `tsv_parity` holds both halves to music21 -- the four
+  tables music21 ships read identically, every measure, offset, length and
+  pitch of them and the repeat brackets besides, and 140 tables written back
+  byte for byte: those four and all 68 RomanText analyses of music21's
+  corpus, each in both standards. The wheel reads and writes one too,
+  `music21_rs.from_tsv` and `music21_rs.to_tsv`, each taking the
+  `dcml_version` music21 takes and defaulting as music21 defaults.
 - **The feature map now tracks every music21 file the crate ports**, where
   it tracked 44 of them: `percussion.py`, `tablature.py`, `text.py`,
   `layout.py`, `style.py`, `spanner.py`, `repeat.py`, `variant.py`,

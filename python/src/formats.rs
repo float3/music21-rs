@@ -1,7 +1,7 @@
 //! The score formats the crate reads, and MusicXML, which it also writes:
 //! `from_musicxml`, `from_abc`, `from_abc_number`, `from_midi`,
-//! `from_tiny_notation`, `from_humdrum`, `from_mei`, `from_roman_text` and
-//! `to_musicxml`.
+//! `from_tiny_notation`, `from_humdrum`, `from_mei`, `from_roman_text`,
+//! `from_tsv`, `to_tsv` and `to_musicxml`.
 //!
 //! These are the wheel's own rather than names music21 has: music21 reaches
 //! its readers through `converter.parse` and its writer through an exporter
@@ -356,6 +356,47 @@ fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
     handed_back(py, music21_rs_crate::romantext::from_roman_text(text))
 }
 
+/// Reads a tabular analysis of the Digital and Cognitive Musicology Lab as
+/// music21's `romanText.tsvConverter.TsvHandler` reads one, as a `Score`.
+///
+/// `dcml_version` says which of the lab's two standards the table is
+/// written in, as music21's does, and 1 is its default here too. The score
+/// holds one part of measures, and in each the chords the numerals stand
+/// for, each lasting until the next, with the measures a volta marks
+/// lettered `2a` and `2b`.
+#[pyfunction]
+#[pyo3(signature = (text, dcml_version=1))]
+fn from_tsv<'py>(py: Python<'py>, text: &str, dcml_version: u8) -> PyResult<Bound<'py, PyAny>> {
+    let version = tsv_version(dcml_version)?;
+    handed_back(
+        py,
+        music21_rs_crate::romantext::tsv::from_tsv(text, version),
+    )
+}
+
+/// Writes a score's roman numerals as one of the lab's tables, as music21's
+/// `romanText.tsvConverter.M21toTSV` writes one, and hands back the text.
+///
+/// The score may be one of this wheel's streams or one of music21's;
+/// `dcml_version` says which standard to write, 2 being music21's default
+/// for writing. Every column the standard names is written, in its own
+/// order, and the ones music21 fills from a numeral's `editorial` -- the
+/// cells its reader did not read -- are written empty, a chord here
+/// carrying nothing of the kind.
+#[pyfunction]
+#[pyo3(signature = (score, dcml_version=2))]
+fn to_tsv(score: &Bound<'_, PyAny>, dcml_version: u8) -> PyResult<String> {
+    let version = tsv_version(dcml_version)?;
+    let stream = crate::stream::crate_stream(score)?;
+    music21_rs_crate::romantext::tsv::to_tsv(&stream, version).map_err(format_error)
+}
+
+/// The standard a number names, as music21 refuses anything but its two.
+fn tsv_version(number: u8) -> PyResult<music21_rs_crate::romantext::tsv::Version> {
+    music21_rs_crate::romantext::tsv::Version::from_number(number)
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(crate::pitch::message(&error)))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(to_musicxml, m)?)?;
     m.add_function(wrap_pyfunction!(to_midi, m)?)?;
@@ -368,6 +409,8 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_humdrum, m)?)?;
     m.add_function(wrap_pyfunction!(from_mei, m)?)?;
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
+    m.add_function(wrap_pyfunction!(from_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(to_tsv, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
     m.add_function(wrap_pyfunction!(from_capella, m)?)?;
