@@ -3425,3 +3425,28 @@ def test_the_interval_against_another_part_is_written_on_each_note():
     rests = m.from_tiny_notation("tinyNotation: 4/4 r1 r1").flatten()
     upper.attachIntervalsBetweenStreams(rests)
     assert [n.editorial.harmonicInterval for n in notes] == [None] * 4
+
+
+def test_a_part_is_named_as_music21_names_it():
+    """Every answer is music21's own for the same part."""
+    bare = m.Part()
+    assert (bare.partName, bare.partAbbreviation) == (None, None)
+
+    named = m.Part()
+    named.partName = "Flauto"
+    assert named.partName == "Flauto"
+
+    # Unsaid, a part answers for the first instrument it holds: its own
+    # partName, else its instrumentName, and the abbreviation likewise.
+    played = m.Part()
+    played.insert(0.0, m.Flute())
+    assert (played.partName, played.partAbbreviation) == ("Flute", "Fl")
+
+    # music21 looks into the substreams too, a part's instrument often
+    # standing in its first measure.
+    nested = m.Part()
+    bar = m.Measure()
+    bar.insert(0.0, m.Flute())
+    bar.insert(0.0, m.Note("C4", quarterLength=1.0))
+    nested.insert(0.0, bar)
+    assert nested.partName == "Flute"

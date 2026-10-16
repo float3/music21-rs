@@ -320,6 +320,13 @@
   reads `Measure(number='14a')` as music21 reads it -- all four were
   attributes the readers wrote and nothing declared, so a measure built by
   hand had none of them.
+- The Python package's `Part` carries `partName` and `partAbbreviation`,
+  music21's own properties: the name said of the part, and where nothing
+  is said the first instrument standing anywhere in it -- its `partName`,
+  else its `instrumentName`, and the abbreviation likewise -- which is
+  where music21 looks too, a part's instrument often standing in its
+  first measure. music21 keeps what it found; the package looks again,
+  so a part given an instrument afterwards answers for it.
 - The Python package gains the spanners: `Spanner` and the eleven kinds
   music21 has classes for -- `Slur`, `Crescendo`, `Diminuendo`, `Ottava`,
   `Line`, `Glissando`, `TrillExtension`, `TremoloSpanner`,

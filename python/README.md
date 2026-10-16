@@ -84,7 +84,8 @@ note's articulations and its ornaments come with it, and so do barlines,
 repeats, words and the spanners: a measure carries its `leftBarline` and
 `rightBarline`, its `number`, `numberSuffix` and padding, and answers
 `barDuration`, `barDurationProportion`, `bestTimeSignature` and
-`padAsAnacrusis`; a stream answers `finalBarline`, `spanners` and
+`padAsAnacrusis`; a part carries its `partName` and `partAbbreviation`,
+answering for the first instrument it holds where nothing says them; a stream answers `finalBarline`, `spanners` and
 `spannerBundle` and plays its repeats out with `expandRepeats`; and a
 slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.

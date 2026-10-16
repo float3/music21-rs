@@ -87,6 +87,11 @@ pub struct Stream {
     number_suffix: Option<String>,
     padding_left: f64,
     padding_right: f64,
+    /// music21's `partName` and `partAbbreviation`, where a caller or a
+    /// reader has said them. Unsaid, a part answers for the first
+    /// instrument it holds, as music21's property does.
+    part_name: Option<String>,
+    part_abbreviation: Option<String>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -302,6 +307,8 @@ impl Stream {
             number_suffix: None,
             padding_left: 0.0,
             padding_right: 0.0,
+            part_name: None,
+            part_abbreviation: None,
         }
     }
 
@@ -473,6 +480,41 @@ impl Stream {
             }
         }
         Ok(nearest.map(|(_, object)| object))
+    }
+
+    /// What the first instrument anywhere in this stream is called,
+    /// under one name or the other: how music21's `partName` and
+    /// `partAbbreviation` fall back.
+    fn named_by_instrument(
+        slf: &Bound<'_, Self>,
+        first: &str,
+        second: &str,
+    ) -> PyResult<Option<String>> {
+        let py = slf.py();
+        let instrument = pyo3::types::PyString::new(py, "Instrument");
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|one| one.object.clone_ref(py))
+            .collect();
+        for object in held {
+            let object = object.into_bound(py);
+            if is_of_class(&object, &instrument)? {
+                for name in [first, second] {
+                    if let Some(said) = text_attribute(&object, name) {
+                        return Ok(Some(said));
+                    }
+                }
+            } else if let Ok(inner) = object.cast::<Stream>() {
+                // music21 looks into the substreams too, a part's
+                // instrument standing in its first measure.
+                if let Some(said) = Self::named_by_instrument(inner, first, second)? {
+                    return Ok(Some(said));
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// The parts this stream holds, where it holds any: what music21's
@@ -682,6 +724,43 @@ impl Stream {
     #[classattr]
     fn classSortOrder() -> i64 {
         -20
+    }
+
+    /// What this part is called: music21's `partName`, which is what a
+    /// caller or a reader said, and failing that what the first
+    /// instrument it holds is called -- its own `partName`, else its
+    /// `instrumentName`, as music21 looks.
+    ///
+    /// music21 keeps that search's answer in a cache and says so; nothing
+    /// is kept here, so an instrument renamed after the fact is answered
+    /// for straight away.
+    #[getter]
+    fn get_partName(slf: &Bound<'_, Self>) -> PyResult<Option<String>> {
+        if let Some(said) = &slf.borrow().part_name {
+            return Ok(Some(said.clone()));
+        }
+        Self::named_by_instrument(slf, "partName", "instrumentName")
+    }
+
+    #[setter]
+    fn set_partName(&mut self, value: Option<String>) {
+        self.part_name = value;
+    }
+
+    /// What this part is called in short: music21's `partAbbreviation`,
+    /// which falls back the same way -- the first instrument's own
+    /// abbreviation, else its `instrumentAbbreviation`.
+    #[getter]
+    fn get_partAbbreviation(slf: &Bound<'_, Self>) -> PyResult<Option<String>> {
+        if let Some(said) = &slf.borrow().part_abbreviation {
+            return Ok(Some(said.clone()));
+        }
+        Self::named_by_instrument(slf, "partAbbreviation", "instrumentAbbreviation")
+    }
+
+    #[setter]
+    fn set_partAbbreviation(&mut self, value: Option<String>) {
+        self.part_abbreviation = value;
     }
 
     /// What this measure is called: music21's `number`, nought until
