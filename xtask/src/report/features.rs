@@ -276,6 +276,18 @@ pub(super) fn scan_features(
     Ok(classes)
 }
 
+/// The source with its line comments taken out, so that a name mentioned in
+/// one is not read as a definition.
+fn without_comments(rust: &str) -> String {
+    rust.lines()
+        .map(|line| match line.find("//") {
+            Some(at) => &line[..at],
+            None => line,
+        })
+        .collect::<Vec<&str>>()
+        .join("\n")
+}
+
 /// The public methods and properties of one class, in source order, each once.
 /// Whether a `class` line opens this class: with bases, with nothing, or
 /// with the type parameters music21 writes in PEP 695's brackets, as
@@ -298,6 +310,10 @@ pub(super) fn class_methods(python: &str, class: &str) -> Vec<String> {
             inside = opens_class(line, class);
             continue;
         }
+        if inside && closes_body(line) {
+            inside = false;
+            continue;
+        }
         if !inside {
             continue;
         }
@@ -306,6 +322,20 @@ pub(super) fn class_methods(python: &str, class: &str) -> Vec<String> {
         }
     }
     names
+}
+
+/// Whether a line ends the class body it follows: a function written
+/// against the left margin.
+///
+/// Without this a module-level function standing after a class gave the
+/// class its *nested* functions as members -- music21's `prepareBeamedNotes`
+/// defines three filters inside itself, and all three were read as members
+/// of the `BrailleGrandSegment` above it. It is only a `def` that closes a
+/// body and not anything at the margin, since a class statement may run
+/// over several lines (`class IndexedLyric(namedtuple(`) and a docstring
+/// may hold a line of its own there.
+fn closes_body(line: &str) -> bool {
+    line.starts_with("def ") || line.starts_with("async def ")
 }
 
 /// The attributes a class declares in `__slots__`, which for a class with no
@@ -318,6 +348,10 @@ pub(super) fn class_slots(python: &str, class: &str) -> Vec<String> {
         if line.starts_with("class ") {
             inside = opens_class(line, class);
             reading = false;
+            continue;
+        }
+        if inside && !reading && closes_body(line) {
+            inside = false;
             continue;
         }
         if !inside {
@@ -451,12 +485,25 @@ pub(super) fn snake_case(name: &str) -> String {
 /// Whether the Rust source defines the name: a `pub fn` for a method, or the
 /// bare identifier — an enum variant or a type — for a class.
 pub(super) fn defines(rust: &str, name: &str, members: Members) -> bool {
+    // Comments are not definitions. A doc comment naming the music21 class
+    // a file ports -- "music21's `repeat.Expander`" -- is what every file
+    // here opens with, and matching the word in one credited the crate with
+    // whatever it merely mentioned.
+    let rust = &without_comments(rust);
     match members {
         Members::Methods | Members::Slots => {
             let plain = format!("pub fn {name}(");
             let plain_generic = format!("pub fn {name}<");
             let constant = format!("pub const fn {name}(");
-            rust.contains(&plain) || rust.contains(&plain_generic) || rust.contains(&constant)
+            // A value type answers with a public field where a method would
+            // be ceremony: music21's `TextBox.content` is `pub content:
+            // String` here and `layout.PageLayout.pageNumber` is `pub
+            // page_number`, and the question each answers is the same one.
+            let field = format!("pub {name}:");
+            rust.contains(&plain)
+                || rust.contains(&plain_generic)
+                || rust.contains(&constant)
+                || rust.contains(&field)
         }
         Members::Classes => rust
             .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
