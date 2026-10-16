@@ -272,28 +272,12 @@ fn notes_of(events: &[(u64, Event)]) -> Vec<Timed<'_>> {
     notes
 }
 
-/// The instrument a percussion key plays: music21's `PercussionMapper`.
+/// The instrument a percussion key plays: music21's `PercussionMapper`,
+/// whose exception for a key it names no instrument for its reader answers
+/// with a bare unpitched percussion instrument.
 fn percussion_instrument(pitch: u8) -> Instrument {
-    let class = match pitch {
-        35 | 36 => "BassDrum",
-        37 | 38 | 40 => "SnareDrum",
-        41 | 43 | 45 | 47 | 48 | 50 => "TomTom",
-        42 | 44 | 46 => "HiHatCymbal",
-        49 | 57 => "CrashCymbals",
-        54 => "Tambourine",
-        56 => "Cowbell",
-        58 => "Vibraslap",
-        60 | 61 => "BongoDrums",
-        62..=64 => "CongaDrum",
-        65 | 66 => "Timbales",
-        67 | 68 => "Agogo",
-        70 => "Maracas",
-        71 | 72 => "Whistle",
-        76 | 77 => "Woodblock",
-        80 | 81 => "Triangle",
-        _ => "UnpitchedPercussion",
-    };
-    Instrument::of_kind(class).unwrap_or_default()
+    crate::instrument::for_percussion_key(pitch)
+        .unwrap_or_else(|_| Instrument::of_kind("UnpitchedPercussion").unwrap_or_default())
 }
 
 /// music21's `midiEventToInstrument`.

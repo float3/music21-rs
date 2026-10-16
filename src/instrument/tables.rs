@@ -4238,3 +4238,47 @@ pub(super) static MODIFIERS: [(&str, &str, &[(&str, u8)], &[(u8, &str)]); 10] = 
         &[(76, "high"), (77, "low")],
     ),
 ];
+
+/// The instrument each key of the General MIDI percussion map plays:
+/// music21's `PercussionMapper.reverseInstrumentMapping`. A key music21
+/// has no class for -- 39 hand clap, 51 and 59 ride cymbal, 52 chinese
+/// cymbal, 53 ride bell, 55 splash cymbal, 69 cabasa, 73 and 74 guiro, 75
+/// claves, 78 and 79 cuica -- is in neither table, and naming one is an
+/// error there and here.
+pub(super) static PERCUSSION_KEYS: [(u8, &str); 35] = [
+    (35, "BassDrum"),
+    (36, "BassDrum"),
+    (37, "SnareDrum"),
+    (38, "SnareDrum"),
+    (40, "SnareDrum"),
+    (41, "TomTom"),
+    (42, "HiHatCymbal"),
+    (43, "TomTom"),
+    (44, "HiHatCymbal"),
+    (45, "TomTom"),
+    (46, "HiHatCymbal"),
+    (47, "TomTom"),
+    (48, "TomTom"),
+    (49, "CrashCymbals"),
+    (50, "TomTom"),
+    (54, "Tambourine"),
+    (56, "Cowbell"),
+    (57, "CrashCymbals"),
+    (58, "Vibraslap"),
+    (60, "BongoDrums"),
+    (61, "BongoDrums"),
+    (62, "CongaDrum"),
+    (63, "CongaDrum"),
+    (64, "CongaDrum"),
+    (65, "Timbales"),
+    (66, "Timbales"),
+    (67, "Agogo"),
+    (68, "Agogo"),
+    (70, "Maracas"),
+    (71, "Whistle"),
+    (72, "Whistle"),
+    (76, "Woodblock"),
+    (77, "Woodblock"),
+    (80, "Triangle"),
+    (81, "Triangle"),
+];
