@@ -10,6 +10,7 @@ handful of behaviours a caller reaches for first are right.
 import gc
 import os
 import copy
+import random
 import math
 import pathlib
 import subprocess
@@ -3757,3 +3758,204 @@ def test_how_many_melodic_intervals_a_stream_uses():
     assert diversity.process(line) == (5, "#ffffff")
     assert diversity.getSolution(line) == 5
     assert diversity.solutionToColor(5) == "#ffffff"
+
+
+def outline_of(score):
+    """Every part of a score, and in each the elements measure by measure."""
+    out = []
+    for part in score.getElementsByClass("Part"):
+        written = []
+        for measure in part.getElementsByClass("Measure"):
+            held = []
+            for element in measure:
+                kind = type(element).__name__
+                if getattr(element, "pitches", None):
+                    names = "+".join(p.nameWithOctave for p in element.pitches)
+                    held.append(f"{kind}({names},{element.quarterLength})")
+                else:
+                    held.append(kind)
+            written.append(f"m{measure.number}[" + " ".join(held) + "]")
+        out.append(" ".join(written))
+    return out
+
+
+def test_a_figured_bass_line_is_written_out():
+    """Every answer is music21's own for the same line."""
+    line = m.FiguredBassLine(m.Key("B"), m.TimeSignature("3/4"))
+    assert (str(line.inKey), str(line.inTime)) == (
+        "B major",
+        "<music21.meter.TimeSignature 3/4>",
+    )
+
+    # As music21 does, the figures are written onto the note handed in.
+    bass = m.Note("B2")
+    line.addElement(bass)
+    line.addElement(m.Note("C#3"), "6")
+    line.addElement(m.Note("D#3"), "6")
+    assert [lyric.text for lyric in bass.lyrics] == [""]
+    assert bass.editorial.notationString is None
+
+    written = line.generateBassLine()
+    score = m.Score()
+    score.insert(0.0, written)
+    assert outline_of(score) == [
+        "m1[BassClef KeySignature TimeSignature "
+        "Note(B2,1.0) Note(C#3,1.0) Note(D#3,1.0)]"
+    ]
+    # The crate keeps a barline on the measure rather than among its
+    # elements, which is why the outline above shows none; music21's own
+    # measure holds a Barline there, and says the same thing.
+    assert [
+        str(bar.rightBarline) for bar in written.getElementsByClass("Measure")
+    ] == ["<music21.bar.Barline type=final>"]
+    assert [
+        [lyric.text for lyric in note.lyrics]
+        for note in written.recurse()
+        if getattr(note, "isNote", False)
+    ] == [[""], ["6"], ["6"]]
+
+    # Anything that is not a bass object is refused where music21 refuses
+    # it: on reading the editorial it writes the figures onto.
+    with pytest.raises(AttributeError):
+        m.FiguredBassLine().addElement("C3")
+
+
+def test_a_figured_bass_line_is_realized():
+    """Every count and every voicing is music21's own for the same line."""
+    line = m.FiguredBassLine()
+    line.addElement(m.Note("C3", quarterLength=2.0))
+    line.addElement(m.Note("G2", quarterLength=2.0), "7")
+    line.addElement(m.Note("C3", quarterLength=4.0))
+
+    segments = line.retrieveSegments()
+    assert [
+        (str(s.bassNote.pitch), s.bassNote.quarterLength, list(s.pitchNamesInChord))
+        for s in segments
+    ] == [
+        ("C3", 2.0, ["C", "E", "G"]),
+        ("G2", 2.0, ["G", "B", "D", "F"]),
+        ("C3", 4.0, ["C", "E", "G"]),
+    ]
+    assert [(s.numParts, str(s._maxPitch)) for s in segments] == [(4, "B5")] * 3
+
+    realization = line.realize()
+    assert realization.getNumSolutions() == 20
+    progressions = realization.getAllPossibilityProgressions()
+    assert len(progressions) == 20
+    assert [tuple(str(p) for p in voicing) for voicing in progressions[0]] == [
+        ("G3", "E3", "C3", "C3"),
+        ("B3", "F3", "D3", "G2"),
+        ("C4", "E3", "C3", "C3"),
+    ]
+
+    # Keyboard style to begin with, as music21's is: the upper parts as
+    # chords over the bass.
+    assert realization.keyboardStyleOutput
+    score = realization.generateRealizationFromPossibilityProgression(progressions[0])
+    assert outline_of(score) == [
+        "m1[TrebleClef KeySignature TimeSignature "
+        "Chord(G3+E3+C3,2.0) Chord(B3+F3+D3,2.0)] m2[Chord(C4+E3+C3,4.0)]",
+        "m1[BassClef KeySignature TimeSignature Note(C3,2.0) Note(G2,2.0)] "
+        "m2[Note(C3,4.0)]",
+    ]
+    realization.keyboardStyleOutput = False
+    chorale = realization.generateRealizationFromPossibilityProgression(progressions[0])
+    assert len(outline_of(chorale)) == 4
+    realization.keyboardStyleOutput = True
+
+    # The rules and the parts are the caller's to say.
+    loose = m.Rules()
+    loose.forbidVoiceCrossing = False
+    assert line.realize(loose).getNumSolutions() == 20
+    assert line.realize(None, 3).getNumSolutions() == 0
+    assert line.realize(None, 4, "F5").getNumSolutions() == 18
+
+    # A line of one segment, and a line of chord symbols.
+    short = m.FiguredBassLine()
+    short.addElement(m.Note("C3", quarterLength=4.0))
+    assert short.realize().getNumSolutions() == 21
+    chords = m.FiguredBassLine()
+    chords.addElement(m.ChordSymbol("C"))
+    chords.addElement(m.ChordSymbol("G"))
+    assert chords.realize().getNumSolutions() == 31
+
+    # music21's own retrieveSegments raises an IndexError for a line with
+    # nothing in it; this answers what realize's own docstring says.
+    with pytest.raises(m.FiguredBassLineException):
+        m.FiguredBassLine().realize()
+
+
+def test_a_realization_chosen_at_random():
+    """Chosen through Python's own random, which is where music21 chooses."""
+    line = m.FiguredBassLine()
+    line.addElement(m.Note("C3", quarterLength=2.0))
+    line.addElement(m.Note("G2", quarterLength=2.0), "7")
+    realization = line.realize()
+    every = [
+        [[p.nameWithOctave for p in voicing] for voicing in progression]
+        for progression in realization.getAllPossibilityProgressions()
+    ]
+
+    random.seed(7)
+    chosen = realization.getRandomPossibilityProgression()
+    names = [[p.nameWithOctave for p in voicing] for voicing in chosen]
+    assert names in every
+    # A caller who seeds random gets the same realization twice.
+    random.seed(7)
+    again = realization.getRandomPossibilityProgression()
+    assert [[p.nameWithOctave for p in voicing] for voicing in again] == names
+
+    random.seed(7)
+    assert len(outline_of(realization.generateRandomRealization())) == 2
+    random.seed(7)
+    assert len(outline_of(realization.generateRandomRealizations(2))) == 2
+    # Asked for more than there are, it answers every one of them.
+    asked = outline_of(realization.generateRandomRealizations(1000))
+    assert len(asked) == len(outline_of(realization.generateAllRealizations()))
+
+
+def test_a_part_laid_over_a_figured_bass_line():
+    """Every answer is music21's own for the same line."""
+
+    def overlaid():
+        # A fresh line each time: music21's own retrieveSegments appends
+        # the bass line to its overlaid parts, so asking it twice is not
+        # asking the same thing twice. This one reads the line and leaves
+        # it as it was.
+        line = m.FiguredBassLine()
+        line.addElement(m.Note("C3", quarterLength=1.0))
+        line.addElement(m.Note("D3", quarterLength=1.0), "6")
+        line.addElement(m.Note("E3", quarterLength=2.0), "6")
+        top = m.Part()
+        for name in ("E5", "F5", "G5", "C5"):
+            top.append(m.Note(name, quarterLength=1.0))
+        line.overlayPart(top)
+        return line
+
+    segments = overlaid().retrieveSegments()
+    # Four segments for three bass notes: where the melody moves and the
+    # bass holds, music21 makes a segment of no length whose other parts
+    # must stay where they are.
+    assert [float(s.quarterLength) for s in segments] == [1.0, 1.0, 2.0, 0.0]
+    assert [
+        [(part, str(held)) for part, held in s.fbRules._partPitchLimits]
+        for s in segments
+    ] == [
+        [],
+        [(1, "<music21.note.Note F>")],
+        [(1, "<music21.note.Note G>")],
+        [(1, "<music21.note.Note C>")],
+    ]
+    assert [list(s.fbRules._partsToCheck) for s in segments] == [[], [], [2, 3, 4], []]
+
+    realization = overlaid().realize()
+    assert realization.getNumSolutions() == 9
+    score = realization.generateRealizationFromPossibilityProgression(
+        realization.getAllPossibilityProgressions()[0]
+    )
+    assert outline_of(score) == [
+        "m1[TrebleClef KeySignature TimeSignature "
+        "Chord(E5+C5+G4,1.0) Chord(F5+B4+B4,1.0) Chord(G5+C5+G4,2.0)]",
+        "m1[BassClef KeySignature TimeSignature "
+        "Note(C3,1.0) Note(D3,1.0) Note(E3,2.0)] m2[Note(E3,2.0)]",
+    ]

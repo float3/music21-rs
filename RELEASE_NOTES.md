@@ -306,6 +306,28 @@
   and an interval is built on two of them, so `noteStart` is one of the
   score's notes; a count is a `collections.Counter` of whatever property
   of a pitch was named, as music21 counts one.
+- The Python package gains the figured-bass realizer: `FiguredBassLine`
+  and `Realization`, music21's `figuredBass.realizer`. A line is bass notes
+  with their figures in a key and a meter -- `addElement`,
+  `generateBassLine`, `overlayPart`, `retrieveSegments`, `realize` -- and a
+  realization is every voicing that keeps the rules: `getNumSolutions`,
+  `getAllPossibilityProgressions`, `getRandomPossibilityProgression`,
+  `generateRealizationFromPossibilityProgression`,
+  `generateAllRealizations`, `generateRandomRealization` and
+  `generateRandomRealizations`, in keyboard or chorale style.
+  Where music21 chooses at random this chooses through Python's own
+  `random`, which is what music21 draws from, so a caller who seeds it gets
+  the same realization twice. A voicing is a tuple of pitches, as music21's
+  is, and a score is this package's own streams. music21's own
+  `retrieveSegments` appends the bass line to its overlaid parts, so asking
+  it twice is not asking the same thing twice; this reads the line and
+  leaves it as it was. `addLyricsToBassNote` is here too, and a chord now
+  carries an `editorial`, which is where the realizer writes the figures it
+  was added with.
+- The Python package's `TimeSignature` says what it is: `<music21.meter
+  .TimeSignature 3/4>`. Installed over music21's, a class answers through
+  music21's own `Music21Object.__repr__`; this one is installed over
+  nothing, so without it a meter read as the object it is at an address.
 - The Python package gains the `analysis.discrete` classes: `Ambitus`, the
   five key weightings (`KeyWeightKeyAnalysis` and the `KrumhanslSchmuckler`,
   `AardenEssen`, `SimpleWeights`, `BellmanBudge` and

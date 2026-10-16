@@ -63,6 +63,39 @@ impl Rules {
         Ok(rules)
     }
 
+    /// The wheel's rules standing for a set of the crate's, the three
+    /// lists music21 keeps as lists built as lists again -- a segment the
+    /// crate made carries where the parts laid over a line stand, and a
+    /// caller reads that off `_partPitchLimits`.
+    pub(crate) fn of(py: Python<'_>, rules: &RsRules) -> PyResult<Self> {
+        let movements = PyList::empty(py);
+        for (part, limit) in &rules.part_movement_limits {
+            movements.append((*part, *limit))?;
+        }
+        let limits = PyList::empty(py);
+        for (part, pitch) in &rules.part_pitch_limits {
+            // music21's realizer puts the *note* it found there, which is
+            // read for its pitch wherever the limit is asked about.
+            let note = crate::installed_new(
+                py,
+                "music21.note",
+                "Note",
+                crate::note::Note::wrap(py, music21_rs_crate::Note::from_pitch(pitch.clone()))?,
+            )?;
+            limits.append((*part, note))?;
+        }
+        let to_check = PyList::empty(py);
+        for part in &rules.parts_to_check {
+            to_check.append(*part)?;
+        }
+        Ok(Self {
+            inner: rules.clone(),
+            part_movement_limits: movements.unbind(),
+            part_pitch_limits: limits.unbind(),
+            parts_to_check: to_check.unbind(),
+        })
+    }
+
     fn fresh(py: Python<'_>) -> Self {
         Self {
             inner: RsRules::default(),

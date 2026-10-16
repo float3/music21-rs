@@ -61,6 +61,7 @@ pub mod notation;
 pub mod note;
 pub mod pitch;
 pub mod possibility;
+pub mod realizer;
 pub mod realizerscale;
 pub mod resolution;
 pub mod rest;
@@ -1358,6 +1359,11 @@ exceptions![
         analysis::FloatingKeyException,
         Some("music21.analysis.floatingKey")
     ),
+    (
+        "FiguredBassLineException",
+        realizer::FiguredBassLineException,
+        Some("music21.figuredBass.realizer")
+    ),
     ("SieveException", sieve::SieveException, None),
     (
         "StreamException",
@@ -1446,6 +1452,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     transposition::register(m)?;
     segment::register(m)?;
     discrete::register(m)?;
+    realizer::register(m)?;
     analysis::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;

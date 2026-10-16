@@ -160,6 +160,14 @@ on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
 property of every pitch into a `Counter`. `analysis.floatingKey.KeyAnalyzer`
 reads a key for every measure and smooths each by the measures around it,
 through a window and a weighting the caller may say.
+the figured-bass realizer is here as `FiguredBassLine` and `Realization`:
+a line of bass notes and figures in a key and a meter, written out as a
+part, and every voicing of it that keeps the rules -- counted, listed,
+chosen from and written out as a score in keyboard or chorale style, with
+any part laid over the line kept as it stands. where music21 chooses at
+random this chooses through Python's own `random`, so a caller who seeds it
+gets the same realization twice.
+
 `analysis.discrete`'s classes are here too -- `Ambitus`, the five key
 weightings and `MelodicIntervalDiversity` -- each handing back what the
 stream holds: a span is its own pitch objects, and a counted interval is

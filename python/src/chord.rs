@@ -133,6 +133,10 @@ pub struct Chord {
     /// not something this crate models — and its mere existence is what
     /// `hasStyleInformation` answers, as music21's does.
     style: Option<Py<PyAny>>,
+    /// music21's `editorial`, where an analysis leaves what it worked out
+    /// about this chord. Built when it is first asked for, and the same
+    /// object after that, since what is written on it must stay.
+    editorial: Option<Py<PyAny>>,
     /// What the chord has already worked out. See [`ChordCache`].
     ///
     /// A mutex rather than a `RefCell` because pyo3 asks a `#[pyclass]` to be
@@ -264,6 +268,7 @@ impl Chord {
             articulations: None,
             overrides: None,
             style: None,
+            editorial: None,
             beams: None,
             cache: Mutex::default(),
         };
@@ -347,6 +352,7 @@ impl Chord {
             articulations: None,
             overrides: None,
             style: None,
+            editorial: None,
             beams: None,
             cache: Mutex::default(),
         }
@@ -373,6 +379,7 @@ impl Chord {
             articulations: None,
             overrides: None,
             style: None,
+            editorial: None,
             beams: None,
             cache: Mutex::default(),
         })
@@ -2750,6 +2757,33 @@ impl Chord {
         slf.borrow_mut().inner.set_color(colour);
         slf.borrow_mut().style = Some(value.clone().unbind());
         Ok(())
+    }
+
+    /// Where an analysis leaves what it worked out about this chord:
+    /// music21's `editorial`, the same object every time it is asked for,
+    /// built when it is first wanted.
+    ///
+    /// music21 keeps one on every object it can put in a stream, and its
+    /// own figured-bass realizer writes `notationString` onto a chord
+    /// symbol's.
+    #[getter]
+    fn get_editorial(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(held) = &slf.borrow().editorial {
+            return Ok(held.clone_ref(py));
+        }
+        let made = Bound::new(py, crate::editorial::Editorial::new(py))?
+            .into_any()
+            .unbind();
+        slf.borrow_mut().editorial = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_editorial(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.editorial = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 
     /// Whether a `style` object has been created for this yet.
