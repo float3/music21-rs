@@ -1180,12 +1180,17 @@ macro_rules! ornament_kinds {
         }
 
         /// The names this facade replaces in `music21.expressions`.
+        // `TextExpression` is deliberately not here. It is registered on
+        // the module, so a caller with no music21 has one, but installing
+        // it over music21's would be swapping in a class implemented less
+        // well: music21's carries an `enclosure`, a `style` and its
+        // position on the page, which nothing here reads, and its own
+        // `enclosure` docstring is the one that said so.
         pub const NAMES: &[&str] = &[
             "Ornament",
             "ExpressionException",
             "TremoloException",
             "Trill",
-            "TextExpression",
             $($name),*
         ];
     };
@@ -1323,6 +1328,11 @@ impl Trill {
 ///
 /// The crate reads one and the writers write it, so a score read here
 /// carries its words; without a class for it they were read and left out.
+///
+/// **Nothing is installed over music21's own.** A text expression there
+/// carries an `enclosure`, a `style` and where it sits on the page, none
+/// of which this reads -- its own `enclosure` docstring is what said so,
+/// by failing the moment this class stood in for it.
 #[pyclass(
     name = "TextExpression",
     module = "music21.expressions",
