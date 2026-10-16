@@ -14,6 +14,8 @@
 //! anything else is a roman numeral. The other lines are a tag, a colon and
 //! what it says.
 
+pub mod tsv;
+
 use crate::bar::{Barline, Ending, RepeatDirection};
 use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
@@ -251,15 +253,20 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
 fn key_and_prefix(word: &str) -> Result<(Key, String)> {
     let name = convert_key_string_to_music21_key_string(word.trim_end_matches([';', ':']));
     let key = Key::from_tonic(&name)?;
-    // The lyric is music21's `tonicPitchNameWithCase`, which spells a flat
-    // `-`: the text a score carries is music21's, not a name of the crate's.
-    let mut letters = key.tonic().name();
-    let step = letters.remove(0);
-    let mut tonic = format!("{step}{}", letters.replace('b', "-"));
-    if key.mode() == "minor" {
-        tonic = tonic.to_lowercase();
-    }
-    Ok((key, format!("{tonic}: ")))
+    // The lyric is music21's `tonicPitchNameWithCase`: the text a score
+    // carries is music21's, not a name of the crate's.
+    let named = music21_key_name(&key);
+    Ok((key, format!("{named}: ")))
+}
+
+/// A key as music21 names it: its `tonicPitchNameWithCase`, which spells a
+/// flat `-` where the crate spells one `b`.
+pub(super) fn music21_key_name(key: &Key) -> String {
+    let mut name = key.tonic_pitch_name_with_case();
+    // The step itself may be a `B`, so only what follows it is a flat.
+    let accidental = name.split_off(1);
+    name.push_str(&accidental.replace('b', "-"));
+    name
 }
 
 /// music21's `getBeatFloatOrFrac`: `b2.5` is beat two and a half, `b1.66`

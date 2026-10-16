@@ -514,6 +514,56 @@ addressToForteName = "forte_name"
 seekChordTablesAddress = "address_of_pitch_classes"
 
 [[class]]
+python = "romanText/tsvConverter.py"
+name = "TabChordBase"
+rust = ["src/romantext/tsv.rs"]
+note = "One row of the lab's tabular analysis, read: the columns both of its standards share, the label music21 builds a numeral from, and the chord that numeral stands for. The one row type here reads a row of either standard, as music21's two subclasses do between them."
+
+[class.renames]
+combinedChord = "chord"
+tabToM21 = "element"
+populateFromRow = "from_row"
+
+[[class]]
+python = "romanText/tsvConverter.py"
+name = "TabChordV2"
+rust = ["src/romantext/tsv.rs"]
+note = "What the lab's second standard renamed: the measure and the onset it writes as `mn` and `mn_onset`, and the keys it writes without the underscore."
+
+[[class]]
+python = "romanText/tsvConverter.py"
+name = "TsvHandler"
+rust = ["src/romantext/tsv.rs"]
+note = "A table read: the rows, and the score of numerals they make."
+
+[class.renames]
+toM21Stream = "from_tsv"
+
+[class.excluded]
+prepStream = "a step inside the reader: `from_tsv` prepares the measures from the table's own numbers and meters itself and hands back the whole score"
+
+[[class]]
+python = "romanText/tsvConverter.py"
+name = "M21toTSV"
+rust = ["src/romantext/tsv.rs"]
+note = "A score written back as a table, column for column."
+
+[class.renames]
+m21ToTsv = "to_tsv"
+
+[class.excluded]
+write = "writes a file, which the library does not do: `to_tsv` hands back the text"
+
+[[class]]
+python = "romanText/tsvConverter.py"
+rust = ["src/romantext/tsv.rs"]
+note = "Module-level helpers: the swaps between the two notations, a local key read as a degree or as a key of its own, and the form, the figured bass and the added tones a label writes."
+
+[class.renames]
+getForm = "form_of"
+localKeyAsRn = "local_key_as_roman"
+
+[[class]]
 python = "harmony.py"
 rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs", "src/chordsymbol/realize.rs"]
 note = "Module-level helpers."

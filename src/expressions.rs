@@ -1327,7 +1327,7 @@ fn neighbour(
 }
 
 /// A number written as Python writes a float: `0.5`, `1.0`.
-fn python_float(value: FloatType) -> String {
+pub(crate) fn python_float(value: FloatType) -> String {
     if value.fract() == 0.0 {
         format!("{value:.1}")
     } else {
