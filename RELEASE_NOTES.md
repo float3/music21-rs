@@ -291,6 +291,9 @@
   music21's, from Project Gutenberg, about 1.9 MB, so the feature is off by
   default. `TX1` gives music21's value on every MusicXML score of
   music21's corpus.
+- The Python package answers music21's four instrument stream functions:
+  `partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
+  `deduplicate`, each handing back a new stream as every edit here does.
 - The Python package's `Measure` answers everything the crate has ported
   for one: `measureNumberWithSuffix`, `barDuration`,
   `barDurationProportion`, `bestTimeSignature` and `padAsAnacrusis`. It

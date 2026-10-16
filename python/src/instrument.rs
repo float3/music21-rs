@@ -524,6 +524,61 @@ fn ensembleNameBySize(number: usize) -> Option<&'static str> {
     ensemble_name_by_size(number)
 }
 
+/// music21's `unbundleInstruments`: each note's stored instrument moved
+/// out of the note and into the stream beside it.
+///
+/// The answer is a new stream, as every other edit in this package is, so
+/// `inPlace=True` is refused -- music21 changes the stream it is given
+/// there.
+#[pyfunction]
+#[pyo3(signature = (streamIn, *, inPlace = false))]
+fn unbundleInstruments<'py>(
+    streamIn: &Bound<'py, PyAny>,
+    inPlace: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::stream::changed(streamIn, inPlace, |stream| {
+        music21_rs_crate::instrument::unbundle_instruments(stream);
+        Ok(())
+    })
+}
+
+/// music21's `bundleInstruments`: an instrument standing in the stream
+/// moved onto the notes that sound it.
+#[pyfunction]
+#[pyo3(signature = (streamIn, *, inPlace = false))]
+fn bundleInstruments<'py>(
+    streamIn: &Bound<'py, PyAny>,
+    inPlace: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::stream::changed(streamIn, inPlace, |stream| {
+        music21_rs_crate::instrument::bundle_instruments(stream);
+        Ok(())
+    })
+}
+
+/// music21's `deduplicate`: the instruments standing at one offset settled
+/// into one, so a track name and a program change read together are one
+/// instrument.
+#[pyfunction]
+#[pyo3(signature = (s, *, inPlace = false))]
+fn deduplicate<'py>(s: &Bound<'py, PyAny>, inPlace: bool) -> PyResult<Bound<'py, PyAny>> {
+    crate::stream::changed(s, inPlace, |stream| {
+        music21_rs_crate::instrument::deduplicate(stream);
+        Ok(())
+    })
+}
+
+/// music21's `partitionByInstrument`: a score of one part per instrument,
+/// each holding what that instrument plays.
+#[pyfunction]
+fn partitionByInstrument<'py>(streamObj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let read = crate::stream::crate_stream(streamObj)?;
+    crate::stream::from_crate(
+        streamObj.py(),
+        &music21_rs_crate::instrument::partition_by_instrument(&read),
+    )
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Instrument>()?;
     crate::instrument_kinds::register(m)?;
@@ -531,5 +586,9 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(instrumentFromMidiProgram, m)?)?;
     m.add_function(wrap_pyfunction!(getAllNamesForInstrument, m)?)?;
     m.add_function(wrap_pyfunction!(ensembleNameBySize, m)?)?;
+    m.add_function(wrap_pyfunction!(unbundleInstruments, m)?)?;
+    m.add_function(wrap_pyfunction!(bundleInstruments, m)?)?;
+    m.add_function(wrap_pyfunction!(deduplicate, m)?)?;
+    m.add_function(wrap_pyfunction!(partitionByInstrument, m)?)?;
     Ok(())
 }

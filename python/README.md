@@ -146,6 +146,10 @@ tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
 
+music21's four instrument stream functions are here too --
+`partitionByInstrument`, `bundleInstruments`, `unbundleInstruments` and
+`deduplicate` -- each handing back a new stream.
+
 a score carries its `metadata`, music21's `Metadata`, whose names are read
 and written as music21 reads them -- by a unique name, by one of the four
 grandfathered work ids, or by one of the twenty Humdrum abbreviations, so

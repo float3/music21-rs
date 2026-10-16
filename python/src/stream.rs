@@ -3587,6 +3587,23 @@ fn meters_of(
         .collect())
 }
 
+/// A stream some module-level function of music21's changes, answered as
+/// a new stream of this package's: the shape `instrument`'s four take.
+///
+/// music21 changes the stream it is given where `inPlace` is asked for;
+/// the answer here is always a new stream, as every edit in this package
+/// is, so that is refused rather than answered differently.
+pub(crate) fn changed<'py>(
+    stream: &Bound<'py, PyAny>,
+    in_place: bool,
+    change: impl FnOnce(&mut RsStream) -> music21_rs_crate::Result<()>,
+) -> PyResult<Bound<'py, PyAny>> {
+    refuse_unported(false, false, in_place)?;
+    let mut read = crate_stream(stream)?;
+    change(&mut read).map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    from_crate(stream.py(), &read)
+}
+
 /// The stream changed in place by the crate, as a new stream of this
 /// package's: the crate's own answer is a change to a stream it is given,
 /// and music21 hands back a copy unless asked for `inPlace`.

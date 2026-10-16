@@ -3278,3 +3278,54 @@ def test_a_measure_is_numbered_and_padded_as_music21_does():
     assert (bar.number, bar.numberSuffix) == (15, "a")
     bar.number = "16c"
     assert (bar.number, bar.numberSuffix) == (16, "c")
+
+
+def test_instruments_rearrange_a_stream_as_music21s_do():
+    """Every answer is music21's own for the same part."""
+    line = m.Part()
+    line.insert(0.0, m.Flute())
+    line.insert(0.0, m.Note("C4", quarterLength=1.0))
+    line.insert(1.0, m.Note("D4", quarterLength=1.0))
+    line.insert(2.0, m.Violin())
+    line.insert(2.0, m.Note("E4", quarterLength=1.0))
+    line.insert(3.0, m.Note("F4", quarterLength=1.0))
+
+    # A part per instrument, each holding what that instrument plays.
+    score = m.partitionByInstrument(line)
+    assert [
+        (
+            [type(i).__name__ for i in part.recurse() if hasattr(i, "instrumentName")],
+            [n.nameWithOctave for n in part.recurse() if getattr(n, "isNote", False)],
+        )
+        for part in score
+    ] == [(["Flute"], ["C4", "D4"]), (["Violin"], ["E4", "F4"])]
+
+    # Bundling puts the instrument onto the notes that sound it, so
+    # nothing but notes is left standing in the stream.
+    bundled = m.bundleInstruments(line)
+    assert [type(e).__name__ for e in bundled] == ["Note"] * 4
+
+    # Unbundling takes each note's own instrument back out beside it.
+    stored = m.Part()
+    for at, (name, kind) in enumerate((("C4", m.Flute), ("D4", m.Violin))):
+        one = m.Note(name, quarterLength=1.0)
+        one.storedInstrument = kind()
+        stored.insert(float(at), one)
+    assert [type(e).__name__ for e in m.unbundleInstruments(stored)] == [
+        "Flute",
+        "Note",
+        "Violin",
+        "Note",
+    ]
+
+    # Two instruments of a kind at one offset settle into one.
+    twice = m.Part()
+    twice.insert(0.0, m.Flute())
+    twice.insert(0.0, m.Flute())
+    twice.insert(0.0, m.Note("C4", quarterLength=1.0))
+    assert [type(e).__name__ for e in m.deduplicate(twice)] == ["Flute", "Note"]
+
+    # Each answers a new stream, as every edit in this package does, so
+    # music21's inPlace is refused rather than answered differently.
+    with pytest.raises(m.StreamException):
+        m.deduplicate(twice, inPlace=True)
