@@ -8,6 +8,27 @@
 # reason, and those show on the page as excluded rather than missing. The
 # command fails if a rename points at a function that does not exist or an
 # exclusion names a member music21 no longer has.
+#
+# What is deliberately not here, and why. The readers and the writers --
+# `musicxml/xmlToM21.py` and `m21ToXml.py`, `midi/translate.py`,
+# `abcFormat/translate.py`, `humdrum/spineParser.py`, `mei/base.py`,
+# `noteworthy`, `musedata`, `capella`, `romanText/translate.py`,
+# `tinyNotation.py`, `volpiano.py`, `lily` -- are ported as one function in
+# and one function out, with every step inside private, and each is held to
+# music21 by a parity test that compares whole documents rather than
+# members: `musicxml_parity` byte for byte on 44 corpus scores,
+# `midi_write_parity` on 647, `abc_read_parity` on 12,978 tunes, and so on.
+# Listing their hundreds of private steps would say nothing a reader does
+# not already know from "every corpus file agrees". The same goes for
+# music21's own small helper modules (`meter/tools.py`, `musedata/base40.py`,
+# `chord/tools.py`, `sorting.py`, `common/numberTools.py`), whose content
+# the crate ports where it uses it rather than as a module of its own; and
+# for what the crate does not model at all: the page (`graph`), the
+# environment and the corpus cache (`environment.py`, `configure.py`,
+# `metadata/bundles.py`, `metadata/caching.py`), file conversion
+# (`converter`), and music21's own object machinery (`base.py`,
+# `prebase.py`, `sites.py`, `derivation.py`, `freezeThaw.py`,
+# `stream/iterator.py`, `stream/filters.py`).
 
 [[class]]
 python = "chord/__init__.py"
@@ -1088,3 +1109,994 @@ getNumbers = "score_numbers"
 [class.excluded]
 write = "writing a file, which the format modules do"
 show = "rendering, which the crate leaves to its caller"
+
+[[class]]
+python = "percussion.py"
+members = "classes"
+rust = ["src/percussion.rs"]
+note = "Unpitched percussion: a stroke written on a staff with no pitch to it, and a chord of them."
+
+[[class]]
+python = "percussion.py"
+name = "PercussionChord"
+rust = ["src/percussion.rs"]
+note = "A chord of strokes, each of which may be pitched or not. Its members are `PercussionNote`s rather than notes, since a stroke is not a note."
+
+[class.renames]
+notes = "members"
+
+[[class]]
+python = "tablature.py"
+members = "classes"
+rust = ["src/tablature.rs"]
+note = "Fretted-instrument tablature: which string is stopped at which fret, and the pitches that sounds. The four instruments music21 keeps a class each for are constructors here, a fretboard being the same thing whatever it is strung as."
+
+[class.renames]
+GuitarFretBoard = "guitar"
+UkeleleFretBoard = "ukulele"
+BassGuitarFretBoard = "bass_guitar"
+MandolinFretBoard = "mandolin"
+
+[[class]]
+python = "tablature.py"
+name = "FretBoard"
+rust = ["src/tablature.rs"]
+
+[class.renames]
+getFretNoteByString = "fret_note_by_string"
+getPitches = "pitches"
+
+[[class]]
+python = "tablature.py"
+name = "ChordWithFretBoard"
+rust = ["src/tablature.rs"]
+note = "A chord symbol with a diagram under it."
+
+[class.excluded]
+getFretNotesFromFigure = "music21's own is a stub that answers nothing, its docstring a `TODO`: the fret notes a figure stands for are not worked out there either"
+
+[[class]]
+python = "text.py"
+rust = ["src/text.rs"]
+note = "Words in a score: the lyrics assembled off its notes, and an article moved to the front of a title or back to its end."
+
+[[class]]
+python = "text.py"
+name = "TextBox"
+rust = ["src/text.rs"]
+note = "Text standing anywhere on the page, which MusicXML writes as a credit."
+
+[[class]]
+python = "text.py"
+name = "LanguageDetector"
+rust = ["src/features/language.rs"]
+note = "Which language a text is most likely in, by the letters that follow each pair of letters."
+
+[class.renames]
+mostLikelyLanguage = "most_likely_language"
+mostLikelyLanguageNumeric = "most_likely_language_numeric"
+
+[class.excluded]
+readExcerpts = "reads the excerpt files off the disk; the crate's excerpts are built in and the library does no file IO"
+
+[[class]]
+python = "text.py"
+name = "Trigram"
+rust = ["src/features/language.rs"]
+
+[class.renames]
+parseExcerpt = "from_text"
+makeWords = "from_words"
+
+[class.excluded]
+measure = "the step that counts the letter triples, which building one does"
+likely = "which language a trigram is nearest, which `most_likely_language` answers"
+
+[[class]]
+python = "layout.py"
+members = "classes"
+rust = ["src/layout.rs", "src/stream.rs"]
+note = "How a score is laid out: the page and system margins a file states, a staff's size and lines, and the parts bracketed together."
+
+[class.excluded]
+LayoutBase = "the class music21 hangs the four layouts off; `layout::Layout` is the one of them a stream holds"
+LayoutScore = "a score regrouped into pages, systems and staves for a renderer, with the three streams below it; the crate keeps the layout a file states and renders nothing"
+Page = "a page of such a score"
+System = "a system of such a score"
+Staff = "a staff of such a score"
+
+[[class]]
+python = "layout.py"
+rust = ["src/layout.rs"]
+note = "Reading a score's measures back off its pages and systems, which only a `LayoutScore` has."
+
+[class.excluded]
+divideByPages = "builds a `LayoutScore`, which the crate has none of"
+getPageRegionMeasureNumbers = "the measures on a page of a `LayoutScore`"
+getSystemRegionMeasureNumbers = "the measures in a system of a `LayoutScore`"
+getRegionMeasureNumbers = "the measures in a region of a `LayoutScore`"
+
+[[class]]
+python = "layout.py"
+name = "ScoreLayout"
+rust = ["src/layout.rs"]
+
+[[class]]
+python = "layout.py"
+name = "StaffGroup"
+rust = ["src/stream.rs"]
+note = "The parts a brace or a bracket joins, and whether their barlines are drawn through."
+
+
+[[class]]
+python = "style.py"
+members = "classes"
+rust = ["src/style.rs", "src/expressions.rs"]
+note = "How something is drawn. The crate models what a reader must read back to write the same document again -- a text's font and where it sits, a line's ticks, a colour -- and the page itself it does not model. Inside music21 the wheel hands back music21's own style objects, whose subclasses carry more than one class here would."
+
+[class.excluded]
+Style = "the base class every style hangs off; the crate keeps the few drawing values it reads and writes beside the thing drawn"
+NoteStyle = "how a note is drawn beyond its colour and its size"
+TextStylePlacement = "a text style that also says which side of the staff it is on, which is `display::Drawn` here"
+BezierStyle = "the curve of a slur"
+LineStyle = "the dashes of a line"
+StreamStyle = "how a whole stream is drawn"
+BeamStyle = "how a beam is drawn"
+StyleMixin = "what music21 mixes into every class it draws; nothing here has a style of its own to mix in"
+Enclosure = "the shape drawn round a text, kept as the name music21 gives it where something has one (`expressions::RehearsalMark::enclosure`) rather than as a type of its own"
+
+[[class]]
+python = "style.py"
+name = "TextStyle"
+rust = ["src/style.rs"]
+
+[class.excluded]
+letterSpacing = "the space between a text's letters: nothing the crate reads states one, and the writer is held to music21's output byte for byte on every corpus score, so there is nothing to carry across"
+
+[[class]]
+python = "spanner.py"
+members = "classes"
+rust = ["src/spanner.rs", "src/bar.rs"]
+note = "Something drawn across several notes: a slur, a hairpin, an octave line, a pedal mark. A spanner here is one value with a kind, naming the leaves it joins by their position in the stream that holds it."
+
+[class.renames]
+RepeatBracket = "Ending"
+
+[class.excluded]
+PendingAssignmentRef = "music21's note to itself that a spanner is waiting for its first element, which the readers keep as a queue"
+SpannerAnchor = "an element standing in a stream for a spanner to hang off where there is no note to; a spanner here names positions and needs none"
+SpannerBundle = "the collection music21 keeps a stream's spanners in; a crate stream holds its own"
+MultiMeasureRest = "several measures of rest drawn as one, which is a notation this crate does not write"
+
+[[class]]
+python = "spanner.py"
+name = "Spanner"
+rust = ["src/spanner.rs"]
+note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back."
+
+[class.renames]
+getSpannedElements = "spanned"
+
+[class.excluded]
+purgeOrphans = "drops the elements no stream holds any more, which only a spanner keeping objects can have"
+purgeLocations = "drops the sites it remembers, and it remembers none"
+getSpannedElementsByClass = "the elements of a class among them, which the stream holding them answers"
+getSpannedElementIds = "Python object ids"
+addSpannedElements = "adds elements by object; `Spanner::new` takes the positions it joins"
+insertFirstSpannedElement = "puts an element first by object"
+hasSpannedElement = "whether an element is among them, which is `spanned().contains`"
+replaceSpannedElement = "swaps one element for another by object"
+fill = "fills in every element between the first and the last, which asks the stream what stands between them"
+getFirst = "the first element itself; `spanned` gives its position and the stream hands back what stands there"
+getLast = "the last element itself, likewise"
+
+[[class]]
+python = "spanner.py"
+name = "Ottava"
+rust = ["src/spanner.rs", "src/stream/sounding.rs"]
+note = "An octave line, and whether the notes under it are written where they sound."
+
+[class.renames]
+type = "name"
+shiftMagnitude = "magnitude"
+shiftDirection = "up"
+performTransposition = "to_sounding_pitch"
+undoTransposition = "to_written_pitch"
+
+[[class]]
+python = "spanner.py"
+name = "Line"
+rust = ["src/spanner.rs"]
+note = "A bracket with a tick at each end."
+
+[class.renames]
+startTick = "start"
+endTick = "end"
+
+[class.excluded]
+tick = "sets both ends at once; `LineEnds` carries each"
+
+[[class]]
+python = "spanner.py"
+name = "Glissando"
+rust = ["src/spanner.rs"]
+
+[[class]]
+python = "repeat.py"
+members = "classes"
+rust = ["src/repeat.rs", "src/stream/repeats.rs"]
+note = "The marks that send the music back -- a segno, a coda, a da capo -- which are the kinds of one `RepeatExpression` here, and the expansion that plays them out."
+
+[class.renames]
+Expander = "expand_repeats"
+RepeatExpressionMarker = "is_marker"
+
+[class.excluded]
+RepeatExpressionCommand = "the kinds that send the music somewhere rather than marking a place, which is every kind `is_marker` says no to"
+RepeatMark = "what music21 mixes into everything that repeats; a barline here says it repeats and an expression says where to go back to"
+RepeatFinder = "finds the repeated passages of a score so as to write it with repeat signs, which nothing here writes"
+
+[[class]]
+python = "repeat.py"
+rust = ["src/repeat.rs", "src/stream/repeats.rs"]
+note = "Writing repeats into a score, which the crate does not do: it plays out the repeats a score already has."
+
+[class.excluded]
+insertRepeatEnding = "writes an ending bracket over some measures"
+insertRepeat = "writes repeat barlines round some measures"
+deleteMeasures = "takes measures out and renumbers the rest"
+
+[[class]]
+python = "repeat.py"
+name = "RepeatExpression"
+rust = ["src/repeat.rs"]
+
+[class.renames]
+getText = "text"
+setText = "set_text"
+
+[class.excluded]
+applyTextFormatting = "the font and the justification a renderer draws the words with; `justify` says which way they are set"
+setTextExpression = "keeps the words as a `TextExpression` object"
+getTextExpression = "the words as a `TextExpression` for a renderer; `text` is what they say"
+
+[[class]]
+python = "repeat.py"
+name = "Expander"
+rust = ["src/stream/repeats.rs"]
+note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one."
+
+[class.renames]
+process = "expand_repeats"
+
+[class.excluded]
+measureMap = "the measures of the expansion listed for a caller to read"
+repeatBarsAreCoherent = "a step of the expansion, which answers an error where the repeats make no sense"
+findInnermostRepeatIndices = "a step of the expansion"
+processInnermostRepeatBars = "a step of the expansion"
+getRepeatExpressionIndex = "a step of the expansion"
+isExpandable = "whether there is anything to play out, which expanding answers"
+
+[[class]]
+python = "variant.py"
+rust = ["src/variant.rs"]
+note = "Another reading of a passage kept beside the one in the score: merged in from a second source, refined, gathered into blocks, and activated in place of what it replaces."
+
+[[class]]
+python = "variant.py"
+name = "Variant"
+rust = ["src/variant.rs"]
+
+[class.excluded]
+purgeOrphans = "drops the elements no stream holds any more, which only a variant keeping objects can have"
+purgeLocations = "drops the sites it remembers, and it remembers none"
+getElementIds = "Python object ids"
+replaceElement = "swaps one element for another by object"
+show = "rendering, which the crate leaves to its caller"
+highestOffset = "the offset of the stream it holds, which `Stream::highest_offset` answers of its contents"
+containedSite = "the stream it was read out of, which is a site"
+replacementDuration = "the `Duration` of what it replaces; `replacement_quarter_length` is how long that is"
+
+[[class]]
+python = "metadata/__init__.py"
+name = "Metadata"
+rust = ["src/metadata.rs"]
+note = "What a score says about itself. Every standard name is read and written by that name through one pair of members, where music21 keeps a property for each; `STANDARD_PROPERTIES` is the table of the 131 names, checked against music21's live one by `metadata_parity`."
+
+[class.renames]
+getContributorsByRole = "contributors_by_role"
+bestTitle = "best_title"
+getCustom = "get"
+setCustom = "set"
+addCustom = "add"
+uniqueNameToNamespaceName = "namespace_name"
+namespaceNameToUniqueName = "unique_name_of"
+isStandardName = "unique_name_of"
+software = "get"
+copyright = "string_value"
+alternativeTitle = "string_value"
+composer = "string_value"
+composers = "get"
+dateCreated = "string_value"
+fileFormat = "string_value"
+filePath = "string_value"
+corpusFilePath = "string_value"
+fileNumber = "string_value"
+localeOfComposition = "string_value"
+librettist = "string_value"
+librettists = "get"
+lyricist = "string_value"
+lyricists = "get"
+movementName = "string_value"
+movementNumber = "string_value"
+number = "string_value"
+opusNumber = "string_value"
+title = "title"
+
+[class.excluded]
+convertValue = "reads a value as one of music21's own primitives -- a `Text`, a `Contributor`, a `Date`; a `MetadataValue` here is the text and the role it was given under"
+
+[[class]]
+python = "metadata/__init__.py"
+name = "RichMetadata"
+rust = ["src/metadata.rs"]
+note = "The numbers music21 caches beside a score's metadata so that its corpus can be searched without parsing every file again."
+
+[class.excluded]
+merge = "takes in another score's cached numbers"
+getSourcePath = "where the file sits, relative to the corpus"
+update = "works out the ambitus, the key signatures, the time signatures and the rest of a score and keeps them; `Stream::analyze` answers each of those of a score when asked"
+all = "the cached numbers beside the metadata"
+
+[[class]]
+python = "search/base.py"
+rust = ["src/search/base.rs"]
+note = "Searching a stream for a run of notes: the searches themselves, and the strings music21 turns a line into so that one line can be matched against another."
+
+[class.renames]
+streamSearchBase = "run_over"
+
+[[class]]
+python = "search/base.py"
+name = "StreamSearcher"
+rust = ["src/search/base.rs"]
+note = "A search for a list of terms, each a note name, a length or a wildcard."
+
+[class.renames]
+wildcardAlgorithm = "run_over"
+rhythmAlgorithm = "rhythmic_search"
+noteNameAlgorithm = "note_name_search"
+
+[[class]]
+python = "search/lyrics.py"
+name = "LyricSearcher"
+rust = ["src/search/lyrics.rs"]
+note = "Searching the words sung in a score, which means indexing them into one text first."
+
+[class.renames]
+indexText = "index_text"
+indexTuples = "indexed"
+index = "indexed"
+
+[[class]]
+python = "search/lyrics.py"
+name = "IndexedLyric"
+rust = ["src/search/lyrics.rs"]
+
+[class.excluded]
+modify = "a named tuple's `_replace`, which is Python's own"
+
+[[class]]
+python = "search/segment.py"
+rust = ["src/search/segment.rs", "src/search/difflib.rs"]
+note = "Comparing scores by cutting each part into overlapping segments and matching the strings they make."
+
+[class.excluded]
+indexScoreFilePaths = "indexes the scores at a list of paths, which means reading files"
+indexOnePath = "indexes the score at a path, likewise"
+saveScoreDict = "writes an index to a file"
+loadScoreDict = "reads an index back"
+getDifflibOrPyLev = "chooses between two Python libraries for the string comparison; `search::difflib` is the one `difflib.SequenceMatcher` ratio, ported"
+
+[[class]]
+python = "analysis/reduction.py"
+name = "ReductiveNote"
+rust = ["src/analysis/reduction.rs"]
+note = "A note of a reduction, written in a lyric under the note it reduces."
+
+[class.renames]
+getNoteAndTextExpression = "note_and_text_expression"
+
+[[class]]
+python = "analysis/reduction.py"
+name = "ScoreReduction"
+rust = ["src/analysis/reduction.rs"]
+
+[[class]]
+python = "analysis/reduction.py"
+name = "PartReduction"
+rust = ["src/analysis/reduction.rs"]
+note = "How busy each part of a score is, span by span, which music21 draws as a horizontal bar graph."
+
+[class.renames]
+process = "weighted_spans"
+
+[class.excluded]
+getGraphHorizontalBarWeightedData = "the spans arranged for music21's bar graph; `weighted_spans` is what they say"
+
+[[class]]
+python = "analysis/correlate.py"
+name = "ActivityMatch"
+rust = ["src/analysis/correlate.rs"]
+note = "What goes with what in a stream: every pitch against the dynamic sounding with it."
+
+[class.renames]
+pitchToDynamic = "pitch_to_dynamic"
+
+[[class]]
+python = "tree/spans.py"
+name = "ElementTimespan"
+rust = ["src/tree.rs"]
+note = "One element of a stream as the stretch of time it sounds for, which is what a timespan tree holds."
+
+[class.renames]
+getParentageByClass = "parentage"
+
+[class.excluded]
+new = "a copy with some of its values changed, which a value type here is made afresh"
+makeElement = "the element itself, which an `ElementTimespan` holds a reference to"
+
+[[class]]
+python = "tree/spans.py"
+name = "Timespan"
+rust = ["src/tree.rs"]
+
+[class.excluded]
+new = "a copy with some of its values changed"
+canMerge = "whether two timespans may be joined, which only the tree's own merging asks"
+mergeWith = "joins two timespans"
+splitAt = "cuts a timespan in two"
+
+[[class]]
+python = "tree/timespanTree.py"
+name = "TimespanTree"
+rust = ["src/tree.rs"]
+note = "Every element of a score as a stretch of time, which is how the voice-leading walk reads what sounds together. The crate keeps the timespans in offset order rather than in music21's tree, there being no insertion to keep balanced."
+
+[class.renames]
+getVerticalityAtOrBefore = "verticality_at_or_before"
+iterateVerticalities = "verticalities"
+iterateVerticalitiesNwise = "verticalities_nwise"
+iterateConsonanceBoundedVerticalities = "consonance_bounded_verticalities"
+findNextPitchedTimespanInSameStreamByClass = "next_in_same_part"
+findPreviousPitchedTimespanInSameStreamByClass = "previous_in_same_part"
+unwrapVerticalities = "unwrap"
+maximumOverlap = "maximum_overlap"
+elementEndTime = "end_time"
+splitAt = "split_at"
+offset = "lowest_position"
+
+[class.excluded]
+index = "where a timespan sits in the tree, which is its place in the list here"
+removeTimespan = "takes a timespan out of the tree; the crate reads a stream into timespans and does not edit them"
+removeTimespanList = "takes several out, likewise"
+toPartwiseTimespanTrees = "a tree for each part of the score; `as_timespans` reads whichever stream it is given, a part included"
+allParts = "every part the timespans came from, which the caller has in the score it read"
+element = "the element a timespan holds, which `ElementTimespan::element` answers"
+
+[[class]]
+python = "tree/verticality.py"
+name = "Verticality"
+rust = ["src/tree.rs"]
+note = "Everything sounding at one offset, which is what a chord of a chordified score is made of."
+
+[class.excluded]
+beatStrength = "the accent weight of the offset in the measure holding it, which music21 asks the note and the note asks its site; `TimeSignature::accent_weight` answers it given the meter"
+
+[class.renames]
+toChord = "to_chord"
+makeElement = "make_element"
+getAllVoiceLeadingQuartets = "voice_leading_quartets"
+getPairedMotion = "paired_motion"
+nextVerticality = "next"
+previousVerticality = "previous"
+bassTimespan = "bass_timespan"
+
+[[class]]
+python = "tree/analysis.py"
+name = "Horizontality"
+rust = ["src/tree.rs"]
+note = "The timespans one voice sounds in a row, and whether the middle note of three is passed through or stepped away from and back."
+
+[class.renames]
+hasPassingTone = "has_passing_tone"
+hasNeighborTone = "has_neighbor_tone"
+hasNoMotion = "has_no_motion"
+
+[[class]]
+python = "tree/fromStream.py"
+rust = ["src/tree.rs"]
+note = "Reading a score into timespans."
+
+[class.renames]
+asTimespans = "as_timespans"
+asTree = "as_timespans"
+
+[class.excluded]
+listOfTreesByClass = "a tree per part per class, which the caller builds of what `as_timespans` reads"
+makeFastShallowTreeFromSortedStream = "a tree of one stream's own elements with nothing nested, built without sorting; the crate sorts once and keeps a list"
+
+[[class]]
+python = "tree/toStream.py"
+rust = ["src/tree.rs", "src/stream/chordify.rs"]
+note = "Writing timespans back out as a stream."
+
+[class.renames]
+chordified = "chordify"
+
+[class.excluded]
+partwise = "the timespans written back out as a part each, which is the score they were read from"
+
+[[class]]
+python = "features/base.py"
+rust = ["src/features/mod.rs", "src/features/dataset.rs"]
+note = "The machinery round the feature extractors: finding one by its id, and the vector a stream gives for all of them. The 72 jSymbolic extractors and the 24 native ones are rows of a generated table rather than a class each, and `features_parity` checks that table against music21's live classes."
+
+[class.renames]
+getIndex = "index_of"
+
+[[class]]
+python = "features/base.py"
+name = "Feature"
+rust = ["src/features/mod.rs"]
+note = "What one extractor found: the numbers, and what each of them is called."
+
+[class.excluded]
+prepareVectors = "makes room for the numbers before they are worked out, which building one does"
+normalize = "divides the numbers by their sum, which `Extractor::extract` does where the extractor asks for it"
+
+[[class]]
+python = "features/base.py"
+name = "FeatureExtractor"
+rust = ["src/features/mod.rs"]
+note = "One extractor: its id, how many numbers it gives, and what it reads off a stream. music21 keeps the stream and the half-built feature on the object; here an extractor is a row of a table and reading is a function of the data."
+
+[class.renames]
+getAttributeLabels = "attribute_labels"
+getBlankFeature = "blank"
+
+[class.excluded]
+setData = "hands the extractor the stream to read, which `extract` takes as an argument"
+fillFeatureAttributes = "copies the extractor's own id and name onto the feature it is filling in"
+prepareFeature = "makes the blank feature and fills its attributes in, which `blank` answers"
+process = "the reading itself, which is the row's own function and runs in `extract`"
+
+[[class]]
+python = "features/base.py"
+name = "StreamForms"
+rust = ["src/features/mod.rs", "src/instrument/streams.rs"]
+note = "The readings of a stream every extractor shares, each worked out once when it is first asked for. music21 keys them by name in a dictionary; here each is a member of the data, and the ones only one extractor reads are worked out where it reads them."
+
+[class.renames]
+formPartitionByInstrument = "partition_by_instrument"
+formChordify = "chordified_chords"
+formQuarterLengthHistogram = "quarter_length_histogram"
+formMidiPitchHistogram = "midi_pitch_histogram"
+formPitchClassHistogram = "pitch_class_histogram"
+formMidiIntervalHistogram = "midi_interval_histogram"
+formContourList = "contour_list"
+formSecondsMap = "seconds_map"
+
+[class.excluded]
+keys = "the names music21 looks a form up by"
+formSetClassHistogram = "how often each set class comes, which the extractors that read it work out where they read it"
+formPitchClassSetHistogram = "how often each pitch-class set comes, likewise"
+formTypesHistogram = "how often each written value comes, likewise"
+formGetElementsByClassMeasure = "the measures of the stream, which `Stream::measures` answers"
+formBeatHistogram = "how often each beat strength comes, which the extractor reading it works out"
+
+[[class]]
+python = "features/base.py"
+name = "DataInstance"
+rust = ["src/features/mod.rs", "src/features/dataset.rs"]
+note = "One subject prepared for extraction: the stream with its ties stripped, each part and each voice of it prepared on its own, and every reading an extractor may ask for."
+
+[class.renames]
+parseStream = "new"
+
+[class.excluded]
+setupPostStreamParse = "the second half of reading the stream in, which building one does in one"
+setClassLabel = "the class a subject belongs to for the data set it is in; `DataSet::add_data` takes it beside the subject"
+getClassValue = "that class, likewise"
+getId = "the name a subject goes by, which `DataSet::add_data` takes beside it"
+
+[[class]]
+python = "features/base.py"
+name = "DataSet"
+rust = ["src/features/dataset.rs"]
+note = "Several subjects run through the same extractors, written out as a table."
+
+[class.renames]
+getClassLabel = "class_label"
+addFeatureExtractors = "add_extractors"
+getAttributeLabels = "attribute_labels"
+getDiscreteLabels = "discrete_labels"
+getFeaturesAsList = "features_as_list"
+getUniqueClassValues = "unique_class_values"
+getString = "to_text"
+addData = "add_data"
+
+[class.excluded]
+addMultipleData = "adds several subjects at once, which is `add_data` in a loop"
+getClassPositionLabels = "where the class column sits, which the caller knows of the labels it asked for"
+write = "writes the table to a file, which the library does not do: `to_text` is the text to write"
+
+[[class]]
+python = "braille/basic.py"
+rust = ["src/braille/basic.rs", "src/braille/lookup.rs"]
+note = "One element of a score in braille: a note, a rest, a chord, a clef, a signature, a dynamic, a word."
+
+[class.renames]
+handlePitchWithAccidental = "note_to_braille"
+handleArticulations = "note_to_braille"
+handleExpressions = "note_to_braille"
+yieldBrailleArticulations = "note_to_braille"
+
+[[class]]
+python = "braille/translate.py"
+rust = ["src/braille/translate.rs"]
+note = "A whole score in braille, part by part or on joined staves."
+
+[class.renames]
+objectToBraille = "element_to_braille"
+
+[class.excluded]
+opusToBraille = "every score of an opus one after another, which is `score_to_braille` of each"
+
+[[class]]
+python = "braille/text.py"
+name = "BrailleText"
+rust = ["src/braille/text.rs"]
+note = "The page the braille is written onto: its lines, and what may still fit on the one being written."
+
+[class.renames]
+showHand = "set_show_hand"
+addHeading = "add_heading"
+addLongExpression = "add_long_expression"
+addToNewLine = "add_to_new_line"
+appendOrInsertCurrent = "append_or_insert_current"
+addInaccord = "add_inaccord"
+addMeasureNumber = "add_measure_number"
+optionalAddKeyboardSymbolsAndDots = "optional_add_keyboard_symbols_and_dots"
+addSignatures = "add_signatures"
+makeNewLine = "make_new_line"
+recenterHeadings = "recenter_headings"
+
+[[class]]
+python = "braille/text.py"
+name = "BrailleTextLine"
+rust = ["src/braille/text.rs"]
+
+[class.renames]
+canAppend = "can_append"
+canInsert = "can_insert"
+lastHyphenToSpace = "last_hyphen_to_space"
+
+[[class]]
+python = "braille/text.py"
+name = "BrailleKeyboard"
+rust = ["src/braille/text.rs"]
+
+[class.renames]
+makeNewLines = "make_new_lines"
+addNoteGroupings = "add_note_groupings"
+
+[[class]]
+python = "braille/lookup.py"
+rust = ["src/braille/lookup.rs"]
+note = "The braille cells music21 writes each thing with, which are tables here rather than dictionaries built at import."
+
+[class.renames]
+dotsAdd = "dots_add"
+makePitchNameToNotes = "pitch_name_to_note"
+
+[class.excluded]
+makeBrailleDictionary = "builds music21's dictionary of cells at import; the tables here are written out"
+
+[[class]]
+python = "braille/segment.py"
+rust = ["src/braille/segment.rs"]
+note = "A part cut into the segments braille is written in, each a run of elements that belong together."
+
+[class.renames]
+findSegments = "find_segments"
+getRawSegments = "get_raw_segments"
+extractBrailleElements = "extract_braille_elements"
+prepareSlurredNotes = "prepare_slurred_notes"
+prepareBeamedNotes = "prepare_beamed_notes"
+splitNoteGrouping = "split_note_grouping"
+
+[class.excluded]
+setGroupingGlobals = "music21's module-level defaults for a grouping, set the first time one is made; `SegmentOptions` is what a caller says instead"
+setAffinityCode = "which kind of segment an element belongs in, which `extract_braille_elements` says as it reads"
+areGroupingsIdentical = "whether two groupings are the same, which the segment asks of its own"
+splitMeasure = "cuts a measure in two so that the braille fits, which `split_note_grouping` does of the grouping"
+
+[[class]]
+python = "braille/segment.py"
+name = "BrailleSegment"
+rust = ["src/braille/segment.rs"]
+note = "One segment written out. music21 takes the segment apart member by member -- the heading, the measure number, each grouping -- where `transcribe` does the whole of it in order, so those steps are not members here."
+
+[class.renames]
+brailleText = "transcribe"
+addGroupingAttributes = "add_grouping_attributes"
+fixArticulations = "fix_articulations"
+
+[class.excluded]
+addDummyRests = "a step of the transcription: the rests that stand before a measure number"
+extractMeasureNumber = "a step of the transcription"
+extractHeading = "a step of the transcription: the key, the meter and the tempo over the first measure"
+extractInaccordGrouping = "a step of the transcription: the voices written one after another"
+extractLongExpressionGrouping = "a step of the transcription"
+showLeadingOctaveFromNoteGrouping = "a step of the transcription: whether the first note of a grouping shows its octave"
+needsSplitToFit = "a step of the transcription: whether a grouping must be split to fit the line"
+splitNoteGroupingAndTranscribe = "a step of the transcription, which `split_note_grouping` does the splitting half of"
+extractNoteGrouping = "a step of the transcription"
+addRepeatSymbols = "a step of the transcription: the sign for a measure repeated"
+consolidate = "a step of the transcription: the groupings of one kind joined into one"
+extractSignatureGrouping = "a step of the transcription"
+extractTempoTextGrouping = "a step of the transcription"
+
+[[class]]
+python = "braille/segment.py"
+name = "BrailleGrandSegment"
+rust = ["src/braille/segment.rs"]
+note = "A keyboard part written on joined staves, the two hands' groupings paired."
+
+[class.renames]
+yieldCombinedGroupingKeys = "combined_keys"
+brailleText = "transcribe"
+
+[class.excluded]
+extractHeading = "a step of the transcription"
+extractNoteGrouping = "a step of the transcription"
+
+[[class]]
+python = "alpha/analysis/aligner.py"
+name = "StreamAligner"
+rust = ["src/alpha/analysis/aligner.rs"]
+note = "Two readings of the same music lined up against each other -- a score read by an optical reader against the same music played in -- by the edit distance between their hashes."
+
+[class.renames]
+getDefaultHasher = "new"
+makeHashedStreams = "align"
+setupDistanceMatrix = "align_hashed"
+populateDistanceMatrix = "align_hashed"
+getPossibleMovesFromLocation = "align_hashed"
+getOpFromLocation = "align_hashed"
+calculateChangesList = "align_hashed"
+calculateNumSimilarities = "changes_count"
+
+[class.excluded]
+insertCost = "what an insertion costs, which is one everywhere"
+deleteCost = "what a deletion costs, likewise"
+substitutionCost = "what a substitution costs, which the hashes' difference says"
+tupleEqualityWithoutReference = "whether two hashes are equal but for which note they came from, which comparing them answers"
+showChanges = "prints the changes, and colours the notes of the score to show them"
+
+[[class]]
+python = "alpha/analysis/hasher.py"
+name = "Hasher"
+rust = ["src/alpha/analysis/hasher.rs"]
+note = "A stream's notes as hashes, each as much or as little of the note as the caller asked to compare."
+
+[class.renames]
+hashStream = "hash_stream"
+setupTupleList = "tuple_list"
+
+[class.excluded]
+setupValidTypesAndStateVars = "reads the switches into the state music21 hashes by, which are the fields of a `Hasher` here"
+hashMeasures = "the measures hashed one at a time, which is `hash_stream` of each"
+addHashToFinalHash = "appends one hash to the list being built"
+addNoteHashToFinalHash = "appends a note's hash, likewise"
+addNoteHashWithReferenceToFinalHash = "appends a note's hash with the note it came from, likewise"
+
+[[class]]
+python = "alpha/analysis/fixer.py"
+rust = ["src/alpha/analysis/fixer.rs"]
+note = "Mending one reading of a score against another: the notes within a length, and the fixes themselves."
+
+[class.renames]
+getNotesWithinDuration = "notes_within_duration"
+
+[[class]]
+python = "alpha/analysis/fixer.py"
+name = "OrnamentFixer"
+rust = ["src/alpha/analysis/fixer.rs"]
+note = "Where the played reading trills or turns and the read one does not, the ornament is written onto the read one."
+
+[class.renames]
+findOrnament = "find_ornament"
+
+[class.excluded]
+addOrnament = "writes the ornament onto the read note, which `fix` does where it finds one"
+
+[[class]]
+python = "alpha/analysis/fixer.py"
+name = "EnharmonicFixer"
+rust = ["src/alpha/analysis/fixer.rs"]
+note = "Where the two readings spell the same sound differently, the played spelling wins."
+
+[class.renames]
+fix = "fix_enharmonics"
+
+[class.excluded]
+isEnharmonic = "whether two notes sound alike, which is `Pitch::is_enharmonic`"
+hasAcc = "whether a note carries an accidental, which is `Pitch::accidental_is_written`"
+hasNatAcc = "whether it carries a natural, likewise"
+hasSharpFlatAcc = "whether it carries a sharp or a flat, likewise"
+stepEq = "whether two notes stand on the same step"
+stepNotEq = "whether they do not"
+intervalTooBig = "whether the two are too far apart to be a misspelling, which the fix asks as it goes"
+
+[[class]]
+python = "alpha/analysis/ornamentRecognizer.py"
+rust = ["src/alpha/analysis/ornament_recognizer.rs"]
+note = "How long the notes of an ornament last, written out."
+
+[class.renames]
+calculateTrillNoteDuration = "ornament_note_quarter_length"
+
+[[class]]
+python = "alpha/analysis/ornamentRecognizer.py"
+name = "TrillRecognizer"
+rust = ["src/alpha/analysis/ornament_recognizer.rs"]
+note = "Whether a run of notes is a trill written out, and which trill it is."
+
+[[class]]
+python = "alpha/analysis/ornamentRecognizer.py"
+name = "TurnRecognizer"
+rust = ["src/alpha/analysis/ornament_recognizer.rs"]
+
+[class.renames]
+isAcceptableInterval = "is_acceptable_interval"
+
+[[class]]
+python = "alpha/analysis/ornamentRecognizer.py"
+name = "OrnamentRecognizer"
+rust = ["src/alpha/analysis/ornament_recognizer.rs"]
+
+[class.renames]
+calculateOrnamentNoteQl = "ornament_note_quarter_length"
+calculateOrnamentTotalQl = "ornament_total_quarter_length"
+
+[[class]]
+python = "alpha/analysis/search.py"
+rust = ["src/alpha/analysis/search.rs"]
+note = "Runs of notes that walk a scale, found in a part."
+
+[[class]]
+python = "omr/correctors.py"
+name = "ScoreCorrector"
+rust = ["src/omr/correctors.rs"]
+note = "Mending a score read by an optical reader against itself: a measure that reads oddly is compared with the same measure of the other parts and with the rest of its own part, and the likeliest reading wins."
+
+[class.renames]
+getAllHashes = "all_hashes"
+getSinglePart = "single_part_mut"
+runHorizontalCorrectionModel = "run_horizontal_correction_model"
+getAllIncorrectMeasures = "all_incorrect_measures"
+verticalProbabilityDist = "vertical_probability_dist"
+runVerticalSearch = "run_vertical_search"
+substituteOneMeasureContentsForAnother = "substitute_measure"
+runVerticalCorrectionModel = "run_vertical_correction_model"
+generateCorrectedScore = "generate_corrected_score"
+
+[class.excluded]
+runPriorModel = "music21's measure of how much the correction helped, which `PriorsIntegrationScore` carries"
+getMeasureSlice = "the same measure across every part, which `vertical_probability_dist` reads as it goes"
+getVerticalProbabilityDistributionSinglePart = "a step of the vertical correction, which `vertical_probability_dist` does for every part at once"
+getVerticalProbabilityDistributionSinglePartSingleMeasure = "a step of the same"
+
+[[class]]
+python = "omr/correctors.py"
+name = "SinglePart"
+rust = ["src/omr/correctors.rs"]
+
+[class.renames]
+getIncorrectMeasureIndices = "find_incorrect_measures"
+getSequenceHashesFromMeasureStream = "hashed_notes"
+horizontalProbabilityDist = "horizontal_probability_dist"
+runHorizontalSearch = "run_horizontal_search"
+runHorizontalCorrectionModel = "run_horizontal_correction_model"
+getProbabilityDistribution = "probability_distribution"
+
+[class.excluded]
+getMeasures = "the measures of the part, which the `Stream` it was read from holds"
+
+[[class]]
+python = "omr/correctors.py"
+name = "MeasureHash"
+rust = ["src/omr/correctors.rs"]
+note = "One measure as a string, a character a note, so that two measures may be compared as text."
+
+[class.renames]
+getHashString = "measure_hash"
+hashNote = "measure_hash"
+hashGrace = "measure_hash"
+hashRest = "measure_hash"
+hashQuarterLength = "measure_hash"
+getMeasureDifference = "measure_difference"
+getOpCodes = "opcodes"
+getProbabilityBasedOnChanges = "probability_based_on_changes"
+getProbabilityOnSubstitute = "probability_on_substitute"
+getProbabilityFromOneCharSub = "probability_from_one_char_sub"
+
+[class.excluded]
+setSequenceMatcher = "keeps Python's own `SequenceMatcher` on the object; `search::difflib` is the comparison, ported"
+differenceProbabilityForOneOpCode = "the odds of one edit, which `probability_based_on_changes` sums"
+getProbabilityOnEquality = "the odds of two measures reading alike, likewise"
+getProbabilityOnOmission = "the odds of a note left out, likewise"
+getProbabilityOnAddition = "the odds of a note put in, likewise"
+
+[[class]]
+python = "omr/correctors.py"
+name = "MeasureSlice"
+rust = ["src/omr/correctors.rs"]
+note = "The same measure across every part, which is what a doubtful measure is compared against."
+
+[class.excluded]
+getSliceHashes = "the hashes of the measure across every part, which `ScoreCorrector::vertical_probability_dist` reads as it goes"
+runSliceSearch = "the search across the parts, which `run_vertical_search` does"
+
+[[class]]
+python = "omr/evaluators.py"
+rust = ["src/omr/evaluators.rs"]
+note = "How well the mending did: a score with mistakes put in on purpose, mended, and compared with the one it was made from."
+
+[class.renames]
+evaluateCorrectingModel = "evaluate_correcting_model"
+autoCorrelationBestMeasure = "auto_correlation_best_measure"
+
+[[class]]
+python = "omr/evaluators.py"
+name = "OmrGroundTruthPair"
+rust = ["src/omr/evaluators.rs"]
+
+[class.renames]
+getOmrScore = "omr"
+getGroundScore = "ground"
+minEditDist = "min_edit_distance"
+getDifferences = "differences"
+
+[class.excluded]
+parseAll = "reads both scores from their files"
+hashAll = "hashes both scores, which building the pair does"
+debug = "music21's switch for printing what it is doing"
+substCost = "what a substitution costs, which the hashes' difference says"
+insertCost = "what an insertion costs, which is one everywhere"
+deleteCost = "what a deletion costs, likewise"
+
+[[class]]
+python = "audioSearch/__init__.py"
+rust = ["src/audiosearch.rs"]
+note = "Hearing a monophonic line: the pitch of each stretch of sound, the lengths they make, and the notes that come of it."
+
+[class.renames]
+autocorrelationFunction = "autocorrelation_frequency"
+prepareThresholds = "prepare_thresholds"
+normalizeInputFrequency = "normalize_input_frequency"
+pitchFrequenciesToObjects = "pitch_frequencies_to_objects"
+detectPitchFrequencies = "detect_pitch_frequencies"
+smoothFrequencies = "smooth_frequencies"
+joinConsecutiveIdenticalPitches = "join_consecutive_identical_pitches"
+quantizeDuration = "quantize_duration"
+quarterLengthEstimation = "quarter_length_estimation"
+notesAndDurationsToStream = "notes_and_durations_to_stream"
+decisionProcess = "decision_process"
+getFrequenciesFromAudioFile = "frequencies_from_wav"
+
+[class.excluded]
+getFrequenciesFromMicrophone = "listens to a microphone, which the library does not do"
+getFrequenciesFromPartialAudioFile = "reads part of a file as it is being recorded"
