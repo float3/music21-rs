@@ -20,6 +20,19 @@
 //! its whole library is built on, sites and contexts and derivations, and
 //! nothing here stands in for that; the classes are the wheel's own, for a
 //! caller with no music21 at all.
+//!
+//! **Five of music21's `Stream` members the crate has ported are left out
+//! here, and each is left out for a reason the package cannot talk its way
+//! around.** `iter` is music21's iterator view, a filterable thing of its
+//! own that this `Stream` answers with plain lists instead.
+//! `splitAtDurations` replaces the elements *in the stream itself* and
+//! answers a tuple of that same stream -- it is in-place only, and this
+//! package refuses `inPlace=True` everywhere, since an edit here answers a
+//! new stream and a caller's own objects would otherwise stop being the
+//! ones the stream holds. `beatDuration` is a question about the site a
+//! stream stands in, and nothing here keeps a site (see `DECISIONS.md`).
+//! `activateVariants` and `showVariantAsOssialikePart` need a class for
+//! music21's `variant.Variant`, which the package has not got.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
