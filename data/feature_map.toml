@@ -574,6 +574,37 @@ getForm = "form_of"
 localKeyAsRn = "local_key_as_roman"
 
 [[class]]
+python = "romanText/clercqTemperley.py"
+name = "CTSong"
+rust = ["src/romantext/clercq_temperley.rs"]
+note = "A de Clercq-Temperley analysis of the rock corpus as its text says it: the title, the comments, the rules, and the key and the meter the song opens in."
+
+[class.renames]
+homeTimeSig = "home_time_signature"
+homeKey = "home_key"
+
+[class.excluded]
+toScore = "music21's own deprecated name for `toPart`, which it will take out"
+
+[[class]]
+python = "romanText/clercqTemperley.py"
+name = "CTRule"
+rust = ["src/romantext/clercq_temperley.rs"]
+note = "One rule of a song, a line of its text: its name, the section it stands for, its chords, its comment, and the measures it expands to."
+
+[class.renames]
+LHS = "left_hand_side"
+fixupChordAtom = "fixup_chord_atom"
+isSame = "is_same"
+
+[class.excluded]
+parent = "music21 keeps a weak reference from a rule back to the song holding it, and reads the rule's key, meter and other rules through it; a song here expands its own rules (`CtSong::to_part`), so nothing needs the way back"
+expandExpansionContent = "a step inside the expansion, which the crate drives from the song rather than from the rule keeping the state"
+expandSimpleContent = "a step inside the expansion, as `expandExpansionContent`"
+insertKsTs = "a step inside the expansion: the crate writes the key and the meter into a measure as it builds it"
+addOptionalTieAndLyrics = "a step inside the expansion, which ties the chord before as it writes the one after"
+
+[[class]]
 python = "harmony.py"
 rust = ["src/chordsymbol/mod.rs", "src/chordsymbol/figure.rs", "src/chordsymbol/tables.rs", "src/chordsymbol/realize.rs"]
 note = "Module-level helpers."

@@ -57,6 +57,24 @@
   corpus, each in both standards. The wheel reads and writes one too,
   `music21_rs.from_tsv` and `music21_rs.to_tsv`, each taking the
   `dcml_version` music21 takes and defaulting as music21 defaults.
+- **The rock corpus's analyses, read** (`romantext::clercq_temperley`):
+  music21's `romanText.clercqTemperley`, the de Clercq-Temperley flavour of
+  RomanText. `from_clercq_temperley` reads a song -- a handful of rules,
+  each a line naming a section's chords a measure at a time, and an `S:`
+  rule playing them through, `S: [G] $In $Vr $Vr $Ch` -- into a part of
+  `RomanNumeral`s: a measure for each the rules name, its chords sharing
+  the bar equally, each figure written under its chord as a lyric, and the
+  name of the rule that brought it under the first chord of its section. A
+  rule may expand another (`$VP*2`), repeat a measure of its own (`|*4`),
+  say the key or the meter in brackets, repeat the chord before it with a
+  dot, and rest a bar with an `R`; a chord repeated across a barline is
+  tied rather than struck again. `CtSong` and `CtRule` are music21's two
+  classes, the three passes of its `_measureGroups` included.
+  `clercq_temperley_parity` holds the reader to music21 on 207 songs --
+  the six music21 carries in the module, eleven written for the test and
+  200 made up out of the whole grammar -- every one agreeing as an outline
+  *and* as MusicXML byte for byte, with ten more that both sides refuse.
+  The wheel reads one too, as `music21_rs.from_clercq_temperley`.
 - **The feature map now tracks every music21 file the crate ports**, where
   it tracked 44 of them: `percussion.py`, `tablature.py`, `text.py`,
   `layout.py`, `style.py`, `spanner.py`, `repeat.py`, `variant.py`,

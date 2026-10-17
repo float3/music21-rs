@@ -14,6 +14,7 @@
 //! anything else is a roman numeral. The other lines are a tag, a colon and
 //! what it says.
 
+pub mod clercq_temperley;
 pub mod tsv;
 
 use crate::bar::{Barline, Ending, RepeatDirection};

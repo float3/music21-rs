@@ -1,7 +1,7 @@
 //! The score formats the crate reads, and MusicXML, which it also writes:
 //! `from_musicxml`, `from_abc`, `from_abc_number`, `from_midi`,
 //! `from_tiny_notation`, `from_humdrum`, `from_mei`, `from_roman_text`,
-//! `from_tsv`, `to_tsv` and `to_musicxml`.
+//! `from_tsv`, `to_tsv`, `from_clercq_temperley` and `to_musicxml`.
 //!
 //! These are the wheel's own rather than names music21 has: music21 reaches
 //! its readers through `converter.parse` and its writer through an exporter
@@ -397,6 +397,22 @@ fn tsv_version(number: u8) -> PyResult<music21_rs_crate::romantext::tsv::Version
         .map_err(|error| pyo3::exceptions::PyValueError::new_err(crate::pitch::message(&error)))
 }
 
+/// Reads a de Clercq-Temperley analysis of the rock corpus as music21's
+/// `romanText.clercqTemperley` reads it, as a `Part`.
+///
+/// The part holds a measure for each the song's rules name, and in each the
+/// chords the numerals stand for, sharing the bar equally, every chord a
+/// `RomanNumeral` carrying its figure as a lyric and the first chord of a
+/// section carrying the name of the rule that brought it. A chord repeated
+/// across a barline is tied rather than struck again, and an `R` is a rest.
+#[pyfunction]
+fn from_clercq_temperley<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    handed_back(
+        py,
+        music21_rs_crate::romantext::clercq_temperley::from_clercq_temperley(text),
+    )
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(to_musicxml, m)?)?;
     m.add_function(wrap_pyfunction!(to_midi, m)?)?;
@@ -411,6 +427,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_tsv, m)?)?;
     m.add_function(wrap_pyfunction!(to_tsv, m)?)?;
+    m.add_function(wrap_pyfunction!(from_clercq_temperley, m)?)?;
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
     m.add_function(wrap_pyfunction!(from_capella, m)?)?;
