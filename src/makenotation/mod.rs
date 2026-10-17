@@ -16,7 +16,8 @@ use crate::clef::Clef;
 use crate::defaults::FloatType;
 use crate::duration::Duration;
 use crate::error::{Error, Result};
-use crate::expressions::split_expressions;
+use crate::expressions::{Expression, Ornament, split_expressions};
+use crate::key::KeySignature;
 use crate::meter::{BeamedNote, TimeSignature};
 use crate::notation::{BeamType, StemDirection, Tie, TieType};
 use crate::note::Note;
@@ -38,6 +39,115 @@ pub use score::{
     consolidate_completed_tuplets, make_notation, make_tuplet_brackets, split_at_durations,
     split_elements_to_complete_tuplets,
 };
+
+/// Every ornament the stream carries played out, in a stream of its own:
+/// music21's `stream.makeNotation.realizeOrnaments`.
+///
+/// The answer is this stream's [`Stream::clone_empty`] with each element
+/// appended after the one before and every nested stream realized the same
+/// way, so a gap between two elements closes -- which is what music21 does
+/// and what the comment in its own source calls a thing to fix. A note
+/// carrying ornaments is replaced by the notes each of them plays, read in
+/// the key signature in force where the note stands, and nothing else by
+/// nothing: an ornament is handed the note *as it stands* rather than what
+/// the ornament before it left, so a note carrying two is heard twice,
+/// once for each.
+///
+/// That is not [`crate::expressions::realize_ornaments`], which is
+/// music21's function of the same name in its `expressions` module: there
+/// the ornaments of one note are chained, each playing what the one before
+/// left.
+///
+/// # Errors
+///
+/// An ornament on anything but a note -- a chord, a rest, an unpitched
+/// stroke -- which music21 cannot play either, since it asks whatever it
+/// is given for its one pitch. And any ornament that cannot play the note
+/// it is on.
+pub fn realize_ornaments(stream: &Stream) -> Result<Stream> {
+    let mut in_force = None;
+    realized_ornaments(stream, &mut in_force)
+}
+
+/// [`realize_ornaments`], carrying the key signature in force into the
+/// streams nested inside this one -- which is the key music21's ornaments
+/// find by asking the note they are on for its context.
+fn realized_ornaments(stream: &Stream, in_force: &mut Option<KeySignature>) -> Result<Stream> {
+    let mut realized = stream.clone_empty();
+    for event in stream.events() {
+        let element = event.element();
+        match element {
+            StreamElement::Stream(inner) => {
+                let inner = realized_ornaments(inner, in_force)?;
+                realized.push(StreamElement::Stream(Box::new(inner)));
+            }
+            StreamElement::KeySignature(signature) => {
+                *in_force = Some(signature.clone());
+                realized.push(element.clone());
+            }
+            StreamElement::Key(key) => {
+                *in_force = Some(key.key_signature());
+                realized.push(element.clone());
+            }
+            _ => played_into(element, in_force.as_ref(), &mut realized)?,
+        }
+    }
+    Ok(realized)
+}
+
+/// One element of a stream appended to `realized`: the notes its ornaments
+/// play, or the element as it stands where it carries none.
+fn played_into(
+    element: &StreamElement,
+    in_force: Option<&KeySignature>,
+    realized: &mut Stream,
+) -> Result<()> {
+    let expressions = match element {
+        StreamElement::Note(note) => note.expressions(),
+        StreamElement::Chord(chord) => chord.expressions(),
+        StreamElement::Rest(rest) => rest.expressions(),
+        StreamElement::Unpitched(unpitched) => unpitched.written().expressions(),
+        _ => &[],
+    };
+    let ornaments: Vec<&Ornament> = expressions
+        .iter()
+        .filter_map(|expression| match expression {
+            Expression::Ornament(ornament) => Some(&**ornament),
+            _ => None,
+        })
+        .collect();
+    if ornaments.is_empty() {
+        realized.push(element.clone());
+        return Ok(());
+    }
+    let StreamElement::Note(note) = element else {
+        return Err(Error::Expression(format!(
+            "Cannot realize an ornament on {}",
+            element
+                .music21_classes()
+                .first()
+                .copied()
+                .unwrap_or("that element")
+        )));
+    };
+    // A key the stream never stated is no sharps, as music21's ornaments
+    // take when the note has no key signature in its context.
+    let default = KeySignature::new(0);
+    let key = in_force.unwrap_or(&default);
+    for ornament in ornaments {
+        let played = ornament.realize(note, key)?;
+        for before in played.before {
+            realized.push(before);
+        }
+        if let Some(main) = played.main {
+            realized.push(main);
+        }
+        for after in played.after {
+            realized.push(after);
+        }
+    }
+    Ok(())
+}
 
 /// Beams the notes of every measure of a part by the meter in force, and
 /// points the stems of each beamed group one way: music21's `makeBeams`.
@@ -1847,5 +1957,118 @@ mod tests {
                 .iter()
                 .all(|(beam, stem)| beam.is_none() && *stem == StemDirection::Unspecified)
         );
+    }
+}
+
+#[cfg(test)]
+mod realize_tests {
+    use super::*;
+    use crate::expressions::{Ornament, OrnamentKind};
+    use crate::{Chord, Duration, Note};
+
+    fn described(stream: &Stream) -> Vec<String> {
+        stream
+            .events()
+            .iter()
+            .map(|event| match event.element() {
+                StreamElement::Stream(inner) => {
+                    format!("[{}]", described(inner).join(" "))
+                }
+                StreamElement::Note(note) => format!(
+                    "{}@{}",
+                    note.pitch().name_with_octave(),
+                    note.duration().map_or(0.0, Duration::quarter_length)
+                ),
+                element => element
+                    .music21_classes()
+                    .first()
+                    .copied()
+                    .unwrap_or("other")
+                    .to_string(),
+            })
+            .collect()
+    }
+
+    fn ornamented(name: &str, length: FloatType, kinds: &[OrnamentKind]) -> Note {
+        let mut note = Note::from_name(name)
+            .unwrap()
+            .with_duration(Duration::new(length).unwrap());
+        for kind in kinds {
+            note.expressions_mut().push(Ornament::of_kind(*kind).into());
+        }
+        note
+    }
+
+    #[test]
+    fn a_mordent_is_played_where_the_note_stood() {
+        // music21's own docstring: the measure holding a whole C with a
+        // mordent comes out holding C, B and C, and the measure after it
+        // is untouched.
+        let mut first = Stream::with_kind(StreamKind::Measure);
+        first.insert(0.0, TimeSignature::new(4, 4).unwrap());
+        first.push(ornamented("C4", 4.0, &[OrnamentKind::Mordent]));
+        let mut second = Stream::with_kind(StreamKind::Measure);
+        second.push(
+            Note::from_name("D4")
+                .unwrap()
+                .with_duration(Duration::new(4.0).unwrap()),
+        );
+        let mut score = Stream::new();
+        score.push(first);
+        score.push(second);
+        let realized = realize_ornaments(&score).unwrap();
+        assert_eq!(
+            described(&realized),
+            [
+                "[TimeSignature C4@0.125 B3@0.125 C4@3.75]".to_string(),
+                "[D4@4]".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn a_note_carrying_two_ornaments_is_heard_twice() {
+        // music21 hands each ornament the note as it stands, so the note
+        // is played once for each: C B C, then C D C.
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.push(ornamented(
+            "C4",
+            2.0,
+            &[OrnamentKind::Mordent, OrnamentKind::InvertedMordent],
+        ));
+        let realized = realize_ornaments(&measure).unwrap();
+        assert_eq!(
+            described(&realized).join(" "),
+            "C4@0.125 B3@0.125 C4@1.75 C4@0.125 D4@0.125 C4@1.75"
+        );
+    }
+
+    #[test]
+    fn the_key_in_force_says_what_the_neighbour_is() {
+        // A trill on A in three flats plays the B flat above it, as
+        // music21's does once it has asked the note for the key in its
+        // context (where the note is spelled `B-`).
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(0.0, KeySignature::new(-3));
+        measure.push(ornamented("A4", 0.5, &[OrnamentKind::Trill]));
+        let realized = realize_ornaments(&measure).unwrap();
+        assert_eq!(
+            described(&realized).join(" "),
+            "KeySignature A4@0.125 Bb4@0.125 A4@0.125 Bb4@0.125"
+        );
+    }
+
+    #[test]
+    fn an_ornament_on_a_chord_is_refused() {
+        // music21 asks whatever it is given for its one pitch, so a chord
+        // raises there too.
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.set_duration(Duration::new(1.0).unwrap());
+        chord
+            .expressions_mut()
+            .push(Ornament::of_kind(OrnamentKind::Mordent).into());
+        measure.push(chord);
+        assert!(realize_ornaments(&measure).is_err());
     }
 }
