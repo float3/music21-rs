@@ -3551,6 +3551,31 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_barline_is_copied_and_frozen():
+    """Copying one rebuilt it by calling the class with the object itself,
+    which is what Python's `copyreg` does for a class it knows nothing
+    else about, and a barline read that as the type it is drawn with."""
+    import copy
+    import pickle
+
+    line = m.Repeat(direction="end", times=3)
+    copied = copy.deepcopy(line)
+    assert copied is not line
+    assert (copied.direction, copied.times, copied.type) == ("end", 3, "final")
+    thawed = pickle.loads(pickle.dumps(line))
+    assert (thawed.direction, thawed.times) == ("end", 3)
+    # music21 refuses a count on a repeat that starts a passage, and one
+    # below nought, each in its own words.
+    start = m.Repeat(direction="start")
+    for value, said in ((3, "start Repeat"), (-3, "less than zero")):
+        try:
+            start.times = value
+        except Exception as error:  # noqa: BLE001 - the class is music21's
+            assert said in str(error)
+        else:
+            raise AssertionError(f"times = {value} was allowed")
+
+
 def test_a_pitch_is_read_from_its_name_in_another_language():
     """Every answer is music21's own for the same names."""
     assert m.toPitch("Es", "de").name == "E-"

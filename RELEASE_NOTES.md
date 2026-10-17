@@ -2,6 +2,21 @@
 
 ## added
 
+- **music21's own barline doctests run against the crate, every one of
+  them**: 7 of 7 docstrings and 43 of 43 examples, the 47th module of the
+  harness. Two things were in the way, and the first is a bug a caller
+  would have met. **A barline could not be copied or frozen at all**:
+  nothing in the facade said how, so Python's `copyreg` fell back to
+  rebuilding it by calling the class with the object itself, and a
+  barline's `__init__` read that as the type it is drawn with
+  (`'Repeat' object is not an instance of 'str'`). Expanding the repeats
+  of a score holding one therefore failed, since music21 deep-copies the
+  measures first. It carries `__deepcopy__`, `__copy__`, `__reduce__` and
+  `__setstate__` now, as every other facade here does. And **a repeat's
+  count is refused where music21 refuses it**: on a repeat that *starts* a
+  passage, where the count would say nothing, and for a value below
+  nought, each in music21's own words.
+
 - **music21's own spanner doctests run against the crate**, 296 of its 419
   examples, where none of them ran before. What it took: the bundle now
   carries `append`, `getByIdLocal` and `getBySpannedElement`, a spanner
