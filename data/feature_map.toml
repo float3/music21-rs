@@ -1019,6 +1019,11 @@ rust = ["src/analysis/metrical.rs"]
 note = "The depth of the metrical hierarchy at each note, and Thomassen's melodic accent."
 
 [[class]]
+python = "analysis/elements.py"
+rust = ["src/analysis/elements.rs"]
+note = "How often each value of some property of a stream's elements comes, counted in the order each value is first met as Python's `Counter` counts. The property is a function of the element rather than the name of one, and the elements are whatever reading the caller counts over, as music21 takes a stream or a stream iterator."
+
+[[class]]
 python = "analysis/segmentByRests.py"
 name = "Segmenter"
 rust = ["src/analysis/segment_by_rests.rs"]

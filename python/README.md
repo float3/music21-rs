@@ -157,7 +157,10 @@ found.
 `analysis.segmentByRests.Segmenter` cuts a line into the runs of notes
 between its rests, each run the stream's own notes and each interval built
 on two of them; `analysis.pitchAnalysis.pitchAttributeCount` counts a named
-property of every pitch into a `Counter`. `analysis.floatingKey.KeyAnalyzer`
+property of every pitch into a `Counter`, and
+`analysis.elements.attributeCount` counts a named property of every
+element a stream or an iterator hands over, passing over an element that
+has none. `analysis.floatingKey.KeyAnalyzer`
 reads a key for every measure and smooths each by the measures around it,
 through a window and a weighting the caller may say.
 the figured-bass realizer is here as `FiguredBassLine` and `Realization`:
