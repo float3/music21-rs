@@ -3551,6 +3551,27 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_pitch_is_read_from_its_name_in_another_language():
+    """Every answer is music21's own for the same names."""
+    assert m.toPitch("Es", "de").name == "E-"
+    assert m.toPitch("H", "de").name == "B"
+    assert [m.toPitch(name, "de").name for name in ("As", "A", "Ais")] == ["A-", "A", "A#"]
+    assert m.toPitch("si", "it").name == "B"
+    assert m.toPitch("ré", "fr").name == "D"
+    # A name the language calls nothing is a C, as music21 answers.
+    assert m.toPitch("Es", "it").name == "C"
+    assert m.toPitch("Es", "la").name == "C"
+    # The note is built on the pitch read, which carries no octave, as
+    # music21's does: `<music21.note.Note E->`.
+    assert m.toNote("Es", "de").nameWithOctave == "E-"
+    assert [p.name for p in m.toChord(["Es", "Gis", "B"], "de").pitches] == ["E-", "G#", "B-"]
+    # The dictionary music21 builds by writing every name out.
+    german = m.generateLanguageDictionary("de")
+    assert len(german) == 63
+    assert german["H"] == "B"
+    assert m.generateLanguageDictionary("la") == {}
+
+
 def test_a_walk_answers_what_music21_s_walk_answers():
     """music21's `recurse` answers a StreamIterator, which its own code
     filters again; a list could not be filtered and a stream would sort

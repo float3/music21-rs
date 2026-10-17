@@ -1,0 +1,10 @@
+# Docstrings of music21.languageExcerpts.naturalLanguageObjects whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_naturallanguage`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.languageExcerpts.naturalLanguageObjects.toChord",
+    "music21.languageExcerpts.naturalLanguageObjects.toNote",
+    "music21.languageExcerpts.naturalLanguageObjects.toPitch",
+]
