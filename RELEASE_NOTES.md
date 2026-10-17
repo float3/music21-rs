@@ -19,7 +19,29 @@
   `makeOrnamentalAccidentals`, which `make_accidentals` says outright it
   does not consider, and the stream-level `realizeOrnaments` -- a
   different function from the `expressions.realizeOrnaments` the crate
-  does have, as that one's doc comment now says.
+  does have, as that one's doc comment now says. (The second of those is
+  ported below; the first is still the to-do list.)
+- **Every ornament a stream carries played out, in a stream of its own**
+  (`makenotation::realize_ornaments`): music21's
+  `stream.makeNotation.realizeOrnaments`, which the crate had no
+  counterpart for -- `expressions::realize_ornaments` is music21's other
+  function of that name, over the ornaments of one note. The answer is the
+  stream's `clone_empty` with each element appended after the one before
+  and every nested stream realized the same way, so a gap between two
+  elements closes, as music21's does. A note carrying ornaments is
+  replaced by the notes each of them plays, read in the key signature in
+  force where the note stands -- and music21 hands every ornament the note
+  *as it stands* rather than what the ornament before it left, so a note
+  carrying two is heard twice, once for each, which is kept. An ornament
+  on anything but a note is refused, as music21 refuses one by asking
+  whatever it is given for its single pitch.
+  `realize_ornaments_parity` holds it to music21 by the shared outline:
+  thirteen subjects built for it -- mordents, trills, turns with their
+  accidentals written, a tremolo's tied pieces, an ornament too long for
+  its note, ornaments in voices, a key change between two trills -- and a
+  sweep of every corpus score carrying an ornament, of which 26 compare
+  and three are refused by both sides with the same sentence, a trill on a
+  grace note having no time to steal.
 - **A score reduced to the chords it is made of** (`analysis::reduce_chords`):
   music21's `analysis.reduceChords.ChordReducer.run`, which the crate had
   no counterpart for at all. The notes are read as spans of time and
