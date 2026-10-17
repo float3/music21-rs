@@ -18,6 +18,7 @@ pub mod metrical;
 pub mod neoriemannian;
 pub mod patel;
 pub mod pitch_analysis;
+pub mod reduce_chords;
 pub mod reduction;
 pub mod segment_by_rests;
 pub mod transposition;

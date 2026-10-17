@@ -266,16 +266,33 @@ fn is_general_note(element: &StreamElement) -> bool {
 /// music21's `template(fillWithRests=False, removeClasses=('GeneralNote',),
 /// retainVoices=False)`: the stream and every stream inside it, voices left
 /// out, with everything but notes, chords and rests kept where it stood.
-fn template_of(stream: &Stream) -> Stream {
+pub(crate) fn template_of(stream: &Stream) -> Stream {
+    template_removing(stream, false)
+}
+
+/// The same, removing the dynamics and expressions as well where `marks`
+/// says to: that is music21's `template` with no `removeClasses` of its
+/// own, which removes `GeneralNote`, `Dynamic` and `Expression`.
+/// `chordify` names `GeneralNote` alone and so keeps them;
+/// `tree.toStream.chordified`, which the chord reducer goes through, does
+/// not, and so loses them.
+pub(crate) fn template_removing(stream: &Stream, marks: bool) -> Stream {
     let events = stream
         .events
         .iter()
         .filter_map(|event| match &event.element {
             StreamElement::Stream(inner) if inner.kind() == StreamKind::Voice => None,
-            StreamElement::Stream(inner) => {
-                Some(StreamEvent::new(event.offset, template_of(inner)))
-            }
+            StreamElement::Stream(inner) => Some(StreamEvent::new(
+                event.offset,
+                template_removing(inner, marks),
+            )),
             element if is_general_note(element) => None,
+            element
+                if marks
+                    && (element.is_instance("Dynamic") || element.is_instance("Expression")) =>
+            {
+                None
+            }
             _ => Some(event.clone()),
         })
         .collect();
