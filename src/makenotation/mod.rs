@@ -21,6 +21,7 @@ use crate::key::KeySignature;
 use crate::meter::{BeamedNote, TimeSignature};
 use crate::notation::{BeamType, StemDirection, Tie, TieType};
 use crate::note::Note;
+use crate::pitch::Accidental;
 use crate::pitch::{AccidentalDisplayOptions, Pitch};
 use crate::rest::Rest;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
@@ -39,6 +40,105 @@ pub use score::{
     consolidate_completed_tuplets, make_notation, make_tuplet_brackets, split_at_durations,
     split_elements_to_complete_tuplets,
 };
+
+/// [`make_ornamental_accidentals`] for one note of a measure being
+/// decided, with what it answered where it could.
+///
+/// An ornament whose notes cannot be worked out at all -- a general
+/// mordent that has not said which way it goes -- is left as it stands and
+/// counts for nothing, where music21 raises out of the whole step; nothing
+/// any reader here builds carries one.
+fn ornaments_decided(
+    note: &mut Note,
+    key: &KeySignature,
+    past: &[Pitch],
+    past_measure: &[Pitch],
+    altered: &[Pitch],
+    cautionary_not_immediate_repeat: bool,
+) -> Vec<Pitch> {
+    if note.expressions().is_empty() {
+        return Vec::new();
+    }
+    make_ornamental_accidentals(
+        note,
+        key,
+        &AccidentalDisplayOptions {
+            pitch_past: past,
+            pitch_past_measure: past_measure,
+            altered_pitches: altered,
+            cautionary_not_immediate_repeat,
+            ..AccidentalDisplayOptions::default()
+        },
+    )
+    .unwrap_or_default()
+}
+
+/// Decides whether each accidental this note's ornaments imply is shown,
+/// and writes it onto the ornament: music21's
+/// `makeOrnamentalAccidentals`.
+///
+/// The notes an ornament plays are read in `key`, decided as
+/// [`Ornament::update_accidental_display`] decides them -- never
+/// simultaneous with anything and never tied, an ornamental note being
+/// neither -- and what is decided is written back onto the ornament's own
+/// accidental, which is where the MusicXML writer reads the mark from.
+/// The pitches decided are answered in music21's order, so a caller can
+/// count them among the pitches already heard, as music21's step adds them
+/// to `pitchPast`.
+///
+/// An ornament of a fixed size -- a half-step trill, a whole-step mordent
+/// -- carries no accidental of its own, so there is nowhere here to write
+/// the decision and the ornament is left as it stands. music21 keeps it on
+/// the pitch it resolved, which a value type does not hold.
+///
+/// # Errors
+///
+/// A general mordent that has not said which way it goes, whose notes
+/// cannot be worked out at all.
+pub fn make_ornamental_accidentals(
+    note: &mut Note,
+    key: &KeySignature,
+    options: &AccidentalDisplayOptions<'_>,
+) -> Result<Vec<Pitch>> {
+    let source = note.pitch().clone();
+    let mut decided = Vec::new();
+    for expression in note.expressions_mut() {
+        let Expression::Ornament(ornament) = expression else {
+            continue;
+        };
+        let mut played = ornament.ornamental_pitches(&source, key)?;
+        if played.is_empty() {
+            continue;
+        }
+        ornament.update_accidental_display(&mut played, options);
+        write_back(ornament, &played);
+        decided.extend(played);
+    }
+    Ok(decided)
+}
+
+/// The accidentals decided for an ornament's notes written onto the
+/// ornament itself, in the order [`Ornament::ornamental_pitches`] answers
+/// them: a turn's upper note and then its lower, and the one note of
+/// anything else.
+fn write_back(ornament: &mut Ornament, played: &[Pitch]) {
+    let shown = |pitch: &Pitch| -> Option<Accidental> {
+        let accidental = pitch.accidental();
+        accidental.display_status().map(|_| accidental.clone())
+    };
+    if ornament.is_a("Turn") {
+        if let Some(upper) = played.first().and_then(shown) {
+            ornament.set_upper_accidental(Some(upper));
+        }
+        if let Some(lower) = played.get(1).and_then(shown) {
+            ornament.set_lower_accidental(Some(lower));
+        }
+    } else if let Some(accidental) = played.first().and_then(shown) {
+        // A half-step or whole-step ornament refuses one, its interval
+        // being fixed, and is left as it stands.
+        let _ = ornament.set_accidental(Some(accidental));
+    }
+}
 
 /// Every ornament the stream carries played out, in a stream of its own:
 /// music21's `stream.makeNotation.realizeOrnaments`.
@@ -1769,6 +1869,11 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
         let mut past: Vec<Pitch> = Vec::new();
         let mut open: Vec<String> = tied.clone().unwrap_or_default();
         let mut last_sounding: Option<Vec<String>> = None;
+        // What the ornaments of this measure play, which counts among the
+        // pitches the measure after it is decided against, as music21's
+        // `makeAccidentalsInMeasureStream` counts them.
+        let mut ornamental: Vec<Pitch> = Vec::new();
+        let in_force = signature.clone().unwrap_or_else(|| KeySignature::new(0));
         measure.for_each_mut(&mut |_, element| match element {
             StreamElement::Note(note) => {
                 let mut pitch = note.pitch().clone();
@@ -1790,6 +1895,18 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
                 }
                 last_sounding = Some(open.clone());
                 past.push(pitch);
+                // The accidentals this note's ornaments imply, decided
+                // against what has been heard including the note itself.
+                let played = ornaments_decided(
+                    note,
+                    &in_force,
+                    &past,
+                    &past_measure,
+                    &altered,
+                    cautionary_not_immediate_repeat,
+                );
+                past.extend(played.iter().cloned());
+                ornamental.extend(played);
             }
             StreamElement::Chord(chord) => {
                 let mut seen: Vec<String> = Vec::new();
@@ -1819,6 +1936,15 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
                     {
                         seen.push(pitch.name_with_octave());
                     }
+                    let played = ornaments_decided(
+                        note,
+                        &in_force,
+                        &past,
+                        &past_measure,
+                        &altered,
+                        cautionary_not_immediate_repeat,
+                    );
+                    ornamental.extend(played);
                 }
                 open = seen;
                 last_sounding = Some(open.clone());
@@ -1884,7 +2010,9 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
             _ => {}
         });
         tied = Some(open);
-        previous = Some((pitches_in_order(measure), last_sounding));
+        let mut held = pitches_in_order(measure);
+        held.extend(ornamental);
+        previous = Some((held, last_sounding));
     }
     *stream = stream.with_events(events);
 }
@@ -2070,5 +2198,95 @@ mod realize_tests {
             .push(Ornament::of_kind(OrnamentKind::Mordent).into());
         measure.push(chord);
         assert!(realize_ornaments(&measure).is_err());
+    }
+}
+
+#[cfg(test)]
+mod ornamental_tests {
+    use super::*;
+    use crate::expressions::{Ornament, OrnamentKind};
+    use crate::{Duration, Note};
+
+    fn trilled(name: &str) -> Note {
+        let mut note = Note::from_name(name)
+            .unwrap()
+            .with_duration(Duration::new(1.0).unwrap());
+        note.expressions_mut()
+            .push(Ornament::of_kind(OrnamentKind::Trill).into());
+        note
+    }
+
+    fn shown(note: &Note) -> Option<String> {
+        let Some(crate::expressions::Expression::Ornament(ornament)) = note.expressions().first()
+        else {
+            return None;
+        };
+        ornament
+            .accidental()
+            .map(|accidental| format!("{} {:?}", accidental.name(), accidental.display_status()))
+    }
+
+    #[test]
+    fn a_trill_above_a_flat_already_heard_shows_a_natural() {
+        // music21 writes an `<accidental-mark>natural</accidental-mark>`
+        // for this trill, the B flat before it having been heard.
+        let mut note = trilled("A4");
+        let past = [crate::Pitch::from_name("Bb4").unwrap()];
+        let played = make_ornamental_accidentals(
+            &mut note,
+            &KeySignature::new(0),
+            &AccidentalDisplayOptions {
+                pitch_past: &past,
+                ..AccidentalDisplayOptions::default()
+            },
+        )
+        .expect("the trill plays its neighbour");
+        assert_eq!(
+            played
+                .iter()
+                .map(crate::Pitch::name_with_octave)
+                .collect::<Vec<_>>(),
+            ["B4".to_string()]
+        );
+        assert_eq!(shown(&note).as_deref(), Some("natural Some(true)"));
+    }
+
+    #[test]
+    fn a_trill_whose_neighbour_needs_nothing_says_nothing() {
+        let mut note = trilled("A4");
+        let played = make_ornamental_accidentals(
+            &mut note,
+            &KeySignature::new(0),
+            &AccidentalDisplayOptions::default(),
+        )
+        .expect("the trill plays its neighbour");
+        assert_eq!(played.len(), 1);
+        // The ornament is left carrying nothing, so the writer writes no
+        // mark for it.
+        assert_eq!(shown(&note), None);
+    }
+
+    #[test]
+    fn an_ornament_of_a_fixed_size_is_left_as_it_stands() {
+        // A half-step trill holds no accidental of its own, so there is
+        // nowhere to write the decision; music21 keeps it on the pitch it
+        // resolved.
+        let mut note = Note::from_name("A4")
+            .unwrap()
+            .with_duration(Duration::new(1.0).unwrap());
+        note.expressions_mut()
+            .push(Ornament::of_kind(OrnamentKind::HalfStepTrill).into());
+        let past = [crate::Pitch::from_name("Bb4").unwrap()];
+        let played = make_ornamental_accidentals(
+            &mut note,
+            &KeySignature::new(0),
+            &AccidentalDisplayOptions {
+                pitch_past: &past,
+                ..AccidentalDisplayOptions::default()
+            },
+        )
+        .expect("the trill plays its neighbour");
+        assert_eq!(played.len(), 1);
+        assert_eq!(shown(&note), None);
     }
 }

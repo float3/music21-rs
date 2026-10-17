@@ -1037,7 +1037,7 @@ makeAccidentalsInMeasureStream = "make_accidentals"
 [class.excluded]
 moveNotesToVoices = "the half of `makeVoices` that moves the notes into a voice, which `make_voices` does itself: there is no stream here for a caller to hold between the two steps"
 getTiePitchSet = "a helper of `makeAccidentals`, which reads the tie off the note where it needs it"
-ornamentalPitches = "the pitches one ornament implies are `expressions::Ornament::ornamental_pitches`, given the note's pitch and the key; gathering them over every ornament a note carries is the caller's, since no step here writes their accidentals"
+ornamentalPitches = "every ornamental pitch of a whole stream, which music21 gathers again for each measure's context: `make_accidentals` keeps the ones it decided as it went instead, `make_ornamental_accidentals` answering them note by note, and `expressions::Ornament::ornamental_pitches` answers for one ornament given the note's pitch and the key"
 iterateBeamGroups = "the beam groups a stream's notes make, which `set_stem_direction_for_beam_groups` walks itself; a caller wanting them reads the beams each note carries"
 setStemDirectionOneGroup = "one group of that walk"
 saveAccidentalDisplayStatus = "a context manager that puts the display status back after an edit that rewrites it; a caller here keeps its own copy of what it wants back, there being no `with` to hang it on"
