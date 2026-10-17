@@ -2,6 +2,24 @@
 
 ## added
 
+- The feature map tracks `stream/makeNotation.py` and the two functions
+  beside music21's ornament classes in `expressions.py`, neither of which
+  it listed anywhere -- so the notation steps the crate has had since
+  0.8.0, and which `musicxml_make_notation_parity` holds to music21 byte
+  for byte on 257 subjects, were tracked only as `Stream`'s methods and
+  music21's module-level half of them was tracked not at all. Nine of
+  makeNotation's seventeen functions are ported, six are left out with
+  their reasons -- the halves of a step the crate's own step takes itself,
+  and a context manager there is no `with` here to hang on -- and
+  `splitElementsToCompleteTuplets` and `consolidateCompletedTuplets` are
+  public now, where they were private ports of two functions music21
+  publishes. `makeAccidentals` and `makeAccidentalsInMeasureStream` are
+  one function here, which the entry says. What the entry turns up is two
+  real gaps, both about the accidentals an ornament implies:
+  `makeOrnamentalAccidentals`, which `make_accidentals` says outright it
+  does not consider, and the stream-level `realizeOrnaments` -- a
+  different function from the `expressions.realizeOrnaments` the crate
+  does have, as that one's doc comment now says.
 - **A score reduced to the chords it is made of** (`analysis::reduce_chords`):
   music21's `analysis.reduceChords.ChordReducer.run`, which the crate had
   no counterpart for at all. The notes are read as spans of time and

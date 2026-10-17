@@ -1603,10 +1603,14 @@ pub(crate) fn split_expressions(expressions: &[Expression]) -> (Vec<Expression>,
     (first, second)
 }
 
-/// Every ornament on `note` played in turn, as music21's
-/// `realizeOrnaments` plays a note's expressions: each ornament realizes
-/// what the one before left of the note, and an ornament that takes the
-/// whole note ends the walk.
+/// Every ornament on `note` played in turn: music21's
+/// `expressions.realizeOrnaments`, where each ornament realizes what the
+/// one before left of the note and an ornament that takes the whole note
+/// ends the walk.
+///
+/// music21's `stream.makeNotation.realizeOrnaments` is a different
+/// function of the same name: it hands each ornament the note as it
+/// stands, and writes the realizations into a stream of its own.
 ///
 /// # Errors
 ///
