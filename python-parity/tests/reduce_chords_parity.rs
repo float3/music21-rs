@@ -4,18 +4,16 @@
 //! both sides read *that* document -- music21 with `converter.parseData`
 //! and the crate with `from_musicxml`, which `musicxml_read_parity` holds
 //! to each other -- so the two reducers are given the same score. Each
-//! reduces it, and the chords of the two reductions are compared: every
-//! measure, and in it every chord and rest with its offset, its length and
-//! its pitches.
+//! reduces it, and the two reductions are compared: every measure, and in
+//! it every chord and rest with its offset, its length and its pitches,
+//! and everything else the reduction carries -- the clef, key, meter,
+//! marks and layout music21's template copies from the score's first part
+//! -- by its class and where it stands.
 //!
-//! The reduction carries a template besides its chords -- the clef, key,
-//! meter, marks and layout music21 copies from the score's first part --
-//! which is the readers' business rather than the reducer's and is what
-//! `musicxml_read_parity` compares. It is not quite the same on the two
-//! sides here: music21's own export writes an empty `<words />` beside the
-//! tempo of a mark that says nothing, which music21's reader passes over
-//! and the crate's reads as a text expression saying nothing. The chords
-//! are what this test is about.
+//! The template is listed by class and offset alone rather than by what
+//! each element says, since what a clef or a mark *says* is the readers'
+//! business and `musicxml_read_parity` compares it; which elements the
+//! reduction keeps, and where, is the reducer's.
 //!
 //! A reduction is a score of one part: the chords each measure is made of,
 //! at most three a measure, which is music21's `ChordReducer.run`. Every
@@ -104,12 +102,19 @@ def reduced(text):
         lines.append('Part')
         for measure in part.getElementsByClass(stream.Measure):
             lines.append(f'  Measure {measure.number}')
-            for element in measure.getElementsByClass(['NotRest', 'Rest']):
-                pitches = ' '.join(p.nameWithOctave for p in getattr(element, 'pitches', ()))
+            for element in measure:
                 offset = float(measure.elementOffset(element))
-                length = float(element.quarterLength)
                 kind = type(element).__name__
-                lines.append(f'    {offset:.5f} {length:.5f} {kind} {pitches}')
+                if 'NotRest' in element.classes or 'Rest' in element.classes:
+                    pitches = ' '.join(
+                        p.nameWithOctave for p in getattr(element, 'pitches', ())
+                    )
+                    length = float(element.quarterLength)
+                    lines.append(f'    {offset:.5f} {length:.5f} {kind} {pitches}')
+                else:
+                    # What the template carries: its class and where it
+                    # stands, not what it says.
+                    lines.append(f'    {offset:.5f} {kind}')
     return chr(10).join(lines)
 "#;
 
@@ -185,7 +190,7 @@ fn the_crate_reduces_a_score_as_music21_does() {
                     }
                 };
                 let ours = match reduce_chords(&score, &ReductionOptions::default()) {
-                    Ok(reduction) => chords_of(&reduction),
+                    Ok(reduction) => listed(&reduction),
                     Err(error) => {
                         failures.push(format!("{name}: the crate could not reduce it: {error}"));
                         continue;
@@ -211,17 +216,23 @@ fn the_crate_reduces_a_score_as_music21_does() {
     );
 }
 
-/// The chords and rests of a reduction, measure by measure, as the helper's
-/// `reduced` lists music21's.
-fn chords_of(reduction: &Stream) -> String {
+/// A reduction as the helper's `reduced` lists music21's: its chords and
+/// rests with their pitches, and whatever else it carries by class alone.
+fn listed(reduction: &Stream) -> String {
     let mut lines = String::new();
     for part in reduction.parts() {
         lines.push_str("Part\n");
         for measure in part.measures() {
             lines.push_str(&format!("  Measure {}\n", measure.number()));
+            // The crate keeps a measure's own barlines beside its elements
+            // rather than among them, where music21 stands them at the
+            // measure's start and end.
+            if let Some(barline) = measure.left_barline() {
+                lines.push_str(&format!("    {:.5} {}\n", 0.0, named(barline)));
+            }
             for event in measure.events() {
-                let (kind, pitches) = match event.element() {
-                    StreamElement::Chord(chord) => (
+                let sounding = match event.element() {
+                    StreamElement::Chord(chord) => Some((
                         "Chord",
                         chord
                             .pitches()
@@ -229,20 +240,52 @@ fn chords_of(reduction: &Stream) -> String {
                             .map(music21_name)
                             .collect::<Vec<String>>()
                             .join(" "),
-                    ),
-                    StreamElement::Rest(_) => ("Rest", String::new()),
-                    StreamElement::Note(note) => ("Note", music21_name(note.pitch())),
-                    _ => continue,
+                    )),
+                    StreamElement::Rest(_) => Some(("Rest", String::new())),
+                    StreamElement::Note(note) => Some(("Note", music21_name(note.pitch()))),
+                    _ => None,
                 };
+                match sounding {
+                    Some((kind, pitches)) => lines.push_str(&format!(
+                        "    {:.5} {:.5} {kind} {pitches}\n",
+                        event.offset(),
+                        event.element().quarter_length()
+                    )),
+                    // What the template carries, named as music21 names its
+                    // class.
+                    None => lines.push_str(&format!(
+                        "    {:.5} {}\n",
+                        event.offset(),
+                        event
+                            .element()
+                            .music21_classes()
+                            .first()
+                            .copied()
+                            .unwrap_or("other")
+                    )),
+                }
+            }
+            if let Some(barline) = measure.right_barline() {
                 lines.push_str(&format!(
-                    "    {:.5} {:.5} {kind} {pitches}\n",
-                    event.offset(),
-                    event.element().quarter_length()
+                    "    {:.5} {}\n",
+                    measure.end_offset(),
+                    named(barline)
                 ));
             }
         }
     }
     lines.trim_end().to_string()
+}
+
+/// A barline as music21 names its class: one that plays a passage again is
+/// a `Repeat` there, where the crate keeps the direction on the barline
+/// itself.
+fn named(barline: &music21_rs::bar::Barline) -> &'static str {
+    if barline.repeat_direction().is_some() {
+        "Repeat"
+    } else {
+        "Barline"
+    }
 }
 
 /// A note as music21 names it: the crate spells a flat `b` where music21
