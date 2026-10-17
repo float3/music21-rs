@@ -385,7 +385,11 @@ fn same_offset(left: FloatType, right: FloatType) -> bool {
 /// Both the notes of the tuplet and the one cut must have had their lengths
 /// worked out rather than written, and the one cut must follow without a
 /// gap. The pieces are tied.
-fn split_elements_to_complete_tuplets(line: &mut Stream) -> Result<()> {
+///
+/// # Errors
+///
+/// A note the cut leaves with a length no tie of written values reaches.
+pub fn split_elements_to_complete_tuplets(line: &mut Stream) -> Result<()> {
     // Each event, and whether it was there before any cut: only those are
     // walked, as music21 walks a list taken before it starts.
     let mut events: Vec<(StreamEvent, bool)> = line
@@ -520,7 +524,7 @@ fn split_elements_to_complete_tuplets(line: &mut Stream) -> Result<()> {
 /// into one note of the tuplet's whole length: music21's
 /// `consolidateCompletedTuplets` with `onlyIfTied`, on one line. Whether
 /// anything was joined.
-fn consolidate_completed_tuplets(line: &mut Stream) -> bool {
+pub fn consolidate_completed_tuplets(line: &mut Stream) -> bool {
     let mut events = line.events().to_vec();
     let mut removed: Vec<usize> = Vec::new();
     let mut consolidated = false;
