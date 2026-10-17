@@ -266,6 +266,8 @@ pub(super) fn scan_features(
         });
     }
 
+    problems.extend(accounting_problems(workspace_root, map));
+
     if !problems.is_empty() {
         return Err(format!(
             "data/feature_map.toml is out of date:\n  {}",
@@ -274,6 +276,89 @@ pub(super) fn scan_features(
         .into());
     }
     Ok(classes)
+}
+
+/// What the map neither reads nor accounts for, and what it accounts for
+/// that music21 no longer has.
+///
+/// The `[[class]]` entries say what is read and `[[unlisted]]` says why the
+/// rest is not; between them they have to cover music21. Without this a
+/// module nobody listed is invisible — `search/serial.py`,
+/// `analysis/elements.py` and `stream/makeNotation.py` were each ported and
+/// tracked nowhere until somebody went looking.
+fn accounting_problems(workspace_root: &Path, map: &FeatureMap) -> Vec<String> {
+    let root = workspace_root.join("music21/music21");
+    let mut problems = Vec::new();
+    let mut accounted: Vec<&str> = Vec::new();
+    for group in &map.unlisted {
+        for module in &group.python {
+            if !root.join(module).is_file() {
+                problems.push(format!(
+                    "`{module}` is accounted for and music21 has no such module"
+                ));
+            }
+            if accounted.contains(&module.as_str()) {
+                problems.push(format!("`{module}` is accounted for twice"));
+            }
+            accounted.push(module);
+        }
+    }
+    let read: Vec<&str> = map
+        .class
+        .iter()
+        .map(|class| class.python.as_str())
+        .collect();
+    for module in modules_of(&root) {
+        if !read.contains(&module.as_str()) && !accounted.contains(&module.as_str()) {
+            problems.push(format!("`{module}` is neither read nor accounted for"));
+        }
+    }
+    problems
+}
+
+/// Every module of music21 the map is answerable for: music21's own test
+/// files, its corpus, its documentation and its data directories are
+/// nobody's to port.
+fn modules_of(root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    modules_into(root, "", &mut found);
+    found.sort();
+    found
+}
+
+fn modules_into(directory: &Path, prefix: &str, found: &mut Vec<String>) {
+    const SKIPPED: [&str; 9] = [
+        "test",
+        "__pycache__",
+        "corpus",
+        "documentation",
+        "demos",
+        "lilypondTestSuite",
+        "testPrimitive",
+        "testFiles",
+        "scl",
+    ];
+    let Ok(entries) = fs::read_dir(directory) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let path = entry.path();
+        let named = |name: &str| {
+            if prefix.is_empty() {
+                name.to_string()
+            } else {
+                format!("{prefix}/{name}")
+            }
+        };
+        if path.is_dir() {
+            if !SKIPPED.contains(&name.as_str()) {
+                modules_into(&path, &named(&name), found);
+            }
+        } else if name.ends_with(".py") && !name.starts_with("test") {
+            found.push(named(&name));
+        }
+    }
 }
 
 /// The source with its line comments taken out, so that a name mentioned in

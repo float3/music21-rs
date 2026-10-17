@@ -67,6 +67,23 @@ struct FeatureMap {
     /// What the crate has that music21 does not.
     #[serde(default)]
     beyond: Vec<BeyondMap>,
+    /// The modules no entry reads, each group with the reason.
+    #[serde(default)]
+    unlisted: Vec<UnlistedMap>,
+}
+
+/// Modules of music21 the map does not read, and why it does not. A file
+/// nothing names is invisible to this report, which is how three ported
+/// modules stayed untracked, so `scan_features` fails where a module is
+/// neither read nor named here -- and where a module named here is one
+/// music21 no longer has.
+#[derive(Debug, Deserialize)]
+struct UnlistedMap {
+    /// Paths inside the `music21` submodule, as `ClassMap::python` are.
+    python: Vec<String>,
+    /// Why none of them is read, which is the same reason for all of them.
+    #[allow(dead_code)]
+    reason: String,
 }
 
 /// One thing the crate does that music21 has no counterpart for. The count,

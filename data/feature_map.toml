@@ -43,6 +43,13 @@
 # them off, so a scan finds nothing to track; it is `figuredbass::Rules`
 # here, every switch of it, and music21's own `figuredBass.rules`
 # docstrings run against it (`doctest_rules`).
+#
+# Every file this prose waves at is named one by one in the `[[unlisted]]`
+# table at the end, with the same reason, and `xtask report` checks that
+# table against the submodule: a module that is neither read above nor
+# named there fails the report, as does a name music21 no longer has. So
+# the prose and the data cannot drift apart, and a module nobody has
+# looked at cannot stay invisible.
 
 [[class]]
 python = "chord/__init__.py"
@@ -2349,3 +2356,240 @@ quarterLengthOnly = "as `quarterLengthBeatStrength`"
 alignHockets = "a step music21 offers and its own `run` never takes: it moves a verticality's spans back where the moment before it sounds a subset of its notes"
 collapseArpeggios = "a step `run` never takes: it makes one chord of two neighbours standing on the same bass"
 removeNonChordTones = "a step `run` never takes: it joins the two spans of a passing or neighbour tone"
+
+[[class]]
+python = "braille/noteGrouping.py"
+rust = ["src/braille/segment.rs"]
+note = "A note grouping written out as braille, which is one function here: `transcribe_note_grouping` walks the grouping's elements as music21's does, and what music21 keeps on a transcriber object between the calls is that function's arguments and the grouping's own fields."
+
+[[class]]
+python = "braille/noteGrouping.py"
+name = "NoteGroupingTranscriber"
+rust = ["src/braille/segment.rs"]
+note = "The object music21 keeps the transcription's state on while it walks a grouping. There is no such object here: `transcribe_note_grouping` is the whole of it, its settings are read off the grouping as music21 reads them, and each `translate*` is a branch of the walk."
+
+[class.excluded]
+reset = "state between groupings, which a function that takes the grouping has none of"
+showClefSigns = "read off the grouping, as music21's transcriber reads it: `BrailleElementGrouping::show_clef_signs`"
+upperFirstInFingering = "read off the grouping, as `showClefSigns`: `upper_first_in_note_fingering`"
+transcribeGroup = "the whole of `transcribe_note_grouping`"
+transcribeOneElement = "one turn of that walk"
+translateNote = "a branch of the walk"
+translateRest = "a branch of the walk"
+translateChord = "a branch of the walk"
+translateDynamic = "a branch of the walk"
+translateTextExpression = "a branch of the walk"
+translateBarline = "a branch of the walk"
+translateClef = "a branch of the walk"
+optionallyAddDotToPrevious = "part of the walk, which writes the dot where the element before it needs one"
+
+# The other half of the map: every module of music21 no entry above reads,
+# with the reason. A file nothing names is invisible to the report, which
+# is how `search/serial.py`, `analysis/elements.py` and
+# `stream/makeNotation.py` each stayed untracked while being ported, so
+# `xtask report` fails where a module is neither read nor named here, and
+# where a module named here is one music21 no longer has. Between the
+# `[[class]]` entries and these, music21's own test files, its corpus, its
+# documentation and its data directories excepted, the map accounts for
+# every module music21 has.
+
+[[unlisted]]
+reason = "a reader or a writer, ported as one function in and one function out with every step inside private, and held to music21 by a parity test that compares whole documents rather than members"
+python = [
+  "abcFormat/__init__.py",
+  "abcFormat/translate.py",
+  "capella/__init__.py",
+  "capella/fromCapellaXML.py",
+  "humdrum/__init__.py",
+  "humdrum/spineParser.py",
+  "lily/__init__.py",
+  "lily/lilyObjects.py",
+  "lily/translate.py",
+  "mei/__init__.py",
+  "mei/base.py",
+  "midi/__init__.py",
+  "midi/base.py",
+  "midi/translate.py",
+  "musedata/__init__.py",
+  "musedata/translate.py",
+  "musicxml/__init__.py",
+  "musicxml/archiveTools.py",
+  "musicxml/helpers.py",
+  "musicxml/m21ToXml.py",
+  "musicxml/partStaffExporter.py",
+  "musicxml/xmlObjects.py",
+  "musicxml/xmlSoundParser.py",
+  "musicxml/xmlToM21.py",
+  "noteworthy/__init__.py",
+  "noteworthy/binaryTranslate.py",
+  "noteworthy/constants.py",
+  "noteworthy/dictionaries.py",
+  "noteworthy/translate.py",
+  "romanText/__init__.py",
+  "romanText/rtObjects.py",
+  "romanText/translate.py",
+  "romanText/writeRoman.py",
+  "tinyNotation.py",
+  "volpiano.py",
+]
+
+[[unlisted]]
+reason = "music21's own object machinery, which is what makes an object a member of a stream rather than a value: sites, contexts, derivations, the sort tuple, freezing and thawing, and the iterators and filters a stream hands out"
+python = [
+  "__init__.py",
+  "_version.py",
+  "base.py",
+  "derivation.py",
+  "exceptions21.py",
+  "freezeThaw.py",
+  "prebase.py",
+  "sites.py",
+  "sorting.py",
+  "stream/__init__.py",
+  "stream/core.py",
+  "stream/enums.py",
+  "stream/filters.py",
+  "stream/iterator.py",
+  "stream/streamStatus.py",
+  "stream/tools.py",
+]
+
+[[unlisted]]
+reason = "a small helper table or module of music21's own, ported here where the crate uses it rather than as a module of its own"
+python = [
+  "chord/tools.py",
+  "common/__init__.py",
+  "common/classTools.py",
+  "common/decorators.py",
+  "common/enums.py",
+  "common/fileTools.py",
+  "common/formats.py",
+  "common/misc.py",
+  "common/numberTools.py",
+  "common/objects.py",
+  "common/parallel.py",
+  "common/pathTools.py",
+  "common/stringTools.py",
+  "common/types.py",
+  "common/weakrefTools.py",
+  "humdrum/instruments.py",
+  "languageExcerpts/instrumentLookup.py",
+  "meter/tools.py",
+  "musedata/base12_26.py",
+  "musedata/base40.py",
+]
+
+[[unlisted]]
+reason = "the page: how a score is drawn, plotted or written out for another program to read, which the crate leaves to its caller"
+python = [
+  "features/outputFormats.py",
+  "graph/__init__.py",
+  "graph/axis.py",
+  "graph/findPlot.py",
+  "graph/plot.py",
+  "graph/primitives.py",
+  "graph/utilities.py",
+]
+
+[[unlisted]]
+reason = "the environment, the corpus cache and file conversion: settings, paths, pickles and the readers music21 chooses between, none of which a library that does no file IO has"
+python = [
+  "configure.py",
+  "converter/__init__.py",
+  "converter/museScore.py",
+  "converter/qmConverter.py",
+  "converter/subConverters.py",
+  "environment.py",
+  "ipython21/__init__.py",
+  "ipython21/converters.py",
+  "ipython21/ipExtension.py",
+  "ipython21/objects.py",
+  "metadata/bundles.py",
+  "metadata/caching.py",
+]
+
+[[unlisted]]
+reason = "a microphone, a MIDI port or a window: music21 talking to the machine, which the crate does not"
+python = [
+  "audioSearch/recording.py",
+  "audioSearch/scoreFollower.py",
+  "audioSearch/transcriber.py",
+  "midi/realtime.py",
+]
+
+[[unlisted]]
+reason = "music21's own, run over the crate's values rather than replaced, which `doctest_checker`, `doctest_fbexamples` and `doctest_fbharmony` hold it to"
+python = [
+  "figuredBass/checker.py",
+  "figuredBass/examples.py",
+  "figuredBass/harmony.py",
+]
+
+[[unlisted]]
+reason = "ported and deliberately not listed as classes: the feature extractors are rows of a generated table rather than a class each, and `Rules` is twelve switches with no method on it for a scan to find"
+python = [
+  "features/jSymbolic.py",
+  "features/native.py",
+  "figuredBass/rules.py",
+]
+
+[[unlisted]]
+reason = "a package's `__init__`, which only re-exports what the modules beside it define"
+python = [
+  "alpha/__init__.py",
+  "alpha/analysis/__init__.py",
+  "analysis/__init__.py",
+  "braille/__init__.py",
+  "features/__init__.py",
+  "figuredBass/__init__.py",
+  "languageExcerpts/__init__.py",
+  "meter/__init__.py",
+  "omr/__init__.py",
+  "search/__init__.py",
+  "tree/__init__.py",
+]
+
+[[unlisted]]
+reason = "music21's own demonstrations and test runners: scores and questions written to show a module off, which say nothing about whether it is ported"
+python = [
+  "braille/examples.py",
+  "braille/runAllBrailleTests.py",
+  "humdrum/questions.py",
+  "tree/examples.py",
+]
+
+[[unlisted]]
+reason = "the interval network a scale is realized through, which the crate answers from the scale's steps instead: a pattern music21 built and the crate has none of is kept as it stands and asked whenever the scale is realized"
+python = ["scale/intervalNetwork.py"]
+
+[[unlisted]]
+reason = "the timespan tree a caller holds and edits: the crate's reading of a stream is taken rather than kept, so `fromStream` and `toStream` are listed above and the tree itself is not"
+python = ["tree/core.py", "tree/node.py", "tree/trees.py"]
+
+[[unlisted]]
+reason = "the reducer music21 kept beside `reduceChords` and deprecated"
+python = ["analysis/reduceChordsOld.py"]
+
+[[unlisted]]
+reason = "the dictionary-with-attributes music21 hangs an analysis's answers on, where every walk here answers a value: `analysis::metrical` gives the accents and the depths rather than writing them onto the notes"
+python = ["editorial.py"]
+
+[[unlisted]]
+reason = "music21's settings, which a caller may change: the facade reads the one the crate cares about live (`pitch::default_octave` for `defaults.pitchOctave`), and the crate takes it as an argument"
+python = ["defaults.py"]
+
+[[unlisted]]
+reason = "music21's metadata values as objects -- a date that may be approximate, uncertain or a range, a text with a language, a contributor with a role: a value here is its text and its role (`metadata::MetadataValue`), which is what the writers write"
+python = ["metadata/primitives.py"]
+
+[[unlisted]]
+reason = "the 131-property vocabulary, which is `metadata::STANDARD_PROPERTIES` and is checked against music21's live table by `metadata_parity` rather than by a scan of its members"
+python = ["metadata/properties.py"]
+
+[[unlisted]]
+reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, which no stream here holds"
+python = ["braille/objects.py"]
+
+[[unlisted]]
+reason = "reading a pitch, a note or a chord from its name in another language, which is the other direction of `Pitch::german` and the rest and is not ported"
+python = ["languageExcerpts/naturalLanguageObjects.py"]
