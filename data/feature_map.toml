@@ -2383,6 +2383,19 @@ translateBarline = "a branch of the walk"
 translateClef = "a branch of the walk"
 optionallyAddDotToPrevious = "part of the walk, which writes the dot where the element before it needs one"
 
+[[class]]
+python = "languageExcerpts/naturalLanguageObjects.py"
+rust = ["src/pitch/names.rs"]
+note = "A pitch read from what it is called in German, French, Italian or Spanish, which is the other direction of `Pitch::german` and its three sisters: `language_dictionary` writes every name the language has, as music21's `generateLanguageDictionary` does, and `from_language_name` reads one back, answering a C natural where the language calls no pitch that. music21's own doctests for the module run against it (`doctest_naturallanguage`), and `language_names_parity` compares every pair of all four languages with music21's own dictionary."
+
+[class.renames]
+generateLanguageDictionary = "language_dictionary"
+toPitch = "from_language_name"
+
+[class.excluded]
+toNote = "a note built on what `from_language_name` read, which is `Note::new(pitch)` here and is music21's own one-liner"
+toChord = "a chord built on what it read, as `toNote`"
+
 # The other half of the map: every module of music21 no entry above reads,
 # with the reason. A file nothing names is invisible to the report, which
 # is how `search/serial.py`, `analysis/elements.py` and
@@ -2590,6 +2603,3 @@ python = ["metadata/properties.py"]
 reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, which no stream here holds"
 python = ["braille/objects.py"]
 
-[[unlisted]]
-reason = "reading a pitch, a note or a chord from its name in another language, which is the other direction of `Pitch::german` and the rest and is not ported"
-python = ["languageExcerpts/naturalLanguageObjects.py"]
