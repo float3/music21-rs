@@ -1,0 +1,18 @@
+# Docstrings of music21.spanner whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_spanner`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.spanner.MultiMeasureRest.numRests",
+    "music21.spanner.RepeatBracket",
+    "music21.spanner.RepeatBracket.number",
+    "music21.spanner.Spanner.addSpannedElements",
+    "music21.spanner.Spanner.getFirst",
+    "music21.spanner.Spanner.getLast",
+    "music21.spanner.Spanner.getSpannedElements",
+    "music21.spanner.SpannerAnchor",
+    "music21.spanner.SpannerBundle.getByClass",
+    "music21.spanner.SpannerBundle.getByIdLocal",
+    "music21.spanner.SpannerBundle.getBySpannedElement",
+]

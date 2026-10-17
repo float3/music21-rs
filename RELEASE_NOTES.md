@@ -2,6 +2,21 @@
 
 ## added
 
+- **music21's own spanner doctests run against the crate**, 296 of its 419
+  examples, where none of them ran before. What it took: the bundle now
+  carries `append`, `getByIdLocal` and `getBySpannedElement`, a spanner
+  answers `getSpannedElementIds` and keeps the `idLocal` a caller or a
+  reader numbers it with, and the members music21 keeps on one kind of
+  spanner alone are answered by the kind that has them and refused by the
+  rest, as music21 refuses them -- an octave line's `type`,
+  `shiftMagnitude` and `transposing`, and a bracket's `lineType`, each
+  written as well as read. One `Spanner` stands for every kind here, so
+  which kind it is decides what it answers.
+  What the remaining examples want is music21's own two stores:
+  `spannerStorage`, the stream it keeps the joined objects in where this
+  package keeps the objects themselves, and the pending-assignment queue
+  its readers hold while a spanner waits for its first note.
+
 - **music21's own metadata doctests run against the crate**, 285 of its
   370 examples, where none of them ran before. Getting there took five
   things, each a real gap in the wheel's `Metadata`:
