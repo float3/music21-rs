@@ -2,6 +2,40 @@
 
 ## added
 
+- **music21's own doctests for seven of its analysis modules now run
+  against the crate**, which takes the harness from 36 modules to 43:
+  `analysis.elements` (4 of 4 examples), `analysis.patel` (14 of 14),
+  `analysis.metrical` (13 of 13), `analysis.pitchAnalysis` (7 of 7),
+  `analysis.segmentByRests` (6 of 6), `analysis.floatingKey` (14 of 14)
+  and `analysis.windowed` (24 of 35). Each suite swaps the classes
+  music21's own examples build -- a pitch, a note, a duration, a chord, a
+  tie, a volume, the beams, and for the two that read a whole chorale its
+  clefs, keys, meters, instruments, dynamics, expressions, articulations
+  and tempo marks -- so music21's readers build the crate's objects and
+  its own analysis docstrings run over them.
+  Four things it found, each fixed. `labelBeatDepth` answered a new stream
+  where music21 writes the lyrics onto the part it is given, so a caller
+  reading its own notes afterwards saw none; it writes them in place now,
+  as its sibling `thomassenMelodicAccent` always did.
+  `melodicIntervalVariability` raised `StreamException` for a line too
+  short to have a deviation where music21 has raised `ValueError` since
+  v9. `getElementsByClass` found nothing when asked with a class rather
+  than a name -- music21's own code asks `getElementsByClass(stream.
+  Measure)`, and this package's classes do not inherit music21's, so a
+  class is read as its name now. And the wheel's `Stream` has `first` and
+  `last`, which music21's own code asks of whatever a filter hands back.
+  What `analysis.windowed` still fails is one shape of thing: the wheel's
+  `recurse` answers a list, so music21's own `analysis.discrete`
+  processors cannot walk a window with `.recurse().notes`, and a measure's
+  `repr` does not carry its number and offset.
+- The doctest totals are regenerated, so the report counts the
+  documentation of the 44 modules mapped since they were last written --
+  `stream.makeNotation`, `search.serial`, the braille modules, the tree
+  readers, `romanText.tsvConverter`, `romanText.clercqTemperley` and the
+  rest. A module the harness does not cover shows as nought of what
+  music21 documents rather than being left off the page, which is what
+  that file is for.
+
 - The feature map tracks `stream/makeNotation.py` and the two functions
   beside music21's ornament classes in `expressions.py`, neither of which
   it listed anywhere -- so the notation steps the crate has had since
