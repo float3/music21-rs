@@ -1019,6 +1019,30 @@ rust = ["src/analysis/metrical.rs"]
 note = "The depth of the metrical hierarchy at each note, and Thomassen's melodic accent."
 
 [[class]]
+python = "expressions.py"
+rust = ["src/expressions.rs"]
+note = "The two functions beside music21's ornament classes: a note's ornaments played out in turn, each realizing what the one before left of it, which is `realize_ornaments`. The stream-level `realizeOrnaments` of the same name is `stream/makeNotation.py`'s and is listed there."
+
+[class.excluded]
+isUnison = "whether an ornament's interval leaves the note where it sounds, which music21 asks of each of its three interval classes before deciding whether the ornament moves the note: the crate's `Interval::is_unison` is the generic question -- a unison whatever its quality -- and the sounding one is `ChromaticInterval::semitones`, so there is nothing to dispatch between here"
+
+[[class]]
+python = "stream/makeNotation.py"
+rust = ["src/makenotation/mod.rs", "src/makenotation/score.rs"]
+note = "The notation a score leaves unsaid, worked out: measures, ties, rests, voices, beams, stem directions, tuplet brackets and accidentals, each a function over a stream as music21's is. music21's `makeAccidentals` and `makeAccidentalsInMeasureStream` are one function here, `make_accidentals`: given a part it walks the measures itself, carrying the key in force and the measure before -- all but that measure's ornamental pitches, which is the same thing the step itself leaves out. `musicxml_make_notation_parity` holds the whole of it to music21 byte for byte on 257 subjects."
+
+[class.renames]
+makeAccidentalsInMeasureStream = "make_accidentals"
+
+[class.excluded]
+moveNotesToVoices = "the half of `makeVoices` that moves the notes into a voice, which `make_voices` does itself: there is no stream here for a caller to hold between the two steps"
+getTiePitchSet = "a helper of `makeAccidentals`, which reads the tie off the note where it needs it"
+ornamentalPitches = "the pitches one ornament implies are `expressions::Ornament::ornamental_pitches`, given the note's pitch and the key; gathering them over every ornament a note carries is the caller's, since no step here writes their accidentals"
+iterateBeamGroups = "the beam groups a stream's notes make, which `set_stem_direction_for_beam_groups` walks itself; a caller wanting them reads the beams each note carries"
+setStemDirectionOneGroup = "one group of that walk"
+saveAccidentalDisplayStatus = "a context manager that puts the display status back after an edit that rewrites it; a caller here keeps its own copy of what it wants back, there being no `with` to hang it on"
+
+[[class]]
 python = "analysis/elements.py"
 rust = ["src/analysis/elements.rs"]
 note = "How often each value of some property of a stream's elements comes, counted in the order each value is first met as Python's `Counter` counts. The property is a function of the element rather than the name of one, and the elements are whatever reading the caller counts over, as music21 takes a stream or a stream iterator."
