@@ -548,6 +548,67 @@ pub fn namespace_name(unique_name: &str) -> Option<&'static str> {
         .map(|(_, namespaced, _)| *namespaced)
 }
 
+/// The unique name a namespaced name stands for, `localeOfComposition` for
+/// `humdrum:OPC`: music21's `namespaceNameToUniqueName`. A name outside
+/// the vocabulary stands for none.
+///
+/// ```
+/// use music21_rs::metadata::unique_name_from_namespace;
+///
+/// assert_eq!(unique_name_from_namespace("humdrum:OPC"), Some("localeOfComposition"));
+/// assert_eq!(unique_name_from_namespace("soundtracker:SampleName"), None);
+/// ```
+#[must_use]
+pub fn unique_name_from_namespace(namespaced: &str) -> Option<&'static str> {
+    STANDARD_PROPERTIES
+        .iter()
+        .find(|(_, named, _)| *named == namespaced)
+        .map(|(unique, _, _)| *unique)
+}
+
+/// Whether a name is one the vocabulary knows, by its unique name or by
+/// its namespaced one: music21's `isStandardName`. A name of music21's own
+/// older vocabulary -- a work id or its abbreviation -- is not one of
+/// these, as music21's answer is not either.
+///
+/// ```
+/// use music21_rs::metadata::is_standard_name;
+///
+/// assert!(is_standard_name("librettist"));
+/// assert!(is_standard_name("marcrel:LBT"));
+/// assert!(!is_standard_name("average duration"));
+/// assert!(!is_standard_name("soundtracker:SampleName"));
+/// ```
+#[must_use]
+pub fn is_standard_name(name: &str) -> bool {
+    STANDARD_PROPERTIES
+        .iter()
+        .any(|(unique, named, _)| *unique == name || *named == name)
+}
+
+/// The unique name a plural attribute of music21's answers for,
+/// `composer` for `composers`: music21's
+/// `ALL_PLURAL_ATTRIBUTE_NAMES`, each of which answers every value under
+/// the name rather than the first.
+///
+/// ```
+/// use music21_rs::metadata::unique_name_of_plural;
+///
+/// assert_eq!(unique_name_of_plural("composers"), Some("composer"));
+/// assert_eq!(unique_name_of_plural("software"), Some("software"));
+/// assert_eq!(unique_name_of_plural("titles"), None);
+/// ```
+#[must_use]
+pub fn unique_name_of_plural(plural: &str) -> Option<&'static str> {
+    match plural {
+        "composers" => Some("composer"),
+        "librettists" => Some("librettist"),
+        "lyricists" => Some("lyricist"),
+        "software" => Some("software"),
+        _ => None,
+    }
+}
+
 /// music21's `STANDARD_PROPERTY_DESCRIPTIONS`: each property's unique name,
 /// its namespaced name, and whether it names a contributor.
 pub const STANDARD_PROPERTIES: [(&str, &str, bool); 131] = [
