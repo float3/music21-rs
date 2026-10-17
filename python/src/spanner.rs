@@ -40,6 +40,12 @@ pub struct Spanner {
     /// kind, how it is drawn, an octave line's shift, a glissando's kind.
     /// The positions it names are not kept here -- the objects are.
     pub(crate) inner: RsSpanner,
+    /// What a caller or a reader has numbered this spanner with:
+    /// music21's `idLocal`, which it keeps as a bare attribute and which
+    /// a MusicXML document's `number` is read into. Nothing musical turns
+    /// on it, so the crate keeps none.
+    #[pyo3(get, set)]
+    idLocal: Option<Py<PyAny>>,
     /// The notes it joins, in order, as the objects they are: music21's
     /// `getSpannedElements`.
     spanned: Vec<Py<PyAny>>,
@@ -51,6 +57,7 @@ impl Spanner {
         Self {
             inner: RsSpanner::new(kind, Vec::new()),
             spanned: Vec::new(),
+            idLocal: None,
         }
     }
 
@@ -181,6 +188,15 @@ impl Spanner {
 
     /// Whether an object is one of the notes it joins: music21's
     /// `hasSpannedElement`.
+    /// The id of every object it joins: music21's
+    /// `getSpannedElementIds`, which is Python's own `id` of each.
+    fn getSpannedElementIds(&self, py: Python<'_>) -> Vec<usize> {
+        self.spanned
+            .iter()
+            .map(|object| object.bind(py).as_ptr() as usize)
+            .collect()
+    }
+
     fn hasSpannedElement(slf: &Bound<'_, Self>, spannedElement: &Bound<'_, PyAny>) -> bool {
         let py = slf.py();
         slf.borrow()
@@ -209,6 +225,86 @@ impl Spanner {
     /// How many notes it joins: music21's `__len__`.
     fn __len__(&self) -> usize {
         self.spanned.len()
+    }
+
+    /// How far and which way an octave line moves the notes under it, as
+    /// music21 names it: `8va`, `8vb`, `15ma`, `15mb`, `22da` or `22db`.
+    ///
+    /// music21 keeps this on `Ottava` alone, and so does this: one `Spanner`
+    /// stands for every kind here, so a spanner of another kind raises as
+    /// music21's would.
+    #[getter]
+    fn r#type(slf: &Bound<'_, Self>) -> PyResult<Option<&'static str>> {
+        let me = slf.borrow();
+        only(slf, SpannerKind::Ottava, "type")?;
+        Ok(me.inner.shift().map(|shift| shift.name()))
+    }
+
+    /// Writes how far and which way the line moves its notes, by
+    /// music21's name for it. Whether the notes are written where they
+    /// sound is kept, as music21 keeps `transposing` across a change of
+    /// type.
+    #[setter(r#type)]
+    fn set_type(slf: &Bound<'_, Self>, value: &str) -> PyResult<()> {
+        only(slf, SpannerKind::Ottava, "type")?;
+        let transposing = slf
+            .borrow()
+            .inner
+            .shift()
+            .is_some_and(|shift| shift.transposing());
+        let shift = music21_rs_crate::spanner::OctaveShift::from_name(value, transposing)
+            .map_err(|error| SpannerException::new_err(crate::pitch::message(&error)))?;
+        slf.borrow_mut().inner.set_shift(Some(shift));
+        Ok(())
+    }
+
+    /// Writes whether the notes under the line are written where they
+    /// sound.
+    #[setter]
+    fn set_transposing(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+        only(slf, SpannerKind::Ottava, "transposing")?;
+        let Some(shift) = slf.borrow().inner.shift() else {
+            return Ok(());
+        };
+        let named = music21_rs_crate::spanner::OctaveShift::from_name(shift.name(), value)
+            .map_err(|error| SpannerException::new_err(crate::pitch::message(&error)))?;
+        slf.borrow_mut().inner.set_shift(Some(named));
+        Ok(())
+    }
+
+    /// What an octave line shifts by: music21's `shiftMagnitude`, 8, 15
+    /// or 22.
+    #[getter]
+    fn shiftMagnitude(slf: &Bound<'_, Self>) -> PyResult<Option<u8>> {
+        let me = slf.borrow();
+        only(slf, SpannerKind::Ottava, "shiftMagnitude")?;
+        Ok(me.inner.shift().map(|shift| shift.magnitude()))
+    }
+
+    /// Whether the notes under an octave line are written where they
+    /// sound: music21's `transposing`.
+    #[getter]
+    fn transposing(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        let me = slf.borrow();
+        only(slf, SpannerKind::Ottava, "transposing")?;
+        Ok(me.inner.shift().is_some_and(|shift| shift.transposing()))
+    }
+
+    /// How a bracket's line is drawn: music21's `lineType`, `solid`,
+    /// `dashed`, `dotted` or `wavy`.
+    #[getter]
+    fn lineType(slf: &Bound<'_, Self>) -> PyResult<Option<String>> {
+        let me = slf.borrow();
+        only(slf, SpannerKind::Line, "lineType")?;
+        Ok(me.inner.line_type().map(str::to_string))
+    }
+
+    /// Writes how the bracket's line is drawn.
+    #[setter]
+    fn set_lineType(slf: &Bound<'_, Self>, value: Option<String>) -> PyResult<()> {
+        only(slf, SpannerKind::Line, "lineType")?;
+        slf.borrow_mut().inner.set_line_type(value);
+        Ok(())
     }
 
     /// Which side of the staff it is drawn on, where the score says:
@@ -294,6 +390,55 @@ impl SpannerBundle {
         self.held.len()
     }
 
+    /// Another spanner into the bundle: music21's `append`.
+    fn append(&mut self, other: &Bound<'_, PyAny>) {
+        self.held.push(other.clone().unbind());
+    }
+
+    /// Those carrying an `idLocal`, as a bundle of their own: music21's
+    /// `getByIdLocal`, whose `idLocal` is an attribute a caller or a
+    /// reader writes rather than anything the crate keeps.
+    #[pyo3(signature = (idLocal = None))]
+    fn getByIdLocal<'py>(
+        slf: &Bound<'py, Self>,
+        idLocal: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let mut found = Vec::new();
+        for spanner in &slf.borrow().held {
+            let held = spanner.bind(py);
+            let same = match (held.getattr("idLocal"), idLocal) {
+                (Ok(mine), Some(wanted)) => mine.eq(wanted)?,
+                (Ok(mine), None) => mine.is_none(),
+                (Err(_), _) => false,
+            };
+            if same {
+                found.push(spanner.clone_ref(py));
+            }
+        }
+        Bound::new(py, Self::of(found))
+    }
+
+    /// Those joining an element, as a bundle of their own: music21's
+    /// `getBySpannedElement`, which asks each by the object itself.
+    fn getBySpannedElement<'py>(
+        slf: &Bound<'py, Self>,
+        spannedElement: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let mut found = Vec::new();
+        for spanner in &slf.borrow().held {
+            let held = spanner.bind(py);
+            if held
+                .call_method1("hasSpannedElement", (spannedElement,))?
+                .is_truthy()?
+            {
+                found.push(spanner.clone_ref(py));
+            }
+        }
+        Bound::new(py, Self::of(found))
+    }
+
     fn __iter__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let listed = PyList::empty(py);
@@ -351,6 +496,21 @@ fn module_of(kind: SpannerKind) -> &'static str {
         SpannerKind::Neume => "music21.volpiano",
         _ => "music21.spanner",
     }
+}
+
+/// Refuses a member music21 keeps on one kind of spanner alone, naming the
+/// class as music21's error names it.
+fn only(slf: &Bound<'_, Spanner>, kind: SpannerKind, member: &str) -> PyResult<()> {
+    if slf.borrow().inner.kind() == kind {
+        return Ok(());
+    }
+    let class = Spanner::classes(slf)?
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "Spanner".to_string());
+    Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+        "'{class}' object has no attribute '{member}'"
+    )))
 }
 
 /// music21's kinds of spanner, each the same `Spanner` under its own name
