@@ -5,7 +5,10 @@ mod names;
 
 pub use display::AccidentalDisplayOptions;
 pub use enharmonic::{CriterionFunction, dissonance_score, simplify_multiple_enharmonics};
-pub use names::{CHROMATIC_PITCH_CLASS_NAMES, pitch_class_name};
+pub use names::{
+    CHROMATIC_PITCH_CLASS_NAMES, Language, from_language_name, language_dictionary,
+    pitch_class_name,
+};
 
 use harmonics::*;
 

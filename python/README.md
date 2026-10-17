@@ -153,6 +153,11 @@ tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
 
+a pitch, a note or a chord is read from what it is called in German,
+French, Italian or Spanish with `toPitch`, `toNote` and `toChord`, and
+`generateLanguageDictionary` writes out every name a language has; a name
+the language calls no pitch by is a C natural, as music21 answers.
+
 music21's `analysis.patel` and `analysis.metrical` are here -- `nPVI`,
 `melodicIntervalVariability`, `labelBeatDepth` and
 `thomassenMelodicAccent` -- and a stream writes the interval against

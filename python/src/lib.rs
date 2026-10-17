@@ -56,6 +56,7 @@ pub mod interval;
 pub mod key;
 pub mod metadata;
 pub mod meter;
+pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
@@ -1494,6 +1495,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     realizer::register(m)?;
     windowed::register(m)?;
     analysis::register(m)?;
+    naturallanguage::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;

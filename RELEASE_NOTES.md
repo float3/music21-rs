@@ -2,6 +2,21 @@
 
 ## added
 
+- **A pitch read from what it is called in German, French, Italian or
+  Spanish** (`pitch::from_language_name`, `pitch::language_dictionary`):
+  music21's `languageExcerpts.naturalLanguageObjects`, the other direction
+  of `Pitch::german` and its three sisters, which the crate had only the
+  writing half of. The dictionary is built as music21 builds its own, by
+  writing every one of the seven letters with up to four flats and four
+  sharps out in the language and turning the pairs round, so there is one
+  table and not two; a name the language calls no pitch by is a C natural,
+  as music21 answers. The wheel has `toPitch`, `toNote`, `toChord` and
+  `generateLanguageDictionary` beside it, and music21's own doctests for
+  the module run against them (3 of 3 docstrings, 7 of 7 examples).
+  `language_names_parity` compares every pair of all four dictionaries
+  with music21's -- 63 names each -- and reads every one of them back,
+  with eight names no language uses.
+
 - **A walk of the wheel's streams answers what music21's answers**
   (`music21.stream.iterator.StreamIterator`): `recurse` handed back a
   plain list, so music21's own code could not filter it again --

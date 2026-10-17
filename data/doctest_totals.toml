@@ -305,6 +305,12 @@ examples = 245
 tests = 7
 
 [[module]]
+module = "music21.languageExcerpts.naturalLanguageObjects"
+docstrings = 3
+examples = 7
+tests = 3
+
+[[module]]
 module = "music21.layout"
 docstrings = 21
 examples = 158
