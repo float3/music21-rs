@@ -3,4 +3,7 @@
 # --manifest-path python-parity/Cargo.toml --test doctest_windowed`; the test
 # fails when one of these stops passing.
 
-passing = ["music21.analysis.windowed.WindowedAnalysis.process"]
+passing = [
+    "music21.analysis.windowed.WindowedAnalysis.analyze",
+    "music21.analysis.windowed.WindowedAnalysis.process",
+]

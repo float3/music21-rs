@@ -2,6 +2,23 @@
 
 ## added
 
+- **A walk of the wheel's streams answers what music21's answers**
+  (`music21.stream.iterator.StreamIterator`): `recurse` handed back a
+  plain list, so music21's own code could not filter it again --
+  `analysis.discrete` asks a window for `recurse().notes`, and the wheel's
+  own `bestClef` and `romanNumeralFromChord` ask the same of whatever
+  stream they are given. The class holds what the walk found, each with
+  where it stood, in the walk's own order, and answers `len`, truth,
+  indexing, iteration, `first`, `last`, `notes`, `notesAndRests`,
+  `getElementsByClass`, `getElementsNotOfClass` and `stream`. A stream
+  cannot stand in for it, as the order of a walk is not a sort: `recurse`
+  meets one part's notes before the next part's, where a stream would put
+  every offset nought together -- which is what made the first attempt at
+  this, handing back a stream, read a chorale in an order music21 never
+  does. With it, `analysis.windowed` passes 34 of its 35 doctests rather
+  than 24, the one left being a measure's `repr`, which music21 writes
+  with its number and its offset and this package writes with its id.
+
 - **music21's own doctests for seven of its analysis modules now run
   against the crate**, which takes the harness from 36 modules to 43:
   `analysis.elements` (4 of 4 examples), `analysis.patel` (14 of 14),
