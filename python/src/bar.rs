@@ -175,6 +175,39 @@ impl Barline {
     fn __eq__(&self, other: &Self) -> bool {
         self.inner == other.inner && self.location == other.location
     }
+    /// Copying and freezing, which the install helper's own fallbacks
+    /// cannot do for a barline: Python's `copyreg` rebuilds an object of a
+    /// C class by calling that class with the object itself, which a
+    /// barline's `__init__` reads as a type it is drawn with.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.get_type().call0()?;
+        {
+            let me = slf.borrow();
+            let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
+            copy.inner = me.inner.clone();
+        }
+        Ok(copied)
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::__deepcopy__(slf, None)
+    }
+
+    /// music21 freezes a score by pickling it, and what this object is
+    /// lives in Rust where a pickle cannot see it.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Some(inner) = crate::unpickled::<_, RsBarline>(slf, state)? {
+            slf.borrow_mut().inner = inner;
+        }
+        Ok(())
+    }
 }
 
 /// music21's `bar.Repeat`: a barline that says which way the music goes
@@ -237,13 +270,36 @@ impl Repeat {
     }
 
     /// Says how many times the passage is played.
+    ///
+    /// music21 refuses a count below nought and refuses one on a repeat
+    /// that *starts* a passage, where the count would say nothing, each
+    /// in its own words.
     #[setter]
-    fn set_times(slf: &Bound<'_, Self>, value: Option<u32>) -> PyResult<()> {
-        if value.is_some_and(|times| times < 1) {
-            return Err(BarException::new_err(
-                "cannot set repeat times to a value less than one",
-            ));
-        }
+    fn set_times(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let value = match value.filter(|value| !value.is_none()) {
+            None => None,
+            Some(given) => {
+                let candidate = given.extract::<i64>().map_err(|_| {
+                    BarException::new_err(format!(
+                        "cannot set repeat times to: {}",
+                        given
+                            .repr()
+                            .map_or_else(|_| "?".to_string(), |said| said.to_string())
+                    ))
+                })?;
+                if candidate < 0 {
+                    return Err(BarException::new_err(format!(
+                        "cannot set repeat times to a value less than zero: {candidate}"
+                    )));
+                }
+                if Self::get_direction(slf)? == "start" {
+                    return Err(BarException::new_err(
+                        "cannot set repeat times on a start Repeat",
+                    ));
+                }
+                Some(u32::try_from(candidate).unwrap_or_default())
+            }
+        };
         let mut base = slf.as_super().borrow_mut();
         let way = base
             .inner

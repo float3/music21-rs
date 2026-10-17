@@ -1,0 +1,14 @@
+# Docstrings of music21.bar whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_bar`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.bar.Barline",
+    "music21.bar.Barline.musicXMLBarStyle",
+    "music21.bar.Barline.type",
+    "music21.bar.Repeat",
+    "music21.bar.Repeat.getTextExpression",
+    "music21.bar.Repeat.times",
+    "music21.bar.typeToMusicXMLBarStyle",
+]
