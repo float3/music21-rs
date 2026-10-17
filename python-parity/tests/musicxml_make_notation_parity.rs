@@ -22,7 +22,11 @@
 //! A subject is named by its kind and a name: `tiny:` and a TinyNotation
 //! line, `flat:` and one read as notes only, with no measures made, `loose:`
 //! and notes each written `name@offset+length`, which may overlap, after a
-//! meter if there is one, `scored:` and the same put in a score, which is
+//! meter if there is one -- or `name@offset+length!ornament!`, a note
+//! carrying that ornament, which is the only way a subject reaches the
+//! accidentals an ornament's own notes need, every accidental of a score
+//! read from a document having been decided by its reader -- `scored:` and
+//! the same put in a score, which is
 //! where music21 makes voices of what overlaps, `measure:` and `voice:` and
 //! the same as a lone measure or voice, written as music21's `fromMeasure`
 //! and `fromVoice` write one, `midi:`
@@ -173,6 +177,42 @@ const SUBJECTS: &[(&str, &str)] = &[
     (
         "scored:C4@1+1 E4@1.5+1 G4@6+3 B4@7+0.25",
         "voices starting late",
+    ),
+    // The accidentals an ornament's own notes need, which only a score
+    // built note by note reaches: every accidental of a score read from a
+    // document has been decided by its reader, so the step that decides
+    // these is never run on one.
+    (
+        "scored:4/4 B-4@0+1 A4@1+1!trill! C5@2+1 D5@3+1",
+        "a trill whose note needs a natural after the flat before it",
+    ),
+    (
+        "scored:4/4 B-4@0+1 A4@1+1!turn! B4@2+2",
+        "a turn's two notes, and the note one of them has already said",
+    ),
+    (
+        "scored:4/4 B-4@0+1 A4@1+1!trill! B4@2+1 C5@3+1",
+        "a note the ornament before it has already sounded",
+    ),
+    (
+        "scored:4/4 B-4@0+1 A4@1+1!trill! C5@2+2 B4@4+1 C5@5+3",
+        "the measure after one an ornament played in",
+    ),
+    (
+        "scored:4/4 B-4@0+1 C5@1+3 A4@4+1!trill! C5@5+3",
+        "an ornament in the measure after the flat",
+    ),
+    (
+        "scored:4/4 C#5@0+1 C5@1+1!mordent! E5@2+2",
+        "an ornament whose note needs nothing",
+    ),
+    (
+        "scored:4/4 C#5@0+1 D5@1+1!invertedMordent! F5@2+2",
+        "an inverted mordent above an altered note",
+    ),
+    (
+        "loose:4/4 B-4@0+1 A4@1+1!turn! C5@2+2",
+        "the same in a part with no score around it",
     ),
     // A lone measure or voice.
     (
@@ -489,17 +529,37 @@ def flat_part(line):
         part.insert(element.getOffsetBySite(read.flatten()), element)
     return part
 
+ORNAMENTS = {
+    'trill': 'Trill',
+    'mordent': 'Mordent',
+    'invertedMordent': 'InvertedMordent',
+    'turn': 'Turn',
+    'invertedTurn': 'InvertedTurn',
+}
+
 def loose_part(text):
-    """A part of notes each standing where it is said to, for as long."""
-    from music21 import meter
+    """A part of notes each standing where it is said to, for as long.
+
+    A note written `name@offset+length!ornament!` carries that ornament,
+    which is how a subject reaches the accidentals an ornament implies: a
+    score read from a document never does, every accidental of one having
+    been decided by the reader.
+    """
+    from music21 import expressions, meter
     part = stream.Part()
     for token in text.split():
         if '@' not in token:
             part.insert(0, meter.TimeSignature(token))
             continue
         name, placed = token.split('@')
+        ornament = None
+        if placed.endswith('!'):
+            placed, ornament = placed[:-1].split('!')
         offset, length = placed.split('+')
-        part.insert(float(offset), note.Note(name, quarterLength=float(length)))
+        made = note.Note(name, quarterLength=float(length))
+        if ornament is not None:
+            made.expressions.append(getattr(expressions, ORNAMENTS[ornament])())
+        part.insert(float(offset), made)
     return part
 
 def lone_stream(text, kind):
@@ -806,7 +866,8 @@ fn the_crate_makes_notation_as_music21_does() {
 }
 
 /// A part of notes each standing where it is said to, for as long, as the
-/// helper builds music21's.
+/// helper builds music21's. A note written
+/// `name@offset+length!ornament!` carries that ornament.
 fn loose_part(text: &str) -> music21_rs::Result<Stream> {
     let mut part = Stream::with_kind(StreamKind::Part);
     for token in text.split_whitespace() {
@@ -814,13 +875,40 @@ fn loose_part(text: &str) -> music21_rs::Result<Stream> {
             part.insert(0.0, music21_rs::TimeSignature::from_ratio_string(token)?);
             continue;
         };
+        let (placed, ornament) = match placed.strip_suffix('!') {
+            Some(rest) => match rest.split_once('!') {
+                Some((placed, ornament)) => (placed, Some(ornament)),
+                None => (rest, None),
+            },
+            None => (placed, None),
+        };
         let (offset, length) = placed.split_once('+').unwrap_or((placed, "1"));
         let number = |text: &str| text.parse::<f64>().unwrap_or(0.0);
-        let note = music21_rs::Note::from_name(name)?
+        let mut note = music21_rs::Note::from_name(name)?
             .with_duration(music21_rs::Duration::new(number(length))?);
+        if let Some(ornament) = ornament {
+            note.expressions_mut()
+                .push(music21_rs::expressions::Ornament::of_kind(kind_of(ornament)?).into());
+        }
         part.insert(number(offset), note);
     }
     Ok(part)
+}
+
+/// The ornament a subject names, as the helper's `ORNAMENTS` names
+/// music21's.
+fn kind_of(named: &str) -> music21_rs::Result<music21_rs::expressions::OrnamentKind> {
+    use music21_rs::expressions::OrnamentKind;
+    match named {
+        "trill" => Ok(OrnamentKind::Trill),
+        "mordent" => Ok(OrnamentKind::Mordent),
+        "invertedMordent" => Ok(OrnamentKind::InvertedMordent),
+        "turn" => Ok(OrnamentKind::Turn),
+        "invertedTurn" => Ok(OrnamentKind::InvertedTurn),
+        other => Err(music21_rs::Error::Expression(format!(
+            "no subject writes the ornament {other}"
+        ))),
+    }
 }
 
 /// A part's notes and rests with its measures taken away, as the helper

@@ -21,6 +21,26 @@
   different function from the `expressions.realizeOrnaments` the crate
   does have, as that one's doc comment now says. (The second of those is
   ported below; the first is still the to-do list.)
+- **The accidentals an ornament's own notes need, decided with the rest**
+  (`makenotation::make_ornamental_accidentals`): music21's
+  `makeOrnamentalAccidentals`, the last gap the notation map turned up.
+  `make_accidentals` now decides them where music21 decides them -- after
+  the note itself and after each note of a chord, against everything heard
+  so far including that note -- and counts them among the pitches already
+  heard, so a note the ornament before it has already sounded shows no
+  accidental of its own and the measure after one is decided against what
+  its ornaments played, as music21's `makeAccidentalsInMeasureStream`
+  counts them. What is decided is written onto the ornament, which is
+  where the MusicXML writer reads the mark from; an ornament of a fixed
+  size carries no accidental of its own and is left as it stands, music21
+  keeping that on a resolved pitch a value type does not hold.
+  `musicxml_make_notation_parity` gained the eight subjects that reach it:
+  a note written `name@offset+length!ornament!` carries an ornament, which
+  is the only way a subject can, since every accidental of a score read
+  from a document has been decided by its reader and the step is then
+  skipped. Two of them write an `<accidental-mark>` music21 writes and the
+  crate did not, and the test was run with the step switched off to prove
+  they catch it.
 - **Every ornament a stream carries played out, in a stream of its own**
   (`makenotation::realize_ornaments`): music21's
   `stream.makeNotation.realizeOrnaments`, which the crate had no
