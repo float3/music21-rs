@@ -2,6 +2,32 @@
 
 ## added
 
+- **A score reduced to the chords it is made of** (`analysis::reduce_chords`):
+  music21's `analysis.reduceChords.ChordReducer.run`, which the crate had
+  no counterpart for at all. The notes are read as spans of time and
+  thinned out -- spans of no length go, each part's are fused where they
+  sound alike in one measure, they are cut where the bass moves, the notes
+  above the bass of a dissonant moment go, the gaps are filled, and spans
+  shorter than half a note and then a note go unless they fill their
+  measure -- and what is left is chordified against the score, each measure
+  keeping the three chords weighing most in it (how long each sounds, times
+  how strong its beat is, a tenth of that where it is dissonant).
+  `reduce_chords_parity` holds it to music21 on twelve corpus scores --
+  chorales, string quartets, a trio sonata, madrigals, early music whose
+  meters change, a Palestrina Agnus -- every chord of every measure the
+  same, with its offset and its length.
+  Two things about music21's own reduction are worth knowing, since both
+  decide what a measure keeps. Its weights are keyed by
+  `tuple({p.pitchClass for p in chord})`, whose order is CPython's for a
+  set of small integers, so two voicings of the same classes weigh as one
+  chord where their hash tables came out alike and as two where they did
+  not; `python_set_order` reproduces that order. And it takes the last of
+  `allParts()` as the bass, sorting a set of part objects by the id of each
+  part's instrument -- so where two parts share an instrument, as a piano's
+  two staves do, which one music21 calls the bass falls out of where those
+  objects sit in memory. The crate keeps the score's own order there, so
+  the lower staff is the bass, and the parity test passes such a score over
+  rather than pretend to compare it.
 - The feature map tracks `search/serial.py`, music21's serial search,
   which the crate had ported with a parity test over corpus scores and the
   map listed nowhere: 41 members over five entries, of which the crate

@@ -2293,3 +2293,30 @@ labelTransformedSegments = "label"
 labelMultisets = "label"
 labelTransposedMultisets = "label"
 labelTransposedAndInvertedMultisets = "label"
+
+[[class]]
+python = "analysis/reduceChords.py"
+name = "ChordReducer"
+rust = ["src/analysis/reduce_chords.rs"]
+note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. Its steps are private, as the readers' are, and the whole is held to music21 by `reduce_chords_parity` on twelve corpus scores."
+
+[class.renames]
+run = "reduce_chords"
+
+[class.excluded]
+removeZeroDurationTimespans = "a step inside the reduction, which `reduce_chords` drives: the steps work on a list of spans of the crate's own rather than on a timespan tree a caller holds"
+splitByBass = "a step inside the reduction, as `removeZeroDurationTimespans`"
+fuseTimespansByPart = "a step inside the reduction, as `removeZeroDurationTimespans`"
+removeVerticalDissonances = "a step inside the reduction, as `removeZeroDurationTimespans`"
+fillBassGaps = "a step inside the reduction, as `removeZeroDurationTimespans`"
+fillMeasureGaps = "a step inside the reduction, as `removeZeroDurationTimespans`"
+removeShortTimespans = "a step inside the reduction, as `removeZeroDurationTimespans`"
+reduceMeasureToNChords = "a step inside the reduction: the measures of the chordified score are reduced as `reduce_chords` goes"
+computeMeasureChordWeights = "a step inside that one, which weighs the chords of a measure by their pitch classes"
+qlbsmpConsonance = "the weighting `run` uses, which is that step's arithmetic: how long a chord sounds times how strong its beat is, a tenth of it where the chord is dissonant, and the length alone for the last chord of a measure"
+quarterLengthBeatStrength = "one of the three weightings music21 offers and its own `run` never chooses"
+quarterLengthBeatStrengthMeasurePosition = "as `quarterLengthBeatStrength`"
+quarterLengthOnly = "as `quarterLengthBeatStrength`"
+alignHockets = "a step music21 offers and its own `run` never takes: it moves a verticality's spans back where the moment before it sounds a subset of its notes"
+collapseArpeggios = "a step `run` never takes: it makes one chord of two neighbours standing on the same bass"
+removeNonChordTones = "a step `run` never takes: it joins the two spans of a passing or neighbour tone"
