@@ -1,0 +1,34 @@
+# Docstrings of music21.metadata whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_metadata`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.metadata.AmbitusShort",
+    "music21.metadata.Metadata.__getattr__",
+    "music21.metadata.Metadata._contributorRoleToUniqueName",
+    "music21.metadata.Metadata._isContributorNamespaceName",
+    "music21.metadata.Metadata._isContributorUniqueName",
+    "music21.metadata.Metadata._isStandardNamespaceName",
+    "music21.metadata.Metadata._isStandardUniqueName",
+    "music21.metadata.Metadata._namespaceNameNeedsArticleNormalization",
+    "music21.metadata.Metadata.addContributor",
+    "music21.metadata.Metadata.alternativeTitle",
+    "music21.metadata.Metadata.composer",
+    "music21.metadata.Metadata.isContributorUniqueName",
+    "music21.metadata.Metadata.isStandardName",
+    "music21.metadata.Metadata.librettist",
+    "music21.metadata.Metadata.localeOfComposition",
+    "music21.metadata.Metadata.lyricist",
+    "music21.metadata.Metadata.movementName",
+    "music21.metadata.Metadata.movementNumber",
+    "music21.metadata.Metadata.namespaceNameToUniqueName",
+    "music21.metadata.Metadata.number",
+    "music21.metadata.Metadata.opusNumber",
+    "music21.metadata.Metadata.title",
+    "music21.metadata.Metadata.uniqueNameToNamespaceName",
+    "music21.metadata.RichMetadata",
+    "music21.metadata.RichMetadata._isStandardUniqueName",
+    "music21.metadata.RichMetadata.getSourcePath",
+    "music21.metadata.RichMetadata.update",
+]

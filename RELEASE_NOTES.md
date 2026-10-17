@@ -2,6 +2,39 @@
 
 ## added
 
+- **music21's own metadata doctests run against the crate**, 285 of its
+  370 examples, where none of them ran before. Getting there took five
+  things, each a real gap in the wheel's `Metadata`:
+  **`__setattr__` refused every name outside the metadata vocabulary**,
+  which is the only call music21 makes for an attribute -- its own
+  comment says so -- so `Music21Object.__init__` could not even write
+  `_id` and nothing of music21's half was built. Anything the vocabulary
+  does not name now goes into the object's own dictionary, as
+  `super().__setattr__` would put it, and the class carries a `dict` to
+  hold it, as the package's `Stream` does.
+  **A frozen score could not be thawed** while the class stood in for
+  music21's: `Music21Object.__setstate__` writes the whole dictionary with
+  `object.__setattr__`, which CPython refuses for an object whose class
+  defines `__setattr__` in C. The class pickles itself now, as every other
+  facade here does.
+  And five members music21's own code and docstrings ask for are carried:
+  `add`, `getCustom`, `addCustom`, `setCustom`,
+  `uniqueNameToNamespaceName`, `namespaceNameToUniqueName`,
+  `isContributorUniqueName`, `isStandardName`, `bestTitle`,
+  `getContributorsByRole`, `contributors`, and music21's four plural
+  names (`composers`, `librettists`, `lyricists`, `software`), each
+  answering every value under the name it stands for.
+  `addContributor` takes music21's own `Contributor` -- anything answering
+  to a role and a name -- as well as the pair this package took before.
+  The crate gained the three vocabulary lookups behind them:
+  `metadata::unique_name_from_namespace`, `is_standard_name` and
+  `unique_name_of_plural`.
+  What the remaining 85 examples want is music21's metadata *primitives*:
+  the `Text`, `Date` and `Contributor` objects it answers with where this
+  package answers the strings they say (`convertValue`, a value's
+  `language`), and `_contents`, the dictionary music21's own private
+  methods read its values out of.
+
 - **A pitch read from what it is called in German, French, Italian or
   Spanish** (`pitch::from_language_name`, `pitch::language_dictionary`):
   music21's `languageExcerpts.naturalLanguageObjects`, the other direction
