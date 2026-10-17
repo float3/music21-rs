@@ -32,6 +32,10 @@ use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 use utils::{init_py, prepare};
 
+pub use music21_rs_python::analysis::{
+    ELEMENTS_NAMES, FLOATING_KEY_NAMES, METRICAL_NAMES, PATEL_NAMES, PITCH_ANALYSIS_NAMES,
+    SEGMENT_BY_RESTS_NAMES,
+};
 /// The names each facade module provides, for swapping into the music21
 /// module of the same name. They live with the classes they name; the
 /// aliases are here because the tests read them off this module.
@@ -67,6 +71,7 @@ pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;
 pub use music21_rs_python::tempo::NAMES as TEMPO_NAMES;
 pub use music21_rs_python::transposition::NAMES as TRANSPOSITION_NAMES;
 pub use music21_rs_python::voiceleading::NAMES as VOICE_LEADING_NAMES;
+pub use music21_rs_python::windowed::NAMES as WINDOWED_NAMES;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Expectations {

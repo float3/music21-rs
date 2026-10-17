@@ -206,7 +206,17 @@ fn answers_to(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<b
     if is_of_class(object, class)? {
         return Ok(true);
     }
-    let Ok(name) = class.extract::<String>() else {
+    // A class given as the class itself is read as its name. This
+    // package's classes do not inherit music21's, so a measure of ours is
+    // no instance of `stream.Measure` though it answers to the name, and
+    // music21's own code asks for one that way.
+    let named = || {
+        class
+            .getattr("__name__")
+            .ok()
+            .and_then(|name| name.extract::<String>().ok())
+    };
+    let Some(name) = class.extract::<String>().ok().or_else(named) else {
         return Ok(false);
     };
     // What the object says it is, which is music21's whole chain for one
@@ -2063,6 +2073,19 @@ impl Stream {
     #[setter]
     fn set_timeSignature(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         Self::set_opening(slf, "TimeSignature", value)
+    }
+
+    /// The first element the stream holds, or nothing where it holds
+    /// none: music21's `first`, which its own code asks of what
+    /// `getElementsByClass` hands back.
+    fn first<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Ok(self.elements(py)?.into_iter().next())
+    }
+
+    /// The last element the stream holds, or nothing where it holds none:
+    /// music21's `last`.
+    fn last<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        Ok(self.elements(py)?.into_iter().next_back())
     }
 
     /// Takes the object at an index out and hands it back, the last where

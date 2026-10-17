@@ -17,10 +17,52 @@ music21_version = "11.0.0b12"
 music21_commit = "5151b5189570c0fa35650944feb47d4e69aea670"
 
 [[module]]
+module = "music21.alpha.analysis.aligner"
+docstrings = 13
+examples = 322
+tests = 10
+
+[[module]]
+module = "music21.alpha.analysis.fixer"
+docstrings = 1
+examples = 91
+tests = 4
+
+[[module]]
+module = "music21.alpha.analysis.hasher"
+docstrings = 10
+examples = 86
+tests = 8
+
+[[module]]
+module = "music21.alpha.analysis.ornamentRecognizer"
+docstrings = 0
+examples = 0
+tests = 3
+
+[[module]]
+module = "music21.alpha.analysis.search"
+docstrings = 0
+examples = 0
+tests = 2
+
+[[module]]
+module = "music21.analysis.correlate"
+docstrings = 1
+examples = 8
+tests = 2
+
+[[module]]
 module = "music21.analysis.discrete"
 docstrings = 25
 examples = 122
 tests = 7
+
+[[module]]
+module = "music21.analysis.elements"
+docstrings = 1
+examples = 4
+tests = 0
 
 [[module]]
 module = "music21.analysis.enharmonics"
@@ -65,6 +107,18 @@ examples = 7
 tests = 0
 
 [[module]]
+module = "music21.analysis.reduceChords"
+docstrings = 4
+examples = 28
+tests = 2
+
+[[module]]
+module = "music21.analysis.reduction"
+docstrings = 1
+examples = 3
+tests = 21
+
+[[module]]
 module = "music21.analysis.segmentByRests"
 docstrings = 2
 examples = 6
@@ -89,10 +143,58 @@ examples = 105
 tests = 2
 
 [[module]]
+module = "music21.audioSearch"
+docstrings = 15
+examples = 107
+tests = 1
+
+[[module]]
+module = "music21.bar"
+docstrings = 7
+examples = 43
+tests = 3
+
+[[module]]
 module = "music21.beam"
 docstrings = 13
 examples = 112
 tests = 2
+
+[[module]]
+module = "music21.braille.basic"
+docstrings = 25
+examples = 199
+tests = 0
+
+[[module]]
+module = "music21.braille.lookup"
+docstrings = 2
+examples = 6
+tests = 0
+
+[[module]]
+module = "music21.braille.noteGrouping"
+docstrings = 3
+examples = 23
+tests = 0
+
+[[module]]
+module = "music21.braille.segment"
+docstrings = 19
+examples = 219
+tests = 1
+
+[[module]]
+module = "music21.braille.text"
+docstrings = 14
+examples = 135
+tests = 0
+
+[[module]]
+module = "music21.braille.translate"
+docstrings = 4
+examples = 30
+tests = 3
 
 [[module]]
 module = "music21.chord"
@@ -129,6 +231,12 @@ module = "music21.expressions"
 docstrings = 40
 examples = 350
 tests = 12
+
+[[module]]
+module = "music21.features.base"
+docstrings = 16
+examples = 82
+tests = 9
 
 [[module]]
 module = "music21.figuredBass.notation"
@@ -173,6 +281,12 @@ examples = 364
 tests = 28
 
 [[module]]
+module = "music21.humdrum.harmParser"
+docstrings = 1
+examples = 11
+tests = 41
+
+[[module]]
 module = "music21.instrument"
 docstrings = 15
 examples = 150
@@ -191,6 +305,18 @@ examples = 245
 tests = 7
 
 [[module]]
+module = "music21.layout"
+docstrings = 21
+examples = 158
+tests = 2
+
+[[module]]
+module = "music21.metadata"
+docstrings = 54
+examples = 370
+tests = 9
+
+[[module]]
 module = "music21.meter.base"
 docstrings = 34
 examples = 387
@@ -203,10 +329,34 @@ examples = 386
 tests = 21
 
 [[module]]
+module = "music21.midi.percussion"
+docstrings = 3
+examples = 27
+tests = 64
+
+[[module]]
 module = "music21.note"
 docstrings = 33
 examples = 341
 tests = 13
+
+[[module]]
+module = "music21.omr.correctors"
+docstrings = 21
+examples = 164
+tests = 0
+
+[[module]]
+module = "music21.omr.evaluators"
+docstrings = 5
+examples = 27
+tests = 0
+
+[[module]]
+module = "music21.percussion"
+docstrings = 2
+examples = 18
+tests = 0
 
 [[module]]
 module = "music21.pitch"
@@ -215,10 +365,28 @@ examples = 934
 tests = 38
 
 [[module]]
+module = "music21.repeat"
+docstrings = 26
+examples = 215
+tests = 44
+
+[[module]]
 module = "music21.roman"
 docstrings = 34
 examples = 560
 tests = 34
+
+[[module]]
+module = "music21.romanText.clercqTemperley"
+docstrings = 14
+examples = 90
+tests = 1
+
+[[module]]
+module = "music21.romanText.tsvConverter"
+docstrings = 13
+examples = 75
+tests = 7
 
 [[module]]
 module = "music21.scale"
@@ -233,6 +401,30 @@ examples = 55
 tests = 63
 
 [[module]]
+module = "music21.search.base"
+docstrings = 22
+examples = 185
+tests = 2
+
+[[module]]
+module = "music21.search.lyrics"
+docstrings = 3
+examples = 17
+tests = 3
+
+[[module]]
+module = "music21.search.segment"
+docstrings = 4
+examples = 25
+tests = 0
+
+[[module]]
+module = "music21.search.serial"
+docstrings = 23
+examples = 564
+tests = 0
+
+[[module]]
 module = "music21.serial"
 docstrings = 22
 examples = 149
@@ -245,10 +437,34 @@ examples = 107
 tests = 9
 
 [[module]]
+module = "music21.spanner"
+docstrings = 39
+examples = 419
+tests = 30
+
+[[module]]
 module = "music21.stream.base"
 docstrings = 144
 examples = 2278
 tests = 271
+
+[[module]]
+module = "music21.stream.makeNotation"
+docstrings = 11
+examples = 255
+tests = 283
+
+[[module]]
+module = "music21.style"
+docstrings = 16
+examples = 76
+tests = 0
+
+[[module]]
+module = "music21.tablature"
+docstrings = 8
+examples = 55
+tests = 4
 
 [[module]]
 module = "music21.tempo"
@@ -257,10 +473,58 @@ examples = 196
 tests = 17
 
 [[module]]
+module = "music21.text"
+docstrings = 10
+examples = 80
+tests = 3
+
+[[module]]
 module = "music21.tie"
 docstrings = 2
 examples = 13
 tests = 1
+
+[[module]]
+module = "music21.tree.analysis"
+docstrings = 0
+examples = 0
+tests = 0
+
+[[module]]
+module = "music21.tree.fromStream"
+docstrings = 3
+examples = 28
+tests = 3
+
+[[module]]
+module = "music21.tree.spans"
+docstrings = 14
+examples = 116
+tests = 1
+
+[[module]]
+module = "music21.tree.timespanTree"
+docstrings = 11
+examples = 80
+tests = 3
+
+[[module]]
+module = "music21.tree.toStream"
+docstrings = 1
+examples = 2
+tests = 0
+
+[[module]]
+module = "music21.tree.verticality"
+docstrings = 14
+examples = 173
+tests = 1
+
+[[module]]
+module = "music21.variant"
+docstrings = 25
+examples = 370
+tests = 7
 
 [[module]]
 module = "music21.voiceLeading"

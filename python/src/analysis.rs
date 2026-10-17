@@ -44,6 +44,28 @@ pub const NAMES: &[&str] = &[
     "FloatingKeyException",
 ];
 
+// What stands in for each of music21's analysis modules, since one module
+// here carries what music21 spreads over six. A doctest run swaps one
+// module at a time, so each needs its own list.
+
+/// `music21.analysis.patel`.
+pub const PATEL_NAMES: &[&str] = &["nPVI", "melodicIntervalVariability"];
+
+/// `music21.analysis.metrical`.
+pub const METRICAL_NAMES: &[&str] = &["labelBeatDepth", "thomassenMelodicAccent"];
+
+/// `music21.analysis.pitchAnalysis`.
+pub const PITCH_ANALYSIS_NAMES: &[&str] = &["pitchAttributeCount"];
+
+/// `music21.analysis.elements`.
+pub const ELEMENTS_NAMES: &[&str] = &["attributeCount"];
+
+/// `music21.analysis.segmentByRests`.
+pub const SEGMENT_BY_RESTS_NAMES: &[&str] = &["Segmenter"];
+
+/// `music21.analysis.floatingKey`.
+pub const FLOATING_KEY_NAMES: &[&str] = &["KeyAnalyzer", "FloatingKeyException", "divide"];
+
 // music21's own `FloatingKeyException` is an `AnalysisException`, which is
 // a `Music21Exception`; this one is the base alone, there being no type
 // here for the class in between. Nothing in music21 catches the middle
@@ -76,20 +98,44 @@ fn melodicIntervalVariability(
 ) -> PyResult<f64> {
     let read = crate::stream::crate_stream(streamForAnalysis)?;
     let options = crate::stream::consecutive_options(skipKeywords)?;
-    music21_rs_crate::analysis::patel::melodic_interval_variability(&read, &options)
-        .map_err(|error| crate::stream::stream_error(&error))
+    music21_rs_crate::analysis::patel::melodic_interval_variability(&read, &options).map_err(
+        |error| match error {
+            // A line too short for a deviation at all, which music21 has
+            // raised as a `ValueError` since v9 rather than as one of its
+            // own exceptions.
+            music21_rs_crate::Error::Analysis(said) => {
+                pyo3::exceptions::PyValueError::new_err(said)
+            }
+            error => crate::stream::stream_error(&error),
+        },
+    )
 }
 
 /// music21's `analysis.metrical.labelBeatDepth`: a lyric under each note
 /// saying how deep in the beat hierarchy it falls.
 ///
-/// The answer is a new stream, as every edit in this package is; music21
-/// writes the lyrics onto the part it is given.
+/// The lyrics are written onto the notes of the stream it is given and the
+/// stream itself is answered, as music21's does -- an annotation of what
+/// an analysis found, like `thomassenMelodicAccent`'s, rather than an edit
+/// of what the music says, which in this package would answer a stream of
+/// its own. The depths are the crate's `beat_depths`, and a note tied from
+/// the one before it is passed over there.
 #[pyfunction]
 fn labelBeatDepth<'py>(streamIn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    crate::stream::changed(streamIn, false, |stream| {
-        music21_rs_crate::analysis::metrical::label_beat_depth(stream)
-    })
+    let py = streamIn.py();
+    let read = crate::stream::read_with_leaves(streamIn)?;
+    let depths = music21_rs_crate::analysis::metrical::beat_depths(&read.0)
+        .map_err(|error| crate::stream::stream_error(&error))?;
+    for (position, depth) in depths {
+        let Some(object) = read.1.get(position) else {
+            continue;
+        };
+        let object = object.bind(py);
+        for _ in 0..depth {
+            object.call_method1("addLyric", ("*",))?;
+        }
+    }
+    Ok(streamIn.clone())
 }
 
 /// music21's `analysis.metrical.thomassenMelodicAccent`: the melodic

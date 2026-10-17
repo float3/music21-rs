@@ -150,9 +150,12 @@ the note's own `Lyric` in it.
 music21's `analysis.patel` and `analysis.metrical` are here -- `nPVI`,
 `melodicIntervalVariability`, `labelBeatDepth` and
 `thomassenMelodicAccent` -- and a stream writes the interval against
-another part onto its notes with `attachIntervalsBetweenStreams`. each
-leaves its answer on the note's `editorial`, music21's dictionary-with-attributes for what an analysis
-found.
+another part onto its notes with `attachIntervalsBetweenStreams`.
+`thomassenMelodicAccent` and `attachIntervalsBetweenStreams` leave their
+answer on the note's `editorial`, music21's dictionary-with-attributes for
+what an analysis found, and `labelBeatDepth` writes a lyric of stars under
+each note; all three write onto the stream they are given, as music21's
+do. music21's own doctests for both modules run against these.
 
 `analysis.segmentByRests.Segmenter` cuts a line into the runs of notes
 between its rests, each run the stream's own notes and each interval built
