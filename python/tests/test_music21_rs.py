@@ -3551,6 +3551,30 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_repeat_mark_says_what_it_is_written_with():
+    """Every answer is music21's own for the same marks."""
+    import copy
+
+    segno = m.Segno()
+    assert (segno.getText(), segno.useSymbol) == ("Segno", True)
+    coda = m.Coda()
+    assert (coda.getText(), coda.useSymbol) == ("Coda", True)
+    # A coda given words it may be written with is written, not drawn.
+    told = m.Coda("to Coda")
+    assert (told.getText(), told.useSymbol) == ("to Coda", False)
+    # And words it may not are passed over, as music21 passes them over.
+    other = m.Coda("D.C. al fine")
+    assert (other.getText(), other.useSymbol) == ("Coda", True)
+    assert m.DaCapoAlFine().getText() == "Da Capo al fine"
+    assert m.DalSegnoAlCoda().isValidText("d.s. al coda")
+    assert not m.DalSegnoAlCoda().isValidText("Fine")
+    # What music21 says each is, down to `Music21Object`.
+    assert m.DaCapo().classes[:3] == ["DaCapo", "RepeatExpressionCommand", "RepeatExpression"]
+    assert m.Segno().classes[1] == "RepeatExpressionMarker"
+    copied = copy.deepcopy(told)
+    assert (copied.getText(), copied.useSymbol) == ("to Coda", False)
+
+
 def test_a_barline_is_copied_and_frozen():
     """Copying one rebuilt it by calling the class with the object itself,
     which is what Python's `copyreg` does for a class it knows nothing
