@@ -34,7 +34,10 @@ pub(crate) use score::{
 pub(crate) use score::{
     beams_made, element_at_durations, make_part_notation_by, make_part_notation_keeping_spanners,
 };
-pub use score::{make_notation, make_tuplet_brackets, split_at_durations};
+pub use score::{
+    consolidate_completed_tuplets, make_notation, make_tuplet_brackets, split_at_durations,
+    split_elements_to_complete_tuplets,
+};
 
 /// Beams the notes of every measure of a part by the meter in force, and
 /// points the stems of each beamed group one way: music21's `makeBeams`.
