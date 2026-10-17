@@ -64,6 +64,7 @@ pub mod pitch;
 pub mod possibility;
 pub mod realizer;
 pub mod realizerscale;
+pub mod repeat;
 pub mod resolution;
 pub mod rest;
 pub mod roman;
@@ -1225,6 +1226,11 @@ exceptions![
     ),
     ("BarException", bar::BarException, Some("music21.bar")),
     (
+        "RepeatExpressionException",
+        repeat::RepeatExpressionException,
+        Some("music21.repeat")
+    ),
+    (
         "SpannerException",
         spanner::SpannerException,
         Some("music21.spanner")
@@ -1496,6 +1502,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     windowed::register(m)?;
     analysis::register(m)?;
     naturallanguage::register(m)?;
+    repeat::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;

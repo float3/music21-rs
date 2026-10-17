@@ -1,0 +1,33 @@
+# Docstrings of music21.repeat whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_repeat`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.repeat.AlSegno",
+    "music21.repeat.Coda",
+    "music21.repeat.DaCapoAlCoda",
+    "music21.repeat.DaCapoAlFine",
+    "music21.repeat.DalSegno",
+    "music21.repeat.DalSegnoAlCoda",
+    "music21.repeat.DalSegnoAlFine",
+    "music21.repeat.Expander",
+    "music21.repeat.Expander._groupRepeatBracketIndices",
+    "music21.repeat.Expander.findInnermostRepeatIndices",
+    "music21.repeat.Expander.getRepeatExpressionIndex",
+    "music21.repeat.Expander.measureMap",
+    "music21.repeat.Expander.processInnermostRepeatBars",
+    "music21.repeat.Fine",
+    "music21.repeat.RepeatFinder",
+    "music21.repeat.RepeatFinder._getSimilarMeasureTuples",
+    "music21.repeat.RepeatFinder.getMeasureSimilarityList",
+    "music21.repeat.RepeatFinder.getQuarterLengthOfPickupMeasure",
+    "music21.repeat.RepeatFinder.getSimilarMeasureGroups",
+    "music21.repeat.RepeatFinder.hasPickup",
+    "music21.repeat.RepeatFinder.simplify",
+    "music21.repeat.RepeatMark",
+    "music21.repeat.Segno",
+    "music21.repeat.deleteMeasures",
+    "music21.repeat.insertRepeat",
+    "music21.repeat.insertRepeatEnding",
+]

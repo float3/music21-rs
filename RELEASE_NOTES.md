@@ -2,6 +2,23 @@
 
 ## added
 
+- **The wheel carries music21's repeat marks, and music21's own doctests
+  for them all pass**: 26 of 26 docstrings and 215 of 215 examples, which
+  is the largest module yet to go from nothing to every example.
+  `python/src/repeat.rs` is music21's eleven classes -- `Coda`, `Segno`,
+  `Fine`, `DaCapo`, `DaCapoAlFine`, `DaCapoAlCoda`, `AlSegno`, `DalSegno`,
+  `DalSegnoAlFine`, `DalSegnoAlCoda` and the `RepeatExpression` they
+  extend -- each the one value the crate holds for any of them, built with
+  the words and the symbol music21 starts it with: a coda given words it
+  may be written with is written rather than drawn, and words it may not
+  be written with are passed over, as music21 passes them over. `getText`,
+  `setText`, `isValidText`, `useSymbol`, `placement` and `classes` are
+  answered off the crate's value, and each mark copies and freezes itself.
+  `Expander` stays music21's and runs over these marks, which is the
+  harder test: playing a score's repeats out is one function here
+  (`Stream::expand_repeats`), and the object music21 keeps that walk's
+  state on has no counterpart.
+
 - **music21's own barline doctests run against the crate, every one of
   them**: 7 of 7 docstrings and 43 of 43 examples, the 47th module of the
   harness. Two things were in the way, and the first is a bug a caller
