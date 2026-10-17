@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub mod correlate;
+pub mod elements;
 pub mod enharmonics;
 pub mod floating_key;
 pub mod harmonic_function;

@@ -166,6 +166,20 @@
   map. And a public field is a definition, since a value type answers with
   one where a method would be ceremony: `TextBox.content` is `pub content:
   String` here.
+- **How often each value of some property of a stream's elements comes**
+  (`analysis::elements::attribute_count`): music21's
+  `analysis.elements.attributeCount`, the one function of a module the
+  feature map listed nowhere. The property is a function of the element
+  rather than the name of one, answering nothing where the element has
+  none -- which is music21's `hasattr` test -- and the elements are
+  whatever reading the caller counts over, a stream's own or a recursive
+  or filtered one, as music21 takes a stream or a stream iterator. The
+  counts come in the order each value was first met, which is the order
+  Python's `Counter` keeps, so `most_common` leaves ties as they stand.
+  `analysis_parity` holds it to music21 on 46 corpus scores and swept 49
+  more -- every note counted by name, and every note and rest by length,
+  in the same order on both sides. The wheel has it too, counting a named
+  property as music21 does.
 
 ## fixed
 

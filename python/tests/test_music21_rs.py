@@ -3551,6 +3551,26 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_property_of_every_element_is_counted():
+    """Every answer music21 gives for the same line, as far as the wheel's
+    elements carry the property: a clef or a meter here has no length of
+    its own, where music21's is counted as a nought."""
+    line = m.from_tiny_notation("4/4 c4 d8 e8 f2")
+    measure = line.getElementsByClass("Measure")[0]
+    assert sorted(m.attributeCount(measure).items()) == [(0.5, 2), (1.0, 1), (2.0, 1)]
+    # A clef answers to a name as well as a note does, as music21's does.
+    assert sorted(m.attributeCount(measure, "name").items()) == [
+        ("C", 1),
+        ("D", 1),
+        ("E", 1),
+        ("F", 1),
+        ("treble", 1),
+    ]
+    # A Counter, as music21 answers, so ties order by what was met first.
+    counted = m.attributeCount(m.from_tiny_notation("4/4 c4 c4 d4 d4").flatten(), "name")
+    assert counted.most_common(2) == [("C", 2), ("D", 2)]
+
+
 def test_an_alteration_is_written_as_a_chord_symbol_writes_it():
     """Every answer is music21's own."""
     assert [m.alterToChordSymbolString(n) for n in (-2, -1, 0, 1, 2)] == [

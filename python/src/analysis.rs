@@ -37,6 +37,7 @@ pub const NAMES: &[&str] = &[
     "labelBeatDepth",
     "thomassenMelodicAccent",
     "pitchAttributeCount",
+    "attributeCount",
     "Segmenter",
     "divide",
     "KeyAnalyzer",
@@ -132,6 +133,37 @@ fn pitchAttributeCount<'py>(
     let counts = py.import("collections")?.getattr("Counter")?.call0()?;
     for pitch in s.getattr("pitches")?.walk()? {
         let value = pitch?.getattr(pitchAttr.as_str())?;
+        let so_far = match counts.get_item(&value) {
+            Ok(so_far) => so_far.extract::<usize>()?,
+            Err(_) => 0,
+        };
+        counts.set_item(&value, so_far + 1)?;
+    }
+    Ok(counts)
+}
+
+/// music21's `analysis.elements.attributeCount`: how often each value of
+/// some property of a stream's elements comes.
+///
+/// The elements are whatever is handed in -- a stream, which gives its own
+/// elements, or any iterator over them, as music21 takes either -- and the
+/// property is read off each by name, an element that has none passed
+/// over. The answer is a `collections.Counter`, which is what music21
+/// answers, so `most_common` orders ties by which value was met first.
+#[pyfunction]
+#[pyo3(signature = (streamOrStreamIter, attrName = "quarterLength".to_string()))]
+fn attributeCount<'py>(
+    streamOrStreamIter: &Bound<'py, PyAny>,
+    attrName: String,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = streamOrStreamIter.py();
+    let counts = py.import("collections")?.getattr("Counter")?.call0()?;
+    for element in streamOrStreamIter.walk()? {
+        let element = element?;
+        if !element.hasattr(attrName.as_str())? {
+            continue;
+        }
+        let value = element.getattr(attrName.as_str())?;
         let so_far = match counts.get_item(&value) {
             Ok(so_far) => so_far.extract::<usize>()?,
             Err(_) => 0,
@@ -452,6 +484,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(labelBeatDepth, m)?)?;
     m.add_function(wrap_pyfunction!(thomassenMelodicAccent, m)?)?;
     m.add_function(wrap_pyfunction!(pitchAttributeCount, m)?)?;
+    m.add_function(wrap_pyfunction!(attributeCount, m)?)?;
     m.add_function(wrap_pyfunction!(divide, m)?)?;
     m.add_class::<Segmenter>()?;
     m.add_class::<KeyAnalyzer>()?;

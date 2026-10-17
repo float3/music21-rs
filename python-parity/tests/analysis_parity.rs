@@ -1,7 +1,7 @@
 //! The crate's consecutive-note walks and the small analyses built on them
 //! against music21's: `findConsecutiveNotes`, `melodicIntervals`,
-//! `analysis.patel`, `analysis.metrical`, `analysis.segmentByRests` and
-//! `analysis.pitchAnalysis`.
+//! `analysis.patel`, `analysis.metrical`, `analysis.segmentByRests`,
+//! `analysis.pitchAnalysis` and `analysis.elements`.
 //!
 //! Each corpus score is read by music21 and by `from_musicxml` (which
 //! `musicxml_read_parity` holds to music21's reader), and each side writes a
@@ -15,7 +15,7 @@
 //! `ANALYSIS_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::analysis::{metrical, patel, pitch_analysis, segment_by_rests};
+use music21_rs::analysis::{elements, metrical, patel, pitch_analysis, segment_by_rests};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::{ConsecutiveOptions, StreamElement};
 use music21_rs::{FloatType, Stream, StreamKind};
@@ -30,7 +30,7 @@ const MUSIC21: &str = r#"
 import copy
 import zipfile
 from music21 import chord, corpus, harmony, note, stream
-from music21.analysis import metrical, patel, pitchAnalysis, segmentByRests
+from music21.analysis import elements, metrical, patel, pitchAnalysis, segmentByRests
 
 def source_text(name):
     path = corpus.getWork(name)
@@ -132,6 +132,13 @@ def report(name):
     lines.append('interval list: ' + ' '.join(names))
     counts = pitchAnalysis.pitchAttributeCount(score, 'nameWithOctave')
     lines.append('pitch counts: ' + ' '.join(f'{k}:{v}' for k, v in counts.items()))
+    # Every element the attribute is on, counted in the order the values
+    # were first met -- which is the order a Counter keeps.
+    named = elements.attributeCount(score.recurse(), 'nameWithOctave')
+    lines.append('element name counts: ' + ' '.join(f'{k}:{v}' for k, v in named.items()))
+    lengths = elements.attributeCount(score.recurse().notesAndRests, 'quarterLength')
+    lines.append('element length counts: ' + ' '.join(
+        f'{float(k):.5f}:{v}' for k, v in lengths.items()))
     return '\n'.join(lines), npvi
 "#;
 
@@ -328,6 +335,26 @@ fn report(score: &Stream) -> (String, Vec<Option<FloatType>>) {
         .map(|(name, count)| format!("{name}:{count}"))
         .collect();
     lines.push(format!("pitch counts: {}", counts.join(" ")));
+    // A note is the only thing music21 keeps a `nameWithOctave` on, so
+    // nothing else is counted.
+    let named: Vec<String> =
+        elements::attribute_count(score.recurse(), |(_, element)| match element {
+            StreamElement::Note(note) => Some(music21_name(note.pitch())),
+            _ => None,
+        })
+        .into_iter()
+        .map(|(name, count)| format!("{name}:{count}"))
+        .collect();
+    lines.push(format!("element name counts: {}", named.join(" ")));
+    let lengths: Vec<String> = elements::attribute_count(score.recurse(), |(_, element)| {
+        element
+            .is_instance("GeneralNote")
+            .then(|| element.quarter_length())
+    })
+    .into_iter()
+    .map(|(length, count)| format!("{length:.5}:{count}"))
+    .collect();
+    lines.push(format!("element length counts: {}", lengths.join(" ")));
     (lines.join("\n"), npvi)
 }
 
