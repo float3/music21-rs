@@ -676,6 +676,30 @@ impl Stream {
         Bound::new(py, out)
     }
 
+    /// [`Stream::recurse`]'s walk: every element with its offset from the
+    /// top, a nested stream before what it holds.
+    fn recurse_into(
+        slf: &Bound<'_, Self>,
+        base: f64,
+        found: &mut Vec<(f64, Py<PyAny>)>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let held: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        for (offset, object) in held {
+            let at = base + offset;
+            found.push((at, object.clone_ref(py)));
+            if let Ok(inner) = object.bind(py).cast::<Stream>() {
+                Self::recurse_into(inner, at, found)?;
+            }
+        }
+        Ok(())
+    }
+
     fn flatten_into(
         slf: &Bound<'_, Self>,
         base: f64,
@@ -2829,26 +2853,20 @@ impl Stream {
         Bound::new(py, out)
     }
 
-    /// Everything held at every depth, streams included, in order.
-    fn recurse<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
+    /// Everything held at every depth, streams included, in the order the
+    /// walk meets them: music21's `recurse`.
+    ///
+    /// The answer is a [`Walked`], as music21's is an iterator rather than
+    /// a stream, because its own code filters what it gets back --
+    /// `analysis.discrete` asks a window for `recurse().notes` -- and
+    /// because the order is the walk's rather than the sort's: a stream
+    /// comes before what it holds, and one part's notes before the next
+    /// part's, where a stream would put every offset nought together.
+    fn recurse<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Walked>> {
         let py = slf.py();
-        let out = PyList::empty(py);
-        let held: Vec<Py<PyAny>> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| held.object.clone_ref(py))
-            .collect();
-        for object in held {
-            let object = object.into_bound(py);
-            out.append(&object)?;
-            if let Ok(inner) = object.cast::<Stream>() {
-                for each in Self::recurse(inner)?.iter() {
-                    out.append(each)?;
-                }
-            }
-        }
-        Ok(out)
+        let mut found = Vec::new();
+        Self::recurse_into(slf, 0.0, &mut found)?;
+        Bound::new(py, Walked::of(found, slf.borrow().kind))
     }
 
     /// The notes and chords this stream holds directly.
@@ -5933,8 +5951,160 @@ fn iterateAllVoiceLeadingQuartets<'py>(
     Ok(out)
 }
 
+/// What a walk hands back: the elements it found, each with where it
+/// stood, in the order it found them -- music21's `StreamIterator`.
+///
+/// music21's filters answer one of these rather than a stream, and its own
+/// code leans on that: it filters again (`recurse().notes`), asks how many
+/// there are, indexes into them and iterates them. A stream cannot stand
+/// in for it, because a stream sorts what it holds and a walk's order is
+/// not a sort -- `recurse` meets one part's notes before the next part's,
+/// where a stream would put every offset nought together.
+#[pyclass(name = "StreamIterator", module = "music21.stream.iterator", subclass)]
+pub struct Walked {
+    /// What was found, each with its offset from the start of the stream
+    /// walked, in the walk's own order.
+    found: Vec<(f64, Py<PyAny>)>,
+    /// The kind of stream `stream()` gathers them back into, which is the
+    /// kind of the one walked.
+    kind: StreamKind,
+}
+
+impl Walked {
+    /// The elements found by a walk, in its order.
+    pub(crate) fn of(found: Vec<(f64, Py<PyAny>)>, kind: StreamKind) -> Self {
+        Self { found, kind }
+    }
+
+    /// Those of them a test answers for, in the same order.
+    fn picked(
+        &self,
+        py: Python<'_>,
+        wanted: impl Fn(&Bound<'_, PyAny>) -> PyResult<bool>,
+    ) -> PyResult<Self> {
+        let mut found = Vec::new();
+        for (offset, object) in &self.found {
+            if wanted(object.bind(py))? {
+                found.push((*offset, object.clone_ref(py)));
+            }
+        }
+        Ok(Self::of(found, self.kind))
+    }
+}
+
+#[pymethods]
+impl Walked {
+    /// How many were found.
+    fn __len__(&self) -> usize {
+        self.found.len()
+    }
+
+    /// Whether any were.
+    fn __bool__(&self) -> bool {
+        !self.found.is_empty()
+    }
+
+    /// Each in turn.
+    fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let objects = PyTuple::new(py, self.found.iter().map(|(_, object)| object.bind(py)))?;
+        objects.as_any().try_iter().map(Bound::into_any)
+    }
+
+    /// The one at an index, counting from the end for a negative one.
+    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+        let count = self.found.len();
+        let at = if index < 0 {
+            count.checked_sub(index.unsigned_abs())
+        } else {
+            Some(index.unsigned_abs())
+        };
+        at.and_then(|at| self.found.get(at))
+            .map(|(_, object)| object.clone_ref(py))
+            .ok_or_else(|| {
+                pyo3::exceptions::PyIndexError::new_err(format!(
+                    "attempting to access index {index} while elements is of size {count}"
+                ))
+            })
+    }
+
+    /// The first found, or nothing where none was: music21's `first`.
+    fn first(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.found.first().map(|(_, object)| object.clone_ref(py))
+    }
+
+    /// The last found, or nothing where none was: music21's `last`.
+    fn last(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.found.last().map(|(_, object)| object.clone_ref(py))
+    }
+
+    /// The notes and chords among them: music21's `notes`.
+    #[getter]
+    fn notes(&self, py: Python<'_>) -> PyResult<Self> {
+        self.picked(py, |object| {
+            Ok(["isNote", "isChord"].iter().any(|flag| {
+                object
+                    .getattr(*flag)
+                    .and_then(|flag| flag.is_truthy())
+                    .unwrap_or(false)
+            }))
+        })
+    }
+
+    /// The notes, chords and rests among them: music21's `notesAndRests`.
+    #[getter]
+    fn notesAndRests(&self, py: Python<'_>) -> PyResult<Self> {
+        self.picked(py, |object| {
+            Ok(["isNote", "isChord", "isRest"].iter().any(|flag| {
+                object
+                    .getattr(*flag)
+                    .and_then(|flag| flag.is_truthy())
+                    .unwrap_or(false)
+            }))
+        })
+    }
+
+    /// Those answering to one of these classes, by name or as the class
+    /// itself: music21's `getElementsByClass`.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsByClass(
+        &self,
+        py: Python<'_>,
+        classFilterList: &Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        self.picked(py, |object| is_of_any(object, classFilterList))
+    }
+
+    /// Those answering to none of them: music21's
+    /// `getElementsNotOfClass`.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsNotOfClass(
+        &self,
+        py: Python<'_>,
+        classFilterList: &Bound<'_, PyAny>,
+    ) -> PyResult<Self> {
+        self.picked(py, |object| {
+            is_of_any(object, classFilterList).map(|found| !found)
+        })
+    }
+
+    /// Them gathered into a stream, each where it stood: music21's
+    /// `stream`.
+    fn stream<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Stream>> {
+        let mut out = Stream::empty(self.kind);
+        for (offset, object) in &self.found {
+            out.put(*offset, object.bind(py));
+        }
+        Bound::new(py, out)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<music21.stream.iterator.StreamIterator for {}>", self.kind)
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Stream>()?;
+    m.add_class::<Walked>()?;
     register_kinds(m)?;
     m.add_class::<Verticality>()?;
     m.add_function(wrap_pyfunction!(realizeVolume, m)?)?;

@@ -130,7 +130,13 @@ rests -- which is what every object's `classes` says of itself, music21's
 own chain down to `object` --
 `getElementsByClass`, `getElementsNotOfClass`, `hasElementOfClass` and
 `getElementsByOffset` with music21's four keywords, under which an element
-is found only where it *begins*, `getElementAtOrBefore`,
+is found only where it *begins*; a class may be given as the class itself
+as well as by name, which is how music21's own code asks. `recurse`
+answers what music21's answers, a `StreamIterator` holding what the walk
+found in the walk's own order, which can be filtered again --
+`recurse().notes` -- counted, indexed, iterated and gathered back into a
+stream with `stream()`; a stream answers `first` and `last` too. Besides
+those: `getElementAtOrBefore`,
 `getElementBeforeOffset`, `getElementAfterElement` and
 `beatAndMeasureFromOffset` -- and they answer
 `isTwelveTone` and

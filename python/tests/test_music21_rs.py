@@ -3551,6 +3551,28 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_walk_answers_what_music21_s_walk_answers():
+    """music21's `recurse` answers a StreamIterator, which its own code
+    filters again; a list could not be filtered and a stream would sort
+    what the walk met in order."""
+    score = m.from_tiny_notation("4/4 c4 d8 e8 f2 g1")
+    walked = score.recurse()
+    assert type(walked).__name__ == "StreamIterator"
+    # The walk's order: each measure before what it holds.
+    assert [type(e).__name__ for e in walked][:3] == ["Measure", "TrebleClef", "TimeSignature"]
+    assert len(walked) == len([e for e in walked])
+    assert walked[0] is walked.first()
+    assert walked[-1] is walked.last()
+    # Filtered again, as music21's own code filters it.
+    assert [n.nameWithOctave for n in walked.notes] == ["C4", "D4", "E4", "F4", "G4"]
+    assert len(walked.notesAndRests) == 5
+    assert len(walked.getElementsByClass("Measure")) == 2
+    assert len(walked.getElementsNotOfClass("Measure")) == len(walked) - 2
+    # Gathered back into a stream, each where it stood.
+    gathered = walked.notes.stream()
+    assert [gathered.elementOffset(n) for n in gathered] == [0.0, 1.0, 1.5, 2.0, 4.0]
+
+
 def test_a_property_of_every_element_is_counted():
     """Every answer music21 gives for the same line, as far as the wheel's
     elements carry the property: a clef or a meter here has no length of
