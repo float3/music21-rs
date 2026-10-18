@@ -2,6 +2,25 @@
 
 ## added
 
+- **The wheel carries music21's layout objects, and music21's own
+  `LayoutScore` machinery runs over them**: 20 of 21 docstrings and 157 of
+  158 examples, from nothing. `python/src/layout.rs` is `LayoutBase`,
+  `ScoreLayout`, `PageLayout`, `SystemLayout` and `StaffLayout` -- the
+  measurements and nothing else, which is why the crate keeps them as
+  plain values -- each written back the way music21 writes it, `120` an
+  `int` and `120.5` a `float`, with a measurement nobody gave left as
+  `None` to inherit whatever the score says. A score layout holds the
+  page, the system and the list of staves as the objects music21 holds, so
+  a caller (or music21's own `divideByPages`, which is what reads them)
+  writes into the score's rather than into a copy; that list is what took
+  the suite from 63 examples to 157.
+  The one example left is a `repr`: music21 keeps a staff size as the
+  number it was given, saying `80` for `staffSize=80` and `113.0` for
+  `113.0`, where the crate's `staff_size` is a float and says `80.0` for
+  both. `layout::Tenths` is the type that keeps the difference, and
+  giving the field one is a breaking change that waits for a minor
+  version.
+
 - **The wheel carries music21's repeat marks, and music21's own doctests
   for them all pass**: 26 of 26 docstrings and 215 of 215 examples, which
   is the largest module yet to go from nothing to every example.
