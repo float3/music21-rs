@@ -55,6 +55,7 @@ pub use music21_rs_python::harmony::NAMES as HARMONY_NAMES;
 pub use music21_rs_python::instrument::NAMES as INSTRUMENT_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;
+pub use music21_rs_python::layout::NAMES as LAYOUT_NAMES;
 pub use music21_rs_python::metadata::NAMES as METADATA_NAMES;
 pub use music21_rs_python::meter::{CORE_NAMES as METER_CORE_NAMES, NAMES as METER_NAMES};
 pub use music21_rs_python::naturallanguage::NAMES as NATURAL_LANGUAGE_NAMES;

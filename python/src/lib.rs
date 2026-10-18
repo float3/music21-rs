@@ -54,6 +54,7 @@ pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
 pub mod key;
+pub mod layout;
 pub mod metadata;
 pub mod meter;
 pub mod naturallanguage;
@@ -1231,6 +1232,11 @@ exceptions![
         Some("music21.repeat")
     ),
     (
+        "LayoutException",
+        layout::LayoutException,
+        Some("music21.layout")
+    ),
+    (
         "SpannerException",
         spanner::SpannerException,
         Some("music21.spanner")
@@ -1503,6 +1509,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     analysis::register(m)?;
     naturallanguage::register(m)?;
     repeat::register(m)?;
+    layout::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;

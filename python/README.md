@@ -153,6 +153,12 @@ tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
 
+how a score, a page, a system and a staff are laid out is here as
+`ScoreLayout`, `PageLayout`, `SystemLayout` and `StaffLayout`, each
+measurement written back the way music21 writes it and a score layout
+holding the page, the system and the staves it starts with as the objects
+music21 holds them.
+
 music21's repeat marks are here -- `Coda`, `Segno`, `Fine`, `DaCapo`,
 `DaCapoAlFine`, `DaCapoAlCoda`, `AlSegno`, `DalSegno`, `DalSegnoAlFine`
 and `DalSegnoAlCoda` -- each saying what it may be written with

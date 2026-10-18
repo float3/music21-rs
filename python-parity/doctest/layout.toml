@@ -1,0 +1,27 @@
+# Docstrings of music21.layout whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_layout`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.layout.LayoutBase",
+    "music21.layout.LayoutScore.getMarginsAndSizeForPageId",
+    "music21.layout.LayoutScore.getPageAndSystemNumberFromMeasureNumber",
+    "music21.layout.LayoutScore.getPositionForStaffMeasure",
+    "music21.layout.LayoutScore.getPositionForSystem",
+    "music21.layout.LayoutScore.getStaffHiddenAttribute",
+    "music21.layout.LayoutScore.getStaffSizeFromLayout",
+    "music21.layout.LayoutScore.getSystemBeforeThis",
+    "music21.layout.LayoutScore.measurePositionWithinSystem",
+    "music21.layout.LayoutScore.show",
+    "music21.layout.Page.show",
+    "music21.layout.PageLayout",
+    "music21.layout.ScoreLayout",
+    "music21.layout.ScoreLayout.tenthsToMillimeters",
+    "music21.layout.StaffGroup",
+    "music21.layout.StaffGroup.barTogether",
+    "music21.layout.StaffGroup.symbol",
+    "music21.layout.StaffLayout",
+    "music21.layout.SystemLayout",
+    "music21.layout.divideByPages",
+]
