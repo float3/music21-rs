@@ -3551,6 +3551,32 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_words_are_read_off_a_score_and_stood_on_its_page():
+    """Every answer is music21's own for the same words."""
+    line = m.from_tiny_notation("4/4 c4_hel-   d_lo e_there f_now")
+    assert m.assembleLyrics(line) == "hello there now"
+    assert m.assembleAllLyrics(line) == "hello there now"
+    assert m.prependArticle("Ale is Dear, The") == "The Ale is Dear"
+    assert m.postpendArticle("The Ale is Dear") == "Ale is Dear, The"
+    # A text box stands where it is told and keeps the style it is drawn
+    # with, so writing into that style is writing into the box's.
+    box = m.TextBox("Hello there, this is long", 250, 1000)
+    assert repr(box) == '<music21.text.TextBox "Hello ther...">'
+    assert (box.page, box.style.absoluteX, box.style.absoluteY) == (1, 250, 1000)
+    assert (box.style.alignVertical, box.style.alignHorizontal) == ("top", "center")
+    box.style.fontSize = 40
+    assert box.style.fontSize == 40
+    assert box.hasStyleInformation
+    box.page = 3
+    assert box.page == 3
+    try:
+        box.page = 0
+    except Exception as error:  # noqa: BLE001 - the class is music21's
+        assert "positive integer" in str(error)
+    else:
+        raise AssertionError("page zero was allowed")
+
+
 def test_a_repeat_mark_says_what_it_is_written_with():
     """Every answer is music21's own for the same marks."""
     import copy

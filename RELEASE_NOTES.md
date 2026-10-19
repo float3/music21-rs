@@ -2,6 +2,24 @@
 
 ## added
 
+- **The wheel reads a score's words and stands text on its page**, and
+  music21's own `text` doctests all pass: 10 of 10 docstrings, 80 of 80
+  examples, from nothing. `assembleLyrics`, `assembleAllLyrics`,
+  `prependArticle` and `postpendArticle` are the crate's, and a `TextBox`
+  is the words, the page it stands on and the style it is drawn with --
+  music21's own `TextStyle` where music21 is there to ask, the same object
+  every time, so a caller writing into it is writing into the box's style.
+  It stands where it is told (`TextBox(content, x, y)`), refuses a page
+  below one in music21's words, and its `repr` cuts the words at ten
+  characters as music21's does. `LanguageDetector` and `Trigram` stay
+  music21's: guessing which language a line is in is a table of letter
+  triplets rather than anything musical.
+  The class a box is drawn with comes from the install helper, which
+  carries `_styleClass` over from the class it replaces. Building it here
+  would import the whole of music21 the moment the package was imported,
+  which is the trap `test_importing_the_package_imports_no_music21`
+  exists to catch -- and did.
+
 - **The wheel carries music21's layout objects, and music21's own
   `LayoutScore` machinery runs over them**: 20 of 21 docstrings and 157 of
   158 examples, from nothing. `python/src/layout.rs` is `LayoutBase`,

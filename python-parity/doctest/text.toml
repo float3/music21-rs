@@ -1,0 +1,17 @@
+# Docstrings of music21.text whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_text`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.text.LanguageDetector",
+    "music21.text.LanguageDetector.mostLikelyLanguage",
+    "music21.text.LanguageDetector.mostLikelyLanguageNumeric",
+    "music21.text.TextBox",
+    "music21.text.TextBox.content",
+    "music21.text.TextBox.page",
+    "music21.text.assembleAllLyrics",
+    "music21.text.assembleLyrics",
+    "music21.text.postpendArticle",
+    "music21.text.prependArticle",
+]
