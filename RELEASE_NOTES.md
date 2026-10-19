@@ -2,6 +2,20 @@
 
 ## added
 
+- **The wheel carries music21's chord diagrams**, and every one of
+  music21's `tablature` doctests passes: 8 of 8 docstrings, 55 of 55
+  examples, from nothing. A `FretNote` is a string, a fret and a finger; a
+  `FretBoard` is those notes over so many strings, with the four boards
+  music21 names -- `GuitarFretBoard`, `UkeleleFretBoard`,
+  `BassGuitarFretBoard` and `MandolinFretBoard` -- each tuned as that
+  instrument is. `getFretNoteByString`, `fretNotesLowestFirst` and
+  `getPitches` are the crate's: what a diagram sounds is each string's
+  open pitch raised by the fret stopping it, and nothing for a string
+  nobody stops. A board's `repr` names the kind of board it is, and a fret
+  note that stops nothing says nothing, as music21's does.
+  `ChordWithFretBoard` stays music21's, which builds it out of its own
+  `ChordSymbol`.
+
 - **The wheel reads a score's words and stands text on its page**, and
   music21's own `text` doctests all pass: 10 of 10 docstrings, 80 of 80
   examples, from nothing. `assembleLyrics`, `assembleAllLyrics`,
