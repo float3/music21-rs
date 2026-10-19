@@ -78,6 +78,7 @@ pub mod spanner;
 mod spelling;
 pub mod stream;
 pub mod tempo;
+pub mod text;
 pub mod transposition;
 pub mod voiceleading;
 pub mod windowed;
@@ -1236,6 +1237,7 @@ exceptions![
         layout::LayoutException,
         Some("music21.layout")
     ),
+    ("TextException", text::TextException, Some("music21.text")),
     (
         "SpannerException",
         spanner::SpannerException,
@@ -1510,6 +1512,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     naturallanguage::register(m)?;
     repeat::register(m)?;
     layout::register(m)?;
+    text::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;
