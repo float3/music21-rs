@@ -12,6 +12,7 @@ import os
 import copy
 import random
 import math
+import importlib.util
 import pathlib
 import re
 import subprocess
@@ -4396,3 +4397,45 @@ def test_lyrics_are_found_in_a_stream_as_text():
         m.LyricSearcher().index()
     with pytest.raises(m.LyricSearcherException):
         searcher.search(5)
+
+
+def test_a_part_is_cut_into_overlapping_segments():
+    """A part written as text and cut into stretches, and the stretches of
+    some scores compared with one another."""
+    line = m.from_tiny_notation("4/4 c4 d e f g a b c' d' e' f' g'")
+    segments, measures = m.translateMonophonicPartToSegments(
+        line, segmentLengths=4, overlap=2
+    )
+    assert segments == ["<>@A", "@ACE", "CEGH", "GHJL", "JLMO", "MO"]
+    # Each stretch's first and last measure, as music21 reads them off the
+    # translation.
+    assert measures == [(1, 1), (1, 2), (2, 2), (2, 3), (3, 3), (3, 3)]
+
+    # A score is indexed part by part, each as music21's pair of lists.
+    score = m.Score()
+    score.insert(0.0, line)
+    indexed = m.indexScoreParts(score, segmentLengths=4, overlap=2)
+    assert indexed == [{"segmentList": segments, "measureList": measures}]
+
+    # Every stretch of one score against every stretch of the next, by
+    # difflib's ratio; a score is never compared with itself.
+    alike = m.scoreSimilarity(
+        {"first": indexed, "second": indexed}, minimumLength=2, forceDifflib=True
+    )
+    assert alike[0] == ("first", 0, 0, (1, 1), "second", 0, 0, (1, 1), 1.0)
+    assert len(alike) == len(segments) ** 2
+    assert len(m.scoreSimilarity({"only": indexed}, minimumLength=2, forceDifflib=True)) == 0
+
+    # What the crate cannot do honestly is said rather than answered
+    # another way: a jitter moves each start at random.
+    with pytest.raises(m.StreamException):
+        m.translateMonophonicPartToSegments(line, jitter=2)
+    # And a comparison by Levenshtein is a different measure from
+    # difflib's, which is the only one here -- so it is refused wherever
+    # music21 would reach for that library, and answered where music21
+    # would fall back to difflib itself.
+    if importlib.util.find_spec("Levenshtein") is not None:
+        with pytest.raises(m.StreamException):
+            m.scoreSimilarity({"first": indexed}, minimumLength=2)
+    else:
+        assert m.scoreSimilarity({"first": indexed}, minimumLength=2) == []

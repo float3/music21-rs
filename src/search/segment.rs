@@ -22,7 +22,11 @@ pub struct Segments {
 /// The notes of a stream in the order music21's `recurse().notes.stream()`
 /// leaves them: by offset in the stream, then by class, grace notes first,
 /// then as the walk met them -- so the notes of two voices interleave.
-fn sorted_notes(stream: &Stream) -> Vec<Searched<'_>> {
+///
+/// It is what music21 hands its translations when it indexes a part, and
+/// so what a caller translating a part itself -- the wheel, whose
+/// translator may fail -- must hand them too.
+pub fn notes_sorted(stream: &Stream) -> Vec<Searched<'_>> {
     let mut notes: Vec<Searched<'_>> = recursed(stream)
         .into_iter()
         .filter(|found| {
@@ -76,12 +80,29 @@ pub fn translate_monophonic_part_to_segments(
     overlap: usize,
     translate: fn(&[Searched<'_>]) -> Translation,
 ) -> Result<Segments> {
+    let notes = notes_sorted(part);
+    cut_translation_into_segments(&translate(&notes), segment_length, overlap)
+}
+
+/// A translation cut into stretches `segment_length` characters long, each
+/// starting `segment_length - overlap` after the one before, the last as
+/// long as what is left: the second half of
+/// [`translate_monophonic_part_to_segments`], for a caller whose
+/// translator answers a [`Result`] -- music21's diatonic translation does,
+/// and its own `translateMonophonicPartToSegments` takes it.
+///
+/// # Errors
+///
+/// As [`translate_monophonic_part_to_segments`].
+pub fn cut_translation_into_segments(
+    translation: &Translation,
+    segment_length: usize,
+    overlap: usize,
+) -> Result<Segments> {
     let step = segment_length
         .checked_sub(overlap)
         .filter(|step| *step > 0)
         .ok_or_else(|| Error::Search("the overlap must be shorter than a segment".to_string()))?;
-    let notes = sorted_notes(part);
-    let translation = translate(&notes);
     let text: Vec<char> = translation.text.chars().collect();
     let total = text.len();
     let count = total.div_ceil(step);

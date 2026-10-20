@@ -74,6 +74,7 @@ pub mod roman;
 pub mod scala;
 pub mod scale;
 pub mod searchlyrics;
+pub mod searchsegment;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
@@ -1535,6 +1536,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tablature::register(m)?;
     midipercussion::register(m)?;
     searchlyrics::register(m)?;
+    searchsegment::register(m)?;
     percussion::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;

@@ -2,6 +2,28 @@
 
 ## added
 
+- **The wheel indexes and compares a score's segments, and every one of
+  music21's `search.segment` examples passes**: 4 of 4 docstrings and 25
+  of 25 examples, from nothing. A part is read into the crate, its notes
+  taken in music21's `recurse().notes.stream()` order
+  (`search::notes_sorted`), written as text by whichever of the crate's
+  five translations the `algorithm` names, and cut into overlapping
+  stretches by `search::cut_translation_into_segments` -- the second half
+  of `translate_monophonic_part_to_segments`, split out for a translator
+  that can fail, as music21's diatonic one does. `indexScoreParts` is that
+  per part of a score and `scoreSimilarity` compares every stretch of an
+  index of scores with every stretch of the next, by `difflib`'s ratio,
+  answering music21's own nine-part tuples. `indexScoreFilePaths`,
+  `indexOnePath`, `saveScoreDict` and `loadScoreDict` stay music21's,
+  reading and writing files, and reach the crate through
+  `indexScoreParts` -- which is how the 496 comparisons of music21's own
+  example are the crate's.
+  Two things are said rather than answered differently: music21's
+  `jitter`, which moves each stretch's start at random, and a comparison
+  with `forceDifflib=False` where `Levenshtein` can be imported, that
+  library's ratio being a different measure from the one the crate
+  carries.
+
 - **The wheel searches a score's lyrics, and every one of music21's
   `search.lyrics` examples passes**: 3 of 3 docstrings and 17 of 17
   examples, from nothing. The indexing is the crate's

@@ -158,6 +158,11 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+a part is written as text and cut into overlapping stretches with
+`translateMonophonicPartToSegments`, a whole score part by part with
+`indexScoreParts`, and `scoreSimilarity` says how alike every stretch of
+some indexed scores is, by difflib's ratio.
+
 the words sung in a score are searched with a `LyricSearcher`: `indexText`
 is each verse read as one text, `index` every lyric with where its text
 sits there, and `search` every place a string or a compiled regular

@@ -1,0 +1,11 @@
+# Docstrings of music21.search.segment whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_searchsegment`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.search.segment.indexScoreFilePaths",
+    "music21.search.segment.indexScoreParts",
+    "music21.search.segment.scoreSimilarity",
+    "music21.search.segment.translateMonophonicPartToSegments",
+]
