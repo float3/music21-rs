@@ -4510,3 +4510,62 @@ def test_a_stream_is_searched_for_a_run_of_notes():
         held.pitch.nameWithOctave for held in rhythms[0]["rhythm"].recurse().notes
     ] == ["C5", "D5", "E5"]
     assert rhythms[0]["measures"][0] is line.recurse().getElementsByClass("Measure").first()
+
+
+def test_a_harm_token_is_read_as_a_roman_numeral():
+    """`**harm`'s notation is not music21's: an inversion letter stands for
+    the figured bass, so `V7b` is a `V65`."""
+    assert m.convertHarmToRoman("V7b") == "V65"
+    assert m.convertHarmToRoman("Gnc") == "Ger43"
+    # A token that says no chord says nothing.
+    assert m.convertHarmToRoman("zzz") is None
+
+    # The parts a token is read into, as music21's own groups come out.
+    assert m.HarmParser().parse("V7b") == {
+        "accidental": None,
+        "root": "V",
+        "attribute": None,
+        "intervals": "7",
+        "inversion": "b",
+        "alternative": None,
+        "secondary": None,
+        "implied": False,
+    }
+    # A token in brackets is implied harmony, and one that cannot be read
+    # at all is nothing read.
+    assert m.HarmParser().parse("(I)")["implied"] is True
+    assert m.HarmParser().parse("zzz") == {}
+
+
+def test_what_sounds_under_each_dynamic():
+    """Every pitch against the dynamic it sounds under, which is where it
+    stands among music21's short names."""
+    line = m.from_tiny_notation("4/4 c4 d e f")
+    line.insert(0.0, m.Dynamic("p"))
+    line.insert(2.0, m.Dynamic("f"))
+    matched = m.ActivityMatch(line)
+    # `e` starts just where the piano ends and the forte begins, so it
+    # sounds under both, as music21 reads it.
+    assert matched.pitchToDynamic() == [
+        (60.0, 5),
+        (62.0, 5),
+        (64.0, 5),
+        (64.0, 8),
+        (65.0, 8),
+    ]
+    # Asked for coordinates instead, each pair comes once with how many
+    # times it was matched.
+    assert matched.pitchToDynamic(False) == [
+        (60.0, 5, 1),
+        (62.0, 5, 1),
+        (64.0, 5, 1),
+        (64.0, 8, 1),
+        (65.0, 8, 1),
+    ]
+
+    # Anything but a stream, and a stream with no dynamic in it, are
+    # refused in music21's words.
+    with pytest.raises(m.CorrelateException):
+        m.ActivityMatch("not a stream")
+    with pytest.raises(m.CorrelateException):
+        m.ActivityMatch(m.from_tiny_notation("4/4 c4 d e f")).pitchToDynamic()

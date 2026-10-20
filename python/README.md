@@ -158,6 +158,10 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+a `**harm` token is read as the roman numeral it annotates with
+`convertHarmToRoman` and taken apart by a `HarmParser`, and an
+`ActivityMatch` says what pitch sounds under which dynamic.
+
 a stream is searched for a run of notes with a `StreamSearcher`, or with
 `rhythmicSearch`, `noteNameSearch` and `noteNameRhythmicSearch`, which say
 where each run starts; a line is written as text with

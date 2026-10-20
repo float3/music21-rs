@@ -2,6 +2,17 @@
 
 ## added
 
+- **The wheel reads a `**harm` token and correlates pitch with dynamic**,
+  and both modules' doctests all pass: `humdrum.harmParser` 11 of 11
+  examples and `analysis.correlate` 8 of 8, from nothing.
+  `convertHarmToRoman` is the crate's -- `**harm`'s inversion letter
+  stands for the figured bass, so `V7b` is a `V65` -- and `HarmParser`
+  answers music21's own dictionary of the parts it read, `HarmDefs`
+  staying music21's, being the regular expressions the crate has none of.
+  `ActivityMatch.pitchToDynamic` is `analysis::correlate::pitch_to_dynamic`
+  over a stream read into the crate: every pitch against each dynamic it
+  sounds under, the dynamic as its place among music21's short names.
+
 - **The wheel searches a stream for a run of notes, and every one of
   music21's `search.base` examples passes**: 22 of 22 docstrings and 185
   of 185 examples, from nothing -- the largest module yet to go from

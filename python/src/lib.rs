@@ -39,6 +39,7 @@ pub mod bar;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
+pub mod correlate;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
@@ -50,6 +51,7 @@ pub mod figuredbass;
 pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
+pub mod harmparser;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
@@ -1292,6 +1294,11 @@ exceptions![
         Some("music21.search.base")
     ),
     (
+        "CorrelateException",
+        correlate::CorrelateException,
+        Some("music21.analysis.correlate")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1573,6 +1580,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text::register(m)?;
     tablature::register(m)?;
     midipercussion::register(m)?;
+    correlate::register(m)?;
+    harmparser::register(m)?;
     searchbase::register(m)?;
     searchlyrics::register(m)?;
     searchsegment::register(m)?;
