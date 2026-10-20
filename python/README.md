@@ -162,6 +162,11 @@ a `**harm` token is read as the roman numeral it annotates with
 `convertHarmToRoman` and taken apart by a `HarmParser`, and an
 `ActivityMatch` says what pitch sounds under which dynamic.
 
+the elements braille writes together are a `BrailleElementGrouping`,
+which mimics a list as music21's does, and a `NoteGroupingTranscriber`
+writes one, element by element or all at once, saying of each what its
+signs mean.
+
 a score, a part, a measure or an opus is written in braille with
 `objectToBraille` and the seven names beside it -- `streamToBraille`,
 `scoreToBraille`, `partToBraille`, `measureToBraille`, `opusToBraille`,

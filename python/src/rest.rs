@@ -41,6 +41,10 @@ pub struct Rest {
     tie: Option<Py<Tie>>,
     expressions: Option<Py<PyList>>,
     articulations: Option<Py<PyList>>,
+    /// Where an analysis leaves what it worked out about this rest:
+    /// music21's `editorial`, made on first asking. Braille writes what
+    /// each of its signs says there, as music21 does.
+    editorial: Option<Py<PyAny>>,
     /// music21's `Style` object, made on first asking; the page is not
     /// something this crate models.
     style: Option<Py<PyAny>>,
@@ -57,6 +61,7 @@ impl Rest {
         Self {
             inner,
             duration: None,
+            editorial: None,
             lyrics: None,
             tie: None,
             expressions: None,
@@ -414,6 +419,34 @@ impl Rest {
         };
         slf.borrow_mut().tie = tie;
         Ok(())
+    }
+
+    /// Where an analysis leaves what it worked out about this rest:
+    /// music21's `editorial`, the same object every time it is asked for,
+    /// built when it is first wanted.
+    #[getter]
+    fn get_editorial(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        // Where this class stands in for music21's, music21's own is the
+        // one that answers: see `music21_editorial`.
+        if let Some(found) = crate::music21_editorial(slf.as_any())? {
+            return Ok(found.unbind());
+        }
+        if let Some(held) = &slf.borrow().editorial {
+            return Ok(held.clone_ref(py));
+        }
+        let made = Bound::new(py, crate::editorial::Editorial::new(py))?
+            .into_any()
+            .unbind();
+        slf.borrow_mut().editorial = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_editorial(&mut self, value: Option<&Bound<'_, PyAny>>) {
+        self.editorial = value
+            .filter(|value| !value.is_none())
+            .map(|value| value.clone().unbind());
     }
 
     #[getter]

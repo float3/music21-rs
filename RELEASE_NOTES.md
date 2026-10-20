@@ -2,6 +2,22 @@
 
 ## added
 
+- **The whole braille package runs against the crate now**: with
+  `braille.segment`'s groupings and `braille.noteGrouping`'s transcriber,
+  all six of its modules pass every one of music21's examples -- 612 of
+  them. A `BrailleElementGrouping` is the elements braille writes
+  together, mimicking a list as music21's does; a
+  `NoteGroupingTranscriber` writes one element at a time, keeping what it
+  has written and what it wrote last, as music21's own examples ask of it.
+  `BrailleSegment` and `BrailleGrandSegment` are still music21's, running
+  over the crate's groupings and the crate's transcriptions -- which is
+  how all 219 of `braille.segment`'s examples pass.
+
+- **A rest carries an editorial**, as music21's does and as braille needs:
+  the wheel's `Rest` had none, so nothing could write onto it what each of
+  its signs says.
+
+
 - **The wheel writes a score, a part or a measure in braille**, and every
   one of music21's `braille.translate` examples passes: 4 of 4 docstrings
   and 30 of 30 examples, from nothing. `objectToBraille`,
