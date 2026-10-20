@@ -102,6 +102,12 @@ impl BrailleTextLine {
         }
     }
 
+    /// Every cell of the line, written or not: music21's `allChars`,
+    /// which its own examples compare against a line of spaces.
+    pub fn cells(&self) -> &[String] {
+        &self.cells
+    }
+
     /// The first `text_location` cells.
     pub fn text(&self) -> String {
         self.cells[..self.text_location].concat()

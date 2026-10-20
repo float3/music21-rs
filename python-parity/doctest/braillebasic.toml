@@ -1,0 +1,32 @@
+# Docstrings of music21.braille.basic whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_braillebasic`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.braille.basic",
+    "music21.braille.basic.barlineToBraille",
+    "music21.braille.basic.brailleAsciiToBrailleUnicode",
+    "music21.braille.basic.brailleUnicodeToBrailleAscii",
+    "music21.braille.basic.brailleUnicodeToSymbols",
+    "music21.braille.basic.chordToBraille",
+    "music21.braille.basic.clefToBraille",
+    "music21.braille.basic.dynamicToBraille",
+    "music21.braille.basic.instrumentToBraille",
+    "music21.braille.basic.keySigToBraille",
+    "music21.braille.basic.metronomeMarkToBraille",
+    "music21.braille.basic.noteToBraille",
+    "music21.braille.basic.numberToBraille",
+    "music21.braille.basic.pitchToOctave",
+    "music21.braille.basic.restToBraille",
+    "music21.braille.basic.showOctaveWithNote",
+    "music21.braille.basic.tempoTextToBraille",
+    "music21.braille.basic.textExpressionToBraille",
+    "music21.braille.basic.timeSigToBraille",
+    "music21.braille.basic.transcribeHeading",
+    "music21.braille.basic.transcribeNoteFingering",
+    "music21.braille.basic.transcribeSignatures",
+    "music21.braille.basic.wordToBraille",
+    "music21.braille.basic.yieldBrailleArticulations",
+    "music21.braille.basic.yieldDots",
+]

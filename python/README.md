@@ -162,6 +162,14 @@ a `**harm` token is read as the roman numeral it annotates with
 `convertHarmToRoman` and taken apart by a `HarmParser`, and an
 `ActivityMatch` says what pitch sounds under which dynamic.
 
+music is written in braille one element at a time -- `noteToBraille`,
+`chordToBraille`, `restToBraille`, `keySigToBraille`, `timeSigToBraille`,
+`clefToBraille`, `dynamicToBraille`, `metronomeMarkToBraille`,
+`instrumentToBraille`, `textExpressionToBraille` and `transcribeHeading`
+among them, each writing what its signs say onto the element it read --
+and laid out in lines of so many cells by a `BrailleText`, a
+`BrailleKeyboard` for the two hands, or a `BrailleTextLine` on its own.
+
 a stream is searched for a row of pitch classes with a
 `ContiguousSegmentSearcher`, which finds every run of a length, and with a
 `SegmentMatcher` or one of the five matchers beside it, which find the runs
