@@ -100,6 +100,7 @@ pub mod tablature;
 pub mod tempo;
 pub mod text;
 pub mod transposition;
+pub mod tsvconverter;
 pub mod voiceleading;
 pub mod windowed;
 
@@ -1346,6 +1347,11 @@ exceptions![
         Some("music21.audioSearch")
     ),
     (
+        "TsvException",
+        tsvconverter::TsvException,
+        Some("music21.romanText.tsvConverter")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1641,6 +1647,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     correlate::register(m)?;
     aligner::register(m)?;
     audiosearch::register(m)?;
+    tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;

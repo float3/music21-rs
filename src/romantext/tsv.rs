@@ -543,6 +543,23 @@ pub(crate) fn offset_in_measure(beat: FloatType) -> FloatType {
 /// carry, and a row of either is read into this one type -- what the lab's
 /// version 1 calls `measure` and `beat` its version 2 calls `mn` and
 /// `mn_onset`, and counts the onset in whole notes rather than in beats.
+/// A row's label and keys as one of the two standards spells them:
+/// what music21's `_changeRepresentation` writes back onto a row.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Spelling {
+    /// The whole label, which the lab's version 2 writes in one column.
+    pub chord: String,
+    /// The degree alone.
+    pub numeral: String,
+    /// How the chord is built over the degree.
+    pub form: Option<String>,
+    /// The degree the chord is read in.
+    pub relativeroot: Option<String>,
+    /// The key in force.
+    pub local_key: String,
+}
+
 /// Every column the standard does not name is kept beside the row, as
 /// music21 keeps its `extra`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -650,47 +667,95 @@ impl TabChord {
         Ok(read)
     }
 
-    /// The label as music21 writes one, which is what a
-    /// [`RomanNumeral`](crate::roman::RomanNumeral) is built from: music21's
-    /// `_changeRepresentation` and the first half of its `tabToM21`.
-    fn music21_label(&self) -> String {
-        // music21's `_changeRepresentation` branches on whether the local
-        // key and the degree it is read in are minor, but every branch
-        // calls one function whose `minor` argument it never reads, so the
-        // swaps are the same either way.
-        let numeral = character_swaps(&self.numeral, Direction::IntoMusic21);
+    /// The label and the keys as one of the two standards spells them:
+    /// music21's `_changeRepresentation`, which writes all five back onto
+    /// the row.
+    ///
+    /// Only the reading *into* music21 touches the label: music21 leaves
+    /// a row's chord and form alone going the other way.
+    pub fn spelled(&self, direction: Direction) -> Spelling {
+        // music21 branches on whether the local key and the degree it is
+        // read in are minor, but every branch calls one function whose
+        // `minor` argument it never reads, so the swaps are the same
+        // either way.
+        let numeral = character_swaps(&self.numeral, direction);
         let relativeroot = self
             .relativeroot
             .as_deref()
             .filter(|root| !root.is_empty())
-            .map(|root| character_swaps(root, Direction::IntoMusic21));
-        let form = self
-            .form
-            .as_deref()
-            .map(|form| form.replace('%', "ø"))
-            .filter(|form| !form.is_empty());
-        if self.version == Version::Two && !self.chord.is_empty() {
-            let mut label = handle_added_tones(&self.chord.replace('%', "ø"));
+            .map(|root| character_swaps(root, direction));
+        let local_key = character_swaps(&self.local_key, direction);
+        if direction == Direction::IntoDcml {
+            return Spelling {
+                chord: self.chord.clone(),
+                numeral,
+                form: self.form.clone(),
+                relativeroot,
+                local_key,
+            };
+        }
+        let form = self.form.as_deref().map(|form| form.replace('%', "ø"));
+        let mut chord = self.chord.clone();
+        if self.version == Version::Two && !chord.is_empty() {
+            chord = handle_added_tones(&chord.replace('%', "ø"));
             // A major-minor seventh away from the fifth degree says so in
-            // music21's figure and not in the lab's.
+            // music21's figure and not in the lab's. music21 reads the
+            // degree here before it has swapped it.
             if self
                 .extra
                 .iter()
                 .any(|(name, value)| name == "chord_type" && value == "Mm7")
                 && self.numeral != "V"
             {
-                label = prefix_sevenths(&label);
+                chord = prefix_sevenths(&chord);
             }
-            return label;
+        }
+        Spelling {
+            chord,
+            numeral,
+            form,
+            relativeroot,
+            local_key,
+        }
+    }
+
+    /// The row with that spelling written onto it.
+    fn spelled_row(&self, direction: Direction) -> Self {
+        let spelling = self.spelled(direction);
+        Self {
+            chord: spelling.chord,
+            numeral: spelling.numeral,
+            form: spelling.form,
+            relativeroot: spelling.relativeroot,
+            local_key: spelling.local_key,
+            ..self.clone()
+        }
+    }
+
+    /// The figure the row's fields spell *as they stand*: the
+    /// figure-building half of music21's `tabToM21`, which reads the row
+    /// after `_changeRepresentation` has had its way with it.
+    ///
+    /// The lab's version 2 writes the whole label in one column, which is
+    /// the figure; version 1 writes the degree, how the chord is built
+    /// over it, the figured bass and the degree it is read in, which this
+    /// puts together.
+    pub fn label(&self) -> String {
+        if self.version == Version::Two && !self.chord.is_empty() {
+            return self.chord.clone();
         }
         let mut label = format!(
-            "{numeral}{}{}",
-            form.unwrap_or_default(),
-            self.figbass.clone().unwrap_or_default()
+            "{}{}{}",
+            self.numeral,
+            self.form
+                .as_deref()
+                .filter(|form| !form.is_empty())
+                .unwrap_or_default(),
+            self.figbass.as_deref().unwrap_or_default()
         );
-        if let Some(root) = relativeroot.filter(|root| !root.is_empty()) {
+        if let Some(root) = self.relativeroot.as_deref().filter(|root| !root.is_empty()) {
             label.push('/');
-            label.push_str(&root);
+            label.push_str(root);
         }
         label
     }
@@ -721,11 +786,22 @@ impl TabChord {
     ///
     /// A label or a key the crate cannot read.
     pub fn element(&self) -> Result<StreamElement> {
+        self.spelled_row(Direction::IntoMusic21)
+            .element_as_spelled()
+    }
+
+    /// The same of a row *as it stands*, which is music21's `tabToM21`
+    /// once `_changeRepresentation` has had its way with the row.
+    ///
+    /// # Errors
+    ///
+    /// A label or a key the crate cannot read.
+    pub fn element_as_spelled(&self) -> Result<StreamElement> {
         if self.numeral.is_empty() || self.numeral == "@none" {
             return Ok(no_chord().into());
         }
         let numeral = RomanNumeral::with_minor_defaults(
-            self.music21_label(),
+            self.label(),
             self.key()?,
             Minor67Default::Flat,
             Minor67Default::Flat,

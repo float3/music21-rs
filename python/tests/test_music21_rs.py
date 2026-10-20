@@ -5083,3 +5083,60 @@ def test_a_recording_is_turned_into_notes():
     ]
     # The notes in it are the caller's own.
     assert part[0] is written[0]
+
+def test_a_tabular_analysis_is_read_as_roman_numerals():
+    """The Digital and Cognitive Musicology Lab's tables read as roman
+    numerals, as music21's `romanText.tsvConverter` reads them."""
+    # music21's own documented answers for the seven readings.
+    assert (m.isMinor("F"), m.isMinor("f")) == (False, True)
+    assert m.characterSwaps("ii%", minor=False, direction="DCML-m21") == "iiø"
+    assert m.getLocalKey("V", "G") == "D"
+    assert m.getLocalKey("ii", "C") == "d"
+    assert m.getLocalKey("#vii", "a") == "g#"
+    assert m.getLocalKey("vii", "a", convertDCMLToM21=True) == "g"
+    assert m.localKeyAsRn(m.Key("C"), m.Key("e")) == "VI"
+    assert m.localKeyAsRn(m.Key("C#"), m.Key("e")) == "#VI"
+    assert m.localKeyAsRn(m.Key("e"), m.Key("C")) == "iii"
+    assert m.getSecondaryKey("V/vi", "C") == "a"
+    assert m.getForm(m.RomanNumeral("viio7")) == "o"
+    assert m.getForm(m.RomanNumeral("IVM7")) == "M"
+    assert m.handleAddedTones("V(64)") == "Cad64"
+    assert m.handleAddedTones("i(4+2)") == "i[no3][add4][add2]"
+    assert m.handleAddedTones("ii6(11#7b6)") == "ii6[no8][no5][add11][add#7][addb6]"
+
+    # A row of the lab's second standard, spelled the lab's way and then
+    # music21's -- music21's own `_changeRepresentation` example.
+    row = m.TabChordV2()
+    row.global_key = "F"
+    row.local_key = "vi"
+    row.numeral = "ii"
+    row.chord = "ii%7(6)"
+    row.representationType = "DCML"
+    assert row.combinedChord == "ii%7(6)"
+    row._changeRepresentation()
+    assert row.representationType == "m21"
+    assert row.chord == "iiø7[no5][add6]"
+
+    # The lab renamed four columns, and a version 2 row answers the older
+    # names by reading the newer ones.
+    row.mn_onset = 0.0
+    assert row.beat == 1.0
+    row.mn_onset = 0.5
+    assert row.beat == 3.0
+    row.beat = 1.5
+    assert (row.beat, row.mn_onset) == (1.5, 0.125)
+    row.measure = 4
+    assert (row.measure, row.mn) == (4, 4)
+    assert (row.local_key, row.global_key) == (row.localkey, row.globalkey)
+
+    # A row of the first standard as the numeral it stands for: music21's
+    # own `tabToM21` example.
+    first = m.TabChord()
+    first.numeral = "vii"
+    first.global_key = "F"
+    first.local_key = "V"
+    first.representationType = "m21"
+    numeral = first.tabToM21()
+    assert numeral.figure == "vii"
+    assert numeral.key.tonicPitchNameWithCase == "C"
+    assert numeral.quarterLength == 0.0

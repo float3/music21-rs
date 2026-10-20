@@ -3993,7 +3993,7 @@ fn leaves_of(py: Python<'_>, stream: &Stream) -> PyResult<Vec<Py<PyAny>>> {
 
 /// The wheel's object for one element of a crate stream, where it has a
 /// class for it.
-fn element_object<'py>(
+pub(crate) fn element_object<'py>(
     py: Python<'py>,
     element: &StreamElement,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
