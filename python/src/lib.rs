@@ -33,6 +33,7 @@ macro_rules! error_into {
     };
 }
 
+pub mod aligner;
 pub mod analysis;
 pub mod articulations;
 pub mod bar;
@@ -1327,6 +1328,16 @@ exceptions![
         Some("music21.braille.segment")
     ),
     (
+        "AlignerException",
+        aligner::AlignerException,
+        Some("music21.alpha.analysis.aligner")
+    ),
+    (
+        "AlignmentTracebackException",
+        aligner::AlignmentTracebackException,
+        Some("music21.alpha.analysis.aligner")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1615,6 +1626,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     brailletext::register(m)?;
     brailletranslate::register(m)?;
     correlate::register(m)?;
+    aligner::register(m)?;
     harmparser::register(m)?;
     hasher::register(m)?;
     searchbase::register(m)?;

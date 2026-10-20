@@ -2021,20 +2021,15 @@ rust = ["src/alpha/analysis/aligner.rs"]
 note = "Two readings of the same music lined up against each other -- a score read by an optical reader against the same music played in -- by the edit distance between their hashes."
 
 [class.renames]
-getDefaultHasher = "new"
+getDefaultHasher = "default_hasher"
 makeHashedStreams = "align"
-setupDistanceMatrix = "align_hashed"
-populateDistanceMatrix = "align_hashed"
-getPossibleMovesFromLocation = "align_hashed"
-getOpFromLocation = "align_hashed"
-calculateChangesList = "align_hashed"
-calculateNumSimilarities = "changes_count"
+getPossibleMovesFromLocation = "moves_from_location"
+getOpFromLocation = "op_from_location"
+calculateChangesList = "change_places"
+calculateNumSimilarities = "num_similarities"
+tupleEqualityWithoutReference = "hashes_equal_without_reference"
 
 [class.excluded]
-insertCost = "what an insertion costs, which is one everywhere"
-deleteCost = "what a deletion costs, likewise"
-substitutionCost = "what a substitution costs, which the hashes' difference says"
-tupleEqualityWithoutReference = "whether two hashes are equal but for which note they came from, which comparing them answers"
 showChanges = "prints the changes, and colours the notes of the score to show them"
 
 [[class]]

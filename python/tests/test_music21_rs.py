@@ -4830,3 +4830,50 @@ def test_a_streams_notes_are_hashed():
 
     # Each measure on its own.
     assert len(hasher.hashMeasures(line)) == 1
+
+def test_two_streams_are_aligned_note_by_note():
+    """Two streams aligned as the cheapest edit from one to the other, as
+    music21's `alpha.analysis.aligner` aligns them. The matrix is numpy's,
+    which is what music21 works in, so without numpy there is nothing to
+    align in."""
+    pytest.importorskip("numpy")
+    target = m.from_tiny_notation("4/4 c4 d e f")
+    source = m.from_tiny_notation("4/4 c4 d e")
+    aligner = m.StreamAligner(target, source)
+    # music21's default hasher: no offset hashed, and every hash says what
+    # it was made from.
+    assert (aligner.hasher.hashOffset, aligner.hasher.includeReference) == (False, True)
+
+    aligner.align()
+    assert (aligner.n, aligner.m) == (4, 3)
+    assert aligner.distanceMatrix.tolist() == [
+        [0, 2, 4, 6],
+        [2, 0, 2, 4],
+        [4, 2, 0, 2],
+        [6, 4, 2, 0],
+        [8, 6, 4, 2],
+    ]
+    assert aligner.similarityScore == 0.75
+    assert aligner.changesCount[m.ChangeOps.NoChange] == 3
+    assert aligner.changesCount[m.ChangeOps.Insertion] == 1
+
+    # Every change is between the score's own notes, and the last of these
+    # is the note the source has not got.
+    notes = list(target.recurse().notes)
+    assert aligner.changes[0][0] is notes[0]
+    assert aligner.changes[-1][0] is notes[-1]
+    assert aligner.changes[-1][2] == m.ChangeOps.Insertion
+    assert aligner.changes[-1][2].color == "green"
+    assert repr(m.ChangeOps.NoChange) == "<ChangeOps.NoChange: 3>"
+    assert m.ChangeOps.NoChange.color is None
+
+    # One step at a time, which is how music21 documents the alignment.
+    assert aligner.getPossibleMovesFromLocation(0, 0) == [None, None, None]
+    assert aligner.getPossibleMovesFromLocation(2, 2) == [2, 2, 0]
+    assert aligner.getOpFromLocation(2, 2) == m.ChangeOps.NoChange
+    assert aligner.getOpFromLocation(4, 3) == m.ChangeOps.Insertion
+    first = aligner.hashedTargetStream[0]
+    assert (aligner.insertCost(first), aligner.deleteCost(first)) == (2, 2)
+    assert aligner.substitutionCost(first, aligner.hashedSourceStream[0]) == 0
+    assert aligner.tupleEqualityWithoutReference(first, aligner.hashedSourceStream[0])
+    assert aligner.calculateNumSimilarities(first, aligner.hashedSourceStream[2]) == 1

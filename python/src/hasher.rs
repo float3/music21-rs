@@ -44,6 +44,11 @@ class NoteHashWithReference:
         self._hashed = hashed
         self.reference = None
 
+    @property
+    def hashItemsKeys(self):
+        """What each of the values is, which is how a hash is read."""
+        return tuple(self._hashed._fields)
+
     def __getattr__(self, name):
         return getattr(self._hashed, name)
 
