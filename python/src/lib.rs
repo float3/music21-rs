@@ -36,6 +36,8 @@ macro_rules! error_into {
 pub mod analysis;
 pub mod articulations;
 pub mod bar;
+pub mod braillebasic;
+pub mod brailletext;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
@@ -1300,6 +1302,16 @@ exceptions![
         Some("music21.analysis.correlate")
     ),
     (
+        "BrailleBasicException",
+        braillebasic::BrailleBasicException,
+        Some("music21.braille.basic")
+    ),
+    (
+        "BrailleTextException",
+        brailletext::BrailleTextException,
+        Some("music21.braille.text")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1581,6 +1593,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text::register(m)?;
     tablature::register(m)?;
     midipercussion::register(m)?;
+    braillebasic::register(m)?;
+    brailletext::register(m)?;
     correlate::register(m)?;
     harmparser::register(m)?;
     searchbase::register(m)?;

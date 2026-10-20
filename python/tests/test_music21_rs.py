@@ -4636,3 +4636,77 @@ def test_a_stream_is_searched_for_a_row_of_pitch_classes():
     assert len(labelled.recurse().getElementsByClass("Line")) == 1
     # The stream it was given is left as it was.
     assert [lyric.text for lyric in line.recurse().notes.first().lyrics] == []
+
+
+def test_music_is_written_in_braille():
+    """One element at a time, as music21's `braille.basic` writes it."""
+    note = m.Note("C4")
+    assert m.noteToBraille(note) == "⠐⠹"
+    # Without its octave mark, which a segment decides.
+    assert m.noteToBraille(note, showOctave=False) == "⠹"
+    # What each sign says is written onto the object, as music21 writes it.
+    assert note.editorial.brailleEnglish == ["C quarter ⠹"]
+
+    chord = m.Chord(["G4", "B4", "D5", "G5"])
+    chord.quarterLength = 4.0
+    assert m.chordToBraille(chord, descending=True) == "⠨⠷⠼⠴⠤"
+    assert m.restToBraille(m.Rest()) == "⠧"
+    assert m.timeSigToBraille(m.TimeSignature("4/8")) == "⠼⠙⠦"
+    assert m.keySigToBraille(m.KeySignature(3)) == "⠩⠩⠩"
+    # A mark that says no number is written as nothing at all.
+    assert m.metronomeMarkToBraille(m.MetronomeMark(numberSounding=80)) == ""
+
+    # The octave mark alone, from a pitch or from the octave itself.
+    assert m.pitchToOctave(m.Pitch("C4")) == m.pitchToOctave(4)
+    # A note within a third of the one before carries no octave mark.
+    assert m.showOctaveWithNote(m.Note("C4"), m.Note("E4")) is False
+    assert m.showOctaveWithNote(None, m.Note("E4")) is True
+
+    # Words, numbers and the two writings of braille itself.
+    assert m.wordToBraille("Andante") == "⠠⠁⠝⠙⠁⠝⠞⠑"
+    assert m.numberToBraille(37) == "⠼⠉⠛"
+    assert m.brailleUnicodeToBrailleAscii("⠜⠋⠂") == ">F1"
+    assert m.brailleAsciiToBrailleUnicode("_>") == "⠸⠜"
+    assert list(m.yieldDots("⠇")) == ["⠄", "⠄", "⠄"]
+
+
+def test_braille_is_laid_out_in_lines():
+    """Lines of so many cells, as music21's `braille.text` lays them out."""
+    text = m.BrailleText(lineLength=10, showHand="right")
+    assert repr(text) == "<music21.braille.text.BrailleText 1 line, 0 headings, 10 cols>"
+    assert (text.lineLength, text.rightHandSymbol, text.leftHandSymbol) == (
+        10,
+        True,
+        False,
+    )
+    assert text.allHeadings == []
+
+    text.addHeading(m.timeSigToBraille(m.TimeSignature("4/8")))
+    text.addMeasureNumber(7)
+    assert len(text.allLines) == 2
+    assert text.allLines[0].isHeading is True
+    assert str(text.allLines[0]) == "⠼⠙⠦"
+    assert text.allHeadings == [(0, 1)]
+
+    # A caller holding a line is holding the text's: writing through it
+    # reaches the text.
+    line = text.currentLine
+    line.append("⠽", addSpace=False)
+    assert text.currentLine is line
+    assert str(text).splitlines()[-1].endswith("⠽")
+
+    # The two hands at a keyboard are the text's own lines.
+    keyboard = m.BrailleKeyboard(lineLength=10)
+    keyboard.highestMeasureNumberLength = 2
+    keyboard.makeNewLines()
+    assert keyboard.rightHandLine is keyboard.allLines[0]
+    assert keyboard.leftHandLine is keyboard.allLines[1]
+
+    # One line on its own, which is what a text is made of.
+    bare = m.BrailleTextLine(5)
+    assert repr(bare) == "<music21.braille.text.BrailleTextLine '⠀⠀⠀⠀⠀'>"
+    assert bare.allChars == 5 * ["⠀"]
+    assert bare.canAppend("⠹", addSpace=False) is True
+    bare.append("⠹", addSpace=False)
+    assert str(bare) == "⠹"
+    assert bare.textLocation == 1

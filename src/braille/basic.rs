@@ -481,7 +481,7 @@ fn metronome_mark_repr(mark: &MetronomeMark) -> String {
 /// The articulations braille writes before a note, bowings first, then
 /// staccatos, then the rest by name: music21's
 /// `yieldBrailleArticulations`.
-fn braille_articulations(note: &Note) -> Vec<(String, String)> {
+pub fn braille_articulations(note: &Note) -> Vec<(String, String)> {
     let mut articulations: Vec<_> = note.articulations().iter().collect();
     articulations.sort_by_key(|articulation| {
         (

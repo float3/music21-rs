@@ -2,6 +2,20 @@
 
 ## added
 
+- **The wheel writes music in braille and lays it out in lines**, and
+  every one of music21's examples for both modules passes:
+  `braille.basic` 25 of 25 docstrings and 199 of 199 examples,
+  `braille.text` 14 of 14 and 135 of 135, from nothing. Every
+  transcription is `braille::basic`'s, which `braille_basic_parity`
+  already held to music21 sign for sign, and every question of layout is
+  `braille::text`'s; what the facades add is music21's own objects. A
+  transcription writes what each sign says onto the element it
+  transcribed (`editorial.brailleEnglish`), as music21 does and as its
+  own examples read back, and a braille text keeps each line as the
+  object music21 keeps it as -- so a caller writing through
+  `currentLine` is writing into the text, and a keyboard's
+  `rightHandLine` *is* one of its own lines.
+
 - **The wheel searches a stream for a row of pitch classes, and every one
   of music21's `search.serial` examples passes**: 23 of 23 docstrings and
   564 of 564 examples, from nothing -- the largest module in the harness.
