@@ -4279,3 +4279,67 @@ def test_a_dynamic_says_what_it_is():
     assert repr(m.Dynamic("")) == "<music21.dynamics.Dynamic>"
     # Nothing said is music21's `n`, as the value itself says.
     assert repr(m.Dynamic()) == "<music21.dynamics.Dynamic n>"
+
+
+def test_a_percussion_chord_says_what_it_strikes():
+    """Several drums struck at once, which is not a chord by pitch."""
+    struck = m.PercussionChord([m.Note("E5"), m.Note("C4")])
+    # music21 writes what is struck, in the order it was given.
+    assert repr(struck) == "<music21.percussion.PercussionChord [E5 C4]>"
+    assert struck.isChord is False
+    assert len(struck) == 2
+    assert [pitch.nameWithOctave for pitch in struck.pitches] == ["E5", "C4"]
+    # One holding nothing says where it sits instead, as music21's does.
+    assert repr(m.PercussionChord()).startswith(
+        "<music21.percussion.PercussionChord object at 0x"
+    )
+
+    # The same objects every time, and the ones a caller handed over.
+    note = m.Note("D4")
+    struck.notes = [note]
+    assert struck.notes[0] is note
+
+    # Writing the pitches replaces everything struck with notes of them,
+    # which is music21's own setter.
+    struck.pitches = [60]
+    assert [held.pitch.nameWithOctave for held in struck.notes] == ["C4"]
+
+    # Only a note or a stroke may be struck; a rest sounds nothing at all.
+    with pytest.raises(TypeError):
+        struck.notes = [m.Rest()]
+
+    # Two are equal where they strike the same things in the same order,
+    # and a copy strikes copies.
+    copied = copy.deepcopy(struck)
+    assert copied == struck
+    assert copied.notes[0] is not struck.notes[0]
+    assert m.PercussionChord([m.Note("C4"), m.Note("E4")]) != m.PercussionChord(
+        [m.Note("E4"), m.Note("C4")]
+    )
+
+
+def test_a_midi_key_names_the_drum_it_plays():
+    """The General MIDI percussion map, read either way."""
+    mapper = m.PercussionMapper()
+    # A key says which drum *and how it is played*: 36 is a bass drum
+    # played `1` and 35 the same drum played `acoustic`.
+    played = mapper.midiPitchToInstrument(36)
+    assert (played.instrumentName, played.modifier) == ("Bass Drum", "1")
+    assert mapper.midiPitchToInstrument(35).modifier == "acoustic"
+    # A pitch is read as the key it is struck on.
+    assert mapper.midiPitchToInstrument(m.Pitch(57)).instrumentName == "Crash Cymbals"
+
+    # And back: the key a drum is struck on.
+    assert mapper.midiInstrumentToPitch(played).nameWithOctave == "C2"
+
+    # Every key the map names a drum for, against the class of that drum.
+    mapping = mapper.reverseInstrumentMapping
+    assert len(mapping) == 35
+    assert mapping[36].__name__ == "BassDrum"
+
+    # A key the map names nothing for, and an instrument it has no key
+    # for, are refused in music21's own words.
+    with pytest.raises(m.MIDIPercussionException):
+        mapper.midiPitchToInstrument(0)
+    with pytest.raises(m.MIDIPercussionException):
+        mapper.midiInstrumentToPitch(m.Piano())

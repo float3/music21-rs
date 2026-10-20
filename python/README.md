@@ -158,6 +158,16 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+several drums struck at once are a `PercussionChord`, which music21 says
+is not a chord -- there is no pitch to compare -- holding whatever it was
+handed, the members that sound answering `pitches`, and writing those
+pitches replacing every member with a note of them. `PercussionMapper`
+reads the General MIDI percussion map either way: `midiPitchToInstrument`
+takes a key as a number or as a pitch and says which drum it plays *and
+how it is played*, key 36 being a bass drum played `1` and key 35 the same
+drum played `acoustic`, and `midiInstrumentToPitch` says the key a drum is
+struck on.
+
 a score's words are read off its notes with `assembleLyrics` and
 `assembleAllLyrics`, a title's article is moved to the front of it and back
 with `prependArticle` and `postpendArticle`, and a `TextBox` stands words
