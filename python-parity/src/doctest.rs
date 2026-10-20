@@ -41,6 +41,7 @@ pub use music21_rs_python::analysis::{
 /// module of the same name. They live with the classes they name; the
 /// aliases are here because the tests read them off this module.
 pub use music21_rs_python::articulations::NAMES as ARTICULATION_NAMES;
+pub use music21_rs_python::audiosearch::NAMES as AUDIO_SEARCH_NAMES;
 pub use music21_rs_python::bar::NAMES as BAR_NAMES;
 pub use music21_rs_python::braillebasic::NAMES as BRAILLE_BASIC_NAMES;
 pub use music21_rs_python::braillelookup::NAMES as BRAILLE_LOOKUP_NAMES;

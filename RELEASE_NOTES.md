@@ -2,6 +2,21 @@
 
 ## added
 
+- **The wheel turns a recording into notes**, and every one of music21's
+  `audioSearch` examples passes: 15 of 15 docstrings and 107 of 107, from
+  nothing. Every step is the crate's `audiosearch`, which
+  `audiosearch_parity` already held to music21 -- the histogram and the
+  parabola through a peak, the frequency a signal sounds by
+  autocorrelation, the thresholds between a scale's pitches and the pitch a
+  frequency falls nearest, the smoothing, the runs of one pitch joined into
+  notes, the quarter length estimated and a length snapped to it, and which
+  part of a score a follower takes. Two by-position twins are new:
+  `joined_pitches` says which pitch each run ends on, so a note keeps the
+  very `Pitch` object music21 hands it, and `transcribed_notes` says what
+  length each note is given and which are kept, so a transcription holds
+  the caller's own notes. The three members that read audio stay
+  music21's, being file IO.
+
 - **The whole `omr` package runs against the crate**, 191 of music21's own
   examples across its two modules: `omr.correctors` 21 of 21 docstrings and
   164 of 164 examples, `omr.evaluators` 5 of 5 and 27 of 27, from nothing.
@@ -689,6 +704,11 @@
   property as music21 does.
 
 ## fixed
+
+- **`smooth_frequencies` raises a `ValueError` for an argument that was
+  never a value**, as music21 does -- no smoothing levels at all, or more
+  levels than there are readings -- rather than an analysis error of its
+  own. Found by running music21's own `audioSearch` examples.
 
 - **A measure's own barline was read twice** by the wheel's reader.
   music21 keeps a measure's right barline among its elements, so it was

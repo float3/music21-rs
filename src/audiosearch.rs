@@ -36,7 +36,7 @@ pub const AUDIO_CHUNK_LENGTH: usize = 1024;
 pub const RECORD_SAMPLE_RATE: FloatType = 44100.0;
 
 /// The frequency standing for a rest.
-const REST_FREQUENCY: FloatType = 10.0;
+pub const REST_FREQUENCY: FloatType = 10.0;
 
 fn audio_error(message: impl Into<String>) -> Error {
     Error::Analysis(message.into())
@@ -275,12 +275,15 @@ pub fn detect_pitch_frequencies(
 ///
 /// No levels, or more levels than frequencies.
 pub fn smooth_frequencies(frequencies: &[FloatType], smooth_levels: usize) -> Result<Vec<i64>> {
+    // music21 raises a `ValueError` for both of these rather than its own
+    // class: they are arguments that were never values, not music that
+    // cannot be read.
     if smooth_levels < 1 {
-        return Err(audio_error("smoothLevels must be >= 1"));
+        return Err(Error::Value("smoothLevels must be >= 1".to_string()));
     }
     let count = frequencies.len();
     if smooth_levels > count {
-        return Err(audio_error(format!(
+        return Err(Error::Value(format!(
             "There cannot be more smoothLevels ({smooth_levels}) than inputPitches ({count})"
         )));
     }
@@ -361,6 +364,67 @@ fn pitch_at_frequency(hertz: FloatType) -> Result<Pitch> {
     Pitch::from_pitch_space((space * 1e6).round_ties_even() / 1e6)
 }
 
+/// One note or rest a run of pitches makes: the by-position twin of
+/// [`join_consecutive_identical_pitches`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct JoinedNote {
+    /// Which of the pitches it sounds, or none where it is a rest.
+    pub pitch: Option<usize>,
+    /// How many pitches it stands for.
+    pub length: usize,
+}
+
+/// What each run of one pitch makes, as the places of the pitches rather
+/// than as notes: the by-position twin of
+/// [`join_consecutive_identical_pitches`].
+///
+/// music21 hands the note it makes the very `Pitch` object of the run's
+/// last pitch, so a caller holding those objects wants to know which.
+///
+/// # Errors
+///
+/// No pitches.
+pub fn joined_pitches(pitches: &[Pitch]) -> Result<Vec<JoinedNote>> {
+    let mut read = pitches.to_vec();
+    let first = read
+        .first_mut()
+        .ok_or_else(|| audio_error("list index out of range"))?;
+    *first = pitch_at_frequency(REST_FREQUENCY)?;
+    let mut joined = Vec::new();
+    let (mut good, mut bad) = (0, 0);
+    let mut j = 0;
+    while j < read.len() {
+        let frequency = read[j].frequency_hz();
+        let mut valid = false;
+        while j < read.len() && read[j].frequency_hz() == frequency {
+            good += 1;
+            if good >= 6 {
+                valid = true;
+                if bad >= 15 {
+                    joined.push(JoinedNote {
+                        pitch: None,
+                        length: bad,
+                    });
+                }
+                bad = 0;
+            }
+            j += 1;
+        }
+        if valid {
+            joined.push(JoinedNote {
+                pitch: Some(j - 1),
+                length: good,
+            });
+        } else {
+            bad += good;
+        }
+        good = 0;
+        j += 1;
+    }
+    Ok(joined)
+}
+
 /// Notes and rests from runs of one pitch, and how many pitches each
 /// lasted: music21's `joinConsecutiveIdenticalPitches`. A run of six or
 /// more is a note of its last pitch; fifteen or more pitches in shorter
@@ -379,31 +443,12 @@ pub fn join_consecutive_identical_pitches(
     *first = pitch_at_frequency(REST_FREQUENCY)?;
     let mut notes: Vec<StreamElement> = Vec::new();
     let mut lengths = Vec::new();
-    let (mut good, mut bad) = (0, 0);
-    let mut j = 0;
-    while j < pitches.len() {
-        let frequency = pitches[j].frequency_hz();
-        let mut valid = false;
-        while j < pitches.len() && pitches[j].frequency_hz() == frequency {
-            good += 1;
-            if good >= 6 {
-                valid = true;
-                if bad >= 15 {
-                    lengths.push(bad);
-                    notes.push(Rest::new(Duration::quarter()).into());
-                }
-                bad = 0;
-            }
-            j += 1;
-        }
-        if valid {
-            lengths.push(good);
-            notes.push(Note::from_pitch(pitches[j - 1].clone()).into());
-        } else {
-            bad += good;
-        }
-        good = 0;
-        j += 1;
+    for one in joined_pitches(&pitches)? {
+        lengths.push(one.length);
+        notes.push(match one.pitch {
+            Some(place) => Note::from_pitch(pitches[place].clone()).into(),
+            None => Rest::new(Duration::quarter()).into(),
+        });
     }
     Ok((notes, lengths))
 }
@@ -452,6 +497,64 @@ pub fn quarter_length_estimation(
     Ok(estimate * (2.0 as FloatType).powf(0.0 - most_repeated.log2()))
 }
 
+/// What one note of a transcription is given: the by-position twin of
+/// [`notes_and_durations_to_stream`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TranscribedNote {
+    /// Which of the notes given it is.
+    pub note: usize,
+    /// How long it is to last, in quarters.
+    pub quarter_length: FloatType,
+    /// Whether it goes into the part: a rest before the first note is
+    /// left out where the caller asked for that.
+    pub kept: bool,
+}
+
+/// How long each note of a transcription is to last and which of them go
+/// into the part, and the quarter length estimated: the by-position twin
+/// of [`notes_and_durations_to_stream`].
+///
+/// music21 writes the length onto *every* note it is given, the rests it
+/// then leaves out included, which is why each note is answered for
+/// whether it is kept or not.
+///
+/// # Errors
+///
+/// Fewer notes than lengths, or no lengths.
+pub fn transcribed_notes(
+    notes: &[StreamElement],
+    lengths: &[usize],
+    score_notes: Option<&Stream>,
+    remove_rests_at_beginning: bool,
+) -> Result<(Vec<TranscribedNote>, FloatType)> {
+    let most_common = match score_notes {
+        Some(score) => crate::features::vector_by_id(score, "QL2")?
+            .and_then(|vector| vector.first().map(|value| value.as_float()))
+            .unwrap_or(1.0),
+        None => 1.0,
+    };
+    let estimate = quarter_length_estimation(lengths, most_common)?;
+    let mut out = Vec::with_capacity(lengths.len());
+    let mut skipping = remove_rests_at_beginning;
+    for (index, length) in lengths.iter().enumerate() {
+        let element = notes
+            .get(index)
+            .ok_or_else(|| audio_error("list index out of range"))?;
+        let quarter_length = quantize_duration(*length as FloatType / estimate);
+        let kept = !(skipping && matches!(element, StreamElement::Rest(_)));
+        if kept {
+            skipping = false;
+        }
+        out.push(TranscribedNote {
+            note: index,
+            quarter_length,
+            kept,
+        });
+    }
+    Ok((out, estimate))
+}
+
 /// A score of one part holding `notes`, each as long as its length in
 /// [`quantize_duration`]d quarters of the estimated quarter length, and that
 /// estimate: music21's `notesAndDurationsToStream`. The estimate is
@@ -469,35 +572,22 @@ pub fn notes_and_durations_to_stream(
     score_notes: Option<&Stream>,
     remove_rests_at_beginning: bool,
 ) -> Result<(Stream, FloatType)> {
-    let most_common = match score_notes {
-        Some(score) => crate::features::vector_by_id(score, "QL2")?
-            .and_then(|vector| vector.first().map(|value| value.as_float()))
-            .unwrap_or(1.0),
-        None => 1.0,
-    };
-    let estimate = quarter_length_estimation(lengths, most_common)?;
+    let (given, estimate) =
+        transcribed_notes(notes, lengths, score_notes, remove_rests_at_beginning)?;
     let mut part = Stream::with_kind(StreamKind::Part);
-    let mut skipping = remove_rests_at_beginning;
-    for (index, length) in lengths.iter().enumerate() {
+    for one in &given {
         let mut element = notes
-            .get(index)
+            .get(one.note)
             .cloned()
             .ok_or_else(|| audio_error("list index out of range"))?;
-        let duration = Duration::new(quantize_duration(*length as FloatType / estimate))?;
-        let rest = match &mut element {
-            StreamElement::Note(note) => {
-                note.set_duration(duration);
-                false
-            }
-            StreamElement::Rest(rest) => {
-                rest.set_duration(duration);
-                true
-            }
-            _ => false,
-        };
-        if !(skipping && rest) {
+        let duration = Duration::new(one.quarter_length)?;
+        match &mut element {
+            StreamElement::Note(note) => note.set_duration(duration),
+            StreamElement::Rest(rest) => rest.set_duration(duration),
+            _ => {}
+        }
+        if one.kept {
             part.push(element);
-            skipping = false;
         }
     }
     let mut score = Stream::with_kind(StreamKind::Score);
