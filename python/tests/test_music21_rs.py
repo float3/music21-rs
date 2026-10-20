@@ -4998,3 +4998,88 @@ def test_a_score_read_by_an_optical_reader_is_mended():
     bare = m.MeasureHash()
     bare.hashString = "GFPGF"
     assert bare.getProbabilityBasedOnChanges("e") == 2.9472832125e-14
+
+def test_a_recording_is_turned_into_notes():
+    """A recorded signal read as frequencies, those as pitches, and the
+    pitches as notes, as music21's `audioSearch` does it."""
+    # music21's own `histogram` example: the first edge is the least of the
+    # data as it was given, and the rest are shares of the span.
+    counts, edges = m.histogram([1, 1, 4, 5, 6, 0, 8, 8, 8, 8, 8], 8)
+    assert counts == [3, 0, 0, 1, 1, 1, 0, 5]
+    assert edges == [0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
+    assert m.histogram([1, 1, 4, 5, 6, 0, 8, 8, 8, 8, 8], 4)[0] == [3, 1, 2, 5]
+
+    # The frequency a signal sounds, by correlating it with itself.
+    rate = 44100.0
+    signal = [
+        math.sin(2 * math.pi * 441.0 * i / rate) * 10000.0 for i in range(1024)
+    ]
+    # music21 finds 442.2033 for this window: the interpolated peak sits a
+    # little early.
+    assert abs(m.autocorrelationFunction(signal, rate) - 442.2033) < 1e-3
+
+    # The thresholds between a scale's pitches, and the pitch a frequency
+    # falls nearest -- music21's own 441.72 example.
+    thresholds, pitches = m.prepareThresholds()
+    assert len(thresholds) == len(pitches) - 1
+    assert [p.nameWithOctave for p in pitches][:3] == ["C4", "C#4", "D4"]
+    frequency, pitch = m.normalizeInputFrequency(441.72)
+    assert (round(frequency, 4), pitch.nameWithOctave) == (440.0, "A4")
+    assert m.normalizeInputFrequency(441.72, thresholds, pitches)[1].nameWithOctave == "A4"
+
+    # music21's own `detectPitchFrequencies` example, in C major.
+    heard = [143.627689055, 99.0835452019, 211.004784689, 4700.31347962, 2197.9431119]
+    found = m.detectPitchFrequencies(heard, useScale=m.MajorScale("C4"))
+    assert [int(round(hertz)) for hertz in found] == [147, 98, 220, 4699, 2093]
+
+    # One bad reading smoothed away, and music21's two refusals.
+    inputPitches = [
+        440, 220, 440, 440, 442, 443, 441, 470, 440, 441, 440, 442, 440, 440,
+        440, 397, 440, 440, 440, 442, 443, 441, 440, 440, 440, 440, 440, 442,
+        443, 441, 440, 440,
+    ]
+    smoothed = m.smoothFrequencies(inputPitches)
+    assert smoothed[:4] == [409, 409, 409, 428]
+    assert inputPitches[1] == 220, "the list given is left alone"
+    assert m.smoothFrequencies(list(inputPitches), inPlace=True) is None
+    for levels in (0, 40):
+        with pytest.raises(ValueError):
+            m.smoothFrequencies(inputPitches, smoothLevels=levels)
+
+    # A length snapped to one music21 writes, and the quarter estimated.
+    assert m.quantizeDuration(0.24) == 0.25
+    assert m.quantizeDuration(1.1) == 1.0
+    assert m.quarterLengthEstimation([20, 19, 10, 30, 6, 21]) > 0.0
+
+    # Runs of one pitch joined into notes, each note keeping the very pitch
+    # object its run ended on.
+    heard = [m.Pitch("C4") for _ in range(8)] + [m.Pitch("D4") for _ in range(8)]
+    notes, lengths = m.joinConsecutiveIdenticalPitches(heard)
+    assert [note.name for note in notes] == ["C", "D"]
+    # music21 writes the rest frequency onto the first pitch it is given
+    # and passes over the first pitch after every run, so the two runs of
+    # eight count six and seven.
+    assert lengths == [6, 7]
+    # The rest frequency is written onto the first pitch, which music21
+    # spells as the nearest note it can and so answers a hair above.
+    assert abs(heard[0].frequency - 10.0) < 1e-6
+    assert notes[1].pitch is heard[-1]
+
+    # music21's own transcription example: the notes it is given, each as
+    # long as its share of the estimated quarter.
+    durations = [20, 19, 10, 30, 6, 21]
+    written = [m.Note(name) for name in ("C#4", "D5", "B4", "F#5", "C5")] + [m.Rest()]
+    score, count = m.notesAndDurationsToStream(written, durations)
+    assert count == 6
+    assert score.metadata.title == "Automatic Music21 Transcription"
+    part = score.getElementsByClass("Part")[0]
+    assert [part.elementOffset(note) for note in part] == [
+        0.0,
+        1.0,
+        2.0,
+        2.5,
+        4.0,
+        4.25,
+    ]
+    # The notes in it are the caller's own.
+    assert part[0] is written[0]

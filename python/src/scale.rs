@@ -2003,6 +2003,25 @@ fn without_duplicates(pitches: Vec<RsPitch>, comparison: RsDegreeComparison) -> 
     kept
 }
 
+/// A scale read as the crate holds one: this package's own scale where it
+/// is one, and otherwise the notes music21 realizes, which is the whole of
+/// what a scale of music21's own says to a reader here.
+///
+/// # Errors
+///
+/// A scale whose notes cannot be worked out, or an object that is no
+/// scale at all.
+pub(crate) fn crate_scale(object: &Bound<'_, PyAny>) -> PyResult<RsScale> {
+    if let Ok(facade) = object.extract::<PyRef<ConcreteScale>>() {
+        return Ok(facade.inner.clone());
+    }
+    let mut pitches = Vec::new();
+    for pitch in object.call_method0("getPitches")?.walk()? {
+        pitches.push(pitch_from_any(&pitch?)?);
+    }
+    RsScale::from_pitches(&pitches).map_err(scale_error)
+}
+
 /// music21's `comparisonAttribute`: whether a pitch matches a degree by
 /// sounding note or by written one.
 pub(crate) fn comparison_of(attribute: &str) -> RsDegreeComparison {

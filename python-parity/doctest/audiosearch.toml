@@ -1,0 +1,22 @@
+# Docstrings of music21.audioSearch whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_audiosearch`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.audioSearch.autocorrelationFunction",
+    "music21.audioSearch.decisionProcess",
+    "music21.audioSearch.detectPitchFrequencies",
+    "music21.audioSearch.getFrequenciesFromAudioFile",
+    "music21.audioSearch.getFrequenciesFromPartialAudioFile",
+    "music21.audioSearch.histogram",
+    "music21.audioSearch.interpolation",
+    "music21.audioSearch.joinConsecutiveIdenticalPitches",
+    "music21.audioSearch.normalizeInputFrequency",
+    "music21.audioSearch.notesAndDurationsToStream",
+    "music21.audioSearch.pitchFrequenciesToObjects",
+    "music21.audioSearch.prepareThresholds",
+    "music21.audioSearch.quantizeDuration",
+    "music21.audioSearch.quarterLengthEstimation",
+    "music21.audioSearch.smoothFrequencies",
+]

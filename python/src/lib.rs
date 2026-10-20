@@ -36,6 +36,7 @@ macro_rules! error_into {
 pub mod aligner;
 pub mod analysis;
 pub mod articulations;
+pub mod audiosearch;
 pub mod bar;
 pub mod braillebasic;
 pub mod braillelookup;
@@ -1340,6 +1341,11 @@ exceptions![
         Some("music21.alpha.analysis.aligner")
     ),
     (
+        "AudioSearchException",
+        audiosearch::AudioSearchException,
+        Some("music21.audioSearch")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1634,6 +1640,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     brailletranslate::register(m)?;
     correlate::register(m)?;
     aligner::register(m)?;
+    audiosearch::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;
