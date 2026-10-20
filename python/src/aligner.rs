@@ -181,7 +181,7 @@ impl ChangeOps {
 
 /// music21's `ChangeOps`, or this module's own where music21 cannot be
 /// asked.
-fn change_ops(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(crate) fn change_ops(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     if let Some(installed) =
         crate::installed_class(py, "music21.alpha.analysis.aligner", "ChangeOps")
     {

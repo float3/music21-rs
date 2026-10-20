@@ -12,12 +12,12 @@ use crate::alpha::analysis::aligner::{Change, ChangeOp, StreamAligner};
 use crate::alpha::analysis::hasher::HashReference;
 use crate::alpha::analysis::ornament_recognizer::{TrillRecognizer, TurnRecognizer};
 use crate::braille::equality::equal;
-use crate::defaults::FloatType;
+use crate::defaults::{FloatType, IntegerType};
 use crate::error::{Error, Result};
 use crate::expressions::{Expression, Ornament};
 use crate::interval::notes_to_chromatic;
 use crate::note::Note;
-use crate::pitch::Accidental;
+use crate::pitch::{Accidental, Pitch};
 use crate::stream::{Stream, StreamElement, StreamKind};
 
 /// What a reference names: an element, or a note of a chord hashed note by
@@ -160,22 +160,116 @@ fn colour(stream: &mut Stream, reference: HashReference, colour: &str) {
     }
 }
 
-/// Respells each note of the reading the performance plays enharmonically
-/// to it: music21's `EnharmonicFixer`.
+/// What becomes of one note read where the performance plays another
+/// spelling of it: the write music21's `EnharmonicFixer` makes for one
+/// change.
 ///
-/// Every element the changes name in the reading is coloured black. Of
-/// two notes changed into each other no more than a fifth apart, by
+/// music21 writes in two ways, and which it is matters to a caller
+/// holding the pitch: its first four cases set the *accidental* on the
+/// pitch the note already has, and its fifth hands the note the pitch
+/// played whole.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum EnharmonicFix {
+    /// The accidental written on the note read becomes this one, or none
+    /// at all where music21 drops it.
+    Accidental(Option<Accidental>),
+    /// The note read takes the pitch played whole, which is music21's
+    /// case for a reading that missed a key signature.
+    Played,
+}
+
+/// Whether two notes are too far apart to be two spellings of one sound:
+/// music21's `intervalTooBig`, which reads the interval *class* and not
+/// the interval itself.
+///
+/// `limit` is music21's `setInt`, five in every call it makes.
+///
+/// # Errors
+///
+/// An interval neither pitch spells.
+pub fn interval_too_big(played: &Pitch, read: &Pitch, limit: IntegerType) -> Result<bool> {
+    Ok(notes_to_chromatic(played, read)?.interval_class() > limit)
+}
+
+/// What becomes of one note read, given the note the performance plays
+/// and what the alignment made of the pair: nothing where the spelling
+/// read stands.
+///
+/// This is music21's `EnharmonicFixer.fix` for one change, and its five
+/// cases in music21's order. Of two notes no more than a fifth apart by
 /// interval class:
 ///
 /// 1. a reading's natural is dropped where the notes sound alike, and
-///    where the reading is a semitone off it becomes the flat above or the
-///    sharp below the note played;
+///    where the reading is a semitone off it becomes the flat above or
+///    the sharp below the note played;
 /// 2. a reading's sharp or flat on the letter played takes the played
 ///    note's accidental;
 /// 3. a sharp read a whole tone above the note played becomes a flat, and
 ///    a flat read a whole tone below a sharp;
 /// 4. a note played sharp or flat on the letter read, but read otherwise,
 ///    takes the played pitch.
+///
+/// # Errors
+///
+/// An interval neither pitch spells, or an accidental no name spells.
+pub fn enharmonic_fix(played: &Pitch, read: &Pitch, op: ChangeOp) -> Result<Option<EnharmonicFix>> {
+    if op == ChangeOp::NoChange {
+        return Ok(None);
+    }
+    if interval_too_big(played, read, 5)? {
+        return Ok(None);
+    }
+    let accidental = read.written_accidental().map(Accidental::name);
+    let has_sharp_or_flat = accidental.is_some_and(|name| name != "natural");
+    let same_step = played.step() == read.step();
+    let accidental_named = |name: &str| -> Result<Option<EnharmonicFix>> {
+        Ok(Some(EnharmonicFix::Accidental(Some(Accidental::new(
+            name,
+        )?))))
+    };
+    if accidental == Some("natural") {
+        if played.ps() == read.ps() {
+            return Ok(Some(EnharmonicFix::Accidental(None)));
+        }
+        if read.ps() > played.ps() {
+            if read.ps() - 1.0 == played.ps() {
+                return accidental_named("flat");
+            }
+        } else if read.ps() < played.ps() && read.ps() + 1.0 == played.ps() {
+            return accidental_named("sharp");
+        }
+    } else if has_sharp_or_flat && same_step {
+        return Ok(Some(EnharmonicFix::Accidental(
+            played.written_accidental().cloned(),
+        )));
+    } else if has_sharp_or_flat {
+        if read.ps() > played.ps() {
+            if accidental == Some("sharp") && read.ps() - 2.0 == played.ps() {
+                return accidental_named("flat");
+            }
+        } else if read.ps() < played.ps()
+            && accidental == Some("flat")
+            && read.ps() + 2.0 == played.ps()
+        {
+            return accidental_named("sharp");
+        }
+    } else if read != played
+        && played
+            .written_accidental()
+            .is_some_and(|accidental| accidental.name() != "natural")
+        && same_step
+    {
+        return Ok(Some(EnharmonicFix::Played));
+    }
+    Ok(None)
+}
+
+/// Respells each note of the reading the performance plays enharmonically
+/// to it: music21's `EnharmonicFixer`.
+///
+/// Every element the changes name in the reading is coloured black, and
+/// each change is then [`enharmonic_fix`]'s to answer.
 ///
 /// # Errors
 ///
@@ -190,52 +284,20 @@ pub fn fix_enharmonics(changes: &[Change], midi: &Stream, omr: &mut Stream) -> R
         let Some(read) = named(omr, omr_reference)?.note().cloned() else {
             continue;
         };
-        if change.op == ChangeOp::NoChange {
+        let Some(fix) = enharmonic_fix(played.pitch(), read.pitch(), change.op)? else {
             continue;
-        }
-        if notes_to_chromatic(played.pitch(), read.pitch())?.interval_class() > 5 {
-            continue;
-        }
+        };
         let Some(fixed) = note_mut(omr, omr_reference) else {
             continue;
         };
-        let (played, read) = (played.pitch(), read.pitch());
-        let accidental = read.written_accidental().map(Accidental::name);
-        let has_sharp_or_flat = accidental.is_some_and(|name| name != "natural");
-        let same_step = played.step() == read.step();
-        let mut pitch = read.clone();
-        if accidental == Some("natural") {
-            if played.ps() == read.ps() {
-                pitch.set_written_accidental(None);
-            } else if read.ps() > played.ps() {
-                if read.ps() - 1.0 == played.ps() {
-                    pitch.set_written_accidental(Some(Accidental::new("flat")?));
-                }
-            } else if read.ps() < played.ps() && read.ps() + 1.0 == played.ps() {
-                pitch.set_written_accidental(Some(Accidental::new("sharp")?));
+        match fix {
+            EnharmonicFix::Accidental(accidental) => {
+                let mut pitch = read.pitch().clone();
+                pitch.set_written_accidental(accidental);
+                fixed.set_pitch(pitch);
             }
-        } else if has_sharp_or_flat && same_step {
-            pitch.set_written_accidental(played.written_accidental().cloned());
-        } else if has_sharp_or_flat {
-            if read.ps() > played.ps() {
-                if accidental == Some("sharp") && read.ps() - 2.0 == played.ps() {
-                    pitch.set_written_accidental(Some(Accidental::new("flat")?));
-                }
-            } else if read.ps() < played.ps()
-                && accidental == Some("flat")
-                && read.ps() + 2.0 == played.ps()
-            {
-                pitch.set_written_accidental(Some(Accidental::new("sharp")?));
-            }
-        } else if read != played
-            && played
-                .written_accidental()
-                .is_some_and(|accidental| accidental.name() != "natural")
-            && same_step
-        {
-            pitch = played.clone();
+            EnharmonicFix::Played => fixed.set_pitch(played.pitch().clone()),
         }
-        fixed.set_pitch(pitch);
     }
     Ok(())
 }
@@ -621,6 +683,58 @@ mod tests {
                 assert!(result.pitch().written_accidental().is_none());
             }
         }
+    }
+
+    /// The same cases asked one change at a time, which is what a caller
+    /// with two notes and no streams asks -- music21's own examples hand
+    /// its fixer `None` for both streams.
+    #[test]
+    fn one_change_says_what_the_note_read_becomes() -> Result<()> {
+        let pitch = |name: &str| -> Result<Pitch> { Ok(Note::from_name(name)?.pitch().clone()) };
+        let written = |name: &str| -> Result<Option<EnharmonicFix>> {
+            Ok(Some(EnharmonicFix::Accidental(Some(Accidental::new(
+                name,
+            )?))))
+        };
+        for (played, read, fix) in [
+            ("A4", "An4", Some(EnharmonicFix::Accidental(None))),
+            ("G#4", "An4", written("flat")?),
+            ("G-4", "Fn4", written("sharp")?),
+            ("G#4", "Gn4", written("sharp")?),
+            ("G#4", "G-4", written("sharp")?),
+            ("G#4", "A#4", written("flat")?),
+            ("A-4", "G-4", written("sharp")?),
+            // Two spellings of one sound on different letters: music21
+            // writes nothing.
+            ("B-4", "A#4", None),
+        ] {
+            let (played, read) = (pitch(played)?, pitch(read)?);
+            assert_eq!(
+                enharmonic_fix(&played, &read, ChangeOp::Substitution)?,
+                fix,
+                "{} played, {} read",
+                played.name_with_octave(),
+                read.name_with_octave()
+            );
+            // Nothing is written where the alignment found no change.
+            assert_eq!(enharmonic_fix(&played, &read, ChangeOp::NoChange)?, None);
+        }
+        // A reading that missed a key signature takes the pitch played
+        // whole, which is music21's fifth case.
+        assert_eq!(
+            enharmonic_fix(&pitch("B-4")?, &pitch("B4")?, ChangeOp::Substitution)?,
+            Some(EnharmonicFix::Played)
+        );
+        // Too far apart to be two spellings of one sound, read as the
+        // interval class and not the interval.
+        assert!(!interval_too_big(&pitch("C4")?, &pitch("F4")?, 5)?);
+        assert!(interval_too_big(&pitch("C4")?, &pitch("F#4")?, 5)?);
+        assert!(interval_too_big(&pitch("C4")?, &pitch("F4")?, 4)?);
+        assert_eq!(
+            enharmonic_fix(&pitch("C4")?, &pitch("F#4")?, ChangeOp::Substitution)?,
+            None
+        );
+        Ok(())
     }
 
     /// music21's testGetNotesWithinDuration, its measure m2.

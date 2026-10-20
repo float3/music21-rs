@@ -55,6 +55,7 @@ pub mod enharmonics;
 pub mod expressions;
 pub mod fbrules;
 pub mod figuredbass;
+pub mod fixer;
 pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
@@ -1627,6 +1628,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     brailletranslate::register(m)?;
     correlate::register(m)?;
     aligner::register(m)?;
+    fixer::register(m)?;
     harmparser::register(m)?;
     hasher::register(m)?;
     searchbase::register(m)?;
