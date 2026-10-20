@@ -57,10 +57,12 @@ pub mod key;
 pub mod layout;
 pub mod metadata;
 pub mod meter;
+pub mod midipercussion;
 pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
+pub mod percussion;
 pub mod pitch;
 pub mod possibility;
 pub mod realizer;
@@ -1245,6 +1247,11 @@ exceptions![
         Some("music21.tablature")
     ),
     (
+        "MIDIPercussionException",
+        midipercussion::MIDIPercussionException,
+        Some("music21.midi.percussion")
+    ),
+    (
         "SpannerException",
         spanner::SpannerException,
         Some("music21.spanner")
@@ -1520,6 +1527,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     layout::register(m)?;
     text::register(m)?;
     tablature::register(m)?;
+    midipercussion::register(m)?;
+    percussion::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;

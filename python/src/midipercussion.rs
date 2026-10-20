@@ -1,0 +1,131 @@
+//! music21's `midi.percussion`: which drum a MIDI key plays, and which
+//! key plays a drum.
+//!
+//! Both are the crate's: `instrument::for_percussion_key` names the drum
+//! a key plays *and how it is played*, since a key says both -- key 36 is
+//! a bass drum played `1` and key 35 the same drum played `acoustic` --
+//! and `Instrument::percussion_pitch` is the key a drum is struck on.
+//! `PercussionMapper` keeps no state, as music21's does not either.
+
+// music21's own names, kept as music21 spells them.
+#![allow(non_snake_case)]
+
+use pyo3::prelude::*;
+
+use music21_rs_crate::instrument;
+
+pyo3::create_exception!(
+    music21_rs_facade,
+    MIDIPercussionException,
+    crate::Music21Exception
+);
+
+/// The names this module hands out.
+pub const NAMES: &[&str] = &["PercussionMapper", "MIDIPercussionException"];
+
+/// music21's `midi.percussion.PercussionMapper`: the General MIDI
+/// percussion map, read either way.
+#[pyclass(
+    name = "PercussionMapper",
+    module = "music21.midi.percussion",
+    subclass,
+    skip_from_py_object
+)]
+pub struct PercussionMapper;
+
+#[pymethods]
+impl PercussionMapper {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    /// Every key the map names a drum for, each against the class of
+    /// that drum: music21's `reverseInstrumentMapping`.
+    ///
+    /// It is read off `instrument::for_percussion_key`, the one table
+    /// behind both answers, rather than written out again -- so a key the
+    /// crate names no instrument for is missing here, as it is there.
+    #[getter]
+    fn reverseInstrumentMapping<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
+        let out = pyo3::types::PyDict::new(py);
+        for key in 0u8..=127 {
+            let Ok(named) = instrument::for_percussion_key(key) else {
+                continue;
+            };
+            let class = match crate::installed_class(py, "music21.instrument", named.kind()) {
+                Some(class) => class,
+                None => py
+                    .import("music21_rs")
+                    .or_else(|_| py.import("music21_rs_facade"))?
+                    .getattr(named.kind())?,
+            };
+            out.set_item(key, class)?;
+        }
+        Ok(out)
+    }
+
+    /// The drum a key plays, and how it is played: music21's
+    /// `midiPitchToInstrument`, which takes the key as a number or as a
+    /// pitch. A key the map names no instrument for is refused in
+    /// music21's own words.
+    fn midiPitchToInstrument<'py>(
+        &self,
+        py: Python<'py>,
+        midiPitch: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let key: i64 = match midiPitch.extract::<i64>() {
+            Ok(key) => key,
+            // A pitch, whose `midi` is the key it is struck on.
+            Err(_) => midiPitch.getattr("midi")?.extract()?,
+        };
+        let named = u8::try_from(key)
+            .ok()
+            .and_then(|key| instrument::for_percussion_key(key).ok())
+            .ok_or_else(|| {
+                MIDIPercussionException::new_err(format!(
+                    "{key} does not map to a valid instrument!"
+                ))
+            })?;
+        Ok(crate::instrument::Instrument::object(py, named)?.into_bound(py))
+    }
+
+    /// The key a drum is struck on: music21's `midiInstrumentToPitch`,
+    /// which refuses an instrument the map has no key for.
+    fn midiInstrumentToPitch<'py>(
+        &self,
+        py: Python<'py>,
+        midiInstrument: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // The instrument as a value of the crate's, whether the object is
+        // one of this package's or music21's own.
+        let (_, read) = crate::instrument::stored_instrument(Some(midiInstrument))?;
+        let read = read.ok_or_else(|| {
+            MIDIPercussionException::new_err("nothing was given to look up".to_string())
+        })?;
+        let Some(key) = read.percussion_pitch() else {
+            return Err(MIDIPercussionException::new_err(format!(
+                "{} is not in the GM Percussion Map!",
+                midiInstrument.repr()?
+            )));
+        };
+        let pitch = music21_rs_crate::Pitch::from_midi(i32::from(key))
+            .map_err(|error| MIDIPercussionException::new_err(crate::pitch::message(&error)))?;
+        Ok(crate::installed_new(
+            py,
+            "music21.pitch",
+            "Pitch",
+            crate::pitch::Pitch::wrap(pitch, true),
+        )?
+        .into_bound(py)
+        .into_any())
+    }
+}
+
+pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<PercussionMapper>()?;
+    Ok(())
+}

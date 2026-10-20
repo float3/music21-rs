@@ -2,6 +2,30 @@
 
 ## added
 
+- **The wheel carries music21's unpitched percussion**, and every example
+  of both modules passes: `percussion` 2 of 2 docstrings and 18 of 18
+  examples, `midi.percussion` 3 of 3 and 27 of 27, from nothing.
+  `python/src/percussion.rs` is `PercussionChord`, several drums struck at
+  once -- which music21 says is not a chord, there being no pitch to
+  compare. It holds the objects it was handed, music21's own strokes among
+  them, hands them back themselves, answers the pitches of the members
+  that sound, and refuses anything but a note or a stroke in music21's
+  words. Its `repr` says what is struck (`[Vibraslap E5]`) and says where
+  it sits only when it strikes nothing at all, and writing its `pitches`
+  replaces every member with a note of those pitches, as music21's own
+  setter does.
+
+- **And the General MIDI percussion map, read either way**:
+  `python/src/midipercussion.rs` is `PercussionMapper`.
+  `midiPitchToInstrument` takes a key as a number or as a pitch and
+  answers the drum *and how it is played* -- key 36 is a bass drum played
+  `1` and key 35 the same drum played `acoustic` -- and
+  `midiInstrumentToPitch` the key a drum is struck on; each refuses what
+  the map has no answer for in music21's own words.
+  `reverseInstrumentMapping` is read off `instrument::for_percussion_key`,
+  the one table behind both answers, rather than written out again, and it
+  comes out the same 35 keys against the same classes as music21's.
+
 - **The wheel carries music21's chord diagrams**, and every one of
   music21's `tablature` doctests passes: 8 of 8 docstrings, 55 of 55
   examples, from nothing. A `FretNote` is a string, a fret and a finger; a
