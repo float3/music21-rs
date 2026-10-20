@@ -162,6 +162,10 @@ a `**harm` token is read as the roman numeral it annotates with
 `convertHarmToRoman` and taken apart by a `HarmParser`, and an
 `ActivityMatch` says what pitch sounds under which dynamic.
 
+a stream's notes are hashed into comparable tuples by a `Hasher`, by
+pitch, length and offset or whatever of the sixteen settings is asked for,
+each hash saying what it was made from where asked.
+
 the elements braille writes together are a `BrailleElementGrouping`,
 which mimics a list as music21's does, and a `NoteGroupingTranscriber`
 writes one, element by element or all at once, saying of each what its

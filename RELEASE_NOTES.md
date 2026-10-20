@@ -2,6 +2,21 @@
 
 ## added
 
+- **The wheel hashes a stream's notes**, and every one of music21's
+  `alpha.analysis.hasher` examples passes: 10 of 10 docstrings and 86 of
+  86, from nothing. The hashing is
+  `alpha::analysis::hasher::Hasher::hash_stream`, which `alpha_parity`
+  already held to music21 note for note; music21's sixteen settings are
+  plain attributes, as they are there, and each hash says what it was made
+  from -- the score's own note, rest or chord, or each member of a chord
+  hashed as notes. `Hasher::hash_value` is new in the crate: one named
+  value of a hash on its own, which is what music21's own
+  `_hashMIDIPitchName`, `_hashRoundedDuration` and the ten beside them
+  answer, each with 9 examples of its own.
+  `NoteHash` and `NoteHashWithReference` stay music21's -- a tuple and a
+  wrapper round one, holding nothing of the crate.
+
+
 - **The whole braille package runs against the crate now**: with
   `braille.segment`'s groupings and `braille.noteGrouping`'s transcriber,
   all six of its modules pass every one of music21's examples -- 612 of

@@ -1,0 +1,17 @@
+# Docstrings of music21.alpha.analysis.hasher whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_hasher`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.alpha.analysis.hasher.Hasher._hashDuration",
+    "music21.alpha.analysis.hasher.Hasher._hashMIDIPitchName",
+    "music21.alpha.analysis.hasher.Hasher._hashOctave",
+    "music21.alpha.analysis.hasher.Hasher._hashPitchName",
+    "music21.alpha.analysis.hasher.Hasher._hashPitchNameNoOctave",
+    "music21.alpha.analysis.hasher.Hasher.addNoteHashToFinalHash",
+    "music21.alpha.analysis.hasher.Hasher.addNoteHashWithReferenceToFinalHash",
+    "music21.alpha.analysis.hasher.Hasher.setupValidTypesAndStateVars",
+    "music21.alpha.analysis.hasher.NoteHash",
+    "music21.alpha.analysis.hasher.NoteHashWithReference",
+]

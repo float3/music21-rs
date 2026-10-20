@@ -4794,3 +4794,39 @@ def test_a_grouping_of_elements_is_written_in_braille():
     assert shallow[0] is grouping[0]
     assert shallow.internalList is not grouping.internalList
     assert copy.deepcopy(grouping)[0] is not grouping[0]
+
+
+def test_a_streams_notes_are_hashed():
+    """What of each note is hashed, and the hashing itself, as music21's
+    `alpha.analysis.hasher` does it."""
+    hasher = m.Hasher()
+    # music21's defaults: a note is its MIDI pitch, its length and its
+    # offset, each rounded to a 32nd of a quarter.
+    assert (hasher.hashMIDI, hasher.granularity) == (True, 32)
+    assert (hasher.includeReference, hasher.hashChordsAsNotes) == (False, True)
+
+    line = m.from_tiny_notation("4/4 c4 d e f")
+    hashes = hasher.hashStream(line)
+    assert hasher.tupleList == ["Pitch", "Duration", "Offset"]
+    assert len(hashes) == 4
+    assert tuple(hashes[0]) == (60, 1.0, 0.0)
+
+    # Asked for it, each hash says what it was made from -- the score's own
+    # note.
+    hasher.includeReference = True
+    referenced = hasher.hashStream(line)
+    assert referenced[0].reference is line.recurse().notes.first()
+
+    # What is remembered while hashing, by the flags that ask for it.
+    counting = m.Hasher()
+    counting.hashIntervalFromLastNote = True
+    counting.setupValidTypesAndStateVars()
+    assert counting.stateVars == {"IntervalFromLastNote": None}
+
+    # One value at a time, which is how music21 documents its own hashing.
+    assert counting._hashOctave(m.Note("C5")) == 5
+    assert counting._hashMIDIPitchName(m.Note(72)) == 72
+    assert counting._hashRoundedDuration(m.Note("C4")) == 1.0
+
+    # Each measure on its own.
+    assert len(hasher.hashMeasures(line)) == 1
