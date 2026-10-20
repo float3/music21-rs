@@ -9,7 +9,8 @@
 //! `BRAILLE_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::braille::translate::{BrailleOptions, stream_to_braille};
+use music21_rs::braille::segment::SegmentOptions;
+use music21_rs::braille::translate::{BrailleOptions, measure_to_braille, stream_to_braille};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -50,6 +51,21 @@ def report(text, debug):
     score = converter.parse(text, format='musicxml', forceSource=True)
     try:
         return (translate.objectToBraille(score, debug=debug), '')
+    except Exception as e:
+        return ('', f'{type(e).__name__}: {e}')
+
+def report_measure(text, debug):
+    """The first measure of that part on its own, which music21 writes with
+    no heading and no measure number."""
+    score = converter.parse(text, format='musicxml', forceSource=True)
+    parts = score.getElementsByClass(['Part', 'PartStaff'])
+    if not parts:
+        return (None, '')
+    measures = parts[0].getElementsByClass('Measure')
+    if not measures:
+        return (None, '')
+    try:
+        return (translate.measureToBraille(measures[0], debug=debug), '')
     except Exception as e:
         return ('', f'{type(e).__name__}: {e}')
 "#;
@@ -157,6 +173,79 @@ fn the_crate_writes_scores_in_braille_as_music21_does() {
                             failures.push(format!(
                                 "{name}: {label}: the crate refused ({error}) but music21 wrote it"
                             ));
+                        }
+                    }
+                }
+            }
+            // A measure on its own, which music21 writes differently from
+            // a score -- no heading and no measure number -- and which
+            // nothing here compared until one came back with its notes
+            // missing. A lone *part* is not compared: music21's part is
+            // still sited in the score and finds the score's slurs through
+            // it, where a part taken out of the crate's score does not, so
+            // the two would be answering different questions. The doctest
+            // suite covers that path on the parts music21's own docstrings
+            // build.
+            let parts = score.parts();
+            let Some(part) = parts.first() else {
+                continue;
+            };
+            let measures: Vec<&music21_rs::stream::Stream> = part
+                .events()
+                .iter()
+                .filter_map(|event| match event.element() {
+                    music21_rs::stream::StreamElement::Stream(inner)
+                        if inner.kind() == music21_rs::stream::StreamKind::Measure =>
+                    {
+                        Some(&**inner)
+                    }
+                    _ => None,
+                })
+                .collect();
+            for (what, run) in [("measure", "report_measure")] {
+                for debug in [false, true] {
+                    let (theirs, their_error): (Option<String>, String) =
+                        music21.getattr(run)?.call1((&text, debug))?.extract()?;
+                    let Some(theirs) = theirs else {
+                        continue;
+                    };
+                    let label = format!("{what} {}", if debug { "English" } else { "braille" });
+                    let Some(measure) = measures.first() else {
+                        continue;
+                    };
+                    // music21's `measureToBraille` writes no heading and no
+                    // measure number: its own source says so.
+                    let ours = measure_to_braille(
+                        measure,
+                        &BrailleOptions {
+                            debug,
+                            segment: SegmentOptions {
+                                show_heading: false,
+                                show_first_measure_number: false,
+                                ..SegmentOptions::default()
+                            },
+                            ..BrailleOptions::default()
+                        },
+                    );
+                    match ours {
+                        Ok(ours) => {
+                            if !their_error.is_empty() {
+                                failures.push(format!(
+                                    "{name}: {label}: music21 refused ({their_error}) but the crate wrote it"
+                                ));
+                            } else if ours != theirs {
+                                failures.push(format!(
+                                    "{name}: {label}: {}",
+                                    first_difference(&ours, &theirs)
+                                ));
+                            }
+                        }
+                        Err(error) => {
+                            if their_error.is_empty() {
+                                failures.push(format!(
+                                    "{name}: {label}: the crate refused ({error}) but music21 wrote it"
+                                ));
+                            }
                         }
                     }
                 }

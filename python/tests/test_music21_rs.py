@@ -4710,3 +4710,31 @@ def test_braille_is_laid_out_in_lines():
     bare.append("⠹", addSpace=False)
     assert str(bare) == "⠹"
     assert bare.textLocation == 1
+
+
+def test_a_score_is_written_in_braille():
+    """A part, a measure or a whole score, as music21's `braille.translate`
+    writes them."""
+    line = m.from_tiny_notation("4/4 c1")
+    assert m.objectToBraille(line) == "⠀⠀⠼⠙⠲⠀⠀\n⠼⠁⠀⠐⠽⠣⠅"
+    # A measure on its own is written with no heading and no measure
+    # number, as music21 writes one.
+    measure = line.getElementsByClass("Measure")[0]
+    assert m.measureToBraille(measure) == "⠼⠙⠲⠀⠐⠽⠣⠅"
+    # The same part through the other two names music21 gives.
+    assert m.streamToBraille(line) == m.objectToBraille(line)
+    assert m.partToBraille(line) == m.objectToBraille(line)
+
+    # One element on its own, which is what a stream is written out of.
+    assert m.objectToBraille(m.Note("C4")) == "⠐⠹"
+
+    # The English listing of each segment, which music21 writes instead of
+    # braille when asked to debug.
+    listing = m.objectToBraille(line, debug=True)
+    assert "---begin segment---" in listing
+    assert "Time Signature 4/4" in listing
+
+    # What the crate cannot do honestly is said: music21's segmentBreaks
+    # says where to break a segment by hand.
+    with pytest.raises(m.BrailleTranslateException):
+        m.objectToBraille(line, segmentBreaks=[(1, 2.0)])

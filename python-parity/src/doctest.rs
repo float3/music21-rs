@@ -44,6 +44,7 @@ pub use music21_rs_python::bar::NAMES as BAR_NAMES;
 pub use music21_rs_python::braillebasic::NAMES as BRAILLE_BASIC_NAMES;
 pub use music21_rs_python::braillelookup::NAMES as BRAILLE_LOOKUP_NAMES;
 pub use music21_rs_python::brailletext::NAMES as BRAILLE_TEXT_NAMES;
+pub use music21_rs_python::brailletranslate::NAMES as BRAILLE_TRANSLATE_NAMES;
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
 pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::clef::NAMES as CLEF_NAMES;

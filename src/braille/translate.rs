@@ -259,12 +259,20 @@ pub fn part_to_braille(part: &Stream, options: &BrailleOptions) -> Result<String
 ///
 /// Music music21 cannot write.
 pub fn measure_to_braille(measure: &Stream, options: &BrailleOptions) -> Result<String> {
-    let mut measure = measure.clone();
-    if !options.in_place {
-        crate::makenotation::make_part_notation_keeping_spanners(&mut measure, false)?;
-    }
     let mut part = Stream::with_kind(StreamKind::Part);
-    part.push(measure);
+    part.push(measure.clone());
+    if !options.in_place {
+        // music21's `Measure.makeNotation(cautionaryNotImmediateRepeat=False)`,
+        // which is the *measure's* notation and not a part's: running a
+        // part's steps over a lone measure cuts it into measures again and
+        // the notes end up a level deeper, where nothing transcribing a
+        // part looks for them.
+        crate::makenotation::keeping_spanners(
+            &mut part,
+            crate::makenotation::Kept::Retained,
+            &mut crate::makenotation::make_measure_notation,
+        )?;
+    }
     part_to_braille(
         &part,
         &BrailleOptions {
