@@ -1,0 +1,15 @@
+# Docstrings of music21.tablature whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_tablature`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.tablature.ChordWithFretBoard",
+    "music21.tablature.FretBoard",
+    "music21.tablature.FretBoard._reprInternal",
+    "music21.tablature.FretBoard.fretNotesLowestFirst",
+    "music21.tablature.FretBoard.getFretNoteByString",
+    "music21.tablature.FretBoard.getPitches",
+    "music21.tablature.FretNote",
+    "music21.tablature.FretNote._reprInternal",
+]

@@ -3551,6 +3551,30 @@ def test_a_property_of_every_pitch_is_counted():
     assert counted.most_common(2) == [("D", 3), ("C", 2)]
 
 
+def test_a_chord_diagram_says_what_it_sounds():
+    """Every answer is music21's own for the same diagram."""
+    board = m.GuitarFretBoard(
+        [m.FretNote(6, 3, 3), m.FretNote(5, 2, 2), m.FretNote(4, 0)]
+    )
+    assert repr(board) == "<music21.tablature.GuitarFretBoard 6 strings, 3 notes, 4 frets>"
+    assert board.numStrings == 6
+    assert [n.string for n in board.fretNotesLowestFirst()] == [6, 5, 4]
+    assert board.getFretNoteByString(5).fret == 2
+    assert board.getFretNoteByString(1) is None
+    # Each string's open pitch raised by the fret stopping it, and nothing
+    # for a string nobody stops.
+    assert [p.nameWithOctave if p else None for p in board.getPitches()] == [
+        "G2",
+        "B2",
+        "D3",
+        None,
+        None,
+        None,
+    ]
+    assert repr(m.FretNote()) == "<music21.tablature.FretNote>"
+    assert repr(m.FretNote(3, 2, 1)) == "<music21.tablature.FretNote 3rd string, 2nd fret, 1st finger>"
+
+
 def test_words_are_read_off_a_score_and_stood_on_its_page():
     """Every answer is music21's own for the same words."""
     line = m.from_tiny_notation("4/4 c4_hel-   d_lo e_there f_now")

@@ -153,6 +153,11 @@ tempo. `lyrics` gathers every line sung, by the number it is sung under,
 with a place for each note read so the lines stay level with the notes and
 the note's own `Lyric` in it.
 
+a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
+`UkeleleFretBoard`, `BassGuitarFretBoard` and `MandolinFretBoard` are
+tuned as those instruments are -- and `getPitches` says what it sounds,
+each string's open pitch raised by the fret stopping it.
+
 a score's words are read off its notes with `assembleLyrics` and
 `assembleAllLyrics`, a title's article is moved to the front of it and back
 with `prependArticle` and `postpendArticle`, and a `TextBox` stands words

@@ -77,6 +77,7 @@ pub mod sieve;
 pub mod spanner;
 mod spelling;
 pub mod stream;
+pub mod tablature;
 pub mod tempo;
 pub mod text;
 pub mod transposition;
@@ -1239,6 +1240,11 @@ exceptions![
     ),
     ("TextException", text::TextException, Some("music21.text")),
     (
+        "TablatureException",
+        tablature::TablatureException,
+        Some("music21.tablature")
+    ),
+    (
         "SpannerException",
         spanner::SpannerException,
         Some("music21.spanner")
@@ -1513,6 +1519,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     repeat::register(m)?;
     layout::register(m)?;
     text::register(m)?;
+    tablature::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;
     spanner::register(m)?;
