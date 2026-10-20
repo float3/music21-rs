@@ -1,0 +1,18 @@
+# Docstrings of music21.stream.makeNotation whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_makenotation`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.stream.makeNotation.consolidateCompletedTuplets",
+    "music21.stream.makeNotation.getTiePitchSet",
+    "music21.stream.makeNotation.iterateBeamGroups",
+    "music21.stream.makeNotation.makeBeams",
+    "music21.stream.makeNotation.makeMeasures",
+    "music21.stream.makeNotation.makeRests",
+    "music21.stream.makeNotation.makeTies",
+    "music21.stream.makeNotation.makeTupletBrackets",
+    "music21.stream.makeNotation.realizeOrnaments",
+    "music21.stream.makeNotation.saveAccidentalDisplayStatus",
+    "music21.stream.makeNotation.splitElementsToCompleteTuplets",
+]
