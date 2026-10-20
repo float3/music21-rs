@@ -259,6 +259,65 @@ impl Hasher {
         }
     }
 
+    /// One named value of a hash, read on its own: what music21's own
+    /// `_hashMIDIPitchName`, `_hashRoundedDuration` and the rest answer,
+    /// each of which its own examples ask for one element at a time.
+    ///
+    /// The element is the note or rest hashed, with the chord it stands in
+    /// where it is a chord's note, or no element and the chord itself
+    /// where a chord is hashed as one -- which is how music21 calls them
+    /// (`_hashDuration(n, thisChord=c)`).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::hash_stream`], and a name no hash holds.
+    pub fn hash_value(
+        &self,
+        key: &str,
+        element: Option<&StreamElement>,
+        chord: Option<&crate::chord::Chord>,
+        offset: FloatType,
+        previous_note: Option<&Pitch>,
+    ) -> Result<HashValue> {
+        let named: &'static str = match key {
+            "Pitch" => "Pitch",
+            "Octave" => "Octave",
+            "Duration" => "Duration",
+            "Offset" => "Offset",
+            "IntervalFromLastNote" => "IntervalFromLastNote",
+            "IsAccidental" => "IsAccidental",
+            "NormalOrderString" => "NormalOrderString",
+            "PrimeFormString" => "PrimeFormString",
+            _ => return Err(crate::Error::Analysis(format!("no hash holds a {key}"))),
+        };
+        // music21's `_hashOctave` answers less one for a chord handed to it
+        // as the element, where chords are hashed as chords, rather than
+        // reading an octave off it -- and raises where it is handed no
+        // element at all, which is what hashing a whole stream that way
+        // does.
+        if named == "Octave"
+            && self.hash_chords_as_chords
+            && matches!(element, Some(StreamElement::Chord(_)))
+        {
+            return Ok(HashValue::Integer(-1));
+        }
+        let hashed = match (element, chord) {
+            (Some(StreamElement::Note(note)), Some(chord)) => Hashed::InChord(note, chord),
+            (Some(element), _) => Hashed::Alone(element),
+            (None, Some(chord)) => Hashed::Chord(chord),
+            (None, None) => {
+                return Err(crate::Error::Analysis(
+                    "nothing was given to hash".to_string(),
+                ));
+            }
+        };
+        let values = self.values(&[named], hashed, offset, previous_note)?;
+        values
+            .into_iter()
+            .next()
+            .ok_or_else(|| crate::Error::Analysis(format!("no hash holds a {key}")))
+    }
+
     fn values(
         &self,
         keys: &[&'static str],

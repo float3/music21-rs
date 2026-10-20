@@ -58,6 +58,7 @@ pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
+pub mod hasher;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
@@ -1615,6 +1616,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     brailletranslate::register(m)?;
     correlate::register(m)?;
     harmparser::register(m)?;
+    hasher::register(m)?;
     searchbase::register(m)?;
     searchlyrics::register(m)?;
     searchserial::register(m)?;
