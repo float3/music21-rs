@@ -4877,3 +4877,59 @@ def test_two_streams_are_aligned_note_by_note():
     assert aligner.substitutionCost(first, aligner.hashedSourceStream[0]) == 0
     assert aligner.tupleEqualityWithoutReference(first, aligner.hashedSourceStream[0])
     assert aligner.calculateNumSimilarities(first, aligner.hashedSourceStream[2]) == 1
+
+def test_a_note_read_wrong_is_respelled_against_the_performance():
+    """Where the reading and the performance spell one sound differently,
+    the performance's spelling wins, as music21's `EnharmonicFixer` has
+    it. A change names two notes and no streams, which is how music21's
+    own examples build one."""
+    # music21's own cases, as its docstring prints them: a played note, a
+    # note read, and what the reading becomes.
+    for played, read, fixed in [
+        ("A4", "An4", None),
+        ("G#4", "An4", "flat"),
+        ("G-4", "Fn4", "sharp"),
+        ("G#4", "Gn4", "sharp"),
+        ("G#4", "G-4", "sharp"),
+        ("G#4", "A#4", "flat"),
+        ("A-4", "G-4", "sharp"),
+        # Two spellings of one sound on different letters: nothing is
+        # written, so the reading keeps the sharp it was read with.
+        ("B-4", "A#4", "sharp"),
+    ]:
+        midi, omr = m.Note(played), m.Note(read)
+        fixer = m.EnharmonicFixer([(midi, omr, m.ChangeOps.Substitution)], None, None)
+        fixer.fix()
+        written = omr.pitch.accidental
+        assert (written.name if written is not None else None) == fixed, f"{played}/{read}"
+        # Every note a change names is coloured black.
+        assert omr.style.color == "black"
+
+    # Nothing is written where the alignment found no change, nor where the
+    # two are too far apart to be two spellings of one sound.
+    for op, played, read in [
+        (m.ChangeOps.NoChange, "A4", "An4"),
+        (m.ChangeOps.Substitution, "C4", "F#4"),
+    ]:
+        omr = m.Note(read)
+        m.EnharmonicFixer([(m.Note(played), omr, op)], None, None).fix()
+        assert omr.pitch.accidental.name == m.Note(read).pitch.accidental.name
+
+    # A reading that missed a key signature takes the pitch played whole.
+    midi, omr = m.Note("B-4"), m.Note("B4")
+    m.EnharmonicFixer([(midi, omr, m.ChangeOps.Substitution)], None, None).fix()
+    assert omr.pitch.nameWithOctave == "B-4"
+
+    # The predicates music21 reads its cases with, each the crate's.
+    fixer = m.EnharmonicFixer([], None, None)
+    sharp, flat, natural = m.Note("A#4"), m.Note("B-4"), m.Note("An4")
+    assert fixer.checkIfNoteInstance(sharp, flat)
+    assert not fixer.checkIfNoteInstance(sharp, m.Rest())
+    assert fixer.isEnharmonic(sharp, flat)
+    assert fixer.hasAcc(sharp) and fixer.hasAcc(natural)
+    assert fixer.hasNatAcc(natural) and not fixer.hasNatAcc(sharp)
+    assert fixer.hasSharpFlatAcc(sharp) and not fixer.hasSharpFlatAcc(natural)
+    assert fixer.stepEq(sharp, natural) and fixer.stepNotEq(sharp, flat)
+    assert not fixer.intervalTooBig(m.Note("C4"), m.Note("F4"))
+    assert fixer.intervalTooBig(m.Note("C4"), m.Note("F#4"))
+    assert fixer.intervalTooBig(m.Note("C4"), m.Note("F4"), setInt=4)

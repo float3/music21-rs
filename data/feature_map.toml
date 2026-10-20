@@ -2085,7 +2085,6 @@ hasNatAcc = "whether it carries a natural, likewise"
 hasSharpFlatAcc = "whether it carries a sharp or a flat, likewise"
 stepEq = "whether two notes stand on the same step"
 stepNotEq = "whether they do not"
-intervalTooBig = "whether the two are too far apart to be a misspelling, which the fix asks as it goes"
 
 [[class]]
 python = "alpha/analysis/ornamentRecognizer.py"

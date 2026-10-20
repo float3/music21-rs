@@ -58,6 +58,7 @@ pub use music21_rs_python::enharmonics::NAMES as ENHARMONICS_NAMES;
 pub use music21_rs_python::expressions::NAMES as EXPRESSION_NAMES;
 pub use music21_rs_python::fbrules::NAMES as RULES_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;
+pub use music21_rs_python::fixer::NAMES as FIXER_NAMES;
 pub use music21_rs_python::harmonicfunction::NAMES as HARMONIC_FUNCTION_NAMES;
 pub use music21_rs_python::harmony::NAMES as HARMONY_NAMES;
 pub use music21_rs_python::harmparser::NAMES as HARM_PARSER_NAMES;

@@ -2,6 +2,24 @@
 
 ## added
 
+- **The wheel mends a reading of a score against a performance of it**, and
+  every one of music21's `alpha.analysis.fixer` examples passes: 1 of 1
+  docstring and 91 of 91, from nothing. All 91 are `EnharmonicFixer`'s, and
+  they build the changes by hand -- `(midiNote, omrNote,
+  ChangeOps.Substitution)` -- handing the fixer **`None` for both
+  streams**, so the fix is over the two notes and nothing else. The crate's
+  `fixer::fix_enharmonics` took two streams and a pair of positions and did
+  the respelling inline, so there was nothing to ask for one pair;
+  `fixer::enharmonic_fix` is that step opened up -- music21's five cases
+  for one change -- with `interval_too_big` beside it (music21's
+  `intervalTooBig`, with the `setInt` it takes) and `fix_enharmonics`
+  rebuilt on both. `EnharmonicFix` says *which* of music21's two writes a
+  change makes, the accidental on the pitch the note already has or the
+  pitch played whole, which is what a caller holding the reading's pitch
+  object sees. `DeleteFixer`, `OrnamentFixer`, `TrillFixer` and
+  `TurnFixer` stay music21's, each reading its changes as elements of two
+  streams.
+
 - **The wheel aligns two streams note by note**, and every one of music21's
   `alpha.analysis.aligner` examples passes: 13 of 13 docstrings and 322 of
   322, from nothing. music21 documents the alignment *step by step*, and
