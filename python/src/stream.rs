@@ -6021,9 +6021,27 @@ impl Walked {
         objects.as_any().try_iter().map(Bound::into_any)
     }
 
-    /// The one at an index, counting from the end for a negative one.
-    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+    /// The one at an index, counting from the end for a negative one, or
+    /// the list a stretch of them makes: music21's own iterator answers a
+    /// list for a slice, and its own code asks for one
+    /// (`thisStreamIter[3:5]`).
+    fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let count = self.found.len();
+        if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
+            let read = slice.indices(count as isize)?;
+            let out = pyo3::types::PyList::empty(py);
+            let mut at = read.start;
+            while (read.step > 0 && at < read.stop) || (read.step < 0 && at > read.stop) {
+                if let Some((_, object)) =
+                    usize::try_from(at).ok().and_then(|at| self.found.get(at))
+                {
+                    out.append(object.bind(py))?;
+                }
+                at += read.step;
+            }
+            return Ok(out.into_any().unbind());
+        }
+        let index: isize = index.extract()?;
         let at = if index < 0 {
             count.checked_sub(index.unsigned_abs())
         } else {

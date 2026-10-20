@@ -3685,6 +3685,12 @@ def test_a_walk_answers_what_music21_s_walk_answers():
     assert len(walked) == len([e for e in walked])
     assert walked[0] is walked.first()
     assert walked[-1] is walked.last()
+    # A stretch of a walk is a list of what it found, as music21's
+    # iterator answers and as music21's own search docstrings ask for.
+    notes = walked.notes
+    assert [n.nameWithOctave for n in notes[1:3]] == ["D4", "E4"]
+    assert [n.nameWithOctave for n in notes[::2]] == ["C4", "E4", "G4"]
+    assert notes[100:] == []
     # Filtered again, as music21's own code filters it.
     assert [n.nameWithOctave for n in walked.notes] == ["C4", "D4", "E4", "F4", "G4"]
     assert len(walked.notesAndRests) == 5
@@ -4378,7 +4384,9 @@ def test_lyrics_are_found_in_a_stream_as_text():
     assert found[0].matchText == "in ter"
     assert (found[0].mStart, found[0].mEnd, found[0].identifier) == (1, 1, 1)
     sung = line.recurse().notes
-    assert found[0].els == (sung[1], sung[2])
+    # A walk answers a list for a stretch of it, as music21's iterator
+    # does and as music21's own code asks for.
+    assert found[0].els == tuple(sung[1:3])
     # A match is music21's own `SearchMatch` where music21 is installed and
     # a plain named tuple of the same parts otherwise, holding nothing of
     # the crate's either way.

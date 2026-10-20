@@ -2,6 +2,13 @@
 
 ## added
 
+- **A walk of the wheel's streams answers a list for a stretch of it**,
+  as music21's own `StreamIterator` does: `recurse().notes[1:3]` is the
+  two notes, `[::2]` every other one, and a stretch past the end is
+  nothing. music21's own search docstrings ask for one
+  (`thisStreamIter[3:5]`), and before this the wheel's walk refused a
+  slice outright.
+
 - **The wheel reads a `**harm` token and correlates pitch with dynamic**,
   and both modules' doctests all pass: `humdrum.harmParser` 11 of 11
   examples and `analysis.correlate` 8 of 8, from nothing.
