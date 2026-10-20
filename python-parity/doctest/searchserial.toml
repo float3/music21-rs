@@ -1,0 +1,30 @@
+# Docstrings of music21.search.serial whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_searchserial`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.search.serial.ContiguousSegmentOfNotes",
+    "music21.search.serial.ContiguousSegmentOfNotes.getDistinctPitchClasses",
+    "music21.search.serial.ContiguousSegmentOfNotes.readPitchClassesFromBottom",
+    "music21.search.serial.ContiguousSegmentSearcher",
+    "music21.search.serial.MultisetSegmentMatcher",
+    "music21.search.serial.SegmentMatcher",
+    "music21.search.serial.SegmentMatcher.checkSearchedAlready",
+    "music21.search.serial.SegmentMatcher.normalize",
+    "music21.search.serial.TransformedSegmentMatcher",
+    "music21.search.serial.TransformedSegmentMatcher.checkSearchedAlready",
+    "music21.search.serial.TransformedSegmentMatcher.equalSubset",
+    "music21.search.serial.TransformedSegmentMatcher.getTransformations",
+    "music21.search.serial.TransformedSegmentMatcher.normalize",
+    "music21.search.serial.TransposedInvertedMultisetMatcher",
+    "music21.search.serial.TransposedMultisetMatcher",
+    "music21.search.serial.TransposedSegmentMatcher",
+    "music21.search.serial.TransposedSegmentMatcher.normalize",
+    "music21.search.serial.labelMultisets",
+    "music21.search.serial.labelSegments",
+    "music21.search.serial.labelTransformedSegments",
+    "music21.search.serial.labelTransposedAndInvertedMultisets",
+    "music21.search.serial.labelTransposedMultisets",
+    "music21.search.serial.labelTransposedSegments",
+]

@@ -158,6 +158,35 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+a `**harm` token is read as the roman numeral it annotates with
+`convertHarmToRoman` and taken apart by a `HarmParser`, and an
+`ActivityMatch` says what pitch sounds under which dynamic.
+
+a stream is searched for a row of pitch classes with a
+`ContiguousSegmentSearcher`, which finds every run of a length, and with a
+`SegmentMatcher` or one of the five matchers beside it, which find the runs
+that are the segments searched for -- transposed, transformed, or as sets
+in any order; `labelSegments` and its five kin mark a copy of the stream
+with a line over each run found and its name sung under its first note.
+
+a stream is searched for a run of notes with a `StreamSearcher`, or with
+`rhythmicSearch`, `noteNameSearch` and `noteNameRhythmicSearch`, which say
+where each run starts; a line is written as text with
+`translateStreamToString` and its four cousins, so that two lines can be
+compared with `approximateNoteSearch` and the three beside it; and
+`mostCommonMeasureRhythms` says which rhythms a stream's measures share.
+
+a part is written as text and cut into overlapping stretches with
+`translateMonophonicPartToSegments`, a whole score part by part with
+`indexScoreParts`, and `scoreSimilarity` says how alike every stretch of
+some indexed scores is, by difflib's ratio.
+
+the words sung in a score are searched with a `LyricSearcher`: `indexText`
+is each verse read as one text, `index` every lyric with where its text
+sits there, and `search` every place a string or a compiled regular
+expression is sung, each match naming the score's own notes and their own
+lyrics.
+
 several drums struck at once are a `PercussionChord`, which music21 says
 is not a chord -- there is no pitch to compare -- holding whatever it was
 handed, the members that sound answering `pitches`, and writing those

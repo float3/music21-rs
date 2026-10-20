@@ -3777,6 +3777,17 @@ pub(crate) fn read_with_leaves(stream: &Bound<'_, PyAny>) -> PyResult<(RsStream,
     Ok((read.stream, read.leaves))
 }
 
+/// One element -- music21's own object or this package's -- read as the
+/// value a walk reads it as, with a stand-in where the walks use one.
+///
+/// It is what reading a whole stream reads each element into, for a caller
+/// handed the elements themselves rather than the stream holding them:
+/// music21's searches take a stream iterator as readily as a stream, and
+/// its translations iterate whatever they are given.
+pub(crate) fn element_read(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
+    element_value(object, true)
+}
+
 /// music21's error for what a stream cannot answer, out of the crate's.
 pub(crate) fn stream_error(error: &music21_rs_crate::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(error))
@@ -6010,9 +6021,27 @@ impl Walked {
         objects.as_any().try_iter().map(Bound::into_any)
     }
 
-    /// The one at an index, counting from the end for a negative one.
-    fn __getitem__(&self, py: Python<'_>, index: isize) -> PyResult<Py<PyAny>> {
+    /// The one at an index, counting from the end for a negative one, or
+    /// the list a stretch of them makes: music21's own iterator answers a
+    /// list for a slice, and its own code asks for one
+    /// (`thisStreamIter[3:5]`).
+    fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let count = self.found.len();
+        if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
+            let read = slice.indices(count as isize)?;
+            let out = pyo3::types::PyList::empty(py);
+            let mut at = read.start;
+            while (read.step > 0 && at < read.stop) || (read.step < 0 && at > read.stop) {
+                if let Some((_, object)) =
+                    usize::try_from(at).ok().and_then(|at| self.found.get(at))
+                {
+                    out.append(object.bind(py))?;
+                }
+                at += read.step;
+            }
+            return Ok(out.into_any().unbind());
+        }
+        let index: isize = index.extract()?;
         let at = if index < 0 {
             count.checked_sub(index.unsigned_abs())
         } else {

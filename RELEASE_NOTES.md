@@ -2,6 +2,102 @@
 
 ## added
 
+- **The wheel searches a stream for a row of pitch classes, and every one
+  of music21's `search.serial` examples passes**: 23 of 23 docstrings and
+  564 of 564 examples, from nothing -- the largest module in the harness.
+  `ContiguousSegmentSearcher` finds every run of a length,
+  `SegmentMatcher` and the five matchers beside it the runs that are the
+  segments or sets of pitch classes searched for, and the six labelling
+  functions mark a copy of the stream with a line over each run found and
+  its name as a lyric. All of it is the crate's
+  (`search::ContiguousSegmentSearcher`, `search::SegmentMatcher`), which
+  `search_serial_parity` already held to music21 on built streams and
+  corpus scores; what the facade adds is carrying the answer back onto the
+  score's own notes, which each run already said the place of.
+  `search::SegmentMatcher::label_places` is a new by-position twin of
+  `label`, which is built on it, and `Matching::equal_segments` is public
+  for music21's own `equalSubset` and `checkSearchedAlready`.
+
+- **A walk of the wheel's streams answers a list for a stretch of it**,
+  as music21's own `StreamIterator` does: `recurse().notes[1:3]` is the
+  two notes, `[::2]` every other one, and a stretch past the end is
+  nothing. music21's own search docstrings ask for one
+  (`thisStreamIter[3:5]`), and before this the wheel's walk refused a
+  slice outright.
+
+- **The wheel reads a `**harm` token and correlates pitch with dynamic**,
+  and both modules' doctests all pass: `humdrum.harmParser` 11 of 11
+  examples and `analysis.correlate` 8 of 8, from nothing.
+  `convertHarmToRoman` is the crate's -- `**harm`'s inversion letter
+  stands for the figured bass, so `V7b` is a `V65` -- and `HarmParser`
+  answers music21's own dictionary of the parts it read, `HarmDefs`
+  staying music21's, being the regular expressions the crate has none of.
+  `ActivityMatch.pitchToDynamic` is `analysis::correlate::pitch_to_dynamic`
+  over a stream read into the crate: every pitch against each dynamic it
+  sounds under, the dynamic as its place among music21's short names.
+
+- **The wheel searches a stream for a run of notes, and every one of
+  music21's `search.base` examples passes**: 22 of 22 docstrings and 185
+  of 185 examples, from nothing -- the largest module yet to go from
+  nothing to every example. `rhythmicSearch`, `noteNameSearch`,
+  `noteNameRhythmicSearch` and `StreamSearcher` are the crate's searches;
+  the five translations that write a line as text are the crate's, as are
+  the four approximate searches that compare two lines by `difflib`'s
+  ratio and `mostCommonMeasureRhythms`. What music21 hands a search -- a
+  stream, one of its stream iterators or any list of elements -- is read
+  element by element as the value it is, with the offset and the measure
+  number taken off each object, since a value knows neither.
+  `StreamSearcher.algorithms` holds real Python functions, as music21's
+  does, each asking the crate: music21's own docstrings print that list,
+  and a method of a pyo3 class reads as a method descriptor rather than as
+  a function. An algorithm of one's own is said rather than run, the
+  crate's search taking the three music21 ships.
+  `SearchMatch` stays music21's, here and in `search.lyrics`: both are
+  named tuples holding nothing of the crate, and music21's own carry its
+  `repr` and its documentation. A wheel with no music21 beside it answers
+  a `namedtuple` of the same name and parts.
+
+- **The wheel indexes and compares a score's segments, and every one of
+  music21's `search.segment` examples passes**: 4 of 4 docstrings and 25
+  of 25 examples, from nothing. A part is read into the crate, its notes
+  taken in music21's `recurse().notes.stream()` order
+  (`search::notes_sorted`), written as text by whichever of the crate's
+  five translations the `algorithm` names, and cut into overlapping
+  stretches by `search::cut_translation_into_segments` -- the second half
+  of `translate_monophonic_part_to_segments`, split out for a translator
+  that can fail, as music21's diatonic one does. `indexScoreParts` is that
+  per part of a score and `scoreSimilarity` compares every stretch of an
+  index of scores with every stretch of the next, by `difflib`'s ratio,
+  answering music21's own nine-part tuples. `indexScoreFilePaths`,
+  `indexOnePath`, `saveScoreDict` and `loadScoreDict` stay music21's,
+  reading and writing files, and reach the crate through
+  `indexScoreParts` -- which is how the 496 comparisons of music21's own
+  example are the crate's.
+  Two things are said rather than answered differently: music21's
+  `jitter`, which moves each stretch's start at random, and a comparison
+  with `forceDifflib=False` where `Levenshtein` can be imported, that
+  library's ratio being a different measure from the one the crate
+  carries.
+
+- **The wheel searches a score's lyrics, and every one of music21's
+  `search.lyrics` examples passes**: 3 of 3 docstrings and 17 of 17
+  examples, from nothing. The indexing is the crate's
+  `search::LyricSearcher` -- each verse read as one text, the syllables of
+  a word run together and the words apart -- and what comes back is the
+  score's *own* notes and lyrics: `el` is the note and `lyric` its
+  `Lyric`, so a caller writing into one writes into the score. That is
+  what the searcher's new by-position twin is for: `places` says, for each
+  indexed lyric, where its note stands among the stream's leaves and which
+  of its lyrics is sung there, and `search_spans` and `indices_between`
+  answer a match as the run of index entries it touches. `search` is built
+  on `search_spans`, so which lyrics a stretch of text is sung to is read
+  one way and not two, and the parity suite now checks the twin against
+  the index on all 46 of its scores.
+  Only matching a regular expression is Python's, the crate having none:
+  a plain string is the crate's own search, and a compiled pattern is
+  `finditer` over the crate's index text, whose spans the crate then reads
+  as the lyrics they touch.
+
 - **The wheel carries music21's unpitched percussion**, and every example
   of both modules passes: `percussion` 2 of 2 docstrings and 18 of 18
   examples, `midi.percussion` 3 of 3 and 27 of 27, from nothing.

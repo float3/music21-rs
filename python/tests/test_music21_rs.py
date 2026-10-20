@@ -12,7 +12,9 @@ import os
 import copy
 import random
 import math
+import importlib.util
 import pathlib
+import re
 import subprocess
 import sys
 import weakref
@@ -3683,6 +3685,12 @@ def test_a_walk_answers_what_music21_s_walk_answers():
     assert len(walked) == len([e for e in walked])
     assert walked[0] is walked.first()
     assert walked[-1] is walked.last()
+    # A stretch of a walk is a list of what it found, as music21's
+    # iterator answers and as music21's own search docstrings ask for.
+    notes = walked.notes
+    assert [n.nameWithOctave for n in notes[1:3]] == ["D4", "E4"]
+    assert [n.nameWithOctave for n in notes[::2]] == ["C4", "E4", "G4"]
+    assert notes[100:] == []
     # Filtered again, as music21's own code filters it.
     assert [n.nameWithOctave for n in walked.notes] == ["C4", "D4", "E4", "F4", "G4"]
     assert len(walked.notesAndRests) == 5
@@ -4343,3 +4351,288 @@ def test_a_midi_key_names_the_drum_it_plays():
         mapper.midiPitchToInstrument(0)
     with pytest.raises(m.MIDIPercussionException):
         mapper.midiInstrumentToPitch(m.Piano())
+
+
+def test_lyrics_are_found_in_a_stream_as_text():
+    """Each verse read as one text, and the notes a stretch is sung to."""
+    line = m.from_tiny_notation("4/4 c4_Et d_in f_terra a_pax")
+    searcher = m.LyricSearcher(line)
+    assert searcher.indexText == "Et in terra pax"
+
+    # Every lyric with where its text sits, on the stream's own notes.
+    indexed = searcher.index()
+    assert len(indexed) == 4
+    first = indexed[0]
+    assert (first.start, first.end, first.measure, first.text) == (0, 2, 1, "Et")
+    assert first.el is line.recurse().notes[0]
+    assert first.lyric is first.el.lyrics[0]
+    assert repr(first) == (
+        "IndexedLyric(el=<music21.note.Note C>, start=0, end=2, measure=1, "
+        "lyric=<music21.note.Lyric number=1 syllabic=single text='Et'>, "
+        "text='Et', identifier=1)"
+    )
+    # music21's is a namedtuple, so it is read as a tuple too, and one part
+    # may be written afresh.
+    assert len(first) == 9
+    assert tuple(first)[1:4] == (0, 2, 1)
+    assert first.modify(text="ET").text == "ET"
+    assert first.text == "Et"
+
+    # A stretch of text across a word break is sung to both its notes.
+    found = searcher.search("in ter")
+    assert len(found) == 1
+    assert found[0].matchText == "in ter"
+    assert (found[0].mStart, found[0].mEnd, found[0].identifier) == (1, 1, 1)
+    sung = line.recurse().notes
+    # A walk answers a list for a stretch of it, as music21's iterator
+    # does and as music21's own code asks for.
+    assert found[0].els == tuple(sung[1:3])
+    # A match is music21's own `SearchMatch` where music21 is installed and
+    # a plain named tuple of the same parts otherwise, holding nothing of
+    # the crate's either way.
+    assert [index.text for index in found[0].indices] == ["in", "terra"]
+    assert type(found[0]).__name__ == "SearchMatch"
+
+    # A plain string is read as itself, where a compiled pattern is matched
+    # as a pattern: `.` is a character in the first and anything in the
+    # second.
+    assert searcher.search("t.rra") == []
+    assert len(searcher.search(re.compile("t.rra"))) == 1
+
+    # Nothing to search, and something that is neither a string nor a
+    # pattern, are refused in music21's words.
+    with pytest.raises(m.LyricSearcherException):
+        m.LyricSearcher().index()
+    with pytest.raises(m.LyricSearcherException):
+        searcher.search(5)
+
+
+def test_a_part_is_cut_into_overlapping_segments():
+    """A part written as text and cut into stretches, and the stretches of
+    some scores compared with one another."""
+    line = m.from_tiny_notation("4/4 c4 d e f g a b c' d' e' f' g'")
+    segments, measures = m.translateMonophonicPartToSegments(
+        line, segmentLengths=4, overlap=2
+    )
+    assert segments == ["<>@A", "@ACE", "CEGH", "GHJL", "JLMO", "MO"]
+    # Each stretch's first and last measure, as music21 reads them off the
+    # translation.
+    assert measures == [(1, 1), (1, 2), (2, 2), (2, 3), (3, 3), (3, 3)]
+
+    # A score is indexed part by part, each as music21's pair of lists.
+    score = m.Score()
+    score.insert(0.0, line)
+    indexed = m.indexScoreParts(score, segmentLengths=4, overlap=2)
+    assert indexed == [{"segmentList": segments, "measureList": measures}]
+
+    # Every stretch of one score against every stretch of the next, by
+    # difflib's ratio; a score is never compared with itself.
+    alike = m.scoreSimilarity(
+        {"first": indexed, "second": indexed}, minimumLength=2, forceDifflib=True
+    )
+    assert alike[0] == ("first", 0, 0, (1, 1), "second", 0, 0, (1, 1), 1.0)
+    assert len(alike) == len(segments) ** 2
+    assert len(m.scoreSimilarity({"only": indexed}, minimumLength=2, forceDifflib=True)) == 0
+
+    # What the crate cannot do honestly is said rather than answered
+    # another way: a jitter moves each start at random.
+    with pytest.raises(m.StreamException):
+        m.translateMonophonicPartToSegments(line, jitter=2)
+    # And a comparison by Levenshtein is a different measure from
+    # difflib's, which is the only one here -- so it is refused wherever
+    # music21 would reach for that library, and answered where music21
+    # would fall back to difflib itself.
+    if importlib.util.find_spec("Levenshtein") is not None:
+        with pytest.raises(m.StreamException):
+            m.scoreSimilarity({"first": indexed}, minimumLength=2)
+    else:
+        assert m.scoreSimilarity({"first": indexed}, minimumLength=2) == []
+
+
+def test_a_stream_is_searched_for_a_run_of_notes():
+    """Runs of notes found by name and by rhythm, and the text a line is
+    written as so that two lines can be compared."""
+    line = m.from_tiny_notation("3/4 c4. d8 e4 g4. a8 f4 c'8 d'4.")
+    notes = line.recurse().notes
+
+    # The text of a line: a character for each note's pitch and one for its
+    # length, and the shorter readings beside it.
+    assert m.translateStreamToString(notes) == "<U>F@PCUEFAPHFJU"
+    assert m.translateStreamToStringNoRhythm(notes) == "<>@CEAHJ"
+    assert m.translateStreamToStringOnlyRhythm(notes) == "UFPUFPFU"
+    assert m.translateDiatonicStreamToString(notes) == "CRLNOMQK"
+    # One note at a time, which is what the text is made of.
+    first = notes.first()
+    assert m.translateNoteToByte(first) == "<"
+    assert m.translateDurationToBytes(first) == "U"
+    assert m.translateNoteWithDurationToBytes(first) == "<U"
+    assert m.translateNoteTieToByte(first) == ""
+
+    # A dotted quarter followed by an eighth, twice over.
+    dotted = [m.Note("C4"), m.Note("C4")]
+    dotted[0].duration.quarterLength = 1.5
+    dotted[1].duration.quarterLength = 0.5
+    assert m.rhythmicSearch(notes, dotted) == [0, 3]
+    assert m.noteNameSearch(notes, [m.Note("D4"), m.Note("E4")]) == [1]
+
+    # The searcher itself, whose algorithms are a list of functions a
+    # caller adds to, as music21's are.
+    searcher = m.StreamSearcher(line, dotted)
+    searcher.recurse = True
+    searcher.filterNotes = True
+    assert [function.__name__ for function in searcher.algorithms] == [
+        "wildcardAlgorithm"
+    ]
+    searcher.algorithms.append(m.StreamSearcher.rhythmAlgorithm)
+    found = searcher.run()
+    assert [match.index for match in found] == [0, 3]
+    assert found[0].elStart is notes.first()
+    assert len(found[0].els) == 2
+    # Each algorithm answers that a pair matches, that it does not, or
+    # nothing at all, leaving the next to say.
+    assert searcher.wildcardAlgorithm(m.Note("C"), m.Note("D")) is None
+    assert searcher.rhythmAlgorithm(m.Note("C"), m.Note("D")) is None
+
+    # An algorithm of one's own is said rather than run another way.
+    searcher.algorithms.append(lambda me, streamEl, searchEl: True)
+    with pytest.raises(m.SearchException):
+        searcher.run()
+
+    # How alike other lines are, each told what it scored.
+    others = [
+        m.from_tiny_notation("3/4 c4. d8 e4"),
+        m.from_tiny_notation("3/4 g4 a b"),
+    ]
+    ranked = m.approximateNoteSearch(line, others)
+    assert ranked[0] is others[0]
+    assert ranked[0].matchProbability > ranked[1].matchProbability
+
+    # The rhythms the measures share, most common first, each with a copy
+    # of the first measure moved to start on C5.
+    rhythms = m.mostCommonMeasureRhythms(line)
+    assert [(found["number"], found["rhythmString"]) for found in rhythms] == [
+        (2, "UFP"),
+        (1, "FU"),
+    ]
+    assert [
+        held.pitch.nameWithOctave for held in rhythms[0]["rhythm"].recurse().notes
+    ] == ["C5", "D5", "E5"]
+    assert rhythms[0]["measures"][0] is line.recurse().getElementsByClass("Measure").first()
+
+
+def test_a_harm_token_is_read_as_a_roman_numeral():
+    """`**harm`'s notation is not music21's: an inversion letter stands for
+    the figured bass, so `V7b` is a `V65`."""
+    assert m.convertHarmToRoman("V7b") == "V65"
+    assert m.convertHarmToRoman("Gnc") == "Ger43"
+    # A token that says no chord says nothing.
+    assert m.convertHarmToRoman("zzz") is None
+
+    # The parts a token is read into, as music21's own groups come out.
+    assert m.HarmParser().parse("V7b") == {
+        "accidental": None,
+        "root": "V",
+        "attribute": None,
+        "intervals": "7",
+        "inversion": "b",
+        "alternative": None,
+        "secondary": None,
+        "implied": False,
+    }
+    # A token in brackets is implied harmony, and one that cannot be read
+    # at all is nothing read.
+    assert m.HarmParser().parse("(I)")["implied"] is True
+    assert m.HarmParser().parse("zzz") == {}
+
+
+def test_what_sounds_under_each_dynamic():
+    """Every pitch against the dynamic it sounds under, which is where it
+    stands among music21's short names."""
+    line = m.from_tiny_notation("4/4 c4 d e f")
+    line.insert(0.0, m.Dynamic("p"))
+    line.insert(2.0, m.Dynamic("f"))
+    matched = m.ActivityMatch(line)
+    # `e` starts just where the piano ends and the forte begins, so it
+    # sounds under both, as music21 reads it.
+    assert matched.pitchToDynamic() == [
+        (60.0, 5),
+        (62.0, 5),
+        (64.0, 5),
+        (64.0, 8),
+        (65.0, 8),
+    ]
+    # Asked for coordinates instead, each pair comes once with how many
+    # times it was matched.
+    assert matched.pitchToDynamic(False) == [
+        (60.0, 5, 1),
+        (62.0, 5, 1),
+        (64.0, 5, 1),
+        (64.0, 8, 1),
+        (65.0, 8, 1),
+    ]
+
+    # Anything but a stream, and a stream with no dynamic in it, are
+    # refused in music21's words.
+    with pytest.raises(m.CorrelateException):
+        m.ActivityMatch("not a stream")
+    with pytest.raises(m.CorrelateException):
+        m.ActivityMatch(m.from_tiny_notation("4/4 c4 d e f")).pitchToDynamic()
+
+
+def test_a_stream_is_searched_for_a_row_of_pitch_classes():
+    """Runs of notes read as pitch classes, matched against segments and
+    marked where they are found."""
+    line = m.from_tiny_notation("4/4 c4 d e f g a b c'")
+
+    # Every run of three notes, as the searcher reads repetitions.
+    searcher = m.ContiguousSegmentSearcher(line, "skipConsecutive", False)
+    runs = searcher.byLength(3)
+    assert len(runs) == 6
+    assert repr(runs[0]) == (
+        "<music21.search.serial.ContiguousSegmentOfNotes ['C4', 'D4', 'E4']>"
+    )
+    assert runs[0].readPitchClassesFromBottom() == [0, 2, 4]
+    assert runs[0].getDistinctPitchClasses() == [0, 2, 4]
+    # A run's notes are the stream's own.
+    assert list(runs[0].segment) == list(line.recurse().notes)[:3]
+
+    # The runs that are the segments searched for, each told what it was
+    # read as and what it was matched to.
+    matcher = m.SegmentMatcher(line, includeChords=False)
+    found = matcher.find([[0, 2, 4], [7, 9, 11]])
+    assert [run.activeSegment for run in found] == [[0, 2, 4], [7, 9, 11]]
+    assert [run.matchedSegment for run in found] == [[0, 2, 4], [7, 9, 11]]
+    assert found[0].containerStream is line
+
+    # A transposed matcher reads a run as the intervals it makes, and a
+    # transformed one as the row it is.
+    assert m.TransposedSegmentMatcher.normalize([3, 4, 5]) == "11"
+    assert m.SegmentMatcher.normalize(["B", -24, "1"]) == [11, 0, 1]
+    assert repr(m.TransformedSegmentMatcher.normalize([3, 4, 5])) == (
+        "<music21.serial.ToneRow 345>"
+    )
+    transformed = m.TransformedSegmentMatcher
+    assert transformed.getTransformations(
+        transformed.normalize([3, 4, 5]), transformed.normalize([4, 5, 6])
+    ) == [("P", 3), ("RI", 5)]
+
+    # A segment looked for already is passed over, which for a transformed
+    # matcher means one looked for in another form.
+    asked = m.SegmentMatcher(None)
+    assert asked.checkSearchedAlready([4, 5, 6]) is False
+    assert asked.checkSearchedAlready([1, 2, 3]) is False
+    assert asked.checkSearchedAlready([4, 5, 6]) is True
+    rows = m.TransformedSegmentMatcher(None)
+    assert rows.checkSearchedAlready([0, 1, 3]) is False
+    # The retrograde inversion of the same row.
+    assert rows.checkSearchedAlready([3, 5, 6]) is True
+
+    # Labelling marks a copy: a lyric on the first note of each run found
+    # and a line joining its ends.
+    labelled = m.labelSegments(line, {"CDE": [0, 2, 4]}, includeChords=False)
+    assert [
+        [lyric.text for lyric in note.lyrics] for note in labelled.recurse().notes
+    ][:3] == [["CDE"], [], []]
+    assert len(labelled.recurse().getElementsByClass("Line")) == 1
+    # The stream it was given is left as it was.
+    assert [lyric.text for lyric in line.recurse().notes.first().lyrics] == []

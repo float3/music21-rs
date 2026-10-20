@@ -16,21 +16,24 @@ mod segment;
 mod serial;
 
 pub use base::{
-    Algorithm, Filter, MeasureRhythm, SearchMatch, SearchTerm, Searched, StreamSearcher,
-    Translation, approximate_note_search, approximate_note_search_no_rhythm,
+    Algorithm, Filter, MeasureRhythm, MeasureRhythmPlaces, SearchMatch, SearchTerm, Searched,
+    StreamSearcher, Translation, approximate_note_search, approximate_note_search_no_rhythm,
     approximate_note_search_only_rhythm, approximate_note_search_weighted, iterated,
-    most_common_measure_rhythms, note_name_rhythmic_search, note_name_search, notes_and_rests,
-    recursed, rhythmic_search, similarity, translate_diatonic_stream_to_string,
-    translate_duration_to_bytes, translate_intervals_and_speed, translate_note_tie_to_byte,
-    translate_note_to_byte, translate_note_with_duration_to_bytes, translate_stream_to_string,
+    most_common_measure_rhythm_places, most_common_measure_rhythms, note_name_rhythmic_search,
+    note_name_search, notes_and_rests, recursed, rhythmic_search, similarity,
+    translate_diatonic_stream_to_string, translate_duration_to_bytes,
+    translate_intervals_and_speed, translate_note_tie_to_byte, translate_note_to_byte,
+    translate_note_with_duration_to_bytes, translate_stream_to_string,
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,
 };
-pub use lyrics::{IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricSearcher};
+pub use lyrics::{
+    IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricPlace, LyricSearcher, LyricSpan,
+};
 pub use segment::{
-    SegmentAt, SegmentSimilarity, Segments, index_score_parts, index_score_parts_with,
-    score_similarity, translate_monophonic_part_to_segments,
+    SegmentAt, SegmentSimilarity, Segments, cut_translation_into_segments, index_score_parts,
+    index_score_parts_with, notes_sorted, score_similarity, translate_monophonic_part_to_segments,
 };
 pub use serial::{
-    ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentMatcher,
-    SegmentNote,
+    ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentLabel,
+    SegmentMatcher, SegmentNote,
 };

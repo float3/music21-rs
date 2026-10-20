@@ -82,7 +82,7 @@ fn pitch_class_of_pitch(pitch: &music21_rs_crate::Pitch) -> i32 {
     (pitch.ps().round_ties_even() as i32).rem_euclid(12)
 }
 
-fn row_from_any(row: Option<&Bound<'_, PyAny>>) -> PyResult<RsToneRow> {
+pub(crate) fn row_from_any(row: Option<&Bound<'_, PyAny>>) -> PyResult<RsToneRow> {
     let Some(row) = row.filter(|value| !value.is_none()) else {
         return Ok(RsToneRow::default());
     };
@@ -121,7 +121,7 @@ impl ToneRow {
 
     /// A row object of the class `pcToToneRow` picks: `TwelveToneRow` for
     /// twelve pitch classes, `ToneRow` otherwise.
-    fn object(py: Python<'_>, inner: RsToneRow) -> PyResult<Py<PyAny>> {
+    pub(crate) fn object(py: Python<'_>, inner: RsToneRow) -> PyResult<Py<PyAny>> {
         if inner.len() == 12 {
             let init = PyClassInitializer::from(ToneRow::of(inner)).add_subclass(TwelveToneRow);
             Ok(Py::new(py, init)?.into_any())

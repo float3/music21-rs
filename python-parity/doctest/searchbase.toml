@@ -1,0 +1,29 @@
+# Docstrings of music21.search.base whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_searchbase`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.search.base.StreamSearcher",
+    "music21.search.base.StreamSearcher.noteNameAlgorithm",
+    "music21.search.base.StreamSearcher.rhythmAlgorithm",
+    "music21.search.base.StreamSearcher.wildcardAlgorithm",
+    "music21.search.base.Wildcard",
+    "music21.search.base.approximateNoteSearch",
+    "music21.search.base.approximateNoteSearchNoRhythm",
+    "music21.search.base.approximateNoteSearchOnlyRhythm",
+    "music21.search.base.approximateNoteSearchWeighted",
+    "music21.search.base.mostCommonMeasureRhythms",
+    "music21.search.base.noteNameRhythmicSearch",
+    "music21.search.base.noteNameSearch",
+    "music21.search.base.rhythmicSearch",
+    "music21.search.base.translateDiatonicStreamToString",
+    "music21.search.base.translateDurationToBytes",
+    "music21.search.base.translateIntervalsAndSpeed",
+    "music21.search.base.translateNoteTieToByte",
+    "music21.search.base.translateNoteToByte",
+    "music21.search.base.translateNoteWithDurationToBytes",
+    "music21.search.base.translateStreamToString",
+    "music21.search.base.translateStreamToStringNoRhythm",
+    "music21.search.base.translateStreamToStringOnlyRhythm",
+]

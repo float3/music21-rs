@@ -11,6 +11,7 @@
 
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::search::{LINE_BREAK, LyricIdentifier, LyricSearcher};
+use music21_rs::stream::StreamElement;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -201,6 +202,27 @@ fn the_crate_searches_lyrics_as_music21_does() {
                     at.and_then(|at| our_indexed.get(at)),
                 ));
                 continue;
+            }
+            // The by-position twin names the very note and lyric the index
+            // holds, which is what the wheel carries music21's answer back
+            // onto.
+            let leaves = score.leaves();
+            for (lyric, place) in searcher.indexed().iter().zip(searcher.places()) {
+                let found = leaves.get(place.position).map(|(_, element)| *element);
+                let held = match found {
+                    Some(StreamElement::Note(note)) => note.lyrics().get(place.lyric),
+                    Some(StreamElement::Chord(chord)) => chord.lyrics().get(place.lyric),
+                    _ => None,
+                };
+                if !found.is_some_and(|element| core::ptr::eq(element, lyric.element))
+                    || !held.is_some_and(|held| core::ptr::eq(held, lyric.lyric))
+                {
+                    failures.push(format!(
+                        "{name}: the lyric {:?} at {}-{} is indexed on a note or a lyric other than the one its place {place:?} names",
+                        lyric.text, lyric.absolute_start, lyric.absolute_end
+                    ));
+                    break;
+                }
             }
             for (query, (theirs, their_error)) in queries.iter().zip(their_found) {
                 match searcher.search(query) {

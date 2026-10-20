@@ -39,6 +39,7 @@ pub mod bar;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
+pub mod correlate;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
@@ -50,6 +51,7 @@ pub mod figuredbass;
 pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
+pub mod harmparser;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
@@ -73,6 +75,10 @@ pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
+pub mod searchbase;
+pub mod searchlyrics;
+pub mod searchsegment;
+pub mod searchserial;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
@@ -241,6 +247,38 @@ fn anything_installed(py: Python<'_>) -> bool {
 /// A facade that builds a new object of its own kind has to build one of
 /// these: music21 will only hold the installed class, and a pickle looking
 /// the class up by name finds it and not the bare facade.
+/// music21's own class for one of its light named tuples, or one built
+/// here where music21 cannot be asked for it.
+///
+/// Two of music21's modules have a `SearchMatch`, and a named tuple of a
+/// few values is nothing musical, so neither is replaced: the better class
+/// is music21's own -- it carries music21's `repr` and its `_DOC_ATTR` --
+/// and a wheel with no music21 beside it answers a plain `namedtuple` of
+/// the same name and fields, which is what music21 builds its own out of.
+pub(crate) fn music21_or_namedtuple<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+    fields: &str,
+    built: &'static pyo3::sync::PyOnceLock<Py<PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    if let Some(installed) = installed_class(py, module, name) {
+        return Ok(installed);
+    }
+    if let Ok(found) = py.import(module).and_then(|module| module.getattr(name)) {
+        return Ok(found);
+    }
+    let class = built.get_or_try_init(py, || -> PyResult<Py<PyAny>> {
+        let made = py
+            .import("collections")?
+            .getattr("namedtuple")?
+            .call1((name, fields))?;
+        made.setattr("__module__", module)?;
+        Ok(made.unbind())
+    })?;
+    Ok(class.bind(py).clone())
+}
+
 pub(crate) fn installed_class<'py>(
     py: Python<'py>,
     module: &str,
@@ -1247,6 +1285,21 @@ exceptions![
         Some("music21.tablature")
     ),
     (
+        "LyricSearcherException",
+        searchlyrics::LyricSearcherException,
+        Some("music21.search.lyrics")
+    ),
+    (
+        "SearchException",
+        searchbase::SearchException,
+        Some("music21.search.base")
+    ),
+    (
+        "CorrelateException",
+        correlate::CorrelateException,
+        Some("music21.analysis.correlate")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1528,6 +1581,12 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text::register(m)?;
     tablature::register(m)?;
     midipercussion::register(m)?;
+    correlate::register(m)?;
+    harmparser::register(m)?;
+    searchbase::register(m)?;
+    searchlyrics::register(m)?;
+    searchserial::register(m)?;
+    searchsegment::register(m)?;
     percussion::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;

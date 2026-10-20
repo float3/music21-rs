@@ -44,6 +44,7 @@ pub use music21_rs_python::bar::NAMES as BAR_NAMES;
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
 pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::clef::NAMES as CLEF_NAMES;
+pub use music21_rs_python::correlate::NAMES as CORRELATE_NAMES;
 pub use music21_rs_python::duration::NAMES as DURATION_NAMES;
 pub use music21_rs_python::dynamics::NAMES as DYNAMICS_NAMES;
 pub use music21_rs_python::enharmonics::NAMES as ENHARMONICS_NAMES;
@@ -52,6 +53,7 @@ pub use music21_rs_python::fbrules::NAMES as RULES_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;
 pub use music21_rs_python::harmonicfunction::NAMES as HARMONIC_FUNCTION_NAMES;
 pub use music21_rs_python::harmony::NAMES as HARMONY_NAMES;
+pub use music21_rs_python::harmparser::NAMES as HARM_PARSER_NAMES;
 pub use music21_rs_python::instrument::NAMES as INSTRUMENT_NAMES;
 pub use music21_rs_python::interval::NAMES as INTERVAL_NAMES;
 pub use music21_rs_python::key::NAMES as KEY_NAMES;
@@ -72,6 +74,10 @@ pub use music21_rs_python::resolution::NAMES as RESOLUTION_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;
 pub use music21_rs_python::scala::NAMES as SCALA_NAMES;
 pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
+pub use music21_rs_python::searchbase::NAMES as SEARCH_BASE_NAMES;
+pub use music21_rs_python::searchlyrics::NAMES as SEARCH_LYRICS_NAMES;
+pub use music21_rs_python::searchsegment::NAMES as SEARCH_SEGMENT_NAMES;
+pub use music21_rs_python::searchserial::NAMES as SEARCH_SERIAL_NAMES;
 pub use music21_rs_python::segment::NAMES as SEGMENT_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;
@@ -99,6 +105,29 @@ struct Summary {
     examples_passing: usize,
     examples: usize,
 }
+
+/// music21's own parallelism cannot run here, and must not run here.
+///
+/// `common.runParallel` spawns worker interpreters through joblib, and
+/// inside an embedded interpreter the executable they are spawned from is
+/// the test binary itself, which answers `Unrecognized option: 'c'`. A
+/// worker that did start would be worse than one that fails: it would be a
+/// fresh interpreter holding music21's own classes, nothing of this package
+/// installed over them, so an example run there would measure music21
+/// against itself. music21 asks `safeToParallize` before every parallel
+/// run -- it already answers no for a pytest worker -- and the answer here
+/// is no for the same reason.
+const SERIAL_HELPER: &str = r#"
+from music21.common import parallel
+
+
+def unsafe() -> bool:
+    """Nothing may be run in a worker process from an embedded interpreter."""
+    return False
+
+
+parallel.safeToParallize = unsafe
+"#;
 
 /// music21's `fixDoctests`, which its own runner applies to every docstring
 /// before a word of it is compared.
@@ -241,6 +270,12 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
     let facade = py.import("music21_rs_facade")?;
     let music21 = py.import("music21")?;
     clear_corpus_cache(py)?;
+    PyModule::from_code(
+        py,
+        &std::ffi::CString::new(SERIAL_HELPER)?,
+        c"music21_rs_doctest_serial.py",
+        c"music21_rs_doctest_serial",
+    )?;
     let target = py.import(module)?;
 
     let doctest = py.import("doctest")?;
