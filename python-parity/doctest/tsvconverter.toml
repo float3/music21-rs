@@ -1,0 +1,20 @@
+# Docstrings of music21.romanText.tsvConverter whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_tsvconverter`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.romanText.tsvConverter.M21toTSV",
+    "music21.romanText.tsvConverter.TabChordBase._changeRepresentation",
+    "music21.romanText.tsvConverter.TabChordBase.combinedChord",
+    "music21.romanText.tsvConverter.TabChordBase.tabToM21",
+    "music21.romanText.tsvConverter.TabChordV2.beat",
+    "music21.romanText.tsvConverter.TsvHandler",
+    "music21.romanText.tsvConverter.characterSwaps",
+    "music21.romanText.tsvConverter.getForm",
+    "music21.romanText.tsvConverter.getLocalKey",
+    "music21.romanText.tsvConverter.getSecondaryKey",
+    "music21.romanText.tsvConverter.handleAddedTones",
+    "music21.romanText.tsvConverter.isMinor",
+    "music21.romanText.tsvConverter.localKeyAsRn",
+]

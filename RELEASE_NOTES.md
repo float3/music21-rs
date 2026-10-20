@@ -2,6 +2,22 @@
 
 ## added
 
+- **The wheel reads the lab's tabular analyses**, and every one of
+  music21's `romanText.tsvConverter` examples passes: 13 of 13 docstrings
+  and 75 of 75, from nothing. Every reading is the crate's
+  `romantext::tsv`, which `tsv_parity` already held to music21 on the four
+  tables music21 ships and on all 68 RomanText analyses of the corpus,
+  written out in both of the lab's standards. `TabChord::spelled` is new:
+  music21's `_changeRepresentation` writes the lab's spelling back onto the
+  row as music21's -- the chord, the degree, the form, the degree it is
+  read in and the key in force -- and its own examples read those fields
+  afterwards, so the crate answers all five rather than only the finished
+  label. `TabChord::label` and `element_as_spelled` read a row *as it
+  stands*, which is what `tabToM21` does once the conversion has happened;
+  asking for the lab's reading again would convert a version 2 label twice.
+  `TsvHandler` and `M21toTSV` stay music21's, being the drivers that read a
+  file and build a score and read a score and write the rows back.
+
 - **The wheel turns a recording into notes**, and every one of music21's
   `audioSearch` examples passes: 15 of 15 docstrings and 107 of 107, from
   nothing. Every step is the crate's `audiosearch`, which
