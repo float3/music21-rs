@@ -156,7 +156,11 @@ pub enum Algorithm {
 }
 
 impl Algorithm {
-    fn compare(self, element: &StreamElement, term: &SearchTerm) -> Option<bool> {
+    /// Whether the element and the term match, do not match, or this
+    /// algorithm has no opinion and the next is to be asked: music21's
+    /// own three answers, for a caller comparing one pair at a time
+    /// rather than running a whole search.
+    pub fn compare(self, element: &StreamElement, term: &SearchTerm) -> Option<bool> {
         match self {
             Self::Wildcard => matches!(term, SearchTerm::Wildcard).then_some(true),
             Self::Rhythm => {
@@ -724,19 +728,46 @@ pub struct MeasureRhythm<'a> {
     pub measures: Vec<&'a Stream>,
 }
 
+/// A rhythm the measures of a stream share, and where each of those
+/// measures stands: the by-position twin of [`MeasureRhythm`], for a
+/// caller holding the objects the stream was read from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MeasureRhythmPlaces {
+    /// How many measures have it.
+    pub count: usize,
+    /// The rhythm as [`translate_stream_to_string_only_rhythm`] writes it.
+    pub rhythm: String,
+    /// Where each of those measures stands among the measures
+    /// [`recursed`] meets, in order.
+    pub measures: Vec<usize>,
+}
+
 /// The rhythms of a stream's measures, nested ones included, most common
 /// first, those as common in the order first met: music21's
 /// `mostCommonMeasureRhythms`, without the copy of each first measure
 /// transposed to start on C5 that music21 keeps beside it.
 pub fn most_common_measure_rhythms(stream: &Stream) -> Vec<MeasureRhythm<'_>> {
-    let mut rhythms: Vec<MeasureRhythm<'_>> = Vec::new();
-    for found in recursed(stream) {
-        let StreamElement::Stream(measure) = found.element else {
-            continue;
-        };
-        if measure.kind() != StreamKind::Measure {
-            continue;
-        }
+    let measures = measures_of(stream);
+    most_common_measure_rhythm_places(stream)
+        .into_iter()
+        .map(|found| MeasureRhythm {
+            count: found.count,
+            rhythm: found.rhythm,
+            measures: found
+                .measures
+                .into_iter()
+                .filter_map(|at| measures.get(at).copied())
+                .collect(),
+        })
+        .collect()
+}
+
+/// The same by position: each rhythm with where the measures that have it
+/// stand among the measures [`recursed`] meets, which is the order
+/// music21's own `streamIn[Measure]` hands them over.
+pub fn most_common_measure_rhythm_places(stream: &Stream) -> Vec<MeasureRhythmPlaces> {
+    let mut rhythms: Vec<MeasureRhythmPlaces> = Vec::new();
+    for (at, measure) in measures_of(stream).into_iter().enumerate() {
         let own: Vec<Searched<'_>> = iterated(measure)
             .into_iter()
             .filter(|found| is_general_note(found.element))
@@ -745,17 +776,31 @@ pub fn most_common_measure_rhythms(stream: &Stream) -> Vec<MeasureRhythm<'_>> {
         match rhythms.iter_mut().find(|known| known.rhythm == rhythm) {
             Some(known) => {
                 known.count += 1;
-                known.measures.push(measure);
+                known.measures.push(at);
             }
-            None => rhythms.push(MeasureRhythm {
+            None => rhythms.push(MeasureRhythmPlaces {
                 count: 1,
                 rhythm,
-                measures: vec![measure],
+                measures: vec![at],
             }),
         }
     }
     rhythms.sort_by_key(|rhythm| std::cmp::Reverse(rhythm.count));
     rhythms
+}
+
+/// Every measure a stream holds, nested ones included, in the order
+/// [`recursed`] meets them.
+fn measures_of(stream: &Stream) -> Vec<&Stream> {
+    recursed(stream)
+        .into_iter()
+        .filter_map(|found| match found.element {
+            StreamElement::Stream(measure) if measure.kind() == StreamKind::Measure => {
+                Some(&**measure)
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 #[cfg(test)]

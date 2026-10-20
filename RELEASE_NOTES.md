@@ -2,6 +2,27 @@
 
 ## added
 
+- **The wheel searches a stream for a run of notes, and every one of
+  music21's `search.base` examples passes**: 22 of 22 docstrings and 185
+  of 185 examples, from nothing -- the largest module yet to go from
+  nothing to every example. `rhythmicSearch`, `noteNameSearch`,
+  `noteNameRhythmicSearch` and `StreamSearcher` are the crate's searches;
+  the five translations that write a line as text are the crate's, as are
+  the four approximate searches that compare two lines by `difflib`'s
+  ratio and `mostCommonMeasureRhythms`. What music21 hands a search -- a
+  stream, one of its stream iterators or any list of elements -- is read
+  element by element as the value it is, with the offset and the measure
+  number taken off each object, since a value knows neither.
+  `StreamSearcher.algorithms` holds real Python functions, as music21's
+  does, each asking the crate: music21's own docstrings print that list,
+  and a method of a pyo3 class reads as a method descriptor rather than as
+  a function. An algorithm of one's own is said rather than run, the
+  crate's search taking the three music21 ships.
+  `SearchMatch` stays music21's, here and in `search.lyrics`: both are
+  named tuples holding nothing of the crate, and music21's own carry its
+  `repr` and its documentation. A wheel with no music21 beside it answers
+  a `namedtuple` of the same name and parts.
+
 - **The wheel indexes and compares a score's segments, and every one of
   music21's `search.segment` examples passes**: 4 of 4 docstrings and 25
   of 25 examples, from nothing. A part is read into the crate, its notes

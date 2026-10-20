@@ -4379,11 +4379,11 @@ def test_lyrics_are_found_in_a_stream_as_text():
     assert (found[0].mStart, found[0].mEnd, found[0].identifier) == (1, 1, 1)
     sung = line.recurse().notes
     assert found[0].els == (sung[1], sung[2])
-    assert repr(found[0]) == (
-        "SearchMatch(mStart=1, mEnd=1, matchText='in ter', "
-        "els=(<music21.note.Note D>, <music21.note.Note F>), indices=[...], "
-        "identifier=1)"
-    )
+    # A match is music21's own `SearchMatch` where music21 is installed and
+    # a plain named tuple of the same parts otherwise, holding nothing of
+    # the crate's either way.
+    assert [index.text for index in found[0].indices] == ["in", "terra"]
+    assert type(found[0]).__name__ == "SearchMatch"
 
     # A plain string is read as itself, where a compiled pattern is matched
     # as a pattern: `.` is a character in the first and anything in the
@@ -4439,3 +4439,74 @@ def test_a_part_is_cut_into_overlapping_segments():
             m.scoreSimilarity({"first": indexed}, minimumLength=2)
     else:
         assert m.scoreSimilarity({"first": indexed}, minimumLength=2) == []
+
+
+def test_a_stream_is_searched_for_a_run_of_notes():
+    """Runs of notes found by name and by rhythm, and the text a line is
+    written as so that two lines can be compared."""
+    line = m.from_tiny_notation("3/4 c4. d8 e4 g4. a8 f4 c'8 d'4.")
+    notes = line.recurse().notes
+
+    # The text of a line: a character for each note's pitch and one for its
+    # length, and the shorter readings beside it.
+    assert m.translateStreamToString(notes) == "<U>F@PCUEFAPHFJU"
+    assert m.translateStreamToStringNoRhythm(notes) == "<>@CEAHJ"
+    assert m.translateStreamToStringOnlyRhythm(notes) == "UFPUFPFU"
+    assert m.translateDiatonicStreamToString(notes) == "CRLNOMQK"
+    # One note at a time, which is what the text is made of.
+    first = notes.first()
+    assert m.translateNoteToByte(first) == "<"
+    assert m.translateDurationToBytes(first) == "U"
+    assert m.translateNoteWithDurationToBytes(first) == "<U"
+    assert m.translateNoteTieToByte(first) == ""
+
+    # A dotted quarter followed by an eighth, twice over.
+    dotted = [m.Note("C4"), m.Note("C4")]
+    dotted[0].duration.quarterLength = 1.5
+    dotted[1].duration.quarterLength = 0.5
+    assert m.rhythmicSearch(notes, dotted) == [0, 3]
+    assert m.noteNameSearch(notes, [m.Note("D4"), m.Note("E4")]) == [1]
+
+    # The searcher itself, whose algorithms are a list of functions a
+    # caller adds to, as music21's are.
+    searcher = m.StreamSearcher(line, dotted)
+    searcher.recurse = True
+    searcher.filterNotes = True
+    assert [function.__name__ for function in searcher.algorithms] == [
+        "wildcardAlgorithm"
+    ]
+    searcher.algorithms.append(m.StreamSearcher.rhythmAlgorithm)
+    found = searcher.run()
+    assert [match.index for match in found] == [0, 3]
+    assert found[0].elStart is notes.first()
+    assert len(found[0].els) == 2
+    # Each algorithm answers that a pair matches, that it does not, or
+    # nothing at all, leaving the next to say.
+    assert searcher.wildcardAlgorithm(m.Note("C"), m.Note("D")) is None
+    assert searcher.rhythmAlgorithm(m.Note("C"), m.Note("D")) is None
+
+    # An algorithm of one's own is said rather than run another way.
+    searcher.algorithms.append(lambda me, streamEl, searchEl: True)
+    with pytest.raises(m.SearchException):
+        searcher.run()
+
+    # How alike other lines are, each told what it scored.
+    others = [
+        m.from_tiny_notation("3/4 c4. d8 e4"),
+        m.from_tiny_notation("3/4 g4 a b"),
+    ]
+    ranked = m.approximateNoteSearch(line, others)
+    assert ranked[0] is others[0]
+    assert ranked[0].matchProbability > ranked[1].matchProbability
+
+    # The rhythms the measures share, most common first, each with a copy
+    # of the first measure moved to start on C5.
+    rhythms = m.mostCommonMeasureRhythms(line)
+    assert [(found["number"], found["rhythmString"]) for found in rhythms] == [
+        (2, "UFP"),
+        (1, "FU"),
+    ]
+    assert [
+        held.pitch.nameWithOctave for held in rhythms[0]["rhythm"].recurse().notes
+    ] == ["C5", "D5", "E5"]
+    assert rhythms[0]["measures"][0] is line.recurse().getElementsByClass("Measure").first()

@@ -158,6 +158,13 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+a stream is searched for a run of notes with a `StreamSearcher`, or with
+`rhythmicSearch`, `noteNameSearch` and `noteNameRhythmicSearch`, which say
+where each run starts; a line is written as text with
+`translateStreamToString` and its four cousins, so that two lines can be
+compared with `approximateNoteSearch` and the three beside it; and
+`mostCommonMeasureRhythms` says which rhythms a stream's measures share.
+
 a part is written as text and cut into overlapping stretches with
 `translateMonophonicPartToSegments`, a whole score part by part with
 `indexScoreParts`, and `scoreSimilarity` says how alike every stretch of

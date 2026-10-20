@@ -9,6 +9,12 @@
 //! music21's are, which is what the searcher's by-position twin
 //! (`places`) is for.
 //!
+//! `SearchMatch` stays music21's, holding nothing of the crate's: a
+//! stretch of text found, the measures it runs between, and the notes and
+//! lyrics it is sung to, each answered elsewhere. music21's own carries
+//! its `repr` and its documentation, and a wheel with no music21 beside it
+//! answers a `namedtuple` of the same name and parts.
+//!
 //! Only the matching of a regular expression is Python's. music21's own
 //! `search` escapes a plain string and runs `re` over the index either
 //! way; here a plain string is the crate's own search and a compiled
@@ -27,7 +33,7 @@ use music21_rs_crate::IntegerType;
 use music21_rs_crate::search::{LyricIdentifier, LyricSearcher as RsLyricSearcher};
 
 /// The names this module hands out.
-pub const NAMES: &[&str] = &["IndexedLyric", "SearchMatch", "LyricSearcher"];
+pub const NAMES: &[&str] = &["IndexedLyric", "LyricSearcher"];
 
 pyo3::create_exception!(
     music21_rs_facade,
@@ -228,139 +234,24 @@ impl IndexedLyric {
     }
 }
 
-/// music21's `search.lyrics.SearchMatch`: one stretch of lyrics a search
-/// found.
-#[pyclass(
-    name = "SearchMatch",
-    module = "music21.search.lyrics",
-    subclass,
-    skip_from_py_object
-)]
-pub struct SearchMatch {
-    /// The measure of the first lyric matched, if it is in one.
-    #[pyo3(get)]
-    mStart: Option<IntegerType>,
-    /// The measure of the last.
-    #[pyo3(get)]
-    mEnd: Option<IntegerType>,
-    /// The text matched, which for a plain search is the search itself.
-    #[pyo3(get)]
-    matchText: String,
-    /// The notes the matched lyrics are sung to.
-    #[pyo3(get)]
-    els: Py<PyTuple>,
-    /// Every lyric the match touches.
-    #[pyo3(get)]
-    indices: Py<PyList>,
-    /// The verse of the first.
-    #[pyo3(get)]
-    identifier: Py<PyAny>,
-}
+/// music21's own `SearchMatch` for this module, or a named tuple of its
+/// six parts where music21 cannot be asked.
+///
+/// It holds nothing of the crate's -- the measures, the text found, the
+/// notes and the lyrics it names are all answered elsewhere -- so
+/// music21's own class is the better one wherever it can be reached: it
+/// carries music21's `repr`, which says nothing of the lyrics themselves,
+/// and its documentation.
+static MATCH: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
 
-impl SearchMatch {
-    /// The parts in music21's order.
-    fn parts<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, PyAny>>> {
-        let number = |value: Option<IntegerType>| -> PyResult<Bound<'py, PyAny>> {
-            Ok(match value {
-                Some(value) => value.into_pyobject(py)?.into_any(),
-                None => py.None().into_bound(py),
-            })
-        };
-        Ok(vec![
-            number(self.mStart)?,
-            number(self.mEnd)?,
-            PyString::new(py, &self.matchText).into_any(),
-            self.els.bind(py).as_any().clone(),
-            self.indices.bind(py).as_any().clone(),
-            self.identifier.bind(py).clone(),
-        ])
-    }
-}
-
-#[pymethods]
-impl SearchMatch {
-    /// music21's `SearchMatch(mStart, mEnd, matchText, els, indices,
-    /// identifier)`, every part with a default for the same reason
-    /// `IndexedLyric`'s have one.
-    #[new]
-    #[pyo3(signature = (mStart = None, mEnd = None, matchText = String::new(), els = None, indices = None, identifier = None))]
-    fn new(
-        py: Python<'_>,
-        mStart: Option<IntegerType>,
-        mEnd: Option<IntegerType>,
-        matchText: String,
-        els: Option<Py<PyTuple>>,
-        indices: Option<Py<PyList>>,
-        identifier: Option<Py<PyAny>>,
-    ) -> PyResult<Self> {
-        let els = match els {
-            Some(els) => els,
-            None => PyTuple::empty(py).unbind(),
-        };
-        let indices = indices.unwrap_or_else(|| PyList::empty(py).unbind());
-        let identifier = identifier.unwrap_or_else(|| py.None());
-        Ok(Self {
-            mStart,
-            mEnd,
-            matchText,
-            els,
-            indices,
-            identifier,
-        })
-    }
-
-    /// How many parts one of these has, a `namedtuple` of six.
-    fn __len__(&self) -> usize {
-        6
-    }
-
-    fn __getitem__<'py>(slf: &Bound<'py, Self>, at: isize) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        let parts = slf.borrow().parts(py)?;
-        let found = if at < 0 {
-            parts.len().checked_sub(at.unsigned_abs())
-        } else {
-            Some(at.unsigned_abs())
-        };
-        found
-            .and_then(|at| parts.get(at).cloned())
-            .ok_or_else(|| pyo3::exceptions::PyIndexError::new_err("tuple index out of range"))
-    }
-
-    fn __iter__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, pyo3::types::PyIterator>> {
-        let py = slf.py();
-        let parts = slf.borrow().parts(py)?;
-        PyTuple::new(py, parts)?.as_any().try_iter()
-    }
-
-    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
-        let py = slf.py();
-        let parts = PyTuple::new(py, slf.borrow().parts(py)?)?;
-        if let Ok(theirs) = other.extract::<PyRef<'_, Self>>() {
-            let theirs = PyTuple::new(py, theirs.parts(py)?)?;
-            return parts.eq(theirs);
-        }
-        parts.as_any().eq(other)
-    }
-
-    /// music21's own `repr`, which says nothing of the lyrics themselves:
-    /// there may be very many of them.
-    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
-        let py = slf.py();
-        let slf = slf.borrow();
-        let measure = |value: Option<IntegerType>| match value {
-            Some(value) => value.to_string(),
-            None => "None".to_string(),
-        };
-        Ok(format!(
-            "SearchMatch(mStart={}, mEnd={}, matchText={}, els={}, indices=[...], identifier={})",
-            measure(slf.mStart),
-            measure(slf.mEnd),
-            PyString::new(py, &slf.matchText).repr()?,
-            slf.els.bind(py).as_any().repr()?,
-            slf.identifier.bind(py).repr()?,
-        ))
-    }
+fn match_class<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    crate::music21_or_namedtuple(
+        py,
+        "music21.search.lyrics",
+        "SearchMatch",
+        "mStart mEnd matchText els indices identifier",
+        &MATCH,
+    )
 }
 
 /// music21's `search.lyrics.LyricSearcher`: a stream's lyrics read as one
@@ -492,19 +383,14 @@ fn match_of<'py>(
     }
     let first = touched.get_item(0)?;
     let last = touched.get_item(touched.len() - 1)?;
-    let made = SearchMatch {
-        mStart: first.getattr("measure")?.extract()?,
-        mEnd: last.getattr("measure")?.extract()?,
-        matchText: text.to_string(),
-        els: PyTuple::new(py, els.iter())?.unbind(),
-        indices: touched.unbind(),
-        identifier: first.getattr("identifier")?.unbind(),
-    };
-    Ok(
-        crate::installed_new(py, "music21.search.lyrics", "SearchMatch", made)?
-            .into_bound(py)
-            .into_any(),
-    )
+    match_class(py)?.call1((
+        first.getattr("measure")?,
+        last.getattr("measure")?,
+        text,
+        PyTuple::new(py, els.iter())?,
+        touched,
+        first.getattr("identifier")?,
+    ))
 }
 
 #[pymethods]
@@ -628,7 +514,6 @@ impl LyricSearcher {
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<IndexedLyric>()?;
-    m.add_class::<SearchMatch>()?;
     m.add_class::<LyricSearcher>()?;
     Ok(())
 }

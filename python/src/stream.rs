@@ -3777,6 +3777,17 @@ pub(crate) fn read_with_leaves(stream: &Bound<'_, PyAny>) -> PyResult<(RsStream,
     Ok((read.stream, read.leaves))
 }
 
+/// One element -- music21's own object or this package's -- read as the
+/// value a walk reads it as, with a stand-in where the walks use one.
+///
+/// It is what reading a whole stream reads each element into, for a caller
+/// handed the elements themselves rather than the stream holding them:
+/// music21's searches take a stream iterator as readily as a stream, and
+/// its translations iterate whatever they are given.
+pub(crate) fn element_read(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
+    element_value(object, true)
+}
+
 /// music21's error for what a stream cannot answer, out of the crate's.
 pub(crate) fn stream_error(error: &music21_rs_crate::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(error))
