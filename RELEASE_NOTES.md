@@ -2,6 +2,22 @@
 
 ## added
 
+- **The wheel searches a stream for a row of pitch classes, and every one
+  of music21's `search.serial` examples passes**: 23 of 23 docstrings and
+  564 of 564 examples, from nothing -- the largest module in the harness.
+  `ContiguousSegmentSearcher` finds every run of a length,
+  `SegmentMatcher` and the five matchers beside it the runs that are the
+  segments or sets of pitch classes searched for, and the six labelling
+  functions mark a copy of the stream with a line over each run found and
+  its name as a lyric. All of it is the crate's
+  (`search::ContiguousSegmentSearcher`, `search::SegmentMatcher`), which
+  `search_serial_parity` already held to music21 on built streams and
+  corpus scores; what the facade adds is carrying the answer back onto the
+  score's own notes, which each run already said the place of.
+  `search::SegmentMatcher::label_places` is a new by-position twin of
+  `label`, which is built on it, and `Matching::equal_segments` is public
+  for music21's own `equalSubset` and `checkSearchedAlready`.
+
 - **A walk of the wheel's streams answers a list for a stretch of it**,
   as music21's own `StreamIterator` does: `recurse().notes[1:3]` is the
   two notes, `[::2]` every other one, and a stretch past the end is

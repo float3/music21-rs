@@ -601,6 +601,16 @@ impl Matching {
         )
     }
 
+    /// Whether a run's pitch classes are the segment searched for, as
+    /// this matcher tells the two the same: music21's `equalSubset`, given
+    /// the classes each reading was made from rather than the readings.
+    ///
+    /// The order is music21's: the segment searched for first, which is
+    /// the one a transposing matcher moves.
+    pub fn equal_segments(self, search: &[IntegerType], subset: &[IntegerType]) -> bool {
+        self.equal(&self.normalize(search), &self.normalize(subset))
+    }
+
     fn equal(self, search: &Normal, subset: &Normal) -> bool {
         let classes = |normal: &Normal| -> Vec<i64> {
             match normal {
@@ -834,6 +844,76 @@ impl SegmentMatcher {
         None
     }
 
+    /// Where each run found is to be marked and with what: the
+    /// by-position twin of [`SegmentMatcher::label`], which is built on
+    /// it, for a caller marking the objects the stream was read from
+    /// rather than a stream of the crate's.
+    ///
+    /// Runs come part by part, measure by measure, offset by offset, as
+    /// music21 marks them, and a run matched to nothing is named nothing.
+    ///
+    /// # Errors
+    ///
+    /// As [`SegmentMatcher::find`].
+    pub fn label_places(
+        &self,
+        stream: &Stream,
+        named: &[(String, Vec<IntegerType>)],
+        convention: Option<TransformationConvention>,
+    ) -> Result<Vec<SegmentLabel>> {
+        let search: Vec<Vec<IntegerType>> =
+            named.iter().map(|(_, segment)| segment.clone()).collect();
+        let mut segments = self.find(stream, &search)?;
+        segments.sort_by(|a, b| {
+            (a.part, a.start_measure())
+                .cmp(&(b.part, b.start_measure()))
+                .then_with(|| {
+                    a.start_offset()
+                        .partial_cmp(&b.start_offset())
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        });
+        let mut found = Vec::new();
+        for segment in &segments {
+            let (Some(first), Some(last)) = (segment.notes.first(), segment.notes.last()) else {
+                continue;
+            };
+            let Some((name, _)) = named
+                .iter()
+                .find(|(_, wanted)| Some(wanted) == segment.matched.as_ref())
+            else {
+                found.push(SegmentLabel {
+                    part: segment.part,
+                    first: first.leaf,
+                    last: last.leaf,
+                    label: String::new(),
+                });
+                continue;
+            };
+            let transformations = match convention {
+                Some(TransformationConvention::OriginalCentered) => {
+                    segment.original_centered_transformations_from_matched()
+                }
+                Some(TransformationConvention::ZeroCentered) => {
+                    segment.zero_centered_transformations_from_matched()
+                }
+                None => Vec::new(),
+            };
+            let mut label = name.clone();
+            for (transformation, index) in transformations {
+                let convention = convention.unwrap_or(TransformationConvention::ZeroCentered);
+                label.push_str(&format!(" ,{}{index}", transformation.label(convention)));
+            }
+            found.push(SegmentLabel {
+                part: segment.part,
+                first: first.leaf,
+                last: last.leaf,
+                label,
+            });
+        }
+        Ok(found)
+    }
+
     /// A copy of the stream with each run found marked, as music21's
     /// `labelSegments` and its kin mark them: a line spanner from its first
     /// note to its last, in its part, and the name of the segment it matched
@@ -852,51 +932,15 @@ impl SegmentMatcher {
         named: &[(String, Vec<IntegerType>)],
         convention: Option<TransformationConvention>,
     ) -> Result<Stream> {
-        let search: Vec<Vec<IntegerType>> =
-            named.iter().map(|(_, segment)| segment.clone()).collect();
-        let mut found: Vec<(Option<usize>, usize, usize, String)> = Vec::new();
-        {
-            let mut segments = self.find(stream, &search)?;
-            segments.sort_by(|a, b| {
-                (a.part, a.start_measure())
-                    .cmp(&(b.part, b.start_measure()))
-                    .then_with(|| {
-                        a.start_offset()
-                            .partial_cmp(&b.start_offset())
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-            });
-            for segment in &segments {
-                let (Some(first), Some(last)) = (segment.notes.first(), segment.notes.last())
-                else {
-                    continue;
-                };
-                let Some((name, _)) = named
-                    .iter()
-                    .find(|(_, wanted)| Some(wanted) == segment.matched.as_ref())
-                else {
-                    found.push((segment.part, first.leaf, last.leaf, String::new()));
-                    continue;
-                };
-                let transformations = match convention {
-                    Some(TransformationConvention::OriginalCentered) => {
-                        segment.original_centered_transformations_from_matched()
-                    }
-                    Some(TransformationConvention::ZeroCentered) => {
-                        segment.zero_centered_transformations_from_matched()
-                    }
-                    None => Vec::new(),
-                };
-                let mut label = name.clone();
-                for (transformation, index) in transformations {
-                    let convention = convention.unwrap_or(TransformationConvention::ZeroCentered);
-                    label.push_str(&format!(" ,{}{index}", transformation.label(convention)));
-                }
-                found.push((segment.part, first.leaf, last.leaf, label));
-            }
-        }
+        let found = self.label_places(stream, named, convention)?;
         let mut labelled = stream.clone();
-        for (part, first, last, label) in found {
+        for SegmentLabel {
+            part,
+            first,
+            last,
+            label,
+        } in found
+        {
             let target = match part {
                 Some(part) => part_mut(&mut labelled, part).ok_or_else(index_error)?,
                 None => &mut labelled,
@@ -940,6 +984,23 @@ impl SegmentMatcher {
         }
         Ok(labelled)
     }
+}
+
+/// Where one run found is to be marked, and with what: the part it is in,
+/// the places of its first and last notes among that part's leaves, and
+/// the name it is marked with, which is empty for a run matched to
+/// nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SegmentLabel {
+    /// The part the run is in, counted from nought, or nothing where the
+    /// stream searched has no parts.
+    pub part: Option<usize>,
+    /// Where its first note stands among the part's leaves.
+    pub first: usize,
+    /// Where its last note stands.
+    pub last: usize,
+    /// The name to write as a lyric of the first note.
+    pub label: String,
 }
 
 /// The part a searcher numbered so, in a stream's walk.

@@ -4577,3 +4577,62 @@ def test_what_sounds_under_each_dynamic():
         m.ActivityMatch("not a stream")
     with pytest.raises(m.CorrelateException):
         m.ActivityMatch(m.from_tiny_notation("4/4 c4 d e f")).pitchToDynamic()
+
+
+def test_a_stream_is_searched_for_a_row_of_pitch_classes():
+    """Runs of notes read as pitch classes, matched against segments and
+    marked where they are found."""
+    line = m.from_tiny_notation("4/4 c4 d e f g a b c'")
+
+    # Every run of three notes, as the searcher reads repetitions.
+    searcher = m.ContiguousSegmentSearcher(line, "skipConsecutive", False)
+    runs = searcher.byLength(3)
+    assert len(runs) == 6
+    assert repr(runs[0]) == (
+        "<music21.search.serial.ContiguousSegmentOfNotes ['C4', 'D4', 'E4']>"
+    )
+    assert runs[0].readPitchClassesFromBottom() == [0, 2, 4]
+    assert runs[0].getDistinctPitchClasses() == [0, 2, 4]
+    # A run's notes are the stream's own.
+    assert list(runs[0].segment) == list(line.recurse().notes)[:3]
+
+    # The runs that are the segments searched for, each told what it was
+    # read as and what it was matched to.
+    matcher = m.SegmentMatcher(line, includeChords=False)
+    found = matcher.find([[0, 2, 4], [7, 9, 11]])
+    assert [run.activeSegment for run in found] == [[0, 2, 4], [7, 9, 11]]
+    assert [run.matchedSegment for run in found] == [[0, 2, 4], [7, 9, 11]]
+    assert found[0].containerStream is line
+
+    # A transposed matcher reads a run as the intervals it makes, and a
+    # transformed one as the row it is.
+    assert m.TransposedSegmentMatcher.normalize([3, 4, 5]) == "11"
+    assert m.SegmentMatcher.normalize(["B", -24, "1"]) == [11, 0, 1]
+    assert repr(m.TransformedSegmentMatcher.normalize([3, 4, 5])) == (
+        "<music21.serial.ToneRow 345>"
+    )
+    transformed = m.TransformedSegmentMatcher
+    assert transformed.getTransformations(
+        transformed.normalize([3, 4, 5]), transformed.normalize([4, 5, 6])
+    ) == [("P", 3), ("RI", 5)]
+
+    # A segment looked for already is passed over, which for a transformed
+    # matcher means one looked for in another form.
+    asked = m.SegmentMatcher(None)
+    assert asked.checkSearchedAlready([4, 5, 6]) is False
+    assert asked.checkSearchedAlready([1, 2, 3]) is False
+    assert asked.checkSearchedAlready([4, 5, 6]) is True
+    rows = m.TransformedSegmentMatcher(None)
+    assert rows.checkSearchedAlready([0, 1, 3]) is False
+    # The retrograde inversion of the same row.
+    assert rows.checkSearchedAlready([3, 5, 6]) is True
+
+    # Labelling marks a copy: a lyric on the first note of each run found
+    # and a line joining its ends.
+    labelled = m.labelSegments(line, {"CDE": [0, 2, 4]}, includeChords=False)
+    assert [
+        [lyric.text for lyric in note.lyrics] for note in labelled.recurse().notes
+    ][:3] == [["CDE"], [], []]
+    assert len(labelled.recurse().getElementsByClass("Line")) == 1
+    # The stream it was given is left as it was.
+    assert [lyric.text for lyric in line.recurse().notes.first().lyrics] == []

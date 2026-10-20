@@ -77,6 +77,7 @@ pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
 pub use music21_rs_python::searchbase::NAMES as SEARCH_BASE_NAMES;
 pub use music21_rs_python::searchlyrics::NAMES as SEARCH_LYRICS_NAMES;
 pub use music21_rs_python::searchsegment::NAMES as SEARCH_SEGMENT_NAMES;
+pub use music21_rs_python::searchserial::NAMES as SEARCH_SERIAL_NAMES;
 pub use music21_rs_python::segment::NAMES as SEGMENT_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;

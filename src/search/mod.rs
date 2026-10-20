@@ -34,6 +34,6 @@ pub use segment::{
     index_score_parts_with, notes_sorted, score_similarity, translate_monophonic_part_to_segments,
 };
 pub use serial::{
-    ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentMatcher,
-    SegmentNote,
+    ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentLabel,
+    SegmentMatcher, SegmentNote,
 };

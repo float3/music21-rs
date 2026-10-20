@@ -162,6 +162,13 @@ a `**harm` token is read as the roman numeral it annotates with
 `convertHarmToRoman` and taken apart by a `HarmParser`, and an
 `ActivityMatch` says what pitch sounds under which dynamic.
 
+a stream is searched for a row of pitch classes with a
+`ContiguousSegmentSearcher`, which finds every run of a length, and with a
+`SegmentMatcher` or one of the five matchers beside it, which find the runs
+that are the segments searched for -- transposed, transformed, or as sets
+in any order; `labelSegments` and its five kin mark a copy of the stream
+with a line over each run found and its name sung under its first note.
+
 a stream is searched for a run of notes with a `StreamSearcher`, or with
 `rhythmicSearch`, `noteNameSearch` and `noteNameRhythmicSearch`, which say
 where each run starts; a line is written as text with

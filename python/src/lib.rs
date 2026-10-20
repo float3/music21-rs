@@ -78,6 +78,7 @@ pub mod scale;
 pub mod searchbase;
 pub mod searchlyrics;
 pub mod searchsegment;
+pub mod searchserial;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
@@ -1584,6 +1585,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     harmparser::register(m)?;
     searchbase::register(m)?;
     searchlyrics::register(m)?;
+    searchserial::register(m)?;
     searchsegment::register(m)?;
     percussion::register(m)?;
     bar::register(m)?;
