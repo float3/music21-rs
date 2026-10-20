@@ -105,32 +105,18 @@ pub fn measure_hash(measure: &Stream) -> Result<String> {
         }
         let length = element.quarter_length();
         let code = if length == 0.0 {
-            Some(hash_quarter_length(0.015625))
+            Some(hash_grace())
         } else {
             match element {
                 StreamElement::Note(_)
                 | StreamElement::Chord(_)
-                | StreamElement::ChordSymbol(_) => {
-                    let code = hash_quarter_length(length);
-                    Some(if code.is_multiple_of(2) {
-                        code
-                    } else {
-                        code + 1
-                    })
-                }
-                StreamElement::Rest(_) => {
-                    let code = hash_quarter_length(length);
-                    Some(if code.is_multiple_of(2) {
-                        code + 1
-                    } else {
-                        code
-                    })
-                }
+                | StreamElement::ChordSymbol(_) => Some(hash_note(length)),
+                StreamElement::Rest(_) => Some(hash_rest(length)),
                 _ => None,
             }
         };
         if let Some(code) = code {
-            hash.push(char::from(code));
+            hash.push(code);
         }
     }
     Ok(hash)
@@ -151,12 +137,40 @@ fn is_general_note(element: &StreamElement) -> bool {
 
 /// music21's `hashQuarterLength`: ten times the base-2 logarithm of a
 /// length in 256ths of a quarter, from 1 to 127, and 1 for no length.
-fn hash_quarter_length(length: FloatType) -> u8 {
+pub fn hash_quarter_length(length: FloatType) -> u8 {
     if length == 0.0 {
         return 1;
     }
     let code = ((length * 256.0).log2() * 10.0) as i64;
     code.clamp(1, 127) as u8
+}
+
+/// The character a note or chord of a length is written as: music21's
+/// `hashNote`, which is [`hash_quarter_length`] made even.
+pub fn hash_note(length: FloatType) -> char {
+    let code = hash_quarter_length(length);
+    char::from(if code.is_multiple_of(2) {
+        code
+    } else {
+        code + 1
+    })
+}
+
+/// The character a rest of a length is written as: music21's `hashRest`,
+/// which is [`hash_quarter_length`] made odd.
+pub fn hash_rest(length: FloatType) -> char {
+    let code = hash_quarter_length(length);
+    char::from(if code.is_multiple_of(2) {
+        code + 1
+    } else {
+        code
+    })
+}
+
+/// The character anything of no length is written as: music21's
+/// `hashGrace`, which writes a grace note as a 128th.
+pub fn hash_grace() -> char {
+    char::from(hash_quarter_length(0.015625))
 }
 
 /// How unlike two rhythms are, as music21's `getMeasureDifference` has it:
@@ -191,14 +205,29 @@ pub fn probability_based_on_changes(own: &str, other: &str) -> FloatType {
 }
 
 fn changes(own: &[char], other: &[char]) -> FloatType {
+    changes_between(own, other, own)
+}
+
+/// How likely the measure `source` was misread as `destination`, with the
+/// steps read between `matching` and `source`: music21's
+/// `getProbabilityBasedOnChanges` with its two strings told apart.
+///
+/// music21 reads its steps off whatever its `SequenceMatcher` was set
+/// from and reads a replacement off its own hash, which are the same
+/// string in every call it makes -- [`probability_based_on_changes`] is
+/// that call -- but a caller may set the one and not the other.
+pub fn probability_based_on_changes_between(
+    matching: &str,
+    source: &str,
+    destination: &str,
+) -> FloatType {
+    changes_between(&chars(matching), &chars(source), &chars(destination))
+}
+
+fn changes_between(matching: &[char], source: &[char], destination: &[char]) -> FloatType {
     let mut probability = 0.0;
-    for (index, step) in difflib::opcodes(own, other).iter().enumerate() {
-        let one = match step.tag {
-            OpcodeTag::Equal => PROBABILITY_ON_EQUALITY.powf((step.j2 - step.j1) as FloatType),
-            OpcodeTag::Replace => substitute(&other[step.j1..step.j2], &own[step.i1..step.i2]),
-            OpcodeTag::Insert => PROBABILITY_ON_OMISSION.powf((step.j2 - step.j1) as FloatType),
-            OpcodeTag::Delete => PROBABILITY_ON_ADDITION.powf((step.i2 - step.i1) as FloatType),
-        };
+    for (index, step) in difflib::opcodes(matching, source).iter().enumerate() {
+        let one = one_opcode(step, source, destination);
         if index == 0 {
             probability = one;
         } else {
@@ -206,6 +235,28 @@ fn changes(own: &[char], other: &[char]) -> FloatType {
         }
     }
     probability
+}
+
+/// How likely one of the steps that turn a rhythm into another is:
+/// music21's `differenceProbabilityForOneOpCode`.
+///
+/// `source` is the measure that would do the correcting and `destination`
+/// the measure flagged, which is how music21 names them. A stretch read
+/// alike is [`PROBABILITY_ON_EQUALITY`] for each character, a stretch
+/// replaced is [`probability_on_substitute`] of the two, a stretch the
+/// flagged measure has not got is [`PROBABILITY_ON_OMISSION`] for each and
+/// one it has over is [`PROBABILITY_ON_ADDITION`].
+pub fn probability_for_one_opcode(step: &Opcode, source: &str, destination: &str) -> FloatType {
+    one_opcode(step, &chars(source), &chars(destination))
+}
+
+fn one_opcode(step: &Opcode, source: &[char], destination: &[char]) -> FloatType {
+    match step.tag {
+        OpcodeTag::Equal => PROBABILITY_ON_EQUALITY.powf((step.j2 - step.j1) as FloatType),
+        OpcodeTag::Replace => substitute(&source[step.j1..step.j2], &destination[step.i1..step.i2]),
+        OpcodeTag::Insert => PROBABILITY_ON_OMISSION.powf((step.j2 - step.j1) as FloatType),
+        OpcodeTag::Delete => PROBABILITY_ON_ADDITION.powf((step.i2 - step.i1) as FloatType),
+    }
 }
 
 /// How likely the rhythm `source` was misread as `destination`: music21's
@@ -268,6 +319,112 @@ fn best(probabilities: &[FloatType]) -> (usize, FloatType) {
     (at, most)
 }
 
+/// The rhythm of every measure of a part: music21's
+/// `SinglePart.getSequenceHashesFromMeasureStream`.
+///
+/// # Errors
+///
+/// A measure of voices that cannot be chordified.
+pub fn part_hashes(part: &Stream) -> Result<Vec<String>> {
+    ScoreCorrector::measure_events(part)
+        .into_iter()
+        .map(|index| match part.events()[index].element() {
+            StreamElement::Stream(measure) => measure_hash(measure),
+            _ => unreachable!("a measure's event holds the measure"),
+        })
+        .collect()
+}
+
+/// Which of a part's measures do not fill their bar, and so would be
+/// flagged by an optical reader: music21's
+/// `SinglePart.getIncorrectMeasureIndices`.
+///
+/// With `run_fast`, every bar is that of the first measure's time
+/// signature, or of 4/4 where none is in force; without, each measure's
+/// own. The places are counted from nought, as music21 counts them, and
+/// are not measure numbers.
+///
+/// # Errors
+///
+/// Without `run_fast`, a measure with no time signature in force, which
+/// music21 fails on.
+pub fn incorrect_measures(part: &Stream, run_fast: bool) -> Result<Vec<usize>> {
+    let measures = ScoreCorrector::measure_events(part);
+    let meter_of = |index: usize| -> Option<TimeSignature> {
+        let event = &part.events()[index];
+        let StreamElement::Stream(measure) = event.element() else {
+            return None;
+        };
+        measure
+            .events()
+            .iter()
+            .take_while(|inner| inner.offset() == 0.0)
+            .find_map(|inner| match inner.element() {
+                StreamElement::TimeSignature(meter) => Some(meter.clone()),
+                _ => None,
+            })
+            .or_else(|| part.time_signature_at(event.offset()))
+    };
+    let common_time = || TimeSignature::new(4, 4);
+    let mut meter = if run_fast {
+        match measures.first().and_then(|&index| meter_of(index)) {
+            Some(meter) => meter,
+            None => common_time()?,
+        }
+    } else {
+        common_time()?
+    };
+    let mut incorrect = Vec::new();
+    for (i, &index) in measures.iter().enumerate() {
+        if !run_fast {
+            meter = meter_of(index).ok_or_else(|| {
+                Error::Omr("'NoneType' object has no attribute 'barDuration'".to_string())
+            })?;
+        }
+        if part.events()[index].element().quarter_length() != meter.bar_quarter_length() {
+            incorrect.push(i);
+        }
+    }
+    Ok(incorrect)
+}
+
+/// Which measure of one place across the parts most likely corrects the
+/// flagged one there: music21's `MeasureSlice.runSliceSearch`.
+///
+/// `hashes` is the rhythm of that measure in every part and `flagged`
+/// says whose is itself flagged, since a flagged measure corrects
+/// nothing; `distribution` is how often each part's measures read like
+/// the flagged part's, which is one row of
+/// [`ScoreCorrector::vertical_probability_dist`]. The likeliest is the
+/// first of those as likely, and a part that cannot correct counts as
+/// nothing at all.
+pub fn slice_search(
+    hashes: &[String],
+    flagged: &[bool],
+    distribution: &[FloatType],
+    part: usize,
+    measure: usize,
+) -> MeasureRelationship {
+    let mut probabilities = Vec::with_capacity(hashes.len());
+    for (k, hash) in hashes.iter().enumerate() {
+        let cannot = k == part || flagged.get(k).copied().unwrap_or(false);
+        if cannot {
+            probabilities.push(0.0);
+            continue;
+        }
+        let likely = probability_based_on_changes(&hashes[part], hash);
+        probabilities.push(likely * distribution.get(k).copied().unwrap_or(0.0));
+    }
+    let (at, most) = best(&probabilities);
+    MeasureRelationship {
+        flagged_measure_part: part,
+        flagged_measure_index: measure,
+        correct_measure_part: at,
+        correct_measure_index: measure,
+        correction_probability: most,
+    }
+}
+
 /// One part of a score being corrected, its measures' rhythms and those
 /// flagged: music21's `SinglePart`.
 #[derive(Clone, Debug, PartialEq)]
@@ -281,6 +438,23 @@ pub struct SinglePart {
 }
 
 impl SinglePart {
+    /// One part read on its own, its measures hashed and those not
+    /// filling their bar flagged: music21's `SinglePart(part, pn)`, whose
+    /// own constructor does both.
+    ///
+    /// # Errors
+    ///
+    /// A measure of voices that cannot be chordified.
+    pub fn from_part(part: &Stream, number: usize) -> Result<Self> {
+        Ok(Self {
+            part_number: number,
+            hashed_notes: part_hashes(part)?,
+            incorrect_measures: incorrect_measures(part, true)?,
+            probability_distribution: None,
+            index_array: None,
+        })
+    }
+
     /// The part's place among the score's parts.
     pub fn part_number(&self) -> usize {
         self.part_number
@@ -443,15 +617,8 @@ impl ScoreCorrector {
             slices: HashMap::new(),
         };
         for part_number in 0..corrector.part_events.len() {
-            let hashed_notes = corrector.hash_part(part_number)?;
-            corrector.single_parts.push(SinglePart {
-                part_number,
-                hashed_notes,
-                incorrect_measures: Vec::new(),
-                probability_distribution: None,
-                index_array: None,
-            });
-            corrector.find_incorrect_measures(part_number, true)?;
+            let single = SinglePart::from_part(corrector.part(part_number), part_number)?;
+            corrector.single_parts.push(single);
         }
         Ok(corrector)
     }
@@ -512,14 +679,7 @@ impl ScoreCorrector {
     }
 
     fn hash_part(&self, part: usize) -> Result<Vec<String>> {
-        let part = self.part(part);
-        Self::measure_events(part)
-            .into_iter()
-            .map(|index| match part.events()[index].element() {
-                StreamElement::Stream(measure) => measure_hash(measure),
-                _ => unreachable!("a measure's event holds the measure"),
-            })
-            .collect()
+        part_hashes(self.part(part))
     }
 
     /// Flags a part's measures whose notes do not fill their bar, and
@@ -532,44 +692,7 @@ impl ScoreCorrector {
     /// Without `run_fast`, a measure with no time signature in force,
     /// which music21 fails on.
     pub fn find_incorrect_measures(&mut self, part: usize, run_fast: bool) -> Result<&[usize]> {
-        let stream = self.part(part);
-        let measures = Self::measure_events(stream);
-        let meter_of = |index: usize| -> Option<TimeSignature> {
-            let event = &stream.events()[index];
-            let StreamElement::Stream(measure) = event.element() else {
-                return None;
-            };
-            measure
-                .events()
-                .iter()
-                .take_while(|inner| inner.offset() == 0.0)
-                .find_map(|inner| match inner.element() {
-                    StreamElement::TimeSignature(meter) => Some(meter.clone()),
-                    _ => None,
-                })
-                .or_else(|| stream.time_signature_at(event.offset()))
-        };
-        let common_time = || TimeSignature::new(4, 4);
-        let mut meter = if run_fast {
-            match measures.first().and_then(|&index| meter_of(index)) {
-                Some(meter) => meter,
-                None => common_time()?,
-            }
-        } else {
-            common_time()?
-        };
-        let mut incorrect = Vec::new();
-        for (i, &index) in measures.iter().enumerate() {
-            if !run_fast {
-                meter = meter_of(index).ok_or_else(|| {
-                    Error::Omr("'NoneType' object has no attribute 'barDuration'".to_string())
-                })?;
-            }
-            if stream.events()[index].element().quarter_length() != meter.bar_quarter_length() {
-                incorrect.push(i);
-            }
-        }
-        self.single_parts[part].incorrect_measures = incorrect;
+        self.single_parts[part].incorrect_measures = incorrect_measures(self.part(part), run_fast)?;
         Ok(&self.single_parts[part].incorrect_measures)
     }
 
@@ -593,42 +716,104 @@ impl ScoreCorrector {
     /// fails on.
     pub fn vertical_probability_dist(&mut self) -> Result<&[Vec<FloatType>]> {
         if self.distribution.is_none() {
-            let parts = self.single_parts.len();
-            let mut distribution = Vec::with_capacity(parts);
-            let hashes: Vec<Vec<Vec<char>>> = self
-                .single_parts
-                .iter()
-                .map(|part| part.hashed_notes.iter().map(|hash| chars(hash)).collect())
-                .collect();
-            for i in 0..parts {
-                let own = &hashes[i];
-                let mut sums = vec![0.0; parts];
-                for (k, hash) in own.iter().enumerate() {
-                    for (other, sum) in sums.iter_mut().enumerate() {
-                        if other == i {
-                            *sum += 1.0;
-                            continue;
-                        }
-                        let their = hashes[other]
-                            .get(k)
-                            .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
-                        if difference(hash, their) == 1.0 {
-                            *sum += 1.0;
-                        }
-                    }
-                }
-                if own.is_empty() {
-                    return Err(Error::Omr("division by zero".to_string()));
-                }
-                distribution.push(
-                    sums.iter()
-                        .map(|sum| sum / own.len() as FloatType)
-                        .collect(),
-                );
+            let mut distribution = Vec::with_capacity(self.single_parts.len());
+            for part in 0..self.single_parts.len() {
+                distribution.push(self.vertical_probability_dist_of_part(part)?);
             }
             self.distribution = Some(distribution);
         }
         Ok(self.distribution.as_deref().unwrap_or_default())
+    }
+
+    /// How often each part's measures read like one part's, that part's own
+    /// counting for one: music21's
+    /// `getVerticalProbabilityDistributionSinglePart`.
+    ///
+    /// # Errors
+    ///
+    /// A part with no measures, or one shorter than this part.
+    pub fn vertical_probability_dist_of_part(&self, part: usize) -> Result<Vec<FloatType>> {
+        let measures = self
+            .single_parts
+            .get(part)
+            .ok_or_else(|| Error::Omr("list index out of range".to_string()))?
+            .hashed_notes
+            .len();
+        if measures == 0 {
+            return Err(Error::Omr("division by zero".to_string()));
+        }
+        let mut sums = vec![0.0; self.single_parts.len()];
+        for measure in 0..measures {
+            for (sum, alike) in sums
+                .iter_mut()
+                .zip(self.vertical_probability_dist_of_measure(part, measure)?)
+            {
+                *sum += alike;
+            }
+        }
+        Ok(sums.iter().map(|sum| sum / measures as FloatType).collect())
+    }
+
+    /// Which parts read one measure of one part exactly alike, that part's
+    /// own counting for one: music21's
+    /// `getVerticalProbabilityDistributionSinglePartSingleMeasure`.
+    ///
+    /// # Errors
+    ///
+    /// A part or a measure there is none of.
+    pub fn vertical_probability_dist_of_measure(
+        &self,
+        part: usize,
+        measure: usize,
+    ) -> Result<Vec<FloatType>> {
+        let hash = self
+            .single_parts
+            .get(part)
+            .and_then(|single| single.hashed_notes.get(measure))
+            .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+        let mut alike = Vec::with_capacity(self.single_parts.len());
+        for (other, single) in self.single_parts.iter().enumerate() {
+            if other == part {
+                alike.push(1.0);
+                continue;
+            }
+            let their = single
+                .hashed_notes
+                .get(measure)
+                .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+            alike.push(if measure_difference(hash, their) == 1.0 {
+                1.0
+            } else {
+                0.0
+            });
+        }
+        Ok(alike)
+    }
+
+    /// The rhythm of one measure in every part: music21's
+    /// `MeasureSlice.getSliceHashes`, the slice its `getMeasureSlice`
+    /// makes.
+    ///
+    /// # Errors
+    ///
+    /// A measure there is none of in some part, or one of voices that
+    /// cannot be chordified.
+    pub fn slice_hashes(&mut self, measure: usize) -> Result<&[String]> {
+        if !self.slices.contains_key(&measure) {
+            let mut hashes = Vec::with_capacity(self.single_parts.len());
+            for number in 0..self.single_parts.len() {
+                let stream = self.part(number);
+                let index = *Self::measure_events(stream)
+                    .get(measure)
+                    .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+                let StreamElement::Stream(inner) = stream.events()[index].element() else {
+                    unreachable!("a measure's event holds the measure");
+                };
+                hashes.push(measure_hash(inner)?);
+            }
+            self.slices.insert(measure, hashes);
+        }
+        Ok(&self.slices[&measure])
     }
 
     /// The measure at the same place in another part most likely to
@@ -647,39 +832,21 @@ impl ScoreCorrector {
         part: usize,
     ) -> Result<MeasureRelationship> {
         self.vertical_probability_dist()?;
-        if !self.slices.contains_key(&measure) {
-            let mut hashes = Vec::with_capacity(self.single_parts.len());
-            for number in 0..self.single_parts.len() {
-                let stream = self.part(number);
-                let index = *Self::measure_events(stream)
-                    .get(measure)
-                    .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
-                let StreamElement::Stream(inner) = stream.events()[index].element() else {
-                    unreachable!("a measure's event holds the measure");
-                };
-                hashes.push(measure_hash(inner)?);
-            }
-            self.slices.insert(measure, hashes);
-        }
+        self.slice_hashes(measure)?;
+        let flagged: Vec<bool> = self
+            .single_parts
+            .iter()
+            .map(|single| single.incorrect_measures.contains(&measure))
+            .collect();
         let hashes = &self.slices[&measure];
         let distribution = self.distribution.as_deref().unwrap_or_default();
-        let mut probabilities = Vec::with_capacity(hashes.len());
-        for (k, hash) in hashes.iter().enumerate() {
-            if k == part || self.single_parts[k].incorrect_measures.contains(&measure) {
-                probabilities.push(0.0);
-            } else {
-                let likely = probability_based_on_changes(&hashes[part], hash);
-                probabilities.push(likely * distribution[part][k]);
-            }
-        }
-        let (at, most) = best(&probabilities);
-        Ok(MeasureRelationship {
-            flagged_measure_part: part,
-            flagged_measure_index: measure,
-            correct_measure_part: at,
-            correct_measure_index: measure,
-            correction_probability: most,
-        })
+        Ok(slice_search(
+            hashes,
+            &flagged,
+            distribution.get(part).map_or(&[][..], Vec::as_slice),
+            part,
+            measure,
+        ))
     }
 
     /// [`Self::run_vertical_search`] for every flagged measure of every
@@ -869,6 +1036,70 @@ mod tests {
         assert_eq!(hash_quarter_length(0.015625), 20);
         assert_eq!(hash_quarter_length(0.0), 1);
         assert_eq!(hash_quarter_length(1000.0), 127);
+    }
+
+    /// music21's `hashNote`, `hashRest` and `hashQuarterLength`
+    /// docstrings, and the measure its `getHashString` writes `VFUF` for.
+    #[test]
+    fn a_note_is_written_as_music21_writes_it() -> Result<()> {
+        assert_eq!(hash_quarter_length(1.0), 80);
+        assert_eq!(hash_quarter_length(2.0), 90);
+        assert_eq!(hash_note(1.0), 'P');
+        assert_eq!(hash_note(2.0), 'Z');
+        assert_eq!(hash_note(1.5), 'V');
+        assert_eq!(hash_rest(1.0), 'Q');
+        // A grace note is written as a 128th.
+        assert_eq!(hash_grace(), char::from(hash_quarter_length(0.015625)));
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        for (name, length) in [("C4", 1.5), ("C4", 0.5)] {
+            measure.push(
+                crate::note::Note::from_name(name)?
+                    .with_duration(crate::duration::Duration::new(length)?),
+            );
+        }
+        measure.push(crate::Rest::new(crate::duration::Duration::new(1.5)?));
+        measure.push(
+            crate::note::Note::from_name("B4")?.with_duration(crate::duration::Duration::new(0.5)?),
+        );
+        assert_eq!(measure_hash(&measure)?, "VFUF");
+        assert_eq!(measure_difference("VFUF", "VGUF"), 0.25);
+        assert_eq!(measure_difference("VFUF", "VFUF"), 1.0);
+        Ok(())
+    }
+
+    /// music21's `differenceProbabilityForOneOpCode` docstring: one step
+    /// of each kind, between the rhythms it names.
+    #[test]
+    fn one_step_of_a_correction_is_as_likely_as_music21_has_it() {
+        let step = |tag, i1, i2, j1, j2| Opcode {
+            tag,
+            i1,
+            i2,
+            j1,
+            j2,
+        };
+        assert_eq!(
+            probability_for_one_opcode(&step(OpcodeTag::Equal, 0, 4, 0, 4), "PFPFFF", "PFPFGF"),
+            0.876_201_303_164_062_6
+        );
+        assert_eq!(
+            probability_for_one_opcode(&step(OpcodeTag::Insert, 4, 4, 4, 5), "PFPFFF", "PFPFGF"),
+            0.009
+        );
+        assert_eq!(
+            probability_for_one_opcode(&step(OpcodeTag::Replace, 2, 4, 2, 4), "PPPPP", "PPVZP"),
+            0.000_148_5
+        );
+        assert_eq!(
+            probability_for_one_opcode(&step(OpcodeTag::Delete, 0, 5, 0, 0), "e", "GFPGF"),
+            1.024e-12
+        );
+        // The whole correction is every step multiplied, which is
+        // music21's `getProbabilityBasedOnChanges`.
+        assert_eq!(
+            probability_based_on_changes("GFPGF", "e"),
+            2.947_283_212_5e-14
+        );
     }
 
     #[test]

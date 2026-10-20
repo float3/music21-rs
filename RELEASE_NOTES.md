@@ -2,6 +2,33 @@
 
 ## added
 
+- **The whole `omr` package runs against the crate**, 191 of music21's own
+  examples across its two modules: `omr.correctors` 21 of 21 docstrings and
+  164 of 164 examples, `omr.evaluators` 5 of 5 and 27 of 27, from nothing.
+  Every number of the correction was already the crate's
+  (`omr_parity` holds it to music21 on corpus scores and on music21's own
+  pair of K. 525), and what this took was opening up the steps music21
+  documents one at a time: `hash_note`, `hash_rest`, `hash_grace` and
+  `hash_quarter_length` for one element of a measure,
+  `probability_for_one_opcode` for one of the steps that turn a rhythm into
+  another, `probability_based_on_changes_between` for the whole correction
+  with music21's two strings told apart, `part_hashes` and
+  `incorrect_measures` and `SinglePart::from_part` for a part read on its
+  own, `ScoreCorrector::slice_hashes` for one measure across the parts,
+  `vertical_probability_dist_of_part` and `..._of_measure` for the
+  distribution a part at a time, and `slice_search` for the search across
+  the parts. Each of `measure_hash`, `probability_based_on_changes`,
+  `find_incorrect_measures`, `vertical_probability_dist` and
+  `run_vertical_search` is rebuilt on them, so no rule is read twice.
+
+  `SinglePart`, `MeasureSlice` and `MeasureHash` are the wheel's;
+  `ScoreCorrector` stays music21's and so does the whole of
+  `omr.evaluators`, which needed no facade at all. That is the harder test:
+  music21's own driver builds our three classes, corrects the score with
+  its own measure surgery, and reports a difference of 32 measures between
+  its OMR reading of K. 525 and the ground truth -- every rhythm it
+  compares hashed by the crate.
+
 - **The wheel mends a reading of a score against a performance of it**, and
   every one of music21's `alpha.analysis.fixer` examples passes: 1 of 1
   docstring and 91 of 91, from nothing. All 91 are `EnharmonicFixer`'s, and
