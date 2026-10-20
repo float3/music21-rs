@@ -73,6 +73,7 @@ pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
+pub mod omrcorrectors;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
@@ -1339,6 +1340,11 @@ exceptions![
         Some("music21.alpha.analysis.aligner")
     ),
     (
+        "OmrException",
+        omrcorrectors::OmrException,
+        Some("music21.omr.correctors")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1628,6 +1634,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     brailletranslate::register(m)?;
     correlate::register(m)?;
     aligner::register(m)?;
+    omrcorrectors::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;
     hasher::register(m)?;

@@ -4933,3 +4933,68 @@ def test_a_note_read_wrong_is_respelled_against_the_performance():
     assert not fixer.intervalTooBig(m.Note("C4"), m.Note("F4"))
     assert fixer.intervalTooBig(m.Note("C4"), m.Note("F#4"))
     assert fixer.intervalTooBig(m.Note("C4"), m.Note("F4"), setInt=4)
+
+def test_a_score_read_by_an_optical_reader_is_mended():
+    """A measure whose notes do not fill its bar is flagged, and its
+    rhythm compared with another's, as music21's `omr.correctors` does
+    it."""
+    whole = m.from_tiny_notation("4/4 c4 d e f  g a b c'  d'4 e' f' g'")
+    short = m.from_tiny_notation("4/4 c4 d e f  g a b c'  d'4 e' f'")
+
+    part = m.SinglePart(whole, 0)
+    assert part.hashedNotes == ["PPPP", "PPPP", "PPPP"]
+    assert part.incorrectMeasures == []
+    assert len(part.measureStream) == 3
+    flagged = m.SinglePart(short, 1)
+    assert flagged.incorrectMeasures == [2]
+    assert flagged.hashedNotes[2] == "PPP"
+    # Each measure's own bar, rather than the first measure's.
+    assert flagged.getIncorrectMeasureIndices(runFast=False) == [2]
+    # How likely a measure that far from a flagged one corrects it: one
+    # entry for every distance either way, as music21 sizes it.
+    distribution = flagged.horizontalProbabilityDist()
+    assert len(distribution) == len(flagged.hashedNotes) * 2 - 1
+    assert all(0.0 <= odds <= 1.0 for odds in distribution)
+    # No distance at all is the measure itself, which music21 counts as
+    # certain so that the indices line up.
+    assert distribution[len(flagged.hashedNotes) - 1] == 1.0
+    assert flagged.indexArray[len(flagged.hashedNotes) - 1] == 0
+
+    # One measure's rhythm as text: music21's own `VFUF` example.
+    line = m.from_tiny_notation("4/4 c4. c8 r4. b8")
+    hashed = m.MeasureHash(line.getElementsByClass("Measure")[0])
+    assert hashed.hashString == "VFUF"
+    assert hashed.getHashString() == "VFUF"
+    hashed.setSequenceMatcher()
+    assert hashed.getMeasureDifference("VGUF") == 0.25
+    assert hashed.getMeasureDifference("VFUF") == 1.0
+    assert hashed.getOpCodes("VGUF") == [
+        ("equal", 0, 1, 0, 1),
+        ("replace", 1, 2, 1, 2),
+        ("equal", 2, 4, 2, 4),
+    ]
+
+    # The characters a note, a rest and a grace note are written as.
+    assert hashed.hashQuarterLength(1.0) == 80
+    assert hashed.hashNote(m.Note("C4")) == "P"
+    assert hashed.hashRest(m.Rest()) == "Q"
+
+    # And how likely each of music21's four kinds of change is.
+    assert hashed.getProbabilityOnEquality() == 0.9675
+    assert hashed.getProbabilityOnOmission() == 0.009
+    assert hashed.getProbabilityOnAddition() == 0.004
+    assert hashed.getProbabilityFromOneCharSub("P", "P") == 1.0
+    assert hashed.getProbabilityFromOneCharSub("Z", "P") == 0.0165
+    assert (
+        hashed.differenceProbabilityForOneOpCode(
+            ("equal", 0, 4, 0, 4), "PFPFFF", "PFPFGF"
+        )
+        == 0.8762013031640626
+    )
+    assert (
+        hashed.differenceProbabilityForOneOpCode(("delete", 0, 5, 0, 0), "e", "GFPGF")
+        == 1.024e-12
+    )
+    bare = m.MeasureHash()
+    bare.hashString = "GFPGF"
+    assert bare.getProbabilityBasedOnChanges("e") == 2.9472832125e-14

@@ -2134,16 +2134,16 @@ getSinglePart = "single_part_mut"
 runHorizontalCorrectionModel = "run_horizontal_correction_model"
 getAllIncorrectMeasures = "all_incorrect_measures"
 verticalProbabilityDist = "vertical_probability_dist"
+getVerticalProbabilityDistributionSinglePart = "vertical_probability_dist_of_part"
+getVerticalProbabilityDistributionSinglePartSingleMeasure = "vertical_probability_dist_of_measure"
+getMeasureSlice = "slice_hashes"
 runVerticalSearch = "run_vertical_search"
 substituteOneMeasureContentsForAnother = "substitute_measure"
 runVerticalCorrectionModel = "run_vertical_correction_model"
 generateCorrectedScore = "generate_corrected_score"
 
 [class.excluded]
-runPriorModel = "music21's measure of how much the correction helped, which `PriorsIntegrationScore` carries"
-getMeasureSlice = "the same measure across every part, which `vertical_probability_dist` reads as it goes"
-getVerticalProbabilityDistributionSinglePart = "a step of the vertical correction, which `vertical_probability_dist` does for every part at once"
-getVerticalProbabilityDistributionSinglePartSingleMeasure = "a step of the same"
+runPriorModel = "both models run and the score corrected, which `run` does"
 
 [[class]]
 python = "omr/correctors.py"
@@ -2169,22 +2169,18 @@ note = "One measure as a string, a character a note, so that two measures may be
 
 [class.renames]
 getHashString = "measure_hash"
-hashNote = "measure_hash"
-hashGrace = "measure_hash"
-hashRest = "measure_hash"
-hashQuarterLength = "measure_hash"
 getMeasureDifference = "measure_difference"
 getOpCodes = "opcodes"
 getProbabilityBasedOnChanges = "probability_based_on_changes"
+differenceProbabilityForOneOpCode = "probability_for_one_opcode"
 getProbabilityOnSubstitute = "probability_on_substitute"
 getProbabilityFromOneCharSub = "probability_from_one_char_sub"
 
 [class.excluded]
 setSequenceMatcher = "keeps Python's own `SequenceMatcher` on the object; `search::difflib` is the comparison, ported"
-differenceProbabilityForOneOpCode = "the odds of one edit, which `probability_based_on_changes` sums"
-getProbabilityOnEquality = "the odds of two measures reading alike, likewise"
-getProbabilityOnOmission = "the odds of a note left out, likewise"
-getProbabilityOnAddition = "the odds of a note put in, likewise"
+getProbabilityOnEquality = "the odds of two measures reading alike, which is the `PROBABILITY_ON_EQUALITY` constant"
+getProbabilityOnOmission = "the odds of a note left out, `PROBABILITY_ON_OMISSION`"
+getProbabilityOnAddition = "the odds of a note put in, `PROBABILITY_ON_ADDITION`"
 
 [[class]]
 python = "omr/correctors.py"
@@ -2192,9 +2188,9 @@ name = "MeasureSlice"
 rust = ["src/omr/correctors.rs"]
 note = "The same measure across every part, which is what a doubtful measure is compared against."
 
-[class.excluded]
-getSliceHashes = "the hashes of the measure across every part, which `ScoreCorrector::vertical_probability_dist` reads as it goes"
-runSliceSearch = "the search across the parts, which `run_vertical_search` does"
+[class.renames]
+getSliceHashes = "slice_hashes"
+runSliceSearch = "slice_search"
 
 [[class]]
 python = "omr/evaluators.py"

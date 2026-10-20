@@ -1,0 +1,28 @@
+# Docstrings of music21.omr.correctors whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_omrcorrectors`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.omr.correctors.MeasureHash.differenceProbabilityForOneOpCode",
+    "music21.omr.correctors.MeasureHash.getHashString",
+    "music21.omr.correctors.MeasureHash.getMeasureDifference",
+    "music21.omr.correctors.MeasureHash.getOpCodes",
+    "music21.omr.correctors.MeasureHash.getProbabilityBasedOnChanges",
+    "music21.omr.correctors.MeasureHash.getProbabilityFromOneCharSub",
+    "music21.omr.correctors.MeasureHash.getProbabilityOnAddition",
+    "music21.omr.correctors.MeasureHash.getProbabilityOnEquality",
+    "music21.omr.correctors.MeasureHash.getProbabilityOnOmission",
+    "music21.omr.correctors.MeasureHash.getProbabilityOnSubstitute",
+    "music21.omr.correctors.MeasureHash.hashNote",
+    "music21.omr.correctors.MeasureHash.hashQuarterLength",
+    "music21.omr.correctors.MeasureHash.hashRest",
+    "music21.omr.correctors.MeasureSlice.getSliceHashes",
+    "music21.omr.correctors.MeasureSlice.runSliceSearch",
+    "music21.omr.correctors.ScoreCorrector.getAllHashes",
+    "music21.omr.correctors.ScoreCorrector.getAllIncorrectMeasures",
+    "music21.omr.correctors.ScoreCorrector.getMeasureSlice",
+    "music21.omr.correctors.ScoreCorrector.getVerticalProbabilityDistributionSinglePart",
+    "music21.omr.correctors.ScoreCorrector.substituteOneMeasureContentsForAnother",
+    "music21.omr.correctors.SinglePart.getIncorrectMeasureIndices",
+]

@@ -74,6 +74,7 @@ pub use music21_rs_python::naturallanguage::NAMES as NATURAL_LANGUAGE_NAMES;
 pub use music21_rs_python::neoriemannian::NAMES as NEO_RIEMANNIAN_NAMES;
 pub use music21_rs_python::notation::{BEAM_NAMES, TIE_NAMES, VOLUME_NAMES};
 pub use music21_rs_python::note::NAMES as NOTE_NAMES;
+pub use music21_rs_python::omrcorrectors::NAMES as OMR_CORRECTORS_NAMES;
 pub use music21_rs_python::percussion::NAMES as PERCUSSION_NAMES;
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
 pub use music21_rs_python::possibility::NAMES as POSSIBILITY_NAMES;
