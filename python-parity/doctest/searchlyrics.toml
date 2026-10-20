@@ -1,0 +1,10 @@
+# Docstrings of music21.search.lyrics whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_searchlyrics`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.search.lyrics.LyricSearcher.index",
+    "music21.search.lyrics.LyricSearcher.indexText",
+    "music21.search.lyrics.LyricSearcher.search",
+]

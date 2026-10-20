@@ -25,7 +25,9 @@ pub use base::{
     translate_note_to_byte, translate_note_with_duration_to_bytes, translate_stream_to_string,
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,
 };
-pub use lyrics::{IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricSearcher};
+pub use lyrics::{
+    IndexedLyric, LINE_BREAK, LyricIdentifier, LyricMatch, LyricPlace, LyricSearcher, LyricSpan,
+};
 pub use segment::{
     SegmentAt, SegmentSimilarity, Segments, index_score_parts, index_score_parts_with,
     score_similarity, translate_monophonic_part_to_segments,

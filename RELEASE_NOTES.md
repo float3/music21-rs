@@ -2,6 +2,25 @@
 
 ## added
 
+- **The wheel searches a score's lyrics, and every one of music21's
+  `search.lyrics` examples passes**: 3 of 3 docstrings and 17 of 17
+  examples, from nothing. The indexing is the crate's
+  `search::LyricSearcher` -- each verse read as one text, the syllables of
+  a word run together and the words apart -- and what comes back is the
+  score's *own* notes and lyrics: `el` is the note and `lyric` its
+  `Lyric`, so a caller writing into one writes into the score. That is
+  what the searcher's new by-position twin is for: `places` says, for each
+  indexed lyric, where its note stands among the stream's leaves and which
+  of its lyrics is sung there, and `search_spans` and `indices_between`
+  answer a match as the run of index entries it touches. `search` is built
+  on `search_spans`, so which lyrics a stretch of text is sung to is read
+  one way and not two, and the parity suite now checks the twin against
+  the index on all 46 of its scores.
+  Only matching a regular expression is Python's, the crate having none:
+  a plain string is the crate's own search, and a compiled pattern is
+  `finditer` over the crate's index text, whose spans the crate then reads
+  as the lyrics they touch.
+
 - **The wheel carries music21's unpitched percussion**, and every example
   of both modules passes: `percussion` 2 of 2 docstrings and 18 of 18
   examples, `midi.percussion` 3 of 3 and 27 of 27, from nothing.

@@ -158,6 +158,12 @@ a chord diagram is a `FretBoard` of `FretNote`s -- `GuitarFretBoard`,
 tuned as those instruments are -- and `getPitches` says what it sounds,
 each string's open pitch raised by the fret stopping it.
 
+the words sung in a score are searched with a `LyricSearcher`: `indexText`
+is each verse read as one text, `index` every lyric with where its text
+sits there, and `search` every place a string or a compiled regular
+expression is sung, each match naming the score's own notes and their own
+lyrics.
+
 several drums struck at once are a `PercussionChord`, which music21 says
 is not a chord -- there is no pitch to compare -- holding whatever it was
 handed, the members that sound answering `pitches`, and writing those

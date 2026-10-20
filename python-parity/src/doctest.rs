@@ -72,6 +72,7 @@ pub use music21_rs_python::resolution::NAMES as RESOLUTION_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;
 pub use music21_rs_python::scala::NAMES as SCALA_NAMES;
 pub use music21_rs_python::scale::NAMES as SCALE_NAMES;
+pub use music21_rs_python::searchlyrics::NAMES as SEARCH_LYRICS_NAMES;
 pub use music21_rs_python::segment::NAMES as SEGMENT_NAMES;
 pub use music21_rs_python::serial::NAMES as SERIAL_NAMES;
 pub use music21_rs_python::sieve::NAMES as SIEVE_NAMES;

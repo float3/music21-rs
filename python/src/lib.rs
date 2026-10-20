@@ -73,6 +73,7 @@ pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
+pub mod searchlyrics;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
@@ -1247,6 +1248,11 @@ exceptions![
         Some("music21.tablature")
     ),
     (
+        "LyricSearcherException",
+        searchlyrics::LyricSearcherException,
+        Some("music21.search.lyrics")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1528,6 +1534,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     text::register(m)?;
     tablature::register(m)?;
     midipercussion::register(m)?;
+    searchlyrics::register(m)?;
     percussion::register(m)?;
     bar::register(m)?;
     editorial::register(m)?;

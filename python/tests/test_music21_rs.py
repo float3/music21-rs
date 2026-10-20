@@ -13,6 +13,7 @@ import copy
 import random
 import math
 import pathlib
+import re
 import subprocess
 import sys
 import weakref
@@ -4343,3 +4344,55 @@ def test_a_midi_key_names_the_drum_it_plays():
         mapper.midiPitchToInstrument(0)
     with pytest.raises(m.MIDIPercussionException):
         mapper.midiInstrumentToPitch(m.Piano())
+
+
+def test_lyrics_are_found_in_a_stream_as_text():
+    """Each verse read as one text, and the notes a stretch is sung to."""
+    line = m.from_tiny_notation("4/4 c4_Et d_in f_terra a_pax")
+    searcher = m.LyricSearcher(line)
+    assert searcher.indexText == "Et in terra pax"
+
+    # Every lyric with where its text sits, on the stream's own notes.
+    indexed = searcher.index()
+    assert len(indexed) == 4
+    first = indexed[0]
+    assert (first.start, first.end, first.measure, first.text) == (0, 2, 1, "Et")
+    assert first.el is line.recurse().notes[0]
+    assert first.lyric is first.el.lyrics[0]
+    assert repr(first) == (
+        "IndexedLyric(el=<music21.note.Note C>, start=0, end=2, measure=1, "
+        "lyric=<music21.note.Lyric number=1 syllabic=single text='Et'>, "
+        "text='Et', identifier=1)"
+    )
+    # music21's is a namedtuple, so it is read as a tuple too, and one part
+    # may be written afresh.
+    assert len(first) == 9
+    assert tuple(first)[1:4] == (0, 2, 1)
+    assert first.modify(text="ET").text == "ET"
+    assert first.text == "Et"
+
+    # A stretch of text across a word break is sung to both its notes.
+    found = searcher.search("in ter")
+    assert len(found) == 1
+    assert found[0].matchText == "in ter"
+    assert (found[0].mStart, found[0].mEnd, found[0].identifier) == (1, 1, 1)
+    sung = line.recurse().notes
+    assert found[0].els == (sung[1], sung[2])
+    assert repr(found[0]) == (
+        "SearchMatch(mStart=1, mEnd=1, matchText='in ter', "
+        "els=(<music21.note.Note D>, <music21.note.Note F>), indices=[...], "
+        "identifier=1)"
+    )
+
+    # A plain string is read as itself, where a compiled pattern is matched
+    # as a pattern: `.` is a character in the first and anything in the
+    # second.
+    assert searcher.search("t.rra") == []
+    assert len(searcher.search(re.compile("t.rra"))) == 1
+
+    # Nothing to search, and something that is neither a string nor a
+    # pattern, are refused in music21's words.
+    with pytest.raises(m.LyricSearcherException):
+        m.LyricSearcher().index()
+    with pytest.raises(m.LyricSearcherException):
+        searcher.search(5)
