@@ -1242,6 +1242,33 @@ impl NoteGroupingTranscriber {
         }
     }
 
+    /// The braille written so far, a sign at a time: music21's `trans`,
+    /// which its own examples join and print.
+    pub fn transcribed(&self) -> &[String] {
+        &self.trans
+    }
+
+    /// One element of a grouping written, the signs appended to what the
+    /// transcriber has written already and its English onto the element:
+    /// music21's `transcribeOneElement`, which it calls one at a time and
+    /// its own examples do too.
+    ///
+    /// The element is named by its place in the grouping, since what is
+    /// written depends on what the grouping says -- the chords' direction,
+    /// whether clefs are shown, which way a fingering is read -- and on
+    /// the element before it.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::transcribe_group`].
+    pub fn transcribe_element(
+        &mut self,
+        grouping: &mut BrailleElementGrouping,
+        index: usize,
+    ) -> Result<()> {
+        self.transcribe_one_element(grouping, index)
+    }
+
     fn transcribe_one_element(
         &mut self,
         grouping: &mut BrailleElementGrouping,

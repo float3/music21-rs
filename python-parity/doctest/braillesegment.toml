@@ -1,0 +1,26 @@
+# Docstrings of music21.braille.segment whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_braillesegment`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.braille.segment.BrailleElementGrouping",
+    "music21.braille.segment.BrailleGrandSegment",
+    "music21.braille.segment.BrailleGrandSegment.yieldCombinedGroupingKeys",
+    "music21.braille.segment.BrailleSegment.__init__",
+    "music21.braille.segment.BrailleSegment.addDummyRests",
+    "music21.braille.segment.BrailleSegment.addRepeatSymbols",
+    "music21.braille.segment.BrailleSegment.consolidate",
+    "music21.braille.segment.BrailleSegment.extractMeasureNumber",
+    "music21.braille.segment.BrailleSegment.needsSplitToFit",
+    "music21.braille.segment.BrailleSegment.showLeadingOctaveFromNoteGrouping",
+    "music21.braille.segment.areGroupingsIdentical",
+    "music21.braille.segment.extractBrailleElements",
+    "music21.braille.segment.findSegments",
+    "music21.braille.segment.getRawSegments",
+    "music21.braille.segment.prepareBeamedNotes",
+    "music21.braille.segment.prepareSlurredNotes",
+    "music21.braille.segment.setAffinityCode",
+    "music21.braille.segment.splitMeasure",
+    "music21.braille.segment.splitNoteGrouping",
+]

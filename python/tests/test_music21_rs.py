@@ -4738,3 +4738,59 @@ def test_a_score_is_written_in_braille():
     # says where to break a segment by hand.
     with pytest.raises(m.BrailleTranslateException):
         m.objectToBraille(line, segmentBreaks=[(1, 2.0)])
+
+
+def test_a_grouping_of_elements_is_written_in_braille():
+    """The elements braille writes together, and the transcriber that
+    writes them one at a time."""
+    grouping = m.BrailleElementGrouping()
+    # music21's mimics a list, so this one hands `append` on to the list it
+    # holds.
+    grouping.append(m.Note("C4"))
+    grouping.append(m.Note("D4"))
+    grouping.append(m.Rest())
+    assert len(grouping) == 3
+    assert repr(grouping) == (
+        "<music21.braille.segment.BrailleElementGrouping ["
+        "<music21.note.Note C>, <music21.note.Note D>, "
+        "<music21.note.Rest quarter>]>"
+    )
+    # The defaults music21 starts a grouping with.
+    assert repr(grouping.keySignature) == (
+        "<music21.key.KeySignature of no sharps or flats>"
+    )
+    assert repr(grouping.timeSignature) == "<music21.meter.TimeSignature 4/4>"
+    assert (grouping.descendingChords, grouping.showClefSigns) == (True, False)
+    assert (grouping.upperFirstInNoteFingering, grouping.withHyphen) == (True, False)
+    assert grouping.numRepeats == 0
+
+    transcriber = m.NoteGroupingTranscriber()
+    # What a caller says wins over the grouping, which wins over the
+    # default.
+    assert transcriber.showClefSigns is False
+    transcriber.brailleElementGrouping = grouping
+    grouping.showClefSigns = True
+    assert transcriber.showClefSigns is True
+    transcriber.showClefSigns = False
+    assert transcriber.showClefSigns is False
+    grouping.showClefSigns = False
+
+    assert transcriber.transcribeGroup(grouping) == "⠐⠹⠱⠧"
+    # What each sign says is written onto the element, as music21 writes it.
+    assert grouping[0].editorial.brailleEnglish == ["Octave 4 ⠐", "C quarter ⠹"]
+    assert str(grouping).splitlines()[-1] == "Rest quarter ⠧"
+
+    # One element at a time, which is how music21 writes a grouping and
+    # what its own examples ask for.
+    one = m.NoteGroupingTranscriber()
+    note = m.Note("C4")
+    one.transcribeOneElement(note)
+    assert "".join(one.trans) == "⠐⠹"
+    assert one.previousElement is note
+
+    # A copy shares the elements and holds a list of its own, which is what
+    # music21's own splitting of a grouping asks for.
+    shallow = copy.copy(grouping)
+    assert shallow[0] is grouping[0]
+    assert shallow.internalList is not grouping.internalList
+    assert copy.deepcopy(grouping)[0] is not grouping[0]
