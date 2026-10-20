@@ -32,6 +32,7 @@ use pyo3::types::{PyDict, PyList};
 use serde::{Deserialize, Serialize};
 use utils::{init_py, prepare};
 
+pub use music21_rs_python::aligner::NAMES as ALIGNER_NAMES;
 pub use music21_rs_python::analysis::{
     ELEMENTS_NAMES, FLOATING_KEY_NAMES, METRICAL_NAMES, PATEL_NAMES, PITCH_ANALYSIS_NAMES,
     SEGMENT_BY_RESTS_NAMES,

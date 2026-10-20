@@ -2,6 +2,26 @@
 
 ## added
 
+- **The wheel aligns two streams note by note**, and every one of music21's
+  `alpha.analysis.aligner` examples passes: 13 of 13 docstrings and 322 of
+  322, from nothing. music21 documents the alignment *step by step*, and
+  each of those steps is now a public reading in the crate rather than
+  something `StreamAligner::align` keeps to itself:
+  `aligner::setup_distance_matrix` and `fill_distance_matrix` for the
+  matrix before and after it is filled, `moves_from_location` and
+  `op_from_location` for the three moves onto a cell and the one taken,
+  `insert_cost`, `delete_cost`, `num_similarities`,
+  `hashes_equal_without_reference` and `substitution_cost` for the costs
+  over a pair of hashes, `change_places` for the edit read back out of the
+  matrix, and `default_hasher` for the hasher an alignment starts with.
+  `StreamAligner` is rebuilt on all of them, so no rule is read twice, and
+  its answers are unchanged. Two hashes are now compared by the *names* of
+  their values, as music21 compares them, rather than side by side.
+  The matrix the wheel hands back is numpy's, which is what music21's own
+  examples write into and print; `ChangeOps` is not swapped, being an
+  `IntEnum` holding nothing of the crate, and the wheel carries one of its
+  own for a caller with no music21 beside it.
+
 - **The wheel hashes a stream's notes**, and every one of music21's
   `alpha.analysis.hasher` examples passes: 10 of 10 docstrings and 86 of
   86, from nothing. The hashing is
