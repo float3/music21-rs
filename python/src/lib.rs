@@ -37,6 +37,7 @@ pub mod analysis;
 pub mod articulations;
 pub mod bar;
 pub mod braillebasic;
+pub mod braillelookup;
 pub mod brailletext;
 pub mod chord;
 pub mod chordtables;
@@ -1594,6 +1595,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tablature::register(m)?;
     midipercussion::register(m)?;
     braillebasic::register(m)?;
+    braillelookup::register(m)?;
     brailletext::register(m)?;
     correlate::register(m)?;
     harmparser::register(m)?;

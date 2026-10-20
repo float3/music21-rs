@@ -2,6 +2,15 @@
 
 ## added
 
+- **The two functions that make a braille sign out of its dots are the
+  crate's**, and `braille.lookup`'s examples pass: 2 of 2 docstrings and
+  6 of 6. `makeBrailleDictionary` is every one of the sixty-four cells
+  against the dots it holds and `dotsAdd` the cell holding every dot of
+  some numbers, whatever order they come in, both out of
+  `braille::lookup`. The tables themselves stay music21's: its own code
+  looks them up by name, and the crate answers what they say as functions
+  rather than as dictionaries.
+
 - **The wheel writes music in braille and lays it out in lines**, and
   every one of music21's examples for both modules passes:
   `braille.basic` 25 of 25 docstrings and 199 of 199 examples,
