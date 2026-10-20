@@ -28,13 +28,13 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 mod score;
 
+pub(crate) use score::{
+    Kept, beams_made, element_at_durations, keeping_spanners, make_measure_notation,
+    make_part_notation_by, make_part_notation_keeping_spanners,
+};
 #[cfg(feature = "musicxml")]
 pub(crate) use score::{
-    Kept, accidentals_made, for_each_measure, keeping_spanners, make_measure_notation,
-    make_part_notation, tuplet_brackets_made,
-};
-pub(crate) use score::{
-    beams_made, element_at_durations, make_part_notation_by, make_part_notation_keeping_spanners,
+    accidentals_made, for_each_measure, make_part_notation, tuplet_brackets_made,
 };
 pub use score::{
     consolidate_completed_tuplets, make_notation, make_tuplet_brackets, split_at_durations,
@@ -628,7 +628,6 @@ pub(crate) fn sorted_events(mut events: Vec<StreamEvent>) -> Vec<StreamEvent> {
 
 /// Puts an element into a stream where music21's sort puts it: after
 /// everything that sorts no later.
-#[cfg(feature = "musicxml")]
 pub(crate) fn insert_sorted(stream: &mut Stream, offset: FloatType, element: StreamElement) {
     let event = StreamEvent::new(offset, element);
     let mut events = stream.events().to_vec();

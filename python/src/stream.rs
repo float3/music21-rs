@@ -5295,7 +5295,7 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
 }
 
 /// A music21 `Metadata`, name by name in the order music21 keeps them.
-fn metadata_value(metadata: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Metadata> {
+pub(crate) fn metadata_value(metadata: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Metadata> {
     use music21_rs_crate::MetadataValue;
     // The package's own metadata is already the crate's, and answers no
     // `Text` or `Contributor` to walk.
@@ -5424,14 +5424,23 @@ fn read_into_with(
                 offset,
                 StreamElement::Stream(Box::new(inner)),
             ));
-        } else if !stand_ins && is_inner_barline(stream, &element)? {
+        } else if !stand_ins && is_barline(&element)? {
             // A measure's own barlines are read with the measure; one
-            // standing inside it is an element of its own.
-            leaves.push(element.clone().unbind());
-            events.push(StreamEvent::new(
-                offset,
-                StreamElement::Barline(barline_value(&element)?),
-            ));
+            // standing inside it is an element of its own. music21 keeps
+            // the measure's among its elements all the same -- its
+            // `rightBarline` is the first barline of `_endElements`, which
+            // `elements` lists -- so one read with the measure is passed
+            // over here, or the measure would hold it twice. Nothing
+            // noticed while the MusicXML writer was the only reader of
+            // these: it writes nothing for a barline element either way,
+            // and braille writes the one it is given.
+            if is_inner_barline(stream, &element)? {
+                leaves.push(element.clone().unbind());
+                events.push(StreamEvent::new(
+                    offset,
+                    StreamElement::Barline(barline_value(&element)?),
+                ));
+            }
         } else if let Some(value) = element_value(&element, stand_ins)? {
             leaves.push(element.unbind());
             events.push(StreamEvent::new(offset, value));
@@ -5443,13 +5452,18 @@ fn read_into_with(
     Ok(read)
 }
 
+/// Whether an element of a stream is a barline at all.
+fn is_barline(element: &Bound<'_, PyAny>) -> PyResult<bool> {
+    is_of_class(
+        element,
+        &pyo3::types::PyString::new(element.py(), "Barline"),
+    )
+}
+
 /// Whether an element of a stream is a barline that is not the stream's own
 /// left or right one.
 fn is_inner_barline(stream: &Bound<'_, PyAny>, element: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if !is_of_class(
-        element,
-        &pyo3::types::PyString::new(element.py(), "Barline"),
-    )? {
+    if !is_barline(element)? {
         return Ok(false);
     }
     for end in ["leftBarline", "rightBarline"] {

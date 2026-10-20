@@ -1,0 +1,11 @@
+# Docstrings of music21.braille.translate whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_brailletranslate`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.braille.translate.measureToBraille",
+    "music21.braille.translate.metadataToString",
+    "music21.braille.translate.objectToBraille",
+    "music21.braille.translate.streamToBraille",
+]

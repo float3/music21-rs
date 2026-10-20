@@ -151,7 +151,6 @@ pub(crate) fn make_part_notation_by(
 /// decided, a meter where the measure states none (`best_time_signature`,
 /// or `4/4` where none fits), tuplets completed and the tied ones joined,
 /// the notes beamed and each line's tuplets bracketed.
-#[cfg(feature = "musicxml")]
 pub(crate) fn make_measure_notation(part: &mut Stream) -> Result<()> {
     make_accidentals_by(part, true);
     for_each_measure(part, &mut |measure| {

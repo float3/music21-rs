@@ -2,6 +2,17 @@
 
 ## added
 
+- **The wheel writes a score, a part or a measure in braille**, and every
+  one of music21's `braille.translate` examples passes: 4 of 4 docstrings
+  and 30 of 30 examples, from nothing. `objectToBraille`,
+  `streamToBraille`, `scoreToBraille`, `partToBraille`, `measureToBraille`,
+  `opusToBraille`, `keyboardPartsToBraille` and `metadataToString` are all
+  the crate's `braille::translate`, which `braille_parity` holds to
+  music21 on corpus scores; music21's `segmentBreaks` is refused rather
+  than passed over, since it says where to break a segment by hand and the
+  crate does not take one.
+
+
 - **The two functions that make a braille sign out of its dots are the
   crate's**, and `braille.lookup`'s examples pass: 2 of 2 docstrings and
   6 of 6. `makeBrailleDictionary` is every one of the sixty-four cells
@@ -582,6 +593,24 @@
   property as music21 does.
 
 ## fixed
+
+- **A measure's own barline was read twice** by the wheel's reader.
+  music21 keeps a measure's right barline among its elements, so it was
+  taken as the measure's own *and* as an element of it. Nothing noticed
+  while the MusicXML writer was the only reader of these -- music21's
+  exporter writes nothing for a barline element and neither does the
+  crate's -- but braille writes the one it is given, so a part came out
+  with its final barline doubled.
+
+- **A lone measure written in braille lost its notes.**
+  `braille::translate::measure_to_braille` ran a *part's* notation steps
+  over the measure, which cuts it into measures again and leaves the notes
+  a level deeper than anything transcribing a part looks; music21 runs
+  `Measure.makeNotation` and then wraps it in a part, which is what the
+  crate does now. A measure that read `⠼⠁⠀⠣⠅` reads `⠼⠙⠲⠀⠐⠽⠣⠅`, which is
+  music21's answer. `braille_parity` wrote whole scores only, which is how
+  this survived; it compares a lone measure now, on all 46 of its scores.
+
 
 - **A drum struck on a key other than its instrument's own default was read
   as that default**, and so written back as the wrong key: the MIDI reader

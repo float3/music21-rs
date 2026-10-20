@@ -39,6 +39,7 @@ pub mod bar;
 pub mod braillebasic;
 pub mod braillelookup;
 pub mod brailletext;
+pub mod brailletranslate;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
@@ -1313,6 +1314,11 @@ exceptions![
         Some("music21.braille.text")
     ),
     (
+        "BrailleTranslateException",
+        brailletranslate::BrailleTranslateException,
+        Some("music21.braille.translate")
+    ),
+    (
         "MIDIPercussionException",
         midipercussion::MIDIPercussionException,
         Some("music21.midi.percussion")
@@ -1597,6 +1603,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     braillebasic::register(m)?;
     braillelookup::register(m)?;
     brailletext::register(m)?;
+    brailletranslate::register(m)?;
     correlate::register(m)?;
     harmparser::register(m)?;
     searchbase::register(m)?;
