@@ -3788,6 +3788,15 @@ pub(crate) fn element_read(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamE
     element_value(object, true)
 }
 
+/// The same as the value it *is*, with no stand-in: what a caller asking
+/// about one element wants, where a walk wants the stand-in.
+///
+/// A percussion chord is the pair of them: the walks read one as a rest
+/// of its length, and a caller asking what it ties wants the strokes.
+pub(crate) fn element_written(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
+    element_value(object, false)
+}
+
 /// music21's error for what a stream cannot answer, out of the crate's.
 pub(crate) fn stream_error(error: &music21_rs_crate::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(error))

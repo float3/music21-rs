@@ -2,6 +2,26 @@
 
 ## added
 
+- **The wheel works out the notation a score leaves unsaid**, and every one
+  of music21's `stream.makeNotation` examples passes: 11 of 11 docstrings
+  and 255 of 255, from nothing -- the largest module in the harness after
+  `stream.base`. The steps are the crate's `makenotation`, which
+  `musicxml_make_notation_parity` already held to music21 byte for byte on
+  257 subjects, and what each decides is carried back **by position onto
+  music21's own notes**: nothing of the stream is rebuilt, so a caller
+  holding a note still holds it afterwards. `makenotation::tie_pitch_set`
+  is new -- music21's `getTiePitchSet`, which its `makeAccidentals` reads
+  note by note and which `make_accidentals` now reads the same way rather
+  than twice over.
+
+  Five members are swapped: `makeBeams`, `makeTupletBrackets`,
+  `setStemDirectionForBeamGroups` and the two that only read. The other six
+  -- `makeMeasures`, `makeRests`, `makeTies`, `realizeOrnaments`,
+  `splitElementsToCompleteTuplets` and `consolidateCompletedTuplets` --
+  stay music21's, and their examples pass too: they change *which*
+  elements there are, and music21's own code does that over this package's
+  notes, durations, beams and tuplets.
+
 - **The wheel reads the lab's tabular analyses**, and every one of
   music21's `romanText.tsvConverter` examples passes: 13 of 13 docstrings
   and 75 of 75, from nothing. Every reading is the crate's

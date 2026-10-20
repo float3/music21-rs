@@ -5140,3 +5140,49 @@ def test_a_tabular_analysis_is_read_as_roman_numerals():
     assert numeral.figure == "vii"
     assert numeral.key.tonicPitchNameWithCase == "C"
     assert numeral.quarterLength == 0.0
+
+def test_the_notation_a_score_leaves_unsaid_is_worked_out():
+    """Beams, stem directions and tuplet brackets written onto the notes
+    they belong to, as music21's `stream.makeNotation` writes them."""
+    line = m.from_tiny_notation("4/4 c16 c c c c c c c c c c c c c c c")
+    measure = line.getElementsByClass("Measure")[0]
+
+    # Beamed in place: the notes are the ones that were there.
+    notes = list(measure.recurse().notes)
+    assert m.makeBeams(measure, inPlace=True) is None
+    assert measure.recurse().notes[0] is notes[0]
+    said = [str(note.beams) for note in measure.recurse().notes[:4]]
+    assert said[0].endswith("1/start>/<music21.beam.Beam 2/start>>")
+    assert said[1].endswith("1/continue>/<music21.beam.Beam 2/stop>>")
+    assert said[3].endswith("1/stop>/<music21.beam.Beam 2/stop>>")
+    # And the stems of each beamed group point one way.
+    assert {note.stemDirection for note in measure.recurse().notes} == {"up"}
+
+    # Asked not to, it beams a copy and leaves the stream alone.
+    plain = m.from_tiny_notation("4/4 c8 c c c c c c c")
+    bare = plain.getElementsByClass("Measure")[0]
+    beamed = m.makeBeams(bare, inPlace=False)
+    assert beamed is not None
+    assert str(bare.recurse().notes[0].beams) == "<music21.beam.Beams>"
+    assert str(beamed.recurse().notes[0].beams).endswith("1/start>>")
+
+    # The groups those beams make, which music21 yields one at a time.
+    groups = list(m.iterateBeamGroups(beamed))
+    assert [len(group) for group in groups] == [2, 2, 2, 2]
+    assert groups[0][0] is beamed.recurse().notes[0]
+
+    # What a note or chord ties forward, and what ties nothing.
+    first, second, third = m.Note("C4"), m.Note("D4"), m.Note("E4")
+    second.tie = m.Tie("start")
+    third.tie = m.Tie("stop")
+    assert m.getTiePitchSet(m.Chord([first, second, third])) == {"D4"}
+    assert m.getTiePitchSet(m.Note("F#5")) == set()
+    assert m.getTiePitchSet(m.Rest()) is None
+
+    # A tuplet drawn with the bracket its place in its run asks for.
+    triplet = m.from_tiny_notation("4/4 trip{c8 c c} c4 c c")
+    held = triplet.getElementsByClass("Measure")[0]
+    assert m.makeTupletBrackets(held, inPlace=True) is None
+    tuplets = [note.duration.tuplets for note in held.recurse().notes]
+    assert tuplets[0] and tuplets[0][0].type == "start"
+    assert tuplets[2] and tuplets[2][0].type == "stop"

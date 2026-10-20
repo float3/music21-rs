@@ -67,6 +67,7 @@ mod instrument_kinds;
 pub mod interval;
 pub mod key;
 pub mod layout;
+pub mod makenotation;
 pub mod metadata;
 pub mod meter;
 pub mod midipercussion;
@@ -1352,6 +1353,11 @@ exceptions![
         Some("music21.romanText.tsvConverter")
     ),
     (
+        "MakeNotationException",
+        makenotation::MakeNotationException,
+        Some("music21.stream.makeNotation")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1647,6 +1653,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     correlate::register(m)?;
     aligner::register(m)?;
     audiosearch::register(m)?;
+    makenotation::register(m)?;
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;

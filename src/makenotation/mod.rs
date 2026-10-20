@@ -249,6 +249,41 @@ fn played_into(
     Ok(())
 }
 
+/// The notes a note or chord ties forward, by name: music21's
+/// `getTiePitchSet`.
+///
+/// Nothing at all where the element is no note -- a rest or a barline
+/// ties nothing, and music21 answers `None` for either -- and an empty
+/// list where it ties nothing on. A stroke with no pitch is left out, as
+/// music21 leaves it out, so a percussion chord of strokes alone ties
+/// nothing.
+pub fn tie_pitch_set(element: &StreamElement) -> Option<Vec<String>> {
+    let tied = |note: &Note| -> Option<String> {
+        note.tie()
+            .filter(|tie| tie.tie_type() != TieType::Stop)
+            .map(|_| note.pitch().name_with_octave())
+    };
+    match element {
+        StreamElement::Note(note) => Some(tied(note).into_iter().collect()),
+        StreamElement::Chord(chord) => Some(chord.notes().iter().filter_map(tied).collect()),
+        // A chord symbol is one of music21's `NotRest`s, so it answers a
+        // list; it realizes its notes from its figure and carries no tie
+        // on any of them.
+        StreamElement::ChordSymbol(_) | StreamElement::Unpitched(_) => Some(Vec::new()),
+        StreamElement::PercussionChord(chord) => Some(
+            chord
+                .members()
+                .iter()
+                .filter_map(|member| match member {
+                    crate::percussion::PercussionNote::Note(note) => tied(note),
+                    crate::percussion::PercussionNote::Unpitched(_) => None,
+                })
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
 /// Beams the notes of every measure of a part by the meter in force, and
 /// points the stems of each beamed group one way: music21's `makeBeams`.
 ///
@@ -1885,13 +1920,7 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
                     ..AccidentalDisplayOptions::default()
                 });
                 note.set_pitch(pitch.clone());
-                open.clear();
-                if note
-                    .tie()
-                    .is_some_and(|tie| tie.tie_type() != TieType::Stop)
-                {
-                    open.push(pitch.name_with_octave());
-                }
+                open = tie_pitch_set(&StreamElement::Note(note.clone())).unwrap_or_default();
                 last_sounding = Some(open.clone());
                 past.push(pitch);
                 // The accidentals this note's ornaments imply, decided
@@ -1929,11 +1958,8 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
                         ..AccidentalDisplayOptions::default()
                     });
                     note.set_pitch(pitch.clone());
-                    if note
-                        .tie()
-                        .is_some_and(|tie| tie.tie_type() != TieType::Stop)
-                    {
-                        seen.push(pitch.name_with_octave());
+                    if let Some(tied) = tie_pitch_set(&StreamElement::Note(note.clone())) {
+                        seen.extend(tied);
                     }
                     let played = ornaments_decided(
                         note,
