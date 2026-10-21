@@ -1539,9 +1539,17 @@ def test_metadata_carries_its_names_as_music21_does():
     # A name is read by its unique name, its work id or its abbreviation.
     assert md.otl == "Maple Leaf Rag"
     assert md.composer == "Joplin, Scott"
-    assert md["title"] == ("Maple Leaf Rag",)
-    assert md.all() == (("composer", "Joplin, Scott"), ("title", "Maple Leaf Rag"))
-    assert md.all(skipContributors=True) == (("title", "Maple Leaf Rag"),)
+    # Every reading of a name answers the primitive that name takes.
+    (title,) = md["title"]
+    assert isinstance(title, m.Text)
+    assert str(title) == "Maple Leaf Rag"
+    (composer,) = md["composer"]
+    assert isinstance(composer, m.Contributor)
+    assert composer.role == "composer"
+    assert composer.name == "Joplin, Scott"
+    # A new metadata is signed under `software`, as music21 signs one.
+    assert len(md.software) == 1
+    assert md.all(skipNonContributors=True) == (("composer", "Joplin, Scott"),)
 
     md.number = "3"
     assert md.number == "3"
@@ -1549,9 +1557,87 @@ def test_metadata_carries_its_names_as_music21_does():
     # A name outside music21's vocabulary is no attribute at all.
     with pytest.raises(AttributeError):
         md.madeUp
-    # The primitives music21 hands back are not here to hand back.
-    with pytest.raises(Exception):
-        md.all(returnPrimitives=True)
+    # A date is read as the date it says.
+    md.dateCreated = "1899/12/01"
+    (made,) = md["dateCreated"]
+    assert isinstance(made, m.DateSingle)
+    assert str(made) == "1899/12/01"
+    assert made.relevance == "certain"
+    # A copyright is a text with a role.
+    md.copyright = "Public domain"
+    (rights,) = md["copyright"]
+    assert isinstance(rights, m.Copyright)
+    assert rights.role is None
+    # A plural name writes under the name it stands for.
+    md.composers = ["Joplin, Scott", "Hayden, Scott"]
+    assert md.composers == ("Joplin, Scott", "Hayden, Scott")
+    # Asked for the primitives, `all` answers them.
+    kinds = {name: type(value).__name__ for name, value in md.all(returnPrimitives=True)}
+    assert kinds["title"] == "Text"
+    assert kinds["composer"] == "Contributor"
+    assert kinds["dateCreated"] == "DateSingle"
+    assert kinds["copyright"] == "Copyright"
+
+
+def test_metadata_values_are_the_primitives_music21_keeps():
+    """A date that may be approximate, a text with a language, somebody
+    with a role: music21's `metadata.primitives`, over the crate's."""
+    # A date any part of which may be missing and any part of which may say
+    # how sure it is.
+    date = m.Date(year=1805, month=3, monthError="approximate")
+    assert str(date) == "1805/03~/--"
+    read = m.Date()
+    read.loadStr("1030?/12~/?4")
+    assert str(read) == "1030?/12~/04?"
+    assert (read.year, read.yearError) == (1030, "uncertain")
+    assert read.hasError is True
+    assert read.hasTime is False
+    # A month no calendar has is refused when a date is loaded.
+    with pytest.raises(Exception, match="Month must be between 1 and 12"):
+        m.Date().load("1999/14/32")
+
+    # The four classes music21 keeps for a date, each refusing a relevance
+    # that is not its own.
+    assert str(m.DateSingle("2009/12/31", "approximate")) == "2009/12/31"
+    assert str(m.DateRelative("2009/12/31", "prior")) == "prior to 2009/12/31"
+    assert str(m.DateBetween(["2009/12/31", "2010/1/28"])) == (
+        "2009/12/31 to 2010/01/28"
+    )
+    assert str(m.DateSelection([1750, "1775/03?"], "and")) == (
+        "1750/--/-- and 1775/03?/--"
+    )
+    for call in (
+        lambda: m.DateRelative("2009/12/31", "certain"),
+        lambda: m.DateBetween(["2009/12/31"], "certain"),
+        lambda: m.DateSelection(["2009/12/31"], "certain"),
+    ):
+        with pytest.raises(Exception, match="not supported by this object"):
+            call()
+
+    # A text keeps what it says of itself.
+    text = m.Text("Ale is Dear, The", "en")
+    assert str(text) == "Ale is Dear, The"
+    assert text.language == "en"
+    assert text.getNormalizedArticle() == "The Ale is Dear"
+    assert text != m.Text("Ale is Dear, The")
+    assert m.Text("some text") == m.Text("some text")
+
+    # A contributor goes under one or more names, and a Humdrum
+    # abbreviation is read as the role it stands for.
+    who = m.Contributor(names=["Chopin, Fryderyk", "Chopin, Frederick"], role="com")
+    assert who.role == "composer"
+    assert who.name == "Chopin, Fryderyk"
+    assert who.names == ["Chopin, Fryderyk", "Chopin, Frederick"]
+    assert m.Contributor.abbreviationToRole("lib") == "librettist"
+    assert m.Contributor.roleToAbbreviation("composer") == "com"
+    # How long somebody lived, which music21 answers as a timedelta: only a
+    # date with all three parts makes one, as Python's own constructor asks.
+    lived = m.Contributor(
+        name="The Composer", role="composer", birth="1923/07/21", death="2013/11/01"
+    )
+    assert lived.age().days == 32976
+    assert str(lived.birth) == "1923/07/21"
+    assert m.Contributor(name="Nobody").age() is None
 
 
 def test_metadata_is_searched_as_music21_searches_it():

@@ -1,0 +1,38 @@
+# Docstrings of music21.metadata.primitives whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_primitives`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.metadata.primitives.Contributor",
+    "music21.metadata.primitives.Contributor.__eq__",
+    "music21.metadata.primitives.Contributor.abbreviationToRole",
+    "music21.metadata.primitives.Contributor.age",
+    "music21.metadata.primitives.Contributor.name",
+    "music21.metadata.primitives.Contributor.names",
+    "music21.metadata.primitives.Contributor.role",
+    "music21.metadata.primitives.Contributor.roleToAbbreviation",
+    "music21.metadata.primitives.Copyright",
+    "music21.metadata.primitives.Creator",
+    "music21.metadata.primitives.Date",
+    "music21.metadata.primitives.Date.__str__",
+    "music21.metadata.primitives.Date._stripError",
+    "music21.metadata.primitives.Date.datetime",
+    "music21.metadata.primitives.Date.errorToSymbol",
+    "music21.metadata.primitives.Date.hasError",
+    "music21.metadata.primitives.Date.hasTime",
+    "music21.metadata.primitives.Date.load",
+    "music21.metadata.primitives.Date.loadDatetime",
+    "music21.metadata.primitives.Date.loadOther",
+    "music21.metadata.primitives.Date.loadStr",
+    "music21.metadata.primitives.DateBetween",
+    "music21.metadata.primitives.DatePrimitive.__eq__",
+    "music21.metadata.primitives.DatePrimitive.datetime",
+    "music21.metadata.primitives.DateRelative",
+    "music21.metadata.primitives.DateSelection",
+    "music21.metadata.primitives.DateSingle",
+    "music21.metadata.primitives.Text",
+    "music21.metadata.primitives.Text.__eq__",
+    "music21.metadata.primitives.Text.getNormalizedArticle",
+    "music21.metadata.primitives.Text.language",
+]

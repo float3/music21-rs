@@ -211,18 +211,32 @@ impl Date {
     /// A value no date can have -- a thirteenth month, the thirty-first of
     /// April, the twenty-ninth of February in a year that is not a leap
     /// year. music21 checks the same, and leaves the value it was given in
-    /// place when it raises.
+    /// place when it raises, which is why [`Self::set_unchecked`] is here
+    /// beside this.
     pub fn set(
         &mut self,
         part: DatePart,
         value: Option<IntegerType>,
         certainty: Option<Certainty>,
     ) -> Result<()> {
+        self.set_unchecked(part, value, certainty);
+        self.check()
+    }
+
+    /// Gives one part a value without asking whether a calendar has such a
+    /// date: music21 writes its own attributes freely and only checks when
+    /// a date is *loaded*, so a caller standing in for it writes this way
+    /// and checks afterwards.
+    pub fn set_unchecked(
+        &mut self,
+        part: DatePart,
+        value: Option<IntegerType>,
+        certainty: Option<Certainty>,
+    ) {
         self.values[part.at()] = value;
         if certainty.is_some() {
             self.certainties[part.at()] = certainty;
         }
-        self.checked()
     }
 
     /// The date written as music21 writes one: `year/month/day` with `--`
@@ -286,6 +300,20 @@ impl Date {
     ///
     /// A part that is not a number, or a value no date can have.
     pub fn from_written(written: &str) -> Result<Self> {
+        let date = Self::from_written_unchecked(written)?;
+        date.check()?;
+        Ok(date)
+    }
+
+    /// A date read as [`Self::from_written`] reads one, without asking
+    /// whether a calendar has such a date. music21's own `load` keeps the
+    /// values it read and *then* raises, so a caller standing in for it
+    /// reads this way and calls [`Self::check`] afterwards.
+    ///
+    /// # Errors
+    ///
+    /// A part that is not a number.
+    pub fn from_written_unchecked(written: &str) -> Result<Self> {
         let mut date = Self::new();
         let written = written.replace(':', "/").replace(' ', "");
         for (part, chunk) in DatePart::ALL.iter().zip(written.split('/')) {
@@ -298,7 +326,6 @@ impl Date {
                 date.certainties[part.at()] = certainty;
             }
         }
-        date.checked()?;
         Ok(date)
     }
 
@@ -316,7 +343,7 @@ impl Date {
         date.values[0] = year;
         date.values[1] = month;
         date.values[2] = day;
-        date.checked()?;
+        date.check()?;
         Ok(date)
     }
 
@@ -335,13 +362,17 @@ impl Date {
                 }
             }
         }
-        self.checked()
+        self.check()
     }
 
-    /// music21's `_sanityCheck`. It does not check whether a Gregorian leap
-    /// year really was one, "as it changes historically", and neither does
-    /// this.
-    fn checked(&self) -> Result<()> {
+    /// Whether a calendar has such a date: music21's `_sanityCheck`. It
+    /// does not check whether a Gregorian leap year really was one, "as it
+    /// changes historically", and neither does this.
+    ///
+    /// # Errors
+    ///
+    /// A value no date can have.
+    pub fn check(&self) -> Result<()> {
         let (year, month, day) = (self.year(), self.month(), self.day());
         if let Some(month) = month
             && !(1..=12).contains(&month)
@@ -391,14 +422,14 @@ impl fmt::Display for Date {
 }
 
 /// A written number with its certainty taken off it: music21's
-/// `_stripError`. Only one symbol is expected, and the first one met is the
+/// `Date._stripError`. Only one symbol is expected, and the first one met is the
 /// one read. A fraction is read as the whole number before the point --
 /// music21 drops milliseconds on purpose.
 ///
 /// # Errors
 ///
 /// Something that is not a number at all.
-fn strip_certainty(written: &str) -> Result<(IntegerType, Option<Certainty>)> {
+pub fn strip_certainty(written: &str) -> Result<(IntegerType, Option<Certainty>)> {
     let mut certainty = None;
     let mut cleaned = written.to_string();
     for character in written.chars() {

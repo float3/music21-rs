@@ -7,11 +7,21 @@
 //! twenty Humdrum abbreviations, so `md.otl` and `md.title` are the same
 //! title.
 //!
-//! **What a name answers is a string here**, where music21 answers its own
-//! `Text` and `Contributor` objects: `md['title']` gives a tuple of
-//! strings and `all(returnPrimitives=True)` is refused. Those classes
-//! carry a language, a role and an encoding scheme that nothing in the
-//! crate reads, and a caller who needs them has music21 installed.
+//! **What a name answers is the primitive the name takes**, as music21
+//! answers one: `md['title']` is a tuple of `Text` objects, `md['composer']`
+//! of `Contributor`s, `md['dateCreated']` of `DateSingle`s and
+//! `md['copyright']` of `Copyright`s -- this package's own, over the crate's
+//! `metadata::primitives`. `metadata::value_kind_of` is what says which
+//! kind a name takes, which is music21's own `UNIQUE_NAME_TO_VALUE_TYPE`
+//! and what its `convertValue` reads.
+//!
+//! **music21's own private readers run over this object.** `_get`, `_add`
+//! and `_set` are the three the facade carries, so
+//! `_getStringValueByNamespaceName`, `_getPluralAttribute` and the rest --
+//! music21's own, inherited because a private member is not blocked -- read
+//! the crate's values through them. `_contents` is a reading of those
+//! values rather than the dictionary music21 keeps, since nothing here
+//! writes through it.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
@@ -21,8 +31,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use music21_rs_crate::metadata::{
-    Metadata as RsMetadata, MetadataQuery, MetadataValue, is_contributor_unique_name,
-    unique_name_from_namespace, unique_name_of, unique_name_of_plural,
+    Metadata as RsMetadata, MetadataQuery, MetadataValue, ValueKind, is_contributor_unique_name,
+    primitives as rsprim, unique_name_from_namespace, unique_name_of, unique_name_of_plural,
+    value_kind_of,
 };
 
 /// The names this module hands out. Nothing here is installed **over**
@@ -80,13 +91,15 @@ impl Metadata {
     /// music21's `Metadata(**keywords)`, each keyword a name of the
     /// vocabulary.
     ///
-    /// music21 starts a new metadata with its own version under
-    /// `software`; this starts empty, as the crate's does, so that what a
-    /// caller reads back is what they wrote.
+    /// It is signed under `software`, as music21's own constructor signs
+    /// one with its version -- its `software` and `all` examples both read
+    /// that line back. The crate's `Metadata::new` starts empty, a library
+    /// having no version of anybody else's to write.
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let mut made = Self::wrap(RsMetadata::new());
+        made.inner.add_text("software", software_line(py));
         if let Some(keywords) = keywords {
             for (key, value) in keywords {
                 let name: String = key.extract()?;
@@ -127,17 +140,9 @@ impl Metadata {
     fn add(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let unique = unique_name_of(name)
             .or_else(|| unique_name_from_namespace(name))
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err(format!(
-                    "Name='{name}' is not a standard metadata name"
-                ))
-            })?;
-        for text in texts_of(value)? {
-            if music21_rs_crate::metadata::is_contributor_unique_name(unique) {
-                self.inner.add_contributor(unique, text);
-            } else {
-                self.inner.add_text(unique, text);
-            }
+            .ok_or_else(|| unknown_name(name))?;
+        for found in given_values(unique, value)? {
+            self.inner.add(unique, found);
         }
         Ok(())
     }
@@ -146,20 +151,18 @@ impl Metadata {
     /// which answers a tuple -- its own `Text` objects, where these are
     /// the strings they say.
     fn getCustom<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyTuple>> {
-        let values: Vec<&str> = self
-            .inner
-            .get(name)
-            .iter()
-            .map(MetadataValue::text)
-            .collect();
-        PyTuple::new(py, values)
+        let mut found = Vec::new();
+        for value in self.inner.get(name) {
+            found.push(primitive_object(py, name, value)?);
+        }
+        PyTuple::new(py, found)
     }
 
     /// Another value under a name of a caller's own, keeping what is
     /// there: music21's `addCustom`.
     fn addCustom(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        for text in texts_of(value)? {
-            self.inner.add_text(name, text);
+        for found in given_values(name, value)? {
+            self.inner.add(name, found);
         }
         Ok(())
     }
@@ -167,10 +170,7 @@ impl Metadata {
     /// The values under a name of a caller's own, in place of whatever was
     /// there: music21's `setCustom`.
     fn setCustom(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let values = texts_of(value)?
-            .into_iter()
-            .map(MetadataValue::new)
-            .collect();
+        let values = given_values(name, value)?;
         self.inner.set(name, values);
         Ok(())
     }
@@ -180,11 +180,10 @@ impl Metadata {
     /// the names of.
     #[getter]
     fn contributors<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        let found: Vec<&str> = self
-            .inner
-            .contributors()
-            .map(|(_, value)| value.text())
-            .collect();
+        let mut found = Vec::new();
+        for (name, value) in self.inner.contributors() {
+            found.push(primitive_object(py, name, value)?);
+        }
         PyTuple::new(py, found)
     }
 
@@ -197,12 +196,10 @@ impl Metadata {
         py: Python<'py>,
         role: Option<&str>,
     ) -> PyResult<Bound<'py, PyTuple>> {
-        let found: Vec<&str> = self
-            .inner
-            .contributors_by_role(role)
-            .into_iter()
-            .map(MetadataValue::text)
-            .collect();
+        let mut found = Vec::new();
+        for value in self.inner.contributors_by_role(role) {
+            found.push(primitive_object(py, "otherContributor", value)?);
+        }
         PyTuple::new(py, found)
     }
 
@@ -271,6 +268,17 @@ impl Metadata {
     /// be built -- music21's `Music21Object.__init__` writes `_id`
     /// through here.
     fn __setattr__(slf: &Bound<'_, Self>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        // music21 keeps `bestTitle` as a property with no setter of its own.
+        if name == "bestTitle" {
+            return Err(PyAttributeError::new_err(
+                "property 'bestTitle' of 'Metadata' object has no setter",
+            ));
+        }
+        if let Some(unique) = unique_name_of_plural(name) {
+            let values = given_values(unique, value)?;
+            slf.borrow_mut().inner.set(unique, values);
+            return Ok(());
+        }
         if unique_name_of(name).is_none() {
             // Written into the object's own dictionary, which is what
             // `object.__setattr__` would do -- and that cannot be called
@@ -283,23 +291,40 @@ impl Metadata {
 
     /// Every value under one name, as music21's `md['title']` answers
     /// them -- strings here, where music21 answers its own `Text`.
-    fn __getitem__<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyTuple>> {
-        let Some(unique) = unique_name_of(name) else {
-            return Err(MetadataException::new_err(format!("invalid name: {name}")));
+    fn __getitem__<'py>(
+        &self,
+        py: Python<'py>,
+        name: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let Ok(name) = name.extract::<String>() else {
+            return Err(pyo3::exceptions::PyKeyError::new_err(
+                "metadata key must be str",
+            ));
         };
-        PyTuple::new(
-            py,
-            self.inner
-                .get(unique)
-                .iter()
-                .map(|value| value.text().to_string()),
-        )
+        let unique = unique_name_of(&name)
+            .or_else(|| unique_name_from_namespace(&name))
+            .ok_or_else(|| unknown_name(&name))?;
+        let mut found = Vec::new();
+        for value in self.inner.get(unique) {
+            found.push(primitive_object(py, unique, value)?);
+        }
+        PyTuple::new(py, found)
     }
 
     /// Writes every value under one name: music21's `md['title'] = ...`,
     /// which takes one value or several.
-    fn __setitem__(&mut self, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.write(name, value)
+    fn __setitem__(&mut self, name: &Bound<'_, PyAny>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let Ok(name) = name.extract::<String>() else {
+            return Err(pyo3::exceptions::PyKeyError::new_err(
+                "metadata key must be str",
+            ));
+        };
+        let unique = unique_name_of(&name)
+            .or_else(|| unique_name_from_namespace(&name))
+            .ok_or_else(|| unknown_name(&name))?;
+        let values = given_values(unique, value)?;
+        self.inner.set(unique, values);
+        Ok(())
     }
 
     /// Adds somebody who worked on the piece: music21's
@@ -314,28 +339,22 @@ impl Metadata {
             self.inner.add_contributor(c.extract::<String>()?, name);
             return Ok(());
         }
-        // music21 hands over a `Contributor`, whose role and name are what
-        // there is to read; anything that answers those two will do.
-        let role = c.getattr("role")?;
-        let role = if role.is_none() {
-            String::new()
+        // music21 hands over a `Contributor`, which is read whole -- every
+        // name it goes by and the dates of a life included.
+        let read = crate::primitives::read_contributor(c)?;
+        let role = read.role().unwrap_or_default().to_string();
+        let unique = if is_contributor_unique_name(&role) {
+            role
         } else {
-            role.str()?.to_string()
+            "otherContributor".to_string()
         };
-        let named = c.getattr("name")?;
-        let named = if named.is_none() {
-            String::new()
-        } else {
-            named.str()?.to_string()
-        };
-        self.inner.add_contributor(role, named);
+        self.inner.add(unique, MetadataValue::of_contributor(read));
         Ok(())
     }
 
-    /// Every name and value: music21's `all`.
-    ///
-    /// `returnPrimitives` is refused, there being no `Text` or
-    /// `Contributor` here to hand back.
+    /// Every name and value: music21's `all`, which answers the values as
+    /// the strings they say, or as the primitives they are where
+    /// `returnPrimitives` asks.
     #[pyo3(signature = (
         *,
         skipContributors = false,
@@ -351,25 +370,140 @@ impl Metadata {
         returnPrimitives: bool,
         returnSorted: bool,
     ) -> PyResult<Bound<'py, PyTuple>> {
-        if returnPrimitives {
-            return Err(MetadataException::new_err(
-                "returnPrimitives needs music21's own Text and Contributor, which this package does not carry",
-            ));
-        }
         let pairs: Vec<(&str, &MetadataValue)> = if returnSorted {
             self.inner.all_sorted()
         } else {
             self.inner.all().collect()
         };
-        let kept: Vec<(String, String)> = pairs
-            .into_iter()
-            .filter(|(name, _)| {
-                let contributor = is_contributor_unique_name(name);
-                !(skipContributors && contributor) && !(skipNonContributors && !contributor)
-            })
-            .map(|(name, value)| (name.to_string(), value.text().to_string()))
-            .collect();
+        let mut kept = Vec::new();
+        for (name, value) in pairs {
+            let contributor = is_contributor_unique_name(name);
+            if (skipContributors && contributor) || (skipNonContributors && !contributor) {
+                continue;
+            }
+            let said = if returnPrimitives {
+                primitive_object(py, name, value)?
+            } else {
+                pyo3::types::PyString::new(py, value.text()).into_any()
+            };
+            kept.push(PyTuple::new(
+                py,
+                [pyo3::types::PyString::new(py, name).into_any(), said],
+            )?);
+        }
         PyTuple::new(py, kept)
+    }
+
+    /// music21's `_get`: every value under a name, as a tuple of the
+    /// primitives that name takes. A name outside the vocabulary is a
+    /// `KeyError` unless it is said to be a caller's own.
+    #[pyo3(signature = (name, isCustom))]
+    fn _get<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        isCustom: bool,
+    ) -> PyResult<Bound<'py, PyTuple>> {
+        let unique = if isCustom {
+            name.to_string()
+        } else {
+            unique_name_of(name)
+                .or_else(|| unique_name_from_namespace(name))
+                .ok_or_else(|| unknown_name(name))?
+                .to_string()
+        };
+        let mut found = Vec::new();
+        for value in self.inner.get(&unique) {
+            found.push(primitive_object(py, &unique, value)?);
+        }
+        PyTuple::new(py, found)
+    }
+
+    /// music21's `_add`: one value or several under a name, keeping what
+    /// is there.
+    #[pyo3(signature = (name, value, isCustom))]
+    fn _add(&mut self, name: &str, value: &Bound<'_, PyAny>, isCustom: bool) -> PyResult<()> {
+        let unique = if isCustom {
+            name.to_string()
+        } else {
+            unique_name_of(name)
+                .or_else(|| unique_name_from_namespace(name))
+                .ok_or_else(|| unknown_name(name))?
+                .to_string()
+        };
+        for found in given_values(&unique, value)? {
+            self.inner.add(unique.clone(), found);
+        }
+        Ok(())
+    }
+
+    /// music21's `_set`: one value or several under a name, in place of
+    /// whatever was there.
+    #[pyo3(signature = (name, value, isCustom))]
+    fn _set(&mut self, name: &str, value: &Bound<'_, PyAny>, isCustom: bool) -> PyResult<()> {
+        let unique = if isCustom {
+            name.to_string()
+        } else {
+            unique_name_of(name)
+                .or_else(|| unique_name_from_namespace(name))
+                .ok_or_else(|| unknown_name(name))?
+                .to_string()
+        };
+        let values = given_values(&unique, value)?;
+        self.inner.set(unique, values);
+        Ok(())
+    }
+
+    /// What music21 keeps its values in, read off the crate's: a
+    /// dictionary of the primitives under each name.
+    ///
+    /// It is a *reading*, not the store itself -- nothing here writes
+    /// through it, `_get`, `_add` and `_set` being the facade's own -- so
+    /// what a caller does to the dictionary it is handed reaches nothing.
+    #[getter]
+    fn _contents<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let found = PyDict::new(py);
+        for (name, value) in self.inner.all() {
+            let made = primitive_object(py, name, value)?;
+            match found.get_item(name)? {
+                Some(held) => held.call_method1("append", (made,))?,
+                None => {
+                    let list = pyo3::types::PyList::empty(py);
+                    list.append(made)?;
+                    found.set_item(name, &list)?;
+                    list.into_any()
+                }
+            };
+        }
+        Ok(found)
+    }
+
+    /// music21's `convertValue`: whatever it was handed, as the value the
+    /// name takes. A value already of that kind is handed back as it
+    /// stands, which is what music21's own `is` test shows.
+    #[staticmethod]
+    fn convertValue<'py>(
+        py: Python<'py>,
+        uniqueName: &str,
+        value: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let unique = unique_name_of(uniqueName)
+            .or_else(|| unique_name_from_namespace(uniqueName))
+            .unwrap_or(uniqueName);
+        let already = match kind_of(unique) {
+            ValueKind::Text => {
+                value.cast::<crate::primitives::Text>().is_ok()
+                    && value.cast::<crate::primitives::Copyright>().is_err()
+            }
+            ValueKind::Copyright => value.cast::<crate::primitives::Copyright>().is_ok(),
+            ValueKind::Contributor => value.cast::<crate::primitives::Contributor>().is_ok(),
+            ValueKind::Date => value.cast::<crate::primitives::DatePrimitive>().is_ok(),
+            ValueKind::Number => value.is_instance_of::<pyo3::types::PyInt>(),
+        };
+        if already {
+            return Ok(value.clone());
+        }
+        primitive_object(py, unique, &crate_value(unique, value)?)
     }
 
     /// Whether a query is found, and the field it was found under:
@@ -406,9 +540,43 @@ impl Metadata {
         let Some(asked) = asked else {
             return Ok((false, None));
         };
-        let found = self
-            .inner
-            .search(&MetadataQuery::Text(&asked), field.as_deref());
+        // music21 reads a query holding any of `*.|+?{}` as a regular
+        // expression, and anything callable as a test of its own. The crate
+        // takes either as a matcher over each value's text; what compiles
+        // the pattern is Python's `re`, there being none in the crate.
+        let py = query.map_or_else(|| None, |query| Some(query.py()));
+        let compiled = match (py, query) {
+            (Some(_), Some(query)) if query.is_callable() => Some(query.clone()),
+            (Some(py), _) if asked.contains(['*', '.', '|', '+', '?', '{', '}']) => py
+                .import("re")
+                .ok()
+                .and_then(|re| {
+                    let flags = re.getattr("IGNORECASE").ok()?;
+                    re.call_method1("compile", (asked.as_str(), flags)).ok()
+                })
+                .map(|pattern| {
+                    pattern
+                        .getattr("search")
+                        .unwrap_or_else(|_| pattern.clone())
+                }),
+            _ => None,
+        };
+        let found = match &compiled {
+            None => self
+                .inner
+                .search(&MetadataQuery::Text(&asked), field.as_deref()),
+            Some(matcher) => {
+                let ask = |text: &str| -> bool {
+                    matcher
+                        .call1((text,))
+                        .ok()
+                        .and_then(|answer| answer.is_truthy().ok())
+                        .unwrap_or(false)
+                };
+                self.inner
+                    .search(&MetadataQuery::Matcher(&ask), field.as_deref())
+            }
+        };
         Ok((
             found.is_some(),
             found.and_then(|found| found.field().map(str::to_string)),
@@ -428,19 +596,160 @@ impl Metadata {
     }
 }
 
-/// A value given as one piece of text or several, as music21 takes
-/// either.
-fn texts_of(value: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+/// What kind of value a name takes, a name of a caller's own taking a
+/// text as music21's does.
+fn kind_of(unique: &str) -> ValueKind {
+    value_kind_of(unique).unwrap_or(ValueKind::Text)
+}
+
+/// One value under a name as the primitive that name takes: music21's own
+/// `Text`, `Copyright`, `Contributor` or `DateSingle`, which is what every
+/// reading of a name answers.
+fn primitive_object<'py>(
+    py: Python<'py>,
+    unique: &str,
+    value: &MetadataValue,
+) -> PyResult<Bound<'py, PyAny>> {
+    match kind_of(unique) {
+        ValueKind::Number => {
+            let read: i64 = value.text().trim().parse().map_err(|_| {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "invalid literal for int() with base 10: '{}'",
+                    value.text()
+                ))
+            })?;
+            Ok(read.into_pyobject(py)?.into_any())
+        }
+        ValueKind::Date => {
+            let date = match value.as_date() {
+                Some(date) => date.clone(),
+                None => rsprim::DatePrimitive::single(value.text(), rsprim::Relevance::Certain)
+                    .map_err(metadata_error)?,
+            };
+            crate::primitives::date_object(py, date)
+        }
+        ValueKind::Contributor => {
+            let contributor = match value.as_contributor() {
+                Some(found) => found.clone(),
+                None => match value.role() {
+                    Some(role) => rsprim::Contributor::new(role, [rsprim::Text::new(value.text())]),
+                    None => {
+                        let mut made = rsprim::Contributor::unnamed();
+                        made.set_name(rsprim::Text::new(value.text()));
+                        made
+                    }
+                },
+            };
+            crate::primitives::contributor_object(py, contributor)
+        }
+        kind => {
+            let text = value
+                .as_text()
+                .cloned()
+                .unwrap_or_else(|| rsprim::Text::new(value.text()));
+            crate::primitives::text_object(py, text, kind == ValueKind::Copyright)
+        }
+    }
+}
+
+/// Whatever a caller handed over, as the value a name takes: music21's
+/// `convertValue`.
+fn crate_value(unique: &str, value: &Bound<'_, PyAny>) -> PyResult<MetadataValue> {
+    match kind_of(unique) {
+        ValueKind::Number => Ok(MetadataValue::new(value.str()?.to_string())),
+        ValueKind::Date => {
+            // music21 reads a `Text` as the string it says before asking
+            // for a date, and falls back to a plain text where no date can
+            // be read at all.
+            let asked = if value.cast::<crate::primitives::Text>().is_ok() {
+                pyo3::types::PyString::new(value.py(), &value.str()?.to_string()).into_any()
+            } else {
+                value.clone()
+            };
+            match crate::primitives::read_date(&asked) {
+                Ok(date) => Ok(MetadataValue::of_date(date)),
+                Err(_) => Ok(MetadataValue::of_text(crate::primitives::read_text(value)?)),
+            }
+        }
+        ValueKind::Contributor => {
+            // music21 gives a bare name the role the name is, and leaves a
+            // contributor it was handed exactly as it came -- with no role
+            // at all where it has none.
+            let given = value.cast::<crate::primitives::Contributor>().is_ok()
+                || value.hasattr("names").unwrap_or(false);
+            let mut read = crate::primitives::read_contributor(value)?;
+            if !given && read.role().is_none() {
+                read.set_role(Some(unique.to_string()));
+            }
+            Ok(MetadataValue::of_contributor(read))
+        }
+        ValueKind::Copyright => {
+            let mut read = crate::primitives::read_text(value)?;
+            if read.role().is_none() {
+                read.set_role(None);
+            }
+            Ok(MetadataValue::of_text(read))
+        }
+        ValueKind::Text => Ok(MetadataValue::of_text(crate::primitives::read_text(value)?)),
+    }
+}
+
+/// Every value a caller handed over, as music21 takes one or several --
+/// and a string whole, which is iterable and must not be walked.
+fn given_values(unique: &str, value: &Bound<'_, PyAny>) -> PyResult<Vec<MetadataValue>> {
     if value.is_none() {
         return Ok(Vec::new());
     }
-    if let Ok(text) = value.extract::<String>() {
-        return Ok(vec![text]);
+    let one = value.extract::<String>().is_ok()
+        || value.cast::<crate::primitives::Text>().is_ok()
+        || value.cast::<crate::primitives::Contributor>().is_ok()
+        || value.cast::<crate::primitives::DatePrimitive>().is_ok()
+        || value.hasattr("role").unwrap_or(false)
+        || value.hasattr("isTranslated").unwrap_or(false)
+        || value.hasattr("relevance").unwrap_or(false);
+    if one {
+        return Ok(vec![crate_value(unique, value)?]);
     }
-    if let Ok(several) = value.extract::<Vec<String>>() {
-        return Ok(several);
+    match crate::Walkable::walk(value) {
+        Err(_) => Ok(vec![crate_value(unique, value)?]),
+        Ok(walk) => {
+            let mut read = Vec::new();
+            for item in walk {
+                read.push(crate_value(unique, &item?)?);
+            }
+            Ok(read)
+        }
     }
-    Ok(vec![value.str()?.to_string()])
+}
+
+/// music21's own `KeyError` for a name outside the vocabulary.
+fn unknown_name(name: &str) -> PyErr {
+    pyo3::exceptions::PyKeyError::new_err(format!(
+        "Name='{name}' is not a standard metadata name. \
+         Call addCustom/setCustom/getCustom for custom names."
+    ))
+}
+
+/// The line music21's own constructor writes under `software`: its
+/// version, which its own `software` and `all` examples read back. The
+/// crate's `Metadata::new` starts empty on purpose -- a library reads no
+/// version of anybody else's -- so the facade adds it, and where there is
+/// no music21 to ask, this package's own version stands there instead.
+fn software_line(py: Python<'_>) -> String {
+    match py
+        .import("music21")
+        .and_then(|module| module.getattr("__version__"))
+        .and_then(|version| Ok(version.str()?.to_string()))
+    {
+        Ok(version) => format!("music21 v{version}"),
+        Err(_) => format!("music21_rs v{}", env!("CARGO_PKG_VERSION")),
+    }
+}
+
+/// A crate error as music21's `MetadataException`.
+fn metadata_error(error: music21_rs_crate::Error) -> PyErr {
+    crate::pitch::specific_error(&error)
+        .unwrap_or_else(|| MetadataException::new_err(crate::pitch::message(&error)))
 }
 
 impl Metadata {
@@ -451,27 +760,7 @@ impl Metadata {
                 "invalid attributeName: {name}"
             )));
         };
-        if value.is_none() {
-            self.inner.set(unique, Vec::new());
-            return Ok(());
-        }
-        let texts: Vec<String> = if let Ok(text) = value.extract::<String>() {
-            vec![text]
-        } else if let Ok(several) = value.extract::<Vec<String>>() {
-            several
-        } else {
-            vec![value.str()?.to_string()]
-        };
-        let values = texts
-            .into_iter()
-            .map(|text| {
-                if is_contributor_unique_name(unique) {
-                    MetadataValue::with_role(text, unique)
-                } else {
-                    MetadataValue::new(text)
-                }
-            })
-            .collect();
+        let values = given_values(unique, value)?;
         self.inner.set(unique, values);
         Ok(())
     }
