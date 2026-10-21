@@ -7,6 +7,7 @@ passing = [
     "music21.layout.LayoutBase",
     "music21.layout.LayoutScore.getMarginsAndSizeForPageId",
     "music21.layout.LayoutScore.getPageAndSystemNumberFromMeasureNumber",
+    "music21.layout.LayoutScore.getPositionForStaff",
     "music21.layout.LayoutScore.getPositionForStaffMeasure",
     "music21.layout.LayoutScore.getPositionForSystem",
     "music21.layout.LayoutScore.getStaffHiddenAttribute",

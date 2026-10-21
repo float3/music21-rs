@@ -2,6 +2,18 @@
 
 ## added
 
+- **`layout` passes all 158 of its examples**, and the reason recorded for
+  the one that did not was wrong. It said music21 keeps a staff size as the
+  number it was given and that `layout::Tenths` was the type that would
+  keep the difference -- a breaking change to a public field, so it waited
+  for a minor version. The difference was never the field's type: music21's
+  `staffSize` is a plain attribute, and only its *constructor* floats what
+  it is handed, so `StaffLayout(staffSize=113)` reads back `113.0` while
+  `sl.staffSize = 80` reads back `80`. The `80` its own example prints comes
+  from its MusicXML reader, which assigns the attribute rather than passing
+  it to the constructor. The wheel keeps the object it was handed beside the
+  crate's float now, and nothing in the crate changed.
+
 - **A data set's table is held to music21's own writers byte for byte.**
   `DataSet::to_text` is the crate's `getString`, and its only check was an
   in-module test reading music21's answers off a transcription;
