@@ -238,7 +238,11 @@ impl WindowedAnalysis {
             return Err(WindowedAnalysisException::new_err("Making measures failed"));
         }
         make_ties(&mut kept).map_err(refuse)?;
-        crate::stream::from_crate(py, &kept)
+        // music21's own streams, so that a measure of a window says its
+        // number and where it stands as music21's `repr` says them: its
+        // own example prints `<music21.stream.Measure 1 offset=0.0>`, which
+        // a stream of this package's cannot say, not knowing what holds it.
+        crate::stream::music21_from_crate(py, &kept)
     }
 }
 

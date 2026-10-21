@@ -2,6 +2,23 @@
 
 ## added
 
+- **`analysis.windowed` passes all 35 of its examples**, and the reason
+  recorded for the one it failed was stale in two ways at once. It said the
+  failure was a measure's `repr` -- music21 writes its number and its offset
+  where this package writes its id -- and that a wheel stream does not know
+  where it stands. True of a wheel stream, and beside the point:
+  `getMinimumWindowStream` is a member a *caller* asks for, so it should
+  have been answering music21's own streams ever since
+  `stream::music21_from_crate` was built.
+
+  Switching it over broke six examples rather than fixing one: a measure's
+  **right barline** was built as the bare facade class, which music21's
+  streams refuse, because `music21.bar` was not among that suite's swaps. It
+  is now. That is a sixth element of the bare-facade-class kind, after the
+  five found when `music21_from_crate` was written -- so when a member
+  starts answering music21's streams, swap every module whose classes its
+  elements are built from, not only the ones the examples name.
+
 - **`layout` passes all 158 of its examples**, and the reason recorded for
   the one that did not was wrong. It said music21 keeps a staff size as the
   number it was given and that `layout::Tenths` was the type that would
