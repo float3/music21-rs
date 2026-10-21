@@ -1879,7 +1879,6 @@ addData = "add_data"
 
 [class.excluded]
 addMultipleData = "adds several subjects at once, which is `add_data` in a loop"
-getClassPositionLabels = "where the class column sits, which the caller knows of the labels it asked for"
 write = "writes the table to a file, which the library does not do: `to_text` is the text to write"
 
 [[class]]
