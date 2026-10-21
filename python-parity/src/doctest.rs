@@ -82,6 +82,7 @@ pub use music21_rs_python::percussion::NAMES as PERCUSSION_NAMES;
 pub use music21_rs_python::pitch::NAMES as PITCH_NAMES;
 pub use music21_rs_python::possibility::NAMES as POSSIBILITY_NAMES;
 pub use music21_rs_python::realizerscale::NAMES as REALIZER_SCALE_NAMES;
+pub use music21_rs_python::reduction::NAMES as REDUCTION_NAMES;
 pub use music21_rs_python::repeat::NAMES as REPEAT_NAMES;
 pub use music21_rs_python::resolution::NAMES as RESOLUTION_NAMES;
 pub use music21_rs_python::roman::NAMES as ROMAN_NAMES;

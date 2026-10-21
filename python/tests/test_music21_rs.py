@@ -5246,3 +5246,34 @@ S: [G] $In $Vr $Ch"""
     with pytest.raises(Exception):
         verse.expand()
     assert len(m.CTRule("In: I | IV |").expand()) == 2
+
+
+def test_a_score_is_reduced_to_the_notes_an_analyst_marked():
+    """The notes a lyric marks gathered into a part of their own, as
+    music21's `analysis.reduction` gathers them."""
+    part = m.from_tiny_notation("4/4 c4 d e f  g a b c'")
+    notes = list(part.recurse().notes)
+    notes[0].addLyric("::/o:5/g:Ursatz/tb:I")
+    notes[4].addLyric("::/o:5/g:Ursatz/tb:V")
+
+    reduction = m.ScoreReduction()
+    reduction.score = part
+    # The score it keeps is a copy, in a score of its own since the part
+    # has no parts under it.
+    assert len(reduction.score.getElementsByClass("Part")) == 1
+    assert reduction.score.getElementsByClass("Part")[0] is not part
+
+    reduced = reduction.reduce()
+    parts = list(reduced.getElementsByClass("Part"))
+    assert [held.id for held in parts] == ["Ursatz", None]
+    marked = list(parts[0].recurse().notes)
+    assert [note.name for note in marked] == ["C", "G"]
+    assert [note.lyric for note in marked] == ["I", "V"]
+    # The part the marks were read off is still there.
+    assert len(list(parts[1].recurse().notes)) == 8
+
+    # Nothing to reduce is refused, as music21 refuses it.
+    with pytest.raises(Exception):
+        m.ScoreReduction().reduce()
+    with pytest.raises(Exception):
+        m.ScoreReduction().score = m.Note("C4")
