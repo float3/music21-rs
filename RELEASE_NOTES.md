@@ -2,6 +2,38 @@
 
 ## added
 
+- **The wheel measures a piece by every feature extractor**, and every one
+  of music21's `features.base` examples passes: 16 of 16 docstrings and 82
+  of 82, from nothing. The reading is the crate's `features`, whose
+  extractors `features_parity` already held to music21 vector for vector;
+  what is swapped is the **data set** -- its columns, what each column is,
+  and the numbers in it -- together with `extractorsById`,
+  `extractorById`, `vectorById`, `getIndex` and `allFeaturesAsList`.
+
+  **`FeatureExtractor`, `Feature`, `StreamForms` and `DataInstance` stay
+  music21's**, and that is the line rather than an omission.
+  `FeatureExtractor` is the base class every one of music21's extractors
+  was built from before any of this runs -- a class already made keeps the
+  base it was made from, which `rebind` cannot change -- so standing in
+  for it would reach none of them, nor any of its own examples, every one
+  of which is demonstrated on a subclass. `Feature` is a bag music21's
+  extractors fill attribute by attribute, `StreamForms` is its cache of a
+  stream read a dozen ways, and `DataInstance` is that cache with a class
+  value and a path to parse.
+
+  So an extractor class is read here as a **name**: an id or a name picks
+  the crate's row, and the class music21 holds under it is what
+  `extractorsById` hands back, which is what its own examples print and
+  what a caller then calls with a stream. Parsing stays music21's too -- a
+  piece added by a corpus name or a path goes to music21's own
+  `DataInstance`, which decides between the corpus and the converter -- so
+  a set's rows are those objects, and music21's own output formats, which
+  `getString` builds with the set itself, read every label and every
+  number out of this one. A wheel standing on its own keeps the pieces
+  itself and takes an extractor's bare id, there being no class of
+  music21's to hand over; the members that can only answer with one say
+  outright that they need music21 beside them.
+
 - **The wheel merges two readings of a score into one with variants**, and
   every one of music21's `variant` examples passes: 25 of 25 docstrings and
   370 of 370, from nothing -- the largest module in the harness after

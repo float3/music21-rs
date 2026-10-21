@@ -5343,3 +5343,93 @@ def test_two_readings_of_a_stream_are_merged_as_variants():
     before = [v.lengthType for v in plain.getElementsByClass(m21variant.Variant)]
     named = m.makeAllVariantsReplacements(plain, variantNames=["draft"])
     assert [v.lengthType for v in named.getElementsByClass(m21variant.Variant)] == before
+
+
+def test_a_piece_is_measured_by_every_feature_extractor():
+    """What each extractor reads of a piece, and the table a set of them
+    makes, as music21's `features` module makes it.
+
+    An extractor class is music21's, so `extractorsById` needs music21
+    beside it; an extractor's bare id does instead, which is how a wheel
+    on its own names one."""
+    line = m.from_tiny_notation("4/4 c4 d e2")
+
+    # Where in its library the extractor of a name stands.
+    assert m.getIndex("Range") == (61, "jsymbolic")
+    assert m.getIndex("Tonal Certainty", "native") == (1, "native")
+    assert m.getIndex("aBrandNewFeature!") is None
+
+    # Every feature of the piece, each as a list of its own.
+    every = m.allFeaturesAsList(line)
+    assert every[2:5] == [[2], [2], [1.0]]
+    assert len(every) > 85
+
+    # One extractor over a stream of this package's own.
+    one = m.Stream()
+    one.append(m.Note("A4"))
+    assert m.vectorById(one, "p20") == [1.0] + [0.0] * 11
+    assert m.vectorById(one, "not an extractor") is None
+
+    # A table of two extractors over one piece.
+    ds = m.DataSet(classLabel="Composer")
+    ds.addFeatureExtractors(["P20", "R31"])
+    assert ds.getClassLabel() == "Composer"
+    assert ds.getAttributeLabels()[-3:] == [
+        "Initial_Time_Signature_0",
+        "Initial_Time_Signature_1",
+        "Composer",
+    ]
+    # The id's column says nothing of itself and the class's is discrete.
+    assert ds.getDiscreteLabels()[:2] == [None, False]
+    assert ds.getDiscreteLabels()[-2:] == [True, True]
+    assert ds.getClassPositionLabels()[-2:] == [False, True]
+
+    ds.addData(line, classValue="Bach", id="a line")
+    ds.process()
+    (row,) = ds.getFeaturesAsList()
+    # A space in an id is written as an underscore, as music21 writes it.
+    assert row[0] == "a_line"
+    assert row[-1] == "Bach"
+    assert row[-3:-1] == [4, 4]
+    assert ds.getUniqueClassValues() == ["Bach"]
+    # Asked for unconcatenated, each feature is a list of its own.
+    (shaped,) = ds.getFeaturesAsList(concatenateLists=False)
+    assert shaped[-2] == [4, 4]
+    assert ds._getOutputFormatFromFilePath("junk") is None
+
+    # Nothing can be added to a set with no class label at all.
+    with pytest.raises(Exception, match="class label"):
+        m.DataSet().addData(line)
+
+    try:
+        from music21 import features as m21features
+    except ImportError:
+        # An extractor class is music21's own, and so is the writer a
+        # format names.
+        for call in (
+            lambda: m.extractorsById("p20"),
+            lambda: m.extractorById("p20"),
+            lambda: m.DataSet(classLabel="Composer").addData("bwv66.6"),
+            lambda: m.allFeaturesAsList("bwv66.6"),
+            lambda: ds.getString(),
+        ):
+            with pytest.raises(Exception, match="needs music21 beside it"):
+                call()
+        return
+
+    # With music21 beside it, an id names music21's own class -- which is
+    # what a caller then calls with a stream.
+    found = m.extractorsById(["p-20", "p 21"])
+    assert [fe.id for fe in found] == ["P20", "P21"]
+    assert m.extractorById("p20") is found[0]
+    assert m.extractorsById("nothing of the sort") == []
+    assert m.extractorById("nothing of the sort") is None
+
+    # A set given one of music21's own extractor classes reads it as the
+    # crate's row of the same id.
+    named = m.DataSet(classLabel="Composer")
+    named.addFeatureExtractors(m21features.jSymbolic.ChangesOfMeterFeature)
+    assert named.getAttributeLabels() == ["Identifier", "Changes_of_Meter", "Composer"]
+    # A music21 stream added to it is read by `install_into_music21`'s
+    # classes, which this suite does not install; `doctest_features` is
+    # where that half runs.

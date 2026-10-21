@@ -1,0 +1,23 @@
+# Docstrings of music21.features.base whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_features`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.features.base.DataInstance.__getitem__",
+    "music21.features.base.DataInstance.setClassLabel",
+    "music21.features.base.DataSet",
+    "music21.features.base.DataSet._getOutputFormatFromFilePath",
+    "music21.features.base.DataSet.getAttributeLabels",
+    "music21.features.base.DataSet.getClassPositionLabels",
+    "music21.features.base.DataSet.getDiscreteLabels",
+    "music21.features.base.Feature",
+    "music21.features.base.FeatureExtractor.getAttributeLabels",
+    "music21.features.base.FeatureExtractor.getBlankFeature",
+    "music21.features.base.FeatureExtractor.prepareFeature",
+    "music21.features.base.allFeaturesAsList",
+    "music21.features.base.extractorById",
+    "music21.features.base.extractorsById",
+    "music21.features.base.getIndex",
+    "music21.features.base.vectorById",
+]

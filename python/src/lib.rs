@@ -56,6 +56,7 @@ pub mod editorial;
 pub mod enharmonics;
 pub mod expressions;
 pub mod fbrules;
+pub mod features;
 pub mod figuredbass;
 pub mod fixer;
 pub mod formats;
@@ -1381,6 +1382,16 @@ exceptions![
         Some("music21.variant")
     ),
     (
+        "FeatureException",
+        features::FeatureException,
+        Some("music21.features.base")
+    ),
+    (
+        "DataSetException",
+        features::DataSetException,
+        Some("music21.features.base")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1682,6 +1693,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     variant::register(m)?;
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
+    features::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;
     hasher::register(m)?;
