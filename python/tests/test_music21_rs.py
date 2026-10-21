@@ -5277,3 +5277,69 @@ def test_a_score_is_reduced_to_the_notes_an_analyst_marked():
         m.ScoreReduction().reduce()
     with pytest.raises(Exception):
         m.ScoreReduction().score = m.Note("C4")
+
+
+def test_two_readings_of_a_stream_are_merged_as_variants():
+    """Where two readings of one stream differ, what differs is kept as a
+    variant, as music21's `variant` module keeps it.
+
+    A variant is music21's own `variant.Variant`, which this package has
+    no class for, so each of these says outright that it needs music21
+    beside it rather than answering a stream with no variants in it."""
+    one = m.from_tiny_notation("4/4 a4 b c d  e2 f2")
+    two = m.from_tiny_notation("4/4 a4 b c e  e2 f2")
+    try:
+        from music21 import variant as m21variant
+    except ImportError:
+        for call in (
+            lambda: m.mergeVariants(one, two, variantName="london"),
+            lambda: m.mergeVariantMeasureStreams(one, two, variantName="london"),
+            lambda: m.mergeVariantsEqualDuration([one, two], ["london"]),
+            lambda: m.addVariant(one, 0.0, two, variantName="london"),
+            lambda: m.makeAllVariantsReplacements(one),
+        ):
+            with pytest.raises(Exception, match="no class for"):
+                call()
+        return
+
+    from music21 import converter
+
+    one = converter.parse("tinyNotation: 4/4 a4 b c d  e2 f2")
+    two = converter.parse("tinyNotation: 4/4 a4 b c e  e2 f2")
+
+    merged = m.mergeVariants(one, two, variantName="london")
+    variants = list(merged.getElementsByClass(m21variant.Variant))
+    assert len(variants) == 1
+    assert variants[0].groups == ["london"]
+    assert [note.name for note in variants[0].containedSite.recurse().notes] == ["E"]
+    # The reading it was merged into is unchanged.
+    assert not list(one.getElementsByClass(m21variant.Variant))
+
+    # Asked for in place, the variants go into the stream it was given and
+    # nothing else of it moves.
+    notes = list(one.recurse().notes)
+    assert m.mergeVariants(one, two, variantName="london", inPlace=True) is None
+    assert len(list(one.getElementsByClass(m21variant.Variant))) == 1
+    assert list(one.recurse().notes)[0] is notes[0]
+
+    # One reading added by hand, and said to stand in for four quarters.
+    plain = converter.parse("tinyNotation: 4/4 a4 b c d  e2 f2")
+    other = converter.parse("tinyNotation: 4/4 a4 b c e")
+    m.addVariant(
+        plain,
+        0.0,
+        other,
+        variantName="draft",
+        replacementQuarterLength=4.0,
+    )
+    added = list(plain.getElementsByClass(m21variant.Variant))
+    assert len(added) == 1
+    assert added[0].groups == ["draft"]
+    assert added[0].replacementQuarterLength == 4.0
+
+    # music21 leaves every variant exactly as it is where they are named,
+    # both branches of its own test skipping, so the stream comes back
+    # unchanged.
+    before = [v.lengthType for v in plain.getElementsByClass(m21variant.Variant)]
+    named = m.makeAllVariantsReplacements(plain, variantNames=["draft"])
+    assert [v.lengthType for v in named.getElementsByClass(m21variant.Variant)] == before

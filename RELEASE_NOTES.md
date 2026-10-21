@@ -2,6 +2,34 @@
 
 ## added
 
+- **The wheel merges two readings of a score into one with variants**, and
+  every one of music21's `variant` examples passes: 25 of 25 docstrings and
+  370 of 370, from nothing -- the largest module in the harness after
+  `stream.base`. The merging and the fixing are the crate's `variant`,
+  which `variant_parity` already held to music21.
+
+  The eight module functions are swapped and `Variant` itself is not,
+  which is the honest line: its own members are readings of, or
+  delegations to, the stream it holds, so a facade for it would carry
+  almost nothing of the crate. A variant is read and built as music21's
+  own (`stream::variant_value`, `stream::variant_object`), and since a
+  stream built without that class would quietly have no variants in it --
+  which is the whole of what these answer -- each function asks for the
+  class first and says outright that it needs music21 beside it.
+
+  **`inPlace=True` is answered here, where it is refused everywhere else
+  in the package.** Every one of these only adds or replaces variants: the
+  notes, rests and measures of the stream are left exactly as they were,
+  so an edit in place is one removal and one insertion per variant and no
+  rebuilding at all. A variant an answer puts inside a measure -- which is
+  where `refineVariant` puts the ones it refines -- goes into the measure
+  at the same place.
+
+  `makeAllVariantsReplacements` leaves every variant exactly as it is where
+  they are named, because both branches of music21's own test skip (its
+  source marks the second `# huh????`); the facade does the same rather
+  than refusing the argument, which is what music21's own example prints.
+
 - **The wheel reduces a score to the notes an analyst marked**, and
   `analysis.reduction`'s examples pass: 1 of 1 docstring and 3 of 3, from
   nothing. The reduction is the crate's

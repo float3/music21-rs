@@ -4227,6 +4227,10 @@ fn element_object_as<'py>(
         StreamElement::TextExpression(text) => {
             crate::expressions::TextExpression::object(py, text.clone())?.into_bound(py)
         }
+        StreamElement::Variant(variant) => match variant_object(py, variant, whose)? {
+            Some(made) => made,
+            None => return Ok(None),
+        },
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -4236,8 +4240,7 @@ fn element_object_as<'py>(
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
-        | StreamElement::TextBox(_)
-        | StreamElement::Variant(_) => return Ok(None),
+        | StreamElement::TextBox(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
     Ok(Some(made))
@@ -4440,9 +4443,68 @@ fn kind_of(object: &Bound<'_, PyAny>) -> PyResult<StreamKind> {
     Ok(StreamKind::Stream)
 }
 
+/// A music21 variant read as the crate holds one.
+pub(crate) fn variant_value(
+    object: &Bound<'_, PyAny>,
+) -> PyResult<music21_rs_crate::variant::Variant> {
+    let contents = object.getattr("containedSite")?;
+    let mut value = music21_rs_crate::variant::Variant::from_stream(crate_stream(&contents)?);
+    for group in object.getattr("groups")?.walk()? {
+        value.groups_mut().push(group?.str()?.to_str()?.to_string());
+    }
+    // music21 keeps the length a caller set apart from the one it works
+    // out, which is what `_replacementQuarterLength` says: the crate does
+    // the same, so only a length that was set is carried.
+    if let Ok(said) = object.getattr("_replacementQuarterLength")
+        && !said.is_none()
+    {
+        value.set_replacement_quarter_length(Some(said.extract()?));
+    }
+    Ok(value)
+}
+
+/// A variant as music21 holds one, where music21 can be asked for its
+/// class; the package has none of its own.
+pub(crate) fn variant_object<'py>(
+    py: Python<'py>,
+    variant: &music21_rs_crate::variant::Variant,
+    whose: Whose,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let Ok(class) = py
+        .import("music21.variant")
+        .and_then(|module| module.getattr("Variant"))
+    else {
+        return Ok(None);
+    };
+    let made = class.call0()?;
+    for event in variant.contents().events() {
+        if let Some(object) = element_object_as(py, event.element(), whose)? {
+            made.call_method1("insert", (event.offset(), object))?;
+        }
+    }
+    let groups = made.getattr("groups")?;
+    for name in variant.groups() {
+        groups.call_method1("append", (name,))?;
+    }
+    // The length it stands in for, which the crate answers as the length
+    // of the variant itself where nothing was said.
+    made.setattr(
+        "replacementQuarterLength",
+        variant.replacement_quarter_length(),
+    )?;
+    Ok(Some(made))
+}
+
 /// The crate's value of one element, or `None` for one it has no value for.
 fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<StreamElement>> {
     let py = object.py();
+    // music21's own `variant.Variant`, which holds a stream of the
+    // reading it stands in for. The package has no class for one, so a
+    // variant is always music21's; what is read of it is its contents,
+    // its groups and how much of the stream it replaces.
+    if is_of_class(object, &pyo3::types::PyString::new(py, "Variant"))? {
+        return Ok(Some(variant_value(object)?.into()));
+    }
     if let Ok(symbol) = object.cast::<ChordSymbol>() {
         return Ok(Some(StreamElement::ChordSymbol(
             crate::harmony::crate_value(symbol)?,

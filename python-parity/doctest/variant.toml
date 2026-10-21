@@ -1,0 +1,32 @@
+# Docstrings of music21.variant whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_variant`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.variant.Variant",
+    "music21.variant.Variant.containedHighestOffset",
+    "music21.variant.Variant.containedHighestTime",
+    "music21.variant.Variant.highestOffset",
+    "music21.variant.Variant.highestTime",
+    "music21.variant.Variant.removeReplacedElementsFromStream",
+    "music21.variant.Variant.replacedElements",
+    "music21.variant.Variant.show",
+    "music21.variant._diffScore",
+    "music21.variant._doVariantFixingOnStream",
+    "music21.variant._generateVariant",
+    "music21.variant._getBestListAndScore",
+    "music21.variant._getNextElements",
+    "music21.variant._getPreviousElement",
+    "music21.variant._getRegionsFromStreams",
+    "music21.variant._mergeVariants",
+    "music21.variant.addVariant",
+    "music21.variant.getMeasureHashes",
+    "music21.variant.makeAllVariantsReplacements",
+    "music21.variant.mergePartAsOssia",
+    "music21.variant.mergeVariantMeasureStreams",
+    "music21.variant.mergeVariantScores",
+    "music21.variant.mergeVariants",
+    "music21.variant.mergeVariantsEqualDuration",
+    "music21.variant.refineVariant",
+]

@@ -104,6 +104,7 @@ pub mod tempo;
 pub mod text;
 pub mod transposition;
 pub mod tsvconverter;
+pub mod variant;
 pub mod voiceleading;
 pub mod windowed;
 
@@ -1375,6 +1376,11 @@ exceptions![
         Some("music21.analysis.reduction")
     ),
     (
+        "VariantException",
+        variant::VariantException,
+        Some("music21.variant")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1673,6 +1679,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     makenotation::register(m)?;
     clercqtemperley::register(m)?;
     reduction::register(m)?;
+    variant::register(m)?;
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;
