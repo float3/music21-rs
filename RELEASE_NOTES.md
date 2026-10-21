@@ -2,6 +2,28 @@
 
 ## added
 
+- **A score reduced to the chords that carry it runs against the crate**:
+  `analysis.reduceChords` is 25 of its 28 examples, from nothing. The whole
+  reduction was already the crate's `analysis::reduce_chords`, which
+  `reduce_chords_parity` holds to music21 chord for chord on twelve corpus
+  scores; what this took was opening up the two steps music21 documents on
+  their own.
+
+  **The four weight algorithms are `ChordWeight`** where only the one a
+  reduction uses was modelled, `measure_chord_weights` is music21's
+  `computeMeasureChordWeights` over them, and `reduced_measure_places` is
+  `reduceMeasureToNChords` read as places -- which chord of the measure is
+  kept, where it goes and how long it sounds -- with
+  `reduce_measure_to_n_chords` rebuilt on it. That twin is what lets the
+  wheel edit music21's own measure, as music21's own step does, so a caller
+  holding one of those chords still holds it.
+
+  The ten steps that walk music21's *mutable* timespan tree and edit it as
+  they go are refused with that reason rather than answered differently.
+  `collapseArpeggios` is the only one of them with examples and it is the
+  three this module fails: a reading of it could be checked by nothing but
+  those eleven examples, which is not enough to ship one by.
+
 - **Every feature extractor is a class of its own in the wheel**, which
   brings `features.jSymbolic` into the harness with all 433 of its examples
   and `features.native` with all 74 -- both from nothing. Each of the
