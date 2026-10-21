@@ -2,6 +2,34 @@
 
 ## added
 
+- **Every feature extractor is a class of its own in the wheel**, which
+  brings `features.jSymbolic` into the harness with all 433 of its examples
+  and `features.native` with all 74 -- both from nothing. Each of the
+  ninety-one classes stands for one row of the crate's table, which
+  `features_parity` already held to music21 vector for vector, and extends a
+  base of this package's own carrying music21's whole `FeatureExtractor`
+  interface. The file is generated from music21's own `featureExtractors`
+  lists, as the instrument classes are from its instrument module.
+
+  music21's `FeatureExtractor` itself still cannot be swapped -- every one of
+  these was built from it before any of this runs, and a class already made
+  keeps the base it was made from. What each *subclass* was built from is
+  nothing a caller sees, which is why the subclasses can be swapped where
+  the base cannot.
+
+  A class says what it reads before it has read anything, so each of the
+  seven things it says is a class attribute answering out of the crate's
+  row; each library raises its own exception, which music21's own examples
+  name; and `metadata`'s refusal for an instrument with no MIDI program now
+  names the instrument as music21 names it, `str(i) or repr(i)`.
+  `LanguageFeature` is the one left to music21, the crate answering it only
+  behind a feature the wheel does not turn on.
+
+  A module the parity harness covers is in scope for the report now whether
+  or not the feature map reads a class of it, which is what gives these two
+  a denominator -- and turned up four more that had been invisible the same
+  way: `figuredBass.checker`, `examples`, `harmony` and `rules`.
+
 - **A spanner holds its joined objects in music21's own `SpannerStorage`**,
   which takes `spanner` from 296 of its 419 examples to all 419. music21's
   own code reaches for that stream everywhere -- `Spanner.__iter__`,

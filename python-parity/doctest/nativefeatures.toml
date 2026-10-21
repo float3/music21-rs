@@ -1,0 +1,26 @@
+# Docstrings of music21.features.native whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_nativefeatures`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.features.native.DiminishedSeventhSimultaneityPrevalence",
+    "music21.features.native.DiminishedTriadSimultaneityPrevalence",
+    "music21.features.native.DominantSeventhSimultaneityPrevalence",
+    "music21.features.native.FirstBeatAttackPrevalence",
+    "music21.features.native.IncorrectlySpelledTriadPrevalence",
+    "music21.features.native.LanguageFeature",
+    "music21.features.native.MajorTriadSimultaneityPrevalence",
+    "music21.features.native.MinorTriadSimultaneityPrevalence",
+    "music21.features.native.MostCommonNoteQuarterLength",
+    "music21.features.native.MostCommonNoteQuarterLengthPrevalence",
+    "music21.features.native.MostCommonPitchClassSetSimultaneityPrevalence",
+    "music21.features.native.MostCommonSetClassSimultaneityPrevalence",
+    "music21.features.native.QualityFeature",
+    "music21.features.native.RangeOfNoteQuarterLengths",
+    "music21.features.native.TonalCertainty",
+    "music21.features.native.TriadSimultaneityPrevalence",
+    "music21.features.native.UniqueNoteQuarterLengths",
+    "music21.features.native.UniquePitchClassSetSimultaneities",
+    "music21.features.native.UniqueSetClassSimultaneities",
+]

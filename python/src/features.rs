@@ -214,7 +214,10 @@ fn value_object<'py>(py: Python<'py>, value: Value) -> PyResult<Bound<'py, PyAny
 }
 
 /// A feature's values as music21's `Feature.vector` is: a plain list.
-fn vector_object<'py>(py: Python<'py>, feature: &Feature) -> PyResult<Bound<'py, PyList>> {
+pub(crate) fn vector_object<'py>(
+    py: Python<'py>,
+    feature: &Feature,
+) -> PyResult<Bound<'py, PyList>> {
     let values = PyList::empty(py);
     for value in feature.values() {
         values.append(value_object(py, *value)?)?;
@@ -224,7 +227,7 @@ fn vector_object<'py>(py: Python<'py>, feature: &Feature) -> PyResult<Bound<'py,
 
 /// music21's own `Feature` for one the crate read, filled as its
 /// `fillFeatureAttributes` fills one.
-fn feature_object<'py>(
+pub(crate) fn feature_object<'py>(
     py: Python<'py>,
     extractor: &RsExtractor,
     feature: &Feature,
@@ -314,7 +317,7 @@ fn crate_stream_of(source: &Bound<'_, PyAny>) -> PyResult<RsStream> {
 }
 
 /// A piece prepared as music21's `DataInstance` prepares one.
-fn prepared(source: &Bound<'_, PyAny>) -> PyResult<RsDataInstance> {
+pub(crate) fn prepared(source: &Bound<'_, PyAny>) -> PyResult<RsDataInstance> {
     let stream = crate_stream_of(source)?;
     RsDataInstance::new(&stream).map_err(feature_error)
 }

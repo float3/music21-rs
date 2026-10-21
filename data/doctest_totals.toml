@@ -239,6 +239,36 @@ examples = 82
 tests = 9
 
 [[module]]
+module = "music21.features.jSymbolic"
+docstrings = 80
+examples = 433
+tests = 20
+
+[[module]]
+module = "music21.features.native"
+docstrings = 19
+examples = 74
+tests = 5
+
+[[module]]
+module = "music21.figuredBass.checker"
+docstrings = 12
+examples = 102
+tests = 2
+
+[[module]]
+module = "music21.figuredBass.examples"
+docstrings = 11
+examples = 71
+tests = 0
+
+[[module]]
+module = "music21.figuredBass.harmony"
+docstrings = 4
+examples = 24
+tests = 0
+
+[[module]]
 module = "music21.figuredBass.notation"
 docstrings = 12
 examples = 129
@@ -266,6 +296,12 @@ tests = 0
 module = "music21.figuredBass.resolution"
 docstrings = 13
 examples = 172
+tests = 0
+
+[[module]]
+module = "music21.figuredBass.rules"
+docstrings = 1
+examples = 5
 tests = 0
 
 [[module]]

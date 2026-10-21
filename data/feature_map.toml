@@ -34,7 +34,7 @@
 # `stream/iterator.py`, `stream/filters.py`).
 #
 # Two more files are ported and deliberately not listed as classes.
-# `features/jSymbolic.py`'s 72 extractors and `features/native.py`'s 24 are
+# `features/jSymbolic.py`'s 72 extractors and `features/native.py`'s 20 are
 # rows of a table generated from music21's own classes rather than a class
 # each -- id, name, description, size, flags and a function writing the
 # vector -- which `features_parity` checks against those live classes and

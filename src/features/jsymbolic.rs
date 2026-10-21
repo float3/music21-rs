@@ -1425,11 +1425,17 @@ fn variability_of_number_of_independent_voices(
     Ok(())
 }
 
-/// Each part of the piece partitioned by instrument, as the program of its
-/// first instrument (`None` where it states none) and how many notes it
-/// holds: what music21's instrument features read off
+/// A part's first instrument as the instrument features read it: the
+/// program it states, `None` where it states none, and the name music21
+/// would refuse it by.
+type PartInstrument = Option<(Option<u8>, String)>;
+
+/// Each part of the piece partitioned by instrument, as its first
+/// instrument -- the program it states and the name music21 would refuse it
+/// by, `None` where the part names no instrument at all -- and how many
+/// notes it holds: what music21's instrument features read off
 /// `partitionByInstrument`. Nothing where the partition is empty.
-fn instrument_parts(data: &DataInstance) -> Result<Vec<(Option<Option<u8>>, usize)>> {
+fn instrument_parts(data: &DataInstance) -> Result<Vec<(PartInstrument, usize)>> {
     let partitioned = crate::instrument::partition_by_instrument(data.prepared());
     if partitioned.is_empty() {
         return Err(Error::Feature("input lacks instruments".to_string()));
@@ -1442,7 +1448,9 @@ fn instrument_parts(data: &DataInstance) -> Result<Vec<(Option<Option<u8>>, usiz
                 .events()
                 .iter()
                 .find_map(|event| match event.element() {
-                    StreamElement::Instrument(instrument) => Some(instrument.midi_program()),
+                    StreamElement::Instrument(instrument) => {
+                        Some((instrument.midi_program(), refused_as(instrument)))
+                    }
                     _ => None,
                 });
             let notes = part
@@ -1466,15 +1474,26 @@ fn instrument_parts(data: &DataInstance) -> Result<Vec<(Option<Option<u8>>, usiz
 
 /// The program of a part's first instrument, refused where it has none or
 /// the instrument names no program, as music21 refuses it.
-fn program_of(program: Option<Option<u8>>) -> Result<usize> {
-    match program {
-        Some(Some(program)) => Ok(usize::from(program)),
-        Some(None) => Err(Error::Feature(
-            "an instrument lacks a midiProgram".to_string(),
-        )),
+fn program_of(found: PartInstrument) -> Result<usize> {
+    match found {
+        Some((Some(program), _)) => Ok(usize::from(program)),
+        Some((None, named)) => Err(Error::Feature(format!("{named} lacks a midiProgram"))),
         None => Err(Error::Feature(
             "'NoneType' object has no attribute 'midiProgram'".to_string(),
         )),
+    }
+}
+
+/// How music21 names an instrument in the sentence it refuses one by:
+/// `str(i) or repr(i)`, which is the instrument's name where it has one and
+/// its `repr` where that says nothing at all.
+fn refused_as(instrument: &crate::instrument::Instrument) -> String {
+    match instrument.name().filter(|name| !name.is_empty()) {
+        Some(name) => name.to_string(),
+        None => format!(
+            "<music21.instrument.{} ''>",
+            instrument.class_name().unwrap_or("Instrument")
+        ),
     }
 }
 
@@ -1556,7 +1575,10 @@ fn instrument_fraction(data: &DataInstance, programs: &[usize]) -> Result<FloatT
         let Some(program) = program else {
             return Err(program_of(None).unwrap_err());
         };
-        if program.is_some_and(|program| programs.contains(&usize::from(program))) {
+        if program
+            .0
+            .is_some_and(|program| programs.contains(&usize::from(program)))
+        {
             count += notes;
         }
     }
