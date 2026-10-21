@@ -5186,3 +5186,63 @@ def test_the_notation_a_score_leaves_unsaid_is_worked_out():
     tuplets = [note.duration.tuplets for note in held.recurse().notes]
     assert tuplets[0] and tuplets[0][0].type == "start"
     assert tuplets[2] and tuplets[2][0].type == "stop"
+
+
+def test_a_rock_corpus_analysis_is_read_into_a_part():
+    """A de Clercq-Temperley analysis read as its text says it, and played
+    through to a part, as music21's `romanText.clercqTemperley` reads
+    one."""
+    text = """% Brown-Eyed Girl
+VP: I | IV | I | V |
+In: $VP*2
+Vr: $VP*4 IV | V | I | vi | IV | V | I | V |     % Second half
+Ch: V | | $VP*2 I |*4
+S: [G] $In $Vr $Ch"""
+
+    song = m.CTSong(text)
+    assert song.title == "Brown-Eyed Girl"
+    assert song.lines[0] == "% Brown-Eyed Girl"
+    assert song.lines[-1] == "S: [G] $In $Vr $Ch"
+    assert song.comments == [["Vr:", "Second half"]]
+    assert song.homeKey.tonicPitchNameWithCase == "G"
+    assert song.homeTimeSig.ratioString == "4/4"
+    assert list(song.rules) == ["VP", "In", "Vr", "Ch", "S"]
+    assert repr(song) == (
+        "<music21.romanText.clercqTemperley.CTSong "
+        "title='Brown-Eyed Girl' year=None>"
+    )
+
+    # A rule says its name, its chords, its comment and the section it
+    # stands for.
+    verse = song.rules["Vr"]
+    assert verse.LHS == "Vr"
+    assert verse.sectionName == "Verse"
+    assert verse.comment == "Second half"
+    assert verse.musicText.startswith("$VP*4 IV | V |")
+    assert m.CTRule.fixupChordAtom("iix") == "iio"
+    assert [group[1] for group in m.CTRule("In: $VP*2")._measureGroups()] == ["$"]
+
+    # The song played through to a part, each chord carrying its figure.
+    part = song.toPart()
+    numerals = list(part.recurse().notes)
+    assert numerals[0].figure == "I"
+    assert numerals[0].lyrics[0].text == "I"
+    # The part holds every measure the S: rule plays through: eight for
+    # the introduction, twenty-four for the verse and fourteen for the
+    # chorus. (It is music21's own `Part` wherever music21 can be asked
+    # for one, and this package's otherwise, which is what the doctest
+    # suite checks.)
+    assert len(part.getElementsByClass("Measure")) == 8 + 24 + 14
+    # The name of every rule that brought a section stands on its first
+    # chord, both as a lyric under the figure and in its editorial -- the
+    # innermost rule first, as music21 writes them.
+    assert numerals[0].lyric == "I" + chr(10) + "VP" + chr(10) + "In"
+    assert numerals[0].editorial.formalDivision == ["VP", "In"]
+    assert numerals[1].lyric == "IV"
+    assert numerals[1].editorial.formalDivision == []
+
+    # A rule with a song behind it is expanded by the song, which keeps the
+    # state music21 keeps on the rule.
+    with pytest.raises(Exception):
+        verse.expand()
+    assert len(m.CTRule("In: I | IV |").expand()) == 2

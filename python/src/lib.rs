@@ -47,6 +47,7 @@ pub mod brailletranslate;
 pub mod chord;
 pub mod chordtables;
 pub mod clef;
+pub mod clercqtemperley;
 pub mod correlate;
 pub mod discrete;
 pub mod duration;
@@ -1358,6 +1359,16 @@ exceptions![
         Some("music21.stream.makeNotation")
     ),
     (
+        "CTSongException",
+        clercqtemperley::CTSongException,
+        Some("music21.romanText.clercqTemperley")
+    ),
+    (
+        "CTRuleException",
+        clercqtemperley::CTRuleException,
+        Some("music21.romanText.clercqTemperley")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1654,6 +1665,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     aligner::register(m)?;
     audiosearch::register(m)?;
     makenotation::register(m)?;
+    clercqtemperley::register(m)?;
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;

@@ -52,6 +52,7 @@ pub use music21_rs_python::brailletranslate::NAMES as BRAILLE_TRANSLATE_NAMES;
 pub use music21_rs_python::chord::NAMES as CHORD_NAMES;
 pub use music21_rs_python::chordtables::NAMES as CHORD_TABLES_NAMES;
 pub use music21_rs_python::clef::NAMES as CLEF_NAMES;
+pub use music21_rs_python::clercqtemperley::NAMES as CLERCQ_TEMPERLEY_NAMES;
 pub use music21_rs_python::correlate::NAMES as CORRELATE_NAMES;
 pub use music21_rs_python::duration::NAMES as DURATION_NAMES;
 pub use music21_rs_python::dynamics::NAMES as DYNAMICS_NAMES;

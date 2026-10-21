@@ -102,10 +102,27 @@ impl CtSong {
     /// the string holds no `|` and no `S:`; the library reads no files, so
     /// this takes the text alone.
     pub fn parse(text: &str) -> Self {
-        let lines: Vec<String> = text
-            .split('\n')
-            .filter(|line| !line.is_empty())
-            .map(|line| line.trim().to_string())
+        Self::from_lines(text.split('\n'))
+    }
+
+    /// A song read from the lines of its file: music21's `parse` once it
+    /// has opened one, which keeps every line that holds anything and
+    /// trims each.
+    ///
+    /// The library reads no files, so a caller hands the lines over; it
+    /// matters that they come as the file wrote them, since music21 reads
+    /// a line's emptiness *before* trimming it -- a blank line of a file
+    /// still carries its newline and so survives as an empty line, where
+    /// one in a text split on newlines does not.
+    pub fn from_lines<I, S>(lines: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let lines: Vec<String> = lines
+            .into_iter()
+            .filter(|line| !line.as_ref().is_empty())
+            .map(|line| line.as_ref().trim().to_string())
             .collect();
         let rules = lines
             .iter()
