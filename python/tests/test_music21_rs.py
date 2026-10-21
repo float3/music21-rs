@@ -5482,6 +5482,21 @@ def test_a_piece_is_measured_by_every_feature_extractor():
     (shaped,) = ds.getFeaturesAsList(concatenateLists=False)
     assert shaped[-2] == [4, 4]
     assert ds._getOutputFormatFromFilePath("junk") is None
+    # A wheel on its own writes the table with the crate's own writer,
+    # which `features_parity` holds to music21's byte for byte.
+    assert ds.getString("csv").splitlines() == [
+        "Identifier,Pitch_Class_Distribution_0,Pitch_Class_Distribution_1,"
+        "Pitch_Class_Distribution_2,Pitch_Class_Distribution_3,"
+        "Pitch_Class_Distribution_4,Pitch_Class_Distribution_5,"
+        "Pitch_Class_Distribution_6,Pitch_Class_Distribution_7,"
+        "Pitch_Class_Distribution_8,Pitch_Class_Distribution_9,"
+        "Pitch_Class_Distribution_10,Pitch_Class_Distribution_11,"
+        "Initial_Time_Signature_0,Initial_Time_Signature_1,Composer",
+        "a_line,0.3333333333333333,0.0,0.3333333333333333,0.0,"
+        "0.3333333333333333,0.0,0.0,0.0,0.0,0.0,0.0,0.0,4,4,Bach",
+    ]
+    with pytest.raises(Exception, match="no output format"):
+        ds.getString("nonsense")
 
     # Nothing can be added to a set with no class label at all.
     with pytest.raises(Exception, match="class label"):
@@ -5497,7 +5512,6 @@ def test_a_piece_is_measured_by_every_feature_extractor():
             lambda: m.extractorById("p20"),
             lambda: m.DataSet(classLabel="Composer").addData("bwv66.6"),
             lambda: m.allFeaturesAsList("bwv66.6"),
-            lambda: ds.getString(),
         ):
             with pytest.raises(Exception, match="needs music21 beside it"):
                 call()

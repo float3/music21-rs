@@ -2,6 +2,20 @@
 
 ## added
 
+- **A data set's table is held to music21's own writers byte for byte.**
+  `DataSet::to_text` is the crate's `getString`, and its only check was an
+  in-module test reading music21's answers off a transcription;
+  `features_parity` now builds the same set on both sides over two corpus
+  scores and compares all three formats -- tab, CSV and ARFF -- so a bumped
+  submodule cannot quietly change what music21 writes without the crate
+  hearing of it.
+
+  That also makes the wheel honest on its own: `getString` was refusing to
+  fall back to the crate's writer purely because nothing held it to
+  music21's, and it falls back now. music21's own writer is still the one
+  that answers wherever music21 can be asked, since it reads every label
+  and every number out of our set.
+
 - **A score reduced to the chords that carry it runs against the crate**:
   `analysis.reduceChords` is 25 of its 28 examples, from nothing. The whole
   reduction was already the crate's `analysis::reduce_chords`, which
