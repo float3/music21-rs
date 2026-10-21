@@ -3890,6 +3890,20 @@ fn edited<'py>(
     from_crate(slf.py(), &made)
 }
 
+/// The class a stream of this shape is built as: music21's own where
+/// music21 can be asked, and this package's where it cannot.
+pub(crate) fn stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(found) = py
+        .import("music21.stream")
+        .and_then(|module| module.getattr(name))
+    {
+        return Ok(found);
+    }
+    py.import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))?
+        .getattr(name)
+}
+
 /// Whose streams a crate stream is built as.
 ///
 /// A wheel on its own has only its own; a facade standing inside music21

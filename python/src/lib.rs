@@ -82,6 +82,7 @@ pub mod pitch;
 pub mod possibility;
 pub mod realizer;
 pub mod realizerscale;
+pub mod reduction;
 pub mod repeat;
 pub mod resolution;
 pub mod rest;
@@ -1369,6 +1370,11 @@ exceptions![
         Some("music21.romanText.clercqTemperley")
     ),
     (
+        "ScoreReductionException",
+        reduction::ScoreReductionException,
+        Some("music21.analysis.reduction")
+    ),
+    (
         "OmrException",
         omrcorrectors::OmrException,
         Some("music21.omr.correctors")
@@ -1666,6 +1672,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     audiosearch::register(m)?;
     makenotation::register(m)?;
     clercqtemperley::register(m)?;
+    reduction::register(m)?;
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     fixer::register(m)?;

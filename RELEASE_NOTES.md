@@ -2,6 +2,16 @@
 
 ## added
 
+- **The wheel reduces a score to the notes an analyst marked**, and
+  `analysis.reduction`'s examples pass: 1 of 1 docstring and 3 of 3, from
+  nothing. The reduction is the crate's
+  `analysis::reduction::ScoreReduction`, which `reduction_parity` holds to
+  music21, and the score it answers is music21's own. `ReductiveNote` and
+  `PartReduction` stay music21's -- the first is a specification read off
+  a lyric, which the crate answers through `ReductiveParameters`, and the
+  second draws a graph of how busy each part is, which is presentation.
+  That is the whole of `analysis` covered.
+
 - **The wheel reads a de Clercq-Temperley analysis of the rock corpus into
   a part**, and every one of music21's `romanText.clercqTemperley`
   examples passes: 14 of 14 docstrings and 90 of 90, from nothing. The
