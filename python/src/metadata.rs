@@ -37,16 +37,19 @@ use music21_rs_crate::metadata::{
 };
 
 /// The names this module hands out. Nothing here is installed **over**
-/// music21's own `metadata`, so `MUSIC21_MODULES` does not name it.
+/// music21's own `metadata` by `install_into_music21`, so
+/// `MUSIC21_MODULES` does not name it -- though the doctest harness swaps
+/// it, which is how its own examples run against this.
 ///
-/// The facade's rule is that what it does not carry raises rather than
-/// falling back. This class cannot keep that bargain: it answers strings
-/// where music21 answers `Text` and `Contributor`, so installing it over
-/// music21's own would be silently different rather than missing --
-/// `RichMetadata` subclasses `Metadata`, the MusicXML writer reads a
-/// `Text`'s language, and the corpus bundles read the dates. It is here
-/// for a caller who has no music21 at all, which is the whole of the
-/// wheel's audience for it.
+/// This used to say the facade could not keep the package's bargain
+/// because it answered strings where music21 answers `Text` and
+/// `Contributor`. It answers the primitives now, so that reason is gone.
+/// What is left to weigh before installing it everywhere: `RichMetadata`
+/// subclasses `Metadata` and carries numbers of its own that nothing here
+/// answers, and `_contents` is a *reading* of the crate's values rather
+/// than the store music21 keeps -- so music21's own corpus bundles and
+/// `freezeThaw`, which go through both, would be running on something
+/// nobody has measured. Measure that before adding it to the table.
 pub const NAMES: &[&str] = &["Metadata", "MetadataException"];
 
 pyo3::create_exception!(
