@@ -2,6 +2,41 @@
 
 ## added
 
+- **`analysis.windowed` passes all 35 of its examples**, and the reason
+  recorded for the one it failed was stale in two ways at once. It said the
+  failure was a measure's `repr` -- music21 writes its number and its offset
+  where this package writes its id -- and that a wheel stream does not know
+  where it stands. True of a wheel stream, and beside the point:
+  `getMinimumWindowStream` is a member a *caller* asks for, so it should
+  have been answering music21's own streams ever since
+  `stream::music21_from_crate` was built.
+
+  Switching it over broke six examples rather than fixing one: a measure's
+  **right barline** was built as the bare facade class, which music21's
+  streams refuse. That is a sixth element of the bare-facade-class kind,
+  after the five found when `music21_from_crate` was written.
+
+- **A measure's barline is music21's own class** where music21 can be asked
+  for one, which is the choice `spanner.Line` and `Style` already make: a
+  barline carries nothing of the crate but its type and, for a repeat, its
+  direction and count, while music21's own readers and writers look for
+  those classes by name.
+
+  Swapping `music21.bar` in the suite instead makes the same examples pass
+  and poisons music21's pickle cache for every process after it. That cache
+  is one directory for the whole machine, a corpus score parsed beside an
+  installed class is written into it carrying that class, and a later
+  process reading the pickle finds the **bare** facade class under a module
+  `install_into_music21` does not carry -- so music21's own tests that parse
+  a chorale die on `'music21.bar.Barline' object has no attribute
+  'activeSite'` in a process with no facade in sight.
+
+  The rule is a combination, and the shorter version of it is wrong: 36 of
+  the modules the suites swap are not installed, `music21.bar` by sixteen
+  of them. What matters is whether such a suite *also leaves a corpus score
+  in the cache carrying one of those objects*. music21's own barline is
+  nobody's to install, and so it travels.
+
 - **`layout` passes all 158 of its examples**, and the reason recorded for
   the one that did not was wrong. It said music21 keeps a staff size as the
   number it was given and that `layout::Tenths` was the type that would

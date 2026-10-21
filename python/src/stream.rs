@@ -3919,6 +3919,47 @@ pub(crate) enum Whose {
     Music21,
 }
 
+/// A measure's barline, as music21's own class wherever music21 can be
+/// asked for one.
+///
+/// It is the choice `spanner.Line` makes, and a barline is the clearest
+/// case for it: it carries nothing of the crate but its type and, where it
+/// is a repeat, its direction and count, while music21's own readers and
+/// writers look for those two classes by name.
+///
+/// **It matters more here than it does for a line.** A bare facade class of
+/// this package's is not a `Music21Object`, so music21's own streams refuse
+/// it outright -- and installing `music21.bar` to get round that is worse
+/// than it looks, because any corpus score parsed beside the installed
+/// class is written into music21's pickle cache carrying it, and that cache
+/// is one directory for the whole machine. A later process reading that
+/// pickle calls `_thawed`, which installs nothing for a module
+/// `install_into_music21` does not carry and so hands back the bare class
+/// again -- in a process with no facade in sight. music21's own barline is
+/// nobody's to install, and so it travels.
+fn barline_object<'py>(
+    py: Python<'py>,
+    barline: &music21_rs_crate::bar::Barline,
+    whose: Whose,
+) -> PyResult<Bound<'py, PyAny>> {
+    if whose == Whose::Music21
+        && let Ok(module) = py.import("music21.bar")
+    {
+        return match barline.repeat_direction() {
+            Some(direction) => {
+                let given = PyDict::new(py);
+                given.set_item("direction", direction.as_str())?;
+                given.set_item("times", barline.repeat_times())?;
+                module.getattr("Repeat")?.call((), Some(&given))
+            }
+            None => module
+                .getattr("Barline")?
+                .call1((barline.bar_type().as_str(),)),
+        };
+    }
+    Ok(crate::bar::Barline::object(py, barline.clone())?.into_bound(py))
+}
+
 /// A crate stream as this wheel's objects: a stream of its kind holding a
 /// wheel object for each element the wheel has a class for, at the offsets
 /// they stand at, with what the stream is called and numbered as the
@@ -4058,16 +4099,10 @@ pub(crate) fn from_crate_as<'py>(
             // music21 keeps these beside a measure's elements, not among
             // them, and so does this package.
             if let Some(left) = stream.left_barline() {
-                made.setattr(
-                    "leftBarline",
-                    crate::bar::Barline::object(py, left.clone())?,
-                )?;
+                made.setattr("leftBarline", barline_object(py, left, whose)?)?;
             }
             if let Some(right) = stream.right_barline() {
-                made.setattr(
-                    "rightBarline",
-                    crate::bar::Barline::object(py, right.clone())?,
-                )?;
+                made.setattr("rightBarline", barline_object(py, right, whose)?)?;
             }
             made.setattr("number", stream.number())?;
             made.setattr("numberSuffix", stream.number_suffix())?;

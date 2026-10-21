@@ -2409,7 +2409,7 @@ quarterLengthBeatStrength = "one of `ChordWeight`'s four, likewise"
 quarterLengthBeatStrengthMeasurePosition = "one of `ChordWeight`'s four, likewise"
 quarterLengthOnly = "one of `ChordWeight`'s four, likewise, and the one `computeMeasureChordWeights` weighs by when it is handed none"
 alignHockets = "a step music21 offers and its own `run` never takes: it moves a verticality's spans back where the moment before it sounds a subset of its notes, editing that mutable tree as it walks"
-collapseArpeggios = "a step `run` never takes: it makes one chord of two neighbours standing on the same bass, walking that mutable tree and editing it as it goes. Only its own eleven examples could say whether a reading of it here were right, which is not enough to ship one by, so the wheel refuses it with that reason"
+collapseArpeggios = "a step `run` never takes: it makes one chord of two neighbours standing on the same bass, walking that mutable tree and editing it as it goes -- and the walk is *live*, measured on real music: a span it fuses is fused again later, so Beach's fifth part goes from 312 spans to 268 on 18 fusions. Reading it without the tree would mean porting music21's own walk over one, which is the `tree` decision in miniature, so the wheel refuses it with that reason"
 removeNonChordTones = "a step `run` never takes: it joins the two spans of a passing or neighbour tone, editing that tree likewise"
 
 [[class]]
