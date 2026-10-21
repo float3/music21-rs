@@ -2311,7 +2311,7 @@ impl GraceDuration {
 /// no time, and how it is written. Nothing for any other duration.
 pub(crate) fn grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDuration>> {
     let Ok(grace) = object.cast::<GraceDuration>() else {
-        return Ok(None);
+        return music21_grace_value(object);
     };
     let grace = grace.borrow();
     let base = grace.as_super();
@@ -2335,6 +2335,63 @@ pub(crate) fn grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDurati
     marks.set_steal_time_previous(grace.steal_previous);
     marks.set_steal_time_following(grace.steal_following);
     marks.set_make_time(grace.make_time);
+    value.set_grace(Some(marks));
+    Ok(Some(value))
+}
+
+/// A grace duration music21 itself built, read off its attributes.
+///
+/// `grace_value` beside it reads this package's own class through fields
+/// only a facade has. A grace note is an eighth that lasts nothing, so what
+/// is read is the written values, the tuplets they are written inside and
+/// the four marks music21 keeps on one. Nothing where the duration is not
+/// a grace at all.
+fn music21_grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDuration>> {
+    if !object
+        .getattr("isGrace")
+        .and_then(|said| said.is_truthy())
+        .unwrap_or(false)
+    {
+        return Ok(None);
+    }
+    let mut written = RsDuration::default();
+    written.clear();
+    written.set_tuplets(Vec::new());
+    for component in object.getattr("components")?.try_iter()? {
+        let component = component?;
+        let Ok(name) = component
+            .getattr("type")
+            .and_then(|name| name.extract::<String>())
+        else {
+            continue;
+        };
+        if let Some(kind) = RsDurationType::from_music21_name(&name) {
+            let dots = component
+                .getattr("dots")
+                .and_then(|dots| dots.extract::<u32>())
+                .unwrap_or(0);
+            written.add_duration_tuple(kind, dots);
+        }
+    }
+    let mut value = written.grace_duration();
+    let mut marks = music21_rs_crate::Grace::new();
+    let said = |name: &str| {
+        object
+            .getattr(name)
+            .and_then(|said| said.is_truthy())
+            .unwrap_or(false)
+    };
+    let number = |name: &str| {
+        object
+            .getattr(name)
+            .ok()
+            .filter(|held| !held.is_none())
+            .and_then(|held| held.extract::<f64>().ok())
+    };
+    marks.set_slash(said("slash"));
+    marks.set_steal_time_previous(number("stealTimePrevious"));
+    marks.set_steal_time_following(number("stealTimeFollowing"));
+    marks.set_make_time(said("makeTime"));
     value.set_grace(Some(marks));
     Ok(Some(value))
 }

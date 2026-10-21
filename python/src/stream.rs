@@ -4166,13 +4166,15 @@ fn element_object_as<'py>(
     element: &StreamElement,
     whose: Whose,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    // The installed class where something is installed, so an element
-    // built here is one music21 will hold: its own streams refuse
-    // anything that is not a `Music21Object`, and a bare facade class is
-    // not one.
+    // A class music21 will hold, so an element built here is one its own
+    // streams accept: they refuse anything that is not a `Music21Object`,
+    // and a bare facade class is not one. Where nothing is installed and
+    // music21 is nonetheless there -- a caller with both and no swap, which
+    // is `pip install music21 music21-rs` -- the subclass installing would
+    // build is built for the purpose and bound into nothing.
     let class_named = |module: &str, name: &str| -> PyResult<Bound<'py, PyAny>> {
-        if let Some(installed) = crate::installed_class(py, module, name) {
-            return Ok(installed);
+        if let Some(held) = crate::holdable_class(py, module, name) {
+            return Ok(held);
         }
         py.import("music21_rs")
             .or_else(|_| py.import("music21_rs_facade"))?
@@ -4181,7 +4183,7 @@ fn element_object_as<'py>(
     let made = match element {
         StreamElement::Stream(inner) => from_crate_as(py, inner, whose)?,
         StreamElement::Note(note) => {
-            crate::installed_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
+            crate::holdable_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
                 .into_bound(py)
                 .into_any()
         }
@@ -4197,7 +4199,7 @@ fn element_object_as<'py>(
             .into_bound(py)
             .into_any()
         }
-        StreamElement::Chord(chord) => crate::installed_new(
+        StreamElement::Chord(chord) => crate::holdable_new(
             py,
             "music21.chord",
             "Chord",
@@ -4206,7 +4208,7 @@ fn element_object_as<'py>(
         .into_bound(py)
         .into_any(),
         StreamElement::Rest(rest) => {
-            crate::installed_new(py, "music21.note", "Rest", Rest::wrap(py, rest.clone()))?
+            crate::holdable_new(py, "music21.note", "Rest", Rest::wrap(py, rest.clone()))?
                 .into_bound(py)
                 .into_any()
         }
@@ -4224,7 +4226,7 @@ fn element_object_as<'py>(
         StreamElement::TimeSignature(meter) => {
             class_named("music21.meter.base", "TimeSignature")?.call1((meter.ratio_string(),))?
         }
-        StreamElement::MetronomeMark(mark) => crate::installed_new(
+        StreamElement::MetronomeMark(mark) => crate::holdable_new(
             py,
             "music21.tempo",
             "MetronomeMark",
@@ -4235,7 +4237,7 @@ fn element_object_as<'py>(
         StreamElement::Barline(barline) => {
             crate::bar::Barline::object(py, barline.clone())?.into_bound(py)
         }
-        StreamElement::Dynamic(dynamic) => crate::installed_new(
+        StreamElement::Dynamic(dynamic) => crate::holdable_new(
             py,
             "music21.dynamics",
             "Dynamic",
@@ -4727,7 +4729,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     }
     // A barline, which a measure keeps beside its elements and a stream
     // may hold among them.
-    if object.cast::<crate::bar::Barline>().is_ok() {
+    if object.cast::<crate::bar::Barline>().is_ok()
+        || is_of_class(object, &pyo3::types::PyString::new(py, "Barline"))?
+    {
         return Ok(Some(StreamElement::Barline(barline_value(object)?)));
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "Clef"))? {
@@ -4735,6 +4739,10 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "Instrument"))? {
         return instrument_value(object).map(|instrument| Some(StreamElement::from(instrument)));
+    }
+    // What music21 itself built, read off its attributes.
+    if !stand_ins && let Some(value) = music21_value(object)? {
+        return Ok(Some(value));
     }
     // Something the crate has no value for: a clef, a barline, an
     // instrument, music21's own metre. What the walks read of one is where it
@@ -4915,21 +4923,30 @@ fn read_written(object: &Bound<'_, PyAny>, note: &mut music21_rs_crate::Note) ->
     if let Ok(parenthesis) = object.getattr("noteheadParenthesis") {
         note.set_notehead_parenthesis(parenthesis.is_truthy()?);
     }
-    if let Ok(beams) = object.getattr("beams")
-        && let Ok(mut beams) = beams.extract::<PyRefMut<'_, crate::notation::Beams>>()
-    {
-        note.set_beams(beams.settled_value(py));
+    if let Ok(beams) = object.getattr("beams") {
+        if let Ok(mut ours) = beams.extract::<PyRefMut<'_, crate::notation::Beams>>() {
+            note.set_beams(ours.settled_value(py));
+        } else if let Some(read) = music21_beams(&beams)? {
+            note.set_beams(read);
+        }
     }
     if let Ok(tie) = object.getattr("tie")
-        && let Ok(tie) = tie.extract::<PyRef<'_, crate::notation::Tie>>()
+        && !tie.is_none()
     {
-        note.set_tie(Some(tie.inner.clone()));
+        if let Ok(ours) = tie.extract::<PyRef<'_, crate::notation::Tie>>() {
+            note.set_tie(Some(ours.inner.clone()));
+        } else if let Some(read) = music21_tie(&tie)? {
+            note.set_tie(Some(read));
+        }
     }
     if let Ok(lyrics) = object.getattr("lyrics") {
         let mut verses = Vec::new();
         for lyric in lyrics.walk()? {
-            if let Ok(lyric) = lyric?.extract::<PyRef<'_, crate::notation::Lyric>>() {
-                verses.push(lyric.synced(py));
+            let lyric = lyric?;
+            if let Ok(ours) = lyric.extract::<PyRef<'_, crate::notation::Lyric>>() {
+                verses.push(ours.synced(py));
+            } else {
+                verses.push(music21_lyric(&lyric)?);
             }
         }
         *note.lyrics_mut() = verses;
@@ -4938,11 +4955,12 @@ fn read_written(object: &Bound<'_, PyAny>, note: &mut music21_rs_crate::Note) ->
         .call_method0("hasVolumeInformation")
         .and_then(|said| said.is_truthy())
         .unwrap_or(false);
-    if has_volume
-        && let Ok(volume) = object.getattr("volume")
-        && let Ok(volume) = volume.extract::<PyRef<'_, crate::notation::Volume>>()
-    {
-        note.set_volume(Some(volume.inner.clone()));
+    if has_volume && let Ok(volume) = object.getattr("volume") {
+        if let Ok(ours) = volume.extract::<PyRef<'_, crate::notation::Volume>>() {
+            note.set_volume(Some(ours.inner.clone()));
+        } else {
+            note.set_volume(Some(music21_volume(&volume)?));
+        }
     }
     if let Ok(stored) = object.getattr("storedInstrument")
         && !stored.is_none()
@@ -4951,9 +4969,154 @@ fn read_written(object: &Bound<'_, PyAny>, note: &mut music21_rs_crate::Note) ->
     }
     note.set_color(style_color(object));
     note.set_hidden(hidden_on_print(object));
+    // Whether it is drawn cue-sized or full, which music21 keeps on the
+    // style and its writer writes on the note's written value.
+    if object
+        .getattr("hasStyleInformation")
+        .and_then(|said| said.is_truthy())
+        .unwrap_or(false)
+        && let Ok(style) = object.getattr("style")
+        && let Some(size) = text_attribute(&style, "noteSize")
+    {
+        note.set_size(music21_rs_crate::notation::NoteSize::from_name(&size));
+    }
     *note.expressions_mut() = expressions_of(object)?;
     *note.articulations_mut() = articulations_of(object)?;
     Ok(())
+}
+
+/// A tie music21 built: which end of the tie the note is, and how the
+/// line over it is drawn.
+fn music21_tie(object: &Bound<'_, PyAny>) -> PyResult<Option<music21_rs_crate::notation::Tie>> {
+    use music21_rs_crate::notation::{Tie as RsTie, TieStyle};
+    let failed =
+        |error: music21_rs_crate::Error| StreamException::new_err(crate::pitch::message(&error));
+    let Some(kind) = text_attribute(object, "type") else {
+        return Ok(None);
+    };
+    let mut tie = RsTie::from_name(&kind).map_err(failed)?;
+    if let Some(style) = text_attribute(object, "style") {
+        tie.set_style(TieStyle::from_name(&style).map_err(failed)?);
+    }
+    tie.set_placement(placement_of(object));
+    Ok(Some(tie))
+}
+
+/// A lyric music21 built: what is sung, which verse it belongs to, and
+/// whether it is a whole word or part of one.
+fn music21_lyric(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::notation::Lyric> {
+    use music21_rs_crate::notation::{Lyric as RsLyric, Syllabic};
+    let failed =
+        |error: music21_rs_crate::Error| StreamException::new_err(crate::pitch::message(&error));
+    // Built unsung and then given its text, which is not the same as
+    // `Lyric::new`: that *says* the syllabic, and the crate writes a
+    // `<syllabic>` only for one that was said. music21 keeps the same
+    // difference between `_syllabic` and the `syllabic` property, so a bare
+    // `Lyric()` -- the empty one music21 numbers beside a real verse --
+    // writes none on either side.
+    let mut lyric = RsLyric::unsung();
+    match object
+        .getattr("text")
+        .ok()
+        .filter(|text| !text.is_none())
+        .and_then(|text| text.extract::<String>().ok())
+    {
+        Some(text) => lyric.set_text(text),
+        // `lyric.text = None` takes even the empty string away.
+        None => lyric.clear_text(),
+    }
+    if let Some(number) = object
+        .getattr("number")
+        .ok()
+        .and_then(|number| number.extract::<i32>().ok())
+    {
+        lyric.set_number(number);
+    }
+    // `_syllabic` and not `syllabic`: the property *works one out* where
+    // none was set -- `single` for a word with no hyphens, `composite` for
+    // a lyric in parts -- and a score writer must write only what the
+    // document said, as this package's own lyric holds only that.
+    if let Some(syllabic) = text_attribute(object, "_syllabic") {
+        lyric.set_syllabic(Syllabic::from_name(&syllabic).map_err(failed)?);
+    }
+    if let Some(elision) = text_attribute(object, "elisionBefore") {
+        lyric.set_elision_before(elision);
+    }
+    lyric.set_identifier(
+        object
+            .getattr("_identifier")
+            .ok()
+            .filter(|held| !held.is_none())
+            .and_then(|held| held.extract::<String>().ok()),
+    );
+    lyric.set_color(style_color(object));
+    // A lyric keeps how it is justified and where it sits on its *style*,
+    // not as attributes of its own as a note's articulations do.
+    if let Ok(style) = object.getattr("style") {
+        if let Some(name) = text_attribute(&style, "justify") {
+            lyric.set_justify(music21_rs_crate::notation::Justification::from_name(&name).ok());
+        }
+        lyric.set_placement(placement_of(&style));
+    }
+    lyric.set_hidden(hidden_on_print(object));
+    // A lyric sung to more than one syllable keeps them as components, and
+    // music21 writes an elision between each pair.
+    if let Ok(components) = object.getattr("components")
+        && !components.is_none()
+    {
+        let mut parts = Vec::new();
+        for component in components.walk()? {
+            parts.push(music21_lyric(&component?)?);
+        }
+        if !parts.is_empty() {
+            lyric.set_components(parts);
+        }
+    }
+    Ok(lyric)
+}
+
+/// A volume music21 built: how loud the note is played.
+fn music21_volume(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Volume> {
+    let mut volume = music21_rs_crate::Volume::new();
+    volume.set_velocity(
+        object
+            .getattr("velocity")
+            .ok()
+            .filter(|velocity| !velocity.is_none())
+            .and_then(|velocity| velocity.extract::<i32>().ok()),
+    );
+    if let Ok(relative) = object.getattr("velocityIsRelative") {
+        volume.set_velocity_is_relative(relative.is_truthy()?);
+    }
+    Ok(volume)
+}
+
+/// The beams music21 wrote on a note, each with what it does and which way
+/// it is drawn. Nothing where none are written.
+fn music21_beams(object: &Bound<'_, PyAny>) -> PyResult<Option<music21_rs_crate::notation::Beams>> {
+    use music21_rs_crate::notation::{Beam as RsBeam, BeamDirection, BeamType, Beams as RsBeams};
+    let Ok(held) = object.getattr("beamsList") else {
+        return Ok(None);
+    };
+    let mut beams = RsBeams::default();
+    for beam in held.walk()? {
+        let beam = beam?;
+        let kind =
+            text_attribute(&beam, "type").and_then(|name| BeamType::from_music21_name(&name));
+        let direction = text_attribute(&beam, "direction")
+            .and_then(|name| BeamDirection::from_music21_name(&name));
+        let mut read = RsBeam::new(kind, direction);
+        read.set_number(
+            beam.getattr("number")
+                .ok()
+                .and_then(|number| number.extract::<u32>().ok()),
+        );
+        beams.beams_mut().push(read);
+    }
+    if beams.beams().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(beams))
 }
 
 /// An attribute as text, where it is set and is text.
@@ -4988,10 +5151,14 @@ fn written_duration(
     if let Some(grace) = crate::duration::grace_value(&held)? {
         return Ok(Some(grace));
     }
-    let Ok(held) = held.extract::<PyRef<'_, crate::duration::Duration>>() else {
-        return Ok(None);
+    let written = match held.extract::<PyRef<'_, crate::duration::Duration>>() {
+        Ok(ours) => ours.written_value(py),
+        // A duration music21 itself built: its components say how it is
+        // written and its tuplets how they are bracketed, which is the
+        // whole of what a score writer reads off one.
+        Err(_) => music21_written_duration(&held)?,
     };
-    let Some(mut written) = held.written_value(py) else {
+    let Some(mut written) = written else {
         return Ok(None);
     };
     let length = duration.map_or(1.0, music21_rs_crate::Duration::quarter_length);
@@ -5005,6 +5172,115 @@ fn written_duration(
             .map_err(|error| StreamException::new_err(error.to_string()))?;
     }
     Ok(Some(written))
+}
+
+/// How a duration music21 built is *written*: its note values and the
+/// tuplets they are written inside.
+///
+/// The crate works a duration's values out from its length until something
+/// says them, so a score writer has to be told them -- which for this
+/// package's own duration is `Duration::written_value` over the Python
+/// tuplet objects it keeps, and for music21's is the same two lists read
+/// off `components` and `tuplets`.
+fn music21_written_duration(
+    held: &Bound<'_, PyAny>,
+) -> PyResult<Option<music21_rs_crate::Duration>> {
+    use music21_rs_crate::DurationType as RsType;
+    let Ok(components) = held.getattr("components") else {
+        return Ok(None);
+    };
+    let mut written = music21_rs_crate::Duration::default();
+    written.clear();
+    written.set_tuplets(Vec::new());
+    let mut any = false;
+    for component in components.walk()? {
+        let component = component?;
+        let Some(kind) =
+            text_attribute(&component, "type").and_then(|name| RsType::from_music21_name(&name))
+        else {
+            // A piece cut from a longer value may have no type at all,
+            // which is music21's `inexpressible` and nothing to write.
+            return Ok(None);
+        };
+        let dots = u8_attribute(&component, "dots").unwrap_or(0);
+        written.add_duration_tuple(kind, u32::from(dots));
+        any = true;
+    }
+    if !any {
+        return Ok(None);
+    }
+    let mut tuplets = Vec::new();
+    if let Ok(held_tuplets) = held.getattr("tuplets") {
+        for tuplet in held_tuplets.walk()? {
+            tuplets.push(music21_tuplet(&tuplet?)?);
+        }
+    }
+    written.set_tuplets(tuplets);
+    Ok(Some(written))
+}
+
+/// A music21 tuplet: so many notes in the time of so many, and how the
+/// bracket over them is drawn.
+fn music21_tuplet(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Tuplet> {
+    use music21_rs_crate::{
+        DurationType as RsType, Tuplet as RsTuplet, TupletBracket, TupletShow, TupletType,
+    };
+    let failed =
+        |error: music21_rs_crate::Error| StreamException::new_err(crate::pitch::message(&error));
+    let written = |name: &str| -> PyResult<Option<(RsType, u32)>> {
+        let Ok(held) = object.getattr(name) else {
+            return Ok(None);
+        };
+        if held.is_none() {
+            return Ok(None);
+        }
+        let Some(kind) =
+            text_attribute(&held, "type").and_then(|name| RsType::from_music21_name(&name))
+        else {
+            return Ok(None);
+        };
+        Ok(Some((
+            kind,
+            u32::from(u8_attribute(&held, "dots").unwrap_or(0)),
+        )))
+    };
+    let actual = object
+        .getattr("numberNotesActual")
+        .and_then(|count| count.extract::<u32>())
+        .unwrap_or(3);
+    let normal = object
+        .getattr("numberNotesNormal")
+        .and_then(|count| count.extract::<u32>())
+        .unwrap_or(2);
+    let (kind, dots) = written("durationActual")?.unwrap_or((RsType::Eighth, 0));
+    let mut tuplet = RsTuplet::new(actual, normal, kind, dots);
+    tuplet.set_duration_actual(written("durationActual")?);
+    tuplet.set_duration_normal(written("durationNormal")?);
+    if let Some(name) = text_attribute(object, "type") {
+        tuplet.set_tuplet_type(Some(TupletType::from_name(&name).map_err(failed)?));
+    }
+    // music21 says a bracket with `True`, `False` or the word `slur`, which
+    // is what this package's own setter takes.
+    if let Ok(bracket) = object.getattr("bracket") {
+        tuplet.set_bracket(match bracket.extract::<String>().as_deref() {
+            Ok("slur") => TupletBracket::Slur,
+            _ if bracket.is_truthy()? => TupletBracket::Bracket,
+            _ => TupletBracket::None,
+        });
+    }
+    tuplet.set_placement(placement_of(object));
+    for (name, set) in [("tupletActualShow", true), ("tupletNormalShow", false)] {
+        let show = text_attribute(object, name)
+            .map(|name| TupletShow::from_name(&name))
+            .transpose()
+            .map_err(failed)?;
+        if set {
+            tuplet.set_actual_show(show);
+        } else {
+            tuplet.set_normal_show(show);
+        }
+    }
+    Ok(tuplet)
 }
 
 /// A duration saying, as its object's does, whether the way it is written
@@ -5040,6 +5316,8 @@ fn articulations_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<music21_rs_crate:
         let articulation = articulation?;
         if let Ok(ours) = articulation.extract::<PyRef<'_, crate::articulations::Articulation>>() {
             out.push(ours.inner.clone());
+        } else if let Some(read) = music21_articulation(&articulation)? {
+            out.push(read);
         }
     }
     Ok(out)
@@ -5063,6 +5341,8 @@ fn expressions_of(
         let expression = expression?;
         if let Ok(ornament) = expression.extract::<PyRef<'_, crate::expressions::Ornament>>() {
             out.push(Expression::Ornament(Box::new(ornament.inner.clone())));
+        } else if let Some(read) = music21_ornament(&expression)? {
+            out.push(Expression::Ornament(Box::new(read)));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "Fermata"))? {
             let mut fermata = Fermata::new();
             fermata.set_fermata_type(
@@ -5116,6 +5396,128 @@ fn placement_of(object: &Bound<'_, PyAny>) -> Option<music21_rs_crate::Placement
         .and_then(|name| music21_rs_crate::Placement::from_name(&name).ok())
 }
 
+/// An articulation music21 itself built, read by the name of its class.
+///
+/// This package's articulations are not installed -- music21's own tables
+/// hold its classes and its readers look them up there -- so a score holds
+/// music21's whenever nothing stands in for them.
+fn music21_articulation(
+    object: &Bound<'_, PyAny>,
+) -> PyResult<Option<music21_rs_crate::Articulation>> {
+    use music21_rs_crate::articulations::ArticulationKind;
+    let class: String = object.get_type().getattr("__name__")?.extract()?;
+    let Some(kind) = ArticulationKind::from_class_name(&class) else {
+        return Ok(None);
+    };
+    let mut read = music21_rs_crate::Articulation::of_kind(kind);
+    read.set_placement(text_attribute(object, "placement"));
+    // The fields past the base ones, each where music21's class for the
+    // kind carries it (`ArticulationKind::has_field`) -- which is the same
+    // list the install helper reads, so a field added to one is added to
+    // both. A `<other-articulation>` writes its `displayText`, which is
+    // what a mark music21 has no class of its own for comes back as.
+    read.set_display_text(text_attribute(object, "displayText"));
+    if kind.has_field("pointDirection") {
+        read.set_point_direction(text_attribute(object, "pointDirection"));
+    }
+    if kind.has_field("symbol") {
+        read.set_symbol(text_attribute(object, "symbol"));
+    }
+    if kind.has_field("harmonicType") {
+        read.set_harmonic_type(text_attribute(object, "harmonicType"));
+    }
+    if kind.has_field("pitchType") {
+        read.set_pitch_type(text_attribute(object, "pitchType"));
+    }
+    if kind.has_field("withBar") {
+        read.set_with_bar(text_attribute(object, "withBar"));
+    }
+    if kind.has_field("number")
+        && let Some(number) = object
+            .getattr("number")
+            .ok()
+            .filter(|held| !held.is_none())
+            .and_then(|held| held.extract::<i32>().ok())
+    {
+        read.set_number(number);
+    }
+    if kind.has_field("substitution") {
+        read.set_substitution(
+            object
+                .getattr("substitution")
+                .and_then(|said| said.is_truthy())
+                .unwrap_or(false),
+        );
+    }
+    if kind.has_field("alternate") {
+        read.set_alternate(
+            object
+                .getattr("alternate")
+                .and_then(|said| said.is_truthy())
+                .unwrap_or(false),
+        );
+    }
+    if kind.has_field("preBend") {
+        read.set_pre_bend(
+            object
+                .getattr("preBend")
+                .and_then(|said| said.is_truthy())
+                .unwrap_or(false),
+        );
+    }
+    if kind.has_field("release") {
+        read.set_release(
+            object
+                .getattr("release")
+                .ok()
+                .filter(|held| !held.is_none())
+                .and_then(|held| held.extract::<f64>().ok()),
+        );
+    }
+    if kind.has_field("bendAlter")
+        && let Ok(alter) = object.getattr("bendAlter")
+        && !alter.is_none()
+        && let Ok(semitones) = alter
+            .getattr("semitones")
+            .and_then(|semitones| semitones.extract::<f64>())
+    {
+        read.set_bend_alter(Some(
+            music21_rs_crate::interval::ChromaticInterval::new(semitones)
+                .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?,
+        ));
+    }
+    if let Some(finger) = text_attribute(object, "fingerNumber") {
+        read.set_finger(Some(music21_rs_crate::articulations::Finger::from_written(
+            &finger,
+        )));
+    } else if let Some(number) = object
+        .getattr("fingerNumber")
+        .ok()
+        .filter(|held| !held.is_none())
+        .and_then(|held| held.extract::<i32>().ok())
+    {
+        read.set_finger(Some(music21_rs_crate::articulations::Finger::Number(
+            number,
+        )));
+    }
+    Ok(Some(read))
+}
+
+/// An ornament music21 itself built, read by the name of its class and the
+/// size it is played at.
+fn music21_ornament(
+    object: &Bound<'_, PyAny>,
+) -> PyResult<Option<music21_rs_crate::expressions::Ornament>> {
+    use music21_rs_crate::expressions::{Ornament, OrnamentKind};
+    let class: String = object.get_type().getattr("__name__")?.extract()?;
+    let Some(kind) = OrnamentKind::from_class_name(&class) else {
+        return Ok(None);
+    };
+    let mut read = Ornament::of_kind(kind);
+    read.set_placement(text_attribute(object, "placement"));
+    Ok(Some(read))
+}
+
 /// A music21 clef this wheel does not hold, read off its attributes.
 fn clef_value(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::clef::Clef> {
     use music21_rs_crate::clef::{Clef as RsClef, ClefKind};
@@ -5132,6 +5534,265 @@ fn clef_value(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::clef::Cle
         clef.set_octave_change(change);
     }
     Ok(clef)
+}
+
+/// An element music21 itself built, read off its attributes.
+///
+/// Every branch above reads an element by *casting to this package's own
+/// class*, which an installed class passes and a plain music21 object does
+/// not -- so a caller who has music21 beside the wheel and has installed
+/// nothing (`pip install music21 music21-rs`, and the wheel's own tests
+/// where music21 is importable) could not write a score music21 parsed at
+/// all: the note fell through to the refusal at the end of this function.
+///
+/// So each kind that had only a cast is read here by what music21 keeps on
+/// it. It runs *after* every branch above, so an installed object still
+/// takes the richer path through its own class and nothing that worked
+/// before reads differently. It is not asked on the walks' side
+/// (`stand_ins`), where music21's own objects have always been held by the
+/// stand-ins the walks were verified with.
+fn music21_value(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
+    let py = object.py();
+    let named = |name: &str| is_of_class(object, &pyo3::types::PyString::new(py, name));
+    // A chord symbol is a chord before it is a symbol, so it is asked first.
+    if named("ChordSymbol")? {
+        return Ok(Some(StreamElement::ChordSymbol(
+            crate::harmony::read_music21(object)?,
+        )));
+    }
+    if named("Chord")? {
+        return Ok(Some(StreamElement::Chord(music21_chord(object)?)));
+    }
+    if named("Note")? {
+        return Ok(Some(StreamElement::Note(music21_note(object)?)));
+    }
+    if named("Rest")? {
+        return Ok(Some(StreamElement::Rest(music21_rest(object)?)));
+    }
+    let failed =
+        |error: music21_rs_crate::Error| StreamException::new_err(crate::pitch::message(&error));
+    // A key is a key signature before it is a key, so it is asked first.
+    if named("Key")? {
+        let tonic = object
+            .getattr("tonic")?
+            .getattr("name")?
+            .extract::<String>()?;
+        let mode = object
+            .getattr("mode")
+            .ok()
+            .filter(|mode| !mode.is_none())
+            .and_then(|mode| mode.extract::<String>().ok());
+        let mut key =
+            music21_rs_crate::Key::from_tonic_mode(&tonic, mode.as_deref()).map_err(failed)?;
+        key.set_color(style_color(object));
+        return Ok(Some(StreamElement::Key(key)));
+    }
+    if named("KeySignature")? {
+        let mut signature = match object
+            .getattr("isNonTraditional")
+            .and_then(|said| said.is_truthy())
+        {
+            Ok(true) => {
+                let mut altered = Vec::new();
+                for pitch in object.getattr("alteredPitches")?.walk()? {
+                    altered.push(crate::pitch::pitch_from_any(&pitch?)?);
+                }
+                music21_rs_crate::KeySignature::from_altered_pitches(altered)
+            }
+            _ => music21_rs_crate::KeySignature::new(
+                object.getattr("sharps")?.extract::<i32>().unwrap_or(0),
+            ),
+        };
+        signature.set_color(style_color(object));
+        return Ok(Some(StreamElement::KeySignature(signature)));
+    }
+    if named("TimeSignature")? {
+        let ratio = object.getattr("ratioString")?.extract::<String>()?;
+        let mut meter =
+            music21_rs_crate::meter::TimeSignature::from_ratio_string(&ratio).map_err(failed)?;
+        // `common` and `cut`, which music21 draws in place of the numbers.
+        meter.set_symbol(text_attribute(object, "symbol"));
+        meter.set_color(style_color(object));
+        meter.set_hidden(hidden_on_print(object));
+        return Ok(Some(StreamElement::TimeSignature(meter)));
+    }
+    if named("Dynamic")? {
+        let mut dynamic =
+            music21_rs_crate::dynamics::Dynamic::new(object.getattr("value")?.extract::<String>()?);
+        dynamic.set_placement(placement_of(object));
+        return Ok(Some(StreamElement::Dynamic(dynamic)));
+    }
+    // A metric modulation is two marks, and is asked for before a mark.
+    if named("MetricModulation")? {
+        if let Some(value) = music21_modulation(object)? {
+            return Ok(Some(StreamElement::from(value)));
+        }
+        return Ok(None);
+    }
+    if named("MetronomeMark")? {
+        return Ok(Some(StreamElement::MetronomeMark(music21_mark(object)?)));
+    }
+    Ok(None)
+}
+
+/// A music21 metronome mark: what it says, how fast, and in what unit.
+///
+/// music21 implies each half from the other -- a word within two beats of a
+/// number, a number from a word -- and says which it was *given* through
+/// `numberImplicit` and `textImplicit`, so only what was given is read and
+/// the crate implies the rest as music21 does.
+fn music21_mark(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::tempo::MetronomeMark> {
+    use music21_rs_crate::tempo::MetronomeMark as RsMark;
+    let implicit = |name: &str| {
+        object
+            .getattr(name)
+            .and_then(|said| said.is_truthy())
+            .unwrap_or(false)
+    };
+    let number = (!implicit("numberImplicit"))
+        .then(|| {
+            object
+                .getattr("number")
+                .ok()
+                .filter(|number| !number.is_none())
+                .and_then(|number| number.extract::<f64>().ok())
+        })
+        .flatten();
+    let text = (!implicit("textImplicit"))
+        .then(|| text_attribute(object, "text"))
+        .flatten();
+    let mut mark = match (number, text) {
+        (Some(number), Some(text)) => RsMark::with_number_and_text(number, text),
+        (Some(number), None) => RsMark::new(number),
+        (None, Some(text)) => RsMark::from_text(text),
+        (None, None) => RsMark::default(),
+    };
+    if let Ok(referent) = object.getattr("referent")
+        && let Ok(length) = referent
+            .getattr("quarterLength")
+            .and_then(|length| length.extract::<f64>())
+        && let Ok(duration) = music21_rs_crate::Duration::new(length)
+    {
+        mark.set_referent(duration);
+    }
+    mark.set_placement(placement_of(object));
+    // How fast it is played where that is not what it says.
+    if let Ok(sounding) = object.getattr("numberSounding")
+        && !sounding.is_none()
+        && let Ok(sounding) = sounding.extract::<f64>()
+        && mark.quarter_bpm().is_none()
+    {
+        mark.set_number_sounding(Some(sounding));
+    }
+    Ok(mark)
+}
+
+/// A music21 metric modulation: the marks either side of it, each read with
+/// no number where the document gave none, which is what a file gives.
+fn music21_modulation(
+    object: &Bound<'_, PyAny>,
+) -> PyResult<Option<music21_rs_crate::tempo::MetricModulation>> {
+    let mut modulation = music21_rs_crate::tempo::MetricModulation::new();
+    for (name, set) in [("oldMetronome", true), ("newMetronome", false)] {
+        let Ok(held) = object.getattr(name) else {
+            continue;
+        };
+        if held.is_none() {
+            continue;
+        }
+        let mark = music21_mark(&held)?;
+        if set {
+            modulation.set_old_metronome(Some(mark));
+        } else {
+            modulation.set_new_metronome(Some(mark));
+        }
+    }
+    Ok(Some(modulation))
+}
+
+/// A music21 note: the pitch it stands on and everything written on it.
+fn music21_note(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Note> {
+    let pitch = crate::pitch::pitch_from_any(&object.getattr("pitch")?)?;
+    let mut note = music21_rs_crate::Note::from_pitch(pitch);
+    read_written(object, &mut note)?;
+    Ok(note)
+}
+
+/// A music21 rest: how long it lasts, where it is drawn and what is on it.
+fn music21_rest(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Rest> {
+    let mut carrier = music21_rs_crate::Note::from_name("C4")
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    read_written(object, &mut carrier)?;
+    let mut rest = music21_rs_crate::Rest::new(carrier.duration().cloned().unwrap_or_default());
+    rest.set_hidden(carrier.hidden());
+    *rest.expressions_mut() = carrier.expressions().to_vec();
+    *rest.articulations_mut() = carrier.articulations().to_vec();
+    if let Some(tie) = carrier.tie() {
+        rest.set_tie(Some(tie.clone()));
+    }
+    *rest.lyrics_mut() = carrier.lyrics().to_vec();
+    if let Some(shift) = object
+        .getattr("stepShift")
+        .ok()
+        .and_then(|shift| shift.extract::<i32>().ok())
+    {
+        rest.set_step_shift(shift);
+    }
+    let styled = object
+        .getattr("hasStyleInformation")
+        .and_then(|said| said.is_truthy())
+        .unwrap_or(false);
+    if styled {
+        rest.set_size(
+            object
+                .getattr("style")
+                .and_then(|style| style.getattr("noteSize"))
+                .ok()
+                .and_then(|size| size.extract::<String>().ok())
+                .and_then(|size| music21_rs_crate::notation::NoteSize::from_name(&size)),
+        );
+    }
+    Ok(rest)
+}
+
+/// A music21 chord: each of its notes, and what is written on the chord
+/// itself. music21 keeps a chord's length on the chord and not on its
+/// notes, so the chord's own duration is the one written back over them.
+fn music21_chord(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Chord> {
+    let mut notes = Vec::new();
+    for note in object.getattr("notes")?.walk()? {
+        notes.push(music21_note(&note?)?);
+    }
+    let mut chord = music21_rs_crate::Chord::new(notes)
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    let mut carrier = music21_rs_crate::Note::from_name("C4")
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    read_written(object, &mut carrier)?;
+    if let Some(duration) = carrier.duration() {
+        chord.set_duration(duration.clone());
+    }
+    chord.set_color(carrier.color().map(str::to_string));
+    *chord.expressions_mut() = carrier.expressions().to_vec();
+    *chord.articulations_mut() = carrier.articulations().to_vec();
+    // music21 beams a chord, not its notes, and its own examples beam one.
+    chord.set_beams(carrier.beams().clone());
+    // Not the tie: music21's `Chord.tie` answers the tie of its *first
+    // note*, which each note already carries and the writer already reads,
+    // so taking it here would write it twice.
+    // music21 hides a chord's notes one by one, and keeps the chord's
+    // lyrics on the chord where the crate keeps them on its first note.
+    if !carrier.lyrics().is_empty()
+        && let Some(first) = chord.notes_mut().first_mut()
+    {
+        *first.lyrics_mut() = carrier.lyrics().to_vec();
+    }
+    for (index, note) in object.getattr("notes")?.walk()?.enumerate() {
+        let hidden = hidden_on_print(&note?);
+        if let Some(held) = chord.notes_mut().get_mut(index) {
+            held.set_hidden(hidden);
+        }
+    }
+    Ok(chord)
 }
 
 /// A music21 instrument, read off its attributes: this wheel's instruments

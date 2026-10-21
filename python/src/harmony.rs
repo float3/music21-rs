@@ -1526,3 +1526,65 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NoChord>()?;
     Ok(())
 }
+
+/// A chord symbol music21 itself built, read off its attributes.
+///
+/// `crate_value` beside it reads this package's own class, through fields
+/// that only a facade has; what music21 keeps is the figure, which is the
+/// text its own `_parseFigure` reads and so the one the crate reads too.
+/// The kind is asked for only where the figure says nothing the crate
+/// knows, as `crate_value` falls back the other way round.
+pub(crate) fn read_music21(object: &Bound<'_, PyAny>) -> PyResult<RsChordSymbol> {
+    let figure = object
+        .getattr("figure")
+        .ok()
+        .filter(|figure| !figure.is_none())
+        .and_then(|figure| figure.extract::<String>().ok())
+        .unwrap_or_default();
+    let mut symbol = RsChordSymbol::parse_music21(&figure).map_err(harmony_error)?;
+    // The kind music21 *settled on*, which its own `_parseFigure` wrote
+    // onto it: a figure read two ways -- `mMaj7` is a minor-major seventh
+    // where the letters alone say major -- is read as music21 read it.
+    if !symbol.is_no_chord()
+        && let Ok(kind) = object.getattr("chordKind")
+        && let Ok(kind) = kind.extract::<String>()
+        && !kind.is_empty()
+    {
+        symbol = symbol.with_kind(&kind);
+    }
+    if let Ok(kind) = object.getattr("chordKindStr")
+        && let Ok(text) = kind.extract::<String>()
+        && !symbol.is_no_chord()
+    {
+        symbol.set_kind_text(Some(text));
+    }
+    // What the figure adds to or leaves out of its kind, which music21
+    // keeps as objects of its own beside the figure it read them from.
+    if !symbol.is_no_chord()
+        && let Ok(modifications) = object.getattr("chordStepModifications")
+    {
+        let mut read = Vec::new();
+        for modification in modifications.try_iter()? {
+            read.push(modification_value(&modification?)?);
+        }
+        if !read.is_empty() {
+            symbol.set_chord_step_modifications(read);
+        }
+    }
+    if let Ok(length) = object
+        .getattr("duration")
+        .and_then(|duration| duration.getattr("quarterLength"))
+        .and_then(|length| length.extract::<f64>())
+    {
+        symbol.set_duration(music21_rs_crate::Duration::new(length).map_err(harmony_error)?);
+    }
+    symbol.set_placement(
+        object
+            .getattr("placement")
+            .ok()
+            .filter(|placement| !placement.is_none())
+            .and_then(|placement| placement.extract::<String>().ok())
+            .and_then(|name| music21_rs_crate::Placement::from_name(&name).ok()),
+    );
+    Ok(symbol)
+}

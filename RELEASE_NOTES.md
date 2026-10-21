@@ -2,6 +2,39 @@
 
 ## added
 
+- **The wheel reads a score music21 itself parsed.** `to_musicxml` and
+  every member that reads a stream took music21's own objects only once
+  `install_into_music21()` had run: `element_value` read a note, a rest and
+  a chord by casting to this package's own class, which an installed class
+  passes and a plain music21 `Note` does not, so it fell through to `a Note
+  cannot be read into a score yet` for a score music21 had just parsed.
+  That is what `pip install music21 music21-rs` gives, and CI had never
+  seen it -- its wheel job installs no music21 beside the wheel.
+
+  Each kind is read off music21's own attributes now: a note, a rest, a
+  chord, a chord symbol, a key, a key signature, a time signature, a
+  dynamic, a metronome mark and a metric modulation, with a music21
+  duration's written values, tuplets and grace marks, its ornaments and
+  articulations, the display an accidental carries, and the tie, lyric,
+  volume and beams that `read_written` took only this package's classes
+  for. Building music21 a stream wanted the same from the other side, so
+  `holdable_class` builds the subclass installing would build -- once per
+  name and bound into nothing, so music21 itself is untouched -- for the
+  stream builder alone.
+
+  **`musicxml_plain_parity` is what holds it**: the comparison
+  `musicxml_parity` makes, the crate's writer against music21's own
+  exporter byte for byte on the same 56 scores, with nothing installed. All
+  56 agree, and the installed comparison still agrees beside it.
+
+- **`zz_corpus_cache` reads back every corpus score the suites cached**,
+  with nothing installed, and fails where one cannot be. A suite that swaps
+  a class `install_into_music21` does not install writes that class into
+  music21's pickle cache -- one directory for the whole machine -- and a
+  later process then finds the bare facade class under it. Its name sorts
+  after every other suite on purpose, so what it reads is the cache a real
+  run leaves rather than the one a suite would write if it ran first.
+
 - **`analysis.windowed` passes all 35 of its examples**, and the reason
   recorded for the one it failed was stale in two ways at once. It said the
   failure was a measure's `repr` -- music21 writes its number and its offset
