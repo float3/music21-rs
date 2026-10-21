@@ -1549,9 +1549,76 @@ containedSite = "the stream it was read out of, which is a site"
 replacementDuration = "the `Duration` of what it replaces; `replacement_quarter_length` is how long that is"
 
 [[class]]
+python = "metadata/primitives.py"
+name = "Date"
+rust = ["src/metadata/primitives.rs"]
+note = "A date as music21 keeps one: any part may be missing and any part may say how sure it is, which is why music21 wrote a type of its own rather than using Python's datetime. The six parts are read and written by name through one pair of members (`value`, `set`) where music21 keeps an attribute and an error attribute for each."
+
+[class.renames]
+errorToSymbol = "symbol"
+loadStr = "from_written"
+loadOther = "take_from"
+hasTime = "has_time"
+hasError = "has_certainty"
+
+[class.excluded]
+load = "reads a date from a string, a number, a datetime or another date, which `from_written`, `from_parts` and `take_from` each answer for the kind they take"
+loadDatetime = "reads a date out of one of Python's, which the crate has no type for: a caller hands the parts over"
+datetime = "answers one of Python's datetimes, likewise"
+
+[[class]]
+python = "metadata/primitives.py"
+name = "DatePrimitive"
+rust = ["src/metadata/primitives.rs"]
+note = "One or more dates and what they say, which is music21's `relevance`. Its four subclasses differ only in the relevances they take and in how they are written, so one type carries all four and `DateKind` says which it is."
+
+[class.excluded]
+datetime = "answers one of Python's datetimes for the first date, which the crate has no type for"
+
+[[class]]
+python = "metadata/primitives.py"
+name = "DateRelative"
+rust = ["src/metadata/primitives.rs"]
+note = "A date something happened before or after: `DatePrimitive::relative`."
+
+[[class]]
+python = "metadata/primitives.py"
+name = "DateBetween"
+rust = ["src/metadata/primitives.rs"]
+note = "A span between two dates: `DatePrimitive::between`."
+
+[[class]]
+python = "metadata/primitives.py"
+name = "DateSelection"
+rust = ["src/metadata/primitives.rs"]
+note = "A choice among dates: `DatePrimitive::selection`."
+
+[[class]]
+python = "metadata/primitives.py"
+name = "Text"
+rust = ["src/metadata/primitives.rs"]
+note = "One piece of text a score says about itself: what it says, the language it is written in, whether it is a translation, and the scheme it was encoded by."
+
+[class.renames]
+getNormalizedArticle = "normalized_article"
+
+[[class]]
+python = "metadata/primitives.py"
+name = "Contributor"
+rust = ["src/metadata/primitives.rs"]
+note = "Somebody who had a hand in a work, under one or more names, with the dates of a life where they are known. A role may be given as one of Humdrum's ten abbreviations, which is read as the role it stands for."
+
+[class.renames]
+abbreviationToRole = "role_of_abbreviation"
+roleToAbbreviation = "abbreviation_of_role"
+
+[class.excluded]
+age = "how long they lived, which is arithmetic over two dates a caller has"
+
+[[class]]
 python = "metadata/__init__.py"
 name = "Metadata"
-rust = ["src/metadata.rs"]
+rust = ["src/metadata/mod.rs"]
 note = "What a score says about itself. Every standard name is read and written by that name through one pair of members, where music21 keeps a property for each; `STANDARD_PROPERTIES` is the table of the 131 names, checked against music21's live one by `metadata_parity`."
 
 [class.renames]
@@ -1590,7 +1657,7 @@ convertValue = "reads a value as one of music21's own primitives -- a `Text`, a 
 [[class]]
 python = "metadata/__init__.py"
 name = "RichMetadata"
-rust = ["src/metadata.rs"]
+rust = ["src/metadata/mod.rs"]
 note = "The numbers music21 caches beside a score's metadata so that its corpus can be searched without parsing every file again."
 
 [class.excluded]
@@ -2578,10 +2645,6 @@ python = ["editorial.py"]
 [[unlisted]]
 reason = "music21's settings, which a caller may change: the facade reads the one the crate cares about live (`pitch::default_octave` for `defaults.pitchOctave`), and the crate takes it as an argument"
 python = ["defaults.py"]
-
-[[unlisted]]
-reason = "music21's metadata values as objects -- a date that may be approximate, uncertain or a range, a text with a language, a contributor with a role: a value here is its text and its role (`metadata::MetadataValue`), which is what the writers write"
-python = ["metadata/primitives.py"]
 
 [[unlisted]]
 reason = "the 131-property vocabulary, which is `metadata::STANDARD_PROPERTIES` and is checked against music21's live table by `metadata_parity` rather than by a scan of its members"

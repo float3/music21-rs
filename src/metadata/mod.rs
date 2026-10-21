@@ -10,31 +10,90 @@
 //! lyricist. Its unique name is its role where the role is in the
 //! vocabulary, and `otherContributor` where it is not.
 
+pub mod primitives;
+
 use std::borrow::Cow;
 
+/// What a metadata value says beyond its text and its role: one of
+/// music21's primitives.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum MetadataContent {
+    /// A piece of text with the language it is written in: music21's
+    /// `Text`, and its `Copyright` where the text carries a role.
+    Text(primitives::Text),
+    /// Somebody who had a hand in the work: music21's `Contributor`, which
+    /// may go under several names and may say when they lived.
+    Contributor(primitives::Contributor),
+    /// A date, which may be approximate, uncertain, a bound, a span or a
+    /// choice: music21's `DatePrimitive` and the four classes under it.
+    Date(primitives::DatePrimitive),
+}
+
 /// One value of a metadata name: its text and, for a contributor or a
-/// copyright, the role it was given.
+/// copyright, the role it was given -- and the primitive it is, which says
+/// what more is known about it.
+///
+/// **The text and the role are a reading of the content, not a second copy
+/// of it.** Every way of building one of these fills all three together and
+/// nothing can write to them afterwards, so they cannot drift apart: a
+/// contributor's text is the first name they go by, and a date's is the way
+/// music21 writes it.
+///
+/// A value built as a plain text is not equal to one built as a contributor
+/// or a date of the same text, and that is right: the one knows what it is
+/// and the other does not.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MetadataValue {
     text: String,
     role: Option<String>,
+    content: MetadataContent,
 }
 
 impl MetadataValue {
     /// A value that is only text.
     pub fn new(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            role: None,
-        }
+        Self::of_text(primitives::Text::new(text))
     }
 
     /// A value with a role, as a contributor or a copyright has.
     pub fn with_role(text: impl Into<String>, role: impl Into<String>) -> Self {
+        Self::of_text(primitives::Text::new(text).in_role(role))
+    }
+
+    /// A value that is a piece of text saying what language it is in:
+    /// music21's `Text`, or its `Copyright` where the text has a role.
+    pub fn of_text(text: primitives::Text) -> Self {
         Self {
-            text: text.into(),
-            role: Some(role.into()),
+            text: text.data().to_string(),
+            role: text.role().map(str::to_string),
+            content: MetadataContent::Text(text),
+        }
+    }
+
+    /// A value that is somebody who had a hand in the work: music21's
+    /// `Contributor`. Its text is the first name they go by, which is what
+    /// music21's own writers write.
+    pub fn of_contributor(contributor: primitives::Contributor) -> Self {
+        Self {
+            text: contributor
+                .name()
+                .map(primitives::Text::data)
+                .unwrap_or_default()
+                .to_string(),
+            role: contributor.role().map(str::to_string),
+            content: MetadataContent::Contributor(contributor),
+        }
+    }
+
+    /// A value that is a date: music21's four date classes. Its text is
+    /// the way music21 writes that date.
+    pub fn of_date(date: primitives::DatePrimitive) -> Self {
+        Self {
+            text: date.to_string(),
+            role: None,
+            content: MetadataContent::Date(date),
         }
     }
 
@@ -46,6 +105,35 @@ impl MetadataValue {
     /// The role, where the value has one.
     pub fn role(&self) -> Option<&str> {
         self.role.as_deref()
+    }
+
+    /// What the value is: a text, a contributor or a date.
+    pub fn content(&self) -> &MetadataContent {
+        &self.content
+    }
+
+    /// The text with its language, where the value is one.
+    pub fn as_text(&self) -> Option<&primitives::Text> {
+        match &self.content {
+            MetadataContent::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    /// The contributor, where the value is one.
+    pub fn as_contributor(&self) -> Option<&primitives::Contributor> {
+        match &self.content {
+            MetadataContent::Contributor(contributor) => Some(contributor),
+            _ => None,
+        }
+    }
+
+    /// The date, where the value is one.
+    pub fn as_date(&self) -> Option<&primitives::DatePrimitive> {
+        match &self.content {
+            MetadataContent::Date(date) => Some(date),
+            _ => None,
+        }
     }
 }
 
@@ -529,6 +617,74 @@ const ARTICLED_TITLES: [&str; 6] = [
     "movementName",
     "groupTitle",
 ];
+
+/// The eleven vocabulary names whose value is a date rather than a text:
+/// music21's `valueType=DatePrimitive`.
+const DATE_NAMES: [&str; 11] = [
+    "dateAvailable",
+    "dateCreated",
+    "otherDate",
+    "dateAccepted",
+    "dateCopyrighted",
+    "dateSubmitted",
+    "dateIssued",
+    "dateModified",
+    "dateValid",
+    "dateFirstPublished",
+    "electronicReleaseDate",
+];
+
+/// What kind of value a metadata name takes: music21's
+/// `UNIQUE_NAME_TO_VALUE_TYPE`, which is what its `convertValue` reads to
+/// decide what to make of whatever it was handed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ValueKind {
+    /// A piece of text: music21's `Text`, which 64 of the names take.
+    Text,
+    /// A text with a role: music21's `Copyright`, which `copyright`
+    /// alone takes.
+    Copyright,
+    /// Somebody who had a hand in the work: music21's `Contributor`,
+    /// which the 54 contributor names take.
+    Contributor,
+    /// A date: music21's `DatePrimitive` and the four classes under it,
+    /// which the eleven date names take.
+    Date,
+    /// A whole number: `fileNumber` alone takes one.
+    Number,
+}
+
+/// What kind of value a unique name takes, and nothing for a name outside
+/// the vocabulary -- which music21 keeps as a text, there being nothing to
+/// say otherwise.
+///
+/// ```
+/// use music21_rs::metadata::{ValueKind, value_kind_of};
+///
+/// assert_eq!(value_kind_of("title"), Some(ValueKind::Text));
+/// assert_eq!(value_kind_of("composer"), Some(ValueKind::Contributor));
+/// assert_eq!(value_kind_of("dateCreated"), Some(ValueKind::Date));
+/// assert_eq!(value_kind_of("copyright"), Some(ValueKind::Copyright));
+/// assert_eq!(value_kind_of("average duration"), None);
+/// ```
+#[must_use]
+pub fn value_kind_of(name: &str) -> Option<ValueKind> {
+    let unique_name = unique_name_of(name).or_else(|| unique_name_from_namespace(name))?;
+    if unique_name == "copyright" {
+        return Some(ValueKind::Copyright);
+    }
+    if unique_name == "fileNumber" {
+        return Some(ValueKind::Number);
+    }
+    if DATE_NAMES.contains(&unique_name) {
+        return Some(ValueKind::Date);
+    }
+    if is_contributor_unique_name(unique_name) {
+        return Some(ValueKind::Contributor);
+    }
+    Some(ValueKind::Text)
+}
 
 /// Whether a unique name is one of the vocabulary's contributor names:
 /// music21's `_isContributorUniqueName`.

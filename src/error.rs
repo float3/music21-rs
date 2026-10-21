@@ -57,6 +57,10 @@ pub enum Error {
     /// Error associated with Xenakis sieve parsing or evaluation.
     #[error("Sieve error: {0}")]
     Sieve(String),
+    /// Error associated with a score's metadata: a date relevance none of
+    /// music21's date classes takes, or a name that is not a metadata name.
+    #[error("Metadata error: {0}")]
+    Metadata(String),
     /// Error associated with duration values.
     #[error("Duration error: {0}")]
     Duration(String),
