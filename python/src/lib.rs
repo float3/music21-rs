@@ -55,6 +55,7 @@ pub mod dynamics;
 pub mod editorial;
 pub mod enharmonics;
 pub mod expressions;
+pub mod extractors;
 pub mod fbrules;
 pub mod features;
 pub mod figuredbass;
@@ -1388,6 +1389,16 @@ exceptions![
         Some("music21.features.base")
     ),
     (
+        "JSymbolicFeatureException",
+        extractors::JSymbolicFeatureException,
+        Some("music21.features.jSymbolic")
+    ),
+    (
+        "NativeFeatureException",
+        extractors::NativeFeatureException,
+        Some("music21.features.native")
+    ),
+    (
         "DataSetException",
         features::DataSetException,
         Some("music21.features.base")
@@ -1700,6 +1711,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     features::register(m)?;
+    extractors::register(m)?;
     primitives::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;

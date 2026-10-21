@@ -58,6 +58,9 @@ pub use music21_rs_python::duration::NAMES as DURATION_NAMES;
 pub use music21_rs_python::dynamics::NAMES as DYNAMICS_NAMES;
 pub use music21_rs_python::enharmonics::NAMES as ENHARMONICS_NAMES;
 pub use music21_rs_python::expressions::NAMES as EXPRESSION_NAMES;
+pub use music21_rs_python::extractors::{
+    JSYMBOLIC_NAMES as FEATURES_JSYMBOLIC_NAMES, NATIVE_NAMES as FEATURES_NATIVE_NAMES,
+};
 pub use music21_rs_python::fbrules::NAMES as RULES_NAMES;
 pub use music21_rs_python::features::NAMES as FEATURES_NAMES;
 pub use music21_rs_python::figuredbass::NAMES as FIGURED_BASS_NAMES;

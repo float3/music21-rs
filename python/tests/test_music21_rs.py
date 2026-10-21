@@ -5519,3 +5519,45 @@ def test_a_piece_is_measured_by_every_feature_extractor():
     # A music21 stream added to it is read by `install_into_music21`'s
     # classes, which this suite does not install; `doctest_features` is
     # where that half runs.
+
+
+def test_a_feature_extractor_is_a_class_of_its_own():
+    """Each of music21's feature extractors as its own class, over the
+    crate's row for it.
+
+    What the class says of the feature -- its id, its name, how many values
+    it has -- is read off that row, and a wheel on its own answers all of
+    it. The feature object `extract` hands back is music21's own `Feature`,
+    which this package does not stand in for, so that one member says it
+    needs music21 beside it."""
+    assert m.PitchClassDistributionFeature.id == "P20"
+    assert m.PitchClassDistributionFeature.name == "Pitch Class Distribution"
+    assert m.PitchClassDistributionFeature.dimensions == 12
+    assert m.PitchClassDistributionFeature.discrete is False
+    assert m.PitchClassDistributionFeature.normalize is True
+    assert m.PitchClassDistributionFeature.isSequential is True
+    # The one extractor music21 reads out of order.
+    assert m.DurationFeature.isSequential is False
+    # A native extractor is a class here too.
+    assert m.TonalCertainty.id == "K1"
+
+    line = m.from_tiny_notation("4/4 c4 d e2")
+    fe = m.ChangesOfMeterFeature(line)
+    assert fe.getAttributeLabels() == ["Changes_of_Meter"]
+    assert fe.data is line
+    assert fe.stream is line
+
+    labels = m.FifthsPitchHistogramFeature().getAttributeLabels()
+    assert labels[0] == "Fifths_Pitch_Histogram_0"
+    assert len(labels) == 12
+
+    try:
+        from music21 import features as m21features
+    except ImportError:
+        # The feature an extractor hands back is music21's own object.
+        with pytest.raises(Exception, match="needs music21 beside it"):
+            fe.extract()
+        return
+
+    assert fe.extract().vector == [0]
+    assert isinstance(fe.extract(), m21features.base.Feature)

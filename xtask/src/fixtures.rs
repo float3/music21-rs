@@ -244,8 +244,55 @@ pub(crate) fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
             modules.push(module);
         }
     }
+    // A module the parity harness covers is in scope whether or not a
+    // class of it is read: `features/jSymbolic.py`'s extractors are rows of
+    // a generated table rather than a class each, and the harness runs all
+    // 433 of their examples -- so without this the report would have no
+    // denominator for them and would leave the module off the page.
+    for module in harness_modules(workspace_root) {
+        if !modules.contains(&module) {
+            modules.push(module);
+        }
+    }
     modules.sort();
     Ok(modules)
+}
+
+/// Every music21 module the parity harness has a doctest suite for, read
+/// off the suites themselves rather than from a list kept by hand -- a list
+/// this repository has had go stale twice.
+fn harness_modules(workspace_root: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    let Ok(entries) = fs::read_dir(workspace_root.join("python-parity/tests")) else {
+        return found;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("doctest_") && name.ends_with(".rs"))
+        {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        // `doctest_suite!(name, "music21.x", "expectations", [...])`
+        let Some(at) = text.find("doctest_suite!(") else {
+            continue;
+        };
+        let rest = &text[at..];
+        let mut quoted = rest.split('"');
+        let _ = quoted.next();
+        if let Some(module) = quoted.next()
+            && module.starts_with("music21.")
+            && !found.contains(&module.to_string())
+        {
+            found.push(module.to_string());
+        }
+    }
+    found
 }
 
 /// The modules holding a module's unit tests, found by looking rather than by
