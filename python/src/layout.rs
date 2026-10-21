@@ -608,6 +608,15 @@ impl SystemLayout {
 )]
 pub struct StaffLayout {
     pub(crate) inner: RsStaffLayout,
+    /// The size as the number it was given, which music21 keeps.
+    ///
+    /// **music21's `staffSize` is a plain attribute, and only its
+    /// constructor floats what it is handed**: `StaffLayout(staffSize=113)`
+    /// reads back `113.0`, and `sl.staffSize = 80` reads back `80` -- which
+    /// is what its own `divideByPages` example prints, the hidden staff's
+    /// size having been *assigned* rather than given. The crate keeps the
+    /// size as a float, so the facade keeps the object beside it.
+    given_size: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -617,6 +626,7 @@ impl StaffLayout {
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let mut made = Self {
             inner: RsStaffLayout::default(),
+            given_size: None,
         };
         if let Some(keywords) = keywords {
             for (key, value) in keywords {
@@ -624,7 +634,17 @@ impl StaffLayout {
                 match name.as_str() {
                     "distance" => made.inner.distance = read_tenths(Some(&value))?,
                     "staffNumber" => made.inner.staff_number = value.extract()?,
-                    "staffSize" => made.inner.staff_size = value.extract()?,
+                    "staffSize" => {
+                        // music21's own constructor floats it.
+                        made.inner.staff_size = value.extract()?;
+                        made.given_size = made
+                            .inner
+                            .staff_size
+                            .map(|size| -> PyResult<Py<PyAny>> {
+                                Ok(size.into_pyobject(value.py())?.into_any().unbind())
+                            })
+                            .transpose()?;
+                    }
                     "staffLines" => made.inner.staff_lines = value.extract()?,
                     "hidden" => made.inner.hidden = value.extract()?,
                     "staffType" => {
@@ -664,15 +684,34 @@ impl StaffLayout {
         self.inner.staff_number = value;
     }
 
-    /// Its size, as a percentage of the ordinary staff's.
+    /// Its size, as a percentage of the ordinary staff's: the number it
+    /// was given, since music21 keeps a plain attribute here and only its
+    /// constructor floats what it is handed.
     #[getter]
-    fn staffSize(&self) -> Option<f64> {
-        self.inner.staff_size
+    fn staffSize(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        match &self.given_size {
+            Some(given) => Some(given.clone_ref(py)),
+            None => self.inner.staff_size.and_then(|size| {
+                size.into_pyobject(py)
+                    .ok()
+                    .map(|held| held.into_any().unbind())
+            }),
+        }
     }
 
     #[setter]
-    fn set_staffSize(&mut self, value: Option<f64>) {
-        self.inner.staff_size = value;
+    fn set_staffSize(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        match value.filter(|given| !given.is_none()) {
+            None => {
+                self.inner.staff_size = None;
+                self.given_size = None;
+            }
+            Some(given) => {
+                self.inner.staff_size = Some(given.extract()?);
+                self.given_size = Some(given.clone().unbind());
+            }
+        }
+        Ok(())
     }
 
     /// How many lines it has, where not five.
@@ -698,18 +737,26 @@ impl StaffLayout {
     }
 
     /// music21's `_reprInternal`, which writes each measurement as Python
-    /// writes it: a size is a float, so 113 is `113.0`.
-    fn __repr__(&self) -> String {
+    /// writes the number it holds -- so a size its constructor floated is
+    /// `113.0` and one a caller assigned is `80`.
+    fn __repr__(slf: &Bound<'_, Self>) -> String {
+        let py = slf.py();
+        let me = slf.borrow();
+        let size = me.staffSize(py).map_or_else(
+            || "None".to_string(),
+            |size| {
+                size.bind(py)
+                    .repr()
+                    .map_or_else(|_| "None".to_string(), |said| said.to_string())
+            },
+        );
         format!(
-            "<music21.layout.StaffLayout distance {}, staffNumber {}, staffSize {}, staffLines {}>",
-            said(self.inner.distance),
-            self.inner
+            "<music21.layout.StaffLayout distance {}, staffNumber {}, staffSize {size}, staffLines {}>",
+            said(me.inner.distance),
+            me.inner
                 .staff_number
                 .map_or_else(|| "None".to_string(), |number| number.to_string()),
-            self.inner
-                .staff_size
-                .map_or_else(|| "None".to_string(), |size| format!("{size:?}")),
-            self.inner
+            me.inner
                 .staff_lines
                 .map_or_else(|| "None".to_string(), |lines| lines.to_string())
         )
@@ -719,11 +766,17 @@ impl StaffLayout {
         slf: &Bound<'py, Self>,
         _memo: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
         let copied = slf.get_type().call0()?;
         {
             let me = slf.borrow();
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
+            // The number the size was given as goes across: music21's own
+            // `divideByPages` deep-copies the layouts it lays out, and the
+            // hidden staff's `staffSize 80` its example prints is read off
+            // one of those copies.
+            copy.given_size = me.given_size.as_ref().map(|given| given.clone_ref(py));
         }
         Ok(copied)
     }
@@ -733,12 +786,24 @@ impl StaffLayout {
     }
 
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        if let Some(given) = &slf.borrow().given_size {
+            extra.set_item("staffSize", given.bind(py))?;
+        }
+        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
-        if let Some(inner) = crate::unpickled::<_, RsStaffLayout>(slf, state)? {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsStaffLayout>(slf, state)?;
+        if let Some(inner) = inner {
             slf.borrow_mut().inner = inner;
+        }
+        if let Some(extra) = extra
+            && let Ok(given) = extra.bind(py).get_item("staffSize")
+        {
+            slf.borrow_mut().given_size = Some(given.unbind());
         }
         Ok(())
     }

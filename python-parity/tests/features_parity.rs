@@ -61,6 +61,28 @@ def metadata(module):
              cls.discrete, cls.normalize)
             for cls in EXTRACTORS[module]]
 
+def written(names, ids, label, fmt):
+    """The table music21 writes for these pieces and these extractors."""
+    chosen = []
+    for module, extractors in EXTRACTORS.items():
+        for cls in extractors:
+            if cls.id in ids:
+                chosen.append(cls)
+    chosen.sort(key=lambda cls: ids.index(cls.id))
+    ds = features.DataSet(classLabel=label)
+    # music21 reads its features in worker interpreters spawned from this
+    # process, whose executable is the test binary: it answers
+    # `Unrecognized option: 'c'`. Reading them here is what the crate does
+    # anyway.
+    ds.runParallel = False
+    ds.failFast = True
+    ds.addFeatureExtractors(chosen)
+    for name, value in names:
+        ds.addData(corpus.parse(name, forceSource=True), classValue=value, id=name)
+    ds.process()
+    return ds.getString(fmt)
+
+
 def report(name):
     data = features.DataInstance(corpus.parse(name, forceSource=True))
     out = []
@@ -85,6 +107,14 @@ const MODULES: [(&str, &[Extractor]); 2] = [
     ("jSymbolic", jsymbolic::JSYMBOLIC),
     ("native", native::NATIVE),
 ];
+
+/// The two pieces and the extractors the table comparison is made of: a
+/// chorale and a quartet movement, and one extractor of each kind of value
+/// -- a histogram, a pair of whole numbers and a measurement -- so that
+/// every column the writers know how to write is in the table.
+const TABLE_SCORES: [(&str, &str); 2] =
+    [("bwv66.6", "Bach"), ("corelli/opus3no1/1grave", "Corelli")];
+const TABLE_IDS: [&str; 4] = ["P20", "R31", "R35", "K1"];
 
 #[test]
 fn the_crate_extracts_features_as_music21_does() {
@@ -227,6 +257,92 @@ fn the_crate_extracts_features_as_music21_does() {
     .expect("the Python side runs");
 
     println!("{compared} scores compared");
+    assert!(
+        failures.is_empty(),
+        "{} differences:\n\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// The table a data set writes against music21's own output formats.
+///
+/// `DataSet::to_text` is the crate's `getString`, and its in-module test
+/// reads music21's answers off a transcription; this compares the two for
+/// real, so a bumped submodule cannot quietly change what music21 writes
+/// without the crate hearing of it. The pieces are given their ids
+/// outright, so what is compared is the numbers and the layout rather than
+/// how each side names a corpus score.
+#[test]
+fn the_crate_writes_a_data_set_as_music21_does() {
+    let root = repo_root();
+    std::env::set_current_dir(&root).expect("chdir to the repository root");
+    prepare().expect("prepare the music21 reference checkout");
+
+    let failures = Python::attach(|py| -> PyResult<Vec<String>> {
+        init_py(py)?;
+        add_dependency_venv(py, &root)?;
+        let music21 = PyModule::from_code(
+            py,
+            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            c"features_parity_music21.py",
+            c"features_parity_music21",
+        )?;
+        let mut failures = Vec::new();
+
+        let mut set = music21_rs::features::DataSet::new("Composer");
+        for id in TABLE_IDS {
+            set.add_extractors(music21_rs::features::extractors_by_id(
+                &[id],
+                &music21_rs::features::Library::ALL,
+            ));
+        }
+        for (name, value) in TABLE_SCORES {
+            let Some(text): Option<String> =
+                music21.getattr("source_text")?.call1((name,))?.extract()?
+            else {
+                failures.push(format!("{name}: no MusicXML to read"));
+                continue;
+            };
+            let score = match from_musicxml(&text) {
+                Ok(score) => score,
+                Err(error) => {
+                    failures.push(format!("{name}: the crate could not read it: {error}"));
+                    continue;
+                }
+            };
+            if let Err(error) = set.add_data(&score, value, Some(name)) {
+                failures.push(format!("{name}: the crate could not prepare it: {error}"));
+            }
+        }
+        set.process();
+        for failed in set.failures() {
+            failures.push(format!(
+                "the crate could not read {} of row {}: {}",
+                failed.extractor, failed.row, failed.error
+            ));
+        }
+
+        for (name, format) in [
+            ("tab", music21_rs::features::OutputFormat::Tab),
+            ("csv", music21_rs::features::OutputFormat::Csv),
+            ("arff", music21_rs::features::OutputFormat::Arff),
+        ] {
+            let theirs: String = music21
+                .getattr("written")?
+                .call1((TABLE_SCORES.to_vec(), TABLE_IDS.to_vec(), "Composer", name))?
+                .extract()?;
+            let ours = set.to_text(format);
+            if ours.trim_end() != theirs.trim_end() {
+                failures.push(format!(
+                    "the {name} table differs:\n  music21\n{theirs}\n  music21-rs\n{ours}"
+                ));
+            }
+        }
+        Ok(failures)
+    })
+    .expect("the Python side runs");
+
     assert!(
         failures.is_empty(),
         "{} differences:\n\n{}",

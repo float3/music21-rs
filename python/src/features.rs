@@ -870,13 +870,23 @@ impl DataSet {
     /// music21's `getString`: the table written in a format.
     #[pyo3(signature = (outputFmt = "tab"))]
     fn getString(slf: &Bound<'_, Self>, outputFmt: &str) -> PyResult<Py<PyAny>> {
-        let writer = slf.call_method1("_getOutputFormat", (outputFmt,))?;
-        if writer.is_none() {
+        let py = slf.py();
+        let Some(format) = OutputFormat::from_name(outputFmt) else {
             return Err(DataSetException::new_err(format!(
                 "no output format could be defined from {outputFmt}"
             )));
+        };
+        // music21's own writer where music21 is there to ask, since it
+        // reads every label and every number out of this set and so is the
+        // harder test of the two; the crate's `to_text` otherwise, which
+        // `features_parity` holds to those same writers byte for byte.
+        if let Ok(writer) = Self::_getOutputFormat(slf, outputFmt)
+            && !writer.bind(py).is_none()
+        {
+            return Ok(writer.bind(py).call_method0("getString")?.unbind());
         }
-        Ok(writer.call_method0("getString")?.unbind())
+        let text = Self::written(slf, format)?;
+        Ok(pyo3::types::PyString::new(py, &text).into_any().unbind())
     }
 
     /// music21's `write`: the table written to a file by music21's own
@@ -916,6 +926,37 @@ impl DataSet {
 }
 
 impl DataSet {
+    /// The table written by the crate, for a wheel with no music21 beside
+    /// it to ask for an output format.
+    ///
+    /// The pieces are read afresh into a crate set of their own, there
+    /// being no way to put features already read into one -- which costs a
+    /// second reading, and only where music21 is not there to write the
+    /// table itself.
+    fn written(slf: &Bound<'_, Self>, format: OutputFormat) -> PyResult<String> {
+        let py = slf.py();
+        let label = slf.borrow().class_label.clone().unwrap_or_default();
+        let mut set = RsDataSet::new(label);
+        set.add_extractors(slf.borrow().extractors.iter().copied());
+        for at in 0..slf.borrow().pieces.len() {
+            let stream = {
+                let me = slf.borrow();
+                me.pieces[at].stream(py)?
+            };
+            let (named, classed) = {
+                let me = slf.borrow();
+                (
+                    me.pieces[at].named(py, &stream)?.str()?.to_string(),
+                    me.pieces[at].classed(py)?.str()?.to_string(),
+                )
+            };
+            set.add_data(&stream, classed, Some(&named))
+                .map_err(feature_error)?;
+        }
+        set.process();
+        Ok(set.to_text(format))
+    }
+
     /// The crate's set for what has been asked of this one, which is what
     /// answers every question about the columns.
     fn set(&self) -> RsDataSet {
