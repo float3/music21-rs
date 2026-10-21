@@ -1408,6 +1408,11 @@ exceptions![
         Some("music21.spanner")
     ),
     (
+        "SpannerBundleException",
+        spanner::SpannerBundleException,
+        Some("music21.spanner")
+    ),
+    (
         "BeamException",
         notation::BeamException,
         Some("music21.beam")

@@ -2,6 +2,31 @@
 
 ## added
 
+- **A spanner holds its joined objects in music21's own `SpannerStorage`**,
+  which takes `spanner` from 296 of its 419 examples to all 419. music21's
+  own code reaches for that stream everywhere -- `Spanner.__iter__`,
+  `__contains__`, `__getitem__`, `purgeLocations`, and the guard a stream
+  runs before it takes an element, which is why a spanner could not be put
+  into a stream at all. The facade keeps the objects as a list and in such a
+  stream built over them, rebuilt whenever the list changes, because putting
+  them in is what registers the spanner as a site on each -- and that is the
+  whole of what `getSpannerSites` reads.
+
+  The other half of that gap was the **pending-assignment queue**: a hairpin
+  read out of a `<direction>` has no note yet, and music21 keeps the queue
+  on the bundle where its own readers reach it. The crate's readers keep one
+  privately, so the facade carries music21's for music21's readers.
+
+  Beside those, the container members are the facade's rather than the
+  crate's -- `fill`, `insertFirstSpannedElement`, `isFirst`, `isLast`,
+  `getSpannedElementsByClass`, `purgeLocations`, `purgeOrphans` and the
+  bundle's ten are operations over the objects a spanner holds, where the
+  crate holds positions. A copy of a spanner joins the very objects the
+  original joins, as music21's own `__deepcopy__` is written to. And the
+  drawing values turned out to be the crate's after all: `LineEnds` already
+  held both heights and both ticks, so `startHeight`, `endHeight`, `tick`,
+  `startTick` and `endTick` are readings of it with music21's own refusals.
+
 - **A score's metadata answers the primitives music21 answers**, which
   takes `metadata` from 285 of its 370 examples to 368 and brings
   `metadata.primitives` into the harness with all 176 of its own.
