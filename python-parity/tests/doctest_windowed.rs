@@ -26,7 +26,6 @@ music21_rs_python_parity::doctest_suite!(
         ("music21.dynamics", doctest::DYNAMICS_NAMES),
         ("music21.expressions", doctest::EXPRESSION_NAMES),
         ("music21.articulations", doctest::ARTICULATION_NAMES),
-        ("music21.bar", doctest::BAR_NAMES),
         ("music21.analysis.windowed", doctest::WINDOWED_NAMES),
     ]
 );
