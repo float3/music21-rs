@@ -85,6 +85,7 @@ pub mod possibility;
 pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
+pub mod reducechords;
 pub mod reduction;
 pub mod repeat;
 pub mod resolution;
@@ -1379,6 +1380,11 @@ exceptions![
         Some("music21.analysis.reduction")
     ),
     (
+        "ChordReducerException",
+        reducechords::ChordReducerException,
+        Some("music21.analysis.reduceChords")
+    ),
+    (
         "VariantException",
         variant::VariantException,
         Some("music21.variant")
@@ -1706,6 +1712,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     audiosearch::register(m)?;
     makenotation::register(m)?;
     clercqtemperley::register(m)?;
+    reducechords::register(m)?;
     reduction::register(m)?;
     variant::register(m)?;
     tsvconverter::register(m)?;

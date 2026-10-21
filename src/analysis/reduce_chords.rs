@@ -96,6 +96,7 @@ pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Strea
             options.maximum_number_of_chords,
             0.25,
             reduction.meter_at(event.offset()),
+            ChordWeight::Consonance,
         )?;
         let length = reduced.end_offset();
         part.insert(at, reduced);
@@ -930,38 +931,233 @@ fn interval_classes(pitches: &[Pitch]) -> Vec<u8> {
     classes
 }
 
-/// How much a chord weighs in its measure: music21's `qlbsmpConsonance`,
-/// which is how long it sounds times how strong its beat is, a tenth of
-/// that where it is dissonant, and the length alone for the last chord of
-/// the measure.
-fn weight_of(
-    chord: &Chord,
-    length: FloatType,
-    beat_strength: FloatType,
-    last_in_measure: bool,
-) -> FloatType {
-    let consonance = if chord.is_consonant() { 1.0 } else { 0.1 };
-    let weight = if last_in_measure {
-        length
-    } else {
-        length * beat_strength
-    };
-    weight * consonance
+/// How much a chord weighs in its measure: music21's four weight
+/// algorithms, one of which its `ChordReducer` hands to
+/// `computeMeasureChordWeights`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ChordWeight {
+    /// How long the chord sounds, and nothing else: music21's
+    /// `quarterLengthOnly`, which is what `computeMeasureChordWeights`
+    /// weighs by when it is handed none.
+    #[default]
+    Length,
+    /// That times how strong its beat is: `quarterLengthBeatStrength`.
+    LengthByBeat,
+    /// The same, except that the last chord of the measure counts as a
+    /// full beat: `quarterLengthBeatStrengthMeasurePosition`.
+    LengthByBeatInMeasure,
+    /// The same again, a tenth of it where the chord is dissonant:
+    /// `qlbsmpConsonance`, which is the one a reduction weighs by.
+    Consonance,
+}
+
+impl ChordWeight {
+    /// The name music21 gives the method.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Length => "quarterLengthOnly",
+            Self::LengthByBeat => "quarterLengthBeatStrength",
+            Self::LengthByBeatInMeasure => "quarterLengthBeatStrengthMeasurePosition",
+            Self::Consonance => "qlbsmpConsonance",
+        }
+    }
+
+    /// What a name stands for, which is how a caller handing music21's own
+    /// method over is read.
+    #[must_use]
+    pub fn named(name: &str) -> Option<Self> {
+        [
+            Self::Length,
+            Self::LengthByBeat,
+            Self::LengthByBeatInMeasure,
+            Self::Consonance,
+        ]
+        .into_iter()
+        .find(|found| found.name() == name)
+    }
+
+    /// How much one chord weighs under this algorithm.
+    #[must_use]
+    pub fn of(
+        self,
+        chord: &Chord,
+        length: FloatType,
+        beat_strength: FloatType,
+        last_in_measure: bool,
+    ) -> FloatType {
+        let by_beat = if last_in_measure {
+            length
+        } else {
+            length * beat_strength
+        };
+        match self {
+            Self::Length => length,
+            Self::LengthByBeat => length * beat_strength,
+            Self::LengthByBeatInMeasure => by_beat,
+            Self::Consonance => {
+                let consonance = if chord.is_consonant() { 1.0 } else { 0.1 };
+                by_beat * consonance
+            }
+        }
+    }
+}
+
+/// One chord of a measure as the weighing reads it: where it stands, what
+/// it is, and how strong the beat it stands on is.
+///
+/// music21 reads the beat strength off the chord's own place in the measure
+/// holding it; a chord here knows neither, so the caller says.
+#[derive(Clone, Copy, Debug)]
+pub struct WeighedChord<'a> {
+    /// Where the chord stands in the measure.
+    pub offset: FloatType,
+    /// The chord itself.
+    pub chord: &'a Chord,
+    /// How strong the beat it stands on is.
+    pub beat_strength: FloatType,
+}
+
+/// How much each chord of a measure weighs, keyed by the pitch classes it
+/// sounds and in the order the chords were met: music21's
+/// `computeMeasureChordWeights`.
+///
+/// Two chords of the same classes weigh as one, which is what makes a chord
+/// struck again over a moving bass count towards the chord already sounding
+/// rather than as a chord of its own. The classes come in the order CPython
+/// reads them out of a set, which is what decides whether two voicings are
+/// the same chord at all.
+#[must_use]
+pub fn measure_chord_weights(
+    chords: &[WeighedChord<'_>],
+    algorithm: ChordWeight,
+) -> Vec<(Vec<u8>, FloatType)> {
+    let mut weights: Vec<(Vec<u8>, FloatType)> = Vec::new();
+    for (index, held) in chords.iter().enumerate() {
+        let classes = pitch_classes(held.chord);
+        let length = held
+            .chord
+            .duration()
+            .map_or(0.0, crate::duration::Duration::quarter_length);
+        let weight = algorithm.of(
+            held.chord,
+            length,
+            held.beat_strength,
+            index + 1 == chords.len(),
+        );
+        match weights.iter_mut().find(|(known, _)| *known == classes) {
+            Some((_, total)) => *total += weight,
+            None => weights.push((classes, weight)),
+        }
+    }
+    weights
+}
+
+/// One chord a reduction keeps: which of the measure's chords it is, where
+/// it goes and how long it sounds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct KeptChord {
+    /// Which of the chords given it is, counted from nought.
+    pub at: usize,
+    /// Where it stands in the measure afterwards.
+    pub offset: FloatType,
+    /// How long it sounds afterwards.
+    pub length: FloatType,
+}
+
+/// Which chords of a measure a reduction keeps, and where: music21's
+/// `reduceMeasureToNChords` read as places rather than as a stream.
+///
+/// Every chord not named is one the reduction drops, and a kept chord takes
+/// the time of the chords it stands for -- music21's greedy walk. `others`
+/// is where the measure's other elements stand, which the evening out of
+/// syncopations reads: a chord may take its time from one of those, which
+/// changes nothing a score says since none of them sounds.
+#[must_use]
+pub fn reduced_measure_places(
+    chords: &[WeighedChord<'_>],
+    others: &[FloatType],
+    maximum: usize,
+    trim_below: FloatType,
+    algorithm: ChordWeight,
+) -> Vec<KeptChord> {
+    let weights = measure_chord_weights(chords, algorithm);
+    if weights.is_empty() {
+        return Vec::new();
+    }
+    let mut sorted = weights;
+    sorted.sort_by(|(_, left), (_, right)| right.total_cmp(left));
+    let keep = maximum.min(sorted.len());
+    let highest = sorted[0].1;
+    let kept: Vec<Vec<u8>> = sorted
+        .into_iter()
+        .take(keep)
+        .take_while(|(_, weight)| *weight >= highest * trim_below)
+        .map(|(classes, _)| classes)
+        .collect();
+
+    let mut greedy: Option<usize> = None;
+    let mut written: Vec<KeptChord> = Vec::new();
+    let mut running = 0.0;
+    let mut last_classes: Option<Vec<u8>> = None;
+    for (at, held) in chords.iter().enumerate() {
+        let classes = pitch_classes(held.chord);
+        let length = held
+            .chord
+            .duration()
+            .map_or(0.0, crate::duration::Duration::quarter_length);
+        if kept.contains(&classes) && Some(&classes) != last_classes.as_ref() {
+            match greedy {
+                None if held.offset != 0.0 => running = held.offset,
+                None => {}
+                Some(place) => {
+                    written[place].length = running;
+                    running = 0.0;
+                }
+            }
+            let offset = if greedy.is_none() && held.offset != 0.0 {
+                0.0
+            } else {
+                held.offset
+            };
+            written.push(KeptChord {
+                at,
+                offset,
+                length: 0.0,
+            });
+            greedy = Some(written.len() - 1);
+            last_classes = Some(classes);
+            running = op_frac(running + length);
+        } else {
+            running = op_frac(running + length);
+        }
+    }
+    if let Some(place) = greedy {
+        written[place].length = running;
+    }
+    even_out_syncopations(&mut written, others);
+    written
 }
 
 /// A measure reduced to the few chords weighing most in it: music21's
-/// `reduceMeasureToNChords`.
+/// `reduceMeasureToNChords`, built on [`reduced_measure_places`].
+///
+/// `meter` is the meter in force where the measure stands, which the beat
+/// strengths are read in; without one every beat is as strong as every
+/// other, as music21 reads a measure standing in no meter.
 ///
 /// # Errors
 ///
 /// A length no duration can have.
-fn reduce_measure_to_n_chords(
+pub fn reduce_measure_to_n_chords(
     measure: &Stream,
     maximum: usize,
     trim_below: FloatType,
     meter: Option<TimeSignature>,
+    algorithm: ChordWeight,
 ) -> Result<Stream> {
-    let chords: Vec<(FloatType, Chord)> = measure
+    let held: Vec<(FloatType, Chord)> = measure
         .events()
         .iter()
         .filter_map(|event| match event.element() {
@@ -969,22 +1165,6 @@ fn reduce_measure_to_n_chords(
             _ => None,
         })
         .collect();
-    let mut weights: Vec<(Vec<u8>, FloatType)> = Vec::new();
-    for (index, (offset, chord)) in chords.iter().enumerate() {
-        let classes = pitch_classes(chord);
-        let length = chord
-            .duration()
-            .map_or(0.0, crate::duration::Duration::quarter_length);
-        let strength = match &meter {
-            Some(meter) => meter.accent_weight(*offset).unwrap_or(1.0),
-            None => 1.0,
-        };
-        let weight = weight_of(chord, length, strength, index + 1 == chords.len());
-        match weights.iter_mut().find(|(known, _)| *known == classes) {
-            Some((_, total)) => *total += weight,
-            None => weights.push((classes, weight)),
-        }
-    }
     // The measure as it stands without its notes, which is what music21
     // leaves when it removes the chords it does not keep: the clef, the
     // key, the meter, a layout, a barline and any rest the chordifying
@@ -997,73 +1177,33 @@ fn reduce_measure_to_n_chords(
             .cloned()
             .collect(),
     );
-    if weights.is_empty() {
-        let length = measure.end_offset();
-        answer.insert(0.0, crate::rest::Rest::new(Duration::new(length)?));
-        return Ok(answer);
-    }
-    let mut sorted = weights.clone();
-    sorted.sort_by(|(_, left), (_, right)| right.total_cmp(left));
-    let keep = maximum.min(sorted.len());
-    let highest = sorted[0].1;
-    let kept: Vec<Vec<u8>> = sorted
-        .into_iter()
-        .take(keep)
-        .take_while(|(_, weight)| *weight >= highest * trim_below)
-        .map(|(classes, _)| classes)
-        .collect();
-
-    // Each kept chord takes the length of the chords it stands for, as
-    // music21's greedy walk gives it.
-    let mut greedy: Option<(usize, FloatType)> = None;
-    let mut written: Vec<(FloatType, Chord, FloatType)> = Vec::new();
-    let mut running = 0.0;
-    let mut last_classes: Option<Vec<u8>> = None;
-    for (offset, chord) in &chords {
-        let classes = pitch_classes(chord);
-        let length = chord
-            .duration()
-            .map_or(0.0, crate::duration::Duration::quarter_length);
-        if kept.contains(&classes) && Some(&classes) != last_classes.as_ref() {
-            match greedy {
-                None if *offset != 0.0 => running = *offset,
-                None => {}
-                Some((place, _)) => {
-                    written[place].2 = running;
-                    running = 0.0;
-                }
-            }
-            let mut kept_chord = chord.clone();
-            undecide_accidentals(&mut kept_chord);
-            let at = if greedy.is_none() && *offset != 0.0 {
-                0.0
-            } else {
-                *offset
-            };
-            written.push((at, kept_chord, 0.0));
-            greedy = Some((written.len() - 1, running));
-            last_classes = Some(classes);
-            running = op_frac(running + length);
-        } else {
-            running = op_frac(running + length);
-        }
-    }
-    if let Some((place, _)) = greedy {
-        written[place].2 = running;
-    }
-    // music21 evens out the syncopations over the measure as it stands,
-    // the elements it keeps beside the chords included, so the element a
-    // syncopated chord takes its time from may be one of those -- which
-    // changes nothing a score says, since none of them sounds.
     let others: Vec<FloatType> = answer
         .events()
         .iter()
         .map(crate::stream::StreamEvent::offset)
         .collect();
-    even_out_syncopations(&mut written, &others);
-    for (offset, mut chord, length) in written {
-        chord.set_duration(Duration::new(length.max(0.0))?);
-        answer.insert(offset, chord);
+    let chords: Vec<WeighedChord<'_>> = held
+        .iter()
+        .map(|(offset, chord)| WeighedChord {
+            offset: *offset,
+            chord,
+            beat_strength: match &meter {
+                Some(meter) => meter.accent_weight(*offset).unwrap_or(1.0),
+                None => 1.0,
+            },
+        })
+        .collect();
+    let kept = reduced_measure_places(&chords, &others, maximum, trim_below, algorithm);
+    if kept.is_empty() {
+        let length = measure.end_offset();
+        answer.insert(0.0, crate::rest::Rest::new(Duration::new(length)?));
+        return Ok(answer);
+    }
+    for place in kept {
+        let mut chord = held[place.at].1.clone();
+        undecide_accidentals(&mut chord);
+        chord.set_duration(Duration::new(place.length.max(0.0))?);
+        answer.insert(place.offset, chord);
     }
     Ok(answer)
 }
@@ -1133,9 +1273,9 @@ fn undecide_accidentals(chord: &mut Chord) {
 /// beat is moved onto it, the element before it giving up the difference:
 /// music21's "even chord lengths" pass, which walks the measure in order
 /// and reads each offset as it has been left by the one before.
-fn even_out_syncopations(written: &mut [(FloatType, Chord, FloatType)], others: &[FloatType]) {
+fn even_out_syncopations(written: &mut [KeptChord], others: &[FloatType]) {
     for index in 0..written.len() {
-        let offset = written[index].0;
+        let offset = written[index].offset;
         let whole = offset.trunc();
         let past = offset - whole;
         let rounded = (past * 1000.0).round() / 1000.0;
@@ -1144,22 +1284,22 @@ fn even_out_syncopations(written: &mut [(FloatType, Chord, FloatType)], others: 
         }
         // The element standing before it, which is a chord only where no
         // other element of the measure stands between the two.
-        let before = written[..index].last().map(|(at, _, _)| *at);
+        let before = written[..index].last().map(|kept| kept.offset);
         let Some(before) = before else {
             // music21 leaves the first element of a measure alone.
             if index == 0 && !others.iter().any(|at| *at < offset) {
                 continue;
             }
-            written[index].0 = whole;
-            written[index].2 = op_frac(written[index].2 + past);
+            written[index].offset = whole;
+            written[index].length = op_frac(written[index].length + past);
             continue;
         };
         let interrupted = others.iter().any(|at| *at > before && *at <= offset);
         if !interrupted {
-            written[index - 1].2 = op_frac(written[index - 1].2 - past);
+            written[index - 1].length = op_frac(written[index - 1].length - past);
         }
-        written[index].0 = whole;
-        written[index].2 = op_frac(written[index].2 + past);
+        written[index].offset = whole;
+        written[index].length = op_frac(written[index].length + past);
     }
 }
 
