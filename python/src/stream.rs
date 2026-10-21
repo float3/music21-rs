@@ -3890,6 +3890,21 @@ fn edited<'py>(
     from_crate(slf.py(), &made)
 }
 
+/// Whose streams a crate stream is built as.
+///
+/// A wheel on its own has only its own; a facade standing inside music21
+/// must answer music21's, because music21's own code indexes a part by
+/// class (`p[roman.RomanNumeral][0]`) and a stream of ours is not one of
+/// its. It is the same choice `SearchMatch`, `spanner.Line` and `Style`
+/// make: music21's where music21 can be asked, the wheel's otherwise.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Whose {
+    /// This package's own `Score`, `Part`, `Measure` and the rest.
+    Wheel,
+    /// music21's own, for a facade answering inside music21.
+    Music21,
+}
+
 /// A crate stream as this wheel's objects: a stream of its kind holding a
 /// wheel object for each element the wheel has a class for, at the offsets
 /// they stand at, with what the stream is called and numbered as the
@@ -3899,40 +3914,95 @@ fn edited<'py>(
 /// unpitched strokes, barlines, pedal bounces and gaps, a manuscript's
 /// breaks, spanners and a score's metadata.
 pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bound<'py, PyAny>> {
-    let class = match stream.kind() {
-        StreamKind::Score => py.get_type::<Score>(),
-        StreamKind::Part => py.get_type::<Part>(),
-        StreamKind::PartStaff => py.get_type::<PartStaff>(),
-        StreamKind::Measure => py.get_type::<Measure>(),
-        StreamKind::Voice => py.get_type::<Voice>(),
-        StreamKind::Opus => py.get_type::<Opus>(),
-        _ => py.get_type::<Stream>(),
+    from_crate_as(py, stream, Whose::Wheel)
+}
+
+/// The same as music21's own streams, where music21 can be asked for them.
+///
+/// The *elements* are already music21's wherever anything is installed --
+/// `element_object` builds every one through `installed_new` -- so what
+/// differs is the container and how an element goes into it.
+pub(crate) fn music21_from_crate<'py>(
+    py: Python<'py>,
+    stream: &RsStream,
+) -> PyResult<Bound<'py, PyAny>> {
+    let whose = if py.import("music21.stream").is_ok() {
+        Whose::Music21
+    } else {
+        Whose::Wheel
     };
-    let made = class.call0()?;
+    from_crate_as(py, stream, whose)
+}
+
+/// A crate stream as one kind of streams or the other.
+pub(crate) fn from_crate_as<'py>(
+    py: Python<'py>,
+    stream: &RsStream,
+    whose: Whose,
+) -> PyResult<Bound<'py, PyAny>> {
+    let made = match whose {
+        Whose::Wheel => {
+            let class = match stream.kind() {
+                StreamKind::Score => py.get_type::<Score>(),
+                StreamKind::Part => py.get_type::<Part>(),
+                StreamKind::PartStaff => py.get_type::<PartStaff>(),
+                StreamKind::Measure => py.get_type::<Measure>(),
+                StreamKind::Voice => py.get_type::<Voice>(),
+                StreamKind::Opus => py.get_type::<Opus>(),
+                _ => py.get_type::<Stream>(),
+            };
+            class.call0()?
+        }
+        Whose::Music21 => {
+            let name = match stream.kind() {
+                StreamKind::Score => "Score",
+                StreamKind::Part => "Part",
+                StreamKind::PartStaff => "PartStaff",
+                StreamKind::Measure => "Measure",
+                StreamKind::Voice => "Voice",
+                StreamKind::Opus => "Opus",
+                _ => "Stream",
+            };
+            py.import("music21.stream")?.getattr(name)?.call0()?
+        }
+    };
     let mut objects = Vec::new();
     for event in stream.events() {
-        if let Some(object) = element_object(py, event.element())? {
+        if let Some(object) = element_object_as(py, event.element(), whose)? {
             objects.push((event.offset(), object));
         }
     }
-    {
-        let cell = made.cast::<Stream>()?;
-        let mut held = cell.borrow_mut();
-        for (offset, object) in &objects {
-            held.put(*offset, object);
+    match whose {
+        Whose::Wheel => {
+            let cell = made.cast::<Stream>()?;
+            let mut held = cell.borrow_mut();
+            for (offset, object) in &objects {
+                held.put(*offset, object);
+            }
+            if let Some(id) = stream.id() {
+                held.id = Some(pyo3::types::PyString::new(py, id).into_any().unbind());
+            }
         }
-        if let Some(id) = stream.id() {
-            held.id = Some(pyo3::types::PyString::new(py, id).into_any().unbind());
+        Whose::Music21 => {
+            for (offset, object) in &objects {
+                made.call_method1("insert", (*offset, object))?;
+            }
+            if let Some(id) = stream.id() {
+                made.setattr("id", id)?;
+            }
         }
     }
     // The spanners, which name the leaves they join by position: each
     // goes in at nought, as music21 keeps one, holding the very objects
     // just built.
     if !stream.spanners().is_empty() {
-        let leaves: Vec<Py<PyAny>> = {
-            let cell = made.cast::<Stream>()?;
-            let held = cell.borrow();
-            leaves_of(py, &held)?
+        let leaves: Vec<Py<PyAny>> = match whose {
+            Whose::Wheel => {
+                let cell = made.cast::<Stream>()?;
+                let held = cell.borrow();
+                leaves_of(py, &held)?
+            }
+            Whose::Music21 => music21_leaves_of(&made)?,
         };
         for spanner in stream.spanners() {
             let joined: Vec<Py<PyAny>> = spanner
@@ -3942,13 +4012,28 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
                 .map(|object| object.clone_ref(py))
                 .collect();
             let built = crate::spanner::Spanner::object(py, spanner, joined)?;
-            let cell = made.cast::<Stream>()?;
-            cell.borrow_mut().put(0.0, built.bind(py));
+            match whose {
+                Whose::Wheel => {
+                    let cell = made.cast::<Stream>()?;
+                    cell.borrow_mut().put(0.0, built.bind(py));
+                }
+                Whose::Music21 => {
+                    made.call_method1("insert", (0.0, built.bind(py)))?;
+                }
+            }
         }
     }
     // The metadata a reader found, which music21 keeps among the elements.
     if let Some(metadata) = stream.metadata() {
-        let carried = Bound::new(py, crate::metadata::Metadata::wrap(metadata.clone()))?;
+        // The installed class, so music21's own `metadata` setter can put
+        // it into the stream: it inserts the object, and its streams hold
+        // nothing that is not a `Music21Object`.
+        let carried = crate::installed_new(
+            py,
+            "music21.metadata",
+            "Metadata",
+            crate::metadata::Metadata::wrap(metadata.clone()),
+        )?;
         made.setattr("metadata", carried)?;
     }
     if let Some(at) = stream.at_sounding_pitch() {
@@ -3984,6 +4069,23 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
     Ok(made)
 }
 
+/// Every leaf of a music21 stream, in the order the crate counts them:
+/// what `recurse` walks past the streams themselves.
+fn music21_leaves_of(stream: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
+    let mut out = Vec::new();
+    for element in stream.call_method0("recurse")?.walk()? {
+        let element = element?;
+        let held = element
+            .getattr("isStream")
+            .and_then(|flag| flag.is_truthy())
+            .unwrap_or(false);
+        if !held {
+            out.push(element.unbind());
+        }
+    }
+    Ok(out)
+}
+
 /// Every leaf of a stream of this package's, in the order the crate
 /// counts them: a nested stream's leaves where it holds one, itself
 /// otherwise. A spanner names what it joins by that position.
@@ -4006,13 +4108,29 @@ pub(crate) fn element_object<'py>(
     py: Python<'py>,
     element: &StreamElement,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    let class_named = |name: &str| -> PyResult<Bound<'py, PyAny>> {
+    element_object_as(py, element, Whose::Wheel)
+}
+
+/// The same, with the nested streams built as one kind or the other.
+fn element_object_as<'py>(
+    py: Python<'py>,
+    element: &StreamElement,
+    whose: Whose,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    // The installed class where something is installed, so an element
+    // built here is one music21 will hold: its own streams refuse
+    // anything that is not a `Music21Object`, and a bare facade class is
+    // not one.
+    let class_named = |module: &str, name: &str| -> PyResult<Bound<'py, PyAny>> {
+        if let Some(installed) = crate::installed_class(py, module, name) {
+            return Ok(installed);
+        }
         py.import("music21_rs")
             .or_else(|_| py.import("music21_rs_facade"))?
             .getattr(name)
     };
     let made = match element {
-        StreamElement::Stream(inner) => from_crate(py, inner)?,
+        StreamElement::Stream(inner) => from_crate_as(py, inner, whose)?,
         StreamElement::Note(note) => {
             crate::installed_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
                 .into_bound(py)
@@ -4048,12 +4166,14 @@ pub(crate) fn element_object<'py>(
             crate::instrument::Instrument::object(py, (**instrument).clone())?.into_bound(py)
         }
         StreamElement::KeySignature(signature) => match signature.sharps() {
-            Some(sharps) => class_named("KeySignature")?.call1((sharps,))?,
+            Some(sharps) => class_named("music21.key", "KeySignature")?.call1((sharps,))?,
             None => return Ok(None),
         },
-        StreamElement::Key(key) => class_named("Key")?.call1((key.tonic().name(), key.mode()))?,
+        StreamElement::Key(key) => {
+            class_named("music21.key", "Key")?.call1((key.tonic().name(), key.mode()))?
+        }
         StreamElement::TimeSignature(meter) => {
-            class_named("TimeSignature")?.call1((meter.ratio_string(),))?
+            class_named("music21.meter.base", "TimeSignature")?.call1((meter.ratio_string(),))?
         }
         StreamElement::MetronomeMark(mark) => crate::installed_new(
             py,
@@ -4076,7 +4196,7 @@ pub(crate) fn element_object<'py>(
         .into_any(),
         StreamElement::ChordSymbol(symbol) => {
             if symbol.is_no_chord() {
-                class_named("NoChord")?.call0()?
+                class_named("music21.harmony", "NoChord")?.call0()?
             } else {
                 let keywords = PyDict::new(py);
                 keywords.set_item("root", symbol.root().name())?;
@@ -4087,7 +4207,7 @@ pub(crate) fn element_object<'py>(
                 if let Some(text) = symbol.kind_text() {
                     keywords.set_item("kindStr", text)?;
                 }
-                class_named("ChordSymbol")?.call((), Some(&keywords))?
+                class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?
             }
         }
         StreamElement::TextExpression(text) => {

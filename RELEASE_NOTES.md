@@ -2,6 +2,27 @@
 
 ## added
 
+- **The wheel reads a de Clercq-Temperley analysis of the rock corpus into
+  a part**, and every one of music21's `romanText.clercqTemperley`
+  examples passes: 14 of 14 docstrings and 90 of 90, from nothing. The
+  reading is the crate's `romantext::clercq_temperley`, which
+  `clercq_temperley_parity` already held to music21 on 207 songs.
+  `CtSong::from_lines` is new, music21's `parse` once it has opened a
+  file: the library reads no files, so a caller hands the lines over, and
+  it matters that they come as the file wrote them -- music21 reads a
+  line's emptiness before trimming it, so a blank line of a file survives
+  where one in a text split on newlines does not.
+
+- **A crate stream can be built as music21's own streams**
+  (`stream::music21_from_crate`), which is what a facade must answer where
+  music21's own code indexes a part by class -- its `clercqTemperley`
+  example asks the part for the figure of its first roman numeral, and a
+  stream of this package's is not one of music21's. The elements were
+  already music21's: every one is built through the install helper. Which
+  kind is answered follows the rule `SearchMatch`, `spanner.Line` and
+  `Style` already follow -- music21's where music21 can be asked, the
+  wheel's otherwise.
+
 - **The wheel works out the notation a score leaves unsaid**, and every one
   of music21's `stream.makeNotation` examples passes: 11 of 11 docstrings
   and 255 of 255, from nothing -- the largest module in the harness after
@@ -740,6 +761,12 @@
   property as music21 does.
 
 ## fixed
+
+- **A key, a key signature, a time signature, a chord symbol and a score's
+  metadata built from a crate stream are the installed classes**, as every
+  other element already was. A bare facade class is not a
+  `Music21Object`, so music21's own streams refused all five: a part built
+  for `clercqTemperley` could not be given its key.
 
 - **`smooth_frequencies` raises a `ValueError` for an argument that was
   never a value**, as music21 does -- no smoothing levels at all, or more

@@ -1,0 +1,21 @@
+# Docstrings of music21.romanText.clercqTemperley whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_clercqtemperley`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.romanText.clercqTemperley.CTRule.LHS",
+    "music21.romanText.clercqTemperley.CTRule._measureGroups",
+    "music21.romanText.clercqTemperley.CTRule.comment",
+    "music21.romanText.clercqTemperley.CTRule.fixupChordAtom",
+    "music21.romanText.clercqTemperley.CTRule.musicText",
+    "music21.romanText.clercqTemperley.CTRule.sectionName",
+    "music21.romanText.clercqTemperley.CTSong",
+    "music21.romanText.clercqTemperley.CTSong.comments",
+    "music21.romanText.clercqTemperley.CTSong.homeKey",
+    "music21.romanText.clercqTemperley.CTSong.homeTimeSig",
+    "music21.romanText.clercqTemperley.CTSong.parse",
+    "music21.romanText.clercqTemperley.CTSong.rules",
+    "music21.romanText.clercqTemperley.CTSong.title",
+    "music21.romanText.clercqTemperley.CTSong.toPart",
+]
