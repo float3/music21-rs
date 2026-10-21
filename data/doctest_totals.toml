@@ -323,6 +323,12 @@ examples = 370
 tests = 9
 
 [[module]]
+module = "music21.metadata.primitives"
+docstrings = 31
+examples = 176
+tests = 18
+
+[[module]]
 module = "music21.meter.base"
 docstrings = 34
 examples = 387

@@ -213,7 +213,7 @@ pub use interval::{
     staff_distance_to_generic_number, written_higher_pitch, written_lower_pitch,
 };
 pub use key::{Key, KeySignature, convert_key_string_to_music21_key_string};
-pub use metadata::{Metadata, MetadataValue};
+pub use metadata::{Metadata, MetadataContent, MetadataValue};
 pub use meter::{BeamedNote, BeatDivision, MeterTerminal, OffsetAlign, TimeSignature};
 pub use midi::{
     DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,

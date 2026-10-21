@@ -81,6 +81,7 @@ pub mod omrcorrectors;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
+pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
 pub mod reduction;
@@ -1694,6 +1695,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tsvconverter::register(m)?;
     omrcorrectors::register(m)?;
     features::register(m)?;
+    primitives::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;
     hasher::register(m)?;

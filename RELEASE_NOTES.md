@@ -2,6 +2,58 @@
 
 ## added
 
+- **A score's metadata answers the primitives music21 answers**, which
+  takes `metadata` from 285 of its 370 examples to 368 and brings
+  `metadata.primitives` into the harness with all 176 of its own.
+  `md['title']` is a tuple of `Text` objects, `md['composer']` of
+  `Contributor`s, `md['dateCreated']` of `DateSingle`s and `md['copyright']`
+  of `Copyright`s -- this package's own classes over the crate's
+  `metadata::primitives` -- and `convertValue` is what decides which, out of
+  `metadata::value_kind_of`. music21's own private readers
+  (`_getStringValueByNamespaceName`, `_getPluralAttribute` and the rest) run
+  over the object through the `_get`, `_add` and `_set` the facade carries.
+
+  Three things the facade does that the crate deliberately does not: it
+  signs a new metadata with music21's version under `software`, as music21's
+  own constructor does; it writes a plural name under the name it stands
+  for, so `md.composers = [...]` reaches `composer`; and it compiles a query
+  holding any of `*.|+?{}` with Python's own `re` and hands it to the crate
+  as a matcher, there being no regex in the crate.
+
+  The two examples left are a Windows path separator in a corpus score's
+  `filePath`, which music21 itself cannot pass on that platform either.
+
+- **A metadata value is a primitive now, not only a string**
+  (`metadata::primitives`, music21's `metadata.primitives`). A title has a
+  language and may be a translation; a contributor has a role and may go
+  under several names; and a date may be approximate, uncertain, a date
+  something happened before or after, a span between two dates, or a choice
+  among several. `metadata::Text`, `metadata::primitives::Contributor`,
+  `metadata::primitives::Date` and `metadata::primitives::DatePrimitive`
+  are those types, and `MetadataValue` carries whichever one it is beside
+  the text and the role it always carried -- the text and the role are a
+  reading of the content rather than a second copy of it, since every way
+  of building one fills all three together.
+
+  **A date is music21's own and not a calendar date.** Any part may be
+  missing and any part may say how sure it is, which is why music21 wrote a
+  type of its own rather than using Python's `datetime`; a date in the
+  distant past is as good as a recent one. The four classes music21 keeps
+  for one -- `DateSingle`, `DateRelative`, `DateBetween`, `DateSelection`
+  -- differ only in the relevances they take and in how they are written, so
+  one type carries all four and `DateKind` says which it is, refusing a
+  relevance that class does not take exactly as music21's own setters do.
+
+  `metadata_parity` holds it to music21: every vocabulary name's value kind
+  against music21's own `UNIQUE_NAME_TO_VALUE_TYPE`
+  (`metadata::value_kind_of`), the four date classes over every relevance
+  each takes, and 150-odd written dates read both sides and compared part
+  for part -- their values, how sure each is, and the string each writes
+  back. That sweep found a real difference at once: music21 joins the first
+  *four* parts of a date with slashes and the rest with colons, so a date
+  with a time in it is written `1030/12/04/04:50:32`, where this was writing
+  the hour after a colon.
+
 - **The wheel measures a piece by every feature extractor**, and every one
   of music21's `features.base` examples passes: 16 of 16 docstrings and 82
   of 82, from nothing. The reading is the crate's `features`, whose
