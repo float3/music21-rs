@@ -3274,6 +3274,17 @@ SLURRED = """<?xml version="1.0" encoding="UTF-8"?>
 
 def test_a_spanner_joins_the_notes_a_stream_holds():
     """Every answer is music21's own for the same document and stream."""
+    # A spanner joins this package's own notes whether or not music21 is
+    # there to be imported. It keeps its objects in music21's own
+    # `SpannerStorage` where music21 can be asked for one, and a stream of
+    # music21's holds nothing that is not a `Music21Object` -- so a note of
+    # this package's, which is one only where something is installed over
+    # music21, was refused and the slur could not be built at all. The
+    # wheel was worse for having music21 beside it than without, which is
+    # the one thing it must never be.
+    joined = m.Slur(m.Note("C4"), m.Note("E4"))
+    assert [held.nameWithOctave for held in joined.getSpannedElements()] == ["C4", "E4"]
+
     read = m.from_musicxml(SLURRED)
     # Asked of the whole tree, which is how music21's own code asks: the
     # crate's readers gather a part's spanners onto the score, where

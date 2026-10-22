@@ -118,8 +118,22 @@ impl Spanner {
         }
         let keywords = PyDict::new(py);
         keywords.set_item("client", slf)?;
-        let made = class.call((elements,), Some(&keywords))?;
-        slf.borrow_mut().storage = Some(made.unbind());
+        // music21's storage is a `Stream`, and a stream of its refuses
+        // anything that is not a `Music21Object` -- which the objects a
+        // spanner joins are only where something is installed over music21.
+        // A caller with both and no swap (`pip install music21 music21-rs`)
+        // joins notes of this package's own, and building the storage over
+        // them raised `'music21.note.Note' object has no attribute
+        // 'isStream'`: **the wheel refused to make a slur at all for having
+        // music21 beside it, where with no music21 it made one.** So a
+        // storage music21 will not hold is no storage, which is what a
+        // wheel standing alone already answers; music21's own code reads
+        // `spannerStorage` to reach the joined objects, and objects it
+        // cannot hold are none it could have read.
+        match class.call((elements,), Some(&keywords)) {
+            Ok(made) => slf.borrow_mut().storage = Some(made.unbind()),
+            Err(_) => slf.borrow_mut().storage = None,
+        }
         Ok(())
     }
 
