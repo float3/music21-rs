@@ -606,7 +606,14 @@ fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
             .and_then(|written| written.extract::<String>())
             .is_ok_and(|written| written == module)
     });
-    let Some(class) = installed_class(py, module, name).or(ours).or_else(|| {
+    // `holdable_class` and not `installed_class`: a module
+    // `install_into_music21` does not carry has nothing installed under it,
+    // and the bare facade this would otherwise fall back to is not a
+    // `Music21Object` -- so music21's own streams refuse it and a score
+    // cached while that class was swapped into music21 could be thawed by
+    // nobody. A suite swapping `music21.bar` and parsing a corpus score did
+    // exactly that, and `zz_corpus_cache` is what reads it back.
+    let Some(class) = holdable_class(py, module, name).or(ours).or_else(|| {
         py.import(module)
             .and_then(|module| module.getattr(name))
             .ok()

@@ -35,6 +35,17 @@
   after every other suite on purpose, so what it reads is the cache a real
   run leaves rather than the one a suite would write if it ran first.
 
+  It found two real faults on its first run in CI, and both are fixed at
+  the root: **`MeterTerminal` and `MeterSequence` pickle themselves**, where
+  before they had `__deepcopy__` and no `__reduce__` and so fell through to
+  music21's `__slots__` machinery, which cannot be read back (`parenthesis`
+  is not an attribute a pyclass has and `_levelListCache` is a getter with
+  no setter); and **`_thawed` asks `holdable_class`** rather than falling
+  back to the bare facade for a module nothing is installed under, since a
+  bare facade is not a `Music21Object` and music21's own streams refuse it.
+  Between them every one of the twenty suites that left an unreadable cache
+  now leaves a readable one.
+
 - **`analysis.windowed` passes all 35 of its examples**, and the reason
   recorded for the one it failed was stale in two ways at once. It said the
   failure was a measure's `repr` -- music21 writes its number and its offset
