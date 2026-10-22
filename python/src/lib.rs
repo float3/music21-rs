@@ -308,6 +308,42 @@ pub(crate) fn installed_class<'py>(
     installed.get_item((module, name)).ok()
 }
 
+/// A class music21's own streams will hold for this name, where nothing
+/// has been installed.
+///
+/// The installed class where there is one. Otherwise, and **only where
+/// music21 has already been imported**, the same subclass installing would
+/// build -- built once and bound into nothing, so music21 is untouched.
+/// The guard is that music21 is already in `sys.modules` rather than that
+/// it could be imported: a wheel standing on its own must not pull the
+/// whole of music21 in to build a note, which is the point of it.
+pub(crate) fn holdable_class<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+) -> Option<Bound<'py, PyAny>> {
+    if let Some(installed) = installed_class(py, module, name) {
+        return Some(installed);
+    }
+    let modules = py.import("sys").ok()?.getattr("modules").ok()?;
+    if !modules.contains(module).unwrap_or(false) {
+        return None;
+    }
+    let facade = py
+        .import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))
+        .ok()?
+        .getattr(name)
+        .ok()?;
+    let original = modules.get_item(module).ok()?.getattr(name).ok()?;
+    install_helper(py)
+        .ok()?
+        .getattr("holdable_class")
+        .ok()?
+        .call1((facade, original))
+        .ok()
+}
+
 /// music21's own `editorial` for an object that really is one of its
 /// `Music21Object`s, which is what an installed class's object is.
 ///
@@ -570,7 +606,14 @@ fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
             .and_then(|written| written.extract::<String>())
             .is_ok_and(|written| written == module)
     });
-    let Some(class) = installed_class(py, module, name).or(ours).or_else(|| {
+    // `holdable_class` and not `installed_class`: a module
+    // `install_into_music21` does not carry has nothing installed under it,
+    // and the bare facade this would otherwise fall back to is not a
+    // `Music21Object` -- so music21's own streams refuse it and a score
+    // cached while that class was swapped into music21 could be thawed by
+    // nobody. A suite swapping `music21.bar` and parsing a corpus score did
+    // exactly that, and `zz_corpus_cache` is what reads it back.
+    let Some(class) = holdable_class(py, module, name).or(ours).or_else(|| {
         py.import(module)
             .and_then(|module| module.getattr(name))
             .ok()
@@ -646,6 +689,29 @@ where
     T: Into<pyo3::PyClassInitializer<T>>,
 {
     let Some(class) = installed_class(py, module, name) else {
+        return Py::new(py, value);
+    };
+    let object = blank_installed(&class)?;
+    let cell = object.cast::<T>()?;
+    *cell.borrow_mut() = value;
+    Ok(cell.clone().unbind())
+}
+
+/// The same as [`installed_new`], but building a class music21's own
+/// streams will hold where nothing has been installed.
+///
+/// Only the builder of music21's streams asks for this: everywhere else a
+/// facade builds an object of its own kind, and the object it builds should
+/// be of the class music21 *has*, which with nothing installed is the bare
+/// one. Handing those paths a subclass of music21's instead broke copying a
+/// chord symbol, whose `__deepcopy__` then took music21's branch for a half
+/// the copy had not been given.
+pub(crate) fn holdable_new<T>(py: Python<'_>, module: &str, name: &str, value: T) -> PyResult<Py<T>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T: Into<pyo3::PyClassInitializer<T>>,
+{
+    let Some(class) = holdable_class(py, module, name) else {
         return Py::new(py, value);
     };
     let object = blank_installed(&class)?;
@@ -777,6 +843,32 @@ installed = {}
 
 # music21's own class for each one installed over it.
 replaced = {}
+
+# A class music21 will hold, built for a process that has installed
+# nothing. Kept apart from `installed` on purpose: that one says what this
+# package has *replaced* in music21, which `_thawed` reads to decide
+# whether a pickle needs the classes installing, and building a class to
+# hand music21 replaces nothing.
+holdable = {}
+
+
+def holdable_class(facade, original):
+    """The class to build so that music21's own streams will hold this.
+
+    music21 refuses to hold anything that is not a `Music21Object`, and a
+    bare facade class is not one -- so a wheel standing beside music21 with
+    nothing installed could not build music21 a score at all. This is the
+    same subclass `make_class` builds for installing, built once per name
+    and never bound into music21: music21 is left exactly as it was, and
+    what changes is only that an object this package hands it is one it can
+    hold.
+    """
+    key = (original.__module__, original.__name__)
+    built = holdable.get(key)
+    if built is None:
+        built = make_class(facade, original)
+        holdable[key] = built
+    return built
 
 # The classes of ours that an installed class is built on. They are the
 # other half of a class music21 has, not a kind of thing in their own right,

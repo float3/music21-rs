@@ -47,7 +47,7 @@ impl Clef {
     /// stream, and this wheel's own where not.
     pub(crate) fn object(py: Python<'_>, inner: RsClef) -> PyResult<Py<PyAny>> {
         let name = inner.kind().class_name();
-        let class = match crate::installed_class(py, "music21.clef", name) {
+        let class = match crate::holdable_class(py, "music21.clef", name) {
             Some(class) => class,
             None => py
                 .import("music21_rs")

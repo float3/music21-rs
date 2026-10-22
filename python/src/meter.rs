@@ -1155,6 +1155,30 @@ impl MeterTerminal {
         self.__copy__(py)
     }
 
+    /// music21 freezes a score by pickling it, and what this object is lives
+    /// in Rust where a pickle cannot see it.
+    ///
+    /// **Without this, music21's own pickling of its `__slots__` is what
+    /// runs**, and it cannot be read back: `parenthesis` is not an attribute
+    /// a pyclass has and `_levelListCache` is a getter with no setter, so
+    /// thawing raised `'MeterSequence' object has no attribute
+    /// 'parenthesis'`. A score cached from the corpus while this facade
+    /// stood in for music21's class could then be read by nobody, which
+    /// `zz_corpus_cache` is what found. A span comes back **loose**, as a
+    /// copy of one does: what it was pickled from may have been a view of a
+    /// meter, and the meter is not what is being frozen here.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let span = slf.borrow().held.read(slf.py())?;
+        crate::pickled(slf, &span)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Some(span) = crate::unpickled::<_, RsMeterTerminal>(slf, state)? {
+            slf.borrow_mut().held = Held::Loose(span);
+        }
+        Ok(())
+    }
+
     #[new]
     #[pyo3(signature = (slashNotation = None, weight = 1.0))]
     fn new(slashNotation: Option<&str>, weight: FloatType) -> PyResult<Self> {
@@ -1379,6 +1403,27 @@ impl MeterSequence {
     fn __deepcopy__(&self, py: Python<'_>, memo: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let _ = memo;
         self.__copy__(py)
+    }
+
+    /// As `MeterTerminal`'s, and for the reason written there: a sequence
+    /// that leaves its pickling to music21's `__slots__` cannot be read
+    /// back at all. The parts come back with the partition, which is in the
+    /// value; the objects a caller held for them do not, as they do not
+    /// across a copy either.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let span = slf.borrow().held.read(slf.py())?;
+        crate::pickled(slf, &span)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Some(span) = crate::unpickled::<_, RsMeterTerminal>(slf, state)? {
+            let mut me = slf.borrow_mut();
+            me.held = Held::Loose(span);
+            // The part objects are rebuilt when something asks for one; a
+            // pickle carries none, as a copy carries none.
+            me.parts = Vec::new();
+        }
+        Ok(())
     }
 
     /// A sequence always writes its parts inside braces, one part or none,

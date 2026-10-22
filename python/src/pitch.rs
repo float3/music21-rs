@@ -391,6 +391,20 @@ pub(crate) fn accidental_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsAccide
         {
             read.set_display_status(status);
         }
+        // How it is drawn where it is drawn at all: plainly, in parentheses
+        // or in brackets, which a score writer writes.
+        if let Ok(style) = value
+            .getattr("displayStyle")
+            .and_then(|style| style.extract::<String>())
+        {
+            read.set_display_style(&style).map_err(accidental_error)?;
+        }
+        if let Ok(kind) = value
+            .getattr("displayType")
+            .and_then(|kind| kind.extract::<String>())
+        {
+            read.set_display_type(&kind).map_err(accidental_error)?;
+        }
         return Ok(read);
     }
     RsAccidental::new(value.extract::<f64>()?).map_err(accidental_error)
@@ -1032,7 +1046,24 @@ pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
         .getattr("nameWithOctave")
         .and_then(|name| name.extract::<String>())
     {
-        return RsPitch::from_name(name).map_err(pitch_error);
+        let mut read = RsPitch::from_name(name).map_err(pitch_error)?;
+        // A music21 pitch says whether its accidental is *written* as well
+        // as what it is, and a score writer reads that: without it every
+        // accidental a document already decided is written again.
+        if let Ok(accidental) = value.getattr("accidental")
+            && !accidental.is_none()
+        {
+            read.set_accidental(accidental_from_any(&accidental)?);
+        }
+        if let Ok(microtone) = value.getattr("microtone")
+            && let Ok(cents) = microtone
+                .getattr("cents")
+                .and_then(|cents| cents.extract::<f64>())
+            && cents != 0.0
+        {
+            read.set_microtone_cents(cents).map_err(pitch_error)?;
+        }
+        return Ok(read);
     }
     Err(PitchException::new_err(format!(
         "cannot read a pitch from {}",
