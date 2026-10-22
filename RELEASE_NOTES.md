@@ -2,6 +2,18 @@
 
 ## added
 
+- **A spanner joins this package's own notes whether or not music21 is
+  there.** It keeps its objects in music21's own `SpannerStorage` wherever
+  music21 can be asked for one, and a stream of music21's holds nothing
+  that is not a `Music21Object` -- which a note of this package's is only
+  where something is installed over music21. So `music21_rs.Slur(a, b)`
+  raised `'music21.note.Note' object has no attribute 'isStream'` for a
+  caller with `pip install music21 music21-rs` and built a slur happily
+  with no music21 at all: **the wheel was worse for having music21 beside
+  it**, which is the one thing it must never be. A storage music21 will not
+  hold is no storage now, which is what a wheel standing alone already
+  answers.
+
 - **The wheel reads a score music21 itself parsed.** `to_musicxml` and
   every member that reads a stream took music21's own objects only once
   `install_into_music21()` had run: `element_value` read a note, a rest and
