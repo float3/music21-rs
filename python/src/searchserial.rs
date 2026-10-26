@@ -895,10 +895,26 @@ fn labelled<'py>(
         // The line joining the run's ends: music21's own `spanner.Line`
         // wherever music21 is there to ask -- its own readers and writers
         // look for that class -- and this package's otherwise.
+        //
+        // "There to ask" means it will *hold these notes*, not merely that
+        // it imports. music21's `Spanner.__init__` appends what is a
+        // `Music21Object` and iterates whatever is not, so handing it a
+        // note of this package's raised `'music21.note.Note' object is not
+        // iterable`; the notes are only music21's where something is
+        // installed over music21.
+        let holds = crate::stream::music21_holds(&first);
         let line = match py
             .import("music21.spanner")
             .and_then(|module| module.getattr("Line"))
-        {
+            .and_then(|class| {
+                if holds {
+                    Ok(class)
+                } else {
+                    Err(pyo3::exceptions::PyTypeError::new_err(
+                        "music21 would not hold these notes",
+                    ))
+                }
+            }) {
             Ok(class) => class.call1((&first, &last))?,
             Err(_) => crate::spanner::Spanner::object(
                 py,

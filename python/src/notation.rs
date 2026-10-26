@@ -1832,21 +1832,27 @@ pub(crate) fn new_style<'py>(
     colour: Option<&str>,
 ) -> PyResult<Py<PyAny>> {
     let py = owner.py();
+    // What is drawn as a note is drawn with a note's style, which says the
+    // stem and the notehead besides. music21 keeps that on the class as
+    // `_styleClass`, which the install helper copies from the class being
+    // replaced -- so an installed note has it and a bare one does not.
+    // **A bare one still wants a note's style**: without this it fell back
+    // to music21's plain `style.Style` wherever music21 could be imported,
+    // which is neither what music21's own note is drawn with nor what this
+    // package answers with no music21 at all.
+    let drawn_as_a_note = owner.is_instance_of::<crate::note::Note>()
+        || owner.is_instance_of::<crate::chord::Chord>()
+        || owner.is_instance_of::<crate::rest::Rest>();
     let class = match py.import("music21.style") {
         Ok(module) => match owner.get_type().getattr("_styleClass") {
             Ok(class) => class,
+            Err(_) if drawn_as_a_note => module
+                .getattr("NoteStyle")
+                .or_else(|_| module.getattr("Style"))?,
             Err(_) => module.getattr("Style")?,
         },
-        Err(_) => {
-            let drawn_as_a_note = owner.is_instance_of::<crate::note::Note>()
-                || owner.is_instance_of::<crate::chord::Chord>()
-                || owner.is_instance_of::<crate::rest::Rest>();
-            if drawn_as_a_note {
-                py.get_type::<NoteStyle>().into_any()
-            } else {
-                py.get_type::<Style>().into_any()
-            }
-        }
+        Err(_) if drawn_as_a_note => py.get_type::<NoteStyle>().into_any(),
+        Err(_) => py.get_type::<Style>().into_any(),
     };
     let style = class.call0()?;
     if let Some(colour) = colour {

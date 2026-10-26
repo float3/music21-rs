@@ -46,8 +46,26 @@ impl Clef {
     /// music21's where there is one, since music21 holds nothing else in a
     /// stream, and this wheel's own where not.
     pub(crate) fn object(py: Python<'_>, inner: RsClef) -> PyResult<Py<PyAny>> {
+        Self::object_as(py, inner, false)
+    }
+
+    /// The same, as a class music21's own streams will hold where asked
+    /// for one.
+    ///
+    /// Only the builder of music21's streams asks: a clef of this
+    /// package's own must read the same whether or not music21 happens to
+    /// be importable, and a subclass of music21's carries its `duration`
+    /// -- so `analysis.attributeCount` over a measure counted the clef and
+    /// the meter as lengths of nought beside the notes on a machine with
+    /// music21 installed and did not on one without.
+    pub(crate) fn object_as(py: Python<'_>, inner: RsClef, holdable: bool) -> PyResult<Py<PyAny>> {
         let name = inner.kind().class_name();
-        let class = match crate::holdable_class(py, "music21.clef", name) {
+        let found = if holdable {
+            crate::holdable_class(py, "music21.clef", name)
+        } else {
+            crate::installed_class(py, "music21.clef", name)
+        };
+        let class = match found {
             Some(class) => class,
             None => py
                 .import("music21_rs")

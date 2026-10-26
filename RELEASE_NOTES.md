@@ -2,6 +2,30 @@
 
 ## added
 
+- **The wheel's own test suite passes with music21 importable**, which is
+  what `pip install music21 music21-rs` gives and what CI has never run --
+  its wheel job installs no music21 beside the wheel, so the suite took the
+  music21-absent branches and all 232 passed either way. Eight failed when
+  read with music21 there, and five were the wheel's fault:
+
+  `ScoreReduction` wrapped a part of this package's in music21's `Score`
+  and `notesAndDurationsToStream` put the caller's own notes in music21's
+  `Part`, neither of which music21 will hold; both ask
+  `stream::stream_class_like` now, which picks the class by what the stream
+  has to hold. One `pickle.loads` installed all 34 modules into music21,
+  which `holdable_class` does one name at a time and bound into nothing --
+  the install changed every object built afterwards, so
+  `analysis.attributeCount` counted a measure's clef and meter as lengths
+  of nought. `m.ChangeOps.NoChange` was not read as a `ChangeOps`, so a
+  change the alignment said to leave alone was respelled. And a note beside
+  music21 was drawn with music21's plain `style.Style` rather than a note's
+  style.
+
+  **The question behind all of them was being asked the wrong way in six
+  places**: "can music21 be imported" is not "will music21 hold this".
+  `stream::music21_holds` is the second, and asking it is what the fixes
+  have in common.
+
 - **A spanner joins this package's own notes whether or not music21 is
   there.** It keeps its objects in music21's own `SpannerStorage` wherever
   music21 can be asked for one, and a stream of music21's holds nothing

@@ -104,22 +104,18 @@ fn frequencies(values: &Bound<'_, PyAny>) -> PyResult<Vec<FloatType>> {
     Ok(out)
 }
 
-/// The class a stream of this shape is built as: music21's own where
-/// music21 can be asked, and this package's where it cannot.
-fn stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
-    if let Ok(found) = py
-        .import("music21.stream")
-        .and_then(|module| module.getattr(name))
-    {
-        return Ok(found);
+/// The same for the metadata a transcription is titled by, which has to be
+/// of a kind the score it is set on will hold: a score of this package's
+/// own keeps metadata of this package's, and music21's keeps music21's.
+///
+/// Both halves matter. Handing music21's `Metadata` to a score of this
+/// package's left `score.metadata` answering nothing at all, and handing
+/// this package's to a score of music21's is refused outright, music21
+/// inserting the object among the score's elements.
+fn metadata_class<'py>(py: Python<'py>, score: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    if !crate::stream::music21_holds(score) {
+        return Ok(py.get_type::<crate::metadata::Metadata>().into_any());
     }
-    py.import("music21_rs")
-        .or_else(|_| py.import("music21_rs_facade"))?
-        .getattr(name)
-}
-
-/// The same for the metadata a transcription is titled by.
-fn metadata_class<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
     if let Some(installed) = crate::installed_class(py, "music21.metadata", "Metadata") {
         return Ok(installed);
     }
@@ -442,7 +438,10 @@ pub fn notes_and_durations_to_stream_py<'py>(
         removeRestsAtBeginning,
     )
     .map_err(audio_error)?;
-    let part = stream_class(py, "Part")?.call0()?;
+    // The part holds the caller's own notes, so it has to be a stream
+    // that will hold them: music21's refuses a note of this package's.
+    let sample = given.first().and_then(|one| objects.get(one.note)).cloned();
+    let part = crate::stream::stream_class_like(py, "Part", sample.as_ref())?.call0()?;
     for one in &given {
         let note = objects
             .get(one.note)
@@ -454,8 +453,8 @@ pub fn notes_and_durations_to_stream_py<'py>(
             part.call_method1("append", (note,))?;
         }
     }
-    let score = stream_class(py, "Score")?.call0()?;
-    let metadata = metadata_class(py)?.call0()?;
+    let score = crate::stream::stream_class_like(py, "Score", Some(&part))?.call0()?;
+    let metadata = metadata_class(py, &score)?.call0()?;
     metadata.setattr("title", "Automatic Music21 Transcription")?;
     score.setattr("metadata", metadata)?;
     score.call_method1("insert", (0.0, &part))?;

@@ -55,7 +55,9 @@ fn held<'py>(value: &Bound<'py, PyAny>, method: &str) -> PyResult<Bound<'py, PyA
     let made = if parts {
         copied
     } else {
-        let score = crate::stream::stream_class(py, "Score")?.call0()?;
+        // A score of the same kind as the stream it wraps: music21's
+        // where music21 will hold it, this package's where it will not.
+        let score = crate::stream::stream_class_like(py, "Score", Some(&copied))?.call0()?;
         score.call_method1("insert", (0.0, copied))?;
         score
     };

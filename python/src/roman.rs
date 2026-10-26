@@ -214,7 +214,24 @@ impl RomanNumeral {
         numeral: Self,
         chord: music21_rs_crate::Chord,
     ) -> PyResult<Py<Self>> {
-        let Some(class) = crate::installed_class(py, "music21.roman", "RomanNumeral") else {
+        Self::object_on_as(py, numeral, chord, false)
+    }
+
+    /// The same, as a class music21's own streams will hold where asked
+    /// for one -- the builder of music21's streams and nothing else, for
+    /// the reason `clef::Clef::object_as` carries.
+    pub(crate) fn object_on_as(
+        py: Python<'_>,
+        numeral: Self,
+        chord: music21_rs_crate::Chord,
+        holdable: bool,
+    ) -> PyResult<Py<Self>> {
+        let found = if holdable {
+            crate::holdable_class(py, "music21.roman", "RomanNumeral")
+        } else {
+            crate::installed_class(py, "music21.roman", "RomanNumeral")
+        };
+        let Some(class) = found else {
             let chord = Chord::from_inner(py, chord)?;
             return Py::new(py, PyClassInitializer::from(chord).add_subclass(numeral));
         };

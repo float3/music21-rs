@@ -100,7 +100,23 @@ impl Instrument {
     pub(crate) fn object(py: Python<'_>, inner: RsInstrument) -> PyResult<Py<PyAny>> {
         // The class installed over music21's where there is one, since
         // music21 holds nothing else in a stream; this wheel's own where not.
-        let class = match crate::installed_class(py, "music21.instrument", inner.kind()) {
+        Self::object_as(py, inner, false)
+    }
+
+    /// The same, as a class music21's own streams will hold where asked
+    /// for one -- the builder of music21's streams and nothing else, for
+    /// the reason `clef::Clef::object_as` carries.
+    pub(crate) fn object_as(
+        py: Python<'_>,
+        inner: RsInstrument,
+        holdable: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let found = if holdable {
+            crate::holdable_class(py, "music21.instrument", inner.kind())
+        } else {
+            crate::installed_class(py, "music21.instrument", inner.kind())
+        };
+        let class = match found {
             Some(class) => class,
             None => py
                 .import("music21_rs")
