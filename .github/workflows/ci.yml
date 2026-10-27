@@ -186,6 +186,31 @@ jobs:
           python -m pip install --no-index --find-links target/wheels music21-rs
           python -m pytest python/tests -q
 
+      # The same suite again with music21 importable, which is what
+      # `pip install music21 music21-rs` gives. Every one of its
+      # music21-present branches went unrun until 2026-10-26, this job
+      # installing no music21 at the time the tests ran, and the first
+      # reading of them turned up five real defects in the wheel: a spanner
+      # that could not be built, a reduction and a transcription that
+      # handed music21 streams objects music21 refuses, one `pickle.loads`
+      # installing the whole of this package into music21, a `ChangeOps` of
+      # ours not read as one, and a note drawn with music21's plain
+      # `style.Style`. Unrun, they would go back.
+      #
+      # The submodule's music21 and not PyPI's, as everywhere else here:
+      # the pin is a commit, and `fixture_freshness` holds every generated
+      # file to it. Ubuntu alone -- none of what this covers is platform's.
+      - name: Install and test it beside music21
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Not shallow: the pin is a commit, and a shallow fetch need not
+          # carry one that is not its branch's tip.
+          git submodule update --init music21
+          python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
+          PYTHONPATH="$PWD/music21" python -m pytest python/tests -q
+
       # The wheel crate's own Rust tests. `maturin build` does not run them
       # and the workspace does not hold the crate, so nothing else does.
       - name: Test the wheel crate
