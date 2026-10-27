@@ -3899,9 +3899,51 @@ pub(crate) fn stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'
     {
         return Ok(found);
     }
+    wheel_stream_class(py, name)
+}
+
+/// This package's own stream class of that name.
+fn wheel_stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     py.import("music21_rs")
         .or_else(|_| py.import("music21_rs_facade"))?
         .getattr(name)
+}
+
+/// Whether music21's own streams will hold this object.
+///
+/// music21 refuses to put anything that is not a `Music21Object` at a point
+/// in time, which its own classes and the installed ones are and a bare
+/// facade class of this package's is not. Asked of an object rather than
+/// worked out from what is installed, because the two can differ: a caller
+/// may hand over objects of either kind whatever has been installed.
+pub(crate) fn music21_holds(object: &Bound<'_, PyAny>) -> bool {
+    let py = object.py();
+    py.import("music21.base")
+        .and_then(|module| module.getattr("Music21Object"))
+        .and_then(|class| object.is_instance(&class))
+        .unwrap_or(false)
+}
+
+/// A stream class of that name for a stream that is to hold `sample`:
+/// music21's where music21 will hold it, and this package's where it will
+/// not.
+///
+/// `stream_class` alone answers music21's wherever music21 can be imported,
+/// which is right for a stream built out of nothing and wrong for one built
+/// to hold objects a caller gave. A caller with `pip install music21
+/// music21-rs` and no swap has objects of this package's own, and music21's
+/// stream refuses them -- so what was a score of its notes came back as
+/// `The object you tried to add to the Stream, <music21.note.Note C#>, is
+/// not a Music21Object`. It is the same fault the spanner's storage had.
+pub(crate) fn stream_class_like<'py>(
+    py: Python<'py>,
+    name: &str,
+    sample: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    match sample {
+        Some(sample) if !music21_holds(sample) => wheel_stream_class(py, name),
+        _ => stream_class(py, name),
+    }
 }
 
 /// Whose streams a crate stream is built as.
@@ -4160,6 +4202,33 @@ pub(crate) fn element_object<'py>(
     element_object_as(py, element, Whose::Wheel)
 }
 
+/// An element of a kind this package carries a value for, built as the
+/// class the stream it is going into will hold.
+///
+/// `holdable_new` for music21's streams and `installed_new` for this
+/// package's: a class of this package's own must read the same whether or
+/// not music21 happens to be importable, and a subclass of music21's
+/// carries machinery of music21's that changes what the wheel answers --
+/// `analysis.attributeCount` counted a clef and a meter as lengths of
+/// nought on a machine with music21 installed and not on one without.
+fn element_new<T>(
+    py: Python<'_>,
+    module: &str,
+    name: &str,
+    value: T,
+    holdable: bool,
+) -> PyResult<Py<T>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T: Into<pyo3::PyClassInitializer<T>>,
+{
+    if holdable {
+        crate::holdable_new(py, module, name, value)
+    } else {
+        crate::installed_new(py, module, name, value)
+    }
+}
+
 /// The same, with the nested streams built as one kind or the other.
 fn element_object_as<'py>(
     py: Python<'py>,
@@ -4172,8 +4241,17 @@ fn element_object_as<'py>(
     // music21 is nonetheless there -- a caller with both and no swap, which
     // is `pip install music21 music21-rs` -- the subclass installing would
     // build is built for the purpose and bound into nothing.
+    // Whether what is built has to be a class music21's own streams will
+    // hold. Only for music21's streams: a class of this package's own must
+    // read the same whether or not music21 happens to be importable.
+    let holdable = whose == Whose::Music21;
     let class_named = |module: &str, name: &str| -> PyResult<Bound<'py, PyAny>> {
-        if let Some(held) = crate::holdable_class(py, module, name) {
+        let found = if holdable {
+            crate::holdable_class(py, module, name)
+        } else {
+            crate::installed_class(py, module, name)
+        };
+        if let Some(held) = found {
             return Ok(held);
         }
         py.import("music21_rs")
@@ -4182,39 +4260,52 @@ fn element_object_as<'py>(
     };
     let made = match element {
         StreamElement::Stream(inner) => from_crate_as(py, inner, whose)?,
-        StreamElement::Note(note) => {
-            crate::holdable_new(py, "music21.note", "Note", Note::wrap(py, note.clone())?)?
-                .into_bound(py)
-                .into_any()
-        }
+        StreamElement::Note(note) => element_new(
+            py,
+            "music21.note",
+            "Note",
+            Note::wrap(py, note.clone())?,
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::Chord(chord) if chord.numeral().is_some() => {
             let numeral = chord.numeral().cloned().ok_or_else(|| {
                 pyo3::exceptions::PyRuntimeError::new_err("a numeral chord with no numeral")
             })?;
-            crate::roman::RomanNumeral::object_on(
+            crate::roman::RomanNumeral::object_on_as(
                 py,
                 crate::roman::RomanNumeral::wrap(numeral, None),
                 chord.clone(),
+                holdable,
             )?
             .into_bound(py)
             .into_any()
         }
-        StreamElement::Chord(chord) => crate::holdable_new(
+        StreamElement::Chord(chord) => element_new(
             py,
             "music21.chord",
             "Chord",
             Chord::from_inner(py, chord.clone())?,
+            holdable,
         )?
         .into_bound(py)
         .into_any(),
-        StreamElement::Rest(rest) => {
-            crate::holdable_new(py, "music21.note", "Rest", Rest::wrap(py, rest.clone()))?
-                .into_bound(py)
-                .into_any()
+        StreamElement::Rest(rest) => element_new(
+            py,
+            "music21.note",
+            "Rest",
+            Rest::wrap(py, rest.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
+        StreamElement::Clef(clef) => {
+            crate::clef::Clef::object_as(py, clef.clone(), holdable)?.into_bound(py)
         }
-        StreamElement::Clef(clef) => crate::clef::Clef::object(py, clef.clone())?.into_bound(py),
         StreamElement::Instrument(instrument) => {
-            crate::instrument::Instrument::object(py, (**instrument).clone())?.into_bound(py)
+            crate::instrument::Instrument::object_as(py, (**instrument).clone(), holdable)?
+                .into_bound(py)
         }
         StreamElement::KeySignature(signature) => match signature.sharps() {
             Some(sharps) => class_named("music21.key", "KeySignature")?.call1((sharps,))?,
@@ -4226,22 +4317,24 @@ fn element_object_as<'py>(
         StreamElement::TimeSignature(meter) => {
             class_named("music21.meter.base", "TimeSignature")?.call1((meter.ratio_string(),))?
         }
-        StreamElement::MetronomeMark(mark) => crate::holdable_new(
+        StreamElement::MetronomeMark(mark) => element_new(
             py,
             "music21.tempo",
             "MetronomeMark",
             MetronomeMark::wrap(mark.clone()),
+            holdable,
         )?
         .into_bound(py)
         .into_any(),
         StreamElement::Barline(barline) => {
             crate::bar::Barline::object(py, barline.clone())?.into_bound(py)
         }
-        StreamElement::Dynamic(dynamic) => crate::holdable_new(
+        StreamElement::Dynamic(dynamic) => element_new(
             py,
             "music21.dynamics",
             "Dynamic",
             Dynamic::wrap(dynamic.clone()),
+            holdable,
         )?
         .into_bound(py)
         .into_any(),

@@ -84,13 +84,25 @@ fn pitch_read(object: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
 /// music21 reads a change as no change only where it really is one of its
 /// own `ChangeOps`; anything else -- a bare number, say -- is read as a
 /// change, and the facade must be as particular.
+///
+/// **Either class counts.** `change_ops` answers music21's own wherever
+/// music21 can be imported, while `music21_rs.ChangeOps` is this package's
+/// -- that enum is deliberately not installed, holding nothing of the
+/// crate -- so a caller with both and no swap handed an op of this
+/// package's and had it read as a *change*, which respelled a note the
+/// alignment had said to leave alone.
 fn op_read(py: Python<'_>, op: &Bound<'_, PyAny>) -> PyResult<ChangeOp> {
-    let class = crate::aligner::change_ops(py)?;
-    let ours = class
-        .cast::<pyo3::types::PyType>()
-        .ok()
-        .is_some_and(|class| op.is_instance(class).unwrap_or(false));
-    if ours && op.eq(3_i64)? {
+    let named = [
+        crate::aligner::change_ops(py).ok(),
+        Some(py.get_type::<crate::aligner::ChangeOps>().into_any()),
+    ];
+    let known = named.into_iter().flatten().any(|class| {
+        class
+            .cast::<pyo3::types::PyType>()
+            .ok()
+            .is_some_and(|class| op.is_instance(class).unwrap_or(false))
+    });
+    if known && op.eq(3_i64)? {
         return Ok(ChangeOp::NoChange);
     }
     Ok(ChangeOp::Substitution)

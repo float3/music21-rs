@@ -253,14 +253,6 @@ pub(crate) fn derived_from(
     Ok(())
 }
 
-/// Whether these classes have been installed into music21 at all.
-fn anything_installed(py: Python<'_>) -> bool {
-    built_helper(py)
-        .and_then(|helper| helper.getattr("installed").ok())
-        .map(|installed| installed.len().unwrap_or(0) > 0)
-        .unwrap_or(false)
-}
-
 /// The class music21 now has under a name, where one of ours was installed
 /// there.
 ///
@@ -573,12 +565,6 @@ where
 #[pyfunction]
 #[pyo3(name = "_thawed")]
 fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
-    // Only where *nothing* is installed: a process that has never installed
-    // these classes — joblib starts one to measure a score's features — has
-    // to install them to read a score at all. Installing again where they
-    // are already in place would build every class a second time, and every
-    // object made before that would stop being of the class its module now
-    // names, which is a far worse thing than a name this cannot resolve.
     // With no music21 to import the module from, the class is this wheel's
     // own, under the name it was written with.
     if py.import(module).is_err() {
@@ -588,9 +574,20 @@ fn thawed(py: Python<'_>, module: &str, name: &str) -> PyResult<Py<PyAny>> {
         let class = wheel.getattr(name)?;
         return Ok(blank_installed(&class)?.unbind());
     }
-    if !anything_installed(py) {
-        install_into_music21(py)?;
-    }
+    // **Nothing is installed to read a pickle.** This used to install the
+    // whole of `MUSIC21_MODULES` wherever nothing was installed yet, on the
+    // grounds that a process which had never installed them — joblib starts
+    // one to measure a score's features — could not read a score at all
+    // otherwise. `holdable_class` below is that, one name at a time and
+    // bound into nothing, so the score reads and music21 is left as it was.
+    //
+    // Installing was far too much for what a thaw needs. One
+    // `pickle.loads` of a single note reconfigured the whole process: every
+    // object built afterwards came back an installed class carrying
+    // music21's machinery, so `analysis.attributeCount` over a measure
+    // began counting its clef and its meter as lengths of nought, and the
+    // wheel's own answers changed under a caller who had installed nothing
+    // and asked for nothing.
     // A class of ours that was registered but never installed — music21
     // does something with it that this does not — is still the class the
     // module has under that name, and still what was written out.
