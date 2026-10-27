@@ -32,14 +32,12 @@ pub(crate) use score::{
     Kept, beams_made, element_at_durations, keeping_spanners, make_measure_notation,
     make_part_notation_by, make_part_notation_keeping_spanners,
 };
-#[cfg(feature = "musicxml")]
-pub(crate) use score::{
-    accidentals_made, for_each_measure, make_part_notation, tuplet_brackets_made,
-};
 pub use score::{
-    consolidate_completed_tuplets, make_notation, make_tuplet_brackets, split_at_durations,
-    split_elements_to_complete_tuplets,
+    accidentals_made, consolidate_completed_tuplets, make_notation, make_tuplet_brackets,
+    split_at_durations, split_elements_to_complete_tuplets,
 };
+#[cfg(feature = "musicxml")]
+pub(crate) use score::{for_each_measure, make_part_notation, tuplet_brackets_made};
 
 /// [`make_ornamental_accidentals`] for one note of a measure being
 /// decided, with what it answered where it could.

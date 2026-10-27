@@ -2202,6 +2202,26 @@ def test_two_streams_are_asked_where_they_strike_together():
     assert not first.hasPartLikeStreams()
 
 
+def test_a_stream_says_whether_its_accidentals_have_been_decided():
+    """music21's `haveAccidentalsBeenMade`, which it documents as true
+    where any accidental has a display status -- "regardless of if
+    makeAccidentals has actually been run" -- and which it works out by
+    walking the pitches on first asking. Nothing is remembered here, which
+    answers the same thing without a flag to remember wrongly."""
+    line = m.Stream()
+    line.insert(0.0, m.Note("C#4", quarterLength=1.0))
+    line.insert(1.0, m.Note("D4", quarterLength=1.0))
+    assert not line.haveAccidentalsBeenMade()
+
+    # Said to be shown, and said *not* to be: either is a decision.
+    for shown in (True, False):
+        decided = m.Stream()
+        note = m.Note("C#4", quarterLength=1.0)
+        note.pitch.accidental.displayStatus = shown
+        decided.insert(0.0, note)
+        assert decided.haveAccidentalsBeenMade()
+
+
 def test_the_gaps_in_a_stream_are_found_as_music21_finds_them():
     """Every answer is music21's own for the same stream."""
     gappy = m.Stream()

@@ -2,6 +2,17 @@
 
 ## added
 
+- **`makenotation::accidentals_made` is public, and the wheel's `Stream`
+  answers `haveAccidentalsBeenMade` with it.** It was ported and
+  crate-private, and the feature map excluded the member as "a flag music21
+  keeps on the stream; nothing here remembers having been asked" -- which
+  was wrong about music21 as well as about the crate. music21's own
+  `StreamStatus.haveAccidentalsBeenMade` *works the answer out by walking
+  the pitches* on first asking, true where any accidental has a display
+  status "regardless of if makeAccidentals has actually been run", and
+  caches it after. That is what the crate computes; what it does not keep
+  is the cache.
+
 - **The wheel's own test suite passes with music21 importable**, which is
   what `pip install music21 music21-rs` gives and what CI has never run --
   its wheel job installs no music21 beside the wheel, so the suite took the
