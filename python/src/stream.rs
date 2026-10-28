@@ -3399,6 +3399,19 @@ impl Stream {
         Ok(crate_stream(slf.as_any())?.has_part_like_streams())
     }
 
+    /// Whether some accidental in the stream has had its showing decided:
+    /// music21's `haveAccidentalsBeenMade`.
+    ///
+    /// music21 keeps a flag and sets it when `makeAccidentals` runs; this
+    /// reads the pitches, which is what its own documentation says the
+    /// flag means -- true where any accidental has a display status,
+    /// "regardless of if makeAccidentals has actually been run".
+    fn haveAccidentalsBeenMade(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(music21_rs_crate::makenotation::accidentals_made(
+            &crate_stream(slf.as_any())?,
+        ))
+    }
+
     /// A stream standing for the gaps in this one, or `None` where there
     /// are none: music21's `findGaps`.
     ///

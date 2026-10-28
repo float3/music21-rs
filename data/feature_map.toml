@@ -1156,6 +1156,7 @@ note = "Music on a timeline, and the subclasses music21 nests inside one another
 
 [class.renames]
 append = "push"
+haveAccidentalsBeenMade = "accidentals_made"
 attachIntervalsBetweenStreams = "harmonic_intervals"
 elements = "events"
 getElementAfterElement = "element_after"
@@ -1182,7 +1183,6 @@ elementOffset = "asks where one object sits; a crate stream owns values rather t
 first = "as `elementOffset`: `events` answers in order"
 getElementById = "an id on every element, which only a stream and a note carry here"
 getElementsByGroup = "as `addGroupForElements`"
-haveAccidentalsBeenMade = "a flag music21 keeps on the stream; nothing here remembers having been asked"
 index = "as `elementOffset`"
 isAtEnd = "needs the sites a crate stream does not keep"
 last = "as `elementOffset`: `events` answers in order"
@@ -1485,7 +1485,7 @@ RepeatExpressionMarker = "is_marker"
 [class.excluded]
 RepeatExpressionCommand = "the kinds that send the music somewhere rather than marking a place, which is every kind `is_marker` says no to"
 RepeatMark = "what music21 mixes into everything that repeats; a barline here says it repeats and an expression says where to go back to"
-RepeatFinder = "finds the repeated passages of a score so as to write it with repeat signs, which nothing here writes"
+RepeatFinder = "finds the repeated passages of a score so as to write it with repeat signs: an analysis that *shortens* a score, where `repeats` plays one out. The crate writes repeat marks readily enough (`src/repeat.rs`, and the MusicXML writer writes them) -- what it has none of is the search for a passage worth marking"
 
 [[class]]
 python = "repeat.py"

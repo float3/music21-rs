@@ -238,7 +238,14 @@ fn for_each_container(
 
 /// Whether some accidental in a stream has had its showing decided:
 /// music21's `haveAccidentalsBeenMade`.
-pub(crate) fn accidentals_made(stream: &Stream) -> bool {
+///
+/// music21 keeps a flag for this and sets it when `makeAccidentals` runs;
+/// the answer here is read off the pitches instead, which is what its own
+/// documentation says the flag means -- "if any Accidental has
+/// displayStatus other than None, this method returns True, regardless of
+/// if makeAccidentals has actually been run". Nothing is remembered, so
+/// nothing can be remembered wrongly.
+pub fn accidentals_made(stream: &Stream) -> bool {
     stream.pitches().iter().any(|pitch| {
         pitch
             .written_accidental()
@@ -1042,6 +1049,45 @@ mod tests {
         Note::from_name(name)
             .unwrap()
             .with_duration(Duration::new(quarter_length).unwrap())
+    }
+
+    /// music21's own `haveAccidentalsBeenMade` walks `client.pitches` and
+    /// answers true where any accidental has a display status, "regardless
+    /// of if makeAccidentals has actually been run" -- so a stream whose
+    /// notes carry accidentals nobody has decided about answers false.
+    #[test]
+    fn accidentals_are_made_once_one_of_them_says_whether_it_is_shown() {
+        let mut stream = Stream::new();
+        stream.insert(0.0, note("C#4", 1.0));
+        stream.insert(1.0, note("D4", 1.0));
+        assert!(
+            !accidentals_made(&stream),
+            "a sharp nobody has decided about is not a decision"
+        );
+
+        let mut decided = Stream::new();
+        let mut sharp = note("C#4", 1.0);
+        let mut pitch = sharp.pitch().clone();
+        pitch
+            .written_accidental_mut()
+            .expect("a C sharp is written with an accidental")
+            .set_display_status(Some(true));
+        sharp.set_pitch(pitch);
+        decided.insert(0.0, sharp);
+        assert!(accidentals_made(&decided));
+
+        // Said *not* to be shown counts too, as music21's does: the test is
+        // whether the showing was decided, not whether it is drawn.
+        let mut hidden = Stream::new();
+        let mut flat = note("B-4", 1.0);
+        let mut pitch = flat.pitch().clone();
+        pitch
+            .written_accidental_mut()
+            .expect("a B flat is written with an accidental")
+            .set_display_status(Some(false));
+        flat.set_pitch(pitch);
+        hidden.insert(0.0, flat);
+        assert!(accidentals_made(&hidden));
     }
 
     fn lengths(stream: &Stream) -> Vec<FloatType> {
