@@ -3,8 +3,8 @@
 //!
 //! Both are the crate's: `instrument::for_percussion_key` names the drum
 //! a key plays *and how it is played*, since a key says both -- key 36 is
-//! a bass drum played `1` and key 35 the same drum played `acoustic` --
-//! and `Instrument::percussion_pitch` is the key a drum is struck on.
+//! a bass drum played `midi-1` and key 35 the same drum played `acoustic`
+//! -- and `Instrument::percussion_pitch` is the key a drum is struck on.
 //! `PercussionMapper` keeps no state, as music21's does not either.
 
 // music21's own names, kept as music21 spells them.
@@ -40,19 +40,36 @@ impl PercussionMapper {
         Self
     }
 
+    /// A mapper holds nothing of its own, so a copy is a new one of the
+    /// same class -- which is also what the class installed over music21's
+    /// asks for when music21 copies it.
+    #[pyo3(signature = (_memo = None))]
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        slf.get_type().call0()
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.get_type().call0()
+    }
+
     /// Every key the map names a drum for, each against the class of
     /// that drum: music21's `reverseInstrumentMapping`.
     ///
-    /// It is read off `instrument::for_percussion_key`, the one table
-    /// behind both answers, rather than written out again -- so a key the
-    /// crate names no instrument for is missing here, as it is there.
+    /// It is read off `instrument::percussion_keys`, the one table behind
+    /// both answers, rather than written out again -- so a key the crate
+    /// names no instrument for is missing here, as it is there. The nine
+    /// sounds the map names but has no class for are
+    /// `namedSoundMapping`'s and not here, as music21 keeps them apart.
     #[getter]
     fn reverseInstrumentMapping<'py>(
         &self,
         py: Python<'py>,
     ) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
         let out = pyo3::types::PyDict::new(py);
-        for key in 0u8..=127 {
+        for key in instrument::percussion_keys() {
             let Ok(named) = instrument::for_percussion_key(key) else {
                 continue;
             };
@@ -68,28 +85,45 @@ impl PercussionMapper {
         Ok(out)
     }
 
+    /// The General MIDI sounds that are no instrument, each against the
+    /// name music21 gives it: music21's `namedSoundMapping`, read off
+    /// `instrument::named_percussion_sounds`.
+    #[getter]
+    fn namedSoundMapping<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyDict>> {
+        let out = pyo3::types::PyDict::new(py);
+        for (key, name) in instrument::named_percussion_sounds() {
+            out.set_item(key, name)?;
+        }
+        Ok(out)
+    }
+
     /// The drum a key plays, and how it is played: music21's
     /// `midiPitchToInstrument`, which takes the key as a number or as a
-    /// pitch. A key the map names no instrument for is refused in
-    /// music21's own words.
+    /// pitch. A key the map names no instrument and no sound for is
+    /// refused in music21's own words, unless `raiseIfUnmapped` is false,
+    /// which answers a bare unpitched percussion instrument keeping the
+    /// key.
+    #[pyo3(signature = (midiPitch, *, raiseIfUnmapped = true))]
     fn midiPitchToInstrument<'py>(
         &self,
         py: Python<'py>,
         midiPitch: &Bound<'py, PyAny>,
+        raiseIfUnmapped: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let key: i64 = match midiPitch.extract::<i64>() {
             Ok(key) => key,
             // A pitch, whose `midi` is the key it is struck on.
             Err(_) => midiPitch.getattr("midi")?.extract()?,
         };
-        let named = u8::try_from(key)
-            .ok()
-            .and_then(|key| instrument::for_percussion_key(key).ok())
-            .ok_or_else(|| {
-                MIDIPercussionException::new_err(format!(
-                    "{key} does not map to a valid instrument!"
-                ))
-            })?;
+        let within = u8::try_from(key).ok();
+        let named = match within {
+            Some(key) if !raiseIfUnmapped => Some(instrument::for_percussion_key_or_unmapped(key)),
+            Some(key) => instrument::for_percussion_key(key).ok(),
+            None => None,
+        };
+        let named = named.ok_or_else(|| {
+            MIDIPercussionException::new_err(format!("{key} does not map to a valid instrument!"))
+        })?;
         Ok(crate::instrument::Instrument::object(py, named)?.into_bound(py))
     }
 

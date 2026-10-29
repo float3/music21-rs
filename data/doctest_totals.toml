@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b12 at 5151b5189570c0fa35650944feb47d4e69aea670
+# music21 11.0.0b14 at 5609a548cdfc344eaed13230166bb837227395e7
 
-music21_version = "11.0.0b12"
-music21_commit = "5151b5189570c0fa35650944feb47d4e69aea670"
+music21_version = "11.0.0b14"
+music21_commit = "5609a548cdfc344eaed13230166bb837227395e7"
 
 [[module]]
 module = "music21.alpha.analysis.aligner"
@@ -110,7 +110,7 @@ tests = 0
 module = "music21.analysis.reduceChords"
 docstrings = 4
 examples = 28
-tests = 2
+tests = 4
 
 [[module]]
 module = "music21.analysis.reduction"
@@ -199,14 +199,14 @@ tests = 3
 [[module]]
 module = "music21.chord"
 docstrings = 108
-examples = 981
+examples = 988
 tests = 31
 
 [[module]]
 module = "music21.chord.tables"
 docstrings = 10
 examples = 65
-tests = 35
+tests = 34
 
 [[module]]
 module = "music21.clef"
@@ -324,9 +324,9 @@ tests = 41
 
 [[module]]
 module = "music21.instrument"
-docstrings = 15
-examples = 150
-tests = 12
+docstrings = 23
+examples = 181
+tests = 13
 
 [[module]]
 module = "music21.interval"
@@ -379,8 +379,8 @@ tests = 21
 [[module]]
 module = "music21.midi.percussion"
 docstrings = 3
-examples = 27
-tests = 64
+examples = 31
+tests = 68
 
 [[module]]
 module = "music21.note"
@@ -420,9 +420,9 @@ tests = 44
 
 [[module]]
 module = "music21.roman"
-docstrings = 34
-examples = 560
-tests = 34
+docstrings = 35
+examples = 562
+tests = 35
 
 [[module]]
 module = "music21.romanText.clercqTemperley"
@@ -482,7 +482,7 @@ tests = 6
 module = "music21.sieve"
 docstrings = 25
 examples = 107
-tests = 9
+tests = 8
 
 [[module]]
 module = "music21.spanner"
@@ -552,8 +552,8 @@ tests = 1
 
 [[module]]
 module = "music21.tree.timespanTree"
-docstrings = 11
-examples = 80
+docstrings = 12
+examples = 85
 tests = 3
 
 [[module]]

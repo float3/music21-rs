@@ -35,7 +35,9 @@ use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
-use tables::{INSTRUMENT_CLASSES, INSTRUMENTS, REFERENCE_NAMES};
+pub use tables::{INSTRUMENT_CLASSES, INSTRUMENTS};
+
+use tables::REFERENCE_NAMES;
 
 fn humdrum_error(message: impl Into<String>) -> Error {
     Error::Humdrum(message.into())

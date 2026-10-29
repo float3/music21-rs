@@ -116,7 +116,14 @@ pub const SCORES: &[(&str, &str)] = &[
         "built:pedals",
         "pedals drawn as lines, signs and both, with bounces and gaps",
     ),
-    ("built:inner-barline", "a barline inside a measure"),
+    (
+        "built:inner-barline",
+        "a barline inside a measure, carrying a segno and a coda",
+    ),
+    (
+        "built:extreme-octaves",
+        "octaves outside MusicXML's 0 to 9, moved into it",
+    ),
     (
         "built:lyric-styles",
         "lyrics justified, placed and left unprinted",
@@ -404,6 +411,33 @@ def inner_barline():
     part.getElementsByClass('Measure')[1].insert(3.0, bar.Barline('double'))
     return one_part(part)
 
+def extreme_octaves():
+    """Octaves MusicXML cannot say, moved into its 0-to-9 range.
+
+    music21's `moveOctaveIntoMusicxmlRange`, new in 11.0.0b14, writes the
+    nearest end of the range and warns rather than writing a number no
+    reader will take; the crate's `musicxml_octave` writes the same number
+    and no warning. Three things carry an octave into a document and all
+    three are here: a pitch, a rest shifted far off its line, and an
+    unpitched stroke's displayed place. No corpus score holds one.
+    """
+    from music21 import note
+    part, bars = quarters([['C12', 'B4', None, 'D4'], ['E4', 'F4', 'G4', 'A4']])
+    # Below the range as well as above it. Written as a number, since
+    # `Note('C-3')` is a C flat in the third octave to music21's reader.
+    bars[0][1].pitch.octave = -3
+    # A rest shifted so far off the middle line that the staff place it is
+    # drawn at is past the ninth octave.
+    bars[0][2].stepShift = 40
+    stroke = note.Unpitched()
+    stroke.displayStep = 'E'
+    stroke.displayOctave = 14
+    stroke.duration.type = 'quarter'
+    second = part.getElementsByClass('Measure')[1]
+    second.remove(bars[1][3])
+    second.append(stroke)
+    return one_part(part)
+
 def lyric_styles():
     """Lyrics that say how they line up, which side they are on and whether
     they are printed."""
@@ -483,6 +517,7 @@ BUILT = {
     'built:pedals': pedals,
     'built:inner-barline': inner_barline,
     'built:lyric-styles': lyric_styles,
+    'built:extreme-octaves': extreme_octaves,
 }
 
 def build(name):
@@ -499,11 +534,17 @@ def build(name):
 
 # What a built score's document gains that music21 reads and does not write.
 ADDED = {
+    # A barline carries a segno and a coda besides its style: MusicXML
+    # allows both inside <barline>, music21 reads them there as of
+    # 11.0.0b14, and its exporter writes them back as a <direction> -- so
+    # nothing music21 writes can exercise the reading and it has to be put
+    # in here.
     'built:inner-barline': (
         '</note>',
         2,
         '</note>\n      <barline location="middle">\n'
-        '        <bar-style>dashed</bar-style>\n      </barline>',
+        '        <bar-style>dashed</bar-style>\n'
+        '        <segno/>\n        <coda/>\n      </barline>',
     ),
     'built:lyric-styles': ('<lyric name="2" number="2">', 1, '<lyric name="2" number="2" print-object="yes">'),
 }
@@ -735,15 +776,27 @@ from fractions import Fraction
 def number(value):
     return f'{float(value):.5f}'
 
+def struck(drum):
+    """What a stroke is played on: the class, how it is played, and the key.
+
+    The key is here because neither of the other two tells a muted drum
+    from an open one -- a muted conga is key 62 with the *high* drum's
+    modifier where 63 is that modifier struck open, and a cuica and a
+    surdo carry no modifier at all.
+    """
+    if drum is None:
+        return 'None None None'
+    played = getattr(drum, 'modifier', None)
+    key = getattr(drum, 'percMapPitch', None)
+    return f'{drum.classes[0]} {played} {key}'
+
 def describe(e):
     classes = e.classes
     if 'Unpitched' in classes:
-        drum = e.storedInstrument
-        played = getattr(drum, 'modifier', None) if drum is not None else None
-        return f'Unpitched {drum.classes[0] if drum is not None else None} {played}'
+        return 'Unpitched ' + struck(e.storedInstrument)
     if 'PercussionChord' in classes:
         return 'PercussionChord ' + ' '.join(
-            str(n.storedInstrument.classes[0]) for n in e.notes)
+            struck(n.storedInstrument) for n in e.notes)
     if 'Note' in classes:
         return f'Note {e.nameWithOctave} {e.tie.type if e.tie else None} {sung(e)}'
     if 'NoChord' in classes:
@@ -831,35 +884,37 @@ fn sung(lyric: Option<String>) -> String {
     option(lyric.map(|lyric| lyric.replace('\n', "|")))
 }
 
+/// What a stroke is played on: the class, how it is played, and the key.
+/// The key is here because neither of the other two tells a muted drum
+/// from an open one -- a muted conga is key 62 with the *high* drum's
+/// modifier where 63 is that modifier struck open, and a cuica and a
+/// surdo carry no modifier at all.
+fn struck(drum: Option<&music21_rs::Instrument>) -> String {
+    match drum {
+        None => "None None None".to_string(),
+        Some(drum) => format!(
+            "{} {} {}",
+            drum.kind(),
+            option(drum.modifier()),
+            option(drum.percussion_pitch().map(|key| key.to_string()))
+        ),
+    }
+}
+
 #[allow(dead_code)]
 fn describe(element: &StreamElement) -> String {
     let tie = |note: &music21_rs::Note| option(note.tie().map(|tie| tie.tie_type().as_str()));
     match element {
-        StreamElement::Unpitched(stroke) => format!(
-            "Unpitched {} {}",
-            option(
-                stroke
-                    .stored_instrument()
-                    .map(|instrument| instrument.kind())
-            ),
-            // How the drum is played, which is the key a MIDI file struck
-            // it with.
-            option(
-                stroke
-                    .stored_instrument()
-                    .and_then(|instrument| instrument.modifier())
-            )
-        ),
+        StreamElement::Unpitched(stroke) => {
+            format!("Unpitched {}", struck(stroke.stored_instrument()))
+        }
         StreamElement::PercussionChord(chord) => format!(
             "PercussionChord {}",
             chord
                 .written()
                 .notes()
                 .iter()
-                .map(|note| option(
-                    note.stored_instrument()
-                        .map(|instrument| instrument.kind().to_string())
-                ))
+                .map(|note| struck(note.stored_instrument()))
                 .collect::<Vec<_>>()
                 .join(" ")
         ),

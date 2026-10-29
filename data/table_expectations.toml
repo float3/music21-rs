@@ -4,10 +4,10 @@
 # They are small enough to transcribe, which is exactly why they drift
 # silently; these fixtures are what stops that.
 #
-# music21 11.0.0b12 at 5151b5189570c0fa35650944feb47d4e69aea670
+# music21 11.0.0b14 at 5609a548cdfc344eaed13230166bb837227395e7
 
-music21_version = "11.0.0b12"
-music21_commit = "5151b5189570c0fa35650944feb47d4e69aea670"
+music21_version = "11.0.0b14"
+music21_commit = "5609a548cdfc344eaed13230166bb837227395e7"
 
 [[accidental]]
 name = "natural"
@@ -1240,4 +1240,404 @@ score = 12
 [[functionality]]
 figure = "vi6"
 score = 10
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "soprn"
+class = "Soprano"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cant"
+class = "Soprano"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "mezzo"
+class = "MezzoSoprano"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "calto"
+class = "Alto"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tenor"
+class = "Tenor"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "barit"
+class = "Baritone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "bass"
+class = "Bass"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "vox"
+class = "Vocalist"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "alto"
+class = "Alto"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "arpa"
+class = "Harp"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "banjo"
+class = "Banjo"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "bguit"
+class = "ElectricBass"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cbass"
+class = "Contrabass"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cello"
+class = "Violoncello"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cemba"
+class = "Harpsichord"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "clavi"
+class = "Clavichord"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "dulc"
+class = "Dulcimer"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "eguit"
+class = "ElectricGuitar"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "guitr"
+class = "Guitar"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "liuto"
+class = "Lute"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "koto"
+class = "Koto"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "mando"
+class = "Mandolin"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "piano"
+class = "Piano"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "shami"
+class = "Shamisen"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "sitar"
+class = "Sitar"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "ukule"
+class = "Ukulele"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "viola"
+class = "Viola"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "violn"
+class = "Violin"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "accor"
+class = "Accordion"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "armon"
+class = "Harmonica"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "bagpS"
+class = "Bagpipes"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "bagpI"
+class = "Bagpipes"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cangl"
+class = "EnglishHorn"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "clarb"
+class = "BassClarinet"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "cor"
+class = "Horn"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "fagot"
+class = "Bassoon"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "flt"
+class = "Flute"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "oboe"
+class = "Oboe"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "organ"
+class = "PipeOrgan"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "panpi"
+class = "PanFlute"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "picco"
+class = "Piccolo"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "reedo"
+class = "ReedOrgan"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "saxS"
+class = "SopranoSaxophone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "saxA"
+class = "AltoSaxophone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "saxT"
+class = "TenorSaxophone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "saxR"
+class = "BaritoneSaxophone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "shaku"
+class = "Shakuhachi"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tromt"
+class = "Trombone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tromb"
+class = "BassTrombone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tromp"
+class = "Trumpet"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tuba"
+class = "Tuba"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "bdrum"
+class = "BassDrum"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "campn"
+class = "ChurchBells"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "caril"
+class = "ChurchBells"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "casts"
+class = "Castanets"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "chime"
+class = "TubularBells"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "crshc"
+class = "CrashCymbals"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "glock"
+class = "Glockenspiel"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "gong"
+class = "Gong"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "marac"
+class = "Maracas"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "marim"
+class = "Marimba"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "piatt"
+class = "Cymbals"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "ridec"
+class = "RideCymbal"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "sdrum"
+class = "SnareDrum"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "spshc"
+class = "SplashCymbal"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "steel"
+class = "SteelDrum"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tambn"
+class = "Tambourine"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "timpa"
+class = "Timpani"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "tom"
+class = "TomTom"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "trngl"
+class = "Triangle"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "vibra"
+class = "Vibraphone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "xylo"
+class = "Xylophone"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "clest"
+class = "Celesta"
+
+[[humdrum_instrument]]
+kind = "instrument"
+code = "hammd"
+class = "ElectricOrgan"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "vox"
+class = "Vocalist"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "str"
+class = "StringInstrument"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "ww"
+class = "WoodwindInstrument"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "bras"
+class = "BrassInstrument"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "klav"
+class = "KeyboardInstrument"
+
+[[humdrum_instrument]]
+kind = "class"
+code = "perc"
+class = "Percussion"
 

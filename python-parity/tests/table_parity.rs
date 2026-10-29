@@ -10,7 +10,7 @@
 //! the fixture itself going stale against a bumped submodule.
 
 use music21_rs::{
-    Accidental, DEFAULT_TEMPO_VALUES, Interval, KeyProfile, key,
+    Accidental, DEFAULT_TEMPO_VALUES, Instrument, Interval, KeyProfile, humdrum, key,
     roman::FUNCTIONALITY_SCORES,
     scale::{HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES},
 };
@@ -29,6 +29,14 @@ struct Expectations {
     dynamic_decimal: Vec<DynamicDecimalExpectation>,
     solfeg: Vec<SolfegExpectation>,
     functionality: Vec<FunctionalityExpectation>,
+    humdrum_instrument: Vec<HumdrumInstrumentExpectation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HumdrumInstrumentExpectation {
+    kind: String,
+    code: String,
+    class: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -416,6 +424,58 @@ fn functionality_scores_match_music21() {
     assert!(
         mismatches.is_empty(),
         "{} functionality scores differ from music21:\n    {}",
+        mismatches.len(),
+        mismatches.join("\n    ")
+    );
+}
+
+#[test]
+fn humdrum_instrument_codes_match_music21() {
+    // music21's `humdrumInstruments` and
+    // `humdrumInstrumentClassToInstrument`, which `humdrum::tables`
+    // transcribes by hand. A code naming a class the crate has no kind for
+    // reads as no instrument at all, in silence, so both are checked.
+    let expectations = expectations();
+    let mut mismatches = Vec::new();
+    for expected in &expectations.humdrum_instrument {
+        let table = match expected.kind.as_str() {
+            "instrument" => humdrum::INSTRUMENTS,
+            "class" => humdrum::INSTRUMENT_CLASSES,
+            other => {
+                mismatches.push(format!("{other}: no such table"));
+                continue;
+            }
+        };
+        match table.iter().find(|(code, _)| *code == expected.code) {
+            Some((_, class)) if *class == expected.class => {}
+            Some((_, class)) => mismatches.push(format!(
+                "{} {}: music21 {}, crate {class}",
+                expected.kind, expected.code, expected.class
+            )),
+            None => mismatches.push(format!(
+                "{} {}: unknown to the crate",
+                expected.kind, expected.code
+            )),
+        }
+    }
+    // Every class either table names has to be a kind the crate has, or
+    // the code reads as nothing.
+    for (code, class) in humdrum::INSTRUMENTS
+        .iter()
+        .chain(humdrum::INSTRUMENT_CLASSES.iter())
+    {
+        if Instrument::of_kind(class).is_err() {
+            mismatches.push(format!("{code}: {class} is no kind the crate has"));
+        }
+    }
+    assert_eq!(
+        expectations.humdrum_instrument.len(),
+        humdrum::INSTRUMENTS.len() + humdrum::INSTRUMENT_CLASSES.len(),
+        "music21 and the crate name a different number of Humdrum codes"
+    );
+    assert!(
+        mismatches.is_empty(),
+        "{} Humdrum instrument codes differ from music21:\n    {}",
         mismatches.len(),
         mismatches.join("\n    ")
     );

@@ -271,9 +271,9 @@ note = "A string instrument's open strings, the only member music21 gives its st
 
 [[class]]
 python = "instrument.py"
-name = "UnpitchedPercussion"
+name = "MidiPercussionMapMixin"
 rust = ["src/instrument/mod.rs"]
-note = "How an unpitched percussion instrument is played, and the drum that plays."
+note = "How an instrument in the General MIDI percussion map is played, and the drum that plays. v11 moved this out of `UnpitchedPercussion` into a mixin, the map being a synthesizer's layout rather than a family of instruments -- which is how a whistle, a flute, comes to be in it."
 
 [[class]]
 python = "instrument.py"

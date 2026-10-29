@@ -144,12 +144,6 @@ kinds!(
     (Trumpet, "Trumpet", BrassInstrument, [BrassInstrument]),
     (Tuba, "Tuba", BrassInstrument, [BrassInstrument]),
     (Ukulele, "Ukulele", StringInstrument, [StringInstrument]),
-    (
-        UnpitchedPercussion,
-        "UnpitchedPercussion",
-        Percussion,
-        [Percussion]
-    ),
     (Viola, "Viola", StringInstrument, [StringInstrument]),
     (Violin, "Violin", StringInstrument, [StringInstrument]),
     (
@@ -171,12 +165,6 @@ kinds!(
         [StringInstrument, Guitar]
     ),
     (
-        Agogo,
-        "Agogo",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
         AltoSaxophone,
         "AltoSaxophone",
         Saxophone,
@@ -195,28 +183,10 @@ kinds!(
         [WoodwindInstrument, Clarinet]
     ),
     (
-        BassDrum,
-        "BassDrum",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
         BassTrombone,
         "BassTrombone",
         Trombone,
         [BrassInstrument, Trombone]
-    ),
-    (
-        BongoDrums,
-        "BongoDrums",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        Castanets,
-        "Castanets",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
     ),
     (
         ChurchBells,
@@ -225,28 +195,10 @@ kinds!(
         [Percussion, PitchedPercussion]
     ),
     (
-        CongaDrum,
-        "CongaDrum",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
         Contrabassoon,
         "Contrabassoon",
         Bassoon,
         [WoodwindInstrument, Bassoon]
-    ),
-    (
-        Cowbell,
-        "Cowbell",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        Cymbals,
-        "Cymbals",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
     ),
     (
         Dulcimer,
@@ -303,12 +255,6 @@ kinds!(
         [Percussion, PitchedPercussion]
     ),
     (
-        Maracas,
-        "Maracas",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
         Marimba,
         "Marimba",
         PitchedPercussion,
@@ -318,38 +264,8 @@ kinds!(
     (Ocarina, "Ocarina", Flute, [WoodwindInstrument, Flute]),
     (PanFlute, "PanFlute", Flute, [WoodwindInstrument, Flute]),
     (Piccolo, "Piccolo", Flute, [WoodwindInstrument, Flute]),
-    (
-        Ratchet,
-        "Ratchet",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
     (Recorder, "Recorder", Flute, [WoodwindInstrument, Flute]),
-    (
-        SandpaperBlocks,
-        "SandpaperBlocks",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
     (Shakuhachi, "Shakuhachi", Flute, [WoodwindInstrument, Flute]),
-    (
-        Siren,
-        "Siren",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        SleighBells,
-        "SleighBells",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        SnareDrum,
-        "SnareDrum",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
     (
         SopranoSaxophone,
         "SopranoSaxophone",
@@ -363,8 +279,116 @@ kinds!(
         [Percussion, PitchedPercussion]
     ),
     (
-        Taiko,
-        "Taiko",
+        TenorSaxophone,
+        "TenorSaxophone",
+        Saxophone,
+        [WoodwindInstrument, Saxophone]
+    ),
+    (
+        Timpani,
+        "Timpani",
+        PitchedPercussion,
+        [Percussion, PitchedPercussion]
+    ),
+    (
+        TubularBells,
+        "TubularBells",
+        PitchedPercussion,
+        [Percussion, PitchedPercussion]
+    ),
+    (
+        UnpitchedPercussion,
+        "UnpitchedPercussion",
+        Percussion,
+        [Percussion]
+    ),
+    (
+        Vibraphone,
+        "Vibraphone",
+        PitchedPercussion,
+        [Percussion, PitchedPercussion]
+    ),
+    (
+        Xylophone,
+        "Xylophone",
+        PitchedPercussion,
+        [Percussion, PitchedPercussion]
+    ),
+    (
+        Agogo,
+        "Agogo",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        BellTree,
+        "BellTree",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Cabasa,
+        "Cabasa",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Castanets,
+        "Castanets",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Claves,
+        "Claves",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Cowbell,
+        "Cowbell",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Cymbals,
+        "Cymbals",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Guiro,
+        "Guiro",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Ratchet,
+        "Ratchet",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        SandpaperBlocks,
+        "SandpaperBlocks",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Shaker,
+        "Shaker",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        Siren,
+        "Siren",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
+    ),
+    (
+        SleighBells,
+        "SleighBells",
         UnpitchedPercussion,
         [Percussion, UnpitchedPercussion]
     ),
@@ -375,44 +399,8 @@ kinds!(
         [Percussion, UnpitchedPercussion]
     ),
     (
-        Tambourine,
-        "Tambourine",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
         TempleBlock,
         "TempleBlock",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        TenorDrum,
-        "TenorDrum",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        TenorSaxophone,
-        "TenorSaxophone",
-        Saxophone,
-        [WoodwindInstrument, Saxophone]
-    ),
-    (
-        Timbales,
-        "Timbales",
-        UnpitchedPercussion,
-        [Percussion, UnpitchedPercussion]
-    ),
-    (
-        Timpani,
-        "Timpani",
-        PitchedPercussion,
-        [Percussion, PitchedPercussion]
-    ),
-    (
-        TomTom,
-        "TomTom",
         UnpitchedPercussion,
         [Percussion, UnpitchedPercussion]
     ),
@@ -423,16 +411,10 @@ kinds!(
         [Percussion, UnpitchedPercussion]
     ),
     (
-        TubularBells,
-        "TubularBells",
-        PitchedPercussion,
-        [Percussion, PitchedPercussion]
-    ),
-    (
-        Vibraphone,
-        "Vibraphone",
-        PitchedPercussion,
-        [Percussion, PitchedPercussion]
+        UnpitchedDrum,
+        "UnpitchedDrum",
+        UnpitchedPercussion,
+        [Percussion, UnpitchedPercussion]
     ),
     (
         Vibraslap,
@@ -460,10 +442,34 @@ kinds!(
         [Percussion, UnpitchedPercussion]
     ),
     (
-        Xylophone,
-        "Xylophone",
-        PitchedPercussion,
-        [Percussion, PitchedPercussion]
+        BassDrum,
+        "BassDrum",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        BongoDrums,
+        "BongoDrums",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        Caxixi,
+        "Caxixi",
+        Shaker,
+        [Percussion, UnpitchedPercussion, Shaker]
+    ),
+    (
+        ChineseCymbal,
+        "ChineseCymbal",
+        Cymbals,
+        [Percussion, UnpitchedPercussion, Cymbals]
+    ),
+    (
+        CongaDrum,
+        "CongaDrum",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
     ),
     (
         CrashCymbals,
@@ -472,20 +478,32 @@ kinds!(
         [Percussion, UnpitchedPercussion, Cymbals]
     ),
     (
+        Cuica,
+        "Cuica",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
         FingerCymbals,
         "FingerCymbals",
         Cymbals,
         [Percussion, UnpitchedPercussion, Cymbals]
     ),
     (
-        HiHatCymbal,
-        "HiHatCymbal",
+        HiHat,
+        "HiHat",
         Cymbals,
         [Percussion, UnpitchedPercussion, Cymbals]
     ),
     (
-        RideCymbals,
-        "RideCymbals",
+        Maracas,
+        "Maracas",
+        Shaker,
+        [Percussion, UnpitchedPercussion, Shaker]
+    ),
+    (
+        RideCymbal,
+        "RideCymbal",
         Cymbals,
         [Percussion, UnpitchedPercussion, Cymbals]
     ),
@@ -496,15 +514,57 @@ kinds!(
         [Percussion, UnpitchedPercussion, Cymbals]
     ),
     (
-        SplashCymbals,
-        "SplashCymbals",
+        SnareDrum,
+        "SnareDrum",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        SplashCymbal,
+        "SplashCymbal",
         Cymbals,
         [Percussion, UnpitchedPercussion, Cymbals]
+    ),
+    (
+        Surdo,
+        "Surdo",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
     ),
     (
         SuspendedCymbal,
         "SuspendedCymbal",
         Cymbals,
         [Percussion, UnpitchedPercussion, Cymbals]
+    ),
+    (
+        Taiko,
+        "Taiko",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        Tambourine,
+        "Tambourine",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        TenorDrum,
+        "TenorDrum",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        Timbales,
+        "Timbales",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
+    ),
+    (
+        TomTom,
+        "TomTom",
+        UnpitchedDrum,
+        [Percussion, UnpitchedPercussion, UnpitchedDrum]
     ),
 );

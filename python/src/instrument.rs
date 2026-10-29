@@ -311,14 +311,49 @@ impl Instrument {
         self.inner.set_in_percussion_map(value);
     }
 
+    /// music21's `percMapPitch`, which `MidiPercussionMapMixin` carries --
+    /// every unpitched percussion instrument and a whistle, which is a
+    /// flute in the General MIDI drum map.
     #[getter]
-    fn get_percMapPitch(&self) -> Option<u8> {
-        self.inner.percussion_pitch()
+    fn get_percMapPitch(&self) -> PyResult<Option<u8>> {
+        self.member_of("MidiPercussionMapMixin", "percMapPitch")?;
+        Ok(self.inner.percussion_pitch())
     }
 
     #[setter]
-    fn set_percMapPitch(&mut self, value: Option<u8>) {
+    fn set_percMapPitch(&mut self, value: Option<u8>) -> PyResult<()> {
+        self.member_of("MidiPercussionMapMixin", "percMapPitch")?;
         self.inner.set_percussion_pitch(value);
+        Ok(())
+    }
+
+    /// music21's `muted`, which three of its percussion classes carry: a
+    /// conga drum, a cuica and a surdo. Muting is the *drum* played rather
+    /// than a flag beside it -- a muted conga drum is key 62 where an open
+    /// one is 63 -- so this reads the key.
+    ///
+    /// Asked of anything else it raises, as music21 does: the property is
+    /// defined on those three classes and nowhere above them.
+    #[getter]
+    fn get_muted(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        slf.borrow().inner.muted().ok_or_else(|| {
+            pyo3::exceptions::PyAttributeError::new_err(format!(
+                "'{}' object has no attribute 'muted'",
+                slf.get_type()
+                    .name()
+                    .map(|name| name.to_string())
+                    .unwrap_or_else(|_| "Instrument".to_string())
+            ))
+        })
+    }
+
+    #[setter]
+    fn set_muted(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+        // Read first, so that anything the property is not defined on
+        // raises rather than quietly doing nothing.
+        let _ = Self::get_muted(slf)?;
+        slf.borrow_mut().inner.set_muted(value);
+        Ok(())
     }
 
     /// music21's `stringPitches`, which only its string instruments have.
@@ -346,17 +381,49 @@ impl Instrument {
         Ok(())
     }
 
-    /// music21's `modifier`, which only its unpitched percussion has.
+    /// music21's `modifier`, which `MidiPercussionMapMixin` has: every
+    /// unpitched percussion instrument, and a whistle besides, the map
+    /// being a synthesizer's layout rather than a family of instruments.
     #[getter]
     fn get_modifier(&self) -> PyResult<Option<&str>> {
-        self.member_of("UnpitchedPercussion", "modifier")?;
+        self.member_of("MidiPercussionMapMixin", "modifier")?;
         Ok(self.inner.modifier())
     }
 
     #[setter]
     fn set_modifier(&mut self, modifier: &str) -> PyResult<()> {
-        self.member_of("UnpitchedPercussion", "modifier")?;
+        self.member_of("MidiPercussionMapMixin", "modifier")?;
         self.inner.set_modifier(modifier);
+        Ok(())
+    }
+
+    /// music21's `headless`, which only its `Tambourine` has: whether it is
+    /// the rock and pop kind, a ring of jingles with no drum head.
+    #[getter]
+    fn get_headless(&self) -> PyResult<bool> {
+        self.member_of("Tambourine", "headless")?;
+        Ok(self.inner.headless().unwrap_or(false))
+    }
+
+    #[setter]
+    fn set_headless(&mut self, value: bool) -> PyResult<()> {
+        self.member_of("Tambourine", "headless")?;
+        self.inner.set_headless(value);
+        Ok(())
+    }
+
+    /// music21's `pitched`, which only its `Whistle` has: whether it sounds
+    /// a definite pitch, as a tin whistle does and a referee's does not.
+    #[getter]
+    fn get_pitched(&self) -> PyResult<bool> {
+        self.member_of("Whistle", "pitched")?;
+        Ok(self.inner.pitched().unwrap_or(false))
+    }
+
+    #[setter]
+    fn set_pitched(&mut self, value: bool) -> PyResult<()> {
+        self.member_of("Whistle", "pitched")?;
+        self.inner.set_pitched(value);
         Ok(())
     }
 
@@ -401,9 +468,15 @@ impl Instrument {
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let class = slf.get_type().name()?;
         let written = slf.borrow().__str__();
+        // music21's `MidiPercussionMapMixin._reprInternal` writes the
+        // modifier after the name, so a bongo drum reads
+        // `<music21.instrument.BongoDrums 'Bongo Drums' high>` -- which is
+        // how a caller sees *which* drum of the pair it is.
+        let modifier = slf.borrow().inner.modifier().map(str::to_string);
         Ok(format!(
-            "<music21.instrument.{class} {}>",
-            pyo3::types::PyString::new(slf.py(), &written).repr()?
+            "<music21.instrument.{class} {}{}>",
+            pyo3::types::PyString::new(slf.py(), &written).repr()?,
+            modifier.map_or_else(String::new, |modifier| format!(" {modifier}"))
         ))
     }
 

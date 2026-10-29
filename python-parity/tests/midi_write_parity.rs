@@ -104,8 +104,8 @@ def built(name):
         # same drum played `acoustic` is 35.
         for class_name, modifier in [
             ('BassDrum', 'acoustic'), ('BassDrum', '1'),
-            ('SnareDrum', 'acoustic'), ('HiHatCymbal', 'closed'),
-            ('HiHatCymbal', 'open'), ('HiHatCymbal', 'pedal'),
+            ('SnareDrum', 'acoustic'), ('HiHat', 'closed'),
+            ('HiHat', 'open'), ('HiHat', 'pedal'),
             ('TomTom', 'high'), ('TomTom', 'low floor'),
             ('BongoDrums', 'low'), ('Woodblock', 'low'),
             ('Triangle', 'mute'), ('CrashCymbals', '2'),
@@ -270,9 +270,9 @@ fn built(name: &str) -> music21_rs::Result<music21_rs::Stream> {
             ("BassDrum", "acoustic"),
             ("BassDrum", "1"),
             ("SnareDrum", "acoustic"),
-            ("HiHatCymbal", "closed"),
-            ("HiHatCymbal", "open"),
-            ("HiHatCymbal", "pedal"),
+            ("HiHat", "closed"),
+            ("HiHat", "open"),
+            ("HiHat", "pedal"),
             ("TomTom", "high"),
             ("TomTom", "low floor"),
             ("BongoDrums", "low"),

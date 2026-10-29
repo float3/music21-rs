@@ -3,10 +3,10 @@
 # The instruments and the name tables are transcribed into
 # src/instrument/tables.rs; the lookups are checked behaviourally.
 #
-# music21 11.0.0b12 at 5151b5189570c0fa35650944feb47d4e69aea670
+# music21 11.0.0b14 at 5609a548cdfc344eaed13230166bb837227395e7
 
-music21_version = "11.0.0b12"
-music21_commit = "5151b5189570c0fa35650944feb47d4e69aea670"
+music21_version = "11.0.0b14"
+music21_commit = "5609a548cdfc344eaed13230166bb837227395e7"
 
 ensemble_names = ["no performers", "solo", "duet", "trio", "quartet", "quintet", "sextet", "septet", "octet", "nonet", "dectet", "undectet", "duodectet", "tredectet", "quattuordectet", "quindectet", "sexdectet", "septendectet", "octodectet", "novemdectet", "vigetet", "unvigetet", "duovigetet", "trevigetet", "quattuorvigetet", "quinvigetet", "sexvigetet", "septenvigetet", "octovigetet", "novemvigetet", "trigetet", "untrigetet", "duotrigetet", "tretrigetet", "quottuortrigetet", "quintrigetet", "sextrigetet", "septentrigetet", "octotrigetet", "novemtrigetet", "quadragetet", "unquadragetet", "duoquadragetet", "trequadragetet", "quattuorquadragetet", "quinquadragetet", "sexquadragetet", "octoquadragetet", "octoquadragetet", "novemquadragetet", "quinquagetet", "unquinquagetet", "duoquinquagetet", "trequinguagetet", "quattuorquinquagetet", "quinquinquagetet", "sexquinquagetet", "septenquinquagetet", "octoquinquagetet", "novemquinquagetet", "sexagetet", "undexagetet", "duosexagetet", "tresexagetet", "quoattuorsexagetet", "quinsexagetet", "sexsexagetet", "septensexagetet", "octosexagetet", "novemsexagetet", "septuagetet", "unseptuagetet", "duoseptuagetet", "treseptuagetet", "quattuorseptuagetet", "quinseptuagetet", "sexseptuagetet", "septenseptuagetet", "octoseptuagetet", "novemseptuagetet", "octogetet", "unoctogetet", "duooctogetet", "treoctogetet", "quattuoroctogetet", "quinoctogetet", "sexoctogetet", "septoctogetet", "octooctogetet", "novemoctogetet", "nonagetet", "unnonagetet", "duononagetet", "trenonagetet", "quattuornonagetet", "quinnonagetet", "sexnonagetet", "septennonagetet", "octononagetet", "novemnonagetet", "centet"]
 
@@ -898,24 +898,6 @@ string_pitches = ["G4", "C4", "E4", "A4"]
 "abbreviation" = ["uke"]
 
 [[instrument]]
-class = "UnpitchedPercussion"
-parents = ["Percussion", "Instrument"]
-name = "Percussion"
-abbreviation = "Perc"
-best_name = "Percussion"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["unpitched percussion"]
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
-
-[[instrument]]
 class = "Viola"
 parents = ["StringInstrument", "Instrument"]
 name = "Viola"
@@ -1016,27 +998,6 @@ string_pitches = ["E2", "A2", "D3", "G3", "B3", "E4"]
 "abbreviation" = ["ac gtr"]
 
 [[instrument]]
-class = "Agogo"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Agogo"
-abbreviation = "Ago"
-sound = "metal.bells.agogo"
-best_name = "Agogo"
-midi_program = 113
-midi_channel = 9
-percussion_pitch = 67
-percussion_map = true
-modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 67 }]
-[instrument.all_names]
-"english" = ["agogo"]
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
-
-[[instrument]]
 class = "AltoSaxophone"
 parents = ["Saxophone", "WoodwindInstrument", "Instrument"]
 name = "Alto Saxophone"
@@ -1097,27 +1058,6 @@ percussion_map = false
 "abbreviation" = ["b cl", "bcl", "bkl", "bs cl"]
 
 [[instrument]]
-class = "BassDrum"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Bass Drum"
-abbreviation = "B Dr"
-sound = "drum.bass-drum"
-best_name = "Bass Drum"
-midi_channel = 9
-percussion_pitch = 35
-percussion_map = true
-modifier = "acoustic"
-modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 35 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 35 }, { given = " acoustic ", modifier = "acoustic", drum = 35 }, { given = "1", modifier = "1", drum = 36 }, { given = "1", modifier = "1", drum = 36 }, { given = " 1 ", modifier = "1", drum = 36 }, { given = "unheard of", modifier = "unheard of", drum = 35 }]
-[instrument.all_names]
-"english" = ["bass drum", "turkish drum"]
-"french" = ["grosse caisse", "tambour bata"]
-"german" = ["bass-drum", "grosse trommel"]
-"italian" = ["cassa", "gran cassa", "grancassa", "tamborone", "tamburo grande", "tamburo grosso"]
-"russian" = ["bol'shoi baraban"]
-"spanish" = ["bombo", "gran caja"]
-"abbreviation" = ["b dr", "cr tr", "g c", "gr cassa"]
-
-[[instrument]]
 class = "BassTrombone"
 parents = ["Trombone", "BrassInstrument", "Instrument"]
 name = "Bass Trombone"
@@ -1135,46 +1075,6 @@ percussion_map = false
 "russian" = []
 "spanish" = ["trombón bajo"]
 "abbreviation" = []
-
-[[instrument]]
-class = "BongoDrums"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Bongo Drums"
-abbreviation = "Bgo Dr"
-sound = "drum.bongo"
-best_name = "Bongo Drums"
-midi_channel = 9
-percussion_pitch = 60
-percussion_map = true
-modifier = "high"
-modifiers = [{ given = "high", modifier = "high", drum = 60 }, { given = "HIGH", modifier = "high", drum = 60 }, { given = " high ", modifier = "high", drum = 60 }, { given = "low", modifier = "low", drum = 61 }, { given = "LOW", modifier = "low", drum = 61 }, { given = " low ", modifier = "low", drum = 61 }, { given = "unheard of", modifier = "unheard of", drum = 60 }]
-[instrument.all_names]
-"english" = ["bongo drums"]
-"french" = ["bongos", "tambours bongo"]
-"german" = ["bongo-trommeln", "bongos"]
-"italian" = ["bonghi", "bongos", "tamburi bongo"]
-"russian" = []
-"spanish" = ["bongo tambores", "bongos"]
-"abbreviation" = ["bgo dr"]
-
-[[instrument]]
-class = "Castanets"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Castanets"
-abbreviation = "Cas"
-sound = "wood.castanets"
-best_name = "Castanets"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["castanets"]
-"french" = ["castagnettes"]
-"german" = ["kastagnetten"]
-"italian" = ["castagnette", "nacchere"]
-"russian" = []
-"spanish" = ["castañuelas"]
-"abbreviation" = ["cas", "casts", "kas"]
 
 [[instrument]]
 class = "ChurchBells"
@@ -1195,27 +1095,6 @@ percussion_map = false
 "abbreviation" = []
 
 [[instrument]]
-class = "CongaDrum"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Conga Drum"
-abbreviation = "Cga Dr"
-sound = "drum.conga"
-best_name = "Conga Drum"
-midi_channel = 9
-percussion_pitch = 64
-percussion_map = true
-modifier = "low"
-modifiers = [{ given = "low", modifier = "low", drum = 64 }, { given = "LOW", modifier = "low", drum = 64 }, { given = " low ", modifier = "low", drum = 64 }, { given = "mute high", modifier = "mute high", drum = 62 }, { given = "MUTE HIGH", modifier = "mute high", drum = 62 }, { given = " mute high ", modifier = "mute high", drum = 62 }, { given = "open high", modifier = "open high", drum = 63 }, { given = "OPEN HIGH", modifier = "open high", drum = 63 }, { given = " open high ", modifier = "open high", drum = 63 }, { given = "unheard of", modifier = "unheard of", drum = 64 }]
-[instrument.all_names]
-"english" = ["conga drum", "tumbadora"]
-"french" = ["conga", "tambour congo", "tumbadora"]
-"german" = ["conga", "conga-trommel", "tumba"]
-"italian" = ["conga", "tumba"]
-"russian" = []
-"spanish" = ["conga", "congas", "tumbadora"]
-"abbreviation" = ["cga dr"]
-
-[[instrument]]
 class = "Contrabassoon"
 parents = ["Bassoon", "WoodwindInstrument", "Instrument"]
 name = "Contrabassoon"
@@ -1233,44 +1112,6 @@ percussion_map = false
 "russian" = []
 "spanish" = ["contrafagot"]
 "abbreviation" = ["c bsn", "cbsn"]
-
-[[instrument]]
-class = "Cowbell"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Cowbell"
-abbreviation = "Cwb"
-sound = "metal.bells.cowbell"
-best_name = "Cowbell"
-midi_channel = 9
-percussion_pitch = 56
-percussion_map = true
-modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 56 }]
-[instrument.all_names]
-"english" = ["cowbells"]
-"french" = ["cloches de vache", "cloches à vache", "gencerros", "sonnailles"]
-"german" = ["herdenglocken", "kuhglocken", "viehschellen"]
-"italian" = ["campanacci", "campanelli da mucca", "campanelli di vacca"]
-"russian" = []
-"spanish" = ["campanos", "cencerros"]
-"abbreviation" = ["cwb"]
-
-[[instrument]]
-class = "Cymbals"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Cymbals"
-abbreviation = "Cym"
-best_name = "Cymbals"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["cymbals"]
-"french" = []
-"german" = ["becken"]
-"italian" = []
-"russian" = []
-"spanish" = ["cimbales", "címbalos", "platillos", "platos"]
-"abbreviation" = []
 
 [[instrument]]
 class = "Dulcimer"
@@ -1441,26 +1282,6 @@ percussion_map = false
 "abbreviation" = ["kal"]
 
 [[instrument]]
-class = "Maracas"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Maracas"
-abbreviation = "Mrcs"
-sound = "rattle.maraca"
-best_name = "Maracas"
-midi_channel = 9
-percussion_pitch = 70
-percussion_map = true
-modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 70 }]
-[instrument.all_names]
-"english" = ["maracas"]
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
-
-[[instrument]]
 class = "Marimba"
 parents = ["PitchedPercussion", "Percussion", "Instrument"]
 name = "Marimba"
@@ -1555,25 +1376,6 @@ percussion_map = false
 "abbreviation" = ["pic", "picc"]
 
 [[instrument]]
-class = "Ratchet"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Ratchet"
-abbreviation = "Ratc"
-sound = "rattle.ratchet"
-best_name = "Ratchet"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["ratchet", "rattle"]
-"french" = ["crécelle", "rochet"]
-"german" = ["knarre", "ratsche", "schnarre"]
-"italian" = ["cricchetto", "raganella"]
-"russian" = []
-"spanish" = ["carraca", "matraca", "trinquete"]
-"abbreviation" = []
-
-[[instrument]]
 class = "Recorder"
 parents = ["Flute", "WoodwindInstrument", "Instrument"]
 name = "Recorder"
@@ -1593,25 +1395,6 @@ percussion_map = false
 "abbreviation" = ["rec"]
 
 [[instrument]]
-class = "SandpaperBlocks"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Sandpaper Blocks"
-abbreviation = "Sand Bl"
-sound = "wood.sand-block"
-best_name = "Sandpaper Blocks"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["sandpaper blocks"]
-"french" = ["blocs de papier de verre", "papier de verre"]
-"german" = ["sandblöcke", "sandpapier", "sandpapier blöcke"]
-"italian" = ["blocchi di carta vetrata", "carta vetrata", "ceppi di carta vetro"]
-"russian" = []
-"spanish" = ["bloques de papel de lija", "papel de lija"]
-"abbreviation" = ["sand bl"]
-
-[[instrument]]
 class = "Shakuhachi"
 parents = ["Flute", "WoodwindInstrument", "Instrument"]
 name = "Shakuhachi"
@@ -1629,65 +1412,6 @@ percussion_map = false
 "russian" = []
 "spanish" = []
 "abbreviation" = ["shk fl"]
-
-[[instrument]]
-class = "Siren"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Siren"
-abbreviation = "Siren"
-sound = "effect.siren"
-best_name = "Siren"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["siren"]
-"french" = ["sirène"]
-"german" = ["sirene"]
-"italian" = ["sirena", "sirena a mano"]
-"russian" = []
-"spanish" = ["sirena"]
-"abbreviation" = []
-
-[[instrument]]
-class = "SleighBells"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Sleigh Bells"
-abbreviation = "Slgh Bl"
-sound = "metal.bells.sleigh-bells"
-best_name = "Sleigh Bells"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["jingle bells", "sleigh bells"]
-"french" = ["grelots"]
-"german" = ["pferdeschlittenglocken", "rollschellen", "schellen"]
-"italian" = ["sonagli", "sonagliera"]
-"russian" = []
-"spanish" = ["cascabels"]
-"abbreviation" = []
-
-[[instrument]]
-class = "SnareDrum"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Snare Drum"
-abbreviation = "Sn Dr"
-sound = "drum.snare-drum"
-best_name = "Snare Drum"
-midi_channel = 9
-percussion_pitch = 38
-percussion_map = true
-modifier = "acoustic"
-modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 38 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 38 }, { given = " acoustic ", modifier = "acoustic", drum = 38 }, { given = "side", modifier = "side", drum = 37 }, { given = "SIDE", modifier = "side", drum = 37 }, { given = " side ", modifier = "side", drum = 37 }, { given = "electric", modifier = "electric", drum = 40 }, { given = "ELECTRIC", modifier = "electric", drum = 40 }, { given = " electric ", modifier = "electric", drum = 40 }, { given = "unheard of", modifier = "unheard of", drum = 38 }]
-[instrument.all_names]
-"english" = ["snare drum"]
-"french" = ["caisse claire", "tambour"]
-"german" = ["kleine trommel", "leinentrommel", "marschtrommel", "schnarrtrommel", "snare-drum"]
-"italian" = ["cassa chiara", "rullante", "tamburo militare"]
-"russian" = ["frantsuzskii baraban"]
-"spanish" = ["caja clara", "con tensores", "redoblante", "tambor afinable", "tambor militar pequeño"]
-"abbreviation" = ["c c", "sn dr"]
 
 [[instrument]]
 class = "SopranoSaxophone"
@@ -1728,103 +1452,6 @@ percussion_map = false
 "abbreviation" = ["st dr"]
 
 [[instrument]]
-class = "Taiko"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Taiko"
-abbreviation = "Tko"
-sound = "drum.taiko"
-best_name = "Taiko"
-midi_program = 116
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["taiko"]
-"french" = []
-"german" = []
-"italian" = []
-"russian" = []
-"spanish" = []
-"abbreviation" = []
-
-[[instrument]]
-class = "TamTam"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Tam-Tam"
-abbreviation = "Tam-t"
-sound = "metal.tamtam"
-best_name = "Tam-Tam"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["bullseye gong", "chau gong", "tam-tam"]
-"french" = []
-"german" = ["tamtam"]
-"italian" = ["tamtam"]
-"russian" = []
-"spanish" = []
-"abbreviation" = []
-
-[[instrument]]
-class = "Tambourine"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Tambourine"
-abbreviation = "Tmbn"
-sound = "drum.tambourine"
-best_name = "Tambourine"
-midi_channel = 9
-percussion_pitch = 54
-percussion_map = true
-modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 54 }]
-[instrument.all_names]
-"english" = ["marine", "tambourine"]
-"french" = ["tambour de basque"]
-"german" = ["schellentrommel", "tambourin", "tamburin"]
-"italian" = ["tamburello", "tamburino", "tamburo basco"]
-"russian" = []
-"spanish" = ["pandereta", "tambor de mano"]
-"abbreviation" = ["tamb", "tmbn"]
-
-[[instrument]]
-class = "TempleBlock"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Temple Block"
-abbreviation = "Temp Bl"
-sound = "wood.temple-block"
-best_name = "Temple Block"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["temple block"]
-"french" = ["temple bloc"]
-"german" = ["tempel-block"]
-"italian" = ["tempio di blocco"]
-"russian" = []
-"spanish" = ["templo de bloque"]
-"abbreviation" = ["temp bl"]
-
-[[instrument]]
-class = "TenorDrum"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Tenor Drum"
-abbreviation = "Ten Dr"
-sound = "drum.tenor-drum"
-best_name = "Tenor Drum"
-midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
-[instrument.all_names]
-"english" = ["tenor drum"]
-"french" = ["caisse roulante", "tambourin", "ténor tambour"]
-"german" = ["rührtrommel", "tenortrommel", "wirbeltrommel"]
-"italian" = ["cassa rullante", "tamburo rullante"]
-"russian" = ["tsilindricheskii baraban"]
-"spanish" = ["caja redoblante", "caja rodante", "el tenor del tambor", "tambor mayor"]
-"abbreviation" = ["ten dr"]
-
-[[instrument]]
 class = "TenorSaxophone"
 parents = ["Saxophone", "WoodwindInstrument", "Instrument"]
 name = "Tenor Saxophone"
@@ -1845,27 +1472,6 @@ percussion_map = false
 "abbreviation" = ["t sax"]
 
 [[instrument]]
-class = "Timbales"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Timbales"
-abbreviation = "Tim"
-sound = "drum.timbale"
-best_name = "Timbales"
-midi_channel = 9
-percussion_pitch = 65
-percussion_map = true
-modifier = "high"
-modifiers = [{ given = "high", modifier = "high", drum = 65 }, { given = "HIGH", modifier = "high", drum = 65 }, { given = " high ", modifier = "high", drum = 65 }, { given = "low", modifier = "low", drum = 66 }, { given = "LOW", modifier = "low", drum = 66 }, { given = " low ", modifier = "low", drum = 66 }, { given = "unheard of", modifier = "unheard of", drum = 65 }]
-[instrument.all_names]
-"english" = ["pailas criollas", "timbales"]
-"french" = ["timbales créoles", "timbales cubaines", "timbales latines"]
-"german" = ["kuba-pauken"]
-"italian" = ["timbales latinoamericani", "timpanetti"]
-"russian" = []
-"spanish" = ["pailas criollas"]
-"abbreviation" = ["tim"]
-
-[[instrument]]
 class = "Timpani"
 parents = ["PitchedPercussion", "Percussion", "Instrument"]
 name = "Timpani"
@@ -1884,48 +1490,6 @@ percussion_map = false
 "abbreviation" = ["k dr", "pk", "timp"]
 
 [[instrument]]
-class = "TomTom"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Tom-Tom"
-abbreviation = "Tom"
-sound = "drum.tom-tom"
-best_name = "Tom-Tom"
-midi_channel = 9
-percussion_pitch = 41
-percussion_map = true
-modifier = "low floor"
-modifiers = [{ given = "low floor", modifier = "low floor", drum = 41 }, { given = "LOW FLOOR", modifier = "low floor", drum = 41 }, { given = " low floor ", modifier = "low floor", drum = 41 }, { given = "high floor", modifier = "high floor", drum = 43 }, { given = "HIGH FLOOR", modifier = "high floor", drum = 43 }, { given = " high floor ", modifier = "high floor", drum = 43 }, { given = "low", modifier = "low", drum = 45 }, { given = "LOW", modifier = "low", drum = 45 }, { given = " low ", modifier = "low", drum = 45 }, { given = "low-mid", modifier = "low-mid", drum = 47 }, { given = "LOW-MID", modifier = "low-mid", drum = 47 }, { given = " low-mid ", modifier = "low-mid", drum = 47 }, { given = "high-mid", modifier = "high-mid", drum = 48 }, { given = "HIGH-MID", modifier = "high-mid", drum = 48 }, { given = " high-mid ", modifier = "high-mid", drum = 48 }, { given = "high", modifier = "high", drum = 50 }, { given = "HIGH", modifier = "high", drum = 50 }, { given = " high ", modifier = "high", drum = 50 }, { given = "unheard of", modifier = "unheard of", drum = 41 }]
-[instrument.all_names]
-"english" = ["tom-tom"]
-"french" = ["tom"]
-"german" = ["tom", "tom tom"]
-"italian" = []
-"russian" = []
-"spanish" = ["tomtom"]
-"abbreviation" = []
-
-[[instrument]]
-class = "Triangle"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Triangle"
-abbreviation = "Tri"
-sound = "metal.triangle"
-best_name = "Triangle"
-midi_channel = 9
-percussion_pitch = 81
-percussion_map = true
-modifier = "open"
-modifiers = [{ given = "open", modifier = "open", drum = 81 }, { given = "OPEN", modifier = "open", drum = 81 }, { given = " open ", modifier = "open", drum = 81 }, { given = "mute", modifier = "mute", drum = 80 }, { given = "MUTE", modifier = "mute", drum = 80 }, { given = " mute ", modifier = "mute", drum = 80 }, { given = "unheard of", modifier = "unheard of", drum = 81 }]
-[instrument.all_names]
-"english" = ["triangle"]
-"french" = []
-"german" = ["dreieck", "triangel"]
-"italian" = ["triangolo"]
-"russian" = []
-"spanish" = ["triángulo"]
-"abbreviation" = ["trgl", "tri"]
-
-[[instrument]]
 class = "TubularBells"
 parents = ["PitchedPercussion", "Percussion", "Instrument"]
 name = "Tubular Bells"
@@ -1941,6 +1505,24 @@ percussion_map = false
 "italian" = ["campane", "campane tubolari", "campane tubulari"]
 "russian" = []
 "spanish" = ["campanas", "campanas tubulares"]
+"abbreviation" = []
+
+[[instrument]]
+class = "UnpitchedPercussion"
+parents = ["MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Percussion"
+abbreviation = "Perc"
+best_name = "Percussion"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["unpitched percussion"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
 "abbreviation" = []
 
 [[instrument]]
@@ -1962,8 +1544,361 @@ percussion_map = false
 "abbreviation" = ["vib", "vibes", "vibr"]
 
 [[instrument]]
+class = "Xylophone"
+parents = ["PitchedPercussion", "Percussion", "Instrument"]
+name = "Xylophone"
+abbreviation = "Xyl."
+sound = "pitched-percussion.xylophone"
+best_name = "Xylophone"
+midi_program = 13
+percussion_map = false
+[instrument.all_names]
+"english" = ["xylophone"]
+"french" = ["claquebois", "harmonica de bois", "échelettes"]
+"german" = ["strohfiedel", "xylophon"]
+"italian" = ["gigelira", "silofono", "xilifono", "xilofono"]
+"russian" = ["ksilofon"]
+"spanish" = ["xilofón", "xilofóno", "xilófono"]
+"abbreviation" = ["xil", "xyl"]
+
+[[instrument]]
+class = "Agogo"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Agogo"
+abbreviation = "Ago"
+sound = "metal.bells.agogo"
+best_name = "Agogo"
+midi_program = 113
+midi_channel = 9
+percussion_pitch = 67
+percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 67 }, { given = "HIGH", modifier = "high", drum = 67 }, { given = " high ", modifier = "high", drum = 67 }, { given = "low", modifier = "low", drum = 68 }, { given = "LOW", modifier = "low", drum = 68 }, { given = " low ", modifier = "low", drum = 68 }, { given = "unheard of", modifier = "unheard of", drum = 67 }]
+[instrument.all_names]
+"english" = ["agogo"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "BellTree"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Bell Tree"
+abbreviation = "B Tr"
+sound = "metal.bells.bell-tree"
+best_name = "Bell Tree"
+midi_channel = 9
+percussion_pitch = 84
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 84 }]
+[instrument.all_names]
+"english" = ["bell tree"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Cabasa"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Cabasa"
+abbreviation = "Cab"
+sound = "rattle.cabasa"
+best_name = "Cabasa"
+midi_channel = 9
+percussion_pitch = 69
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 69 }]
+[instrument.all_names]
+"english" = ["cabasa"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Castanets"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Castanets"
+abbreviation = "Cas"
+sound = "wood.castanets"
+best_name = "Castanets"
+midi_channel = 9
+percussion_pitch = 85
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 85 }]
+[instrument.all_names]
+"english" = ["castanets"]
+"french" = ["castagnettes"]
+"german" = ["kastagnetten"]
+"italian" = ["castagnette", "nacchere"]
+"russian" = []
+"spanish" = ["castañuelas"]
+"abbreviation" = ["cas", "casts", "kas"]
+
+[[instrument]]
+class = "Claves"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Claves"
+abbreviation = "Clv"
+sound = "wood.claves"
+best_name = "Claves"
+midi_channel = 9
+percussion_pitch = 75
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 75 }]
+[instrument.all_names]
+"english" = ["claves"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Cowbell"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Cowbell"
+abbreviation = "Cwb"
+sound = "metal.bells.cowbell"
+best_name = "Cowbell"
+midi_channel = 9
+percussion_pitch = 56
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 56 }]
+[instrument.all_names]
+"english" = ["cowbells"]
+"french" = ["cloches de vache", "cloches à vache", "gencerros", "sonnailles"]
+"german" = ["herdenglocken", "kuhglocken", "viehschellen"]
+"italian" = ["campanacci", "campanelli da mucca", "campanelli di vacca"]
+"russian" = []
+"spanish" = ["campanos", "cencerros"]
+"abbreviation" = ["cwb"]
+
+[[instrument]]
+class = "Cymbals"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Cymbals"
+abbreviation = "Cym"
+best_name = "Cymbals"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["cymbals"]
+"french" = []
+"german" = ["becken"]
+"italian" = []
+"russian" = []
+"spanish" = ["cimbales", "címbalos", "platillos", "platos"]
+"abbreviation" = []
+
+[[instrument]]
+class = "Guiro"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Guiro"
+abbreviation = "Gro"
+sound = "wood.guiro"
+best_name = "Guiro"
+midi_channel = 9
+percussion_pitch = 73
+percussion_map = true
+modifier = "short"
+modifiers = [{ given = "short", modifier = "short", drum = 73 }, { given = "SHORT", modifier = "short", drum = 73 }, { given = " short ", modifier = "short", drum = 73 }, { given = "long", modifier = "long", drum = 74 }, { given = "LONG", modifier = "long", drum = 74 }, { given = " long ", modifier = "long", drum = 74 }, { given = "unheard of", modifier = "unheard of", drum = 73 }]
+[instrument.all_names]
+"english" = ["guiro", "güiro"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Ratchet"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Ratchet"
+abbreviation = "Ratc"
+sound = "rattle.ratchet"
+best_name = "Ratchet"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["ratchet", "rattle"]
+"french" = ["crécelle", "rochet"]
+"german" = ["knarre", "ratsche", "schnarre"]
+"italian" = ["cricchetto", "raganella"]
+"russian" = []
+"spanish" = ["carraca", "matraca", "trinquete"]
+"abbreviation" = []
+
+[[instrument]]
+class = "SandpaperBlocks"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Sandpaper Blocks"
+abbreviation = "Sand Bl"
+sound = "wood.sand-block"
+best_name = "Sandpaper Blocks"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["sandpaper blocks"]
+"french" = ["blocs de papier de verre", "papier de verre"]
+"german" = ["sandblöcke", "sandpapier", "sandpapier blöcke"]
+"italian" = ["blocchi di carta vetrata", "carta vetrata", "ceppi di carta vetro"]
+"russian" = []
+"spanish" = ["bloques de papel de lija", "papel de lija"]
+"abbreviation" = ["sand bl"]
+
+[[instrument]]
+class = "Shaker"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Shaker"
+abbreviation = "Shk"
+sound = "rattle.shaker"
+best_name = "Shaker"
+midi_channel = 9
+percussion_pitch = 82
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 82 }]
+[instrument.all_names]
+"english" = ["shaker"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Siren"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Siren"
+abbreviation = "Siren"
+sound = "effect.siren"
+best_name = "Siren"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["siren"]
+"french" = ["sirène"]
+"german" = ["sirene"]
+"italian" = ["sirena", "sirena a mano"]
+"russian" = []
+"spanish" = ["sirena"]
+"abbreviation" = []
+
+[[instrument]]
+class = "SleighBells"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Sleigh Bells"
+abbreviation = "Slgh Bl"
+sound = "metal.bells.sleigh-bells"
+best_name = "Sleigh Bells"
+midi_channel = 9
+percussion_pitch = 83
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 83 }]
+[instrument.all_names]
+"english" = ["jingle bells", "sleigh bells"]
+"french" = ["grelots"]
+"german" = ["pferdeschlittenglocken", "rollschellen", "schellen"]
+"italian" = ["sonagli", "sonagliera"]
+"russian" = []
+"spanish" = ["cascabels"]
+"abbreviation" = []
+
+[[instrument]]
+class = "TamTam"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Tam-Tam"
+abbreviation = "Tam-t"
+sound = "metal.tamtam"
+best_name = "Tam-Tam"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["bullseye gong", "chau gong", "tam-tam"]
+"french" = []
+"german" = ["tamtam"]
+"italian" = ["tamtam"]
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "TempleBlock"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Temple Block"
+abbreviation = "Temp Bl"
+sound = "wood.temple-block"
+best_name = "Temple Block"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["temple block"]
+"french" = ["temple bloc"]
+"german" = ["tempel-block"]
+"italian" = ["tempio di blocco"]
+"russian" = []
+"spanish" = ["templo de bloque"]
+"abbreviation" = ["temp bl"]
+
+[[instrument]]
+class = "Triangle"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Triangle"
+abbreviation = "Tri"
+sound = "metal.triangle"
+best_name = "Triangle"
+midi_channel = 9
+percussion_pitch = 81
+percussion_map = true
+modifier = "open"
+modifiers = [{ given = "open", modifier = "open", drum = 81 }, { given = "OPEN", modifier = "open", drum = 81 }, { given = " open ", modifier = "open", drum = 81 }, { given = "mute", modifier = "mute", drum = 80 }, { given = "MUTE", modifier = "mute", drum = 80 }, { given = " mute ", modifier = "mute", drum = 80 }, { given = "unheard of", modifier = "unheard of", drum = 81 }]
+[instrument.all_names]
+"english" = ["triangle"]
+"french" = []
+"german" = ["dreieck", "triangel"]
+"italian" = ["triangolo"]
+"russian" = []
+"spanish" = ["triángulo"]
+"abbreviation" = ["trgl", "tri"]
+
+[[instrument]]
+class = "UnpitchedDrum"
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Drum"
+abbreviation = "Dr"
+best_name = "Drum"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["unpitched percussion"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
 class = "Vibraslap"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Vibraslap"
 abbreviation = "Vbslp"
 sound = "rattle.vibraslap"
@@ -1983,7 +1918,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 58 }]
 
 [[instrument]]
 class = "Whip"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Whip"
 abbreviation = "Whip"
 sound = "effect.whip"
@@ -2002,7 +1937,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 
 [[instrument]]
 class = "Whistle"
-parents = ["Flute", "WoodwindInstrument", "Instrument"]
+parents = ["MidiPercussionMapMixin", "Flute", "WoodwindInstrument", "Instrument"]
 name = "Whistle"
 abbreviation = "Whs"
 sound = "wind.flutes.whistle"
@@ -2011,6 +1946,8 @@ midi_program = 78
 percussion_pitch = 71
 lowest = "C4"
 percussion_map = true
+modifier = "short"
+modifiers = [{ given = "short", modifier = "short", drum = 71 }, { given = "SHORT", modifier = "short", drum = 71 }, { given = " short ", modifier = "short", drum = 71 }, { given = "long", modifier = "long", drum = 72 }, { given = "LONG", modifier = "long", drum = 72 }, { given = " long ", modifier = "long", drum = 72 }, { given = "unheard of", modifier = "unheard of", drum = 71 }]
 [instrument.all_names]
 "english" = ["whistle"]
 "french" = ["siffler"]
@@ -2022,7 +1959,7 @@ percussion_map = true
 
 [[instrument]]
 class = "WindMachine"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Wind Machine"
 abbreviation = "Wind Mach"
 sound = "effect.wind"
@@ -2041,7 +1978,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 
 [[instrument]]
 class = "Woodblock"
-parents = ["UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Woodblock"
 abbreviation = "Wd Bl"
 sound = "wood.wood-block"
@@ -2062,26 +1999,111 @@ modifiers = [{ given = "high", modifier = "high", drum = 76 }, { given = "HIGH",
 "abbreviation" = ["wd bl"]
 
 [[instrument]]
-class = "Xylophone"
-parents = ["PitchedPercussion", "Percussion", "Instrument"]
-name = "Xylophone"
-abbreviation = "Xyl."
-sound = "pitched-percussion.xylophone"
-best_name = "Xylophone"
-midi_program = 13
-percussion_map = false
+class = "BassDrum"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Bass Drum"
+abbreviation = "B Dr"
+sound = "drum.bass-drum"
+best_name = "Bass Drum"
+midi_channel = 9
+percussion_pitch = 35
+percussion_map = true
+modifier = "acoustic"
+modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 35 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 35 }, { given = " acoustic ", modifier = "acoustic", drum = 35 }, { given = "midi-1", modifier = "midi-1", drum = 36 }, { given = "MIDI-1", modifier = "midi-1", drum = 36 }, { given = " midi-1 ", modifier = "midi-1", drum = 36 }, { given = "1", modifier = "midi-1", drum = 36 }, { given = "1", modifier = "midi-1", drum = 36 }, { given = " 1 ", modifier = "midi-1", drum = 36 }, { given = "unheard of", modifier = "unheard of", drum = 35 }]
 [instrument.all_names]
-"english" = ["xylophone"]
-"french" = ["claquebois", "harmonica de bois", "échelettes"]
-"german" = ["strohfiedel", "xylophon"]
-"italian" = ["gigelira", "silofono", "xilifono", "xilofono"]
-"russian" = ["ksilofon"]
-"spanish" = ["xilofón", "xilofóno", "xilófono"]
-"abbreviation" = ["xil", "xyl"]
+"english" = ["bass drum", "turkish drum"]
+"french" = ["grosse caisse", "tambour bata"]
+"german" = ["bass-drum", "grosse trommel"]
+"italian" = ["cassa", "gran cassa", "grancassa", "tamborone", "tamburo grande", "tamburo grosso"]
+"russian" = ["bol'shoi baraban"]
+"spanish" = ["bombo", "gran caja"]
+"abbreviation" = ["b dr", "cr tr", "g c", "gr cassa"]
+
+[[instrument]]
+class = "BongoDrums"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Bongo Drums"
+abbreviation = "Bgo Dr"
+sound = "drum.bongo"
+best_name = "Bongo Drums"
+midi_channel = 9
+percussion_pitch = 60
+percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 60 }, { given = "HIGH", modifier = "high", drum = 60 }, { given = " high ", modifier = "high", drum = 60 }, { given = "low", modifier = "low", drum = 61 }, { given = "LOW", modifier = "low", drum = 61 }, { given = " low ", modifier = "low", drum = 61 }, { given = "unheard of", modifier = "unheard of", drum = 60 }]
+[instrument.all_names]
+"english" = ["bongo drums"]
+"french" = ["bongos", "tambours bongo"]
+"german" = ["bongo-trommeln", "bongos"]
+"italian" = ["bonghi", "bongos", "tamburi bongo"]
+"russian" = []
+"spanish" = ["bongo tambores", "bongos"]
+"abbreviation" = ["bgo dr"]
+
+[[instrument]]
+class = "Caxixi"
+parents = ["Shaker", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Caxixi"
+abbreviation = "Cax"
+sound = "rattle.caxixi"
+best_name = "Caxixi"
+midi_channel = 9
+percussion_pitch = 82
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 82 }]
+[instrument.all_names]
+"english" = ["caxixi"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "ChineseCymbal"
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Chinese Cymbal"
+abbreviation = "Chin Cym"
+sound = "metal.cymbal.chinese"
+best_name = "Chinese Cymbal"
+midi_channel = 9
+percussion_pitch = 52
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 52 }]
+[instrument.all_names]
+"english" = ["chinese cymbal"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "CongaDrum"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Conga Drum"
+abbreviation = "Cga Dr"
+sound = "drum.conga"
+best_name = "Conga Drum"
+midi_channel = 9
+percussion_pitch = 64
+percussion_map = true
+modifier = "low"
+modifiers = [{ given = "low", modifier = "low", drum = 64 }, { given = "LOW", modifier = "low", drum = 64 }, { given = " low ", modifier = "low", drum = 64 }, { given = "", modifier = "low", drum = 64 }, { given = "", modifier = "low", drum = 64 }, { given = "  ", modifier = "low", drum = 64 }, { given = "high", modifier = "high", drum = 63 }, { given = "HIGH", modifier = "high", drum = 63 }, { given = " high ", modifier = "high", drum = 63 }, { given = "unheard of", modifier = "unheard of", drum = 64 }]
+[instrument.all_names]
+"english" = ["conga drum", "tumbadora"]
+"french" = ["conga", "tambour congo", "tumbadora"]
+"german" = ["conga", "conga-trommel", "tumba"]
+"italian" = ["conga", "tumba"]
+"russian" = []
+"spanish" = ["conga", "congas", "tumbadora"]
+"abbreviation" = ["cga dr"]
 
 [[instrument]]
 class = "CrashCymbals"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Crash Cymbals"
 abbreviation = "Cym"
 sound = "metal.cymbal.crash"
@@ -2089,8 +2111,8 @@ best_name = "Crash Cymbals"
 midi_channel = 9
 percussion_pitch = 49
 percussion_map = true
-modifier = "1"
-modifiers = [{ given = "1", modifier = "1", drum = 49 }, { given = "1", modifier = "1", drum = 49 }, { given = " 1 ", modifier = "1", drum = 49 }, { given = "2", modifier = "2", drum = 57 }, { given = "2", modifier = "2", drum = 57 }, { given = " 2 ", modifier = "2", drum = 57 }, { given = "unheard of", modifier = "unheard of", drum = 49 }]
+modifier = "midi-1"
+modifiers = [{ given = "midi-1", modifier = "midi-1", drum = 49 }, { given = "MIDI-1", modifier = "midi-1", drum = 49 }, { given = " midi-1 ", modifier = "midi-1", drum = 49 }, { given = "midi-2", modifier = "midi-2", drum = 57 }, { given = "MIDI-2", modifier = "midi-2", drum = 57 }, { given = " midi-2 ", modifier = "midi-2", drum = 57 }, { given = "1", modifier = "midi-1", drum = 49 }, { given = "1", modifier = "midi-1", drum = 49 }, { given = " 1 ", modifier = "midi-1", drum = 49 }, { given = "2", modifier = "midi-2", drum = 57 }, { given = "2", modifier = "midi-2", drum = 57 }, { given = " 2 ", modifier = "midi-2", drum = 57 }, { given = "unheard of", modifier = "unheard of", drum = 49 }]
 [instrument.all_names]
 "english" = ["crash cymbals"]
 "french" = ["crash", "cymbales"]
@@ -2101,8 +2123,28 @@ modifiers = [{ given = "1", modifier = "1", drum = 49 }, { given = "1", modifier
 "abbreviation" = ["cym"]
 
 [[instrument]]
+class = "Cuica"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Cuica"
+abbreviation = "Cui"
+sound = "drum.cuica"
+best_name = "Cuica"
+midi_channel = 9
+percussion_pitch = 79
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 79 }]
+[instrument.all_names]
+"english" = ["cuica", "cuíca"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
 class = "FingerCymbals"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Finger Cymbals"
 abbreviation = "Fing Cym"
 sound = "metal.cymbal.finger"
@@ -2120,19 +2162,19 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "abbreviation" = ["fing cym"]
 
 [[instrument]]
-class = "HiHatCymbal"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Hi-Hat Cymbal"
+class = "HiHat"
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Hi-Hat"
 abbreviation = "Hi-Hat"
 sound = "metal.hi-hat"
-best_name = "Hi-Hat Cymbal"
+best_name = "Hi-Hat"
 midi_channel = 9
 percussion_pitch = 44
 percussion_map = true
 modifier = "pedal"
 modifiers = [{ given = "pedal", modifier = "pedal", drum = 44 }, { given = "PEDAL", modifier = "pedal", drum = 44 }, { given = " pedal ", modifier = "pedal", drum = 44 }, { given = "open", modifier = "open", drum = 46 }, { given = "OPEN", modifier = "open", drum = 46 }, { given = " open ", modifier = "open", drum = 46 }, { given = "closed", modifier = "closed", drum = 42 }, { given = "CLOSED", modifier = "closed", drum = 42 }, { given = " closed ", modifier = "closed", drum = 42 }, { given = "unheard of", modifier = "unheard of", drum = 44 }]
 [instrument.all_names]
-"english" = ["hi-hat", "hi-hat cymbal", "sock cymbal"]
+"english" = ["hi-hat", "hi-hat cymbal", "hi-hat cymbals", "high hat", "hihat", "sock cymbal"]
 "french" = ["charleston", "cymbale à pédale", "hi-hat", "salut-chapeau cymbale"]
 "german" = ["fussbecken", "h-hat becken", "hallo-hat-becken", "ständerbecken"]
 "italian" = ["charleston", "hi-hat", "hi-hat piatto", "piatti a pedale"]
@@ -2141,17 +2183,39 @@ modifiers = [{ given = "pedal", modifier = "pedal", drum = 44 }, { given = "PEDA
 "abbreviation" = []
 
 [[instrument]]
-class = "RideCymbals"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Ride Cymbals"
+class = "Maracas"
+parents = ["Shaker", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Maracas"
+abbreviation = "Mrcs"
+sound = "rattle.maraca"
+best_name = "Maracas"
+midi_channel = 9
+percussion_pitch = 70
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 70 }]
+[instrument.all_names]
+"english" = ["maracas"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "RideCymbal"
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Ride Cymbal"
 abbreviation = "Ride Cym"
 sound = "metal.cymbal.ride"
-best_name = "Ride Cymbals"
+best_name = "Ride Cymbal"
 midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+percussion_pitch = 51
+percussion_map = true
+modifier = "midi-1"
+modifiers = [{ given = "midi-1", modifier = "midi-1", drum = 51 }, { given = "MIDI-1", modifier = "midi-1", drum = 51 }, { given = " midi-1 ", modifier = "midi-1", drum = 51 }, { given = "midi-2", modifier = "midi-2", drum = 59 }, { given = "MIDI-2", modifier = "midi-2", drum = 59 }, { given = " midi-2 ", modifier = "midi-2", drum = 59 }, { given = "bell", modifier = "bell", drum = 53 }, { given = "BELL", modifier = "bell", drum = 53 }, { given = " bell ", modifier = "bell", drum = 53 }, { given = "1", modifier = "midi-1", drum = 51 }, { given = "1", modifier = "midi-1", drum = 51 }, { given = " 1 ", modifier = "midi-1", drum = 51 }, { given = "2", modifier = "midi-2", drum = 59 }, { given = "2", modifier = "midi-2", drum = 59 }, { given = " 2 ", modifier = "midi-2", drum = 59 }, { given = "unheard of", modifier = "unheard of", drum = 51 }]
 [instrument.all_names]
-"english" = ["ride cymbals"]
+"english" = ["ride cymbal", "ride cymbals"]
 "french" = []
 "german" = []
 "italian" = []
@@ -2161,7 +2225,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 
 [[instrument]]
 class = "SizzleCymbal"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Sizzle Cymbal"
 abbreviation = "Siz Cym"
 sound = "metal.cymbal.sizzle"
@@ -2179,17 +2243,59 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "abbreviation" = []
 
 [[instrument]]
-class = "SplashCymbals"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
-name = "Splash Cymbals"
+class = "SnareDrum"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Snare Drum"
+abbreviation = "Sn Dr"
+sound = "drum.snare-drum"
+best_name = "Snare Drum"
+midi_channel = 9
+percussion_pitch = 38
+percussion_map = true
+modifier = "acoustic"
+modifiers = [{ given = "acoustic", modifier = "acoustic", drum = 38 }, { given = "ACOUSTIC", modifier = "acoustic", drum = 38 }, { given = " acoustic ", modifier = "acoustic", drum = 38 }, { given = "side", modifier = "side", drum = 37 }, { given = "SIDE", modifier = "side", drum = 37 }, { given = " side ", modifier = "side", drum = 37 }, { given = "electric", modifier = "electric", drum = 40 }, { given = "ELECTRIC", modifier = "electric", drum = 40 }, { given = " electric ", modifier = "electric", drum = 40 }, { given = "unheard of", modifier = "unheard of", drum = 38 }]
+[instrument.all_names]
+"english" = ["snare drum"]
+"french" = ["caisse claire", "tambour"]
+"german" = ["kleine trommel", "leinentrommel", "marschtrommel", "schnarrtrommel", "snare-drum"]
+"italian" = ["cassa chiara", "rullante", "tamburo militare"]
+"russian" = ["frantsuzskii baraban"]
+"spanish" = ["caja clara", "con tensores", "redoblante", "tambor afinable", "tambor militar pequeño"]
+"abbreviation" = ["c c", "sn dr"]
+
+[[instrument]]
+class = "SplashCymbal"
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Splash Cymbal"
 abbreviation = "Spl Cym"
 sound = "metal.cymbal.splash"
-best_name = "Splash Cymbals"
+best_name = "Splash Cymbal"
 midi_channel = 9
-percussion_map = false
-modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+percussion_pitch = 55
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 55 }]
 [instrument.all_names]
-"english" = ["splash cymbals"]
+"english" = ["splash cymbal", "splash cymbals"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Surdo"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Surdo"
+abbreviation = "Sur"
+sound = "drum.surdo"
+best_name = "Surdo"
+midi_channel = 9
+percussion_pitch = 87
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 87 }]
+[instrument.all_names]
+"english" = ["surdo"]
 "french" = []
 "german" = []
 "italian" = []
@@ -2199,7 +2305,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 
 [[instrument]]
 class = "SuspendedCymbal"
-parents = ["Cymbals", "UnpitchedPercussion", "Percussion", "Instrument"]
+parents = ["Cymbals", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
 name = "Suspended Cymbal"
 abbreviation = "Sus Cym"
 sound = "metal.cymbal.suspended"
@@ -2214,6 +2320,107 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "italian" = ["piatto sospeso"]
 "russian" = []
 "spanish" = ["platillo suspendido", "platillos suspendidos"]
+"abbreviation" = []
+
+[[instrument]]
+class = "Taiko"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Taiko"
+abbreviation = "Tko"
+sound = "drum.taiko"
+best_name = "Taiko"
+midi_program = 116
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["taiko"]
+"french" = []
+"german" = []
+"italian" = []
+"russian" = []
+"spanish" = []
+"abbreviation" = []
+
+[[instrument]]
+class = "Tambourine"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Tambourine"
+abbreviation = "Tmbn"
+sound = "drum.tambourine"
+best_name = "Tambourine"
+midi_channel = 9
+percussion_pitch = 54
+percussion_map = true
+modifiers = [{ given = "unheard of", modifier = "unheard of", drum = 54 }]
+[instrument.all_names]
+"english" = ["marine", "tambourine"]
+"french" = ["tambour de basque"]
+"german" = ["schellentrommel", "tambourin", "tamburin"]
+"italian" = ["tamburello", "tamburino", "tamburo basco"]
+"russian" = []
+"spanish" = ["pandereta", "tambor de mano"]
+"abbreviation" = ["tamb", "tmbn"]
+
+[[instrument]]
+class = "TenorDrum"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Tenor Drum"
+abbreviation = "Ten Dr"
+sound = "drum.tenor-drum"
+best_name = "Tenor Drum"
+midi_channel = 9
+percussion_map = false
+modifiers = [{ given = "unheard of", modifier = "unheard of" }]
+[instrument.all_names]
+"english" = ["tenor drum"]
+"french" = ["caisse roulante", "tambourin", "ténor tambour"]
+"german" = ["rührtrommel", "tenortrommel", "wirbeltrommel"]
+"italian" = ["cassa rullante", "tamburo rullante"]
+"russian" = ["tsilindricheskii baraban"]
+"spanish" = ["caja redoblante", "caja rodante", "el tenor del tambor", "tambor mayor"]
+"abbreviation" = ["ten dr"]
+
+[[instrument]]
+class = "Timbales"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Timbales"
+abbreviation = "Tim"
+sound = "drum.timbale"
+best_name = "Timbales"
+midi_channel = 9
+percussion_pitch = 65
+percussion_map = true
+modifier = "high"
+modifiers = [{ given = "high", modifier = "high", drum = 65 }, { given = "HIGH", modifier = "high", drum = 65 }, { given = " high ", modifier = "high", drum = 65 }, { given = "low", modifier = "low", drum = 66 }, { given = "LOW", modifier = "low", drum = 66 }, { given = " low ", modifier = "low", drum = 66 }, { given = "unheard of", modifier = "unheard of", drum = 65 }]
+[instrument.all_names]
+"english" = ["pailas criollas", "timbales"]
+"french" = ["timbales créoles", "timbales cubaines", "timbales latines"]
+"german" = ["kuba-pauken"]
+"italian" = ["timbales latinoamericani", "timpanetti"]
+"russian" = []
+"spanish" = ["pailas criollas"]
+"abbreviation" = ["tim"]
+
+[[instrument]]
+class = "TomTom"
+parents = ["UnpitchedDrum", "UnpitchedPercussion", "MidiPercussionMapMixin", "Percussion", "Instrument"]
+name = "Tom-Tom"
+abbreviation = "Tom"
+sound = "drum.tom-tom"
+best_name = "Tom-Tom"
+midi_channel = 9
+percussion_pitch = 41
+percussion_map = true
+modifier = "low floor"
+modifiers = [{ given = "low floor", modifier = "low floor", drum = 41 }, { given = "LOW FLOOR", modifier = "low floor", drum = 41 }, { given = " low floor ", modifier = "low floor", drum = 41 }, { given = "high floor", modifier = "high floor", drum = 43 }, { given = "HIGH FLOOR", modifier = "high floor", drum = 43 }, { given = " high floor ", modifier = "high floor", drum = 43 }, { given = "low", modifier = "low", drum = 45 }, { given = "LOW", modifier = "low", drum = 45 }, { given = " low ", modifier = "low", drum = 45 }, { given = "low-mid", modifier = "low-mid", drum = 47 }, { given = "LOW-MID", modifier = "low-mid", drum = 47 }, { given = " low-mid ", modifier = "low-mid", drum = 47 }, { given = "high-mid", modifier = "high-mid", drum = 48 }, { given = "HIGH-MID", modifier = "high-mid", drum = 48 }, { given = " high-mid ", modifier = "high-mid", drum = 48 }, { given = "high", modifier = "high", drum = 50 }, { given = "HIGH", modifier = "high", drum = 50 }, { given = " high ", modifier = "high", drum = 50 }, { given = "unheard of", modifier = "unheard of", drum = 41 }]
+[instrument.all_names]
+"english" = ["tom-tom"]
+"french" = ["tom"]
+"german" = ["tom", "tom tom"]
+"italian" = []
+"russian" = []
+"spanish" = ["tomtom"]
 "abbreviation" = []
 
 [midi_program]
@@ -2366,20 +2573,25 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "bassoons" = "Bassoon"
 "bell lira" = "Glockenspiel"
 "bell lyre" = "Glockenspiel"
+"bell tree" = "BellTree"
 "bongo drums" = "BongoDrums"
 "brass instrument" = "BrassInstrument"
 "bullseye gong" = "TamTam"
+"cabasa" = "Cabasa"
 "castanets" = "Castanets"
+"caxixi" = "Caxixi"
 "celesta" = "Celesta"
 "celeste" = "Celesta"
 "cello" = "Violoncello"
 "cellos" = "Violoncello"
 "chau gong" = "TamTam"
 "chimes" = "Glockenspiel"
+"chinese cymbal" = "ChineseCymbal"
 "choir" = "Choir"
 "church bells" = "ChurchBells"
 "clarinet" = "Clarinet"
 "clarinets" = "Clarinet"
+"claves" = "Claves"
 "clavichord" = "Clavichord"
 "conductor" = "Conductor"
 "conga drum" = "CongaDrum"
@@ -2390,6 +2602,8 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "cor anglais" = "EnglishHorn"
 "cowbells" = "Cowbell"
 "crash cymbals" = "CrashCymbals"
+"cuica" = "Cuica"
+"cuíca" = "Cuica"
 "cymbals" = "Cymbals"
 "double bass" = "Contrabass"
 "double basses" = "Contrabass"
@@ -2408,14 +2622,19 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "fretless bass" = "FretlessBass"
 "glockenspiel" = "Glockenspiel"
 "gong" = "Gong"
+"guiro" = "Guiro"
 "guitar" = "AcousticGuitar"
+"güiro" = "Guiro"
 "handbells" = "Handbells"
 "harmonica" = "Harmonica"
 "harp" = "Harp"
 "harps" = "Harp"
 "harpsichord" = "Harpsichord"
-"hi-hat" = "HiHatCymbal"
-"hi-hat cymbal" = "HiHatCymbal"
+"hi-hat" = "HiHat"
+"hi-hat cymbal" = "HiHat"
+"hi-hat cymbals" = "HiHat"
+"high hat" = "HiHat"
+"hihat" = "HiHat"
 "horn" = "Horn"
 "horns" = "Horn"
 "jingle bells" = "SleighBells"
@@ -2453,11 +2672,13 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "rattle" = "Ratchet"
 "recorder" = "Recorder"
 "reed organ" = "ReedOrgan"
-"ride cymbals" = "RideCymbals"
+"ride cymbal" = "RideCymbal"
+"ride cymbals" = "RideCymbal"
 "sampler" = "Sampler"
 "sandpaper blocks" = "SandpaperBlocks"
 "saxophone" = "Saxophone"
 "saxophones" = "Saxophone"
+"shaker" = "Shaker"
 "shakuhachi" = "Shakuhachi"
 "shamisen" = "Shamisen"
 "shehnai" = "Shehnai"
@@ -2467,17 +2688,19 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "slapstick" = "Whip"
 "sleigh bells" = "SleighBells"
 "snare drum" = "SnareDrum"
-"sock cymbal" = "HiHatCymbal"
+"sock cymbal" = "HiHat"
 "soprano" = "Soprano"
 "soprano saxophone" = "SopranoSaxophone"
 "sopranos" = "Soprano"
-"splash cymbals" = "SplashCymbals"
+"splash cymbal" = "SplashCymbal"
+"splash cymbals" = "SplashCymbal"
 "steel drum" = "SteelDrum"
 "steel drums" = "SteelDrum"
 "steel pan" = "SteelDrum"
 "steel pans" = "SteelDrum"
 "string instrument" = "StringInstrument"
 "strings" = "StringInstrument"
+"surdo" = "Surdo"
 "suspended cymbal" = "SuspendedCymbal"
 "taiko" = "Taiko"
 "tam-tam" = "TamTam"
@@ -2547,7 +2770,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "chant" = "Vocalist"
 "chanteur" = "Vocalist"
 "chanteuse" = "Vocalist"
-"charleston" = "HiHatCymbal"
+"charleston" = "HiHat"
 "claquebois" = "Xylophone"
 "clarinette" = "Clarinet"
 "clarinette basse" = "BassClarinet"
@@ -2583,7 +2806,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "cuivres" = "BrassInstrument"
 "cymbale sur tiges" = "SizzleCymbal"
 "cymbale suspendue" = "SuspendedCymbal"
-"cymbale à pédale" = "HiHatCymbal"
+"cymbale à pédale" = "HiHat"
 "cymbales" = "CrashCymbals"
 "cymbales digitales" = "FingerCymbals"
 "célesta" = "Celesta"
@@ -2612,7 +2835,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "harpe" = "Harp"
 "harpes" = "Harp"
 "hautbois" = "Oboe"
-"hi-hat" = "HiHatCymbal"
+"hi-hat" = "HiHat"
 "instrument à cordes" = "StringInstrument"
 "instrument à percussion" = "Percussion"
 "instrument à vent" = "WoodwindInstrument"
@@ -2633,7 +2856,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "roseau organe" = "ReedOrgan"
 "sagates" = "FingerCymbals"
 "sagattes" = "FingerCymbals"
-"salut-chapeau cymbale" = "HiHatCymbal"
+"salut-chapeau cymbale" = "HiHat"
 "saxophon alto" = "AltoSaxophone"
 "saxophone alto" = "AltoSaxophone"
 "saxophone baryton" = "BaritoneSaxophone"
@@ -2735,15 +2958,15 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "fingerzimbeln" = "FingerCymbals"
 "flöte" = "Flute"
 "flöten" = "Flute"
-"fussbecken" = "HiHatCymbal"
+"fussbecken" = "HiHat"
 "geige" = "Violin"
 "gitarre" = "AcousticGuitar"
 "glocken" = "TubularBells"
 "grosse trommel" = "BassDrum"
 "guitarre" = "AcousticGuitar"
-"h-hat becken" = "HiHatCymbal"
+"h-hat becken" = "HiHat"
 "hackbrett" = "Dulcimer"
-"hallo-hat-becken" = "HiHatCymbal"
+"hallo-hat-becken" = "HiHat"
 "handglocken" = "Handbells"
 "handharmonika" = "Accordion"
 "harfe" = "Harp"
@@ -2835,7 +3058,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "streicher" = "StringInstrument"
 "strohfiedel" = "Xylophone"
 "stromgitarre" = "ElectricGuitar"
-"ständerbecken" = "HiHatCymbal"
+"ständerbecken" = "HiHat"
 "syrinx" = "PanFlute"
 "tambourin" = "Tambourine"
 "tamburin" = "Tambourine"
@@ -2902,7 +3125,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "cembalo" = "Harpsichord"
 "ceppi di carta vetro" = "SandpaperBlocks"
 "cestello in acciaio" = "SteelDrum"
-"charleston" = "HiHatCymbal"
+"charleston" = "HiHat"
 "chitarra" = "AcousticGuitar"
 "chitarra acustica" = "AcousticGuitar"
 "chitarra elettrica" = "ElectricGuitar"
@@ -2949,8 +3172,8 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "gigelira" = "Xylophone"
 "gran cassa" = "BassDrum"
 "grancassa" = "BassDrum"
-"hi-hat" = "HiHatCymbal"
-"hi-hat piatto" = "HiHatCymbal"
+"hi-hat" = "HiHat"
+"hi-hat piatto" = "HiHat"
 "legni" = "WoodwindInstrument"
 "liuto" = "Lute"
 "macchina del vento" = "WindMachine"
@@ -2968,7 +3191,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "percussione" = "Percussion"
 "pianoforte" = "Piano"
 "piatti" = "CrashCymbals"
-"piatti a pedale" = "HiHatCymbal"
+"piatti a pedale" = "HiHat"
 "piatti di crash" = "CrashCymbals"
 "piatto chiodati" = "SizzleCymbal"
 "piatto sospeso" = "SuspendedCymbal"
@@ -3113,8 +3336,8 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "caña de órganos" = "ReedOrgan"
 "cello" = "Violoncello"
 "cencerros" = "Cowbell"
-"charles" = "HiHatCymbal"
-"charleston" = "HiHatCymbal"
+"charles" = "HiHat"
+"charleston" = "HiHat"
 "chelo" = "Violoncello"
 "chelos" = "Violoncello"
 "chinchines" = "FingerCymbals"
@@ -3177,8 +3400,8 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "guitarra acústica" = "AcousticGuitar"
 "guitarra eléctrica" = "ElectricGuitar"
 "harmónica" = "Harmonica"
-"hi hat" = "HiHatCymbal"
-"hi-hat" = "HiHatCymbal"
+"hi hat" = "HiHat"
+"hi-hat" = "HiHat"
 "instrumento de cuerda" = "StringInstrument"
 "instrumento de madera" = "WoodwindInstrument"
 "instrumento de percusión" = "Percussion"
@@ -3201,7 +3424,7 @@ modifiers = [{ given = "unheard of", modifier = "unheard of" }]
 "pandereta" = "Tambourine"
 "papel de lija" = "SandpaperBlocks"
 "percusión" = "Percussion"
-"platillo hi-hat" = "HiHatCymbal"
+"platillo hi-hat" = "HiHat"
 "platillo sizzle" = "SizzleCymbal"
 "platillo suspendido" = "SuspendedCymbal"
 "platillos" = "Cymbals"
@@ -4564,6 +4787,16 @@ language = "english"
 class = "Glockenspiel"
 
 [[lookup]]
+text = "bell tree"
+language = "all"
+class = "BellTree"
+
+[[lookup]]
+text = "bell tree"
+language = "english"
+class = "BellTree"
+
+[[lookup]]
 text = "bgo dr"
 language = "abbreviation"
 class = "BongoDrums"
@@ -4927,6 +5160,16 @@ language = "all"
 class = "SnareDrum"
 
 [[lookup]]
+text = "cabasa"
+language = "all"
+class = "Cabasa"
+
+[[lookup]]
+text = "cabasa"
+language = "english"
+class = "Cabasa"
+
+[[lookup]]
 text = "caisse claire"
 language = "all"
 class = "SnareDrum"
@@ -5267,6 +5510,16 @@ language = "all"
 class = "Castanets"
 
 [[lookup]]
+text = "caxixi"
+language = "all"
+class = "Caxixi"
+
+[[lookup]]
+text = "caxixi"
+language = "english"
+class = "Caxixi"
+
+[[lookup]]
 text = "caña de órganos"
 language = "all"
 class = "ReedOrgan"
@@ -5466,32 +5719,32 @@ class = "Vocalist"
 [[lookup]]
 text = "charles"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "charles"
 language = "spanish"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "charleston"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "charleston"
 language = "french"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "charleston"
 language = "italian"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "charleston"
 language = "spanish"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "chau gong"
@@ -5562,6 +5815,16 @@ class = "FingerCymbals"
 text = "chinchines"
 language = "spanish"
 class = "FingerCymbals"
+
+[[lookup]]
+text = "chinese cymbal"
+language = "all"
+class = "ChineseCymbal"
+
+[[lookup]]
+text = "chinese cymbal"
+language = "english"
+class = "ChineseCymbal"
 
 [[lookup]]
 text = "chisporroteo de platillos"
@@ -5880,6 +6143,16 @@ class = "Harpsichord"
 text = "clavecín"
 language = "spanish"
 class = "Harpsichord"
+
+[[lookup]]
+text = "claves"
+language = "all"
+class = "Claves"
+
+[[lookup]]
+text = "claves"
+language = "english"
+class = "Claves"
 
 [[lookup]]
 text = "clavessin"
@@ -6722,6 +6995,16 @@ class = "EnglishHorn"
 transposition = "P-5"
 
 [[lookup]]
+text = "cuica"
+language = "all"
+class = "Cuica"
+
+[[lookup]]
+text = "cuica"
+language = "english"
+class = "Cuica"
+
+[[lookup]]
 text = "cuivres"
 language = "all"
 class = "BrassInstrument"
@@ -6730,6 +7013,16 @@ class = "BrassInstrument"
 text = "cuivres"
 language = "french"
 class = "BrassInstrument"
+
+[[lookup]]
+text = "cuíca"
+language = "all"
+class = "Cuica"
+
+[[lookup]]
+text = "cuíca"
+language = "english"
+class = "Cuica"
 
 [[lookup]]
 text = "cwb"
@@ -6774,12 +7067,12 @@ class = "SuspendedCymbal"
 [[lookup]]
 text = "cymbale à pédale"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "cymbale à pédale"
 language = "french"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "cymbales"
@@ -7833,12 +8126,12 @@ class = "Whip"
 [[lookup]]
 text = "fussbecken"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "fussbecken"
 language = "german"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "g c"
@@ -8123,6 +8416,16 @@ language = "all"
 class = "Glockenspiel"
 
 [[lookup]]
+text = "guiro"
+language = "all"
+class = "Guiro"
+
+[[lookup]]
+text = "guiro"
+language = "english"
+class = "Guiro"
+
+[[lookup]]
 text = "guitar"
 language = "all"
 class = "AcousticGuitar"
@@ -8216,6 +8519,16 @@ class = "ElectricGuitar"
 text = "guitarre électrique"
 language = "french"
 class = "ElectricGuitar"
+
+[[lookup]]
+text = "güiro"
+language = "all"
+class = "Guiro"
+
+[[lookup]]
+text = "güiro"
+language = "english"
+class = "Guiro"
 
 [[lookup]]
 text = "h-hat becken"
@@ -8420,22 +8733,22 @@ class = "Cowbell"
 [[lookup]]
 text = "hi hat"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "hi hat"
 language = "spanish"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat"
 language = "all"
-error = "InstrumentException"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat"
 language = "english"
-error = "InstrumentException"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat"
@@ -8455,22 +8768,52 @@ error = "InstrumentException"
 [[lookup]]
 text = "hi-hat cymbal"
 language = "all"
-error = "InstrumentException"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat cymbal"
 language = "english"
-error = "InstrumentException"
+class = "HiHat"
+
+[[lookup]]
+text = "hi-hat cymbals"
+language = "all"
+class = "HiHat"
+
+[[lookup]]
+text = "hi-hat cymbals"
+language = "english"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat piatto"
 language = "all"
-error = "InstrumentException"
+class = "HiHat"
 
 [[lookup]]
 text = "hi-hat piatto"
 language = "italian"
 error = "InstrumentException"
+
+[[lookup]]
+text = "high hat"
+language = "all"
+class = "HiHat"
+
+[[lookup]]
+text = "high hat"
+language = "english"
+class = "HiHat"
+
+[[lookup]]
+text = "hihat"
+language = "all"
+class = "HiHat"
+
+[[lookup]]
+text = "hihat"
+language = "english"
+class = "HiHat"
 
 [[lookup]]
 text = "hirtenflöte"
@@ -10125,12 +10468,12 @@ class = "CrashCymbals"
 [[lookup]]
 text = "piatti a pedale"
 language = "all"
-class = "HiHatCymbal"
+class = "CrashCymbals"
 
 [[lookup]]
 text = "piatti a pedale"
 language = "italian"
-class = "HiHatCymbal"
+class = "CrashCymbals"
 
 [[lookup]]
 text = "piatti di crash"
@@ -10273,7 +10616,7 @@ class = "Timpani"
 [[lookup]]
 text = "platillo hi-hat"
 language = "all"
-error = "InstrumentException"
+class = "HiHat"
 
 [[lookup]]
 text = "platillo hi-hat"
@@ -10481,14 +10824,24 @@ language = "italian"
 class = "Recorder"
 
 [[lookup]]
+text = "ride cymbal"
+language = "all"
+class = "RideCymbal"
+
+[[lookup]]
+text = "ride cymbal"
+language = "english"
+class = "RideCymbal"
+
+[[lookup]]
 text = "ride cymbals"
 language = "all"
-class = "RideCymbals"
+class = "RideCymbal"
 
 [[lookup]]
 text = "ride cymbals"
 language = "english"
-class = "RideCymbals"
+class = "RideCymbal"
 
 [[lookup]]
 text = "rochet"
@@ -11230,6 +11583,16 @@ language = "italian"
 class = "SizzleCymbal"
 
 [[lookup]]
+text = "shaker"
+language = "all"
+class = "Shaker"
+
+[[lookup]]
+text = "shaker"
+language = "english"
+class = "Shaker"
+
+[[lookup]]
 text = "shakuhachi"
 language = "all"
 class = "Shakuhachi"
@@ -11482,12 +11845,12 @@ error = "InstrumentException"
 [[lookup]]
 text = "sock cymbal"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "sock cymbal"
 language = "english"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "sonagli"
@@ -11586,14 +11949,24 @@ class = "SopranoSaxophone"
 transposition = "M-2"
 
 [[lookup]]
+text = "splash cymbal"
+language = "all"
+class = "SplashCymbal"
+
+[[lookup]]
+text = "splash cymbal"
+language = "english"
+class = "SplashCymbal"
+
+[[lookup]]
 text = "splash cymbals"
 language = "all"
-class = "SplashCymbals"
+class = "SplashCymbal"
 
 [[lookup]]
 text = "splash cymbals"
 language = "english"
-class = "SplashCymbals"
+class = "SplashCymbal"
 
 [[lookup]]
 text = "st dr"
@@ -11808,12 +12181,22 @@ class = "StringInstrument"
 [[lookup]]
 text = "ständerbecken"
 language = "all"
-class = "HiHatCymbal"
+class = "HiHat"
 
 [[lookup]]
 text = "ständerbecken"
 language = "german"
-class = "HiHatCymbal"
+class = "HiHat"
+
+[[lookup]]
+text = "surdo"
+language = "all"
+class = "Surdo"
+
+[[lookup]]
+text = "surdo"
+language = "english"
+class = "Surdo"
 
 [[lookup]]
 text = "suspended cymbal"

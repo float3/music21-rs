@@ -145,6 +145,10 @@ pub struct Instrument {
     string_pitches: Option<Vec<Pitch>>,
     modifier: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
+    headless: Option<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pitched: Option<bool>,
+    #[cfg_attr(feature = "serde", serde(default))]
     part_id: Option<String>,
     #[cfg_attr(feature = "serde", serde(default))]
     instrument_id: Option<String>,
@@ -173,6 +177,14 @@ impl Instrument {
         let kind = kind_named(class)
             .ok_or_else(|| Error::Instrument(format!("no instrument class {class}")))?;
         let pitch = |name: Option<&str>| name.map(Pitch::from_name).transpose();
+        // A flag music21 sets in one class's `__init__` belongs to every
+        // kind below it too, so the whole chain is asked.
+        let flagged = |classes: &[&str]| {
+            std::iter::once(kind.class)
+                .chain(kind.parents.iter().copied())
+                .any(|class| classes.contains(&class))
+                .then_some(false)
+        };
         Ok(Self {
             kind: kind.class.to_string(),
             name: kind.name.map(String::from),
@@ -196,6 +208,8 @@ impl Instrument {
                 .iter()
                 .find(|(named, ..)| *named == kind.class)
                 .map(|(_, modifier, ..)| modifier.to_string()),
+            headless: flagged(&tables::HEADLESS),
+            pitched: flagged(&tables::PITCHED),
             part_id: None,
             instrument_id: None,
         })
@@ -485,6 +499,79 @@ impl Instrument {
         self.percussion_pitch = pitch;
     }
 
+    /// Whether the drum is struck muted: music21's `muted`, which is the
+    /// *drum* it plays and not a flag beside it -- a muted conga drum is
+    /// key 62 where an open one is 63.
+    ///
+    /// Three of music21's classes carry it, and `None` here is an
+    /// instrument that is not one of them.
+    #[must_use]
+    pub fn muted(&self) -> Option<bool> {
+        let (muted, _, _) = Self::muting(&self.kind)?;
+        Some(self.percussion_pitch == Some(muted))
+    }
+
+    /// Strikes it muted or open, where it is an instrument that can be.
+    ///
+    /// A conga drum's muting is the high drum's alone, so asking it of the
+    /// low one does nothing, exactly as music21's setter does nothing
+    /// unless the modifier is `high`.
+    pub fn set_muted(&mut self, muted: bool) {
+        let Some((muted_key, open_key, only)) = Self::muting(&self.kind) else {
+            return;
+        };
+        if only.is_some_and(|modifier| self.modifier() != Some(modifier)) {
+            return;
+        }
+        self.percussion_pitch = Some(if muted { muted_key } else { open_key });
+    }
+
+    /// Whether the tambourine has no drum head -- the rock and pop kind, a
+    /// ring of jingles -- where a classical one is headed: music21's
+    /// `headless`, which only its `Tambourine` carries, so `None` is an
+    /// instrument that is not one.
+    ///
+    /// No document says it: MIDI and MusicXML both write a tambourine the
+    /// same either way, and music21's MIDI reader takes every one as
+    /// headless because most such files are rock.
+    #[must_use]
+    pub fn headless(&self) -> Option<bool> {
+        self.headless
+    }
+
+    /// Says whether the tambourine is headless, where it is a tambourine at
+    /// all; asked of anything else it does nothing, as [`Instrument::muted`]
+    /// does.
+    pub fn set_headless(&mut self, headless: bool) {
+        if self.headless.is_some() {
+            self.headless = Some(headless);
+        }
+    }
+
+    /// Whether the whistle sounds a definite pitch -- a tin whistle does, a
+    /// referee's does not: music21's `pitched`, which only its `Whistle`
+    /// carries, so `None` is an instrument that is not one.
+    #[must_use]
+    pub fn pitched(&self) -> Option<bool> {
+        self.pitched
+    }
+
+    /// Says whether the whistle is pitched, where it is a whistle at all.
+    pub fn set_pitched(&mut self, pitched: bool) {
+        if self.pitched.is_some() {
+            self.pitched = Some(pitched);
+        }
+    }
+
+    /// The pair of drums a kind is struck muted and open, and the modifier
+    /// its muting is of where it has one.
+    fn muting(kind: &str) -> Option<(u8, u8, Option<&'static str>)> {
+        tables::MUTED
+            .iter()
+            .find(|(class, _, _, _)| *class == kind)
+            .map(|(_, muted, open, only)| (*muted, *open, *only))
+    }
+
     /// Says whether the instrument is in the General MIDI percussion map.
     pub fn set_in_percussion_map(&mut self, in_map: bool) {
         self.percussion_map = in_map;
@@ -657,40 +744,118 @@ pub fn ensemble_name_by_size(players: usize) -> Option<&'static str> {
 /// the way that key says: music21's
 /// `midi.percussion.PercussionMapper.midiPitchToInstrument`.
 ///
-/// A key is 0 to 127 and the map runs from 35 to 81; a key outside it, or
-/// one of the eleven inside it music21 has no instrument for, is an error,
-/// as it raises there. Where the instrument is played more than one way the
-/// modifier is the one that key plays, so key 36 is a bass drum played
-/// `"1"` and key 35 the same drum played `"acoustic"`.
+/// A key is 0 to 127 and the map runs from 27 to 87. Where the instrument
+/// is played more than one way the modifier is the one that key plays, so
+/// key 36 is a bass drum played `"midi-1"` and key 35 the same drum played
+/// `"acoustic"`. Nine of the map's sounds are not instruments at all --
+/// a hand clap, a metronome click, a scratch -- and each of those is a
+/// bare unpitched percussion instrument under the sound's own name
+/// (music21's `namedSoundMapping`). A key the map says nothing of is an
+/// error, as it raises there; [`for_percussion_key_or_unmapped`] is
+/// music21's `raiseIfUnmapped=False`.
+///
+/// **The key is the drum, not the class's own.** music21 writes the key
+/// onto the instrument after the modifier, so a key that is the muted one
+/// of a pair stays muted where its class starts on the open one: key 62 is
+/// a conga drum with the *high* drum's modifier struck muted, where 63 is
+/// the same modifier struck open.
 ///
 /// ```
 /// use music21_rs::instrument::for_percussion_key;
 ///
 /// let drum = for_percussion_key(36)?;
 /// assert_eq!(drum.kind(), "BassDrum");
-/// assert_eq!(drum.modifier(), Some("1"));
+/// assert_eq!(drum.modifier(), Some("midi-1"));
 /// assert_eq!(drum.percussion_pitch(), Some(36));
-/// assert!(for_percussion_key(69).is_err());
+///
+/// let muted = for_percussion_key(62)?;
+/// assert_eq!((muted.modifier(), muted.muted()), (Some("high"), Some(true)));
+///
+/// let clap = for_percussion_key(39)?;
+/// assert_eq!(clap.name(), Some("Hand Clap"));
+///
+/// assert!(for_percussion_key(22).is_err());
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
 ///
 /// # Errors
 ///
-/// A key the map does not name an instrument for.
+/// A key the map names neither an instrument nor a sound for.
 pub fn for_percussion_key(key: u8) -> Result<Instrument> {
-    let (_, kind) = tables::PERCUSSION_KEYS
+    percussion_key_instrument(key)
+        .ok_or_else(|| Error::Instrument(format!("{key} does not map to a valid instrument!")))?
+}
+
+/// The instrument a key of the General MIDI percussion map plays, and a
+/// bare unpitched percussion instrument carrying the key where the map
+/// names nothing at all: music21's `midiPitchToInstrument` asked with
+/// `raiseIfUnmapped=False`, which is how its MIDI reader asks.
+///
+/// ```
+/// use music21_rs::instrument::for_percussion_key_or_unmapped;
+///
+/// let bare = for_percussion_key_or_unmapped(22);
+/// assert_eq!(bare.kind(), "UnpitchedPercussion");
+/// assert_eq!(bare.name(), Some("Percussion"));
+/// assert_eq!(bare.percussion_pitch(), Some(22));
+/// ```
+pub fn for_percussion_key_or_unmapped(key: u8) -> Instrument {
+    percussion_key_instrument(key)
+        .unwrap_or_else(|| {
+            Instrument::of_kind("UnpitchedPercussion").map(|mut bare| {
+                bare.set_percussion_pitch(Some(key));
+                bare
+            })
+        })
+        .unwrap_or_default()
+}
+
+/// Every key of the General MIDI percussion map that names an instrument
+/// class, in key order: music21's `reverseInstrumentMapping` read as its
+/// keys, which is how a caller listing the map asks for one class per key
+/// without the named sounds among them.
+pub fn percussion_keys() -> impl Iterator<Item = u8> {
+    tables::PERCUSSION_KEYS.iter().map(|(key, _)| *key)
+}
+
+/// Every General MIDI percussion sound that is no instrument, each with
+/// the name music21 gives it: music21's `namedSoundMapping`, a hand clap
+/// and a metronome among them.
+pub fn named_percussion_sounds() -> impl Iterator<Item = (u8, &'static str)> {
+    tables::NAMED_SOUNDS.iter().copied()
+}
+
+/// The instrument or the named sound a key plays, and nothing for a key
+/// the map says nothing of. The inner result is the class lookup, which
+/// cannot fail for a class in the table.
+fn percussion_key_instrument(key: u8) -> Option<Result<Instrument>> {
+    if let Some((_, kind)) = tables::PERCUSSION_KEYS
         .iter()
         .find(|(named, _)| *named == key)
-        .ok_or_else(|| Error::Instrument(format!("{key} does not map to a valid instrument!")))?;
-    let mut instrument = Instrument::of_kind(kind)?;
-    // music21 writes the modifier that key plays onto the instrument it
-    // built, which moves the drum it plays with it.
-    if let Some((_, _, _, by_key)) = tables::MODIFIERS.iter().find(|(named, ..)| named == kind)
-        && let Some((_, modifier)) = by_key.iter().find(|(drum, _)| *drum == key)
     {
-        instrument.set_modifier(modifier);
+        return Some(Instrument::of_kind(kind).map(|mut made| {
+            // music21 writes the modifier that key plays onto the
+            // instrument it built, which moves the drum it plays with it,
+            // and then writes the key itself -- so a muted drum is the key
+            // struck and not the one its modifier names.
+            if let Some((_, _, _, by_key)) =
+                tables::MODIFIERS.iter().find(|(named, ..)| named == kind)
+                && let Some((_, modifier)) = by_key.iter().find(|(drum, _)| *drum == key)
+            {
+                made.set_modifier(modifier);
+            }
+            made.set_percussion_pitch(Some(key));
+            made
+        }));
     }
-    Ok(instrument)
+    let (_, sound) = tables::NAMED_SOUNDS
+        .iter()
+        .find(|(named, _)| *named == key)?;
+    Some(Instrument::of_kind("UnpitchedPercussion").map(|mut made| {
+        made.set_name(Some((*sound).to_string()));
+        made.set_percussion_pitch(Some(key));
+        made
+    }))
 }
 
 #[cfg(test)]
@@ -757,5 +922,75 @@ mod tests {
         assert!(violin.auto_assign_midi_channel(&full, 16).is_err());
         assert_eq!(violin.auto_assign_midi_channel(&full, 32).unwrap(), 16);
         assert_eq!(ensemble_name_by_size(4), Some("quartet"));
+    }
+
+    #[test]
+    fn a_percussion_key_is_the_drum_that_key_strikes_and_not_the_class_s_own() {
+        // music21 writes the key onto the instrument *after* the modifier,
+        // so a key that is the muted one of a pair stays the muted one
+        // where its class starts on the open one -- and a muted conga is
+        // key 62 with the *high* drum's modifier, 63 being the open high
+        // drum. Read off music21 11.0.0b14.
+        for (key, kind, modifier, muted) in [
+            (62u8, "CongaDrum", Some("high"), Some(true)),
+            (63, "CongaDrum", Some("high"), Some(false)),
+            (64, "CongaDrum", Some("low"), Some(false)),
+            (78, "Cuica", None, Some(true)),
+            (79, "Cuica", None, Some(false)),
+            (86, "Surdo", None, Some(true)),
+            (87, "Surdo", None, Some(false)),
+            (35, "BassDrum", Some("acoustic"), None),
+            (36, "BassDrum", Some("midi-1"), None),
+        ] {
+            let drum = for_percussion_key(key).expect("the map names a drum for it");
+            assert_eq!(
+                (
+                    drum.kind(),
+                    drum.modifier(),
+                    drum.percussion_pitch(),
+                    drum.muted()
+                ),
+                (kind, modifier, Some(key), muted),
+                "key {key}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_sound_the_map_names_no_class_for_is_named_percussion() {
+        // music21's `namedSoundMapping`, new in v11: nine General MIDI
+        // sounds that are not instruments, each a bare unpitched
+        // percussion instrument under the sound's own name.
+        for (key, name) in [(27u8, "High Q"), (34, "Metronome Bell"), (39, "Hand Clap")] {
+            let sound = for_percussion_key(key).expect("the map names the sound");
+            assert_eq!(sound.kind(), "UnpitchedPercussion");
+            assert_eq!(sound.name(), Some(name));
+            assert_eq!(sound.percussion_pitch(), Some(key));
+            assert_eq!(sound.modifier(), None);
+        }
+        // A key the map says nothing of at all is refused, unless the
+        // caller asks for one anyway -- music21's `raiseIfUnmapped=False`,
+        // which keeps the key on an instrument saying only `Percussion`.
+        assert!(for_percussion_key(22).is_err());
+        let bare = for_percussion_key_or_unmapped(22);
+        assert_eq!(bare.kind(), "UnpitchedPercussion");
+        assert_eq!(bare.name(), Some("Percussion"));
+        assert_eq!(bare.percussion_pitch(), Some(22));
+    }
+
+    #[test]
+    fn two_instrument_classes_carry_a_flag_of_their_own() {
+        // music21 gives a tambourine `headless` and a whistle `pitched`,
+        // and nothing else either.
+        let tambourine = Instrument::of_kind("Tambourine").unwrap();
+        assert_eq!(tambourine.headless(), Some(false));
+        assert_eq!(tambourine.pitched(), None);
+        let whistle = Instrument::of_kind("Whistle").unwrap();
+        assert_eq!(whistle.pitched(), Some(false));
+        assert_eq!(whistle.headless(), None);
+        let mut piano = Instrument::of_kind("Piano").unwrap();
+        assert_eq!(piano.headless(), None);
+        piano.set_headless(true);
+        assert_eq!(piano.headless(), None);
     }
 }

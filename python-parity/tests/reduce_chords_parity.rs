@@ -66,7 +66,7 @@ const SCORES: &[(&str, &str)] = &[
 ];
 
 const MUSIC21: &str = r#"
-from music21 import chord, converter, corpus, note, stream, tree
+from music21 import converter, corpus, stream
 from music21.analysis import reduceChords
 from music21.musicxml import m21ToXml
 
@@ -77,22 +77,6 @@ def written(name):
     # are given the same document to reduce.
     exporter.makeNotation = False
     return exporter.parse().decode('utf-8')
-
-def ties(text):
-    """Whether two parts of the score share an instrument id.
-
-    music21 takes the last of `allParts()` as the bass, and `allParts`
-    sorts a set of part objects by the id of each part's instrument -- so
-    where two share one, as the two staves of a piano do, which part
-    music21 calls the bass falls out of the order CPython's set of those
-    objects happened to iterate in, which is their addresses in memory.
-    Nothing can reproduce that, so such a score is passed over.
-    """
-    score = converter.parseData(text, format='musicxml', forceSource=True)
-    spans = tree.fromStream.asTimespans(score, flatten=True,
-                                        classList=(note.Note, chord.Chord))
-    ids = [part.getInstrument().partId for part in spans.allParts()]
-    return len(set(ids)) != len(ids)
 
 def reduced(text):
     score = converter.parseData(text, format='musicxml', forceSource=True)
@@ -133,8 +117,8 @@ fn the_crate_reduces_a_score_as_music21_does() {
         Err(_) => SCORES.iter().map(|(name, _)| (*name).to_string()).collect(),
     };
 
-    let (failures, compared, passed_over, refused) =
-        Python::attach(|py| -> PyResult<(Vec<String>, usize, usize, usize)> {
+    let (failures, compared, refused) =
+        Python::attach(|py| -> PyResult<(Vec<String>, usize, usize)> {
             init_py(py)?;
             add_dependency_venv(py, &root)?;
             let _ = py.import("music21")?;
@@ -147,7 +131,6 @@ fn the_crate_reduces_a_score_as_music21_does() {
 
             let mut failures = Vec::new();
             let mut compared = 0;
-            let mut passed_over = 0;
             let mut refused = 0;
             for name in &chosen {
                 let text: String = match music21.getattr("written")?.call1((name.as_str(),)) {
@@ -160,17 +143,6 @@ fn the_crate_reduces_a_score_as_music21_does() {
                         continue;
                     }
                 };
-                // A score whose parts share an instrument id is not comparable:
-                // which part music21 calls the bass comes out of the order a
-                // set of part objects iterated in.
-                if music21
-                    .getattr("ties")?
-                    .call1((text.as_str(),))?
-                    .extract::<bool>()?
-                {
-                    passed_over += 1;
-                    continue;
-                }
                 let theirs: String = match music21.getattr("reduced")?.call1((text.as_str(),)) {
                     Ok(listed) => listed.extract()?,
                     Err(error) => {
@@ -202,13 +174,11 @@ fn the_crate_reduces_a_score_as_music21_does() {
                     failures.push(format!("{name}: {difference}"));
                 }
             }
-            Ok((failures, compared, passed_over, refused))
+            Ok((failures, compared, refused))
         })
         .expect("the comparison runs");
 
-    println!(
-        "{compared} compared, {passed_over} passed over for a tie between part ids, {refused} music21 could not write or reduce"
-    );
+    println!("{compared} compared, {refused} music21 could not write or reduce");
     assert!(
         failures.is_empty(),
         "the two reducers differ:\n  {}",

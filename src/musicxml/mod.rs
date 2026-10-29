@@ -2100,7 +2100,10 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
         if unpitched {
             let displayed = mxnote.sub("unpitched");
             displayed.sub_text("display-step", note.pitch().step().as_char().to_string());
-            displayed.sub_text("display-octave", note.pitch().implicit_octave().to_string());
+            displayed.sub_text(
+                "display-octave",
+                musicxml_octave(note.pitch().implicit_octave()).to_string(),
+            );
         } else {
             mxnote.push(pitch_element(note.pitch()));
         }
@@ -2296,7 +2299,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 .unwrap_or(31);
             let (step, octave) = step_and_octave(lowest + 4 + rest.step_shift());
             mxrest.sub_text("display-step", step.to_string());
-            mxrest.sub_text("display-octave", octave.to_string());
+            mxrest.sub_text("display-octave", musicxml_octave(octave).to_string());
         }
         mxnote.sub_text("duration", divisions(duration.quarter_length()).to_string());
         if let Some(tie) = rest.tie() {
@@ -3417,6 +3420,20 @@ fn is_written_as_note(element: &StreamElement) -> bool {
     )
 }
 
+/// An octave as MusicXML can say it: music21's
+/// `moveOctaveIntoMusicxmlRange`, new in v11, which moves an octave
+/// outside the format's 0 to 9 to the nearest end of that range rather
+/// than writing a number no reader will take.
+///
+/// music21 warns as it moves one; the crate writes no warning, a library
+/// having no environment to write to, and what reaches the document is
+/// the same number. Three things carry an octave into a document -- a
+/// pitch, a rest's displayed place and an unpitched stroke's -- and each
+/// goes through this.
+fn musicxml_octave(octave: i32) -> i32 {
+    octave.clamp(0, 9)
+}
+
 /// The step and octave of a diatonic note number, as music21's
 /// `diatonicNoteNum` setter reads one: the octave truncated toward nought.
 fn step_and_octave(number: i32) -> (char, i32) {
@@ -3600,7 +3617,10 @@ fn pitch_element(pitch: &Pitch) -> Element {
     if let Some(accidental) = pitch.written_accidental() {
         element.sub_text("alter", num_to_int_or_float(accidental.alter()));
     }
-    element.sub_text("octave", pitch.implicit_octave().to_string());
+    element.sub_text(
+        "octave",
+        musicxml_octave(pitch.implicit_octave()).to_string(),
+    );
     element
 }
 

@@ -1046,7 +1046,25 @@ pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
         .getattr("nameWithOctave")
         .and_then(|name| name.extract::<String>())
     {
-        let mut read = RsPitch::from_name(name).map_err(pitch_error)?;
+        // A negative octave makes the name ambiguous -- B in octave -3 is
+        // written `B-3`, which reads as B-flat 3 -- so where music21 says
+        // the octave itself (`_octave`, nothing for an implicit one) the
+        // name is read without it.
+        let mut read = match (
+            value
+                .getattr("name")
+                .and_then(|name| name.extract::<String>()),
+            value
+                .getattr("_octave")
+                .and_then(|octave| octave.extract::<Option<i32>>()),
+        ) {
+            (Ok(bare), Ok(octave)) => {
+                let mut read = RsPitch::from_name(bare).map_err(pitch_error)?;
+                read.set_octave(octave);
+                read
+            }
+            _ => RsPitch::from_name(name).map_err(pitch_error)?,
+        };
         // A music21 pitch says whether its accidental is *written* as well
         // as what it is, and a score writer reads that: without it every
         // accidental a document already decided is written again.

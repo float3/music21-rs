@@ -4452,9 +4452,9 @@ def test_a_midi_key_names_the_drum_it_plays():
     """The General MIDI percussion map, read either way."""
     mapper = m.PercussionMapper()
     # A key says which drum *and how it is played*: 36 is a bass drum
-    # played `1` and 35 the same drum played `acoustic`.
+    # played `midi-1` and 35 the same drum played `acoustic`.
     played = mapper.midiPitchToInstrument(36)
-    assert (played.instrumentName, played.modifier) == ("Bass Drum", "1")
+    assert (played.instrumentName, played.modifier) == ("Bass Drum", "midi-1")
     assert mapper.midiPitchToInstrument(35).modifier == "acoustic"
     # A pitch is read as the key it is struck on.
     assert mapper.midiPitchToInstrument(m.Pitch(57)).instrumentName == "Crash Cymbals"
@@ -4462,10 +4462,24 @@ def test_a_midi_key_names_the_drum_it_plays():
     # And back: the key a drum is struck on.
     assert mapper.midiInstrumentToPitch(played).nameWithOctave == "C2"
 
+    # The key is the drum struck, not the class's own: a muted conga is
+    # key 62 with the high drum's modifier, where 63 is it struck open.
+    muted = mapper.midiPitchToInstrument(62)
+    assert (muted.modifier, muted.percMapPitch, muted.muted) == ("high", 62, True)
+    assert mapper.midiPitchToInstrument(63).muted is False
+
     # Every key the map names a drum for, against the class of that drum.
     mapping = mapper.reverseInstrumentMapping
-    assert len(mapping) == 35
+    assert len(mapping) == 52
     assert mapping[36].__name__ == "BassDrum"
+
+    # Nine of the map's sounds are no instrument, and each is a bare
+    # unpitched percussion instrument under the sound's own name.
+    sounds = mapper.namedSoundMapping
+    assert len(sounds) == 9
+    assert sounds[39] == "Hand Clap"
+    clap = mapper.midiPitchToInstrument(39)
+    assert (clap.instrumentName, clap.percMapPitch) == ("Hand Clap", 39)
 
     # A key the map names nothing for, and an instrument it has no key
     # for, are refused in music21's own words.
@@ -4473,6 +4487,10 @@ def test_a_midi_key_names_the_drum_it_plays():
         mapper.midiPitchToInstrument(0)
     with pytest.raises(m.MIDIPercussionException):
         mapper.midiInstrumentToPitch(m.Piano())
+
+    # Unless the caller asks for one anyway, which keeps the key.
+    other = mapper.midiPitchToInstrument(22, raiseIfUnmapped=False)
+    assert (other.instrumentName, other.percMapPitch) == ("Percussion", 22)
 
 
 def test_lyrics_are_found_in_a_stream_as_text():
