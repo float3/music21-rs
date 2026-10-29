@@ -40,6 +40,21 @@ impl PercussionMapper {
         Self
     }
 
+    /// A mapper holds nothing of its own, so a copy is a new one of the
+    /// same class -- which is also what the class installed over music21's
+    /// asks for when music21 copies it.
+    #[pyo3(signature = (_memo = None))]
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        slf.get_type().call0()
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.get_type().call0()
+    }
+
     /// Every key the map names a drum for, each against the class of
     /// that drum: music21's `reverseInstrumentMapping`.
     ///

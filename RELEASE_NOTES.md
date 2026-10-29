@@ -1170,6 +1170,14 @@
 
 ## fixed
 
+- **`install_into_music21` installs `midi.percussion.PercussionMapper`.**
+  It was left out, so music21 kept its own mapper, whose
+  `reverseInstrumentMapping` is a class attribute built at import and still
+  held music21's own instrument classes: `midiPitchToInstrument(53)` answered
+  a `RideCymbal` that was not the `instrument.RideCymbal` installed over it,
+  which music21 11.0.0b14's new `testMidiPitchToInstrument` caught. A mapper
+  holds nothing, so it copies as a new one.
+
 - **A drum struck muted was read as the open one.** A percussion key names
   a class and a modifier, and music21 writes *the key itself* onto the
   instrument after both -- so a key that is the muted one of a pair stays
