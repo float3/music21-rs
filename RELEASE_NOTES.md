@@ -2,6 +2,65 @@
 
 ## added
 
+- **music21 11.0.0b14, whose instrument module grew by ten classes and
+  moved its percussion map into a mixin of its own.** `Instrument::of_kind`
+  covers all 125 of music21's classes -- `BellTree`, `Cabasa`, `Claves`,
+  `Guiro`, `Shaker`, `UnpitchedDrum`, `Caxixi`, `ChineseCymbal`, `Cuica`
+  and `Surdo` are new -- and `HiHatCymbal`, `RideCymbals` and
+  `SplashCymbals` are `HiHat`, `RideCymbal` and `SplashCymbal`, as upstream
+  renamed them. The map itself is `MidiPercussionMapMixin` rather than
+  `UnpitchedPercussion`, since it is a synthesizer's layout and not a
+  family of instruments, which is how a `Whistle` -- a `Flute` -- comes to
+  be in it: so the wheel gates `modifier` and `percMapPitch` on the mixin,
+  and the feature map reads it. `Instrument::muted` is music21's `muted`
+  for the three drums that carry it.
+
+- **Nine General MIDI percussion sounds that are no instrument.**
+  music21's new `namedSoundMapping` -- a hand clap, a metronome click and
+  bell, sticks, a slap, two scratches and a square click, keys 27 to 34 and
+  39 -- so `instrument::for_percussion_key` answers a bare
+  `UnpitchedPercussion` under the sound's own name where it used to refuse
+  the key. `for_percussion_key_or_unmapped` is music21's new
+  `raiseIfUnmapped=False`, which keeps the key on an instrument saying only
+  `Percussion` and is how both of music21's own readers ask;
+  `percussion_keys` and `named_percussion_sounds` are the two lists, read
+  by the wheel's `reverseInstrumentMapping` and `namedSoundMapping` so that
+  neither can drift from the crate's one table.
+
+- **A tambourine says whether it is headless and a whistle whether it is
+  pitched**, which are the two flags music21 gives one class each:
+  `Instrument::headless` and `Instrument::pitched`, both `Option<bool>` so
+  that `None` is an instrument that is not one of those two, and both set
+  from the kind *or its parents*. No document says either -- MIDI and
+  MusicXML write a tambourine the same way with a head or without -- but
+  the MIDI reader sets `headless` as music21's does, a General MIDI
+  tambourine being a rock one.
+
+- **An octave MusicXML cannot say is written as the nearest one it can**,
+  which is music21's new `moveOctaveIntoMusicxmlRange`: outside 0 to 9 the
+  writer writes the nearest end of that range rather than a number no
+  reader will take, at all three places an octave reaches a document -- a
+  pitch, a rest's displayed place and an unpitched stroke's. music21 warns
+  as it moves one and the crate does not, a library having no environment
+  to warn to; the number written is the same.
+  `musicxml_parity`'s `built:extreme-octaves` holds it to music21 at both
+  ends of the range, no corpus score having an octave outside it.
+
+- **A segno or a coda inside a `<barline>` is read**, which MusicXML allows
+  and music21 reads as of 11.0.0b14, each going into the measure at the
+  offset the measure has been read to -- exactly where one read from a
+  `<direction>` goes. music21's exporter writes them back as a
+  `<direction>`, so nothing music21 writes can exercise the reading and
+  `musicxml_read_parity` puts the pair into `built:inner-barline`'s
+  document itself.
+
+- **The Humdrum instrument codes are held to music21.**
+  `humdrum::INSTRUMENTS` and `INSTRUMENT_CLASSES` are its
+  `humdrumInstruments` and `humdrumInstrumentClassToInstrument`, and
+  `table_parity` now compares both code for code and asserts besides that
+  every class either names is a kind the crate has. Nothing checked them
+  before, which is how two went stale (below).
+
 - **`makenotation::accidentals_made` is public, and the wheel's `Stream`
   answers `haveAccidentalsBeenMade` with it.** It was ported and
   crate-private, and the feature map excluded the member as "a flag music21
@@ -1110,6 +1169,44 @@
   property as music21 does.
 
 ## fixed
+
+- **A drum struck muted was read as the open one.** A percussion key names
+  a class and a modifier, and music21 writes *the key itself* onto the
+  instrument after both -- so a key that is the muted one of a pair stays
+  muted where its class starts open. `instrument::for_percussion_key` wrote
+  only the modifier, so a muted conga (key 62) came back as the open high
+  conga (63), a muted cuica (78) as the open one (79) and a muted surdo
+  (86) as the open one (87), and the writer then put each stroke back on
+  the wrong key. The readers' outline named a stroke's class and modifier,
+  which are the same for all three either way; it says the key now, and
+  `written:percussion.mid` holds every key of the map, 27 to 87, where it
+  held 39 of them.
+
+- **Every hi-hat in a MusicXML document read as an instrument saying
+  nothing.** `src/musicxml/read.rs` kept a second copy of the whole
+  percussion map, written out as a `match` on the key, and it still asked
+  for `HiHatCymbal` -- a class upstream renamed -- so `of_kind` failed and
+  the reader fell back to a bare `Instrument`. It is
+  `instrument::for_percussion_key_or_unmapped` now, as music21's reader is
+  its own mapper, so there is one reading of the map and not two.
+
+- **The Humdrum codes for a ride and a splash cymbal named no
+  instrument.** `*Iridec` and `*Ispshc` asked for `RideCymbals` and
+  `SplashCymbals`, renamed upstream, and a code naming no kind reads as a
+  bare tandem instruction rather than an instrument -- in silence, since no
+  corpus `.krn` file uses either and nothing compared the table with
+  music21's. Both are checked now.
+
+- **The chord reduction's bass is the score's last part.** music21 takes
+  the last of `TimespanTree.allParts()`, and the crate sorted the parts by
+  the id of each one's instrument, which is what music21 did until
+  11.0.0b14 placed a part of the tree's source by where it stands in that
+  source. The two now agree on every score `reduce_chords_parity` compares,
+  thirteen of them with none passed over, where before the fix two scores
+  whose part ids do not sort into score order came out with a different
+  bass -- and the piano score the test used to skip, there being no
+  reproducing which of two staves music21 would call the bass, is compared
+  like any other.
 
 - **A key, a key signature, a time signature, a chord symbol and a score's
   metadata built from a crate stream are the installed classes**, as every

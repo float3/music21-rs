@@ -272,12 +272,19 @@ fn notes_of(events: &[(u64, Event)]) -> Vec<Timed<'_>> {
     notes
 }
 
-/// The instrument a percussion key plays: music21's `PercussionMapper`,
-/// whose exception for a key it names no instrument for its reader answers
-/// with a bare unpitched percussion instrument.
+/// The instrument a percussion key plays: music21's
+/// `_midiNumberToPercussionInstrument`, which asks its `PercussionMapper`
+/// with `raiseIfUnmapped=False` -- so a key the map says nothing of is a
+/// bare unpitched percussion instrument *keeping that key*, rather than
+/// one that plays no drum at all.
+///
+/// A tambourine read here is headless, as that function makes it: General
+/// MIDI says nothing about a tambourine's head and most files holding one
+/// are rock.
 fn percussion_instrument(pitch: u8) -> Instrument {
-    crate::instrument::for_percussion_key(pitch)
-        .unwrap_or_else(|_| Instrument::of_kind("UnpitchedPercussion").unwrap_or_default())
+    let mut made = crate::instrument::for_percussion_key_or_unmapped(pitch);
+    made.set_headless(true);
+    made
 }
 
 /// music21's `midiEventToInstrument`.

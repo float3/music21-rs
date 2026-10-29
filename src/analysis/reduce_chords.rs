@@ -198,11 +198,14 @@ struct Reduction<'a> {
 }
 
 impl<'a> Reduction<'a> {
-    /// The score read as spans, its parts in the order music21 sorts them:
-    /// by the id of each part's instrument, as `allParts` does.
+    /// The score read as spans, its parts in the score's own order, which
+    /// is the order music21's `allParts` answers: a part of the tree's
+    /// source is placed by where it stands in that source, and only a part
+    /// from somewhere else is sorted by the id of its instrument. Every
+    /// part the reducer's tree holds is the score's, so the score's order
+    /// is the whole of it.
     fn of(score: &'a Stream) -> Result<Self> {
-        let mut parts: Vec<&Stream> = score.parts().into_iter().collect();
-        parts.sort_by_key(|part| part_id(part));
+        let parts: Vec<&Stream> = score.parts().into_iter().collect();
         let timespans = as_timespans(
             score,
             Flatten::Flat,
@@ -262,8 +265,16 @@ impl<'a> Reduction<'a> {
         for part in 0..self.parts {
             self.fuse_by_part(part);
         }
-        // The bass is the part sorting last, as music21 takes `parts[-1]`.
-        let bass = self.parts.saturating_sub(1);
+        // The bass is the last of the parts, as music21 takes
+        // `allParts()[-1]` -- and `allParts` lists only the parts its
+        // timespans belong to, so a trailing part holding no note is not
+        // the bass.
+        let bass = self
+            .spans
+            .iter()
+            .map(|span| span.part)
+            .max()
+            .unwrap_or_default();
         let mut offsets: Vec<FloatType> = self
             .spans
             .iter()
@@ -886,17 +897,6 @@ impl<'a> Reduction<'a> {
         }
         Ok(out)
     }
-}
-
-/// The id of the part's first instrument, which is what music21 sorts the
-/// parts of a reduction by (`getInstrument().partId`). A part with no
-/// instrument has none, and sorts last here where music21's own sort
-/// refuses to compare it at all.
-fn part_id(part: &Stream) -> Option<String> {
-    part.leaves().iter().find_map(|(_, element)| match element {
-        StreamElement::Instrument(instrument) => instrument.part_id().map(str::to_string),
-        _ => None,
-    })
 }
 
 /// Every meter the score states, by where it stands.

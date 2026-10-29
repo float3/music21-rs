@@ -83,7 +83,7 @@ const FILES: &[(&str, &str)] = &[
     ("corpus:demos/drum_sample.xml", "a drum part on channel 10"),
     (
         "written:percussion.mid",
-        "every key of the General MIDI percussion map, and four it has no instrument for",
+        "every key of the General MIDI percussion map, 27 to 87 -- the 52 it names a class for and the 9 it names only a sound for -- and four outside it, which the reader keeps the key of",
     ),
     (
         "corpus:schoenberg/opus19/movement6",

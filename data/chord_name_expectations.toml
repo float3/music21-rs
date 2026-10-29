@@ -5,10 +5,10 @@
 # `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 # A field music21 raises on is left out.
 #
-# music21 11.0.0b12 at 5151b5189570c0fa35650944feb47d4e69aea670
+# music21 11.0.0b14 at 5609a548cdfc344eaed13230166bb837227395e7
 
-music21_version = "11.0.0b12"
-music21_commit = "5151b5189570c0fa35650944feb47d4e69aea670"
+music21_version = "11.0.0b14"
+music21_commit = "5609a548cdfc344eaed13230166bb837227395e7"
 
 chord = [
     { forte = "1-1", common_name = "note", pitched_common_name = "C", quality = "other", forte_class = "1-1", inversion = 0, figure = "Cpedal", root = "C", bass = "C" },

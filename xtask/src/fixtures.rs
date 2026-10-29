@@ -1469,6 +1469,15 @@ fn write_instruments(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> Py
         {
             continue;
         }
+        // music21's `MidiPercussionMapMixin` is a subclass of `Instrument`
+        // and is not an instrument: it is what its percussion classes mix in
+        // to be looked up in the General MIDI percussion map. Nothing plays
+        // one, and no score holds one. The name is still carried in the
+        // parent chains below, since it really is in the method resolution
+        // order of every percussion class and `is_a` must say so.
+        if name == "MidiPercussionMapMixin" {
+            continue;
+        }
         let depth = class.getattr("__mro__")?.len()?;
         classes.push((depth, name, class));
     }
@@ -2293,10 +2302,33 @@ fn write_small_tables(py: Python<'_>, workspace_root: &Path, stamp: &Stamp) -> P
         score_rows += 1;
     }
 
+    // The instrument each Humdrum `*I` and `*IC` code names, which the
+    // crate's `humdrum::tables` transcribes by hand, for `table_parity`.
+    let humdrum = py.import("music21.humdrum.instruments")?;
+    let mut humdrum_codes = 0;
+    for (table, kind) in [
+        ("humdrumInstruments", "instrument"),
+        ("humdrumInstrumentClassToInstrument", "class"),
+    ] {
+        let Ok(mapping) = humdrum.getattr(table) else {
+            continue;
+        };
+        for (code, class) in mapping.cast_into::<PyDict>()?.iter() {
+            let code: String = code.extract()?;
+            let class: String = class.extract()?;
+            let _ = writeln!(out, "[[humdrum_instrument]]");
+            let _ = writeln!(out, "kind = {}", toml_string(kind));
+            let _ = writeln!(out, "code = {}", toml_string(&code));
+            let _ = writeln!(out, "class = {}", toml_string(&class));
+            let _ = writeln!(out);
+            humdrum_codes += 1;
+        }
+    }
+
     let path = workspace_root.join("data/table_expectations.toml");
     fs::write(&path, out)?;
     println!(
-        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {dynamic_marks} dynamics, {solfeg_rows} solfeg rows, {score_rows} functionality scores)",
+        "  wrote {} ({accidentals} accidentals, {mode_count} modes, {specifiers} specifier combos, {profiles} key profiles, {tempo_words} tempo words, {dynamic_marks} dynamics, {solfeg_rows} solfeg rows, {score_rows} functionality scores, {humdrum_codes} humdrum instrument codes)",
         path.display()
     );
     Ok(path)

@@ -3144,6 +3144,20 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             }
         }
 
+        // A barline may carry a segno or a coda, which MusicXML allows
+        // inside `<barline>` as well as inside a `<direction>`. music21
+        // puts each in the measure where the barline stands, at the offset
+        // the measure has been read to, exactly as it puts one read from a
+        // direction -- so a document saying it either way reads alike.
+        for (tag, kind) in [
+            ("segno", RepeatExpressionKind::Segno),
+            ("coda", RepeatExpressionKind::Coda),
+        ] {
+            if element.find(tag).is_some() {
+                self.insert(self.offset, NO_STAFF, RepeatExpression::new(kind));
+            }
+        }
+
         match element.get("location") {
             Some("left") => self.measure.left = Some(barline),
             Some("right") | None => self.measure.right = Some(barline),
@@ -3160,41 +3174,14 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     }
 }
 
-/// General MIDI's drum for a pitch as the instrument music21 has for it:
+/// General MIDI's drum for a key as the instrument music21 has for it:
 /// its `PercussionMapper.midiPitchToInstrument`, and a bare unpitched
-/// instrument where it has none.
-fn percussion_instrument(pitch: u8) -> Instrument {
-    let class = match pitch {
-        35 | 36 => "BassDrum",
-        37 | 38 | 40 => "SnareDrum",
-        41 | 43 | 45 | 47 | 48 | 50 => "TomTom",
-        42 | 44 | 46 => "HiHatCymbal",
-        49 | 57 => "CrashCymbals",
-        54 => "Tambourine",
-        56 => "Cowbell",
-        58 => "Vibraslap",
-        60 | 61 => "BongoDrums",
-        62..=64 => "CongaDrum",
-        65 | 66 => "Timbales",
-        67 | 68 => "Agogo",
-        70 => "Maracas",
-        71 | 72 => "Whistle",
-        76 | 77 => "Woodblock",
-        80 | 81 => "Triangle",
-        _ => {
-            let mut bare = Instrument::of_kind("UnpitchedPercussion").unwrap_or_default();
-            bare.set_percussion_pitch(Some(pitch));
-            return bare;
-        }
-    };
-    let mut instrument = Instrument::of_kind(class).unwrap_or_default();
-    // An instrument that names its drums apart takes the one asked for.
-    let usual = instrument.percussion_pitch();
-    instrument.set_percussion_pitch(Some(pitch));
-    if instrument.modifier().is_none() {
-        instrument.set_percussion_pitch(usual);
-    }
-    instrument
+/// instrument carrying the key where the map names nothing -- which is
+/// what music21's reader makes of the exception its mapper raises. The map
+/// is the crate's one table, read through
+/// `instrument::for_percussion_key_or_unmapped`.
+fn percussion_instrument(key: u8) -> Instrument {
+    crate::instrument::for_percussion_key_or_unmapped(key)
 }
 
 /// What is read of a note before it is known whether it has a pitch.

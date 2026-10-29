@@ -1,7 +1,7 @@
 //! Tables of music21's Humdrum reader.
 
 /// music21's `humdrumInstruments`: the instrument each Humdrum `*I` code names.
-pub(super) const INSTRUMENTS: &[(&str, &str)] = &[
+pub const INSTRUMENTS: &[(&str, &str)] = &[
     ("soprn", "Soprano"),
     ("cant", "Soprano"),
     ("mezzo", "MezzoSoprano"),
@@ -64,9 +64,9 @@ pub(super) const INSTRUMENTS: &[(&str, &str)] = &[
     ("marac", "Maracas"),
     ("marim", "Marimba"),
     ("piatt", "Cymbals"),
-    ("ridec", "RideCymbals"),
+    ("ridec", "RideCymbal"),
     ("sdrum", "SnareDrum"),
-    ("spshc", "SplashCymbals"),
+    ("spshc", "SplashCymbal"),
     ("steel", "SteelDrum"),
     ("tambn", "Tambourine"),
     ("timpa", "Timpani"),
@@ -80,7 +80,7 @@ pub(super) const INSTRUMENTS: &[(&str, &str)] = &[
 
 /// music21's `humdrumInstrumentClassToInstrument`: the family each `*IC` code
 /// names.
-pub(super) const INSTRUMENT_CLASSES: &[(&str, &str)] = &[
+pub const INSTRUMENT_CLASSES: &[(&str, &str)] = &[
     ("vox", "Vocalist"),
     ("str", "StringInstrument"),
     ("ww", "WoodwindInstrument"),
