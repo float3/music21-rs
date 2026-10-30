@@ -290,7 +290,9 @@ def test_roman_module_functions():
     tuples = m.figureTuples(m.Chord("B3 D4 F4 A4"), m.Key("C"))
     assert [t[:3] for t in tuples] == [(1, 0.0, ""), (3, 0.0, ""), (5, 0.0, ""), (7, 0.0, "")]
     assert tuples[0][3].name == "B"
-    assert m.figureTupleSolo(m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")) == (3, 1.0, "#")
+    assert m.FigureTuple.fromPitchAndReference(
+        m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")
+    ) == (3, 1.0, "#")
     assert m.correctRNAlterationForMinor((7, 0.0, ""), m.Key("a")) == (7, 0.0, "b")
     assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")
 
@@ -5897,3 +5899,46 @@ def test_add_variant_warns_for_its_old_keyword():
             m.addVariant(
                 one, 0.0, None, replacementQuarterLength=2.0, replacementDuration=1.0
             )
+
+
+def test_figure_tuples_are_named_as_music21_names_them():
+    """music21 v11 made a figure a `FigureTuple` (degFromRefPitch, alter,
+    prefix), built by `FigureTuple.fromPitchAndReference`; `figureTupleSolo`
+    is its deprecated alias."""
+    made = m.FigureTuple.fromPitchAndReference(
+        m.Pitch("A-3"), m.Key("C"), m.Pitch("F#2")
+    )
+    assert repr(made) == "FigureTuple(degFromRefPitch=3, alter=-1.0, prefix='b')"
+    assert made.degFromRefPitch == 3
+
+    first = m.figureTuples(m.Chord(["F#2", "D3"]), m.Key("C"))[0]
+    assert type(first).__name__ == "PitchFigureTuple"
+    assert (first.degFromRefPitch, first.prefix, first.pitch.name) == (1, "#", "F#")
+
+    flat_six = m.FigureTuple(degFromRefPitch=6, alter=-1, prefix="")
+    corrected = m.correctRNAlterationForMinor(flat_six, m.Key("c"))
+    assert repr(corrected) == "FigureTuple(degFromRefPitch=6, alter=-1, prefix='b')"
+    major = m.FigureTuple(2, 0.0, "")
+    assert m.correctRNAlterationForMinor(major, m.Key("C")) is major
+
+
+def test_figure_tuple_solo_warns_it_is_deprecated():
+    code = """
+import warnings
+import music21_rs as m
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    made = m.figureTupleSolo(m.Pitch("A-4"), m.Key("C"), m.Pitch("C4"))
+    m.figureTupleSolo(m.Pitch("A-4"), m.Key("C"), m.Pitch("C4"))
+print(repr(made))
+print(len(caught), caught[0].message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert lines[0] == "FigureTuple(degFromRefPitch=6, alter=-1.0, prefix='b')"
+    assert lines[1] == (
+        "1 figureTupleSolo was deprecated on v11 and will disappear at or after "
+        "v12. use FigureTuple.fromPitchAndReference() instead"
+    )

@@ -1200,6 +1200,18 @@
 
 ## fixed
 
+- **The wheel follows music21's v11 changes it had missed**, found by
+  auditing the port against every music21 commit since porting began:
+  `KeySignature.alteredPitches` no longer flips a signature to
+  non-traditional; `Chord`'s ten per-note accessors and
+  `Stream.hasElementOfClass` warn that they are deprecated; a chord is
+  indexed by an int, a pitch name or a Pitch only; a root-position
+  `ChordSymbol` drops a stored inversion; a non-finite length raises what
+  music21 raises; `AbstractScale.mode` is a diatonic mode's name, an
+  octatonic mode's number, or None; `addVariant` warns for its old
+  keyword; and figures are `FigureTuple` and `PitchFigureTuple` named
+  tuples, `figureTupleSolo` a deprecated alias.
+
 - **A keyboard heading reads a lone key signature.** music21 now reads
   each element of a heading's signatures by what it is; the port still
   took a lone signature for a meter and failed on a key signature.
