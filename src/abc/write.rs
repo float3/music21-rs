@@ -248,12 +248,12 @@ fn key_field(element: &StreamElement, clef: Option<&Clef>) -> Result<String> {
             // then every accidental said, which leaves no mode to read.
             let signature = signature_of(element)
                 .ok_or_else(|| abc_error("a key field written for what is no key"))?;
-            let tonic = match signature.sharps() {
-                Some(sharps) => {
-                    let key = KeySignature::new(sharps).as_key("major");
-                    abc_tonic(key.tonic_pitch())
-                }
-                None => "C".to_string(),
+            // A non-traditional signature says every accidental itself.
+            let tonic = if signature.is_non_traditional() {
+                "C".to_string()
+            } else {
+                let key = KeySignature::new(signature.sharps()).as_key("major");
+                abc_tonic(key.tonic_pitch())
             };
             let mut text = format!("{tonic} exp");
             for pitch in signature.altered_pitches()? {

@@ -839,13 +839,8 @@ fn element_events(
                 vec![numerator as u8, denominator, 24, 8],
             )]
         }
-        StreamElement::KeySignature(signature) => {
-            key_events(signature.sharps().unwrap_or(0), false)
-        }
-        StreamElement::Key(key) => key_events(
-            key.key_signature().sharps().unwrap_or(0),
-            key.mode() == "minor",
-        ),
+        StreamElement::KeySignature(signature) => key_events(signature.sharps(), false),
+        StreamElement::Key(key) => key_events(key.key_signature().sharps(), key.mode() == "minor"),
         StreamElement::MetronomeMark(mark) => {
             if mark.number().is_none() && mark.number_sounding().is_none() {
                 return Ok(None);

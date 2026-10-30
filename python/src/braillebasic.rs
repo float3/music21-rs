@@ -116,19 +116,12 @@ fn transcribed(
     Ok(transcription.braille.clone())
 }
 
-/// The sharps a key signature is written with, or nothing where it is one
-/// of music21's non-traditional signatures, which has no count.
+/// The sharps a key signature is written with. music21 reads the count of
+/// a non-traditional signature too, which is nought unless set.
 fn sharps_of(object: &Bound<'_, PyAny>) -> PyResult<Option<IntegerType>> {
-    if object
-        .getattr("isNonTraditional")
-        .and_then(|flag| flag.is_truthy())
-        .unwrap_or(false)
-    {
-        return Ok(None);
-    }
     match value_of(object)? {
-        StreamElement::KeySignature(key) => Ok(key.sharps()),
-        StreamElement::Key(key) => Ok(key.key_signature().sharps()),
+        StreamElement::KeySignature(key) => Ok(Some(key.sharps())),
+        StreamElement::Key(key) => Ok(Some(key.key_signature().sharps())),
         _ => refuse(object, "key signature"),
     }
 }

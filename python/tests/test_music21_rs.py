@@ -5766,3 +5766,25 @@ print(caught[0].message)
         "Stream.hasElementOfClass was deprecated on v11 and will disappear at "
         "or after v12. use `bool(s.getElementsByClass(className))` instead"
     )
+
+
+def test_a_key_signatures_count_and_flag_are_set_apart():
+    """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
+    a flag of its own, so writing pitches over a signature leaves it
+    traditional, and a flagged one still names a key and transposes."""
+    two = m.KeySignature(2)
+    two.alteredPitches = ["E-"]
+    assert (two.sharps, two.isNonTraditional) == (2, False)
+    assert repr(two) == "<music21.key.KeySignature of 2 sharps>"
+
+    flagged = m.KeySignature(2)
+    flagged.isNonTraditional = True
+    flagged.alteredPitches = ["B-", "F#"]
+    assert repr(flagged) == "<music21.key.KeySignature of pitches: [B-, F#]>"
+    assert flagged.asKey().tonic.name == "D"
+    moved = flagged.transpose("M2")
+    assert (moved.sharps, moved.isNonTraditional) == (4, True)
+    assert flagged != m.KeySignature(2)
+
+    with pytest.raises(TypeError):
+        m.sharpsToPitch(None)

@@ -210,13 +210,13 @@ pub(crate) fn element_repr(element: &StreamElement) -> String {
                 python_str_repr(tempo.text())
             )
         }
-        StreamElement::KeySignature(signature) => match signature.sharps() {
-            Some(sharps) => format!(
-                "<music21.key.KeySignature of {}>",
-                sharps_description(sharps)
-            ),
-            None => "<music21.key.KeySignature of pitches: []>".to_string(),
-        },
+        StreamElement::KeySignature(signature) if signature.is_non_traditional() => {
+            "<music21.key.KeySignature of pitches: []>".to_string()
+        }
+        StreamElement::KeySignature(signature) => format!(
+            "<music21.key.KeySignature of {}>",
+            sharps_description(signature.sharps())
+        ),
         StreamElement::Key(key) => {
             // A key's `str` is its tonic and mode alone.
             let tonic = music21_pitch_name(key.tonic_pitch());
@@ -796,7 +796,7 @@ impl BrailleSegment {
 fn sharps_of(element: &StreamElement) -> Option<Option<IntegerType>> {
     match element {
         StreamElement::Key(key) => Some(Some(key.sharps())),
-        StreamElement::KeySignature(signature) => Some(signature.sharps()),
+        StreamElement::KeySignature(signature) => Some(Some(signature.sharps())),
         _ => None,
     }
 }

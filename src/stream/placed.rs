@@ -202,7 +202,7 @@ impl Stream {
     ///     .iter()
     ///     .find(|placed| matches!(placed.element(), StreamElement::Note(_)))
     ///     .unwrap();
-    /// assert_eq!(note.key_signature().and_then(KeySignature::sharps), Some(-1));
+    /// assert_eq!(note.key_signature().map(KeySignature::sharps), Some(-1));
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
     pub fn placed(&self) -> Vec<Placed<'_>> {
@@ -370,7 +370,7 @@ mod tests {
             .into_iter()
             .filter(|placed| matches!(placed.element(), StreamElement::Note(_)))
             .collect();
-        let sharps = |index: usize| notes[index].key_signature().and_then(KeySignature::sharps);
+        let sharps = |index: usize| notes[index].key_signature().map(KeySignature::sharps);
 
         assert_eq!(notes.len(), 6);
         assert_eq!(sharps(4), Some(-1));

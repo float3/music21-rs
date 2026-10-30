@@ -969,7 +969,7 @@ fn describe(element: &StreamElement) -> String {
         StreamElement::Rest(rest) => format!("Rest {}", sung(rest.lyric())),
         StreamElement::Dynamic(dynamic) => format!("Dynamic {}", dynamic.value()),
         StreamElement::KeySignature(signature) => {
-            format!("KeySignature {}", option(signature.sharps()))
+            format!("KeySignature {}", signature.sharps())
         }
         StreamElement::Clef(clef) => format!(
             "Clef {}{}",

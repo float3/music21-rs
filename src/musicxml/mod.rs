@@ -3890,7 +3890,7 @@ fn key_signature_element(key: &KeySignature, mode: Option<&str>) -> Result<Eleme
         element.set("color", normalize_color(color)?);
     }
     let altered = key.altered_pitches()?;
-    match key.sharps().filter(|_| !key.is_non_traditional()) {
+    match (!key.is_non_traditional()).then_some(key.sharps()) {
         Some(sharps) => {
             element.sub_text("fifths", sharps.to_string());
             if let Some(mode) = mode {

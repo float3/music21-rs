@@ -1,5 +1,19 @@
 # Unreleased
 
+## breaking changes
+
+- **`KeySignature::sharps` is always a count**, as music21's `sharps` has
+  been since 14acfa0f2, and `is_non_traditional` is a flag of its own
+  rather than a missing count. `set_sharps`, `set_altered_pitches` and
+  `set_non_traditional` each set their own part and leave the others;
+  pitches written over a traditional signature no longer make it
+  non-traditional. A non-traditional signature still names a key, still
+  transposes, and compares unequal to the traditional one with its count.
+  Saved signatures with no count read back as non-traditional ones.
+  The wheel's `sharpsToPitch(None)` is a `TypeError`, as music21's is, and
+  a non-traditional signature handed back to music21 keeps its pitches
+  where it used to be dropped.
+
 ## added
 
 - **A meter carries a bar length written over its own.**

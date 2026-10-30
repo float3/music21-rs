@@ -4358,10 +4358,22 @@ fn element_object_as<'py>(
             crate::instrument::Instrument::object_as(py, (**instrument).clone(), holdable)?
                 .into_bound(py)
         }
-        StreamElement::KeySignature(signature) => match signature.sharps() {
-            Some(sharps) => class_named("music21.key", "KeySignature")?.call1((sharps,))?,
-            None => return Ok(None),
-        },
+        StreamElement::KeySignature(signature) => {
+            let made = class_named("music21.key", "KeySignature")?.call1((signature.sharps(),))?;
+            // A non-traditional signature says its pitches, in music21's
+            // spelling; it used to be dropped here.
+            if signature.is_non_traditional() {
+                made.setattr("isNonTraditional", true)?;
+                let names: Vec<String> = signature
+                    .altered_pitches()
+                    .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?
+                    .iter()
+                    .map(|pitch| crate::spelling::music21_name(&pitch.to_string()))
+                    .collect();
+                made.setattr("alteredPitches", names)?;
+            }
+            made
+        }
         StreamElement::Key(key) => {
             class_named("music21.key", "Key")?.call1((key.tonic().name(), key.mode()))?
         }

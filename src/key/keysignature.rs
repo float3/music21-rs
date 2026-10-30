@@ -100,23 +100,67 @@ pub fn pitch_name_to_sharps(pitch_name: &str, mode: Option<&str>) -> Result<Inte
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(from = "SavedKeySignature"))]
 /// A key signature represented by the number of sharps.
 ///
 /// Flats are represented as negative sharps, so B-flat major has `-2`.
+/// A non-traditional signature, `E-` and `G#` together, is flagged as one
+/// and lists its pitches; it keeps a count as well, as music21's does
+/// since 14acfa0f2.
 #[must_use]
 pub struct KeySignature {
-    sharps: Option<IntegerType>,
+    sharps: IntegerType,
+    /// music21's `isNonTraditional`, set on its own.
+    #[cfg_attr(feature = "serde", serde(default))]
+    non_traditional: bool,
+    /// Pitches written over the ones the count implies: music21's
+    /// `_alteredPitches`, which a traditional signature may carry too.
     altered: Option<Vec<Pitch>>,
     accidentals_apply_only_to_octave: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     color: Option<String>,
 }
 
+/// A key signature as it was saved before the count was always a count:
+/// a missing count was a non-traditional signature.
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+struct SavedKeySignature {
+    sharps: Option<IntegerType>,
+    #[serde(default)]
+    non_traditional: bool,
+    altered: Option<Vec<Pitch>>,
+    accidentals_apply_only_to_octave: bool,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+#[cfg(feature = "serde")]
+impl From<SavedKeySignature> for KeySignature {
+    fn from(saved: SavedKeySignature) -> Self {
+        Self {
+            sharps: saved.sharps.unwrap_or(0),
+            non_traditional: saved.non_traditional || saved.sharps.is_none(),
+            altered: saved.altered,
+            accidentals_apply_only_to_octave: saved.accidentals_apply_only_to_octave,
+            color: saved.color,
+        }
+    }
+}
+
+impl PartialEq for KeySignature {
+    /// music21's `equalityAttributes`: the count and the flag.
+    fn eq(&self, other: &Self) -> bool {
+        self.sharps == other.sharps && self.non_traditional == other.non_traditional
+    }
+}
+
 impl KeySignature {
     /// Creates a key signature from a sharp count.
     pub fn new(sharps: IntegerType) -> Self {
         Self {
-            sharps: Some(sharps),
+            sharps,
+            non_traditional: false,
             altered: None,
             accidentals_apply_only_to_octave: false,
             color: None,
@@ -133,65 +177,44 @@ impl KeySignature {
         self.color = color;
     }
 
-    /// Creates a non-traditional key signature from the pitches it alters,
-    /// as music21 does when `alteredPitches` is assigned: `E-` and `G#`
-    /// together, say, which no count of sharps can express. Such a signature
-    /// has no sharp count and no key.
+    /// Creates a non-traditional key signature from the pitches it alters:
+    /// `E-` and `G#` together, say, which no count of sharps can express.
+    /// Its count is nought.
     pub fn from_altered_pitches(pitches: Vec<Pitch>) -> Self {
-        Self {
-            sharps: None,
-            altered: Some(pitches),
-            accidentals_apply_only_to_octave: false,
-            color: None,
-        }
+        let mut signature = Self::new(0);
+        signature.non_traditional = true;
+        signature.altered = Some(pitches);
+        signature
     }
 
-    /// Returns the number of sharps, with flats as negative values, or
-    /// `None` for a non-traditional signature.
-    pub fn sharps(&self) -> Option<IntegerType> {
+    /// Returns the number of sharps, with flats as negative values.
+    pub fn sharps(&self) -> IntegerType {
         self.sharps
     }
 
-    /// Replaces the sharp count, turning a non-traditional signature back
-    /// into a traditional one.
+    /// Replaces the sharp count, leaving the flag and any pitches written
+    /// over it as they are, as music21's `sharps` setter does.
     pub fn set_sharps(&mut self, sharps: IntegerType) {
-        self.sharps = Some(sharps);
-        self.altered = None;
+        self.sharps = sharps;
     }
 
-    /// Replaces the altered pitches, turning the signature non-traditional.
+    /// Writes pitches over the ones the count implies, as music21's
+    /// `alteredPitches` setter does. It does not make the signature
+    /// non-traditional; [`Self::set_non_traditional`] does that.
     pub fn set_altered_pitches(&mut self, pitches: Vec<Pitch>) {
-        self.sharps = None;
         self.altered = Some(pitches);
     }
 
     /// Whether the signature is a list of altered pitches rather than a
-    /// count of sharps or flats.
-    ///
-    /// music21's `isNonTraditional`. There `sharps` answers nought when this
-    /// is true; [`Self::sharps`] answers `None`, which says both things at
-    /// once.
+    /// count of sharps or flats: music21's `isNonTraditional`.
     pub fn is_non_traditional(&self) -> bool {
-        self.sharps.is_none()
+        self.non_traditional
     }
 
-    /// Makes the signature non-traditional, or traditional again: the setter
-    /// of music21's `isNonTraditional`.
-    ///
-    /// Turning it on drops the sharp count and starts an empty list of
-    /// altered pitches; turning it off restores a count of nought. Setting it
-    /// to what it already is does nothing.
+    /// Flags the signature non-traditional or traditional, its count and
+    /// pitches left as they are.
     pub fn set_non_traditional(&mut self, non_traditional: bool) {
-        if non_traditional == self.sharps.is_none() {
-            return;
-        }
-        if non_traditional {
-            self.sharps = None;
-            self.altered = Some(Vec::new());
-        } else {
-            self.sharps = Some(0);
-            self.altered = None;
-        }
+        self.non_traditional = non_traditional;
     }
 
     /// Whether the altered pitches of a non-traditional signature carry
@@ -206,33 +229,25 @@ impl KeySignature {
         self.accidentals_apply_only_to_octave = value;
     }
 
-    fn sharps_or_error(&self) -> Result<IntegerType> {
-        self.sharps.ok_or_else(|| {
-            Error::Key(
-                "a non-traditional key signature has no count of sharps or flats".to_string(),
-            )
-        })
-    }
-
     /// The description music21 prints after `of`: `3 sharps`, `1 flat`,
     /// `no sharps or flats`, or `pitches: [E-, G#]`.
     pub fn description(&self) -> String {
+        if self.non_traditional {
+            let names: Vec<String> = self
+                .altered
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .map(Pitch::to_string)
+                .collect();
+            return format!("pitches: [{}]", names.join(", "));
+        }
         match self.sharps {
-            None => {
-                let names: Vec<String> = self
-                    .altered
-                    .as_deref()
-                    .unwrap_or_default()
-                    .iter()
-                    .map(Pitch::to_string)
-                    .collect();
-                format!("pitches: [{}]", names.join(", "))
-            }
-            Some(0) => "no sharps or flats".to_string(),
-            Some(1) => "1 sharp".to_string(),
-            Some(-1) => "1 flat".to_string(),
-            Some(n) if n > 1 => format!("{n} sharps"),
-            Some(n) => format!("{} flats", -n),
+            0 => "no sharps or flats".to_string(),
+            1 => "1 sharp".to_string(),
+            -1 => "1 flat".to_string(),
+            n if n > 1 => format!("{n} sharps"),
+            n => format!("{} flats", -n),
         }
     }
 
@@ -243,7 +258,10 @@ impl KeySignature {
         if let Some(altered) = &self.altered {
             return Ok(altered.clone());
         }
-        let sharps = self.sharps_or_error()?;
+        if self.non_traditional {
+            return Ok(Vec::new());
+        }
+        let sharps = self.sharps;
         let (start, interval) = if sharps > 0 {
             ("B", &*PERFECT_FIFTH)
         } else {
@@ -278,9 +296,10 @@ impl KeySignature {
         if interval.implicit_diatonic && pitch_to_sharps(&transposed, None)?.abs() > 6 {
             transposed = transposed.get_enharmonic()?;
         }
-        // music21 transposes the object, so it is drawn as it was.
-        let mut moved = Self::new(pitch_to_sharps(&transposed, None)?);
-        moved.color = self.color.clone();
+        // music21 transposes the object, so only the count moves: its colour,
+        // its flag and any pitches written over it stay.
+        let mut moved = self.clone();
+        moved.sharps = pitch_to_sharps(&transposed, None)?;
         Ok(moved)
     }
 
@@ -289,7 +308,7 @@ impl KeySignature {
     /// fourth per flat, keeping the pitch's own octave, so `E4` in two sharps
     /// is `F#4` and in three flats `G4`.
     pub fn transpose_pitch_from_c(&self, pitch: &Pitch) -> Result<Pitch> {
-        let sharps = self.sharps_or_error()?;
+        let sharps = self.sharps;
         if sharps == 0 {
             return Ok(pitch.clone());
         }
@@ -332,7 +351,7 @@ impl KeySignature {
 
     /// Converts this signature to a key, optionally inferring mode from tonic.
     pub fn try_as_key(&self, mode: Option<&str>, tonic: Option<&str>) -> Result<Key> {
-        let our_sharps = self.sharps_or_error()?;
+        let our_sharps = self.sharps;
 
         let resolved_mode = if mode.is_none() && tonic.is_none() {
             "major".to_string()
@@ -369,8 +388,7 @@ impl std::fmt::Display for KeySignature {
 mod non_traditional_tests {
     use super::*;
 
-    /// A non-traditional signature reports no sharp count, and the flag can
-    /// be turned on and off again.
+    /// The flag turns on and off again and the count stays through both.
     #[test]
     fn a_signature_can_be_made_non_traditional_and_back() {
         let mut signature = KeySignature::new(3);
@@ -378,16 +396,11 @@ mod non_traditional_tests {
 
         signature.set_non_traditional(true);
         assert!(signature.is_non_traditional());
-        assert_eq!(signature.sharps(), None);
+        assert_eq!(signature.sharps(), 3);
 
         signature.set_non_traditional(false);
         assert!(!signature.is_non_traditional());
-        assert_eq!(signature.sharps(), Some(0));
-
-        // Setting it to what it already is leaves the count alone.
-        let mut three = KeySignature::new(3);
-        three.set_non_traditional(false);
-        assert_eq!(three.sharps(), Some(3));
+        assert_eq!(signature.sharps(), 3);
     }
 
     fn pitches(names: &[&str]) -> Vec<Pitch> {
@@ -397,43 +410,94 @@ mod non_traditional_tests {
             .collect()
     }
 
+    /// music21 14acfa0f2: `sharps` is always a count, and `isNonTraditional`
+    /// is a flag of its own.
     #[test]
     fn a_pitch_list_makes_a_non_traditional_signature() {
         let unusual = KeySignature::from_altered_pitches(pitches(&["Eb", "G#"]));
         assert!(unusual.is_non_traditional());
-        assert_eq!(unusual.sharps(), None);
+        assert_eq!(unusual.sharps(), 0);
         assert_eq!(unusual.to_string(), "KeySignature of pitches: [Eb, G#]");
         assert_eq!(
             unusual.accidental_by_step('G').unwrap().unwrap().name(),
             "sharp"
         );
         assert_eq!(unusual.accidental_by_step('A').unwrap(), None);
-        assert!(unusual.try_as_key(Some("major"), None).is_err());
-        assert!(
+        // Its count still names a key and still transposes.
+        assert_eq!(
+            unusual
+                .try_as_key(Some("major"), None)
+                .unwrap()
+                .tonic()
+                .name(),
+            "C"
+        );
+        assert_eq!(
             unusual
                 .transpose_pitch_from_c(&Pitch::from_name("C4").unwrap())
-                .is_err()
+                .unwrap()
+                .name_with_octave(),
+            "C4"
         );
     }
 
+    /// Each of the three is set on its own, as music21's attributes are.
     #[test]
-    fn setting_pitches_and_sharps_switches_kinds() {
+    fn sharps_flag_and_pitches_are_set_apart() {
+        // Pitches written over a traditional signature leave it traditional.
         let mut signature = KeySignature::new(2);
+        signature.set_altered_pitches(pitches(&["Eb"]));
+        assert!(!signature.is_non_traditional());
+        assert_eq!(signature.sharps(), 2);
         assert_eq!(signature.to_string(), "KeySignature of 2 sharps");
-        signature.set_altered_pitches(pitches(&["F#4"]));
-        assert!(signature.is_non_traditional());
-        assert_eq!(signature.to_string(), "KeySignature of pitches: [F#4]");
+        assert_eq!(signature.altered_pitches().unwrap(), pitches(&["Eb"]));
+        signature.set_sharps(3);
+        assert_eq!(signature.altered_pitches().unwrap(), pitches(&["Eb"]));
+
+        // The flag keeps the count; the count keeps the flag.
+        let mut flagged = KeySignature::new(2);
+        flagged.set_non_traditional(true);
+        assert_eq!(flagged.sharps(), 2);
+        assert_eq!(flagged.to_string(), "KeySignature of pitches: []");
+        assert_eq!(flagged.try_as_key(None, None).unwrap().tonic().name(), "D");
+        flagged.set_sharps(3);
+        assert!(flagged.is_non_traditional());
+        flagged.set_non_traditional(false);
+        assert_eq!(flagged.to_string(), "KeySignature of 3 sharps");
+
         assert!(!signature.accidentals_apply_only_to_octave());
         signature.set_accidentals_apply_only_to_octave(true);
         assert!(signature.accidentals_apply_only_to_octave());
-        signature.set_sharps(-1);
-        assert!(!signature.is_non_traditional());
-        assert_eq!(signature.to_string(), "KeySignature of 1 flat");
         assert_eq!(
             KeySignature::new(0).to_string(),
             "KeySignature of no sharps or flats"
         );
         assert_eq!(KeySignature::new(-4).description(), "4 flats");
+    }
+
+    /// A transposed signature keeps its flag and its pitches; only the count
+    /// moves.
+    #[test]
+    fn transposing_moves_only_the_count() {
+        let mut unusual = KeySignature::new(2);
+        unusual.set_non_traditional(true);
+        unusual.set_altered_pitches(pitches(&["B-", "F#"]));
+        let moved = unusual
+            .transpose(&Interval::from_name("M2").unwrap())
+            .unwrap();
+        assert_eq!(moved.sharps(), 4);
+        assert!(moved.is_non_traditional());
+        assert_eq!(moved.altered_pitches().unwrap(), pitches(&["B-", "F#"]));
+    }
+
+    /// A non-traditional signature is not the C-major one it shares a count
+    /// with.
+    #[test]
+    fn the_flag_counts_in_equality() {
+        let mut flagged = KeySignature::new(2);
+        flagged.set_non_traditional(true);
+        assert_ne!(flagged, KeySignature::new(2));
+        assert_eq!(KeySignature::new(2), KeySignature::new(2));
     }
 
     #[test]
@@ -483,7 +547,6 @@ mod tests {
             "D"
         );
         let altered = KeySignature::from_altered_pitches(vec![Pitch::from_name("F#").unwrap()]);
-        assert!(altered.try_as_key(Some("major"), None).is_err());
         assert_eq!(altered.as_key("major").tonic().name(), "C");
         assert_eq!(
             pitch_to_sharps(&Pitch::from_name("D").unwrap(), Some("major")).unwrap(),
@@ -670,7 +733,7 @@ mod tests {
                 let moved = signature
                     .transpose(&Interval::from_name(name).unwrap())
                     .unwrap();
-                assert_eq!(moved.sharps(), Some(expected), "{sharps} by {name}");
+                assert_eq!(moved.sharps(), expected, "{sharps} by {name}");
             }
             assert_eq!(signature.scale("major").unwrap().tonic().name(), major);
             assert_eq!(signature.scale("minor").unwrap().tonic().name(), minor);

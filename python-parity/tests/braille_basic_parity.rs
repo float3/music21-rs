@@ -167,7 +167,7 @@ fn first_in(part: &Stream, wanted: fn(&StreamElement) -> bool) -> Option<&Stream
 fn sharps_of(element: &StreamElement) -> Option<Option<IntegerType>> {
     match element {
         StreamElement::Key(key) => Some(Some(key.sharps())),
-        StreamElement::KeySignature(signature) => Some(signature.sharps()),
+        StreamElement::KeySignature(signature) => Some(Some(signature.sharps())),
         _ => None,
     }
 }

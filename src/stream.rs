@@ -1729,11 +1729,11 @@ mod tests {
     #[test]
     fn the_key_in_force_is_the_last_one_written_before_it() {
         let score = two_measure_score();
-        assert_eq!(score.key_signature_at(0.0).unwrap().sharps(), Some(2));
-        assert_eq!(score.key_signature_at(3.5).unwrap().sharps(), Some(2));
+        assert_eq!(score.key_signature_at(0.0).unwrap().sharps(), 2);
+        assert_eq!(score.key_signature_at(3.5).unwrap().sharps(), 2);
         // the second measure changes it
-        assert_eq!(score.key_signature_at(4.0).unwrap().sharps(), Some(-1));
-        assert_eq!(score.key_signature_at(100.0).unwrap().sharps(), Some(-1));
+        assert_eq!(score.key_signature_at(4.0).unwrap().sharps(), -1);
+        assert_eq!(score.key_signature_at(100.0).unwrap().sharps(), -1);
         assert_eq!(
             score.time_signature_at(5.0).unwrap().ratio_string(),
             "4/4",
@@ -1745,7 +1745,7 @@ mod tests {
         let mut late = Stream::new();
         late.insert(2.0, KeySignature::new(3));
         assert!(late.key_signature_at(1.0).is_none());
-        assert_eq!(late.key_signature_at(2.0).unwrap().sharps(), Some(3));
+        assert_eq!(late.key_signature_at(2.0).unwrap().sharps(), 3);
     }
 
     #[test]
@@ -1754,8 +1754,8 @@ mod tests {
         let up = score
             .transpose(&Interval::from_name("M2").unwrap())
             .unwrap();
-        assert_eq!(up.key_signature_at(0.0).unwrap().sharps(), Some(4));
-        assert_eq!(up.key_signature_at(4.0).unwrap().sharps(), Some(1));
+        assert_eq!(up.key_signature_at(0.0).unwrap().sharps(), 4);
+        assert_eq!(up.key_signature_at(4.0).unwrap().sharps(), 1);
         let names: Vec<String> = up.pitches().iter().map(Pitch::name_with_octave).collect();
         assert_eq!(names, ["E4", "F#4", "G#4", "A4", "B4", "C5"]);
         assert_eq!(up.kind(), StreamKind::Score);
