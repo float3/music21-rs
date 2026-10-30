@@ -106,6 +106,9 @@ pub struct Stream {
     /// instrument it holds, as music21's property does.
     part_name: Option<String>,
     part_abbreviation: Option<String>,
+    /// music21's `_unlinkedDuration`: a duration set apart from what the
+    /// stream holds, which `duration` and `quarterLength` then answer.
+    unlinked_duration: Option<Py<PyAny>>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -117,11 +120,27 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
-/// How long an object lasts: a stream as long as what it holds, anything
+/// How far `recurseRepr` indents what a held stream holds.
+const REPR_INDENT: usize = 4;
+
+/// A number with at most four decimal places and at least one, trailing
+/// zeros dropped: music21's `common.strTrimFloat`, `1.0` and `1.3333`.
+fn str_trim_float(value: f64) -> String {
+    let written = format!("{value:.4}");
+    let trimmed = written.trim_end_matches('0');
+    match trimmed.ends_with('.') {
+        true => format!("{trimmed}0"),
+        false => trimmed.to_string(),
+    }
+}
+
+/// How long an object lasts: a stream as long as its `duration`, anything
 /// else as long as its duration, a thing with no duration no time at all.
 fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
     if let Ok(stream) = object.cast::<Stream>() {
-        return Stream::highest_time(stream);
+        // As long as its `duration` says, which is set apart or what it
+        // holds.
+        return Stream::quarterLength(stream)?.extract();
     }
     match object.getattr("duration") {
         Ok(duration) if !duration.is_none() => duration.getattr("quarterLength")?.extract(),
@@ -333,6 +352,7 @@ impl Stream {
             padding_right: 0.0,
             part_name: None,
             part_abbreviation: None,
+            unlinked_duration: None,
         }
     }
 
@@ -1031,6 +1051,264 @@ impl Stream {
                 target.repr()?
             ))),
         }
+    }
+
+    /// Where an object stands among `elements`, found by identity:
+    /// music21's `index`.
+    fn index(&self, el: &Bound<'_, PyAny>) -> PyResult<usize> {
+        self.sorted()
+            .iter()
+            .position(|held| held.object.bind(el.py()).is(el))
+            .ok_or_else(|| {
+                let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
+                StreamException::new_err(format!("cannot find object ({shown}) in Stream"))
+            })
+    }
+
+    /// Puts `replacement` where `target` stands: music21's `replace`. A
+    /// replacement already held is refused, and a target not held is
+    /// passed over, or with `recurse` looked for in the streams held.
+    /// `allDerived` is accepted and has nothing to follow: a stream here
+    /// keeps no derivation chain.
+    #[pyo3(signature = (target, replacement, *, recurse = false, allDerived = true))]
+    fn replace(
+        &mut self,
+        target: &Bound<'_, PyAny>,
+        replacement: &Bound<'_, PyAny>,
+        recurse: bool,
+        allDerived: bool,
+    ) -> PyResult<()> {
+        let _ = allDerived;
+        let py = target.py();
+        if self
+            .held
+            .iter()
+            .any(|held| held.object.bind(py).is(replacement))
+        {
+            let shown = replacement.str()?.to_string();
+            return Err(StreamException::new_err(format!(
+                "{shown} already in this stream"
+            )));
+        }
+        if let Some(held) = self
+            .held
+            .iter_mut()
+            .find(|held| held.object.bind(py).is(target))
+        {
+            held.object = replacement.clone().unbind();
+            held.order = sort_order(replacement);
+            return Ok(());
+        }
+        if !recurse {
+            return Ok(());
+        }
+        let nested: Vec<Py<PyAny>> = self
+            .held
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        for inner in nested {
+            let Ok(inner) = inner.bind(py).cast::<Stream>() else {
+                continue;
+            };
+            inner
+                .borrow_mut()
+                .replace(target, replacement, recurse, allDerived)?;
+        }
+        Ok(())
+    }
+
+    /// The first element held whose `id` is `elementId`, or `None`:
+    /// music21's `getElementById`, which looks at this stream's own
+    /// elements and not into the streams they hold.
+    fn getElementById<'py>(
+        &self,
+        py: Python<'py>,
+        elementId: &Bound<'py, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        for held in self.sorted() {
+            let object = held.object.bind(py);
+            let Ok(id) = object.getattr("id") else {
+                continue;
+            };
+            if id.eq(elementId)? {
+                return Ok(Some(object.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    /// This stream's own elements, in order, as music21's `iter` hands
+    /// them: a `StreamIterator`, which filters as `recurse` does.
+    fn iter<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Walked>> {
+        let found = self
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        Bound::new(py, Walked::of(found, self.kind))
+    }
+
+    /// The stream holding `el`, this one or one held at any depth below
+    /// it, or `None`: music21's `containerInHierarchy`. A stream here keeps
+    /// no active site, so `setActiveSite` has nothing to set.
+    #[pyo3(signature = (el, *, setActiveSite = true))]
+    fn containerInHierarchy<'py>(
+        slf: &Bound<'py, Self>,
+        el: &Bound<'py, PyAny>,
+        setActiveSite: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        if held.iter().any(|object| object.bind(py).is(el)) {
+            return Ok(Some(slf.clone().into_any()));
+        }
+        let keywords = PyDict::new(py);
+        keywords.set_item("setActiveSite", setActiveSite)?;
+        let stream = pyo3::types::PyString::new(py, "Stream");
+        for object in held {
+            let object = object.bind(py);
+            if !is_of_class(object, &stream)? {
+                continue;
+            }
+            let found = object.call_method("containerInHierarchy", (el,), Some(&keywords))?;
+            if !found.is_none() {
+                return Ok(Some(found));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Each element on a line of its own with its offset, a held stream's
+    /// indented beneath it: music21's `recurseRepr`, which `show('text')`
+    /// prints.
+    #[pyo3(signature = (
+        *,
+        prefixSpaces = 0,
+        addBreaks = true,
+        addIndent = true,
+        addEndTimes = false,
+        useMixedNumerals = false
+    ))]
+    fn recurseRepr(
+        slf: &Bound<'_, Self>,
+        prefixSpaces: usize,
+        addBreaks: bool,
+        addIndent: bool,
+        addEndTimes: bool,
+        useMixedNumerals: bool,
+    ) -> PyResult<String> {
+        let py = slf.py();
+        let held: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        let written = |value: f64| -> PyResult<String> {
+            match useMixedNumerals {
+                true => crate::duration::mixed_numeral(py, value),
+                false => Ok(str_trim_float(value)),
+            }
+        };
+        let indent = match addIndent {
+            true => " ".repeat(prefixSpaces),
+            false => String::new(),
+        };
+        let keywords = PyDict::new(py);
+        keywords.set_item("prefixSpaces", prefixSpaces + REPR_INDENT)?;
+        keywords.set_item("addBreaks", addBreaks)?;
+        keywords.set_item("addIndent", addIndent)?;
+        keywords.set_item("addEndTimes", addEndTimes)?;
+        keywords.set_item("useMixedNumerals", useMixedNumerals)?;
+        let stream = pyo3::types::PyString::new(py, "Stream");
+
+        let mut lines = Vec::new();
+        for (offset, object) in held {
+            let object = object.bind(py);
+            // `{1.0} <...>`, or with end times `{1.0 - 1.3333} <...>`.
+            let mut place = written(offset)?;
+            if addEndTimes {
+                place = format!("{place} - {}", written(offset + length_of(object)?)?);
+            }
+            lines.push(format!("{indent}{{{place}}} {}", object.repr()?));
+            if is_of_class(object, &stream)? {
+                let inner = object.call_method("recurseRepr", (), Some(&keywords))?;
+                lines.push(inner.extract()?);
+            }
+        }
+        let joint = match addBreaks {
+            true => "\n",
+            false => " / ",
+        };
+        Ok(lines.join(joint))
+    }
+
+    /// music21's `show` for its text formats: `'text'` (or `'txt'`, `'t'`)
+    /// prints the `recurseRepr` listing, taking `addEndTimes` and
+    /// `useMixedNumerals`, and `'textline'` answers it on one line. A
+    /// format that renders -- MusicXML, MIDI, an image -- is refused: the
+    /// wheel writes those documents and leaves showing them to its caller.
+    #[pyo3(signature = (fmt = None, app = None, **keywords))]
+    fn show<'py>(
+        slf: &Bound<'py, Self>,
+        fmt: Option<&str>,
+        app: Option<&Bound<'py, PyAny>>,
+        keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Option<String>> {
+        let _ = app;
+        let py = slf.py();
+        let said = |name: &str| -> PyResult<bool> {
+            match keywords
+                .map(|given| given.get_item(name))
+                .transpose()?
+                .flatten()
+            {
+                Some(value) => value.is_truthy(),
+                None => Ok(false),
+            }
+        };
+        let format = fmt.unwrap_or("").to_lowercase();
+        match format.as_str() {
+            "text" | "txt" | "t" => {
+                let listing = Self::recurseRepr(
+                    slf,
+                    0,
+                    true,
+                    true,
+                    said("addEndTimes")?,
+                    said("useMixedNumerals")?,
+                )?;
+                py.import("builtins")?.getattr("print")?.call1((listing,))?;
+                Ok(None)
+            }
+            "textline" => Ok(Some(Self::recurseRepr(
+                slf,
+                0,
+                false,
+                false,
+                said("addEndTimes")?,
+                said("useMixedNumerals")?,
+            )?)),
+            _ => Err(StreamException::new_err(format!(
+                "cannot show {fmt:?} here: only 'text' and 'textline' are shown; \
+                 write the document and open it instead"
+            ))),
+        }
+    }
+
+    /// Takes everything out, keeping what else the stream says of itself:
+    /// music21's `clear`. A measure's barlines go too, being among
+    /// music21's elements.
+    fn clear(&mut self) {
+        self.held.clear();
+        self.left_barline = None;
+        self.right_barline = None;
     }
 
     /// The element of this stream sounding where another element starts:
@@ -2808,7 +3086,51 @@ impl Stream {
     /// How long the stream lasts, which is its highest time.
     #[getter]
     fn quarterLength<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
+        let py = slf.py();
+        if let Some(set) = &slf.borrow().unlinked_duration {
+            let length: f64 = set.bind(py).getattr("quarterLength")?.extract()?;
+            return crate::duration::op_frac(py, length);
+        }
+        crate::duration::op_frac(py, Self::highest_time(slf)?)
+    }
+
+    /// The length of the whole stream: music21's `duration`, the highest
+    /// time unless a duration has been set apart from it.
+    #[getter]
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(set) = &slf.borrow().unlinked_duration {
+            return Ok(set.clone_ref(py));
+        }
+        let length = music21_rs_crate::Duration::new(Self::highest_time(slf)?)
+            .map_err(|error| StreamException::new_err(error.to_string()))?;
+        crate::duration::Duration::object(py, length)
+    }
+
+    /// Sets a duration apart from what the stream holds, or with `None`
+    /// goes back to the highest time. Anything but a duration is refused,
+    /// as music21 refuses it.
+    #[setter]
+    fn set_duration(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|given| !given.is_none()) else {
+            self.unlinked_duration = None;
+            return Ok(());
+        };
+        if !is_of_class(value, &pyo3::types::PyString::new(value.py(), "Duration"))? {
+            let shown = value.str()?.to_string();
+            return Err(StreamException::new_err(format!(
+                "this must be a Duration object, not {shown}"
+            )));
+        }
+        self.unlinked_duration = Some(value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `sort`. A stream here answers in order whenever it is
+    /// read, so there is nothing to do; `force` is accepted for that.
+    #[pyo3(signature = (force = false))]
+    fn sort(&self, force: bool) {
+        let _ = force;
     }
 
     fn __len__(&self) -> usize {
@@ -3705,6 +4027,9 @@ impl Stream {
             let stream = copied.cast::<Stream>()?;
             let mut stream = stream.borrow_mut();
             stream.id = slf.borrow().id.as_ref().map(|id| id.clone_ref(py));
+            if let Some(set) = &slf.borrow().unlinked_duration {
+                stream.unlinked_duration = Some(deepcopy.call1((set, memo))?.unbind());
+            }
             for (offset, object) in held {
                 let object = deepcopy.call1((object, memo))?;
                 stream.put(offset, &object);
@@ -3721,6 +4046,7 @@ impl Stream {
             let mut stream = stream.borrow_mut();
             let me = slf.borrow();
             stream.id = me.id.as_ref().map(|id| id.clone_ref(py));
+            stream.unlinked_duration = me.unlinked_duration.as_ref().map(|set| set.clone_ref(py));
             for held in me.sorted() {
                 stream.put(held.offset, held.object.bind(py));
             }

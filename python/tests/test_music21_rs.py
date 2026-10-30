@@ -484,6 +484,122 @@ def test_a_stream_holds_the_objects_it_is_given():
     assert repr(score.parts[0]) == "<music21.stream.Part upper>"
 
 
+def test_a_stream_finds_and_swaps_what_it_holds():
+    """music21's `index`, `replace`, `getElementById` and `clear`."""
+    line = m.Stream()
+    first, second = m.Note("C4"), m.Note("D4")
+    line.append([first, second])
+    assert line.index(second) == 1
+    with pytest.raises(m.StreamException, match="cannot find object"):
+        line.index(m.Note("D4"))
+
+    # A replacement stands where the target stood; one already held is
+    # refused, and a target the stream lacks is passed over.
+    third = m.Note("E4")
+    line.replace(second, third)
+    assert line.elements == (first, third)
+    assert line.elementOffset(third) == 1.0
+    with pytest.raises(m.StreamException):
+        line.replace(first, third)
+    line.replace(m.Note("F4"), m.Note("G4"))
+    assert len(line) == 2
+
+    # With recurse, a stream nested inside is searched too.
+    outer, inner = m.Stream(), m.Stream()
+    inner.id = "inner"
+    inner.append(first)
+    outer.insert(0, inner)
+    fourth = m.Note("A4")
+    outer.replace(first, fourth, recurse=True)
+    assert inner.elements == (fourth,)
+
+    assert outer.getElementById("inner") is inner
+    assert outer.getElementById("nothing") is None
+
+    line.clear()
+    assert len(line) == 0
+    bar = m.Measure()
+    bar.append(m.Note("C4"))
+    bar.rightBarline = "final"
+    bar.clear()
+    assert bar.rightBarline is None
+
+
+def test_a_stream_has_a_duration_that_can_be_set_apart():
+    """music21's `Stream.duration`: the highest time, unless a duration is
+    set, which `quarterLength` then answers; `sort` leaves a stream that
+    is always in order as it is."""
+    line = m.Stream()
+    line.append([m.Note("C4"), m.Note("D4", quarterLength=2)])
+    assert line.duration.quarterLength == 3.0
+    line.duration = m.Duration(8.0)
+    assert line.duration.quarterLength == 8.0
+    assert line.quarterLength == 8.0
+    assert line.highestTime == 3.0
+    assert copy.deepcopy(line).quarterLength == 8.0
+    with pytest.raises(m.StreamException):
+        line.duration = 4.0
+    line.duration = None
+    assert line.quarterLength == 3.0
+    assert line.sort() is None
+    assert line.sort(force=True) is None
+
+
+def test_a_stream_finds_where_an_element_is_held():
+    """music21's `iter`, `containerInHierarchy` and `recurseRepr`."""
+    score, part, bar = m.Score(), m.Part(), m.Stream()
+    bar.id = "m1"
+    held = m.Note("D4")
+    bar.append([held, m.Note("E4", quarterLength=1 / 3)])
+    part.append(bar)
+    score.insert(0, part)
+    assert score.containerInHierarchy(held).id == "m1"
+    assert score.containerInHierarchy(held, setActiveSite=False) is bar
+    assert m.Stream().containerInHierarchy(held) is None
+
+    walked = bar.iter()
+    assert type(walked).__name__ == "StreamIterator"
+    assert list(walked) == [held, bar[1]]
+    assert len(part.iter().notes) == 0
+
+    address = re.compile(r"0x[0-9a-f]+")
+    shown = address.sub("ADDR", score.recurseRepr())
+    assert shown == (
+        "{0.0} <music21.stream.Part ADDR>\n"
+        "    {0.0} <music21.stream.Stream m1>\n"
+        "        {0.0} <music21.note.Note D>\n"
+        "        {1.0} <music21.note.Note E>"
+    )
+    line = address.sub("ADDR", bar.recurseRepr(addBreaks=False, addEndTimes=True))
+    assert line == (
+        "{0.0 - 1.0} <music21.note.Note D> / "
+        "{1.0 - 1.3333} <music21.note.Note E>"
+    )
+    mixed = bar.recurseRepr(addEndTimes=True, useMixedNumerals=True)
+    assert mixed.splitlines()[1] == "{1 - 1 1/3} <music21.note.Note E>"
+
+
+def test_a_stream_shows_itself_as_text(capsys):
+    """music21's `show('text')`, which prints the `recurseRepr` listing,
+    and `show('textline')`, which answers it on one line; the formats
+    that render are the caller's to reach."""
+    line = m.Stream()
+    line.append([m.Note("C4"), m.Note("D4", quarterLength=0.5)])
+    assert line.show("text") is None
+    assert capsys.readouterr().out == (
+        "{0.0} <music21.note.Note C>\n{1.0} <music21.note.Note D>\n"
+    )
+    line.show("txt", addEndTimes=True)
+    assert capsys.readouterr().out == (
+        "{0.0 - 1.0} <music21.note.Note C>\n{1.0 - 1.5} <music21.note.Note D>\n"
+    )
+    assert line.show("textline") == (
+        "{0.0} <music21.note.Note C> / {1.0} <music21.note.Note D>"
+    )
+    with pytest.raises(m.StreamException):
+        line.show("musicxml")
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.

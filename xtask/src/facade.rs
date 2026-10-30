@@ -264,6 +264,18 @@ pub fn defines_member(body: &str, name: &str) -> bool {
     ]
     .iter()
     .any(|pattern| body.contains(pattern.as_str()))
+        || serves_metadata_name(body, name)
+}
+
+/// Whether a class answers `name` from music21's metadata vocabulary
+/// through `__getattr__`, as the wheel's `Metadata` answers `composer` and
+/// `composers`: names no `fn` declares.
+fn serves_metadata_name(body: &str, name: &str) -> bool {
+    if !body.contains("fn __getattr__") || !body.contains("unique_name_of(") {
+        return false;
+    }
+    music21_rs::metadata::unique_name_of(name).is_some()
+        || music21_rs::metadata::unique_name_of_plural(name).is_some()
 }
 
 #[cfg(test)]
@@ -460,5 +472,22 @@ pub struct Matcher {
         assert!(defines_member(&body, "reps"));
         assert!(!defines_member(&body, "hidden"));
         assert!(!defines_member(&body, "found"));
+    }
+
+    /// A class answering music21's metadata vocabulary through
+    /// `__getattr__`, as the wheel's `Metadata` does, carries every name of
+    /// it, plural ones too, and nothing else.
+    #[test]
+    fn a_metadata_lookup_serves_the_vocabulary() {
+        let body = "\
+    fn __getattr__(&self, name: &str) {
+        let unique = unique_name_of(name);
+    }
+";
+        assert!(defines_member(body, "composer"));
+        assert!(defines_member(body, "composers"));
+        assert!(defines_member(body, "copyright"));
+        assert!(!defines_member(body, "titles"));
+        assert!(!defines_member("fn other(&self) {}", "composer"));
     }
 }
