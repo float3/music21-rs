@@ -1186,6 +1186,16 @@
 
 ## fixed
 
+- **`CS12` counts the bass moving up**, as music21 now does: C to G is
+  seven semitones, not five. The wheel's `ChordBassMotionFeature` follows.
+
+- **An arpeggio on a lone percussion chord is numbered**, as music21 now
+  numbers one on any chord of more than one note.
+
+- **LilyPond text stays inside its string.** A backslash is escaped as
+  well as a quote, and a lyric is quoted the same way, as music21 now
+  does, so text cannot end the string and run as Scheme.
+
 - **`install_into_music21` installs `midi.percussion.PercussionMapper`.**
   It was left out, so music21 kept its own mapper, whose
   `reverseInstrumentMapping` is a class attribute built at import and still

@@ -3166,6 +3166,8 @@ fn spanner_notations(
             .flatten()
             .map(|element| match element {
                 StreamElement::Chord(chord) => chord.notes().len(),
+                // music21 counts the notes of any `ChordBase`.
+                StreamElement::PercussionChord(chord) => chord.len(),
                 _ => 1,
             })
             .sum();

@@ -454,9 +454,10 @@ fn children(kind: &Kind) -> (Vec<usize>, Vec<usize>) {
     }
 }
 
-/// `quoteString`: in double quotes, a quote inside escaped, a space after.
+/// `quoteString`: in double quotes, a backslash and a quote inside
+/// escaped, a space after.
 fn quote(text: &str) -> String {
-    format!("\"{}\" ", text.replace('"', "\\\""))
+    format!("\"{}\" ", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// `makeLettersOnlyId`: every character not a letter turned into one.
@@ -781,7 +782,7 @@ impl<'a> Converter<'a> {
             None => " _ ".to_string(),
             Some(lyric) if lyric.text().is_empty() => " _ ".to_string(),
             Some(lyric) => {
-                let mut text = format!("\"{}\"", lyric.text());
+                let mut text = quote(&lyric.text()).trim_end().to_string();
                 match lyric.syllabic() {
                     Syllabic::End => {
                         text += "__";
@@ -1561,5 +1562,21 @@ mod tests {
         assert!(text.contains("\\time 4/4"));
         assert!(text.contains("fis' 4."));
         assert!(text.contains("\\bar \"|.\"  %{ end measure 2 %}"));
+    }
+
+    /// music21 keeps text inside its string: a backslash and a quote are
+    /// both escaped, in a lyric as in a header.
+    #[test]
+    fn text_stays_inside_strings() {
+        let scheme_call = r#"\" #(system "touch x") %"#;
+        let escaped = r#""\\\" #(system \"touch x\") %""#;
+        assert_eq!(quote(scheme_call), format!("{escaped} "));
+
+        let mut note = crate::Note::from_name("C4").unwrap();
+        note.set_lyric(Some(scheme_call)).unwrap();
+        let mut line = Stream::new();
+        line.push(note);
+        let text = to_lilypond(&line, &LilyOptions::default()).unwrap();
+        assert!(text.contains(escaped), "{text}");
     }
 }

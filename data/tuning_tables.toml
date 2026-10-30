@@ -8,7 +8,7 @@
 # Emit the Rust with `cargo run --release -p xtask -- emit-tuning-tables`.
 
 music21_version = "11.0.0b14"
-music21_commit = "5609a548cdfc344eaed13230166bb837227395e7"
+music21_commit = "0bb37a82b4f40011d75e9579dc9245da04685f4c"
 
 [[table]]
 name = "CARLOS_HARMONIC"

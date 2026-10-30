@@ -483,7 +483,7 @@ fn bass_class(symbol: &ChordSymbol) -> usize {
     pitch_class(symbol.bass().unwrap_or(symbol.root()))
 }
 
-/// How far the bass moves down, in semitones folded into the octave, from
+/// How far the bass moves up, in semitones folded into the octave, from
 /// each chord symbol to the next that has another bass, each as a share of
 /// all such moves; the first value, a bass staying put, is one where the
 /// bass never moves. A symbol that sounds nothing is passed over.
@@ -506,7 +506,7 @@ fn chord_bass_motion(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
         let last_bass = bass_class(previous);
         let this_bass = bass_class(this);
         if last_bass != this_bass {
-            motion[(last_bass + 12 - this_bass) % 12] += 1;
+            motion[(this_bass + 12 - last_bass) % 12] += 1;
             total += 1;
             last = Some(this);
         }
@@ -596,8 +596,16 @@ mod tests {
         // Each read off music21's ChordBassMotionFeature.
         let data = DataInstance::new(&symbols(&["C", "F", "G", "C"]))?;
         let mut expected = vec![0.0; 12];
-        expected[7] = 2.0 / 3.0;
-        expected[10] = 1.0 / 3.0;
+        expected[5] = 2.0 / 3.0;
+        expected[2] = 1.0 / 3.0;
+        assert_eq!(vector("CS12", &data), expected);
+
+        // Counted upward: C up to D, D down to B, B down to B-.
+        let data = DataInstance::new(&symbols(&["C", "D", "B", "B-"]))?;
+        let mut expected = vec![0.0; 12];
+        expected[2] = 1.0 / 3.0;
+        expected[9] = 1.0 / 3.0;
+        expected[11] = 1.0 / 3.0;
         assert_eq!(vector("CS12", &data), expected);
 
         // A symbol that sounds nothing is passed over, wherever it stands.
@@ -606,7 +614,7 @@ mod tests {
         silent.insert(2.0, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
         let data = DataInstance::new(&silent)?;
         let mut expected = vec![0.0; 12];
-        expected[5] = 1.0;
+        expected[7] = 1.0;
         assert_eq!(vector("CS12", &data), expected);
         let mut alone = symbols(&["C"]);
         alone.insert(1.0, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));
