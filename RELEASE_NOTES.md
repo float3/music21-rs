@@ -7,6 +7,11 @@
   `bar_duration` answers it. The wheel kept it as a Python object beside
   the meter; now copies, pickles and the crate's own readers see it.
 
+- **A chord's `pitches` and `root()` build no notes in the wheel.** Under
+  `install_into_music21` each note runs music21's own object machinery;
+  `Chord('C4 E4 G4').pitches` drops from 26.8µs to 8.9µs. A note built
+  later carries the pitch object already handed out.
+
 - **music21 11.0.0b14, whose instrument module grew by ten classes and
   moved its percussion map into a mixin of its own.** `Instrument::of_kind`
   covers all 125 of music21's classes -- `BellTree`, `Cabasa`, `Claves`,

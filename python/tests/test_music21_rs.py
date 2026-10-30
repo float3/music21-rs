@@ -5693,3 +5693,44 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     # The reduction itself is of a score, as music21 refuses anything else.
     with pytest.raises(Exception, match="stream.Score"):
         cr.run(m.from_tiny_notation("4/4 c4 d e2"))
+
+
+def _live_notes():
+    return sum(isinstance(held, m.Note) for held in gc.get_objects())
+
+
+def test_a_chords_pitches_are_handed_out_without_its_notes():
+    """Asking a chord for its pitches, or its root, builds no notes: under
+    `install_into_music21` each note runs music21's own object machinery,
+    which is most of what a chord costs. The pitch objects are still the
+    chord's own, and the notes built later carry the same ones."""
+    gc.collect()
+    before = _live_notes()
+    chord = m.Chord("C4 E4 G4")
+    pitches = chord.pitches
+    assert chord.root() is pitches[0]
+    assert chord.pitches[1] is pitches[1]
+    assert _live_notes() == before
+
+    # An edit through one reaches the chord.
+    pitches[1].name = "E-"
+    assert chord.commonName == "minor triad"
+
+    # The notes, once built, hold the pitches already handed out, and the
+    # pitch knows its note.
+    notes = chord.notes
+    assert [note.pitch for note in notes] == list(pitches)
+    assert all(note.pitch is pitch for note, pitch in zip(notes, pitches))
+    assert pitches[0]._client is notes[0]
+    pitches[2].name = "G#"
+    assert chord.pitchNames == ["C", "E-", "G#"]
+
+
+def test_a_loose_pitch_reaches_its_note_when_asked_for_its_client():
+    """music21 reads `pitch._client` to find the note around a pitch; a
+    pitch handed out before its note was built answers the note."""
+    chord = m.Chord("D4 F#4 A4")
+    third = chord.pitches[1]
+    client = third._client
+    assert client.pitch is third
+    assert chord.notes[1] is client

@@ -907,6 +907,11 @@ pub struct Pitch {
     /// an edit through this object has to reach the note and the chord;
     /// [`Pitch::write_back`] is what carries it there.
     pub(crate) owner: Option<Py<Note>>,
+    /// The chord this pitch was handed out by before the note holding it
+    /// was built, and that note's place in the chord: a chord answers
+    /// `pitches` without building notes, so an edit through the pitch is
+    /// written into the chord directly until the note exists.
+    pub(crate) loose_in: Option<(Py<PyAny>, usize)>,
     /// The pitch's own `Accidental` object, once something has asked for it.
     ///
     /// music21 keeps one object and hands it back every time, so
@@ -924,6 +929,7 @@ impl Clone for Pitch {
             inner: self.inner.clone(),
             spelling_is_inferred: self.spelling_is_inferred,
             owner: None,
+            loose_in: None,
             accidental: None,
         }
     }
@@ -1099,6 +1105,7 @@ impl Pitch {
             inner,
             spelling_is_inferred,
             owner: None,
+            loose_in: None,
             accidental: None,
         }
     }
@@ -1137,10 +1144,13 @@ impl Pitch {
     /// shapes; a mutating method is only ever reached from Python, so the
     /// interpreter is already there.
     pub(crate) fn write_back(&self) -> PyResult<()> {
-        let Some(owner) = &self.owner else {
+        if let Some(owner) = &self.owner {
+            return Python::attach(|py| Note::adopt_pitch(py, owner, &self.inner));
+        }
+        let Some((chord, index)) = &self.loose_in else {
             return Ok(());
         };
-        Python::attach(|py| Note::adopt_pitch(py, owner, &self.inner))
+        Python::attach(|py| crate::chord::Chord::adopt_loose_pitch(py, chord, *index, &self.inner))
     }
 
     /// This pitch as it sounds, which for one that was never given an octave
@@ -1205,12 +1215,16 @@ impl Pitch {
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
         visit.call(&self.owner)?;
+        if let Some((chord, _)) = &self.loose_in {
+            visit.call(chord)?;
+        }
         visit.call(&self.accidental)?;
         Ok(())
     }
 
     fn __clear__(&mut self) {
         self.owner = None;
+        self.loose_in = None;
         self.accidental = None;
     }
 
@@ -2085,11 +2099,27 @@ impl Pitch {
     /// music21's `_client`: the note this pitch belongs to, where it belongs
     /// to one. Its own `interval._extractPitch` reads it to tell a pitch
     /// from the note around it.
+    ///
+    /// A pitch a chord handed out before building its note asks the chord
+    /// for that note now.
     #[getter]
-    fn _client(&self, py: Python<'_>) -> Py<PyAny> {
-        match &self.owner {
-            Some(owner) => owner.clone_ref(py).into_any(),
-            None => py.None(),
+    fn _client(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let loose = {
+            let me = slf.borrow();
+            if let Some(owner) = &me.owner {
+                return Ok(owner.clone_ref(py).into_any());
+            }
+            me.loose_in
+                .as_ref()
+                .map(|(chord, index)| (chord.clone_ref(py), *index))
+        };
+        let Some((chord, index)) = loose else {
+            return Ok(py.None());
+        };
+        match crate::chord::Chord::note_at(chord.bind(py), index)? {
+            Some(note) => Ok(note.into_any()),
+            None => Ok(py.None()),
         }
     }
 

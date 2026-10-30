@@ -12,7 +12,7 @@ they are shaped that way. `issues.md` says what is still wrong.
 **the crate models music, and is meant to model scores too.** *changed
 2026-09-12.* it used to answer only questions about a pitch, an interval, a
 chord, a meter or a tuning, leaving `Stream`, parsing and notation to
-music21 — which is why 29 members are carried by the wheel and not the crate.
+music21 — which is why members are carried by the wheel and not the crate.
 The direction now is the opposite: the crate is meant to be a strict superset
 of the wheel, caches aside, and as little as possible belongs in the facade.
 
@@ -23,8 +23,8 @@ to make an object a *member* of a stream — sites and contexts, derivations,
 `activeSite`, measure-relative offsets.
 
 *costs:* until it does, a facade object that music21 may put in a stream has
-to carry music21's own half, which is what makes an installed chord cost
-eight `Music21Object.__init__` calls. see `issues.md`.
+to carry music21's own half: an installed chord's notes each run
+`Music21Object.__init__` once they are asked for. see `issues.md`.
 
 **nothing answers at random.** *changed 2026-10-07.* where music21 picks
 at random -- a note a scale stands on twice, the way Rag Marwa comes down
@@ -155,9 +155,9 @@ from the pyo3 class and from music21's own, so music21 will keep it in a
 every musical question is answered in Rust.
 
 *costs:* a Python `__init__` on the hot path. an installed `Chord('C4 E4 G4')`
-costs about what music21's does, because building one makes eight objects
-that each start music21's half. the bare wheel does the same chord in 8.1µs
-against music21's 30µs.
+builds only itself (3.3µs against music21's 21.2µs), and its pitches on
+their own (8.9µs); asking for its notes costs about what music21's chord
+does (25.8µs), each note starting music21's half.
 
 **the facade shows two classes where the crate has one.** music21 calls a
 span of a bar that nothing divides a `MeterTerminal` and one that is divided a

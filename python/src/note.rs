@@ -438,7 +438,12 @@ impl Note {
             "Pitch",
             Pitch::wrap(inner.pitch().clone(), inferred),
         )?;
-        Ok(Self {
+        Ok(Self::around(inner, pitch))
+    }
+
+    /// The facade around a note and the pitch object it hands out.
+    fn around(inner: RsNote, pitch: Py<Pitch>) -> Self {
+        Self {
             inner,
             pitch,
             volume: None,
@@ -453,12 +458,25 @@ impl Note {
             beams: None,
             stored_instrument: None,
             unread_pitch: None,
-        })
+        }
     }
 
     /// A Python note object whose pitch already points back at it.
     pub(crate) fn object(py: Python<'_>, inner: RsNote) -> PyResult<Py<Self>> {
         let note = crate::installed_new(py, "music21.note", "Note", Self::wrap(py, inner)?)?;
+        Self::claim_pitch(py, &note);
+        Ok(note)
+    }
+
+    /// A note of a chord, built around the pitch object the chord already
+    /// handed out for it, so that `chord.pitches[0] is chord[0].pitch` holds
+    /// whichever was asked for first.
+    pub(crate) fn object_around(
+        py: Python<'_>,
+        inner: RsNote,
+        pitch: Py<Pitch>,
+    ) -> PyResult<Py<Self>> {
+        let note = crate::installed_new(py, "music21.note", "Note", Self::around(inner, pitch))?;
         Self::claim_pitch(py, &note);
         Ok(note)
     }
@@ -496,7 +514,10 @@ impl Note {
     /// the pitch finds its way home.
     fn claim_pitch(py: Python<'_>, note: &Py<Self>) {
         let pitch = note.borrow(py).pitch.clone_ref(py);
-        pitch.borrow_mut(py).owner = Some(note.clone_ref(py));
+        let mut pitch = pitch.borrow_mut(py);
+        pitch.owner = Some(note.clone_ref(py));
+        // A pitch a chord handed out on its own now has its note.
+        pitch.loose_in = None;
     }
 
     /// Takes the value a `Pitch` object now holds and passes it on: into the

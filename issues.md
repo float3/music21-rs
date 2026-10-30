@@ -143,16 +143,32 @@ two rules, set 2026-09-12, that most of the open work now serves:
    examples, `Sieve.compressed` having brought in the compressed reading the
    last one wanted.
 
-7. **an installed chord costs what music21's does.** `Chord('C4 E4 G4')`
-   through `install_into_music21` is ~30µs against music21's ~30µs, while the
-   bare wheel does it in 8.1µs. one chord builds eight objects through the
-   install helper — the chord, three notes, three pitches and a duration —
-   and four of them run music21's `Music21Object.__init__` and
-   `Sites.__init__` in Python, because music21 will not keep anything else in
-   a `Stream` and construction cannot know whether the object will end up in
-   one. two ways out: build fewer objects (lazy notes and pitches, which has
-   to keep `chord.pitches[0] is chord.root()` true), or give the crate
-   streams so the wheel need not build music21's half at all — entry 2.
+7. **an installed chord costs what music21's does only once its notes
+   are asked for.** measured on one Linux machine, best of five runs of
+   20,000 (`Chord('C4 E4 G4')` through `install_into_music21`):
+
+   | asked for          | before | now    | music21 |
+   |--------------------|--------|--------|---------|
+   | the chord alone    | 3.3µs  | 3.3µs  | 21.2µs  |
+   | its `pitches`      | 26.8µs | 8.9µs  | --      |
+   | its `root()`       | 11.8µs | 6.9µs  | --      |
+   | its `notes`        | 25.6µs | 25.8µs | --      |
+
+   music21 builds notes and pitches with the chord, so its one figure
+   stands for every row.
+
+   the notes were already lazy; what was left was that `pitches` built all
+   three and `root()` the one it named, and each note runs music21's
+   `Music21Object.__init__` and `Sites.__init__` in Python. a chord now
+   hands out pitch objects on their own, and a note built later takes the
+   one already out, so `chord.pitches[0] is chord.root()` and
+   `chord.pitches[0] is chord[0].pitch` both hold whichever is asked first.
+   an edit through such a pitch is written into the chord directly.
+
+   what is left is the notes themselves: music21 will keep nothing but a
+   `Music21Object` in a `Stream`, so a note has to pay for its half of
+   that. giving the crate streams so the wheel need not build music21's
+   half is entry 2.
 
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
