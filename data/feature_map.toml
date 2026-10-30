@@ -1444,6 +1444,7 @@ getLast = "the last element itself, likewise"
 [[class]]
 python = "spanner.py"
 name = "Ottava"
+facade = "Spanner"
 rust = ["src/spanner.rs", "src/stream/sounding.rs"]
 note = "An octave line, and whether the notes under it are written where they sound."
 
@@ -1457,6 +1458,7 @@ undoTransposition = "to_written_pitch"
 [[class]]
 python = "spanner.py"
 name = "Line"
+facade = "Spanner"
 rust = ["src/spanner.rs"]
 note = "A bracket with a tick at each end."
 
@@ -1470,6 +1472,7 @@ tick = "sets both ends at once; `LineEnds` carries each"
 [[class]]
 python = "spanner.py"
 name = "Glissando"
+facade = "Spanner"
 rust = ["src/spanner.rs"]
 
 [[class]]
@@ -2651,6 +2654,6 @@ reason = "the 131-property vocabulary, which is `metadata::STANDARD_PROPERTIES` 
 python = ["metadata/properties.py"]
 
 [[unlisted]]
-reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, which no stream here holds"
+reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, each a class with no members: the two segment divisions are `braille::SegmentDivision`, read from music21's own objects by the wheel; the other seven no stream here holds"
 python = ["braille/objects.py"]
 

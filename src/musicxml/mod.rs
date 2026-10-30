@@ -1956,7 +1956,9 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             | StreamElement::Break(_)
             | StreamElement::Layout(_)
             | StreamElement::TextBox(_)
-            | StreamElement::Variant(_) => {}
+            | StreamElement::Variant(_)
+            | StreamElement::GlobalComment(_)
+            | StreamElement::BrailleSegmentDivision(_) => {}
         }
         Ok(())
     }
@@ -3166,6 +3168,8 @@ fn spanner_notations(
             .flatten()
             .map(|element| match element {
                 StreamElement::Chord(chord) => chord.notes().len(),
+                // music21 counts the notes of any `ChordBase`.
+                StreamElement::PercussionChord(chord) => chord.len(),
                 _ => 1,
             })
             .sum();
@@ -3888,7 +3892,7 @@ fn key_signature_element(key: &KeySignature, mode: Option<&str>) -> Result<Eleme
         element.set("color", normalize_color(color)?);
     }
     let altered = key.altered_pitches()?;
-    match key.sharps().filter(|_| !key.is_non_traditional()) {
+    match (!key.is_non_traditional()).then_some(key.sharps()) {
         Some(sharps) => {
             element.sub_text("fifths", sharps.to_string());
             if let Some(mode) = mode {

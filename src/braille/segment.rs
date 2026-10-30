@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use super::SegmentDivision;
 use super::basic::{
     self, NoteContext, Transcription, barline_to_braille, chord_to_braille, clef_to_braille,
     dynamic_to_braille, note_to_braille, number_to_braille, rest_to_braille,
@@ -210,13 +211,13 @@ pub(crate) fn element_repr(element: &StreamElement) -> String {
                 python_str_repr(tempo.text())
             )
         }
-        StreamElement::KeySignature(signature) => match signature.sharps() {
-            Some(sharps) => format!(
-                "<music21.key.KeySignature of {}>",
-                sharps_description(sharps)
-            ),
-            None => "<music21.key.KeySignature of pitches: []>".to_string(),
-        },
+        StreamElement::KeySignature(signature) if signature.is_non_traditional() => {
+            "<music21.key.KeySignature of pitches: []>".to_string()
+        }
+        StreamElement::KeySignature(signature) => format!(
+            "<music21.key.KeySignature of {}>",
+            sharps_description(signature.sharps())
+        ),
         StreamElement::Key(key) => {
             // A key's `str` is its tonic and mode alone.
             let tonic = music21_pitch_name(key.tonic_pitch());
@@ -368,6 +369,9 @@ fn affinity_of(element: &StreamElement) -> Option<(Affinity, i32)> {
         StreamElement::Stream(inner) if inner.kind() == StreamKind::Voice => {
             (Affinity::Inaccord, 10)
         }
+        // music21's `BrailleTranscriptionHelper` takes no affinity; the
+        // segmenting reads it before asking for one.
+        StreamElement::BrailleSegmentDivision(_) => (Affinity::NoteGrouping, -100),
         StreamElement::TextExpression(text) => {
             if text.content().split_whitespace().count() > 1 {
                 (Affinity::LongTextExpression, 8)
@@ -796,7 +800,7 @@ impl BrailleSegment {
 fn sharps_of(element: &StreamElement) -> Option<Option<IntegerType>> {
     match element {
         StreamElement::Key(key) => Some(Some(key.sharps())),
-        StreamElement::KeySignature(signature) => Some(signature.sharps()),
+        StreamElement::KeySignature(signature) => Some(Some(signature.sharps())),
         _ => None,
     }
 }
@@ -914,6 +918,16 @@ pub fn get_raw_segments(
                     ordinal += 1;
                 }
                 start_new = false;
+            }
+            // A division ends the segment unless it is empty, or optional
+            // and the segment not yet past its length; it is never written.
+            if let StreamElement::BrailleSegmentDivision(division) = &element.element {
+                let waits =
+                    *division == SegmentDivision::Optional && in_current <= MAX_ELEMENTS_IN_SEGMENT;
+                if !waits && in_current > 0 {
+                    start_new = true;
+                }
+                continue;
             }
             if let StreamElement::Barline(barline) = &element.element
                 && in_current > MAX_ELEMENTS_IN_SEGMENT
@@ -2262,28 +2276,20 @@ impl BrailleGrandSegment {
             let grouping = &self.groupings[&use_key];
             match use_key.affinity {
                 Affinity::Signature => {
-                    if grouping.elements.len() >= 2 {
-                        sharps = sharps_of(&grouping.elements[0].element);
-                        places[0] = sharps.map(|_| (use_key, 0));
-                        if let StreamElement::TimeSignature(time) = &grouping.elements[1].element {
+                    // Each element read by what it is, the first key and
+                    // the first meter of the heading winning: music21
+                    // 36d9144c0, which reads a lone key signature as one.
+                    for (index, held) in grouping.elements.iter().enumerate() {
+                        if sharps.is_none()
+                            && let Some(found) = sharps_of(&held.element)
+                        {
+                            sharps = Some(found);
+                            places[0] = found.map(|_| (use_key, index));
+                        } else if meter.is_none()
+                            && let StreamElement::TimeSignature(time) = &held.element
+                        {
                             meter = Some(time.clone());
-                            places[1] = Some((use_key, 1));
-                        }
-                    } else if let Some(only) = grouping.elements.first() {
-                        // music21 asks whether the grouping, not its element,
-                        // is a key signature, so a lone signature is taken
-                        // for a time signature, which a key signature cannot
-                        // be written as.
-                        match &only.element {
-                            StreamElement::TimeSignature(time) => {
-                                meter = Some(time.clone());
-                                places[1] = Some((use_key, 0));
-                            }
-                            _ => {
-                                return Err(Error::Notation(
-                                    "'KeySignature' object has no attribute 'symbol'".to_string(),
-                                ));
-                            }
+                            places[1] = Some((use_key, index));
                         }
                     }
                 }

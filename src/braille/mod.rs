@@ -8,6 +8,9 @@
 pub mod basic;
 pub(crate) mod equality;
 pub mod lookup;
+mod objects;
 pub mod segment;
 pub mod text;
 pub mod translate;
+
+pub use objects::SegmentDivision;

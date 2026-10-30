@@ -24,8 +24,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
 - **the crate is meant to be a strict superset of the wheel**, caches aside.
   As little as possible belongs in the facade — only what genuinely cannot
-  live in Rust. 29 members answer in the wheel today with no crate function
-  behind them; each is either work to move or a documented exception.
+  live in Rust. 124 members answer in the wheel today with no crate
+  function behind them, and each carries its reason in
+  `data/feature_map.toml`.
 - **the crate should have streams.** it has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
   parts, measures, voices, `transpose`, and the `*_at` lookups). what it
@@ -82,10 +83,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
    values and answers where an element sits with `Stream::placed`, the
    composite "Music21's Mistakes" (point 2) recommends over storing sites
    on objects. the wheel still keeps music21's sites for compatibility. this is what would let the facade stop building
-   `Music21Object`s. `getMeasureOffsetOrMeterModulusOffset` has moved as far
-   as it can without them: the arithmetic is the crate's
-   `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
-   element and the meter sit.
+   `Music21Object`s.
+
+   **measure-relative offsets and the beat are in.** a `Placed` now answers
+   music21's `getMeasureOffsetOrMeterModulusOffset` (`bar_offset`, a
+   measure's `paddingLeft` counted as music21 counts it) and the four
+   members music21 hangs on every object through its sites -- `beat`,
+   `beatStr`, `beatDuration`, `beatStrength` -- from the meter in force,
+   with no site anywhere. music21's own examples for them are its tests.
+   the wheel does not read them yet: its elements still answer through
+   music21's half, which is the step left. derivations are not started.
 
    It is also what the wheel waits on to carry `FiguredBassLine` and
    `Realization`, which build their bass line and realizations as music21
@@ -98,22 +105,29 @@ two rules, set 2026-09-12, that most of the open work now serves:
    with no contexts anywhere. What is left of them in the wheel is the
    classes themselves and `MelodicIntervalDiversity`'s counts.
 
-3. **the 29 wheel-only members.** caches (`cachedRealized`,
-   `cachedRealizedStr`) stay Python-side by design. the rest — observer
-   callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
-   and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
-   `Duration`'s component machinery — are either work to move into the crate
-   or exceptions that should say why in `data/feature_map.toml`. the count is
-   read off the page `xtask report` writes, which is where it is made;
-   `naiveBeams`, `getDynamicContext`, `getGrace`, `isConcrete` and meter's
-   two exclusions are in it too.
+3. **the 124 wheel-only members.** every one is an exclusion with a
+   reason in `data/feature_map.toml`; none is left undecided. caches
+   (`cachedRealized`, `cachedRealizedStr`) stay Python-side by design, and
+   most of the rest are observer callbacks (`informClient`,
+   `pitchChanged`), music21's own object machinery (`Spanner`'s by-object
+   members, `Stream.elementOffset`), or steps the crate runs inside one
+   function (`ChordReducer`, `Hasher`). the count is read off the page
+   `xtask report --features-only` writes; it grew from 29 because the map
+   now lists far more classes, not because members moved out.
 
-   **One deviation that count cannot see.** `barDuration` reads as ported,
-   because `bar_duration` exists — but its *setter* keeps music21's
-   `_overriddenBarDuration` as a Python object in the wheel, and the crate
-   has nothing of the kind. a member can be ported and still carry state
-   that lives only in the facade, so 30 is a floor rather than the whole of
-   what the rule has to answer for.
+   **`barDuration` no longer keeps state in the facade.** its setter kept
+   music21's `_overriddenBarDuration` as a Python object in the wheel; the
+   crate's `TimeSignature` now carries it (`set_bar_duration`), so a copy,
+   a pickle and every crate reader of `bar_duration` see it. the one thing
+   given up is identity: `ts.barDuration is d` is false, as no music21
+   example asks.
+
+   **What the count still cannot see.** a member can be ported and keep
+   state only in the facade. 146 fields of the wheel's classes hold Python
+   objects. many hold identity rather than value — the `Duration` a note
+   hands back, the chord a note sits in — which Python callers rely on and
+   the crate cannot carry; which of them hold only a value, as
+   `barDuration` did, is not yet sorted.
 
 4. **CI has now run all of this green**, music21's own suite and the docs
    build included. two things it caught that no local gate did: `cargo fmt`
@@ -135,19 +149,51 @@ two rules, set 2026-09-12, that most of the open work now serves:
    examples, `Sieve.compressed` having brought in the compressed reading the
    last one wanted.
 
-7. **an installed chord costs what music21's does.** `Chord('C4 E4 G4')`
-   through `install_into_music21` is ~30µs against music21's ~30µs, while the
-   bare wheel does it in 8.1µs. one chord builds eight objects through the
-   install helper — the chord, three notes, three pitches and a duration —
-   and four of them run music21's `Music21Object.__init__` and
-   `Sites.__init__` in Python, because music21 will not keep anything else in
-   a `Stream` and construction cannot know whether the object will end up in
-   one. two ways out: build fewer objects (lazy notes and pitches, which has
-   to keep `chord.pitches[0] is chord.root()` true), or give the crate
-   streams so the wheel need not build music21's half at all — entry 2.
+7. **an installed chord costs what music21's does only once its notes
+   are asked for.** measured on one Linux machine, best of five runs of
+   20,000 (`Chord('C4 E4 G4')` through `install_into_music21`):
+
+   | asked for          | before | now    | music21 |
+   |--------------------|--------|--------|---------|
+   | the chord alone    | 3.3µs  | 3.3µs  | 21.2µs  |
+   | its `pitches`      | 26.8µs | 8.9µs  | --      |
+   | its `root()`       | 11.8µs | 6.9µs  | --      |
+   | its `notes`        | 25.6µs | 25.8µs | --      |
+
+   music21 builds notes and pitches with the chord, so its one figure
+   stands for every row.
+
+   the notes were already lazy; what was left was that `pitches` built all
+   three and `root()` the one it named, and each note runs music21's
+   `Music21Object.__init__` and `Sites.__init__` in Python. a chord now
+   hands out pitch objects on their own, and a note built later takes the
+   one already out, so `chord.pitches[0] is chord.root()` and
+   `chord.pitches[0] is chord[0].pitch` both hold whichever is asked first.
+   an edit through such a pitch is written into the chord directly.
+
+   what is left is the notes themselves: music21 will keep nothing but a
+   `Music21Object` in a `Stream`, so a note has to pay for its half of
+   that. giving the crate streams so the wheel need not build music21's
+   half is entry 2.
 
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
+
+8. **older mismatches the drift audit turned up.** music21's 346
+   non-owner commits since porting began (7e77707) were checked against
+   the port on 2026-10-30; the drifts found are fixed. These differ from
+   music21 too, but music21 already behaved this way at 7e77707, so they
+   were never followed rather than left behind:
+
+   - the wheel's hand-back loses humdrum tandems and `!!` comments. Its
+     measures keep their barlines beside their elements, so a Humdrum or
+     RomanText measure's barline or repeat is its `rightBarline` but not
+     one of its elements, as music21's is (stored at the end). Its readers hand back the wheel's own
+     streams even with music21 installed, so an installed note in one
+     answers music21's `offset` as 0.0: it has no site. Handing back
+     music21's streams there is a design call, not yet made.
+   - wheel argument handling: negative quarter lengths refused, non-bool
+     truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
 
 ## closed
 
@@ -208,6 +254,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
 - **the install helper forgives three exceptions on copy** — `AttributeError`,
   `TypeError` and `RecursionError`, narrowed from a bare `except Exception`
   (`7c8e4de`).
+- **a `<transpose>` with no `<chromatic>` reads as a unison.** music21
+  reads a generic interval, but MusicXML requires `<chromatic>`, the
+  crate's instrument holds a full interval, and music21's own writer
+  cannot write a generic one back.
 - **`xtask bench` imports the installed wheel on purpose.** it measures the
   artifact a caller installs; the guards against a second copy belong to the
   harnesses that test the linked crate (`1012c5e`, `47cb607`).

@@ -142,6 +142,23 @@ def test_a_grace_note_is_in_no_tuplet():
     assert note.duration.tuplets == ()
 
 
+def test_an_appoggiatura_makes_time():
+    duration = m.Duration(1.0).getGraceDuration(appoggiatura=True)
+    assert type(duration).__name__ == "AppoggiaturaDuration"
+    assert duration.slash is False
+    assert duration.makeTime is True
+
+
+def test_a_grace_note_read_from_a_file_keeps_its_grace_duration():
+    score = m.from_humdrum("**kern\n*M2/4\n=1\n8cq\n4d\n4e\n=2\n*-\n")
+    grace = score.recurse().notes[0]
+    assert type(grace.duration).__name__ == "GraceDuration"
+    assert grace.duration.isGrace
+    assert grace.duration.type == "eighth"
+    assert grace.duration.quarterLength == 0.0
+    assert grace.duration.slash is True
+
+
 def test_a_length_no_single_value_comes_to_is_a_value_in_a_tuplet():
     duration = m.Duration(5 / 6)
     assert duration.type == "quarter"
@@ -290,7 +307,9 @@ def test_roman_module_functions():
     tuples = m.figureTuples(m.Chord("B3 D4 F4 A4"), m.Key("C"))
     assert [t[:3] for t in tuples] == [(1, 0.0, ""), (3, 0.0, ""), (5, 0.0, ""), (7, 0.0, "")]
     assert tuples[0][3].name == "B"
-    assert m.figureTupleSolo(m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")) == (3, 1.0, "#")
+    assert m.FigureTuple.fromPitchAndReference(
+        m.Pitch("G#4"), m.Key("a"), m.Pitch("E4")
+    ) == (3, 1.0, "#")
     assert m.correctRNAlterationForMinor((7, 0.0, ""), m.Key("a")) == (7, 0.0, "b")
     assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")
 
@@ -1753,6 +1772,7 @@ def test_elements_are_found_by_offset_as_music21_finds_them():
     ]
 
 
+@pytest.mark.filterwarnings("ignore:Stream.hasElementOfClass was deprecated")
 def test_a_stream_is_asked_what_classes_it_holds():
     flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
     assert flat.hasElementOfClass("Note")
@@ -2805,6 +2825,7 @@ def test_what_sounds_where_a_note_is_struck_is_found():
     assert m.Stream().playingWhenAttacked(list(upper)[0], upper) is None
 
 
+@pytest.mark.filterwarnings("ignore:Stream.hasElementOfClass was deprecated")
 def test_a_class_filter_reads_what_music21_says_a_thing_is():
     """Every count is music21's own for the same stream.
 
@@ -4880,6 +4901,17 @@ def test_a_score_is_written_in_braille():
         m.objectToBraille(line, segmentBreaks=[(1, 2.0)])
 
 
+def test_music21s_segment_division_divides_braille():
+    """music21's `BrailleSegmentDivision` in a measure starts a new
+    segment there, as its `getRawSegments` example shows."""
+    objects = pytest.importorskip("music21.braille.objects")
+    part = m.from_tiny_notation("3/4 c4 c c e e e g g g c'2.").makeNotation()
+    part.measure(2).insert(1.0, objects.BrailleSegmentDivision())
+    assert m.objectToBraille(part) == (
+        "⠀⠀⠀⠼⠉⠲⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠹⠹⠀⠫⠐\n⠼⠃⠄⠀⠐⠫⠫⠀⠳⠳⠳⠀⠨⠝⠄⠣⠅"
+    )
+
+
 def test_a_grouping_of_elements_is_written_in_braille():
     """The elements braille writes together, and the transcriber that
     writes them one at a time."""
@@ -5693,3 +5725,352 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     # The reduction itself is of a score, as music21 refuses anything else.
     with pytest.raises(Exception, match="stream.Score"):
         cr.run(m.from_tiny_notation("4/4 c4 d e2"))
+
+
+def _live_notes():
+    return sum(isinstance(held, m.Note) for held in gc.get_objects())
+
+
+def test_a_chords_pitches_are_handed_out_without_its_notes():
+    """Asking a chord for its pitches, or its root, builds no notes: under
+    `install_into_music21` each note runs music21's own object machinery,
+    which is most of what a chord costs. The pitch objects are still the
+    chord's own, and the notes built later carry the same ones."""
+    gc.collect()
+    before = _live_notes()
+    chord = m.Chord("C4 E4 G4")
+    pitches = chord.pitches
+    assert chord.root() is pitches[0]
+    assert chord.pitches[1] is pitches[1]
+    assert _live_notes() == before
+
+    # An edit through one reaches the chord.
+    pitches[1].name = "E-"
+    assert chord.commonName == "minor triad"
+
+    # The notes, once built, hold the pitches already handed out, and the
+    # pitch knows its note.
+    notes = chord.notes
+    assert [note.pitch for note in notes] == list(pitches)
+    assert all(note.pitch is pitch for note, pitch in zip(notes, pitches))
+    assert pitches[0]._client is notes[0]
+    pitches[2].name = "G#"
+    assert chord.pitchNames == ["C", "E-", "G#"]
+
+
+def test_a_loose_pitch_reaches_its_note_when_asked_for_its_client():
+    """music21 reads `pitch._client` to find the note around a pitch; a
+    pitch handed out before its note was built answers the note."""
+    chord = m.Chord("D4 F#4 A4")
+    third = chord.pitches[1]
+    client = third._client
+    assert client.pitch is third
+    assert chord.notes[1] is client
+
+
+def test_has_element_of_class_warns_it_is_deprecated_once():
+    """music21 deprecated `hasElementOfClass` in v11 and warns on the first
+    call in a process, as its `common.deprecated` does. Run apart, since
+    the warning is spent once given."""
+    code = """
+import warnings
+import music21_rs as m
+line = m.Stream()
+line.append(m.Note("C4"))
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    first = line.hasElementOfClass("Note")
+    second = line.hasElementOfClass("Rest")
+print(first, second, len(caught))
+print(caught[0].category.__name__)
+print(caught[0].message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert lines[0] == "True False 1"
+    # music21's own class where music21 is there, Python's where not.
+    assert lines[1] in ("Music21DeprecationWarning", "DeprecationWarning")
+    assert lines[2] == (
+        "Stream.hasElementOfClass was deprecated on v11 and will disappear at "
+        "or after v12. use `bool(s.getElementsByClass(className))` instead"
+    )
+
+
+def test_a_key_signatures_count_and_flag_are_set_apart():
+    """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
+    a flag of its own, so writing pitches over a signature leaves it
+    traditional, and a flagged one still names a key and transposes."""
+    two = m.KeySignature(2)
+    two.alteredPitches = ["E-"]
+    assert (two.sharps, two.isNonTraditional) == (2, False)
+    assert repr(two) == "<music21.key.KeySignature of 2 sharps>"
+
+    flagged = m.KeySignature(2)
+    flagged.isNonTraditional = True
+    flagged.alteredPitches = ["B-", "F#"]
+    assert repr(flagged) == "<music21.key.KeySignature of pitches: [B-, F#]>"
+    assert flagged.asKey().tonic.name == "D"
+    moved = flagged.transpose("M2")
+    assert (moved.sharps, moved.isNonTraditional) == (4, True)
+    assert flagged != m.KeySignature(2)
+
+    with pytest.raises(TypeError):
+        m.sharpsToPitch(None)
+
+
+def test_a_chords_per_note_accessors_warn_they_are_deprecated():
+    """music21 2e5a51ae7 deprecated ten per-note accessors of `Chord` in
+    v11, each warning once per process. Run apart, since a warning is
+    spent once given."""
+    code = """
+import warnings
+import music21_rs as m
+c = m.Chord("C4 E4 G4")
+p = c.pitches[0]
+calls = [
+    lambda: c.getColor(p), lambda: c.getNotehead(p),
+    lambda: c.getNoteheadFill(p), lambda: c.getStemDirection(p),
+    lambda: c.getTie(p), lambda: c.setColor("red", p),
+    lambda: c.setNotehead("x", p), lambda: c.setNoteheadFill(True, p),
+    lambda: c.setStemDirection("up", p), lambda: c.setTie("start", p),
+]
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    for call in calls:
+        call()
+        call()
+for warning in caught:
+    print(warning.message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert len(lines) == 10
+    assert lines[0] == (
+        "Chord.getColor was deprecated on v11 and will disappear at or after "
+        "v12. read a component color via c[query].style.color"
+    )
+    assert lines[9] == (
+        "Chord.setTie was deprecated on v11 and will disappear at or after "
+        "v12. index the component and set .tie, e.g. c[query].tie = ..."
+    )
+
+
+def test_a_chord_is_indexed_by_int_name_or_pitch_only():
+    """music21 f9f96d9a1: a chord's key is an int, a pitch name with its
+    octave, or a Pitch. A Note, or anything else, is a KeyError."""
+    chord = m.Chord("C#4 D-4 G4")
+    assert chord[1].pitch.name == "D-"
+    assert chord["g4"].pitch.name == "G"
+    assert chord[m.Pitch("C#4")].pitch.name == "C#"
+    for key in (m.Note("C#4"), None):
+        with pytest.raises(KeyError):
+            chord[key]
+    with pytest.raises(KeyError):
+        chord[m.Note("G4")] = "A4"
+    chord[m.Pitch("G4")] = "A4"
+    assert chord.pitchNames == ["C#", "D-", "A"]
+
+
+def test_a_chord_symbol_in_root_position_drops_a_stored_inversion():
+    """music21 c02ed8926: re-realizing a symbol whose bass is its root
+    clears a stored inversion, which `inversion(None)` meant to do since
+    2012 and never did."""
+    symbol = m.ChordSymbol("C")
+    symbol.setInversion(2, transpose=False, inPlace=True)
+    symbol.addChordStepModification(m.ChordStepModification("add", 9))
+    assert symbol.inversion() == 0
+
+
+def test_a_length_that_is_no_number_is_refused_as_music21_refuses_it():
+    """music21 71c384b69: an unlinked duration refuses a length that is not
+    finite with a ValueError; a linked one fails turning it into a ratio."""
+    for value, linked, raised in (
+        (math.inf, False, ValueError),
+        (math.nan, False, ValueError),
+        (-math.inf, False, ValueError),
+        (math.inf, True, OverflowError),
+        (math.nan, True, ValueError),
+    ):
+        length = m.Duration()
+        length.linked = linked
+        with pytest.raises(raised):
+            length.quarterLength = value
+
+
+def test_an_abstract_scale_says_its_mode_as_music21_does():
+    """music21 a0358751c: every abstract scale has a `mode`. A diatonic one
+    names its mode, an octatonic one keeps the number it was built with,
+    and the rest have none."""
+    assert m.DorianScale("C4").abstract.mode == "dorian"
+    assert m.OctatonicScale("C4", mode=1).abstract.mode == 1
+    assert m.OctatonicScale("C4", mode=2).abstract.mode == 2
+    for made in (
+        m.OctatonicScale("C4"),
+        m.HarmonicMinorScale("C4"),
+        m.WholeToneScale("C4"),
+        m.RagMarwa("C4"),
+    ):
+        assert made.abstract.mode is None
+
+
+@pytest.mark.parametrize(
+    "tonic, pitches, ninth",
+    [
+        ("C", "C4 D-4 E-4 F-4 G-4 G4 A4 B-4 C5", "C4"),
+        ("F#", "F#4 G4 A4 B-4 C5 D-5 E-5 F-5 G-5", "F#4"),
+        ("E-", "E-4 F-4 G-4 G4 A4 B-4 C5 D-5 E-5", "E-4"),
+    ],
+)
+def test_the_first_octatonic_mode_closes_on_its_octave(tonic, pitches, ninth):
+    """music21's mode 1 starts with the half step and stacks its steps to
+    the octave; its ranged realization starts on C whatever the tonic."""
+    scale = m.OctatonicScale(tonic, mode=1)
+    assert " ".join(str(p) for p in scale.pitches) == pitches
+    ranged = " ".join(str(p) for p in scale.getPitches("C2", "C3"))
+    assert ranged == "C2 D-2 E-2 F-2 G-2 G2 A2 B-2 C3"
+    assert str(scale.pitchFromDegree(9)) == ninth
+
+
+def test_add_variant_warns_for_its_old_keyword():
+    """music21 v11: `addVariant`'s old `replacementDuration` warns on every
+    call, and giving it beside `replacementQuarterLength` is a TypeError.
+    Both are checked before music21 is needed."""
+    one = m.Stream()
+    with pytest.warns(Warning, match="'replacementDuration' is deprecated"):
+        with pytest.raises(TypeError, match="received both"):
+            m.addVariant(
+                one, 0.0, None, replacementQuarterLength=2.0, replacementDuration=1.0
+            )
+
+
+def test_figure_tuples_are_named_as_music21_names_them():
+    """music21 v11 made a figure a `FigureTuple` (degFromRefPitch, alter,
+    prefix), built by `FigureTuple.fromPitchAndReference`; `figureTupleSolo`
+    is its deprecated alias."""
+    made = m.FigureTuple.fromPitchAndReference(
+        m.Pitch("A-3"), m.Key("C"), m.Pitch("F#2")
+    )
+    assert repr(made) == "FigureTuple(degFromRefPitch=3, alter=-1.0, prefix='b')"
+    assert made.degFromRefPitch == 3
+
+    first = m.figureTuples(m.Chord(["F#2", "D3"]), m.Key("C"))[0]
+    assert type(first).__name__ == "PitchFigureTuple"
+    assert (first.degFromRefPitch, first.prefix, first.pitch.name) == (1, "#", "F#")
+
+    flat_six = m.FigureTuple(degFromRefPitch=6, alter=-1, prefix="")
+    corrected = m.correctRNAlterationForMinor(flat_six, m.Key("c"))
+    assert repr(corrected) == "FigureTuple(degFromRefPitch=6, alter=-1, prefix='b')"
+    major = m.FigureTuple(2, 0.0, "")
+    assert m.correctRNAlterationForMinor(major, m.Key("C")) is major
+
+
+def test_figure_tuple_solo_warns_it_is_deprecated():
+    code = """
+import warnings
+import music21_rs as m
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    made = m.figureTupleSolo(m.Pitch("A-4"), m.Key("C"), m.Pitch("C4"))
+    m.figureTupleSolo(m.Pitch("A-4"), m.Key("C"), m.Pitch("C4"))
+print(repr(made))
+print(len(caught), caught[0].message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert lines[0] == "FigureTuple(degFromRefPitch=6, alter=-1.0, prefix='b')"
+    assert lines[1] == (
+        "1 figureTupleSolo was deprecated on v11 and will disappear at or after "
+        "v12. use FigureTuple.fromPitchAndReference() instead"
+    )
+
+
+def test_beat_progress_is_a_fraction_where_music21s_is():
+    from fractions import Fraction
+
+    six_eight = m.TimeSignature("6/8")
+    assert six_eight.getBeatProgress(Fraction(5, 3)) == (2, Fraction(1, 6))
+    assert six_eight.getBeatProgress(1.0) == (1, 1.0)
+
+
+def test_meter_spans_are_fractions_where_music21s_are():
+    from fractions import Fraction
+
+    thirds = m.MeterSequence("1/12+1/12+1/12")
+    assert thirds.offsetToSpan(0.4) == (Fraction(1, 3), Fraction(2, 3))
+    assert isinstance(thirds.offsetToSpan(0.4)[0], Fraction)
+    spans = thirds.getLevelSpan(0)
+    assert spans[1] == (Fraction(1, 3), Fraction(2, 3))
+    assert all(isinstance(end, Fraction) for _, end in spans[:2])
+    assert spans[2][1] == 1.0
+
+
+def test_clercq_temperley_text_that_is_no_song_is_refused():
+    """music21 b30248a6a: the converter refuses data with no barline or no
+    `S:` rule, as a `CTSongException`, rather than opening it as a file."""
+    with pytest.raises(Exception, match='must contain "\\|" and "S:"') as raised:
+        m.from_clercq_temperley("S: [C] I IV V I\n")
+    assert type(raised.value).__name__ == "CTSongException"
+
+
+def test_a_quartets_key_given_as_a_name_is_handed_back_as_a_key():
+    """music21 reads `VoiceLeadingQuartet(..., key='C')` through its key
+    setter, so the name comes back as the Key it names."""
+    notes = [m.Note(name) for name in ("C4", "D4", "A3", "B3")]
+    for given in ({"key": "C"}, {"analyticKey": "C"}):
+        quartet = m.VoiceLeadingQuartet(*notes, **given)
+        assert type(quartet.key).__name__ == "Key"
+        assert quartet.key.tonic.name == "C"
+
+
+def test_an_accidental_is_not_named_in_the_crates_own_flats():
+    """The crate writes a double flat `bb`; music21's table has `b` for a
+    flat and no `bb`, so the wheel refuses it as music21 does."""
+    assert m.Accidental("b").name == "flat"
+    for name in ("bb", "BB"):
+        with pytest.raises(Exception, match="not a supported accidental type"):
+            m.Accidental(name)
+
+
+def test_a_duration_is_set_only_from_a_duration():
+    """music21's `duration` setter reads `quarterLength` off what it is
+    given and raises TypeError for anything that has none: a bare number
+    is not a duration."""
+    for made in (m.Note("C4"), m.Chord("C4 E4"), m.Rest()):
+        with pytest.raises(TypeError, match="this must be a Duration object, not 3"):
+            made.duration = 3
+        made.duration = m.Duration(2.0)
+        assert made.quarterLength == 2.0
+
+
+def test_set_inversion_reads_its_number_through_int():
+    """music21's `setInversion` reads the inversion through `int()`, so a
+    numeral written as text works, and a copy says it came from it."""
+    triad = m.Chord("C4 E4 G4")
+    turned = triad.setInversion("1")
+    assert [p.nameWithOctave for p in turned.pitches] == ["E4", "G4", "C5"]
+    with pytest.raises(Exception, match="Inversion must be an integer"):
+        triad.setInversion("first")
+
+
+def test_a_streams_offsets_are_fractions_where_music21s_are():
+    """music21 answers offsets through `opFrac`: a triplet note stands at
+    `Fraction(1, 3)`, not at the float that only nearly says it."""
+    from fractions import Fraction
+
+    line = m.from_tiny_notation("4/4 trip{c8 d e} f4")
+    measure = line.getElementsByClass("Measure")[0]
+    notes = list(measure.notes)
+    assert measure.elementOffset(notes[1]) == Fraction(1, 3)
+    assert isinstance(measure.elementOffset(notes[1]), Fraction)
+    assert measure.elementOffset(notes[3]) == 1.0
+    assert isinstance(measure.highestOffset, float)
+    loose = m.Stream()
+    loose.insert(Fraction(1, 3), m.Note("C4"))
+    assert isinstance(loose.lowestOffset, Fraction)
+    assert isinstance(loose.highestTime, Fraction)

@@ -100,8 +100,14 @@ impl VoiceLeadingQuartet {
         .map_err(quartet_error)?;
         let mut key_object = None;
         if let Some(value) = key.filter(|value| !value.is_none()) {
-            inner = inner.with_key(analytic_key(value)?);
-            key_object = Some(value.clone().unbind());
+            let analytic = analytic_key(value)?;
+            // A key given as a name is handed back as the key it names, as
+            // music21's constructor goes through its own setter.
+            key_object = Some(match value.extract::<String>() {
+                Ok(_) => crate::key::Key::object(py, analytic.clone())?,
+                Err(_) => value.clone().unbind(),
+            });
+            inner = inner.with_key(analytic);
         }
         Ok(Self {
             inner,

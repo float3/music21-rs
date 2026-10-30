@@ -200,6 +200,10 @@ pub enum StreamElement {
     /// Another reading of the passage starting here, which takes no time
     /// itself. Boxed: it holds a stream.
     Variant(Box<crate::variant::Variant>),
+    /// A `!!` line of a Humdrum file, kept where it was written.
+    GlobalComment(crate::humdrum::GlobalComment),
+    /// Where a braille segment divides; nothing is written for it.
+    BrailleSegmentDivision(crate::braille::SegmentDivision),
 }
 
 impl StreamElement {
@@ -235,7 +239,9 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => None,
+            | Self::Variant(_)
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => None,
         }
     }
 
@@ -264,7 +270,9 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => 0.0,
+            | Self::Variant(_)
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -300,7 +308,9 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => Vec::new(),
+            | Self::Variant(_)
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => Vec::new(),
         }
     }
 
@@ -316,6 +326,8 @@ impl StreamElement {
     /// at one offset.
     pub(crate) fn class_sort_order(&self) -> i32 {
         match self {
+            // music21's `BrailleTranscriptionHelper`.
+            Self::BrailleSegmentDivision(_) => -100,
             Self::TextBox(_) => -31,
             Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
@@ -381,6 +393,8 @@ impl StreamElement {
             Self::Layout(layout) => Ok(Self::Layout(layout.clone())),
             Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
             Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
+            Self::GlobalComment(said) => Ok(Self::GlobalComment(said.clone())),
+            Self::BrailleSegmentDivision(division) => Ok(Self::BrailleSegmentDivision(*division)),
         }
     }
 }
@@ -394,6 +408,18 @@ impl From<Barline> for StreamElement {
 impl From<PedalObject> for StreamElement {
     fn from(value: PedalObject) -> Self {
         Self::PedalObject(value)
+    }
+}
+
+impl From<crate::humdrum::GlobalComment> for StreamElement {
+    fn from(value: crate::humdrum::GlobalComment) -> Self {
+        Self::GlobalComment(value)
+    }
+}
+
+impl From<crate::braille::SegmentDivision> for StreamElement {
+    fn from(value: crate::braille::SegmentDivision) -> Self {
+        Self::BrailleSegmentDivision(value)
     }
 }
 
@@ -1729,11 +1755,11 @@ mod tests {
     #[test]
     fn the_key_in_force_is_the_last_one_written_before_it() {
         let score = two_measure_score();
-        assert_eq!(score.key_signature_at(0.0).unwrap().sharps(), Some(2));
-        assert_eq!(score.key_signature_at(3.5).unwrap().sharps(), Some(2));
+        assert_eq!(score.key_signature_at(0.0).unwrap().sharps(), 2);
+        assert_eq!(score.key_signature_at(3.5).unwrap().sharps(), 2);
         // the second measure changes it
-        assert_eq!(score.key_signature_at(4.0).unwrap().sharps(), Some(-1));
-        assert_eq!(score.key_signature_at(100.0).unwrap().sharps(), Some(-1));
+        assert_eq!(score.key_signature_at(4.0).unwrap().sharps(), -1);
+        assert_eq!(score.key_signature_at(100.0).unwrap().sharps(), -1);
         assert_eq!(
             score.time_signature_at(5.0).unwrap().ratio_string(),
             "4/4",
@@ -1745,7 +1771,7 @@ mod tests {
         let mut late = Stream::new();
         late.insert(2.0, KeySignature::new(3));
         assert!(late.key_signature_at(1.0).is_none());
-        assert_eq!(late.key_signature_at(2.0).unwrap().sharps(), Some(3));
+        assert_eq!(late.key_signature_at(2.0).unwrap().sharps(), 3);
     }
 
     #[test]
@@ -1754,8 +1780,8 @@ mod tests {
         let up = score
             .transpose(&Interval::from_name("M2").unwrap())
             .unwrap();
-        assert_eq!(up.key_signature_at(0.0).unwrap().sharps(), Some(4));
-        assert_eq!(up.key_signature_at(4.0).unwrap().sharps(), Some(1));
+        assert_eq!(up.key_signature_at(0.0).unwrap().sharps(), 4);
+        assert_eq!(up.key_signature_at(4.0).unwrap().sharps(), 1);
         let names: Vec<String> = up.pitches().iter().map(Pitch::name_with_octave).collect();
         assert_eq!(names, ["E4", "F#4", "G#4", "A4", "B4", "C5"]);
         assert_eq!(up.kind(), StreamKind::Score);

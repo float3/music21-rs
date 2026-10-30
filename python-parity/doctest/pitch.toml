@@ -33,6 +33,7 @@ passing = [
     "music21.pitch.Pitch.__gt__",
     "music21.pitch.Pitch.__le__",
     "music21.pitch.Pitch.__lt__",
+    "music21.pitch.Pitch._cacheParsedName",
     "music21.pitch.Pitch._nameInKeySignature",
     "music21.pitch.Pitch._stepInKeySignature",
     "music21.pitch.Pitch.accidental",

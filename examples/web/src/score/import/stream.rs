@@ -292,9 +292,7 @@ fn read_staff(
                 StreamElement::KeySignature(_) | StreamElement::Key(_) => {
                     let (fifths, minor) = match held.element() {
                         StreamElement::Key(key) => (key.sharps(), key.mode() == "minor"),
-                        StreamElement::KeySignature(signature) => {
-                            (signature.sharps().unwrap_or(0), false)
-                        }
+                        StreamElement::KeySignature(signature) => (signature.sharps(), false),
                         _ => continue,
                     };
                     // The key sounds where the notes do, so a transposing

@@ -811,6 +811,40 @@ fn quarter_length_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
         })
 }
 
+/// music21's `duration` setter, which reads `quarterLength` off what it is
+/// given and refuses anything that has none: a bare number is no duration.
+pub(crate) fn require_duration(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    if value.hasattr("quarterLength")? {
+        return Ok(());
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "this must be a Duration object, not {}",
+        value.str()?
+    )))
+}
+
+/// What music21 raises for a length that is not finite: an unlinked
+/// duration checks it (71c384b69), and a linked one fails making a ratio of
+/// it in `opFrac`, as Python's `float.as_integer_ratio` does.
+fn not_finite(value: f64, linked: bool) -> PyErr {
+    let written = if value.is_nan() {
+        "nan"
+    } else if value > 0.0 {
+        "inf"
+    } else {
+        "-inf"
+    };
+    if !linked {
+        return PyValueError::new_err(format!(
+            "quarterLength must be a finite number, not {written}"
+        ));
+    }
+    if value.is_nan() {
+        return PyValueError::new_err("cannot convert NaN to integer ratio");
+    }
+    pyo3::exceptions::PyOverflowError::new_err("cannot convert Infinity to integer ratio")
+}
+
 /// music21's `duration.Duration`: how long something lasts, and how that
 /// length is written.
 ///
@@ -948,7 +982,47 @@ impl Duration {
     /// A `Duration` object holding `inner`, of the class installed over
     /// music21's where there is one.
     pub(crate) fn object(py: Python<'_>, inner: RsDuration) -> PyResult<Py<PyAny>> {
+        if let Some(marks) = inner.grace().cloned() {
+            return Self::grace(py, inner, &marks);
+        }
         Ok(crate::installed_new(py, "music21.duration", "Duration", Self::wrap(inner))?.into_any())
+    }
+
+    /// A grace note's duration as music21 holds one: its written values
+    /// sounding nothing, unlinked, in a `GraceDuration` or, for an
+    /// unslashed one that takes time, an `AppoggiaturaDuration`.
+    fn grace(
+        py: Python<'_>,
+        inner: RsDuration,
+        marks: &music21_rs_crate::Grace,
+    ) -> PyResult<Py<PyAny>> {
+        let mut base = Self::wrap(inner);
+        let mut written_type = base.get_type(py)?;
+        if written_type == "zero" {
+            written_type = "eighth".to_string();
+        }
+        base.components = Some(
+            base.component_list()
+                .into_iter()
+                .map(|component| DurationTuple::new(component.r#type(), component.dots(), 0.0))
+                .collect(),
+        );
+        base.linked = false;
+        base.unlinked_type = Some(written_type);
+
+        // music21's `AppoggiaturaDuration` is the unslashed grace note
+        // that takes time; any other is a `GraceDuration`.
+        let kind = match (marks.slash(), marks.make_time()) {
+            (false, true) => GraceKind::Appoggiatura,
+            _ => GraceKind::Acciaccatura,
+        };
+        let said = GraceDuration {
+            slash: marks.slash(),
+            steal_previous: marks.steal_time_previous(),
+            steal_following: marks.steal_time_following(),
+            make_time: marks.make_time(),
+        };
+        grace_object(py, base, said, kind)
     }
 
     pub(crate) fn wrap(inner: RsDuration) -> Self {
@@ -1400,6 +1474,9 @@ impl Duration {
     #[setter]
     fn set_quarterLength(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = quarter_length_from_any(value)?;
+        if !value.is_finite() {
+            return Err(not_finite(value, self.linked));
+        }
         let was = self.inner.quarter_length();
         if !self.linked {
             self.inner = RsDuration::new(value).map_err(duration_error)?;
@@ -1863,55 +1940,11 @@ impl Duration {
         grace.linked = false;
         grace.unlinked_type = Some(written_type);
         grace.inner = RsDuration::new(0.0).map_err(duration_error)?;
-        let initializer = GraceDuration {
-            slash: true,
-            steal_previous: None,
-            steal_following: None,
-            make_time: false,
+        let kind = match appoggiatura {
+            true => GraceKind::Appoggiatura,
+            false => GraceKind::Acciaccatura,
         };
-        if appoggiatura {
-            let marks = GraceDuration {
-                slash: false,
-                steal_previous: None,
-                steal_following: None,
-                make_time: false,
-            };
-            if let Some(class) =
-                crate::installed_class(py, "music21.duration", "AppoggiaturaDuration")
-            {
-                let object = crate::blank_installed(&class)?;
-                {
-                    let cell = object.cast::<AppoggiaturaDuration>()?;
-                    let mut me = cell.borrow_mut();
-                    let graces = me.as_super();
-                    **graces.as_super() = grace;
-                    **graces = marks;
-                }
-                return Ok(object.unbind());
-            }
-            return Ok(Py::new(
-                py,
-                PyClassInitializer::from(grace)
-                    .add_subclass(marks)
-                    .add_subclass(AppoggiaturaDuration),
-            )?
-            .into_any());
-        }
-        if let Some(class) = crate::installed_class(py, "music21.duration", "GraceDuration") {
-            let object = crate::blank_installed(&class)?;
-            {
-                let cell = object.cast::<GraceDuration>()?;
-                let mut me = cell.borrow_mut();
-                **me.as_super() = grace;
-                *me = initializer;
-            }
-            return Ok(object.unbind());
-        }
-        Ok(Py::new(
-            py,
-            PyClassInitializer::from(grace).add_subclass(initializer),
-        )?
-        .into_any())
+        grace_object(py, grace, kind.marks(), kind)
     }
 
     /// music21's `dots`: how many dots the first written value carries.
@@ -2148,6 +2181,68 @@ impl Duration {
         let copied = slf.borrow().clone();
         crate::copy_as_same_type(slf, copied)
     }
+}
+
+/// Which of music21's grace duration classes to build.
+#[derive(Clone, Copy)]
+enum GraceKind {
+    /// `GraceDuration`: slashed, taking no time.
+    Acciaccatura,
+    /// `AppoggiaturaDuration`: unslashed, taking its time.
+    Appoggiatura,
+}
+
+impl GraceKind {
+    /// The marks music21's constructor for the class sets.
+    fn marks(self) -> GraceDuration {
+        let appoggiatura = matches!(self, Self::Appoggiatura);
+        GraceDuration {
+            slash: !appoggiatura,
+            steal_previous: None,
+            steal_following: None,
+            make_time: appoggiatura,
+        }
+    }
+}
+
+/// A grace duration object of the class `kind` names, the installed one
+/// where there is one: `base` its written values, `marks` how it is played.
+fn grace_object(
+    py: Python<'_>,
+    base: Duration,
+    marks: GraceDuration,
+    kind: GraceKind,
+) -> PyResult<Py<PyAny>> {
+    if let GraceKind::Appoggiatura = kind {
+        if let Some(class) = crate::installed_class(py, "music21.duration", "AppoggiaturaDuration")
+        {
+            let object = crate::blank_installed(&class)?;
+            {
+                let cell = object.cast::<AppoggiaturaDuration>()?;
+                let mut me = cell.borrow_mut();
+                let graces = me.as_super();
+                **graces.as_super() = base;
+                **graces = marks;
+            }
+            return Ok(object.unbind());
+        }
+        let made = PyClassInitializer::from(base)
+            .add_subclass(marks)
+            .add_subclass(AppoggiaturaDuration);
+        return Ok(Py::new(py, made)?.into_any());
+    }
+    if let Some(class) = crate::installed_class(py, "music21.duration", "GraceDuration") {
+        let object = crate::blank_installed(&class)?;
+        {
+            let cell = object.cast::<GraceDuration>()?;
+            let mut me = cell.borrow_mut();
+            **me.as_super() = base;
+            *me = marks;
+        }
+        return Ok(object.unbind());
+    }
+    let made = PyClassInitializer::from(base).add_subclass(marks);
+    Ok(Py::new(py, made)?.into_any())
 }
 
 /// music21's `duration.GraceDuration`: written as a note, sounding as

@@ -206,7 +206,7 @@ fn page_open(report: &Report, root: &str, current: Option<View>, title: &str) ->
         };
         let _ = writeln!(
             html,
-            "                <a href=\"{root}{file}\"{here}><b>{swatch}{label}</b><span>{what}</span></a>",
+            "                <a href=\"{root}{file}\"{here}><b class=\"tab-label\">{swatch}{label}</b><span class=\"tab-what\">{what}</span></a>",
             file = view.file(),
         );
     }
@@ -718,7 +718,7 @@ fn render_subjects(report: &Report) -> String {
     if !shared.is_empty() {
         html.push_str(
             "            <div class=\"shared\">
-                <p class=\"shared-note\"><b>Both at once.</b> music21's own documentation and tests, run over the wheel's classes answering out of the crate.</p>
+                <p class=\"shared-note\"><b class=\"shared-lead\">Both at once.</b> music21's own documentation and tests, run over the wheel's classes answering out of the crate.</p>
                 <div class=\"facts\">
 ",
         );
@@ -1616,7 +1616,7 @@ pub(super) fn render_features(features: &[ClassReport], view: View) -> String {
             html,
             r#"                    <details class="class-item" data-missing="{incomplete}" data-search="{haystack}">
                         <summary>
-                            <span class="class-name"><span class="caret">&#9654;</span><b>{name}</b><span class="path"><code>{python}</code></span></span>
+                            <span class="class-name"><span class="caret">&#9654;</span><b class="class-title">{name}</b><span class="path"><code>{python}</code></span></span>
 "#,
             haystack = escape(&haystack),
             name = escape(&class.name),

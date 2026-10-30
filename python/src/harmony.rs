@@ -762,6 +762,13 @@ impl ChordSymbol {
         };
         let root = pitch_from_any(&root)?;
         let bass = pitch_from_any(&bass)?;
+        // A symbol standing on its root is in no inversion, whatever was
+        // stored: music21 c02ed8926.
+        if root.name() == bass.name() {
+            let keywords = PyDict::new(py);
+            keywords.set_item("inPlace", true)?;
+            slf.call_method("setInversion", (py.None(),), Some(&keywords))?;
+        }
         let modifications: Vec<RsChordStepModification> = slf
             .borrow()
             .modifications

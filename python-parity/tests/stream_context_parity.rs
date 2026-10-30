@@ -250,9 +250,7 @@ fn attempt(label: &str, run: impl FnOnce() -> music21_rs::Result<Vec<String>>) -
 }
 
 fn sharps(signature: &music21_rs::key::keysignature::KeySignature) -> String {
-    signature
-        .sharps()
-        .map_or("None".to_string(), |sharps| sharps.to_string())
+    signature.sharps().to_string()
 }
 
 fn found(event: Option<&StreamEvent>) -> String {

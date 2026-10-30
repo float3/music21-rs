@@ -1698,68 +1698,172 @@ pub(crate) fn romanNumeralFromChord(
     Ok(object)
 }
 
-/// music21's `figureTuples`: for each pitch of a chord, its degree above the
-/// bass, its alteration in the key, the accidental to print and the pitch
-/// itself, as `(degFromRefPitch, alter, prefix, pitch)` tuples.
+/// music21's `figureTuples`: each pitch of the chord above its bass, as a
+/// `PitchFigureTuple` holding the chord's own pitch object.
 #[pyfunction]
 #[pyo3(name = "figureTuples")]
-fn figureTuples(
-    py: Python<'_>,
-    chordObject: &Bound<'_, PyAny>,
-    keyObject: &Bound<'_, PyAny>,
-) -> PyResult<Vec<(u8, f64, String, Pitch)>> {
+fn figureTuples<'py>(
+    py: Python<'py>,
+    chordObject: &Bound<'py, PyAny>,
+    keyObject: &Bound<'py, PyAny>,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
     let chord = chord_argument(py, chordObject)?;
     let key = key_argument(keyObject)?;
-    Ok(rs_roman::figure_tuples(&chord, &key)
-        .map_err(roman_error)?
+    let figures = rs_roman::figure_tuples(&chord, &key).map_err(roman_error)?;
+    let held: Vec<Bound<'py, PyAny>> = chordObject
+        .getattr("pitches")?
+        .try_iter()?
+        .collect::<PyResult<_>>()?;
+    let class = figure_classes(py)?.getattr("PitchFigureTuple")?;
+    figures
         .into_iter()
-        .map(|each| {
+        .enumerate()
+        .map(|(index, each)| {
             let (degree, alter, prefix) = figure_tuple(&each.figure);
-            (degree, alter, prefix, Pitch::wrap(each.pitch, false))
+            let pitch = match held.get(index) {
+                Some(object) => object.clone(),
+                None => Pitch::wrap(each.pitch, false).into_pyobject(py)?.into_any(),
+            };
+            class.call1((degree, alter, prefix, pitch))
         })
-        .collect())
+        .collect()
 }
-
-/// music21's `figureTupleSolo`: one pitch's degree above a reference pitch,
-/// its alteration in the key and the accidental to print, as a
-/// `(degFromRefPitch, alter, prefix)` tuple.
+/// The figure of a pitch above a reference pitch in a key, as the three
+/// values a `FigureTuple` holds: what `FigureTuple.fromPitchAndReference`
+/// asks of the crate.
 #[pyfunction]
-#[pyo3(name = "figureTupleSolo")]
-fn figureTupleSolo(
+fn figure_of(
     pitchObj: &Bound<'_, PyAny>,
     keyObj: &Bound<'_, PyAny>,
-    bass: &Bound<'_, PyAny>,
+    refPitch: &Bound<'_, PyAny>,
 ) -> PyResult<(u8, f64, String)> {
     let figure = rs_roman::FigureTuple::from_pitch_and_reference(
         &pitch_from_any(pitchObj)?,
         &key_argument(keyObj)?,
-        &pitch_from_any(bass)?,
+        &pitch_from_any(refPitch)?,
     )
     .map_err(roman_error)?;
     Ok(figure_tuple(&figure))
 }
 
+/// music21's `FigureTuple` and `PitchFigureTuple`, named tuples with a
+/// `fromPitchAndReference` that asks the crate. Built in Python since a
+/// named tuple is a Python class; `collections` is loaded already.
+const FIGURE_CLASSES: &str = r#"
+import collections
+
+def build(figure_of, module):
+    class FigureTuple(collections.namedtuple(
+            'FigureTuple', ['degFromRefPitch', 'alter', 'prefix'])):
+        __slots__ = ()
+
+        @classmethod
+        def fromPitchAndReference(cls, pitchObj, keyObj, refPitch):
+            return cls(*figure_of(pitchObj, keyObj, refPitch))
+
+    class PitchFigureTuple(collections.namedtuple(
+            'PitchFigureTuple', ['degFromRefPitch', 'alter', 'prefix', 'pitch'])):
+        __slots__ = ()
+
+        @classmethod
+        def fromPitchAndReference(cls, pitchObj, keyObj, refPitch):
+            figure = FigureTuple.fromPitchAndReference(pitchObj, keyObj, refPitch)
+            return cls(figure.degFromRefPitch, figure.alter, figure.prefix, pitchObj)
+
+    for made in (FigureTuple, PitchFigureTuple):
+        made.__module__ = module
+    return FigureTuple, PitchFigureTuple
+"#;
+
+/// The two classes, built once and kept on the module.
+fn figure_classes(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    py.import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))
+}
+
+/// Builds the two figure classes onto the module.
+fn add_figure_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let builder = PyModule::from_code(
+        py,
+        &std::ffi::CString::new(FIGURE_CLASSES)?,
+        c"music21_rs_figure_tuples.py",
+        c"music21_rs_figure_tuples",
+    )?;
+    let figure = wrap_pyfunction!(figure_of, m)?;
+    let (figure_tuple, pitch_figure_tuple): (Bound<'_, PyAny>, Bound<'_, PyAny>) = builder
+        .getattr("build")?
+        .call1((figure, "music21.roman"))?
+        .extract()?;
+    m.add("FigureTuple", figure_tuple)?;
+    m.add("PitchFigureTuple", pitch_figure_tuple)?;
+    Ok(())
+}
+
+/// Whether `figureTupleSolo` has warned yet in this process.
+static FIGURE_TUPLE_SOLO_WARNED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// music21's `figureTupleSolo`, a deprecated alias of
+/// `FigureTuple.fromPitchAndReference` since v11.
+#[pyfunction]
+#[pyo3(name = "figureTupleSolo")]
+fn figureTupleSolo<'py>(
+    py: Python<'py>,
+    pitchObj: &Bound<'py, PyAny>,
+    keyObj: &Bound<'py, PyAny>,
+    bass: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    crate::warn_deprecated_once(
+        py,
+        &FIGURE_TUPLE_SOLO_WARNED,
+        "figureTupleSolo was deprecated on v11 and will disappear at or after v12. \
+         use FigureTuple.fromPitchAndReference() instead",
+    )?;
+    figure_classes(py)?
+        .getattr("FigureTuple")?
+        .call_method1("fromPitchAndReference", (pitchObj, keyObj, bass))
+}
+
 /// music21's `correctRNAlterationForMinor`: a sixth or seventh degree in a
-/// minor key read against the raised degree, as a `(degFromRefPitch,
-/// alter, prefix)` tuple.
+/// minor key read against the raised degree. A figure it leaves alone comes
+/// back as the very object given, and a new one as a `FigureTuple`, its
+/// alteration keeping the type it was given in, as music21's arithmetic does.
 #[pyfunction]
 #[pyo3(name = "correctRNAlterationForMinor", signature = (figureTuple, keyObj, *, chordHasMajorThird = false))]
-fn correctRNAlterationForMinor(
-    figureTuple: (u8, f64, String),
-    keyObj: &Bound<'_, PyAny>,
+fn correctRNAlterationForMinor<'py>(
+    py: Python<'py>,
+    figureTuple: &Bound<'py, PyAny>,
+    keyObj: &Bound<'py, PyAny>,
     chordHasMajorThird: bool,
-) -> PyResult<(u8, f64, String)> {
+) -> PyResult<Bound<'py, PyAny>> {
+    let (degree, given_alter, prefix): (u8, Bound<'py, PyAny>, String) = figureTuple.extract()?;
+    let alter: f64 = given_alter.extract()?;
     let figure = rs_roman::FigureTuple {
-        deg_from_ref_pitch: figureTuple.0,
-        alter: figureTuple.1,
-        prefix: figureTuple.2,
+        deg_from_ref_pitch: degree,
+        alter,
+        prefix: prefix.clone(),
     };
     let corrected = rs_roman::correct_rn_alteration_for_minor(
         &figure,
         &key_argument(keyObj)?,
         chordHasMajorThird,
     );
-    Ok(figure_tuple(&corrected))
+    // Every change music21 makes changes a value, so equal values are the
+    // figure it handed back unchanged.
+    if corrected.alter == alter && corrected.prefix == prefix {
+        return Ok(figureTuple.clone());
+    }
+    let new_alter = if alter == 1.0 || given_alter.is_instance_of::<pyo3::types::PyFloat>() {
+        corrected.alter.into_pyobject(py)?.into_any()
+    } else {
+        (corrected.alter as i64).into_pyobject(py)?.into_any()
+    };
+    figure_classes(py)?.getattr("FigureTuple")?.call1((
+        corrected.deg_from_ref_pitch,
+        new_alter,
+        corrected.prefix,
+    ))
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1771,6 +1875,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(figureTuples, m)?)?;
     m.add_function(wrap_pyfunction!(figureTupleSolo, m)?)?;
     m.add_function(wrap_pyfunction!(correctRNAlterationForMinor, m)?)?;
+    add_figure_classes(m)?;
     m.add_class::<RomanNumeral>()?;
     Ok(())
 }

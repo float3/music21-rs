@@ -190,16 +190,16 @@ impl KeySignature {
         Ok(Self::of(sharps))
     }
 
-    /// The number of sharps, negative for flats. Always an `int`: a
-    /// non-traditional signature reports 0 (see `isNonTraditional`).
+    /// The number of sharps, negative for flats. Always an `int`, a
+    /// non-traditional signature's too (see `isNonTraditional`).
     #[getter]
     fn sharps(&self) -> i32 {
-        self.signature.sharps().unwrap_or(0)
+        self.signature.sharps()
     }
 
     #[setter]
-    fn set_sharps(&mut self, value: Option<i32>) {
-        self.signature.set_sharps(value.unwrap_or(0));
+    fn set_sharps(&mut self, value: i32) {
+        self.signature.set_sharps(value);
     }
 
     #[setter]
@@ -231,8 +231,8 @@ impl KeySignature {
     }
 
     /// Whether this signature is a list of altered pitches rather than a
-    /// count of sharps or flats. Setting it to `True` drops the sharp count
-    /// so that `alteredPitches` can be assigned.
+    /// count of sharps or flats. Set on its own: the count and any pitches
+    /// stay as they are.
     #[getter]
     fn isNonTraditional(&self) -> bool {
         self.signature.is_non_traditional()
@@ -286,9 +286,8 @@ impl KeySignature {
                 if mode.is_none()
                     && let Some(missing) = tonic
                         .as_deref()
-                        .filter(|_| self.signature.sharps().is_some())
                         .and_then(unsolved_mode_lookup)
-                        .map(|major| self.signature.sharps().unwrap_or(0) - major)
+                        .map(|major| self.signature.sharps() - major)
                 {
                     raised.set_cause(py, Some(PyKeyError::new_err(missing)));
                 }
@@ -366,7 +365,8 @@ impl KeySignature {
         }
         Ok(other
             .extract::<PyRef<KeySignature>>()
-            .is_ok_and(|other| other.signature.sharps() == slf.borrow().signature.sharps()))
+            // music21's `equalityAttributes`: the count and the flag.
+            .is_ok_and(|other| other.signature == slf.borrow().signature))
     }
 
     fn __hash__(slf: &Bound<'_, Self>) -> u64 {
@@ -1206,13 +1206,11 @@ impl Key {
 /// music21's `key.sharpsToPitch`: the tonic of the major key with this many
 /// sharps (negative for flats), so `sharpsToPitch(-3)` is `E-`.
 #[pyfunction]
-#[pyo3(name = "sharpsToPitch", signature = (sharpCount = None))]
-fn sharps_to_pitch_facade<'py>(
-    py: Python<'py>,
-    sharpCount: Option<i32>,
-) -> PyResult<Bound<'py, PyAny>> {
-    // music21 reads a missing count as C major rather than as an error.
-    let sharp_count = sharpCount.unwrap_or(0);
+#[pyo3(name = "sharpsToPitch", signature = (sharpCount))]
+fn sharps_to_pitch_facade<'py>(py: Python<'py>, sharpCount: i32) -> PyResult<Bound<'py, PyAny>> {
+    // A count is an `int`: music21 dropped reading `None` as C major in
+    // 14acfa0f2, and a `None` here is a `TypeError`.
+    let sharp_count = sharpCount;
     let cache = sharps_to_pitch_cache(py)?;
     if let Some(cached) = cache.get_item(sharp_count)? {
         return Ok(cached);

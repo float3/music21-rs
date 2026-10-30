@@ -600,6 +600,14 @@ mod tests {
         expected[2] = 1.0 / 3.0;
         assert_eq!(vector("CS12", &data), expected);
 
+        // Counted upward: C up to D, D down to B, B down to B-.
+        let data = DataInstance::new(&symbols(&["C", "D", "B", "B-"]))?;
+        let mut expected = vec![0.0; 12];
+        expected[2] = 1.0 / 3.0;
+        expected[9] = 1.0 / 3.0;
+        expected[11] = 1.0 / 3.0;
+        assert_eq!(vector("CS12", &data), expected);
+
         // A symbol that sounds nothing is passed over, wherever it stands.
         let mut silent = symbols(&["C", "G"]);
         silent.insert(0.5, StreamElement::ChordSymbol(ChordSymbol::no_chord(None)));

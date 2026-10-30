@@ -125,6 +125,10 @@ pub const SCORES: &[(&str, &str)] = &[
         "octaves outside MusicXML's 0 to 9, moved into it",
     ),
     (
+        "built:arpeggio-chord-kinds",
+        "an arpeggio on one note, one chord and one percussion chord",
+    ),
+    (
         "built:lyric-styles",
         "lyrics justified, placed and left unprinted",
     ),
@@ -438,6 +442,31 @@ def extreme_octaves():
     second.append(stroke)
     return one_part(part)
 
+def arpeggio_chord_kinds():
+    """An arpeggio mark standing on a single element of each kind.
+
+    music21 numbers an arpeggio that spans more than one note; since
+    11.0.0b14 it counts the notes of any `ChordBase`, so a percussion chord
+    of two strokes is numbered as a chord of two pitches is, and a lone
+    note is not. No corpus score has an arpeggio on a percussion chord.
+    """
+    from music21 import chord, expressions, note, percussion
+    part, bars = quarters([['C4', 'D4', 'E4', 'F4']])
+    measure = part.getElementsByClass('Measure')[0]
+    triad = chord.Chord(['C4', 'E4', 'G4'], type='quarter')
+    strokes = []
+    for step in ('E', 'G'):
+        stroke = note.Unpitched()
+        stroke.displayStep = step
+        stroke.displayOctave = 4
+        strokes.append(stroke)
+    drums = percussion.PercussionChord(strokes, type='quarter')
+    measure.replace(bars[0][1], triad)
+    measure.replace(bars[0][2], drums)
+    for marked in (bars[0][0], triad, drums):
+        part.insert(0, expressions.ArpeggioMarkSpanner([marked]))
+    return one_part(part)
+
 def lyric_styles():
     """Lyrics that say how they line up, which side they are on and whether
     they are printed."""
@@ -516,6 +545,7 @@ BUILT = {
     'built:tremolo-spanners': tremolos,
     'built:pedals': pedals,
     'built:inner-barline': inner_barline,
+    'built:arpeggio-chord-kinds': arpeggio_chord_kinds,
     'built:lyric-styles': lyric_styles,
     'built:extreme-octaves': extreme_octaves,
 }
@@ -939,7 +969,7 @@ fn describe(element: &StreamElement) -> String {
         StreamElement::Rest(rest) => format!("Rest {}", sung(rest.lyric())),
         StreamElement::Dynamic(dynamic) => format!("Dynamic {}", dynamic.value()),
         StreamElement::KeySignature(signature) => {
-            format!("KeySignature {}", option(signature.sharps()))
+            format!("KeySignature {}", signature.sharps())
         }
         StreamElement::Clef(clef) => format!(
             "Clef {}{}",

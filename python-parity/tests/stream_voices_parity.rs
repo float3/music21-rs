@@ -272,9 +272,7 @@ fn setting(element: &StreamElement, offset: f64) -> Option<String> {
 }
 
 fn sharps(signature: &music21_rs::key::keysignature::KeySignature) -> String {
-    signature
-        .sharps()
-        .map_or("None".to_string(), |sharps| sharps.to_string())
+    signature.sharps().to_string()
 }
 
 fn notes_of(stream: &Stream) -> String {

@@ -50,7 +50,7 @@ pub(crate) fn music21_figure_and_key(text: &str) -> String {
 /// A key signature's description with its pitches spelled music21's way:
 /// `pitches: [E-, G#4]`, where the crate says `[Eb, G#4]`.
 pub(crate) fn music21_description(signature: &KeySignature) -> String {
-    if signature.sharps().is_some() {
+    if !signature.is_non_traditional() {
         return signature.description();
     }
     let names: Vec<String> = signature

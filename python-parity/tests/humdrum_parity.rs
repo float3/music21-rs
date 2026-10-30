@@ -16,6 +16,7 @@
 //! of. `HUMDRUM_PARITY_FILES`, a `;`-separated list of such names or `@`
 //! and the path of a file of them, runs those instead of the ones below.
 
+use music21_rs::StreamElement;
 use music21_rs::humdrum::from_humdrum;
 use music21_rs::metadata::MetadataValue;
 use music21_rs::musicxml::{ExportOptions, to_musicxml};
@@ -37,6 +38,7 @@ const FILES: &[(&str, &str)] = &[
         "triplets, grace notes and spines split into voices",
     ),
     ("chopin/mazurka06-2.krn", "a piano piece on two staves"),
+    ("bach/bwv366.krn", "a chorale with global comments"),
     (
         "palestrina/Agnus_01.krn",
         "a mass movement in long values, with words",
@@ -124,6 +126,37 @@ fn the_crate_reads_humdrum_as_music21_does() {
                     continue;
                 }
             };
+            // The `!!` comments standing in the score, which neither the
+            // outline nor the MusicXML says.
+            let their_comments: Vec<(f64, i32, String)> = read
+                .getattr("elements")?
+                .try_iter()?
+                .filter_map(Result::ok)
+                .filter(|held| held.hasattr("comment").unwrap_or(false))
+                .map(|held| -> PyResult<(f64, i32, String)> {
+                    Ok((
+                        held.getattr("offset")?.extract()?,
+                        held.getattr("priority")?.extract()?,
+                        held.getattr("comment")?.extract()?,
+                    ))
+                })
+                .collect::<PyResult<_>>()?;
+            let our_comments: Vec<(f64, i32, String)> = ours
+                .events()
+                .iter()
+                .filter_map(|event| match event.element() {
+                    StreamElement::GlobalComment(said) => {
+                        Some((event.offset(), said.priority(), said.comment().to_string()))
+                    }
+                    _ => None,
+                })
+                .collect();
+            if our_comments != their_comments {
+                failures.push(format!(
+                    "{line}: comments {our_comments:?}, music21 {their_comments:?}"
+                ));
+                continue;
+            }
             // The outline first: music21 cannot write every analysis as it
             // stands, and an outline says plainly what differs.
             let their_outline: String = outlines.getattr("outline")?.call1((&read,))?.extract()?;

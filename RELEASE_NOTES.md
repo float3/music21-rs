@@ -1,6 +1,50 @@
 # Unreleased
 
+## breaking changes
+
+- **`KeySignature::sharps` is always a count**, as music21's `sharps` has
+  been since 14acfa0f2, and `is_non_traditional` is a flag of its own
+  rather than a missing count. `set_sharps`, `set_altered_pitches` and
+  `set_non_traditional` each set their own part and leave the others;
+  pitches written over a traditional signature no longer make it
+  non-traditional. A non-traditional signature still names a key, still
+  transposes, and compares unequal to the traditional one with its count.
+  Saved signatures with no count read back as non-traditional ones.
+  The wheel's `sharpsToPitch(None)` is a `TypeError`, as music21's is, and
+  a non-traditional signature handed back to music21 keeps its pitches
+  where it used to be dropped.
+
+- **`StreamElement::GlobalComment` and `BrailleSegmentDivision`** are new
+  variants, so a `match` over every variant needs arms for them.
+
 ## added
+
+- **A braille segment divides where a stream says.**
+  `braille::SegmentDivision` is music21's `BrailleSegmentDivision` and
+  `BrailleOptionalSegmentDivision`: standing in a measure, it starts a new
+  segment there, the optional one only past 48 elements. The wheel reads
+  music21's own objects into it.
+
+- **Humdrum `!!` comments are kept.** Each stands in the score as a
+  `humdrum::GlobalComment`, at the offset and priority music21's
+  `insertGlobalEvents` gives it; they used to be dropped. The wheel still
+  drops them on hand-back.
+
+- **A meter carries a bar length written over its own.**
+  `TimeSignature::set_bar_duration` is music21's `barDuration` setter, and
+  `bar_duration` answers it. The wheel kept it as a Python object beside
+  the meter; now copies, pickles and the crate's own readers see it.
+
+- **A chord's `pitches` and `root()` build no notes in the wheel.** Under
+  `install_into_music21` each note runs music21's own object machinery;
+  `Chord('C4 E4 G4').pitches` drops from 26.8µs to 8.9µs. A note built
+  later carries the pitch object already handed out.
+
+- **A placed element tells its beat.** `Placed::bar_offset`, `beat`,
+  `beat_string`, `beat_duration` and `beat_strength` are music21's
+  `getMeasureOffsetOrMeterModulusOffset`, `beat`, `beatStr`,
+  `beatDuration` and `beatStrength`, read from the meter in force with no
+  sites. `TimeSignature::offset_in_bar` wraps at a written bar length.
 
 - **music21 11.0.0b14, whose instrument module grew by ten classes and
   moved its percussion map into a mixin of its own.** `Instrument::of_kind`
@@ -1169,6 +1213,69 @@
   property as music21 does.
 
 ## fixed
+
+- **The wheel's `OctatonicScale(tonic, mode=1)` stops at its octave.**
+  It realized a tenth pitch an octave up (`B#5` on C) and counted its
+  degrees from there; it now stands on the crate's step scale, which
+  matches music21 on every tonic, ranged realizations included.
+
+- **A grace note handed back by the wheel keeps its grace duration.** A
+  note read with one came back holding a plain `Duration`, so `isGrace`
+  was false; it is now a `GraceDuration`, or an `AppoggiaturaDuration`
+  for an unslashed one that takes time. `getGraceDuration(appoggiatura=True)`
+  sets `makeTime`, as music21's does.
+
+- **The wheel's streams answer offsets through `opFrac`**:
+  `elementOffset`, `highestTime`, `highestOffset`, `lowestOffset` and
+  `quarterLength` give `Fraction(1, 3)` for a triplet, as music21's do,
+  where they gave a float.
+
+- **The wheel reads more arguments as music21 does**:
+  `VoiceLeadingQuartet(..., key='C')` hands back the Key the name names,
+  `Accidental('bb')` is refused, `bb` being the crate's spelling and not
+  music21's, a `duration` is set only from a Duration (a bare number is a
+  `TypeError`), and `setInversion` reads its number through `int()`, a
+  copy saying it came from `setInversion`.
+
+- **De Clercq-Temperley text with no barline or no `S:` rule is
+  refused**, as music21's converter refuses it, where it read as an empty
+  part; the wheel raises `CTSongException`.
+
+- **A Humdrum pickup is padded**, as music21 pads a first measure shorter
+  than the bar of the meter it opens with, and **a Humdrum opus is named
+  as music21 names it**: its scores `section_1` on, its own metadata a
+  copy of the first score's numbered `0`.
+
+- **`TimeSignature::beat_progress` is read through `op_frac`**, and the
+  wheel's `getBeatProgress`, `offsetToSpan` and `getLevelSpan` answer
+  `Fraction`s where music21's do.
+
+- **The wheel follows music21's v11 changes it had missed**, found by
+  auditing the port against every music21 commit since porting began:
+  `KeySignature.alteredPitches` no longer flips a signature to
+  non-traditional; `Chord`'s ten per-note accessors and
+  `Stream.hasElementOfClass` warn that they are deprecated; a chord is
+  indexed by an int, a pitch name or a Pitch only; a root-position
+  `ChordSymbol` drops a stored inversion; a non-finite length raises what
+  music21 raises; `AbstractScale.mode` is a diatonic mode's name, an
+  octatonic mode's number, or None; `addVariant` warns for its old
+  keyword; and figures are `FigureTuple` and `PitchFigureTuple` named
+  tuples, `figureTupleSolo` a deprecated alias.
+
+- **A keyboard heading reads a lone key signature.** music21 now reads
+  each element of a heading's signatures by what it is; the port still
+  took a lone signature for a meter and failed on a key signature.
+
+- **A whistle's stroke is written on its percussion key.** music21 reads
+  the MIDI percussion map of any `MidiPercussionMapMixin`, a `Whistle`
+  among them though it is a `Flute`; the writer only read
+  `UnpitchedPercussion` and wrote key 60.
+
+- **`CS12` counts the bass moving up**, as music21 now does: C to G is
+  seven semitones, not five. The wheel's `ChordBassMotionFeature` follows.
+
+- **An arpeggio on a lone percussion chord is numbered**, as music21 now
+  numbers one on any chord of more than one note.
 
 - **`CS12` (Chord Bass Motion) counts motion upward.** Index *i* is the
   share of bass moves up *i* semitones, as the extractor's description

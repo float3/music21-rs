@@ -43,6 +43,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
+use music21_rs_crate::braille::SegmentDivision;
 use music21_rs_crate::voiceleading::QuartetOptions;
 use music21_rs_crate::{Stream as RsStream, StreamElement, StreamEvent, StreamKind};
 
@@ -440,6 +441,23 @@ impl Stream {
             object: object.clone().unbind(),
         });
         self.next += 1;
+    }
+
+    /// Where an object stands in this stream, as a number.
+    fn offset_of(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
+        self.held
+            .iter()
+            .find(|held| held.object.bind(element.py()).is(element))
+            .map(|held| held.offset)
+            .ok_or_else(|| {
+                StreamException::new_err(format!(
+                    "an entry for this object {} is not stored in this stream",
+                    element
+                        .repr()
+                        .map(|text| text.to_string())
+                        .unwrap_or_default()
+                ))
+            })
     }
 
     /// What this stream holds, in music21's order.
@@ -1035,7 +1053,7 @@ impl Stream {
             Some(given) => given
                 .call_method1("elementOffset", (el,))?
                 .extract::<f64>()?,
-            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+            None => slf.borrow().offset_of(el).unwrap_or(0.0),
         };
         let span = music21_rs_crate::stream::OffsetSpan {
             must_begin_in_span: false,
@@ -1088,7 +1106,7 @@ impl Stream {
             Some(given) => given
                 .call_method1("elementOffset", (el,))?
                 .extract::<f64>()?,
-            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+            None => slf.borrow().offset_of(el).unwrap_or(0.0),
         };
         let length = length_of(el)?;
         let end = offset + length;
@@ -2298,20 +2316,9 @@ impl Stream {
     }
 
     /// Where an object stands in this stream.
-    fn elementOffset(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
-        self.held
-            .iter()
-            .find(|held| held.object.bind(element.py()).is(element))
-            .map(|held| held.offset)
-            .ok_or_else(|| {
-                StreamException::new_err(format!(
-                    "an entry for this object {} is not stored in this stream",
-                    element
-                        .repr()
-                        .map(|text| text.to_string())
-                        .unwrap_or_default()
-                ))
-            })
+    fn elementOffset<'py>(&self, element: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        // Through `opFrac`, as music21's: a triplet stands at a third.
+        crate::duration::op_frac(element.py(), self.offset_of(element)?)
     }
 
     /// Moves an object this stream holds to another offset.
@@ -2445,8 +2452,8 @@ impl Stream {
 
     /// The offset just past the last thing held.
     #[getter]
-    fn highestTime(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Self::highest_time(slf)
+    fn highestTime<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
     }
 
     /// The stream as one line of chords, as music21's `chordify` makes it:
@@ -2759,15 +2766,15 @@ impl Stream {
     /// Where the last element this stream holds itself starts: music21's
     /// `highestOffset`.
     #[getter]
-    fn highestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(crate_stream(slf.as_any())?.highest_offset())
+    fn highestOffset<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), crate_stream(slf.as_any())?.highest_offset())
     }
 
     /// Where the first element this stream holds itself starts: music21's
     /// `lowestOffset`.
     #[getter]
-    fn lowestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(crate_stream(slf.as_any())?.lowest_offset())
+    fn lowestOffset<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), crate_stream(slf.as_any())?.lowest_offset())
     }
 
     /// Whether the stream holds a measure itself: music21's `hasMeasures`.
@@ -2800,8 +2807,8 @@ impl Stream {
 
     /// How long the stream lasts, which is its highest time.
     #[getter]
-    fn quarterLength(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Self::highest_time(slf)
+    fn quarterLength<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
     }
 
     fn __len__(&self) -> usize {
@@ -2924,6 +2931,8 @@ impl Stream {
 
     /// Whether any element answers to one of these classes: music21's
     /// `hasElementOfClass`.
+    ///
+    /// * Deprecated in v11: use `bool(s.getElementsByClass(className))`.
     #[pyo3(signature = (className, forceFlat = false))]
     fn hasElementOfClass(
         slf: &Bound<'_, Self>,
@@ -2932,6 +2941,11 @@ impl Stream {
     ) -> PyResult<bool> {
         let _ = forceFlat;
         let py = slf.py();
+        crate::warn_deprecated_once(
+            py,
+            &HAS_ELEMENT_OF_CLASS_WARNED,
+            HAS_ELEMENT_OF_CLASS_DEPRECATED,
+        )?;
         let objects: Vec<Py<PyAny>> = slf
             .borrow()
             .held
@@ -3727,6 +3741,14 @@ impl Stream {
     }
 }
 
+/// What music21's `common.deprecated` says for `hasElementOfClass`.
+const HAS_ELEMENT_OF_CLASS_DEPRECATED: &str = "Stream.hasElementOfClass was deprecated on v11 \
+     and will disappear at or after v12. use `bool(s.getElementsByClass(className))` instead";
+
+/// Whether `hasElementOfClass` has warned yet in this process.
+static HAS_ELEMENT_OF_CLASS_WARNED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 /// Refuses what the wheel's copies of music21's editing methods cannot do:
 /// edit one target, cut without ties, or change the stream in place.
 fn refuse_unported(target: bool, untied: bool, in_place: bool) -> PyResult<()> {
@@ -4320,10 +4342,22 @@ fn element_object_as<'py>(
             crate::instrument::Instrument::object_as(py, (**instrument).clone(), holdable)?
                 .into_bound(py)
         }
-        StreamElement::KeySignature(signature) => match signature.sharps() {
-            Some(sharps) => class_named("music21.key", "KeySignature")?.call1((sharps,))?,
-            None => return Ok(None),
-        },
+        StreamElement::KeySignature(signature) => {
+            let made = class_named("music21.key", "KeySignature")?.call1((signature.sharps(),))?;
+            // A non-traditional signature says its pitches, in music21's
+            // spelling; it used to be dropped here.
+            if signature.is_non_traditional() {
+                made.setattr("isNonTraditional", true)?;
+                let names: Vec<String> = signature
+                    .altered_pitches()
+                    .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?
+                    .iter()
+                    .map(|pitch| crate::spelling::music21_name(&pitch.to_string()))
+                    .collect();
+                made.setattr("alteredPitches", names)?;
+            }
+            made
+        }
         StreamElement::Key(key) => {
             class_named("music21.key", "Key")?.call1((key.tonic().name(), key.mode()))?
         }
@@ -4383,7 +4417,9 @@ fn element_object_as<'py>(
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
-        | StreamElement::TextBox(_) => return Ok(None),
+        | StreamElement::TextBox(_)
+        | StreamElement::GlobalComment(_)
+        | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
     Ok(Some(made))
@@ -4647,6 +4683,21 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     // its groups and how much of the stream it replaces.
     if is_of_class(object, &pyo3::types::PyString::new(py, "Variant"))? {
         return Ok(Some(variant_value(object)?.into()));
+    }
+    // music21's own `braille.objects` divisions, which the package has no
+    // class for: where braille starts a new segment.
+    if !stand_ins
+        && is_of_class(
+            object,
+            &pyo3::types::PyString::new(py, "BrailleSegmentDivision"),
+        )?
+    {
+        let optional = pyo3::types::PyString::new(py, "BrailleOptionalSegmentDivision");
+        let division = match is_of_class(object, &optional)? {
+            true => SegmentDivision::Optional,
+            false => SegmentDivision::Required,
+        };
+        return Ok(Some(StreamElement::BrailleSegmentDivision(division)));
     }
     if let Ok(symbol) = object.cast::<ChordSymbol>() {
         return Ok(Some(StreamElement::ChordSymbol(

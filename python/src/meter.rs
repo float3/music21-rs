@@ -38,7 +38,7 @@ use music21_rs_crate::{
 use crate::chord::chord_from_any;
 use crate::note::note_from_any;
 
-use crate::duration::Duration;
+use crate::duration::{Duration, duration_from_any};
 
 /// The names the `meter` facade replaces in `music21.meter.base`.
 pub const NAMES: &[&str] = &["TimeSignature", "MeterException", "TimeSignatureException"];
@@ -106,26 +106,9 @@ fn checked_divisions(
     subclass,
     skip_from_py_object
 )]
+#[derive(Clone)]
 pub struct TimeSignature {
     pub(crate) inner: RsTimeSignature,
-    /// music21's `_overriddenBarDuration`: the bar length a caller wrote
-    /// over this meter's own, kept as the object it was given, since that is
-    /// what music21 hands back.
-    overridden_bar_duration: Option<Py<PyAny>>,
-}
-
-impl Clone for TimeSignature {
-    /// A copy keeps the bar length written over this meter, since that is
-    /// part of what the meter says rather than a name for one object.
-    fn clone(&self) -> Self {
-        Python::attach(|py| Self {
-            inner: self.inner.clone(),
-            overridden_bar_duration: self
-                .overridden_bar_duration
-                .as_ref()
-                .map(|written| written.clone_ref(py)),
-        })
-    }
 }
 
 #[pymethods]
@@ -154,10 +137,7 @@ impl TimeSignature {
         let _ = keywords;
         let mut inner = read_meter(&value)?;
         checked_divisions(&mut inner, divisions)?;
-        Ok(Self {
-            inner,
-            overridden_bar_duration: None,
-        })
+        Ok(Self { inner })
     }
 
     /// music21 builds in `__init__`, and a Python subclass of this one hands
@@ -372,32 +352,22 @@ impl TimeSignature {
         self.inner.set_display(&written).map_err(meter_error)
     }
 
-    // music21 lets a caller write this, and keeps what it was given.
+    // music21 lets a caller write this over the meter's own; `None`
+    // clears it. The crate keeps it, so a copy and a pickle carry it.
     #[setter]
     fn set_barDuration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.overridden_bar_duration = Some(value.clone().unbind());
+        let written = match value.is_none() {
+            true => None,
+            false => Some(duration_from_any(value)?),
+        };
+        self.inner.set_bar_duration(written);
         Ok(())
-    }
-
-    fn __traverse__(
-        &self,
-        visit: pyo3::pyclass::PyVisit<'_>,
-    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
-        visit.call(&self.overridden_bar_duration)?;
-        Ok(())
-    }
-
-    fn __clear__(&mut self) {
-        self.overridden_bar_duration = None;
     }
 
     /// The length of one bar, as a `Duration`. It can be set to override
     /// the length the meter implies.
     #[getter]
     fn barDuration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        if let Some(written) = &self.overridden_bar_duration {
-            return Ok(written.clone_ref(py));
-        }
         // The class installed over music21's where there is one, since a
         // duration is compared by its class as well as its length.
         Duration::object(py, self.inner.bar_duration())
@@ -521,7 +491,9 @@ impl TimeSignature {
             py,
             [
                 beat.into_pyobject(py)?.into_any(),
-                offset.into_pyobject(py)?.into_any(),
+                // A `Fraction` where the progress is not a binary fraction,
+                // as music21's `opFrac` answers.
+                crate::duration::op_frac(py, offset)?,
             ],
         )
     }
@@ -725,14 +697,8 @@ impl TimeSignature {
 
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it.
-    /// A bar length written over the meter's own goes with it, since the
-    /// crate's value does not carry it.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        let py = slf.py();
-        let me = slf.borrow();
-        let extra = pyo3::types::PyDict::new(py);
-        extra.set_item("barDuration", me.overridden_bar_duration.as_ref())?;
-        crate::pickled_extra(slf, &me.inner, Some(&extra))
+        crate::pickled(slf, &slf.borrow().inner)
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -754,10 +720,12 @@ impl TimeSignature {
             if let Some(symbolize) = extra.get_item("symbolizeDenominator")? {
                 me.inner.set_symbolize_denominator(symbolize.extract()?);
             }
+            // A pickle written before the crate carried a written bar
+            // length says it beside the value.
             if let Some(bar) = extra.get_item("barDuration")?
                 && !bar.is_none()
             {
-                me.overridden_bar_duration = Some(bar.unbind());
+                me.inner.set_bar_duration(Some(duration_from_any(&bar)?));
             }
         }
         Ok(())
@@ -1851,8 +1819,23 @@ impl MeterSequence {
 
     /// music21's `getLevelSpan`: where each part of a level starts and ends.
     #[pyo3(signature = (level = 0))]
-    fn getLevelSpan(&self, py: Python<'_>, level: usize) -> PyResult<Vec<(FloatType, FloatType)>> {
-        Ok(self.held.read(py)?.level_span(level))
+    fn getLevelSpan<'py>(
+        &self,
+        py: Python<'py>,
+        level: usize,
+    ) -> PyResult<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>> {
+        // Through `opFrac`, as music21's: a third is `Fraction(1, 3)`.
+        self.held
+            .read(py)?
+            .level_span(level)
+            .into_iter()
+            .map(|(start, end)| {
+                Ok((
+                    crate::duration::op_frac(py, start)?,
+                    crate::duration::op_frac(py, end)?,
+                ))
+            })
+            .collect()
     }
 
     /// music21's `getLevelWeight`: what each part of a level weighs.
@@ -1906,7 +1889,7 @@ impl MeterSequence {
         py: Python<'_>,
         qLenPos: FloatType,
         permitMeterModulus: bool,
-    ) -> PyResult<(Py<PyAny>, FloatType)> {
+    ) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
         let (start, end) = self
             .held
             .read(py)?
@@ -1915,9 +1898,9 @@ impl MeterSequence {
         let start = if start == 0.0 {
             0i64.into_pyobject(py)?.into_any().unbind()
         } else {
-            start.into_pyobject(py)?.into_any().unbind()
+            crate::duration::op_frac(py, start)?.unbind()
         };
-        Ok((start, end))
+        Ok((start, crate::duration::op_frac(py, end)?.unbind()))
     }
 
     /// music21's `subdivideNestedHierarchy`: this span nested down to a
@@ -2179,10 +2162,7 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
         meas.py(),
         "music21.meter.base",
         "TimeSignature",
-        TimeSignature {
-            inner,
-            overridden_bar_duration: None,
-        },
+        TimeSignature { inner },
     )
 }
 
