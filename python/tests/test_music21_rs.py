@@ -1090,6 +1090,17 @@ def test_fresh_instrument_ids_are_counted_not_drawn():
         int(given[1:], 16)
     assert int(violin.partId[1:], 16) == int(piano.partId[1:], 16) + 1
 
+    # Counted after a prefix drawn once per process, so two processes
+    # writing a score each do not both name their first part the same.
+    code = "import music21_rs as m; p = m.Piano(); p.partIdRandomize(); print(p.partId)"
+    firsts = {
+        subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, check=True
+        ).stdout.strip()
+        for _ in range(2)
+    }
+    assert len(firsts) == 2
+
 
 def test_a_note_a_scale_stands_twice_is_read_as_its_lowest_degree():
     # Rag Marwa's A is its fifth degree and its seventh, and its D- coming

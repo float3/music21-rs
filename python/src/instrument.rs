@@ -132,12 +132,34 @@ impl Instrument {
 /// How many ids `fresh_id` has handed out in this process.
 static IDS_GIVEN: AtomicU64 = AtomicU64::new(0);
 
+/// The first half of every id this process hands out, drawn once.
+static PROCESS_PREFIX: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
 /// The next id of this process: `prefix` and thirty-two hex digits, the
-/// shape of music21's `getMd5` ids, counting up from one. No two calls in a
-/// process answer the same id.
+/// shape of music21's `getMd5` ids. The first sixteen are drawn once per
+/// process and the last sixteen count up from one, so no two calls in a
+/// process answer the same id, and two processes -- workers each writing
+/// a score -- do not both name their first part the same.
 fn fresh_id(prefix: char) -> String {
+    let process = *PROCESS_PREFIX.get_or_init(drawn_prefix);
     let number = IDS_GIVEN.fetch_add(1, Ordering::Relaxed) + 1;
-    format!("{prefix}{number:032x}")
+    format!("{prefix}{process:016x}{number:016x}")
+}
+
+/// Sixteen hex digits no other process is likely to draw: the standard
+/// library's per-process random hashing keys, over the process id and the
+/// time.
+fn drawn_prefix() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u32(std::process::id());
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_nanos())
+        .unwrap_or_default();
+    hasher.write_u128(now);
+    hasher.finish()
 }
 
 fn language(value: Option<&str>) -> PyResult<SearchLanguage> {
