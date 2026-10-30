@@ -4401,7 +4401,7 @@ pub(crate) fn from_crate<'py>(py: Python<'py>, stream: &RsStream) -> PyResult<Bo
     from_crate_as(py, stream, Whose::Wheel)
 }
 
-/// The same as music21's own streams, where music21 can be asked for them.
+/// The same as music21's own streams, where music21 is already imported.
 ///
 /// The *elements* are already music21's wherever anything is installed --
 /// `element_object` builds every one through `installed_new` -- so what
@@ -4410,10 +4410,15 @@ pub(crate) fn music21_from_crate<'py>(
     py: Python<'py>,
     stream: &RsStream,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let whose = if py.import("music21.stream").is_ok() {
-        Whose::Music21
-    } else {
-        Whose::Wheel
+    // Already imported, not merely importable: deciding must not cost the
+    // 370ms of importing music21.
+    let loaded = py
+        .import("sys")?
+        .getattr("modules")?
+        .contains("music21.stream")?;
+    let whose = match loaded {
+        true => Whose::Music21,
+        false => Whose::Wheel,
     };
     from_crate_as(py, stream, whose)
 }

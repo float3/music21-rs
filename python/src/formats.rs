@@ -20,13 +20,19 @@ fn format_error(error: music21_rs_crate::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(&error))
 }
 
-/// The wheel's streams for what a reader read, or its error as a
-/// `StreamException`.
+/// What a reader read, or its error as a `StreamException`: music21's own
+/// streams once the wheel is installed into music21, so a note answers its
+/// offset and the score nests and writes as music21's; the wheel's own
+/// streams otherwise, whether or not music21 happens to be importable.
 fn handed_back<'py>(
     py: Python<'py>,
     read: music21_rs_crate::Result<RsStream>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    crate::stream::from_crate(py, &read.map_err(format_error)?)
+    let read = read.map_err(format_error)?;
+    if crate::installed_class(py, "music21.note", "Note").is_some() {
+        return crate::stream::music21_from_crate(py, &read);
+    }
+    crate::stream::from_crate(py, &read)
 }
 
 /// Writes a score as MusicXML and hands back the document's text.

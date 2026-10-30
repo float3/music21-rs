@@ -5914,6 +5914,37 @@ print(caught[0].message)
     )
 
 
+def test_readers_hand_back_music21_streams_once_installed():
+    """Once the wheel is installed into music21 its readers hand back
+    music21's own streams, so a note answers its offset and the score can
+    be written and nested as music21's; before that, the wheel's own."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+from music21 import stream
+before = m.from_tiny_notation("3/4 c4 d e f g a")
+print(isinstance(before, stream.Stream))
+m.install_into_music21()
+part = m.from_tiny_notation("3/4 c4 d e f g a")
+print(isinstance(part, stream.Stream))
+print([float(n.offset) for n in part.recurse().notes])
+print(part.recurse().notes[4].measureNumber, part.recurse().notes[4].beat)
+print(len(stream.Score([part]).parts))
+print("<score-partwise" in m.to_musicxml(part))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "False",
+        "True",
+        "[0.0, 1.0, 2.0, 0.0, 1.0, 2.0]",
+        "2 2.0",
+        "1",
+        "True",
+    ]
+
+
 def test_a_key_signatures_count_and_flag_are_set_apart():
     """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
     a flag of its own, so writing pitches over a signature leaves it
