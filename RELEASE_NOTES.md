@@ -42,6 +42,31 @@ DECISIONS.md; these are the changes they called for.
 - **Chord analyses find the root once**: an augmented-sixth test runs in
   430-560ns rather than 1.3µs.
 
+- **A spanner keeps its notes past what the wheel leaves out.** A rehearsal
+  mark, segno or layout before a slur moved every later spanner one note
+  on: none of Der Lindenbaum's 65 matched music21's, and 63 do now.
+
+- **A score read once installed keeps its metadata**, which music21's
+  setter had dropped without a word, so an opus is searchable again.
+
+- **A measure's barlines are found where they are listed**: `index`,
+  `elementOffset`, `in`, `getElementsByOffset`, `getElementAtOrBefore`,
+  `containerInHierarchy`, `iter` and `remove` see them too.
+
+- **`make_measures` puts no loose barline into a measure**, as music21's
+  passes over them, so a flattened part made into measures again, and its
+  braille, hold no stray barline.
+
+- **Part and instrument ids differ between processes**: their first half is
+  drawn once per process, so two workers' scores do not share part ids.
+
+- **Objects pointing back at their owners are freed**: a note, chord or rest
+  whose editorial names it, a slur its note keeps, and a Clercq-Temperley
+  song were never collected.
+
+- **`sortByCreationTime='reverse'` and `atSoundingPitch=1` are taken**, as
+  music21 takes them.
+
 # music21-rs 0.11.0
 
 The Python package carries much more of music21: braille, OMR, the `alpha`
