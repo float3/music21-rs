@@ -1170,6 +1170,21 @@
 
 ## fixed
 
+- **`CS12` (Chord Bass Motion) counts motion upward.** Index *i* is the
+  share of bass moves up *i* semitones, as the extractor's description
+  says. It counted them downward, as music21 did until the fork's master
+  fixed it: C to F now lands at 5, not 7.
+
+- **LilyPond strings escape backslashes and quotes.** Titles, lyrics and
+  note colours are written as LilyPond strings with `\` and `"` escaped, so
+  text in them can no longer end the string and be read as LilyPond or
+  Scheme.
+
+- **MuseScore's scratch files go in a private directory.** `read` and
+  `write` make a new directory for each call (mode 0700 on Unix) and remove
+  it afterwards, instead of using a predictable name in the shared temporary
+  directory.
+
 - **`install_into_music21` installs `midi.percussion.PercussionMapper`.**
   It was left out, so music21 kept its own mapper, whose
   `reverseInstrumentMapping` is a class attribute built at import and still
