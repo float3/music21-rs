@@ -101,6 +101,7 @@ impl StreamElement {
             StreamElement::Layout(layout) => vec![layout.class_name(), "LayoutBase"],
             StreamElement::TextBox(_) => vec!["TextBox"],
             StreamElement::Variant(_) => vec!["Variant"],
+            StreamElement::GlobalComment(_) => vec!["GlobalComment"],
         };
         names.push("Music21Object");
         names

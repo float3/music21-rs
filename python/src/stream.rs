@@ -4416,7 +4416,8 @@ fn element_object_as<'py>(
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
-        | StreamElement::TextBox(_) => return Ok(None),
+        | StreamElement::TextBox(_)
+        | StreamElement::GlobalComment(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
     Ok(Some(made))

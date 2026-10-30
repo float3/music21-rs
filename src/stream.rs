@@ -200,6 +200,8 @@ pub enum StreamElement {
     /// Another reading of the passage starting here, which takes no time
     /// itself. Boxed: it holds a stream.
     Variant(Box<crate::variant::Variant>),
+    /// A `!!` line of a Humdrum file, kept where it was written.
+    GlobalComment(crate::humdrum::GlobalComment),
 }
 
 impl StreamElement {
@@ -235,7 +237,8 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => None,
+            | Self::Variant(_)
+            | Self::GlobalComment(_) => None,
         }
     }
 
@@ -264,7 +267,8 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => 0.0,
+            | Self::Variant(_)
+            | Self::GlobalComment(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -300,7 +304,8 @@ impl StreamElement {
             | Self::Break(_)
             | Self::Layout(_)
             | Self::TextBox(_)
-            | Self::Variant(_) => Vec::new(),
+            | Self::Variant(_)
+            | Self::GlobalComment(_) => Vec::new(),
         }
     }
 
@@ -381,6 +386,7 @@ impl StreamElement {
             Self::Layout(layout) => Ok(Self::Layout(layout.clone())),
             Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
             Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
+            Self::GlobalComment(said) => Ok(Self::GlobalComment(said.clone())),
         }
     }
 }
@@ -394,6 +400,12 @@ impl From<Barline> for StreamElement {
 impl From<PedalObject> for StreamElement {
     fn from(value: PedalObject) -> Self {
         Self::PedalObject(value)
+    }
+}
+
+impl From<crate::humdrum::GlobalComment> for StreamElement {
+    fn from(value: crate::humdrum::GlobalComment) -> Self {
+        Self::GlobalComment(value)
     }
 }
 

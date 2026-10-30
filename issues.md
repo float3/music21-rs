@@ -185,9 +185,8 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - humdrum: `!!` global comments are dropped.
-   - the wheel's hand-back loses grace durations, humdrum barlines and
-     tandems, and RomanText repeats. Its readers hand back the wheel's own
+   - the wheel's hand-back loses grace durations, humdrum barlines,
+     tandems and `!!` comments, and RomanText repeats. Its readers hand back the wheel's own
      streams even with music21 installed, so an installed note in one
      answers music21's `offset` as 0.0: it has no site. Handing back
      music21's streams there is a design call, not yet made.
@@ -197,8 +196,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
      in sharps, and music21's own ranged realization starts on C whatever
      the tonic, so this wants its network walk ported rather than a
      different step scale.
-   - MusicXML `<transpose>` with `<diatonic>` and no `<chromatic>` reads
-     as a unison; music21 reads a generic interval.
    - `BrailleSegmentDivision` is not ported.
    - wheel argument handling: negative quarter lengths refused, non-bool
      truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
@@ -262,6 +259,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
 - **the install helper forgives three exceptions on copy** — `AttributeError`,
   `TypeError` and `RecursionError`, narrowed from a bare `except Exception`
   (`7c8e4de`).
+- **a `<transpose>` with no `<chromatic>` reads as a unison.** music21
+  reads a generic interval, but MusicXML requires `<chromatic>`, the
+  crate's instrument holds a full interval, and music21's own writer
+  cannot write a generic one back.
 - **`xtask bench` imports the installed wheel on purpose.** it measures the
   artifact a caller installs; the guards against a second copy belong to the
   harnesses that test the linked crate (`1012c5e`, `47cb607`).

@@ -1657,7 +1657,8 @@ impl<'a> Tune<'a> {
             match held.element {
                 StreamElement::Stream(_)
                 | StreamElement::Instrument(_)
-                | StreamElement::Variant(_) => {}
+                | StreamElement::Variant(_)
+                | StreamElement::GlobalComment(_) => {}
                 StreamElement::Clef(clef) => {
                     if !header {
                         lead.push_str(&format!("[K:clef={}]", clef_name(clef)?));

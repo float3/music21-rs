@@ -14,7 +14,15 @@
   a non-traditional signature handed back to music21 keeps its pitches
   where it used to be dropped.
 
+- **`StreamElement::GlobalComment`** is a new variant, so a `match` over
+  every variant needs an arm for it.
+
 ## added
+
+- **Humdrum `!!` comments are kept.** Each stands in the score as a
+  `humdrum::GlobalComment`, at the offset and priority music21's
+  `insertGlobalEvents` gives it; they used to be dropped. The wheel still
+  drops them on hand-back.
 
 - **A meter carries a bar length written over its own.**
   `TimeSignature::set_bar_duration` is music21's `barDuration` setter, and

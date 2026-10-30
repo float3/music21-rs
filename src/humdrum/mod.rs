@@ -8,6 +8,7 @@
 //! `**text` spines the words sung, and `**harm` spines the harmony read
 //! into the music, each said by `*staff` to belong to a `**kern` spine.
 
+mod comment;
 pub mod harm;
 mod tables;
 
@@ -35,6 +36,7 @@ use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
+pub use comment::GlobalComment;
 pub use tables::{INSTRUMENT_CLASSES, INSTRUMENTS};
 
 use tables::REFERENCE_NAMES;
@@ -1267,16 +1269,28 @@ fn reference(metadata: &mut Metadata, line: &str) -> Result<()> {
 fn score_of(lines: &[&str]) -> Result<Stream> {
     let mut metadata = Metadata::new();
     let mut rows: Vec<(usize, Vec<String>)> = Vec::new();
+    let mut globals: Vec<GlobalLine> = Vec::new();
+    let mut run = 0;
     let mut width = 0;
     for (index, line) in lines.iter().enumerate() {
         let line = line.trim_end();
         if line.is_empty() {
+            run = 0;
             continue;
+        }
+        if line.starts_with("!!") {
+            run += 1;
+        } else {
+            run = 0;
         }
         if line.starts_with("!!!") {
             reference(&mut metadata, line)?;
         } else if line.starts_with("!!") {
-            continue;
+            globals.push(GlobalLine {
+                line: index + 1,
+                run,
+                comment: comment_text(line).to_string(),
+            });
         } else {
             let cells: Vec<String> = line
                 .split('\t')
@@ -1300,6 +1314,7 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
             _ => parse_other(&spine.events, false),
         };
     }
+    let places = line_places(&spines);
     for index in 0..spines.len() {
         if spines[index].parent.is_none() {
             insert_voices(&mut spines, index);
@@ -1427,9 +1442,88 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
             Stream::with_kind(StreamKind::Part).with_events(held),
         ));
     }
+    place_comments(&mut events, &globals, &places);
     let mut score = Stream::with_kind(StreamKind::Score).with_events(events);
     score.set_metadata(Some(metadata));
     Ok(score)
+}
+
+/// A `!!` line: its line number, how many global lines run into it, and
+/// what it says.
+struct GlobalLine {
+    line: usize,
+    run: usize,
+    comment: String,
+}
+
+/// music21's `GlobalCommentLine.value`: the line without its bangs and the
+/// one space after them.
+fn comment_text(line: &str) -> &str {
+    let text = line.trim_start_matches('!');
+    text.strip_prefix(char::is_whitespace).unwrap_or(text)
+}
+
+/// music21's `getOffsetsAndPrioritiesByLineNumber`: the offset and priority
+/// of the first thing each line holds, the top spines read in order and
+/// their measures passed over.
+fn line_places(spines: &[Spine]) -> BTreeMap<usize, (FloatType, usize)> {
+    let mut places = BTreeMap::new();
+    let tops = spines.iter().filter(|spine| spine.parent.is_none());
+    for placed in tops.flat_map(|spine| &spine.stream) {
+        if matches!(placed.thing, Thing::Measure(_)) {
+            continue;
+        }
+        places
+            .entry(placed.line)
+            .or_insert((placed.offset, placed.priority));
+    }
+    places
+}
+
+/// music21's `insertGlobalEvents`: each comment before the next line that
+/// holds anything, 40 ahead of its priority and one back for each global
+/// line running into it; a comment with no such line goes at the end.
+///
+/// ```text
+/// !!a        -> offset of `4c`, priority 6 - 40 + 1
+/// !!!COM: X     (counted in the run, but metadata)
+/// !!b        -> offset of `4c`, priority 6 - 40 + 3
+/// 4c            (line 6)
+/// ```
+fn place_comments(
+    events: &mut Vec<StreamEvent>,
+    globals: &[GlobalLine],
+    places: &BTreeMap<usize, (FloatType, usize)>,
+) {
+    const AHEAD: i32 = 40;
+    let key = |event: &StreamEvent| match event.element() {
+        StreamElement::GlobalComment(said) => (event.offset(), said.priority()),
+        _ => (event.offset(), 0),
+    };
+    let mut trailing = Vec::new();
+    for global in globals {
+        let Some((_, (offset, priority))) = places.range(global.line..).next() else {
+            trailing.push(GlobalComment::new(global.comment.clone(), 0));
+            continue;
+        };
+        let priority = *priority as i32 - AHEAD + global.run as i32;
+        let comment = GlobalComment::new(global.comment.clone(), priority);
+        let index = events
+            .iter()
+            .position(|event| {
+                let (held, ahead) = key(event);
+                held > *offset || (held == *offset && ahead > priority)
+            })
+            .unwrap_or(events.len());
+        events.insert(index, StreamEvent::new(*offset, comment));
+    }
+    let end = events
+        .iter()
+        .map(StreamEvent::end_offset)
+        .fold(0.0, FloatType::max);
+    for comment in trailing {
+        events.push(StreamEvent::new(end, comment));
+    }
 }
 
 /// Reads a Humdrum file into a score: music21's `converter.parse` of one.
@@ -1530,6 +1624,39 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
 
 #[cfg(test)]
 mod tests {
+    /// A `!!` line stands in the score at the offset of the next line
+    /// holding anything, before what stands there, as music21's
+    /// `insertGlobalEvents` puts it; one after the music goes at the end.
+    #[test]
+    fn global_comments_stand_in_the_score() {
+        let text = "!!first\n**kern\n*M2/4\n=1\n!!mid\n4c\n!!second\n!!!COM: X\n\
+                    !!third\n4d\n=2\n2e\n==\n*-\n!!last\n";
+        let score = from_humdrum(text).unwrap();
+        let seen: Vec<(FloatType, String, i32)> = score
+            .events()
+            .iter()
+            .map(|event| match event.element() {
+                StreamElement::GlobalComment(said) => {
+                    (event.offset(), said.comment().to_string(), said.priority())
+                }
+                _ => (event.offset(), "part".to_string(), 0),
+            })
+            .collect();
+        let expected = [
+            (0.0, "first", -37),
+            (0.0, "mid", -33),
+            (0.0, "part", 0),
+            (1.0, "second", -29),
+            (1.0, "third", -27),
+            (4.0, "last", 0),
+        ];
+        let expected: Vec<(FloatType, String, i32)> = expected
+            .iter()
+            .map(|(offset, said, priority)| (*offset, said.to_string(), *priority))
+            .collect();
+        assert_eq!(seen, expected);
+    }
+
     /// An opus is named as music21 names it: its scores `section_1` on,
     /// and its own metadata a copy of the first score's, numbered `0`.
     #[test]
