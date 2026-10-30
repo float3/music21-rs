@@ -490,6 +490,37 @@ fixes found while porting went upstream:
 - [cuthbertLab/music21#2057](https://github.com/cuthbertLab/music21/pull/2057):
   `nextPitch` on a cyclical scale answering below the pitch it was given:
   F#3 after C4 on a scale of major thirds from D3.
+- [cuthbertLab/music21#2110](https://github.com/cuthbertLab/music21/pull/2110):
+  a missing comma that merged the NoteWorthy tenor and percussion clef
+  names.
+- [cuthbertLab/music21#2111](https://github.com/cuthbertLab/music21/pull/2111):
+  MusicXML export failing on an arpeggio mark over a single note.
+- [cuthbertLab/music21#2112](https://github.com/cuthbertLab/music21/pull/2112):
+  an empty `TimespanTree` yielding a verticality at `-inf`.
+- [cuthbertLab/music21#2113](https://github.com/cuthbertLab/music21/pull/2113):
+  `extractorsById(library='all')` leaving out the native extractors.
+- [cuthbertLab/music21#2114](https://github.com/cuthbertLab/music21/pull/2114):
+  `getElementsByOffset` missing a float offset slightly off an element's
+  fractional offset, so `extendTies` missed ties after triplets.
+- [cuthbertLab/music21#2115](https://github.com/cuthbertLab/music21/pull/2115):
+  pitch detection without scipy overflowing on sixteen-bit samples.
+- [cuthbertLab/music21#2116](https://github.com/cuthbertLab/music21/pull/2116):
+  a metadata search failing on a query that will not compile as a regular
+  expression.
+- [cuthbertLab/music21#2117](https://github.com/cuthbertLab/music21/pull/2117):
+  the complement of an empty residual class in sieve.
+- [cuthbertLab/music21#2118](https://github.com/cuthbertLab/music21/pull/2118):
+  a stage-1 MuseData part getting a name it does not have.
+- [cuthbertLab/music21#2119](https://github.com/cuthbertLab/music21/pull/2119):
+  MuseData files with Windows line endings read with a carriage return
+  ending every line.
+- [cuthbertLab/music21#2120](https://github.com/cuthbertLab/music21/pull/2120):
+  path doctests failing on Windows.
+- [cuthbertLab/music21#2121](https://github.com/cuthbertLab/music21/pull/2121):
+  `ScoreReduction` failing on a lone part, from a method tested without
+  being called.
+- [cuthbertLab/music21#2122](https://github.com/cuthbertLab/music21/pull/2122):
+  Humdrum spines split a second time losing their notes (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - corrections to the Xenharmonic Wiki's temperament pages, found while

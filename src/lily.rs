@@ -454,10 +454,15 @@ fn children(kind: &Kind) -> (Vec<usize>, Vec<usize>) {
     }
 }
 
-/// `quoteString`: in double quotes, a backslash and a quote inside
-/// escaped, a space after.
+/// `quoteString`: in double quotes, a space after.
 fn quote(text: &str) -> String {
-    format!("\"{}\" ", text.replace('\\', "\\\\").replace('"', "\\\""))
+    format!("{} ", string_literal(text))
+}
+
+/// Text as one LilyPond string: in double quotes, with each backslash and
+/// quote inside escaped, so nothing in it is read as LilyPond or Scheme.
+fn string_literal(text: &str) -> String {
+    format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// `makeLettersOnlyId`: every character not a letter turned into one.
@@ -782,7 +787,7 @@ impl<'a> Converter<'a> {
             None => " _ ".to_string(),
             Some(lyric) if lyric.text().is_empty() => " _ ".to_string(),
             Some(lyric) => {
-                let mut text = quote(&lyric.text()).trim_end().to_string();
+                let mut text = string_literal(&lyric.text());
                 match lyric.syllabic() {
                     Syllabic::End => {
                         text += "__";
@@ -1059,10 +1064,9 @@ impl<'a> Converter<'a> {
         if let Some(color) = note.color().filter(|color| !color.is_empty())
             && !note.hidden()
         {
-            parts.push(Item::Text(format!(
-                "\\override NoteHead.color = \"{color}\"\n"
-            )));
-            parts.push(Item::Text(format!("\\override Stem.color = \"{color}\"\n")));
+            let color = string_literal(color);
+            parts.push(Item::Text(format!("\\override NoteHead.color = {color}\n")));
+            parts.push(Item::Text(format!("\\override Stem.color = {color}\n")));
         }
         if note.hidden() {
             parts.push(Item::Text("s ".to_string()));
@@ -1564,19 +1568,46 @@ mod tests {
         assert!(text.contains("\\bar \"|.\"  %{ end measure 2 %}"));
     }
 
-    /// music21 keeps text inside its string: a backslash and a quote are
-    /// both escaped, in a lyric as in a header.
-    #[test]
-    fn text_stays_inside_strings() {
-        let scheme_call = r#"\" #(system "touch x") %"#;
-        let escaped = r#""\\\" #(system \"touch x\") %""#;
-        assert_eq!(quote(scheme_call), format!("{escaped} "));
+    /// Text from a score that would end its string early and run Scheme.
+    const SCHEME_CALL: &str = "\\\" #(system \"touch x\") %";
+    /// That text as one LilyPond string.
+    const ESCAPED: &str = "\"\\\\\\\" #(system \\\"touch x\\\") %\"";
 
+    fn one_note(edit: impl FnOnce(&mut crate::Note)) -> Stream {
         let mut note = crate::Note::from_name("C4").unwrap();
-        note.set_lyric(Some(scheme_call)).unwrap();
+        edit(&mut note);
         let mut line = Stream::new();
         line.push(note);
+        line
+    }
+
+    #[test]
+    fn titles_and_lyrics_stay_inside_their_strings() {
+        let line = one_note(|note| {
+            note.lyrics_mut()
+                .push(crate::notation::Lyric::new(SCHEME_CALL));
+        });
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.push(line);
+        let mut metadata = crate::metadata::Metadata::new();
+        metadata.add_text("title", SCHEME_CALL);
+        score.set_metadata(Some(metadata));
+        let text = to_lilypond(&score, &LilyOptions::default()).unwrap();
+        assert!(text.contains(&format!("title = {ESCAPED}")), "{text}");
+        assert_eq!(text.matches(ESCAPED).count(), 2, "{text}");
+    }
+
+    #[test]
+    fn a_colour_stays_inside_its_string() {
+        let line = one_note(|note| note.set_color(Some(SCHEME_CALL.to_string())));
         let text = to_lilypond(&line, &LilyOptions::default()).unwrap();
-        assert!(text.contains(escaped), "{text}");
+        assert!(
+            text.contains(&format!("\\override NoteHead.color = {ESCAPED}\n")),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("\\override Stem.color = {ESCAPED}\n")),
+            "{text}"
+        );
     }
 }

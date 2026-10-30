@@ -19,6 +19,7 @@ use music21_rs::analysis::{elements, metrical, patel, pitch_analysis, segment_by
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::{ConsecutiveOptions, StreamElement};
 use music21_rs::{FloatType, Stream, StreamKind};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -407,11 +408,12 @@ fn the_crate_analyses_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
+        let music21 = answers::helpers(
             py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            MUSIC21,
             c"analysis_parity_music21.py",
             c"analysis_parity_music21",
+            &["report"],
         )?;
         let chosen: Vec<String> = match std::env::var("ANALYSIS_PARITY_SCORES") {
             Ok(list) => list

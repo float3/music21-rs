@@ -47,25 +47,59 @@ fn failed(message: impl Into<String>) -> Error {
     Error::MuseScore(message.into())
 }
 
-/// A file in the system's temporary directory no other call is using.
-fn scratch(extension: &str) -> PathBuf {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.subsec_nanos());
-    std::env::temp_dir().join(format!(
-        "music21-rs-{}-{serial}-{nanos}.{extension}",
-        std::process::id()
-    ))
-}
-
-/// Removes a scratch file when the call that made it is over.
+/// A directory in the system's temporary directory that this call made and
+/// only this user can open, removed with what is in it when the call is
+/// over. The temporary directory may be shared with other users, so the
+/// files a call writes and reads back go in here, where no one else can put
+/// a file or a link in their place.
 struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new() -> Result<Self> {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        // Elsewhere the temporary directory is the user's own.
+        #[cfg(not(unix))]
+        let builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        let builder = {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = std::fs::DirBuilder::new();
+            builder.mode(0o700);
+            builder
+        };
+        loop {
+            let serial = COUNTER.fetch_add(1, Ordering::Relaxed);
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.subsec_nanos());
+            let path = std::env::temp_dir().join(format!(
+                "music21-rs-{}-{serial}-{nanos}",
+                std::process::id()
+            ));
+            // Creating the directory fails where anything, a link included,
+            // is already there, so the one made is new.
+            match builder.create(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => {
+                    return Err(failed(format!(
+                        "no scratch directory could be made in {}: {error}",
+                        path.display()
+                    )));
+                }
+            }
+        }
+    }
+
+    /// A file of this name in the directory.
+    fn file(&self, name: &str) -> PathBuf {
+        self.0.join(name)
+    }
+}
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
@@ -150,9 +184,10 @@ impl MuseScore {
     /// Reads a file of any format MuseScore opens -- `.mscz`, `.mscx`,
     /// `.gp`, `.cap`, `.mei`, `.mid`, `.mxl` -- as a score.
     pub fn read(&self, path: &Path) -> Result<Stream> {
-        let converted = Scratch(scratch("musicxml"));
-        self.convert(path, &converted.0)?;
-        let text = std::fs::read_to_string(&converted.0)
+        let scratch = Scratch::new()?;
+        let converted = scratch.file("score.musicxml");
+        self.convert(path, &converted)?;
+        let text = std::fs::read_to_string(&converted)
             .map_err(|error| failed(format!("what MuseScore wrote could not be read: {error}")))?;
         from_musicxml(&text)
     }
@@ -161,10 +196,11 @@ impl MuseScore {
     /// path's extension: `.mscz`, `.mscx`, `.pdf`, `.png`, `.svg`, `.mid`,
     /// `.mp3`, `.mei`.
     pub fn write(&self, score: &Stream, path: &Path, options: &ExportOptions) -> Result<()> {
-        let written = Scratch(scratch("musicxml"));
-        std::fs::write(&written.0, to_musicxml(score, options)?)
+        let scratch = Scratch::new()?;
+        let written = scratch.file("score.musicxml");
+        std::fs::write(&written, to_musicxml(score, options)?)
             .map_err(|error| failed(format!("the score could not be written out: {error}")))?;
-        self.convert(&written.0, path)
+        self.convert(&written, path)
     }
 }
 
@@ -181,18 +217,34 @@ mod tests {
             nowhere.convert(missing, Path::new("out.musicxml")),
             Err(Error::MuseScore(_))
         ));
-        let here = scratch("musicxml");
+        let scratch = Scratch::new().unwrap();
+        let here = scratch.file("score.musicxml");
         std::fs::write(&here, "<score-partwise/>").unwrap();
-        let ran = nowhere.convert(&here, &scratch("mscz"));
-        let _ = std::fs::remove_file(&here);
+        let ran = nowhere.convert(&here, &scratch.file("score.mscz"));
         assert!(
             matches!(ran, Err(Error::MuseScore(message)) if message.contains("could not be run"))
         );
     }
 
     #[test]
-    fn scratch_files_do_not_collide() {
-        assert_ne!(scratch("musicxml"), scratch("musicxml"));
+    fn scratch_directories_are_new_private_and_removed() {
+        let first = Scratch::new().unwrap();
+        let second = Scratch::new().unwrap();
+        assert_ne!(first.0, second.0);
+        for scratch in [&first, &second] {
+            let found = std::fs::symlink_metadata(&scratch.0).unwrap();
+            assert!(found.is_dir());
+            assert_eq!(std::fs::read_dir(&scratch.0).unwrap().count(), 0);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                assert_eq!(found.permissions().mode() & 0o077, 0);
+            }
+        }
+        let gone = first.0.clone();
+        std::fs::write(first.file("score.musicxml"), "<score-partwise/>").unwrap();
+        drop(first);
+        assert!(!gone.exists());
     }
 
     /// Round the houses through a real MuseScore, where there is one.
@@ -214,11 +266,12 @@ mod tests {
         let mut score = Stream::with_kind(StreamKind::Score);
         score.push(part);
 
-        let file = Scratch(scratch("mscz"));
+        let scratch = Scratch::new().unwrap();
+        let file = scratch.file("score.mscz");
         musescore
-            .write(&score, &file.0, &ExportOptions::default())
+            .write(&score, &file, &ExportOptions::default())
             .unwrap();
-        let read = musescore.read(&file.0).unwrap();
+        let read = musescore.read(&file).unwrap();
         let names: Vec<String> = read
             .pitches()
             .iter()
