@@ -145,9 +145,25 @@ impl Spanner {
         inner: &RsSpanner,
         spanned: Vec<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
+        Self::object_as(py, inner, spanned, crate::stream::Whose::Wheel)
+    }
+
+    /// The same, for one kind of streams or the other: one music21's own
+    /// streams will hold where they are what it goes into, as they refuse
+    /// anything that is not a `Music21Object`.
+    pub(crate) fn object_as(
+        py: Python<'_>,
+        inner: &RsSpanner,
+        spanned: Vec<Py<PyAny>>,
+        whose: crate::stream::Whose,
+    ) -> PyResult<Py<PyAny>> {
         let name = inner.kind().class_name();
         let module = module_of(inner.kind());
-        let class = match crate::installed_class(py, module, name) {
+        let found = match whose {
+            crate::stream::Whose::Music21 => crate::holdable_class(py, module, name),
+            crate::stream::Whose::Wheel => crate::installed_class(py, module, name),
+        };
+        let class = match found {
             Some(class) => class,
             None => py
                 .import("music21_rs")

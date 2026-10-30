@@ -89,9 +89,11 @@ pub struct Stream {
     /// they sound. `None` is music21's `'unknown'`, which is what a stream
     /// says before anything has been decided.
     sounding: Option<bool>,
-    /// music21's `leftBarline` and `rightBarline`, which a measure keeps
-    /// beside its elements rather than among them. The objects given, as
-    /// music21 keeps the ones it is given.
+    /// music21's `leftBarline` and `rightBarline`. Kept beside the
+    /// elements, where music21 holds them among them, so `len`, indexing and
+    /// the places spanners name their notes by leave them out; `listed`
+    /// puts them back for the listings. The objects given, as music21 keeps
+    /// the ones it is given.
     left_barline: Option<Py<PyAny>>,
     right_barline: Option<Py<PyAny>>,
     /// What a measure is called and how much of its bar is missing:
@@ -118,6 +120,14 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .getattr("classSortOrder")
         .and_then(|order| order.extract::<i64>())
         .unwrap_or(20)
+}
+
+/// Where a listed element sorts among those at its offset: as anything
+/// held, or after all of them, as music21 keeps a measure's right barline.
+#[derive(Clone, Copy)]
+enum Placing {
+    Held,
+    Last,
 }
 
 /// How far `recurseRepr` indents what a held stream holds.
@@ -722,19 +732,39 @@ impl Stream {
     ) -> PyResult<Bound<'py, Stream>> {
         let py = slf.py();
         let mut out = Self::empty(kind.unwrap_or(slf.borrow().kind));
-        let chosen: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
-        for (offset, object) in chosen {
+        for (offset, object, last) in slf.borrow().listed(py)? {
             let object = object.into_bound(py);
-            if keep(&object)? {
-                out.put(offset, &object);
+            if !keep(&object)? {
+                continue;
+            }
+            match last {
+                Placing::Last => out.put_with_priority(offset, &object, i64::MAX),
+                Placing::Held => out.put(offset, &object),
             }
         }
         Bound::new(py, out)
+    }
+
+    /// What this stream holds, in order, with a measure's own barlines
+    /// where music21 lists them: the left first at nought, the right last
+    /// at the end. They are kept as `leftBarline` and `rightBarline` and
+    /// never in `held`, so `len`, indexing and the positions spanners name
+    /// their notes by are untouched; the listings that ask what a stream
+    /// holds by class, flattened or walked show them.
+    fn listed(&self, py: Python<'_>) -> PyResult<Vec<(f64, Py<PyAny>, Placing)>> {
+        let mut out: Vec<(f64, Py<PyAny>, Placing)> = Vec::new();
+        if let Some(left) = &self.left_barline {
+            out.push((0.0, left.clone_ref(py), Placing::Held));
+        }
+        out.extend(
+            self.sorted()
+                .iter()
+                .map(|held| (held.offset, held.object.clone_ref(py), Placing::Held)),
+        );
+        if let Some(right) = &self.right_barline {
+            out.push((self.end(py)?, right.clone_ref(py), Placing::Last));
+        }
+        Ok(out)
     }
 
     /// [`Stream::recurse`]'s walk: every element with its offset from the
@@ -745,13 +775,8 @@ impl Stream {
         found: &mut Vec<(f64, Py<PyAny>)>,
     ) -> PyResult<()> {
         let py = slf.py();
-        let held: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
-        for (offset, object) in held {
+        let held = slf.borrow().listed(py)?;
+        for (offset, object, _) in held {
             let at = base + offset;
             found.push((at, object.clone_ref(py)));
             if let Ok(inner) = object.bind(py).cast::<Stream>() {
@@ -767,13 +792,8 @@ impl Stream {
         out: &mut Vec<(f64, Py<PyAny>)>,
     ) -> PyResult<()> {
         let py = slf.py();
-        let held: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
-        for (offset, object) in held {
+        let held = slf.borrow().listed(py)?;
+        for (offset, object, _) in held {
             let object = object.into_bound(py);
             match object.cast::<Stream>() {
                 Ok(inner) => Self::flatten_into(inner, base + offset, out)?,
@@ -931,8 +951,7 @@ impl Stream {
     }
 
     /// The barline closing the left side of this measure, or `None`:
-    /// music21's `leftBarline`, which a measure keeps beside its elements
-    /// rather than among them.
+    /// music21's `leftBarline`.
     #[getter]
     fn get_leftBarline(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         self.left_barline.as_ref().map(|bar| bar.clone_ref(py))
@@ -3201,9 +3220,21 @@ impl Stream {
         let py = slf.py();
         let mut leaves = Vec::new();
         Self::flatten_into(slf, 0.0, &mut leaves)?;
+        let own_right = slf
+            .borrow()
+            .right_barline
+            .as_ref()
+            .map(|right| right.clone_ref(py));
         let mut out = Self::empty(slf.borrow().kind);
         for (offset, object) in leaves {
-            out.put(offset, object.bind(py));
+            // A nested measure's right barline is an element like any other
+            // once flattened; this stream's own stays last, as music21
+            // keeps it at the end.
+            let own = own_right.as_ref().is_some_and(|right| right.is(&object));
+            match own {
+                true => out.put_with_priority(offset, object.bind(py), i64::MAX),
+                false => out.put(offset, object.bind(py)),
+            }
         }
         Bound::new(py, out)
     }
@@ -4500,7 +4531,7 @@ pub(crate) fn from_crate_as<'py>(
                 .filter_map(|place| place.and_then(|place| leaves.get(place)))
                 .map(|object| object.clone_ref(py))
                 .collect();
-            let built = crate::spanner::Spanner::object(py, spanner, joined)?;
+            let built = crate::spanner::Spanner::object_as(py, spanner, joined, whose)?;
             match whose {
                 Whose::Wheel => {
                     let cell = made.cast::<Stream>()?;
@@ -4530,8 +4561,8 @@ pub(crate) fn from_crate_as<'py>(
     }
     match stream.kind() {
         StreamKind::Measure => {
-            // music21 keeps these beside a measure's elements, not among
-            // them, and so does this package.
+            // Through music21's own setters, which put them among the
+            // measure's elements; the wheel's measures keep them beside.
             if let Some(left) = stream.left_barline() {
                 made.setattr("leftBarline", barline_object(py, left, whose)?)?;
             }
@@ -4562,9 +4593,18 @@ fn music21_leaves_of(stream: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
             .getattr("isStream")
             .and_then(|flag| flag.is_truthy())
             .unwrap_or(false);
-        if !held {
-            out.push(element.unbind());
+        if held {
+            continue;
         }
+
+        // music21 holds a measure's own barlines among its elements; the
+        // crate keeps them on the measure and counts no leaf for them.
+        let container = element.getattr("activeSite")?;
+        if !container.is_none() && !is_inner_barline(&container, &element)? && is_barline(&element)?
+        {
+            continue;
+        }
+        out.push(element.unbind());
     }
     Ok(out)
 }
@@ -4758,9 +4798,15 @@ fn element_object_as<'py>(
                 class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?
             }
         }
-        StreamElement::TextExpression(text) => {
-            crate::expressions::TextExpression::object(py, text.clone())?.into_bound(py)
-        }
+        StreamElement::TextExpression(text) => element_new(
+            py,
+            "music21.expressions",
+            "TextExpression",
+            crate::expressions::TextExpression::wrap(text.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::Variant(variant) => match variant_object(py, variant, whose)? {
             Some(made) => made,
             None => return Ok(None),
@@ -5241,8 +5287,7 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         }
         return Ok(Some(StreamElement::TempoText(text)));
     }
-    // A barline, which a measure keeps beside its elements and a stream
-    // may hold among them.
+    // A barline standing among a stream's elements.
     if object.cast::<crate::bar::Barline>().is_ok()
         || is_of_class(object, &pyo3::types::PyString::new(py, "Barline"))?
     {

@@ -600,6 +600,34 @@ def test_a_stream_shows_itself_as_text(capsys):
         line.show("musicxml")
 
 
+def test_a_measures_barlines_are_in_its_listings():
+    """A measure keeps its barlines as `leftBarline` and `rightBarline`, and
+    the listings that ask what it holds by class, flattened or walked list
+    them as music21 does: the left first, the right last at the end."""
+    bar = m.Measure()
+    bar.append([m.TrebleClef(), m.TimeSignature("2/4"), m.Note("C4"), m.Note("D4")])
+    bar.leftBarline = "heavy-light"
+    bar.rightBarline = "final"
+    part = m.Part()
+    part.append(bar)
+    named = lambda found: [type(each).__name__ for each in found]
+    assert named(bar.getElementsByClass("Barline")) == ["Barline", "Barline"]
+    assert named(bar.getElementsNotOfClass("Note")) == [
+        "Barline", "TrebleClef", "TimeSignature", "Barline",
+    ]
+    flat = part.flatten()
+    assert named(flat) == [
+        "Barline", "TrebleClef", "TimeSignature", "Note", "Note", "Barline",
+    ]
+    assert [float(flat.elementOffset(each)) for each in flat] == [
+        0.0, 0.0, 0.0, 0.0, 1.0, 2.0,
+    ]
+    assert named(part.recurse()) == [
+        "Measure", "Barline", "TrebleClef", "TimeSignature", "Note", "Note", "Barline",
+    ]
+    assert len(part.recurse().getElementsByClass("Barline")) == 2
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.
@@ -2011,9 +2039,8 @@ def test_a_stream_is_asked_what_classes_it_holds():
     assert flat.hasElementOfClass("Note")
     assert flat.hasElementOfClass("Clef")
     assert not flat.hasElementOfClass("Dynamic")
-    # The clef and the meter, where music21 also holds the final barline
-    # it keeps among the elements and this package keeps on the measure.
-    assert len(flat.getElementsNotOfClass("Note").elements) == 2
+    # The clef, the meter and the measure's final barline, as music21.
+    assert len(flat.getElementsNotOfClass("Note").elements) == 3
     assert len(flat.getElementsByClass("Note").elements) == 3
 
 
@@ -2227,6 +2254,7 @@ def test_a_stream_is_transposed_as_music21_transposes_it():
         "Note A4 ql=1.0",
         "Note B4 ql=1.0",
         "Note C5 ql=1.0",
+        "Barline  ql=0.0",
     ]
     # A count of semitones, which music21 reads as an interval too.
     assert outline(part.transpose(2))[3:] == [
@@ -2234,6 +2262,7 @@ def test_a_stream_is_transposed_as_music21_transposes_it():
         "Note E4 ql=1.0",
         "Note F#4 ql=1.0",
         "Note G4 ql=1.0",
+        "Barline  ql=0.0",
     ]
     # The answer is a copy, as music21's is unless asked for inPlace.
     assert outline(part)[3] == "Note C4 ql=1.0"
@@ -2253,6 +2282,7 @@ def test_tied_notes_are_joined_as_music21_joins_them():
         "Note E4 ql=1.0",
         "Note F4 ql=1.0",
         "Note G4 ql=1.0",
+        "Barline  ql=0.0",
     ]
 
 
@@ -2266,12 +2296,14 @@ def test_a_template_keeps_the_skeleton_as_music21_keeps_it():
         "TrebleClef  ql=0.0",
         "TimeSignature  ql=0.0",
         "Rest  ql=4.0",
+        "Barline  ql=0.0",
     ]
     assert outline(part.template(removeAll=True)) == ["[Measure]", "Rest  ql=4.0"]
     assert outline(part.template(fillWithRests=False)) == [
         "[Measure]",
         "TrebleClef  ql=0.0",
         "TimeSignature  ql=0.0",
+        "Barline  ql=0.0",
     ]
     # The classes taken out are music21's own default set here, so naming
     # others is refused rather than answered differently.
@@ -2316,6 +2348,7 @@ def test_a_stream_is_cut_into_measures_as_music21_cuts_it():
         "Note F4 ql=1.0",
         "Note G4 ql=1.0",
         "Note A4 ql=1.0",
+        "Barline  ql=0.0",
     ]
 
     # The meters may be given in a stream of their own, as music21 takes
@@ -2334,6 +2367,7 @@ def test_a_stream_is_cut_into_measures_as_music21_cuts_it():
         "[Measure]",
         "Note E4 ql=1.0",
         "Note F4 ql=1.0",
+        "Barline  ql=0.0",
     ]
 
 
@@ -2411,6 +2445,7 @@ def test_a_stream_is_notated_as_music21_notates_it():
         "Note E4 ql=1.0",
         "[Measure]",
         "Note F4 ql=1.0",
+        "Barline  ql=0.0",
     ]
     # Each step is taken at music21's own defaults, so asking for others
     # is refused.
@@ -2513,6 +2548,7 @@ def test_a_measure_is_cut_in_two_as_music21_cuts_it():
         "TimeSignature  ql=0.0",
         "Note C4 ql=1.0",
         "Note D4 ql=2.0",
+        "Barline  ql=0.0",
     ]
     notes = [e for e in first.recurse() if getattr(e, "isNote", False)]
     assert notes[0].tie.type == "start"
@@ -3779,12 +3815,10 @@ def test_a_line_is_measured_as_music21_measures_it():
         22.268088571
     )
 
-    # nPVI counts every element, clefs and all, as music21's docstring
-    # says: so a flattened part answers differently of the two, this
-    # package keeping a measure's barline on the measure where music21
-    # holds it among the elements. 3.2 over nine elements against eight.
+    # nPVI counts every element, clefs and the final barline among them,
+    # as music21's docstring says: 3.2 over nine elements.
     part = m.from_tiny_notation("tinyNotation: 4/4 c4 d8 e8 f2 g4 a4 b2")
-    assert round(m.nPVI(part.flatten()), 6) == 40.0
+    assert round(m.nPVI(part.flatten()), 6) == 35.555556
 
     # A lyric under each note saying how deep in the beat it falls.
     labelled = m.labelBeatDepth(
@@ -6085,6 +6119,55 @@ except AttributeError as error:
         "'RomanNumeral' object has no attribute 'findFigure': "
         "not ported to music21-rs",
     ]
+
+
+def test_a_slur_read_once_installed_joins_its_own_notes():
+    """music21's measures hold their barlines among their elements, so a
+    slur's notes are found past them; and the slur is one music21's
+    streams hold."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+from music21 import bar, note, spanner, stream
+part = stream.Part()
+for number, names in enumerate([["C4", "D4", "E4", "F4"], ["G4", "A4", "B4", "C5"]]):
+    measure = stream.Measure(number=number + 1)
+    measure.append([note.Note(name) for name in names])
+    measure.rightBarline = bar.Barline("double")
+    part.append(measure)
+notes = list(part.recurse().notes)
+part.insert(0, spanner.Slur(notes[2], notes[5]))
+written = m.to_musicxml(stream.Score([part]))
+m.install_into_music21()
+read = m.from_musicxml(written)
+slur = read.recurse().getElementsByClass("Slur").first()
+print([n.nameWithOctave for n in slur.getSpannedElements()])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["['E4', 'A4']"]
+
+
+def test_words_read_once_installed_stand_in_music21s_streams():
+    """Words over the staff read after installing go into music21's own
+    streams, which hold nothing that is not a `Music21Object`."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+from music21 import expressions, note, stream
+measure = stream.Measure(number=1)
+measure.append(note.Note("C4", quarterLength=4))
+measure.insert(0, expressions.TextExpression("cresc."))
+written = m.to_musicxml(stream.Score([stream.Part([measure])]))
+m.install_into_music21()
+read = m.from_musicxml(written)
+print([t.content for t in read.recurse().getElementsByClass("TextExpression")])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["['cresc.']"]
 
 
 def test_a_key_signatures_count_and_flag_are_set_apart():
