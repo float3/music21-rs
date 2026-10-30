@@ -6454,6 +6454,23 @@ def test_a_slur_joins_its_notes_past_what_the_wheel_drops(extra):
     assert [n.nameWithOctave for n in slurs[0].getSpannedElements()] == ["E4", "F5"]
 
 
+def test_a_humdrum_comment_read_once_installed_is_music21s():
+    """A `!!` line read once installed stands in the score as music21's
+    own `GlobalComment`, where music21's reader puts it."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+read = m.from_humdrum("!!first\\n**kern\\n*M2/4\\n=1\\n4c\\n4d\\n==\\n*-\\n")
+said = [e for e in read if type(e).__name__ == "GlobalComment"]
+print([(e.comment, float(e.offset), e.priority) for e in said])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["[('first', 0.0, -37)]"]
+
+
 def test_a_key_signatures_count_and_flag_are_set_apart():
     """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
     a flag of its own, so writing pitches over a signature leaves it

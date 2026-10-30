@@ -4841,6 +4841,16 @@ fn element_object_as<'py>(
             Some(made) => made,
             None => return Ok(None),
         },
+        // music21's own, on music21's streams: the package has no class for
+        // a Humdrum comment, and its own streams leave one out.
+        StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
+            let made = py
+                .import("music21.humdrum.spineParser")?
+                .getattr("GlobalComment")?
+                .call1((said.comment(),))?;
+            made.setattr("priority", said.priority())?;
+            made
+        }
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
