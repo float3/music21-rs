@@ -9,7 +9,7 @@ name = "harte"
 readme = "README.md"
 repository = "https://github.com/float3/music21-rs"
 rust-version = "1.90"
-version = "0.3.0"
+version = "0.4.0"
 
 [features]
 default = []

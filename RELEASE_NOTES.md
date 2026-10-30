@@ -1,4 +1,43 @@
-# Unreleased
+# music21-rs 0.11.0
+
+The Python package carries much more of music21: braille, OMR, the `alpha`
+analyses that hash and align streams, searches for runs of notes, rows,
+segments and lyrics, variants, score and chord reductions, every feature
+extractor, the rock corpus's and the lab's tabular analyses, turning a
+recording into notes, layout, repeat marks, chord diagrams and unpitched
+percussion. music21's own doctests for these modules run against the
+crate. music21 is followed to 11.0.0b14, with its new instrument classes
+and General MIDI percussion map.
+
+One change breaks callers: `KeySignature::sharps` is always a count, as
+music21's has been, and a non-traditional signature is a flag of its own.
+Two new `StreamElement` variants need arms in a `match` over all of them.
+
+Two fixes follow security fixes music21 made: LilyPond output escapes
+backslashes and quotes in titles, lyrics and note colours, and MuseScore's
+scratch files go in a private directory. Bugs found in music21 while
+porting were sent upstream as music21 PRs 2110 to 2130, and the submodule
+follows the fork that holds them.
+
+`harte` 0.4.0 depends on this release, whose types it hands out, and is
+otherwise unchanged.
+
+## breaking changes
+
+- **`KeySignature::sharps` is always a count**, as music21's `sharps` has
+  been since 14acfa0f2, and `is_non_traditional` is a flag of its own
+  rather than a missing count. `set_sharps`, `set_altered_pitches` and
+  `set_non_traditional` each set their own part and leave the others;
+  pitches written over a traditional signature no longer make it
+  non-traditional. A non-traditional signature still names a key, still
+  transposes, and compares unequal to the traditional one with its count.
+  Saved signatures with no count read back as non-traditional ones.
+  The wheel's `sharpsToPitch(None)` is a `TypeError`, as music21's is, and
+  a non-traditional signature handed back to music21 keeps its pitches
+  where it used to be dropped.
+
+- **`StreamElement::GlobalComment` and `BrailleSegmentDivision`** are new
+  variants, so a `match` over every variant needs arms for them.
 
 ## added
 
@@ -19,33 +58,6 @@
   end times and mixed numerals included. `show('text')` prints that
   listing and `show('textline')` answers it on one line; a format that
   renders is refused, the wheel leaving the showing to its caller.
-
-## fixed
-
-- **The report counts the metadata names the wheel serves by lookup.**
-  `composer`, `copyright` and 18 more are answered through `__getattr__`,
-  which the static scan read as missing.
-
-# music21-rs 0.11.0
-
-## breaking changes
-
-- **`KeySignature::sharps` is always a count**, as music21's `sharps` has
-  been since 14acfa0f2, and `is_non_traditional` is a flag of its own
-  rather than a missing count. `set_sharps`, `set_altered_pitches` and
-  `set_non_traditional` each set their own part and leave the others;
-  pitches written over a traditional signature no longer make it
-  non-traditional. A non-traditional signature still names a key, still
-  transposes, and compares unequal to the traditional one with its count.
-  Saved signatures with no count read back as non-traditional ones.
-  The wheel's `sharpsToPitch(None)` is a `TypeError`, as music21's is, and
-  a non-traditional signature handed back to music21 keeps its pitches
-  where it used to be dropped.
-
-- **`StreamElement::GlobalComment` and `BrailleSegmentDivision`** are new
-  variants, so a `match` over every variant needs arms for them.
-
-## added
 
 - **A braille segment divides where a stream says.**
   `braille::SegmentDivision` is music21's `BrailleSegmentDivision` and
@@ -1242,6 +1254,10 @@
 
 ## fixed
 
+- **The report counts the metadata names the wheel serves by lookup.**
+  `composer`, `copyright` and 18 more are answered through `__getattr__`,
+  which the static scan read as missing.
+
 - **MuseData files with Windows line endings read as with Unix ones.**
   `from_musedata` split lines on `\n` alone, so every line kept a `\r` and
   titles came out with one at the end. It now reads `\r\n` as `\n`, as
@@ -1304,16 +1320,13 @@
   among them though it is a `Flute`; the writer only read
   `UnpitchedPercussion` and wrote key 60.
 
-- **`CS12` counts the bass moving up**, as music21 now does: C to G is
-  seven semitones, not five. The wheel's `ChordBassMotionFeature` follows.
+- **`CS12` (Chord Bass Motion) counts the bass moving up.** Index *i* is
+  the share of bass moves up *i* semitones, as the extractor's description
+  says and as music21 now counts: C to G is seven, not five. The wheel's
+  `ChordBassMotionFeature` follows.
 
 - **An arpeggio on a lone percussion chord is numbered**, as music21 now
   numbers one on any chord of more than one note.
-
-- **`CS12` (Chord Bass Motion) counts motion upward.** Index *i* is the
-  share of bass moves up *i* semitones, as the extractor's description
-  says. It counted them downward, as music21 did until the fork's master
-  fixed it: C to F now lands at 5, not 7.
 
 - **LilyPond strings escape backslashes and quotes.** Titles, lyrics and
   note colours are written as LilyPond strings with `\` and `"` escaped, so
