@@ -304,6 +304,16 @@ absent, so the file only ever grows.
 that fails by accident. `sieve` is 24/25 because the compressed reading of a
 sieve is not modelled.
 
+*debated 2026-10-30, changed.* a newly passing docstring only printed a line
+that nextest hides, so the list fell behind what passes. the gate now fails
+both ways: a listed docstring that fails, and a passing one that is not
+listed, which `UPDATE_DOCTEST_EXPECTATIONS=1` records. an optional
+`[not_passing]` table names deliberate failures with a reason
+(`collapseArpeggios` refused, `Stream.plot` without matplotlib), and the
+rewrite keeps it; an unexplained failure still needs no entry. `sieve` now
+passes 25/25. `xtask report` reads summaries only for suites that exist, and
+shows the reasons.
+
 **music21's own suite is a comparison, not a pass mark.** it has failures of
 its own in any environment, so only a test failing under `music21_rs` that
 does not fail under music21 counts. one divergence is listed with its reason

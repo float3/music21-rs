@@ -1,10 +1,14 @@
 # Docstrings of music21.analysis.reduceChords whose every example passes against the
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
 # --manifest-path python-parity/Cargo.toml --test doctest_reducechords`; the test
-# fails when one of these stops passing.
+# fails when one of these stops passing or one passes that is not listed.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why.
 
 passing = [
     "music21.analysis.reduceChords.ChordReducer.computeMeasureChordWeights",
     "music21.analysis.reduceChords.ChordReducer.reduceMeasureToNChords",
     "music21.analysis.reduceChords.testMeasureStream1",
 ]
+
+[not_passing]
+"music21.analysis.reduceChords.ChordReducer.collapseArpeggios" = "refused by design: it walks music21's mutable timespan tree while editing it"
