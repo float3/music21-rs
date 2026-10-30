@@ -185,8 +185,8 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - the wheel's hand-back loses grace durations, humdrum barlines,
-     tandems and `!!` comments, and RomanText repeats. Its readers hand back the wheel's own
+   - the wheel's hand-back loses humdrum barlines, tandems and `!!`
+     comments, and RomanText repeats. Its readers hand back the wheel's own
      streams even with music21 installed, so an installed note in one
      answers music21's `offset` as 0.0: it has no site. Handing back
      music21's streams there is a design call, not yet made.

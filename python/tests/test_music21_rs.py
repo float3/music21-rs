@@ -142,6 +142,23 @@ def test_a_grace_note_is_in_no_tuplet():
     assert note.duration.tuplets == ()
 
 
+def test_an_appoggiatura_makes_time():
+    duration = m.Duration(1.0).getGraceDuration(appoggiatura=True)
+    assert type(duration).__name__ == "AppoggiaturaDuration"
+    assert duration.slash is False
+    assert duration.makeTime is True
+
+
+def test_a_grace_note_read_from_a_file_keeps_its_grace_duration():
+    score = m.from_humdrum("**kern\n*M2/4\n=1\n8cq\n4d\n4e\n=2\n*-\n")
+    grace = score.recurse().notes[0]
+    assert type(grace.duration).__name__ == "GraceDuration"
+    assert grace.duration.isGrace
+    assert grace.duration.type == "eighth"
+    assert grace.duration.quarterLength == 0.0
+    assert grace.duration.slash is True
+
+
 def test_a_length_no_single_value_comes_to_is_a_value_in_a_tuplet():
     duration = m.Duration(5 / 6)
     assert duration.type == "quarter"

@@ -1208,6 +1208,12 @@
 
 ## fixed
 
+- **A grace note handed back by the wheel keeps its grace duration.** A
+  note read with one came back holding a plain `Duration`, so `isGrace`
+  was false; it is now a `GraceDuration`, or an `AppoggiaturaDuration`
+  for an unslashed one that takes time. `getGraceDuration(appoggiatura=True)`
+  sets `makeTime`, as music21's does.
+
 - **The wheel's streams answer offsets through `opFrac`**:
   `elementOffset`, `highestTime`, `highestOffset`, `lowestOffset` and
   `quarterLength` give `Fraction(1, 3)` for a triplet, as music21's do,
