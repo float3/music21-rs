@@ -13,6 +13,7 @@
 
 use pyo3::prelude::*;
 
+pub mod answers;
 pub mod doctest;
 pub mod suite;
 

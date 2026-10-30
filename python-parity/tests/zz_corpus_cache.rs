@@ -36,6 +36,11 @@
 //! cleared -- `rm ~/AppData/Local/Temp/music21/*.p.gz` on Windows, under
 //! `getRootTempDir` elsewhere. On a CI runner the directory starts empty,
 //! so what it reads is always this run's.
+//!
+//! **Under nextest it has nothing to read.** There every test process gets
+//! an empty directory of its own (`utils::init_py`), so no suite reads
+//! another's pickles, and this checks an empty directory. What it guards
+//! against is a `cargo test` run.
 
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;

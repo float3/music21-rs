@@ -20,6 +20,7 @@ use music21_rs::analysis::{KeyProfile, estimate_key_of_stream};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::StreamElement;
 use music21_rs::{FloatType, Stream, StreamKind};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -257,8 +258,37 @@ fn first_difference(ours: &str, theirs: &str) -> Option<String> {
     ))
 }
 
-#[test]
-fn the_crate_windows_and_floats_keys_as_music21_does() {
+/// How many tests the scores are dealt between, so that each runs in its
+/// own process beside the others. Score `i` goes to test `i % PARTS`, which
+/// puts the largest scores, the Beethoven quartets, in different tests.
+const PARTS: usize = 10;
+
+macro_rules! parts {
+    ($($name:ident = $part:literal),* $(,)?) => {
+        $(
+            #[test]
+            fn $name() {
+                windows_and_floats_keys($part);
+            }
+        )*
+    };
+}
+
+parts!(
+    the_crate_windows_and_floats_keys_as_music21_does_0 = 0,
+    the_crate_windows_and_floats_keys_as_music21_does_1 = 1,
+    the_crate_windows_and_floats_keys_as_music21_does_2 = 2,
+    the_crate_windows_and_floats_keys_as_music21_does_3 = 3,
+    the_crate_windows_and_floats_keys_as_music21_does_4 = 4,
+    the_crate_windows_and_floats_keys_as_music21_does_5 = 5,
+    the_crate_windows_and_floats_keys_as_music21_does_6 = 6,
+    the_crate_windows_and_floats_keys_as_music21_does_7 = 7,
+    the_crate_windows_and_floats_keys_as_music21_does_8 = 8,
+    the_crate_windows_and_floats_keys_as_music21_does_9 = 9,
+);
+
+/// Compares every `PARTS`th chosen score, from the `part`th.
+fn windows_and_floats_keys(part: usize) {
     let root = repo_root();
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
@@ -266,11 +296,12 @@ fn the_crate_windows_and_floats_keys_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
+        let music21 = answers::helpers(
             py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            MUSIC21,
             c"windowed_parity_music21.py",
             c"windowed_parity_music21",
+            &["report"],
         )?;
         let chosen: Vec<String> = match std::env::var("WINDOWED_PARITY_SCORES") {
             Ok(list) => list
@@ -288,7 +319,7 @@ fn the_crate_windows_and_floats_keys_as_music21_does() {
 
         let mut failures = Vec::new();
         let mut compared = 0;
-        for name in &chosen {
+        for name in chosen.iter().skip(part).step_by(PARTS) {
             let Some(text): Option<String> =
                 music21.getattr("source_text")?.call1((name,))?.extract()?
             else {

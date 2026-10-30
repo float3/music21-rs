@@ -294,8 +294,13 @@ for flags in "--no-default-features" "--no-default-features --features serde" "-
   cargo test --workspace --all-targets $flags
 done
 
-# the parity suite: fixtures, the Scala archive, and music21's doctests
+# the parity suite: fixtures, the Scala archive, and music21's doctests,
+# each test in a process of its own, as many at once as there are cores
+cargo nextest run --manifest-path python-parity/Cargo.toml --no-fail-fast
+# or one at a time, without nextest
 cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
+# the slowest tests keep music21's answers in python-parity/target/music21-answers,
+# by music21 commit; MUSIC21_PARITY_ANSWERS=off asks music21 every time
 
 # music21's own test suite, on music21 and on the crate
 cargo run --release -p xtask --features python -- music21-suite

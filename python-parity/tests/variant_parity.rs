@@ -20,6 +20,7 @@ use music21_rs::variant::{
     merge_variants, refine_variant, replaced_elements,
 };
 use music21_rs::{Stream, StreamElement, StreamKind};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -435,12 +436,7 @@ fn the_crate_merges_and_activates_variants_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
-            py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
-            c"variant_parity_music21.py",
-            c"variant_parity_music21",
-        )?;
+        let music21 = answers::helpers(py, MUSIC21, c"variant_parity_music21.py", c"variant_parity_music21", &["report", "second_version"])?;
         let mut failures = Vec::new();
         let chosen: Vec<String> = match std::env::var("VARIANT_PARITY_SCORES") {
             Ok(list) => list

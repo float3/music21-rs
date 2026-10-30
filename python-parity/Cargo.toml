@@ -30,3 +30,8 @@ utils = { path = "../utils", features = ["python"] }
 # workspace, so it says so itself rather than going unlinted.
 [lints.clippy]
 all = { level = "deny", priority = -1 }
+
+# The tests compare whole corpus scores, and the crate unoptimized is most of
+# the time on the largest ones.
+[profile.dev]
+opt-level = 2

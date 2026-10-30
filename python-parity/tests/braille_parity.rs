@@ -12,6 +12,7 @@
 use music21_rs::braille::segment::SegmentOptions;
 use music21_rs::braille::translate::{BrailleOptions, measure_to_braille, stream_to_braille};
 use music21_rs::musicxml::from_musicxml;
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -106,12 +107,7 @@ fn the_crate_writes_scores_in_braille_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
-            py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
-            c"braille_parity_music21.py",
-            c"braille_parity_music21",
-        )?;
+        let music21 = answers::helpers(py, MUSIC21, c"braille_parity_music21.py", c"braille_parity_music21", &["report"])?;
         let mut failures = Vec::new();
         let chosen: Vec<String> = match std::env::var("BRAILLE_PARITY_SCORES") {
             Ok(list) => list

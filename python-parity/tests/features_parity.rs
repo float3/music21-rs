@@ -16,6 +16,7 @@
 use music21_rs::features::{DataInstance, Extractor, jsymbolic, native};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::{FloatType, StreamKind};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -125,12 +126,7 @@ fn the_crate_extracts_features_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
-            py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
-            c"features_parity_music21.py",
-            c"features_parity_music21",
-        )?;
+        let music21 = answers::helpers(py, MUSIC21, c"features_parity_music21.py", c"features_parity_music21", &["metadata", "report", "written"])?;
         let mut failures = Vec::new();
 
         type Metadata = (String, String, String, usize, bool, bool);
@@ -282,11 +278,12 @@ fn the_crate_writes_a_data_set_as_music21_does() {
     let failures = Python::attach(|py| -> PyResult<Vec<String>> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
+        let music21 = answers::helpers(
             py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            MUSIC21,
             c"features_parity_music21.py",
             c"features_parity_music21",
+            &["metadata", "report", "written"],
         )?;
         let mut failures = Vec::new();
 

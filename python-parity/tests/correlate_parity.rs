@@ -13,6 +13,7 @@ use music21_rs::FloatType;
 use music21_rs::analysis::correlate::{pitch_to_dynamic, pitch_to_dynamic_counts};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::Stream;
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -84,11 +85,12 @@ fn the_crate_correlates_pitches_and_dynamics_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
+        let music21 = answers::helpers(
             py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            MUSIC21,
             c"correlate_parity_music21.py",
             c"correlate_parity_music21",
+            &["report"],
         )?;
         let mut failures = Vec::new();
         let chosen: Vec<String> = match std::env::var("CORRELATE_PARITY_SCORES") {
