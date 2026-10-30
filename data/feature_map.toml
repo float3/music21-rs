@@ -1444,6 +1444,7 @@ getLast = "the last element itself, likewise"
 [[class]]
 python = "spanner.py"
 name = "Ottava"
+facade = "Spanner"
 rust = ["src/spanner.rs", "src/stream/sounding.rs"]
 note = "An octave line, and whether the notes under it are written where they sound."
 
@@ -1457,6 +1458,7 @@ undoTransposition = "to_written_pitch"
 [[class]]
 python = "spanner.py"
 name = "Line"
+facade = "Spanner"
 rust = ["src/spanner.rs"]
 note = "A bracket with a tick at each end."
 
@@ -1470,6 +1472,7 @@ tick = "sets both ends at once; `LineEnds` carries each"
 [[class]]
 python = "spanner.py"
 name = "Glissando"
+facade = "Spanner"
 rust = ["src/spanner.rs"]
 
 [[class]]

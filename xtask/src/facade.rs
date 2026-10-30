@@ -64,6 +64,7 @@ impl Facade {
         for _ in 0..MAX_INHERITANCE_DEPTH {
             let (text, parent) = self.declaration(&current)?;
             body.push_str(&impl_blocks(text, &current));
+            body.push_str(&exposed_fields(text, &current));
             let Some(parent) = parent else {
                 return Some(body);
             };
@@ -95,7 +96,7 @@ impl Facade {
     pub fn has_class(&self, class: &str) -> bool {
         self.files
             .values()
-            .any(|text| declares(text, class) || names_list(text, class))
+            .any(|text| declares(text, class) || names_list(text, class) || table_row(text, class))
     }
 
     /// Whether some facade module carries a free function of this name.
@@ -104,8 +105,15 @@ impl Facade {
     /// than in one file: `duration`'s live in `note.rs`, and a mapping from
     /// music21's module to the file that ports it would be one more thing to
     /// keep true.
+    ///
+    /// A function a macro writes, or one built in Python and added by name,
+    /// is found by the module's `NAMES` or by its `m.add("name", ...)`.
     pub fn has_function(&self, name: &str) -> bool {
-        self.files.values().any(|text| defines_member(text, name))
+        self.files.values().any(|text| {
+            defines_member(text, name)
+                || names_list(text, name)
+                || text.contains(&format!("m.add(\"{name}\""))
+        })
     }
 }
 
@@ -158,6 +166,46 @@ fn table_row_parent(text: &str, class: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Whether a macro table has a row for the class, `(Class, "Class", ...)`,
+/// whatever its third field is: a repeat mark's row gives its kind there
+/// rather than a parent class.
+fn table_row(text: &str, class: &str) -> bool {
+    text.match_indices('(').any(|(at, _)| {
+        let mut fields = text[at + 1..].splitn(3, ',').map(str::trim);
+        fields.next() == Some(class) && fields.next() == Some(&format!("\"{class}\"")[..])
+    })
+}
+
+/// The fields a class's `pub struct` exposes with `#[pyo3(get ...)]`,
+/// written as `fn name(` so [`defines_member`] finds them as it finds a
+/// getter.
+fn exposed_fields(text: &str, class: &str) -> String {
+    let Some(at) = text.find(&format!("pub struct {class} ")) else {
+        return String::new();
+    };
+    let declaration = &text[at..];
+    let end = declaration.find("\n}").unwrap_or(declaration.len());
+    let mut out = String::new();
+    let mut exposed = false;
+    for line in declaration[..end].lines().map(str::trim) {
+        if line.starts_with("#[pyo3(get") {
+            exposed = true;
+            continue;
+        }
+        if line.starts_with("#[") || line.starts_with("///") {
+            continue;
+        }
+        if exposed && let Some((name, _)) = line.split_once(':') {
+            let name = name
+                .trim_start_matches("pub(crate) ")
+                .trim_start_matches("pub ");
+            out.push_str(&format!("fn {name}(\n"));
+        }
+        exposed = false;
+    }
+    out
 }
 
 /// Whether a file's `NAMES` list carries the class.
@@ -352,5 +400,65 @@ ornament_kinds![
         let body = impl_blocks(SOURCE, "Chord");
         assert!(defines_member(&body, "_chordAttached"));
         assert!(!defines_member(&body, "notThere"));
+    }
+
+    /// Three ways the wheel makes a name Python sees that no `pub struct`
+    /// or `fn` declares: a row of a macro table whose third field is no
+    /// class, a function listed in its module's `NAMES`, and one added by
+    /// name.
+    #[test]
+    fn names_made_by_tables_and_lists_are_found() {
+        let source = "\
+repeat_kinds!(
+    (
+        Coda,
+        \"Coda\",
+        Kind::Coda,
+    ),
+);
+
+pub const NAMES: &[&str] = &[
+    \"streamToBraille\",
+];
+
+fn register(m: &Bound<'_, PyModule>) {
+    m.add(\"iterateBeamGroups\", built)?;
+}
+";
+        let facade = Facade {
+            files: BTreeMap::from([("repeat".to_string(), source.to_string())]),
+        };
+        assert!(facade.has_class("Coda"));
+        assert!(!facade.has_class("Segno"));
+        assert!(facade.has_function("streamToBraille"));
+        assert!(facade.has_function("iterateBeamGroups"));
+        assert!(!facade.has_function("partToBraille"));
+    }
+
+    /// A field pyo3 exposes with `#[pyo3(get, set)]` is a member Python
+    /// sees, and a subclass sees its parent's.
+    #[test]
+    fn an_exposed_field_is_a_member() {
+        let source = "\
+#[pyclass(subclass)]
+pub struct Searcher {
+    /// How repeats are read.
+    #[pyo3(get, set)]
+    reps: String,
+    hidden: bool,
+}
+
+#[pyclass(extends = Searcher)]
+pub struct Matcher {
+    found: usize,
+}
+";
+        let facade = Facade {
+            files: BTreeMap::from([("search".to_string(), source.to_string())]),
+        };
+        let body = facade.class_body("Matcher").unwrap();
+        assert!(defines_member(&body, "reps"));
+        assert!(!defines_member(&body, "hidden"));
+        assert!(!defines_member(&body, "found"));
     }
 }
