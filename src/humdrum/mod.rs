@@ -1205,6 +1205,26 @@ fn measure_stream(gathered: Gathered) -> Stream {
     measure
 }
 
+/// A first measure shorter than the bar of the meter it opens with is a
+/// pickup, padded on the left by what it lacks: music21's
+/// `moveElementsIntoMeasures`.
+fn pad_pickup(measure: &mut Stream, length: FloatType) {
+    let opening = measure
+        .events()
+        .iter()
+        .find_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) if event.offset() == 0.0 => Some(meter),
+            _ => None,
+        });
+    let Some(meter) = opening else {
+        return;
+    };
+    let bar = meter.bar_duration().quarter_length();
+    if length < bar {
+        measure.set_padding_left(op_frac(bar - length));
+    }
+}
+
 /// The staff a spine says it belongs to, or the staves.
 fn staves_of(things: &[Placed]) -> Vec<IntegerType> {
     things
@@ -1393,9 +1413,12 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
     for (_, measures, _) in parts.into_iter().rev() {
         let mut held = Vec::new();
         let mut offset = 0.0;
-        for gathered in measures {
-            let measure = measure_stream(gathered);
+        for (index, gathered) in measures.into_iter().enumerate() {
+            let mut measure = measure_stream(gathered);
             let length = measure.end_offset();
+            if index == 0 {
+                pad_pickup(&mut measure, length);
+            }
             held.push(StreamEvent::new(offset, measure));
             offset = op_frac(offset + length);
         }
@@ -1493,6 +1516,27 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
 
 #[cfg(test)]
 mod tests {
+    /// A first measure shorter than its bar is a pickup, padded on the left
+    /// by what it lacks, as music21's `moveElementsIntoMeasures` pads it.
+    #[test]
+    fn a_short_first_measure_is_padded_as_a_pickup() {
+        let padding = |body: &str| {
+            let text = format!("**kern\n*M2/4\n{body}\n=1\n2d\n=2\n*-\n");
+            let score = from_humdrum(&text).unwrap();
+            let part = score.parts()[0].clone();
+            part.measures()
+                .iter()
+                .map(|measure| measure.padding_left())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(padding("4c"), [1.0, 0.0]);
+        assert_eq!(
+            padding("12c"),
+            [crate::makenotation::op_frac(5.0 / 3.0), 0.0]
+        );
+        assert_eq!(padding("2c"), [0.0, 0.0]);
+    }
+
     use super::*;
 
     #[test]

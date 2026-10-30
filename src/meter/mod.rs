@@ -921,7 +921,11 @@ impl TimeSignature {
     pub fn beat_progress(&self, offset: FloatType) -> Result<(UnsignedIntegerType, FloatType)> {
         let index = self.beat_index(offset)?;
         let (start, _) = self.beat_spans()[index];
-        Ok((index as UnsignedIntegerType + 1, offset - start))
+        // Through `opFrac`, as music21's: a third of a beat is a sixth.
+        Ok((
+            index as UnsignedIntegerType + 1,
+            crate::makenotation::op_frac(offset - start),
+        ))
     }
 
     /// Returns the position within the bar as a fractional beat: music21's
@@ -2213,6 +2217,16 @@ mod tests {
         let six_eight = TimeSignature::new(6, 8).unwrap();
         assert_eq!((six_eight.numerator(), six_eight.denominator()), (6, 8));
         assert_eq!(six_eight.bar_duration().quarter_length(), 3.0);
+    }
+
+    /// music21 reads the progress through `opFrac`, so a third of a beat
+    /// is a sixth exactly, not the float the subtraction leaves.
+    #[test]
+    fn beat_progress_is_read_through_op_frac() {
+        let six_eight = TimeSignature::new(6, 8).unwrap();
+        let (beat, progress) = six_eight.beat_progress(5.0 / 3.0).unwrap();
+        assert_eq!(beat, 2);
+        assert_eq!(progress, crate::makenotation::op_frac(1.0 / 6.0));
     }
 
     #[test]

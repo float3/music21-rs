@@ -5942,3 +5942,23 @@ print(len(caught), caught[0].message)
         "1 figureTupleSolo was deprecated on v11 and will disappear at or after "
         "v12. use FigureTuple.fromPitchAndReference() instead"
     )
+
+
+def test_beat_progress_is_a_fraction_where_music21s_is():
+    from fractions import Fraction
+
+    six_eight = m.TimeSignature("6/8")
+    assert six_eight.getBeatProgress(Fraction(5, 3)) == (2, Fraction(1, 6))
+    assert six_eight.getBeatProgress(1.0) == (1, 1.0)
+
+
+def test_meter_spans_are_fractions_where_music21s_are():
+    from fractions import Fraction
+
+    thirds = m.MeterSequence("1/12+1/12+1/12")
+    assert thirds.offsetToSpan(0.4) == (Fraction(1, 3), Fraction(2, 3))
+    assert isinstance(thirds.offsetToSpan(0.4)[0], Fraction)
+    spans = thirds.getLevelSpan(0)
+    assert spans[1] == (Fraction(1, 3), Fraction(2, 3))
+    assert all(isinstance(end, Fraction) for _, end in spans[:2])
+    assert spans[2][1] == 1.0

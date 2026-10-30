@@ -179,6 +179,30 @@ two rules, set 2026-09-12, that most of the open work now serves:
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
 
+8. **older mismatches the drift audit turned up.** music21's 346
+   non-owner commits since porting began (7e77707) were checked against
+   the port on 2026-10-30; the drifts found are fixed. These differ from
+   music21 too, but music21 already behaved this way at 7e77707, so they
+   were never followed rather than left behind:
+
+   - humdrum: an opus carries no metadata; `!!` global comments are
+     dropped (a pickup's `paddingLeft` is fixed).
+   - `from_clercq_temperley` answers an empty part for text with no `|`
+     or `S:`, where music21 raises `CTSongException`.
+   - the wheel's hand-back loses grace durations, humdrum barlines and
+     tandems, RomanText repeats, and gives offsets as floats where music21
+     gives `Fraction`s.
+   - `OctatonicScale(tonic, mode=1)` closes on the tonic an octave up
+     (`B#4` for C); music21 stacks the steps (`C5`, and `G-5` for F#).
+   - MusicXML `<transpose>` with `<diatonic>` and no `<chromatic>` reads
+     as a unison; music21 reads a generic interval.
+   - `BrailleSegmentDivision` is not ported.
+   - wheel argument handling: `Accidental('bb')` accepted, negative
+     quarter lengths refused, `chord.duration = 3` accepted,
+     `setInversion('1')` refused, non-bool truthy flags refused,
+     `VoiceLeadingQuartet(key='C')` keeping the string, `Stream.isAtEnd`
+     and `storeAtEnd` missing.
+
 ## closed
 
 - **random comparison with music21 found what the fixtures could not.**

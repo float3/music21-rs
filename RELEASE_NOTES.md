@@ -1200,6 +1200,13 @@
 
 ## fixed
 
+- **A Humdrum pickup is padded**, as music21 pads a first measure shorter
+  than the bar of the meter it opens with.
+
+- **`TimeSignature::beat_progress` is read through `op_frac`**, and the
+  wheel's `getBeatProgress`, `offsetToSpan` and `getLevelSpan` answer
+  `Fraction`s where music21's do.
+
 - **The wheel follows music21's v11 changes it had missed**, found by
   auditing the port against every music21 commit since porting began:
   `KeySignature.alteredPitches` no longer flips a signature to

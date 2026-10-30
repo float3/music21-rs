@@ -491,7 +491,9 @@ impl TimeSignature {
             py,
             [
                 beat.into_pyobject(py)?.into_any(),
-                offset.into_pyobject(py)?.into_any(),
+                // A `Fraction` where the progress is not a binary fraction,
+                // as music21's `opFrac` answers.
+                crate::duration::op_frac(py, offset)?,
             ],
         )
     }
@@ -1817,8 +1819,23 @@ impl MeterSequence {
 
     /// music21's `getLevelSpan`: where each part of a level starts and ends.
     #[pyo3(signature = (level = 0))]
-    fn getLevelSpan(&self, py: Python<'_>, level: usize) -> PyResult<Vec<(FloatType, FloatType)>> {
-        Ok(self.held.read(py)?.level_span(level))
+    fn getLevelSpan<'py>(
+        &self,
+        py: Python<'py>,
+        level: usize,
+    ) -> PyResult<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>> {
+        // Through `opFrac`, as music21's: a third is `Fraction(1, 3)`.
+        self.held
+            .read(py)?
+            .level_span(level)
+            .into_iter()
+            .map(|(start, end)| {
+                Ok((
+                    crate::duration::op_frac(py, start)?,
+                    crate::duration::op_frac(py, end)?,
+                ))
+            })
+            .collect()
     }
 
     /// music21's `getLevelWeight`: what each part of a level weighs.
@@ -1872,7 +1889,7 @@ impl MeterSequence {
         py: Python<'_>,
         qLenPos: FloatType,
         permitMeterModulus: bool,
-    ) -> PyResult<(Py<PyAny>, FloatType)> {
+    ) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
         let (start, end) = self
             .held
             .read(py)?
@@ -1881,9 +1898,9 @@ impl MeterSequence {
         let start = if start == 0.0 {
             0i64.into_pyobject(py)?.into_any().unbind()
         } else {
-            start.into_pyobject(py)?.into_any().unbind()
+            crate::duration::op_frac(py, start)?.unbind()
         };
-        Ok((start, end))
+        Ok((start, crate::duration::op_frac(py, end)?.unbind()))
     }
 
     /// music21's `subdivideNestedHierarchy`: this span nested down to a
