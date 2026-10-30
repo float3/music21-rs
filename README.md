@@ -486,6 +486,14 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2127](https://github.com/cuthbertLab/music21/pull/2127):
   a `ReductiveNote` on a chord looking for a C when it names no pitch
   (open).
+- [cuthbertLab/music21#2128](https://github.com/cuthbertLab/music21/pull/2128):
+  tuplets set on a duration before it worked out its own being overwritten,
+  so `augmentOrDiminish` kept the old length (open).
+- [cuthbertLab/music21#2129](https://github.com/cuthbertLab/music21/pull/2129):
+  `PartReduction` lengthening the score's own dynamics (open).
+- [cuthbertLab/music21#2130](https://github.com/cuthbertLab/music21/pull/2130):
+  TinyNotation's `}` closing a tie instead of its bracket, and ties and
+  tuplets counting a time signature as a note (open).
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
