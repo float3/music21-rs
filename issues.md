@@ -185,17 +185,13 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - the wheel's hand-back loses humdrum barlines, tandems and `!!`
-     comments, and RomanText repeats. Its readers hand back the wheel's own
+   - the wheel's hand-back loses humdrum tandems and `!!` comments. Its
+     measures keep their barlines beside their elements, so a Humdrum or
+     RomanText measure's barline or repeat is its `rightBarline` but not
+     one of its elements, as music21's is (stored at the end). Its readers hand back the wheel's own
      streams even with music21 installed, so an installed note in one
      answers music21's `offset` as 0.0: it has no site. Handing back
      music21's streams there is a design call, not yet made.
-   - `OctatonicScale(tonic, mode=1)` closes on the tonic an octave up
-     (`B#4` for C); music21 stacks the steps (`C5`, and `G-5` for F#).
-     A cyclical step scale matches that but spells ranged realizations
-     in sharps, and music21's own ranged realization starts on C whatever
-     the tonic, so this wants its network walk ported rather than a
-     different step scale.
    - `BrailleSegmentDivision` is not ported.
    - wheel argument handling: negative quarter lengths refused, non-bool
      truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.

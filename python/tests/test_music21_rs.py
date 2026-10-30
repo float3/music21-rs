@@ -5906,6 +5906,24 @@ def test_an_abstract_scale_says_its_mode_as_music21_does():
         assert made.abstract.mode is None
 
 
+@pytest.mark.parametrize(
+    "tonic, pitches, ninth",
+    [
+        ("C", "C4 D-4 E-4 F-4 G-4 G4 A4 B-4 C5", "C4"),
+        ("F#", "F#4 G4 A4 B-4 C5 D-5 E-5 F-5 G-5", "F#4"),
+        ("E-", "E-4 F-4 G-4 G4 A4 B-4 C5 D-5 E-5", "E-4"),
+    ],
+)
+def test_the_first_octatonic_mode_closes_on_its_octave(tonic, pitches, ninth):
+    """music21's mode 1 starts with the half step and stacks its steps to
+    the octave; its ranged realization starts on C whatever the tonic."""
+    scale = m.OctatonicScale(tonic, mode=1)
+    assert " ".join(str(p) for p in scale.pitches) == pitches
+    ranged = " ".join(str(p) for p in scale.getPitches("C2", "C3"))
+    assert ranged == "C2 D-2 E-2 F-2 G-2 G2 A2 B-2 C3"
+    assert str(scale.pitchFromDegree(9)) == ninth
+
+
 def test_add_variant_warns_for_its_old_keyword():
     """music21 v11: `addVariant`'s old `replacementDuration` warns on every
     call, and giving it beside `replacementQuarterLength` is a TypeError.

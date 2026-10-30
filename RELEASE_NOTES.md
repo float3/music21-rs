@@ -1208,6 +1208,11 @@
 
 ## fixed
 
+- **The wheel's `OctatonicScale(tonic, mode=1)` stops at its octave.**
+  It realized a tenth pitch an octave up (`B#5` on C) and counted its
+  degrees from there; it now stands on the crate's step scale, which
+  matches music21 on every tonic, ranged realizations included.
+
 - **A grace note handed back by the wheel keeps its grace duration.** A
   note read with one came back holding a plain `Duration`, so `isGrace`
   was false; it is now a `GraceDuration`, or an `AppoggiaturaDuration`

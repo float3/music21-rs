@@ -967,8 +967,7 @@ impl ConcreteScale {
                 .map(RsInterval::from_name)
                 .collect::<music21_rs_crate::Result<Vec<_>>>()
                 .map_err(scale_error)?;
-            me.inner = RsStepScale::octave_repeating_of(tonic, steps)
-                .and_then(|stepped| stepped.scale())
+            me.inner = RsScale::from_steps(tonic, steps)
                 .map_err(scale_error)?
                 .with_simplification(RsSimplification::MaxAccidental);
             me.named_type = Some("Octatonic".to_string());
