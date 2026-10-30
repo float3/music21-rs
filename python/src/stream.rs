@@ -4555,12 +4555,13 @@ pub(crate) fn from_crate_as<'py>(
         // The installed class, so music21's own `metadata` setter can put
         // it into the stream: it inserts the object, and its streams hold
         // nothing that is not a `Music21Object`.
-        let carried = crate::installed_new(
-            py,
-            "music21.metadata",
-            "Metadata",
-            crate::metadata::Metadata::wrap(metadata.clone()),
-        )?;
+        // On music21's own streams, a class music21's setter will take:
+        // it drops anything that is not its own `Metadata`, silently.
+        let wrapped = crate::metadata::Metadata::wrap(metadata.clone());
+        let carried = match whose {
+            Whose::Music21 => crate::holdable_new(py, "music21.metadata", "Metadata", wrapped)?,
+            Whose::Wheel => crate::installed_new(py, "music21.metadata", "Metadata", wrapped)?,
+        };
         made.setattr("metadata", carried)?;
     }
     if let Some(at) = stream.at_sounding_pitch() {

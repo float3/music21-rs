@@ -6186,6 +6186,22 @@ def test_a_flag_is_read_for_its_truth_as_music21_reads_it():
         pitch.transpose(2, inPlace="False")
 
 
+def test_a_score_read_once_installed_keeps_its_metadata():
+    """music21's `metadata` setter takes only music21's own `Metadata`, so
+    one the wheel built was dropped without a word once installed."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+read = m.from_abc("X:1\\nT:Little Tune\\nC:Somebody\\nM:2/4\\nL:1/4\\nK:C\\nC D|E F|]\\n")
+print(read.metadata.title, read.metadata.composer)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["Little Tune Somebody"]
+
+
 def test_a_key_signatures_count_and_flag_are_set_apart():
     """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
     a flag of its own, so writing pitches over a signature leaves it
