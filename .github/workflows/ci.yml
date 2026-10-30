@@ -26,9 +26,73 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Whether this push to master is code a pull request's run already passed.
+  # A pull request's run records the tree it tested (its merge with the base
+  # as the base stood then). On a push, the merged pull request's last
+  # successful run is looked up, and when its tree is this commit's tree, the
+  # checks below are skipped: they would test the same files again. When
+  # master moved on in between, the trees differ and everything runs.
+  # Building and publishing the site, the report and a release always run.
+  proven:
+    name: Already Proven
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.compare.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Record the tree under test
+        if: github.event_name == 'pull_request'
+        run: git rev-parse 'HEAD^{tree}' > tested-tree
+
+      - name: Upload the tree under test
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: tested-tree
+          path: tested-tree
+          retention-days: 30
+
+      - name: Compare with the merged pull request
+        id: compare
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          skip=false
+          pr=none
+          if [ "${{ github.event_name }}" = push ]; then
+            tree=$(git rev-parse 'HEAD^{tree}')
+            # Any lookup that fails leaves `skip` false, so everything runs.
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" \
+              --jq '[.[] | select(.merge_commit_sha == $ENV.GITHUB_SHA)][0].number // "none"') \
+              || pr=none
+            if [ "$pr" != none ]; then
+              head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha) || head=none
+              runs="repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs"
+              run=$(gh api "$runs?event=pull_request&head_sha=$head&status=success" \
+                --jq '.workflow_runs[0].id // "none"') || run=none
+              if [ "$run" != none ] \
+                && gh run download "$run" -R "$GITHUB_REPOSITORY" -n tested-tree -D proven \
+                && [ "$(cat proven/tested-tree)" = "$tree" ]; then
+                skip=true
+              fi
+            fi
+          fi
+          echo "pull request: $pr, skip: $skip"
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   nix:
     name: Nix Flake Check
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -52,6 +116,8 @@ jobs:
   feature-matrix:
     name: Feature Matrix (${{ matrix.feature_set.name }})
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -116,6 +182,8 @@ jobs:
   python-parity:
     name: Python Parity (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -184,6 +252,8 @@ jobs:
   wheel:
     name: Python Wheel
     runs-on: ${{ matrix.os }}
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -284,7 +354,10 @@ jobs:
   music21-suite:
     name: music21's Own Suite
     runs-on: ubuntu-latest
-    needs: wheel
+    needs:
+      - proven
+      - wheel
+    if: needs.proven.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -341,6 +414,8 @@ jobs:
   lint:
     name: Lint (fmt + clippy + check)
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     steps:
       # No submodules: every `verify-*` command below compares a committed
       # `data/*.toml` against the Rust emitted from it and reads nothing else,
@@ -425,6 +500,8 @@ jobs:
   msrv:
     name: MSRV
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -458,6 +535,8 @@ jobs:
   semver:
     name: Semver Checks
     runs-on: ubuntu-latest
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -525,6 +604,8 @@ jobs:
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -824,7 +905,7 @@ jobs:
     needs:
       - lint
       - site
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
     permissions:
       contents: read
       pages: write
@@ -971,7 +1052,7 @@ jobs:
       - lint
       - site
       - report
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
     permissions:
       contents: read
       pages: write
@@ -1055,7 +1136,7 @@ jobs:
       - site
       - report
       - pages
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
     permissions:
       contents: write
     outputs:
