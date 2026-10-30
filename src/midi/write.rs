@@ -660,7 +660,9 @@ fn track_packets(
     for (index, (offset, element)) in track.elements.iter().enumerate() {
         if let StreamElement::Instrument(instrument) = element {
             last_instrument = Some(instrument.as_ref().clone());
-            if instrument.is_a("UnpitchedPercussion")
+            // music21 reads the percussion map of any instrument in it,
+            // a `Whistle` -- a `Flute` -- among them.
+            if instrument.is_a("MidiPercussionMapMixin")
                 && let Some(pitch) = instrument.percussion_pitch()
             {
                 percussion_in_force = Some(pitch);
@@ -734,7 +736,7 @@ fn element_events(
     };
     let stroke_pitch = |stored: Option<&Instrument>| -> u8 {
         stored
-            .filter(|instrument| instrument.is_a("UnpitchedPercussion"))
+            .filter(|instrument| instrument.is_a("MidiPercussionMapMixin"))
             .and_then(Instrument::percussion_pitch)
             .or(percussion_in_force)
             .unwrap_or(60)
@@ -1088,6 +1090,34 @@ mod tests {
         let mut out = Vec::new();
         put_variable_length(&mut out, number);
         out
+    }
+
+    /// The key a stroke sounds on: music21 reads the percussion map of any
+    /// instrument in it, a `Whistle` among them though it is a `Flute`.
+    #[test]
+    fn a_whistle_stroke_plays_its_percussion_key() {
+        let key_of = |stored: Option<Instrument>, in_force: Option<u8>| {
+            let mut stroke = crate::percussion::Unpitched::new();
+            stroke.written_mut().set_stored_instrument(stored);
+            let events = element_events(&StreamElement::Unpitched(stroke), None, None, in_force)
+                .unwrap()
+                .unwrap();
+            events
+                .iter()
+                .find(|event| matches!(event.kind, Kind::NoteOn))
+                .map(|event| event.first)
+        };
+        let mut long = Instrument::of_kind("Whistle").unwrap();
+        long.set_modifier("long");
+        assert_eq!(key_of(Some(long), None), Some(72));
+        assert_eq!(
+            key_of(Some(Instrument::of_kind("Whistle").unwrap()), None),
+            Some(71)
+        );
+        assert_eq!(
+            key_of(Some(Instrument::of_kind("Flute").unwrap()), None),
+            Some(60)
+        );
     }
 
     #[test]

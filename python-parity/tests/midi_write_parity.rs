@@ -62,7 +62,7 @@ const SUBJECTS: &[(&str, &str)] = &[
     ),
     (
         "built:percussion",
-        "drum strokes whose keys are the ones their instruments are played by",
+        "drum strokes whose keys are the ones their instruments are played by, a whistle's too",
     ),
 ];
 
@@ -111,6 +111,8 @@ def built(name):
             ('Triangle', 'mute'), ('CrashCymbals', '2'),
             ('CongaDrum', 'high'), ('Timbales', 'low'),
             ('Agogo', 'low'),
+            # In the map though it is a `Flute`, not an `UnpitchedPercussion`.
+            ('Whistle', 'long'),
         ]:
             played = getattr(instrument, class_name)()
             played.modifier = modifier
@@ -282,6 +284,7 @@ fn built(name: &str) -> music21_rs::Result<music21_rs::Stream> {
             ("CongaDrum", "high"),
             ("Timbales", "low"),
             ("Agogo", "low"),
+            ("Whistle", "long"),
         ] {
             let mut played = music21_rs::Instrument::of_kind(class)?;
             played.set_modifier(modifier);

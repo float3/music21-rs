@@ -1186,6 +1186,14 @@
 
 ## fixed
 
+- **A whistle's stroke is written on its percussion key.** music21 reads
+  the MIDI percussion map of any `MidiPercussionMapMixin`, a `Whistle`
+  among them though it is a `Flute`; the writer only read
+  `UnpitchedPercussion` and wrote key 60.
+
+- **`CS12` counts the bass moving up**, as music21 now does: C to G is
+  seven semitones, not five. The wheel's `ChordBassMotionFeature` follows.
+
 - **An arpeggio on a lone percussion chord is numbered**, as music21 now
   numbers one on any chord of more than one note.
 
