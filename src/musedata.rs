@@ -101,12 +101,12 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
 }
 
 /// music21's `MuseDataFile.readstr`: the parts of one file, comments and
-/// `@` lines left out.
+/// `@` lines left out, read the same with Windows line endings.
 fn split_parts(text: &str) -> Result<Vec<Part>> {
     let mut parts = Vec::new();
     let mut lines: Vec<String> = Vec::new();
     let mut comment = false;
-    for line in text.split('\n') {
+    for line in text.replace("\r\n", "\n").split('\n') {
         if line.starts_with('&') {
             comment = !comment;
             continue;
@@ -1076,5 +1076,25 @@ mod tests {
             .map(|dynamic| dynamic.value().to_string())
             .collect();
         assert_eq!(values, ["pp"]);
+    }
+
+    #[test]
+    fn windows_line_endings_are_read_as_unix_ones() {
+        let unix = "Title\nSource\n$ K:0 Q:4 T:4/4 C:4\nC4 4 q\n/END\n";
+        let windows = unix.replace('\n', "\r\n");
+        let lines = |text: &str| -> Vec<Vec<String>> {
+            split_parts(text)
+                .expect("the parts are read")
+                .into_iter()
+                .map(|part| part.lines)
+                .collect()
+        };
+        assert_eq!(lines(&windows), lines(unix));
+        assert!(
+            lines(&windows)
+                .iter()
+                .flatten()
+                .all(|line| !line.contains('\r'))
+        );
     }
 }

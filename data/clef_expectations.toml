@@ -3,10 +3,10 @@
 # The classes are transcribed into src/clef.rs; the rest is checked
 # behaviourally.
 #
-# music21 11.0.0b14 at 0ea5491fdbb757469db12d9147e80934cc8fa1b6
+# music21 11.0.0b14 at 841bfd0cf8a801a3fd4f43c3aed169f7b02debd2
 
 music21_version = "11.0.0b14"
-music21_commit = "0ea5491fdbb757469db12d9147e80934cc8fa1b6"
+music21_commit = "841bfd0cf8a801a3fd4f43c3aed169f7b02debd2"
 
 [[clef]]
 class = "Clef"
