@@ -5843,3 +5843,29 @@ def test_a_chord_is_indexed_by_int_name_or_pitch_only():
         chord[m.Note("G4")] = "A4"
     chord[m.Pitch("G4")] = "A4"
     assert chord.pitchNames == ["C#", "D-", "A"]
+
+
+def test_a_chord_symbol_in_root_position_drops_a_stored_inversion():
+    """music21 c02ed8926: re-realizing a symbol whose bass is its root
+    clears a stored inversion, which `inversion(None)` meant to do since
+    2012 and never did."""
+    symbol = m.ChordSymbol("C")
+    symbol.setInversion(2, transpose=False, inPlace=True)
+    symbol.addChordStepModification(m.ChordStepModification("add", 9))
+    assert symbol.inversion() == 0
+
+
+def test_a_length_that_is_no_number_is_refused_as_music21_refuses_it():
+    """music21 71c384b69: an unlinked duration refuses a length that is not
+    finite with a ValueError; a linked one fails turning it into a ratio."""
+    for value, linked, raised in (
+        (math.inf, False, ValueError),
+        (math.nan, False, ValueError),
+        (-math.inf, False, ValueError),
+        (math.inf, True, OverflowError),
+        (math.nan, True, ValueError),
+    ):
+        length = m.Duration()
+        length.linked = linked
+        with pytest.raises(raised):
+            length.quarterLength = value

@@ -811,6 +811,28 @@ fn quarter_length_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
         })
 }
 
+/// What music21 raises for a length that is not finite: an unlinked
+/// duration checks it (71c384b69), and a linked one fails making a ratio of
+/// it in `opFrac`, as Python's `float.as_integer_ratio` does.
+fn not_finite(value: f64, linked: bool) -> PyErr {
+    let written = if value.is_nan() {
+        "nan"
+    } else if value > 0.0 {
+        "inf"
+    } else {
+        "-inf"
+    };
+    if !linked {
+        return PyValueError::new_err(format!(
+            "quarterLength must be a finite number, not {written}"
+        ));
+    }
+    if value.is_nan() {
+        return PyValueError::new_err("cannot convert NaN to integer ratio");
+    }
+    pyo3::exceptions::PyOverflowError::new_err("cannot convert Infinity to integer ratio")
+}
+
 /// music21's `duration.Duration`: how long something lasts, and how that
 /// length is written.
 ///
@@ -1400,6 +1422,9 @@ impl Duration {
     #[setter]
     fn set_quarterLength(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = quarter_length_from_any(value)?;
+        if !value.is_finite() {
+            return Err(not_finite(value, self.linked));
+        }
         let was = self.inner.quarter_length();
         if !self.linked {
             self.inner = RsDuration::new(value).map_err(duration_error)?;
