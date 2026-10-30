@@ -120,6 +120,20 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
+/// How far `recurseRepr` indents what a held stream holds.
+const REPR_INDENT: usize = 4;
+
+/// A number with at most four decimal places and at least one, trailing
+/// zeros dropped: music21's `common.strTrimFloat`, `1.0` and `1.3333`.
+fn str_trim_float(value: f64) -> String {
+    let written = format!("{value:.4}");
+    let trimmed = written.trim_end_matches('0');
+    match trimmed.ends_with('.') {
+        true => format!("{trimmed}0"),
+        false => trimmed.to_string(),
+    }
+}
+
 /// How long an object lasts: a stream as long as its `duration`, anything
 /// else as long as its duration, a thing with no duration no time at all.
 fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
@@ -1122,6 +1136,117 @@ impl Stream {
             }
         }
         Ok(None)
+    }
+
+    /// This stream's own elements, in order, as music21's `iter` hands
+    /// them: a `StreamIterator`, which filters as `recurse` does.
+    fn iter<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Walked>> {
+        let found = self
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        Bound::new(py, Walked::of(found, self.kind))
+    }
+
+    /// The stream holding `el`, this one or one held at any depth below
+    /// it, or `None`: music21's `containerInHierarchy`. A stream here keeps
+    /// no active site, so `setActiveSite` has nothing to set.
+    #[pyo3(signature = (el, *, setActiveSite = true))]
+    fn containerInHierarchy<'py>(
+        slf: &Bound<'py, Self>,
+        el: &Bound<'py, PyAny>,
+        setActiveSite: bool,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let held: Vec<Py<PyAny>> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        if held.iter().any(|object| object.bind(py).is(el)) {
+            return Ok(Some(slf.clone().into_any()));
+        }
+        let keywords = PyDict::new(py);
+        keywords.set_item("setActiveSite", setActiveSite)?;
+        let stream = pyo3::types::PyString::new(py, "Stream");
+        for object in held {
+            let object = object.bind(py);
+            if !is_of_class(object, &stream)? {
+                continue;
+            }
+            let found = object.call_method("containerInHierarchy", (el,), Some(&keywords))?;
+            if !found.is_none() {
+                return Ok(Some(found));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Each element on a line of its own with its offset, a held stream's
+    /// indented beneath it: music21's `recurseRepr`, which `show('text')`
+    /// prints.
+    #[pyo3(signature = (
+        *,
+        prefixSpaces = 0,
+        addBreaks = true,
+        addIndent = true,
+        addEndTimes = false,
+        useMixedNumerals = false
+    ))]
+    fn recurseRepr(
+        slf: &Bound<'_, Self>,
+        prefixSpaces: usize,
+        addBreaks: bool,
+        addIndent: bool,
+        addEndTimes: bool,
+        useMixedNumerals: bool,
+    ) -> PyResult<String> {
+        let py = slf.py();
+        let held: Vec<(f64, Py<PyAny>)> = slf
+            .borrow()
+            .sorted()
+            .iter()
+            .map(|held| (held.offset, held.object.clone_ref(py)))
+            .collect();
+        let written = |value: f64| -> PyResult<String> {
+            match useMixedNumerals {
+                true => crate::duration::mixed_numeral(py, value),
+                false => Ok(str_trim_float(value)),
+            }
+        };
+        let indent = match addIndent {
+            true => " ".repeat(prefixSpaces),
+            false => String::new(),
+        };
+        let keywords = PyDict::new(py);
+        keywords.set_item("prefixSpaces", prefixSpaces + REPR_INDENT)?;
+        keywords.set_item("addBreaks", addBreaks)?;
+        keywords.set_item("addIndent", addIndent)?;
+        keywords.set_item("addEndTimes", addEndTimes)?;
+        keywords.set_item("useMixedNumerals", useMixedNumerals)?;
+        let stream = pyo3::types::PyString::new(py, "Stream");
+
+        let mut lines = Vec::new();
+        for (offset, object) in held {
+            let object = object.bind(py);
+            // `{1.0} <...>`, or with end times `{1.0 - 1.3333} <...>`.
+            let mut place = written(offset)?;
+            if addEndTimes {
+                place = format!("{place} - {}", written(offset + length_of(object)?)?);
+            }
+            lines.push(format!("{indent}{{{place}}} {}", object.repr()?));
+            if is_of_class(object, &stream)? {
+                let inner = object.call_method("recurseRepr", (), Some(&keywords))?;
+                lines.push(inner.extract()?);
+            }
+        }
+        let joint = match addBreaks {
+            true => "\n",
+            false => " / ",
+        };
+        Ok(lines.join(joint))
     }
 
     /// Takes everything out, keeping what else the stream says of itself:

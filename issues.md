@@ -194,6 +194,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
      music21's streams there is a design call, not yet made.
    - wheel argument handling: negative quarter lengths refused, non-bool
      truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
+   - a wheel measure's repr is `<music21.stream.Measure m1>` where
+     music21's is `<music21.stream.Measure 1 offset=4.0>`: the offset is
+     the measure's in its part, which needs the sites the wheel's streams
+     do not keep.
 
 ## closed
 

@@ -12,6 +12,12 @@
   then follow; anything but a duration is refused, as music21 refuses
   it. `sort` is accepted and has nothing to do.
 
+- **The wheel's `Stream` has `iter`, `containerInHierarchy` and
+  `recurseRepr`**: `iter` hands its own elements back as a
+  `StreamIterator`, `containerInHierarchy` finds the stream holding an
+  element at any depth, and `recurseRepr` writes music21's text listing,
+  end times and mixed numerals included.
+
 ## fixed
 
 - **The report counts the metadata names the wheel serves by lookup.**

@@ -545,6 +545,40 @@ def test_a_stream_has_a_duration_that_can_be_set_apart():
     assert line.sort(force=True) is None
 
 
+def test_a_stream_finds_where_an_element_is_held():
+    """music21's `iter`, `containerInHierarchy` and `recurseRepr`."""
+    score, part, bar = m.Score(), m.Part(), m.Stream()
+    bar.id = "m1"
+    held = m.Note("D4")
+    bar.append([held, m.Note("E4", quarterLength=1 / 3)])
+    part.append(bar)
+    score.insert(0, part)
+    assert score.containerInHierarchy(held).id == "m1"
+    assert score.containerInHierarchy(held, setActiveSite=False) is bar
+    assert m.Stream().containerInHierarchy(held) is None
+
+    walked = bar.iter()
+    assert type(walked).__name__ == "StreamIterator"
+    assert list(walked) == [held, bar[1]]
+    assert len(part.iter().notes) == 0
+
+    address = re.compile(r"0x[0-9a-f]+")
+    shown = address.sub("ADDR", score.recurseRepr())
+    assert shown == (
+        "{0.0} <music21.stream.Part ADDR>\n"
+        "    {0.0} <music21.stream.Stream m1>\n"
+        "        {0.0} <music21.note.Note D>\n"
+        "        {1.0} <music21.note.Note E>"
+    )
+    line = address.sub("ADDR", bar.recurseRepr(addBreaks=False, addEndTimes=True))
+    assert line == (
+        "{0.0 - 1.0} <music21.note.Note D> / "
+        "{1.0 - 1.3333} <music21.note.Note E>"
+    )
+    mixed = bar.recurseRepr(addEndTimes=True, useMixedNumerals=True)
+    assert mixed.splitlines()[1] == "{1 - 1 1/3} <music21.note.Note E>"
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.
