@@ -1200,6 +1200,11 @@
 
 ## fixed
 
+- **The wheel reads two more arguments as music21 does**:
+  `VoiceLeadingQuartet(..., key='C')` hands back the Key the name names,
+  and `Accidental('bb')` is refused, `bb` being the crate's spelling and
+  not music21's.
+
 - **De Clercq-Temperley text with no barline or no `S:` rule is
   refused**, as music21's converter refuses it, where it read as an empty
   part; the wheel raises `CTSongException`.

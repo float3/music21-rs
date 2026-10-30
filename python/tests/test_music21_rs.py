@@ -5970,3 +5970,22 @@ def test_clercq_temperley_text_that_is_no_song_is_refused():
     with pytest.raises(Exception, match='must contain "\\|" and "S:"') as raised:
         m.from_clercq_temperley("S: [C] I IV V I\n")
     assert type(raised.value).__name__ == "CTSongException"
+
+
+def test_a_quartets_key_given_as_a_name_is_handed_back_as_a_key():
+    """music21 reads `VoiceLeadingQuartet(..., key='C')` through its key
+    setter, so the name comes back as the Key it names."""
+    notes = [m.Note(name) for name in ("C4", "D4", "A3", "B3")]
+    for given in ({"key": "C"}, {"analyticKey": "C"}):
+        quartet = m.VoiceLeadingQuartet(*notes, **given)
+        assert type(quartet.key).__name__ == "Key"
+        assert quartet.key.tonic.name == "C"
+
+
+def test_an_accidental_is_not_named_in_the_crates_own_flats():
+    """The crate writes a double flat `bb`; music21's table has `b` for a
+    flat and no `bb`, so the wheel refuses it as music21 does."""
+    assert m.Accidental("b").name == "flat"
+    for name in ("bb", "BB"):
+        with pytest.raises(Exception, match="not a supported accidental type"):
+            m.Accidental(name)

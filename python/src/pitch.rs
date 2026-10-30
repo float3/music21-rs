@@ -423,6 +423,11 @@ fn looked_up(value: &Bound<'_, PyAny>) -> Option<RsAccidental> {
             if text.is_empty() || !text.is_ascii() || text.parse::<f64>().is_ok() {
                 return None;
             }
+            // The crate spells a double flat `bb`; music21's table holds a
+            // lone `b` for a flat and nothing longer.
+            if text.len() > 1 && text.chars().all(|letter| letter.eq_ignore_ascii_case(&'b')) {
+                return None;
+            }
             RsAccidental::new(text).ok()
         };
         return standard(&text).or_else(|| standard(&text.to_lowercase()));

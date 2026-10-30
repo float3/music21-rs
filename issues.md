@@ -191,14 +191,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
      gives `Fraction`s.
    - `OctatonicScale(tonic, mode=1)` closes on the tonic an octave up
      (`B#4` for C); music21 stacks the steps (`C5`, and `G-5` for F#).
+     A cyclical step scale matches that but spells ranged realizations
+     in sharps, and music21's own ranged realization starts on C whatever
+     the tonic, so this wants its network walk ported rather than a
+     different step scale.
    - MusicXML `<transpose>` with `<diatonic>` and no `<chromatic>` reads
      as a unison; music21 reads a generic interval.
    - `BrailleSegmentDivision` is not ported.
-   - wheel argument handling: `Accidental('bb')` accepted, negative
-     quarter lengths refused, `chord.duration = 3` accepted,
-     `setInversion('1')` refused, non-bool truthy flags refused,
-     `VoiceLeadingQuartet(key='C')` keeping the string, `Stream.isAtEnd`
-     and `storeAtEnd` missing.
+   - wheel argument handling: negative quarter lengths refused,
+     `chord.duration = 3` accepted, `setInversion('1')` refused, non-bool
+     truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
 
 ## closed
 
