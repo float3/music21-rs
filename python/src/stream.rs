@@ -2934,7 +2934,7 @@ impl Stream {
     ) -> PyResult<bool> {
         let _ = forceFlat;
         let py = slf.py();
-        warn_deprecated_once(
+        crate::warn_deprecated_once(
             py,
             &HAS_ELEMENT_OF_CLASS_WARNED,
             HAS_ELEMENT_OF_CLASS_DEPRECATED,
@@ -3741,29 +3741,6 @@ const HAS_ELEMENT_OF_CLASS_DEPRECATED: &str = "Stream.hasElementOfClass was depr
 /// Whether `hasElementOfClass` has warned yet in this process.
 static HAS_ELEMENT_OF_CLASS_WARNED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
-
-/// music21's `common.deprecated`: one warning per process, the first time
-/// the member is called. It is music21's own `Music21DeprecationWarning`
-/// where music21 is there, and Python's `DeprecationWarning` where not.
-fn warn_deprecated_once(
-    py: Python<'_>,
-    warned: &std::sync::atomic::AtomicBool,
-    message: &str,
-) -> PyResult<()> {
-    if warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
-        return Ok(());
-    }
-    let category = py
-        .import("music21.exceptions21")
-        .and_then(|module| module.getattr("Music21DeprecationWarning"))
-        .or_else(|_| {
-            py.import("builtins")
-                .and_then(|module| module.getattr("DeprecationWarning"))
-        })?;
-    py.import("warnings")?
-        .call_method1("warn", (message, category, 2))?;
-    Ok(())
-}
 
 /// Refuses what the wheel's copies of music21's editing methods cannot do:
 /// edit one target, cut without ties, or change the stream in place.

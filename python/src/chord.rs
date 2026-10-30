@@ -30,6 +30,89 @@ pub const NAMES: &[&str] = &["Chord", "ChordException"];
 
 pyo3::create_exception!(music21_rs_facade, ChordException, crate::Music21Exception);
 
+/// The name a chord is indexed by, as music21 writes it: a pitch name with
+/// its octave, or a `Pitch`'s. Anything else names no note, which music21
+/// has answered with `KeyError` since f9f96d9a1 -- a `Note` included.
+fn key_name(key: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    if let Ok(name) = key.extract::<String>() {
+        return Ok(Some(name.to_uppercase()));
+    }
+    let Ok(pitch) = key.extract::<PyRef<'_, Pitch>>() else {
+        return Ok(None);
+    };
+    Ok(Some(music21_name(&pitch.inner.name_with_octave())))
+}
+
+/// The per-note accessors music21 deprecated in v11 (2e5a51ae7): a
+/// component is indexed and read or written instead.
+#[derive(Clone, Copy)]
+enum NoteAccessor {
+    GetColor,
+    GetNotehead,
+    GetNoteheadFill,
+    GetStemDirection,
+    GetTie,
+    SetColor,
+    SetNotehead,
+    SetNoteheadFill,
+    SetStemDirection,
+    SetTie,
+}
+
+/// How many [`NoteAccessor`]s there are.
+const NOTE_ACCESSOR_COUNT: usize = 10;
+
+impl NoteAccessor {
+    /// What music21's `common.deprecated` says for it.
+    fn message(self) -> &'static str {
+        match self {
+            Self::GetColor => {
+                "Chord.getColor was deprecated on v11 and will disappear at or after v12. read a component color via c[query].style.color"
+            }
+            Self::GetNotehead => {
+                "Chord.getNotehead was deprecated on v11 and will disappear at or after v12. index the component and read .notehead, e.g. c[query].notehead"
+            }
+            Self::GetNoteheadFill => {
+                "Chord.getNoteheadFill was deprecated on v11 and will disappear at or after v12. index the component and read .noteheadFill, e.g. c[query].noteheadFill"
+            }
+            Self::GetStemDirection => {
+                "Chord.getStemDirection was deprecated on v11 and will disappear at or after v12. index the component and read .stemDirection, e.g. c[query].stemDirection"
+            }
+            Self::GetTie => {
+                "Chord.getTie was deprecated on v11 and will disappear at or after v12. index the component and read .tie, e.g. c[query].tie"
+            }
+            Self::SetColor => {
+                "Chord.setColor was deprecated on v11 and will disappear at or after v12. set a component color via c[query].style.color = ... (whole chord: c.style.color)"
+            }
+            Self::SetNotehead => {
+                "Chord.setNotehead was deprecated on v11 and will disappear at or after v12. set the component notehead via c[query].notehead = ..."
+            }
+            Self::SetNoteheadFill => {
+                "Chord.setNoteheadFill was deprecated on v11 and will disappear at or after v12. set the component noteheadFill via c[query].noteheadFill = ..."
+            }
+            Self::SetStemDirection => {
+                "Chord.setStemDirection was deprecated on v11 and will disappear at or after v12. set the component stemDirection via c[query].stemDirection = ..."
+            }
+            Self::SetTie => {
+                "Chord.setTie was deprecated on v11 and will disappear at or after v12. index the component and set .tie, e.g. c[query].tie = ..."
+            }
+        }
+    }
+}
+
+/// Whether each accessor has warned yet in this process.
+static NOTE_ACCESSORS_WARNED: [std::sync::atomic::AtomicBool; NOTE_ACCESSOR_COUNT] =
+    [const { std::sync::atomic::AtomicBool::new(false) }; NOTE_ACCESSOR_COUNT];
+
+/// The once-per-process warning music21 gives for a deprecated accessor.
+fn warn_accessor(py: Python<'_>, accessor: NoteAccessor) -> PyResult<()> {
+    crate::warn_deprecated_once(
+        py,
+        &NOTE_ACCESSORS_WARNED[accessor as usize],
+        accessor.message(),
+    )
+}
+
 /// The duration a caller asked for by keyword, if they asked for one.
 ///
 /// music21 lets any note-like object be timed as it is built, and hands the
@@ -1763,23 +1846,19 @@ impl Chord {
         {
             return Ok(note.clone_ref(py));
         }
-        let wanted = if let Ok(name) = key.extract::<String>() {
-            name.to_uppercase()
-        } else {
-            music21_name(&pitch_from_any(key)?.name_with_octave())
+        let missing = || -> PyErr {
+            PyKeyError::new_err(format!(
+                "No note in the chord matches {}",
+                key.repr().map_or_else(|_| String::new(), |r| r.to_string())
+            ))
         };
+        let wanted = key_name(key)?.ok_or_else(missing)?;
         // Names compared as music21 writes them, which is how they are asked.
         notes
             .iter()
             .find(|note| music21_name(&note.borrow(py).inner.pitch().name_with_octave()) == wanted)
             .map(|note| note.clone_ref(py))
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "No note in the chord matches {}",
-                    key.repr()
-                        .map_or_else(|_| wanted.clone(), |r| r.to_string())
-                ))
-            })
+            .ok_or_else(missing)
     }
 
     fn __setitem__(
@@ -1793,11 +1872,12 @@ impl Chord {
             Ok(index) if index < 0 => index + length,
             Ok(index) => index,
             Err(_) => {
-                let wanted = if let Ok(name) = key.extract::<String>() {
-                    name.to_uppercase()
-                } else {
-                    music21_name(&pitch_from_any(key)?.name_with_octave())
-                };
+                let wanted = key_name(key)?.ok_or_else(|| {
+                    PyKeyError::new_err(format!(
+                        "No note in the chord matches {}",
+                        key.repr().map_or_else(|_| String::new(), |r| r.to_string())
+                    ))
+                })?;
                 self.inner
                     .notes()
                     .iter()
@@ -2920,6 +3000,7 @@ impl Chord {
         py: Python<'_>,
         pitchTarget: &Bound<'_, PyAny>,
     ) -> PyResult<Option<String>> {
+        warn_accessor(py, NoteAccessor::GetColor)?;
         let note = self.note_object(py, pitchTarget)?;
         let color = note.borrow(py).colour(py);
         Ok(color.or_else(|| self.colour(py)))
@@ -2932,6 +3013,7 @@ impl Chord {
         value: Option<String>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        warn_accessor(py, NoteAccessor::SetColor)?;
         match pitchTarget.filter(|target| !target.is_none()) {
             None => {
                 self.inner.set_color(value);
@@ -2946,6 +3028,7 @@ impl Chord {
     }
 
     fn getNotehead(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+        warn_accessor(py, NoteAccessor::GetNotehead)?;
         let note = self.note_object(py, p)?;
         let notehead = note.borrow(py).inner.notehead();
         Ok(notehead.as_str())
@@ -2958,11 +3041,13 @@ impl Chord {
         nh: Option<&str>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        warn_accessor(py, NoteAccessor::SetNotehead)?;
         let target = self.first_or_named(py, pitchTarget)?;
         target.borrow_mut(py).set_notehead(nh)
     }
 
     fn getNoteheadFill(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+        warn_accessor(py, NoteAccessor::GetNoteheadFill)?;
         let note = self.note_object(py, p)?;
         let fill = note.borrow(py).inner.notehead_fill();
         Ok(fill)
@@ -2975,11 +3060,13 @@ impl Chord {
         nh: &Bound<'_, PyAny>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        warn_accessor(py, NoteAccessor::SetNoteheadFill)?;
         let target = self.first_or_named(py, pitchTarget)?;
         target.borrow_mut(py).set_noteheadFill(nh)
     }
 
     fn getStemDirection(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<&'static str> {
+        warn_accessor(py, NoteAccessor::GetStemDirection)?;
         let note = self.note_object(py, p)?;
         let direction = note.borrow(py).inner.stem_direction();
         Ok(direction.as_str())
@@ -2992,11 +3079,13 @@ impl Chord {
         stemDirection: Option<&str>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        warn_accessor(py, NoteAccessor::SetStemDirection)?;
         let target = self.first_or_named(py, pitchTarget)?;
         target.borrow_mut(py).set_stemDirection(stemDirection)
     }
 
     fn getTie(&mut self, py: Python<'_>, p: &Bound<'_, PyAny>) -> PyResult<Option<Tie>> {
+        warn_accessor(py, NoteAccessor::GetTie)?;
         match self.note_object(py, p) {
             Ok(note) => {
                 let tie = note.borrow(py).inner.tie().cloned().map(Tie::wrap);
@@ -3013,6 +3102,7 @@ impl Chord {
         tieObjOrStr: &Bound<'_, PyAny>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        warn_accessor(py, NoteAccessor::SetTie)?;
         let target = self.first_or_named(py, pitchTarget)?;
         crate::note::Note::set_tie(target.bind(py), Some(tieObjOrStr))
     }

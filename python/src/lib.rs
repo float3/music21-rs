@@ -155,6 +155,38 @@ const MUSIC21_MODULES: [(&str, &[&str]); 35] = [
     ("music21.analysis.transposition", transposition::NAMES),
 ];
 
+/// music21's `Music21DeprecationWarning` where music21 is there, and
+/// Python's `DeprecationWarning` where not.
+fn deprecation_category(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    py.import("music21.exceptions21")
+        .and_then(|module| module.getattr("Music21DeprecationWarning"))
+        .or_else(|_| {
+            py.import("builtins")
+                .and_then(|module| module.getattr("DeprecationWarning"))
+        })
+}
+
+/// A deprecation warning on every call, as music21 gives one from inside a
+/// member rather than through `common.deprecated`.
+pub(crate) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    py.import("warnings")?
+        .call_method1("warn", (message, deprecation_category(py)?, 2))?;
+    Ok(())
+}
+
+/// music21's `common.deprecated`: one warning per process, the first time
+/// the member is called.
+pub(crate) fn warn_deprecated_once(
+    py: Python<'_>,
+    warned: &std::sync::atomic::AtomicBool,
+    message: &str,
+) -> PyResult<()> {
+    if warned.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        return Ok(());
+    }
+    warn_deprecated(py, message)
+}
+
 /// An argument that may not have been given at all, which is not the same
 /// thing as one given as `None`.
 ///

@@ -5788,3 +5788,58 @@ def test_a_key_signatures_count_and_flag_are_set_apart():
 
     with pytest.raises(TypeError):
         m.sharpsToPitch(None)
+
+
+def test_a_chords_per_note_accessors_warn_they_are_deprecated():
+    """music21 2e5a51ae7 deprecated ten per-note accessors of `Chord` in
+    v11, each warning once per process. Run apart, since a warning is
+    spent once given."""
+    code = """
+import warnings
+import music21_rs as m
+c = m.Chord("C4 E4 G4")
+p = c.pitches[0]
+calls = [
+    lambda: c.getColor(p), lambda: c.getNotehead(p),
+    lambda: c.getNoteheadFill(p), lambda: c.getStemDirection(p),
+    lambda: c.getTie(p), lambda: c.setColor("red", p),
+    lambda: c.setNotehead("x", p), lambda: c.setNoteheadFill(True, p),
+    lambda: c.setStemDirection("up", p), lambda: c.setTie("start", p),
+]
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    for call in calls:
+        call()
+        call()
+for warning in caught:
+    print(warning.message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert len(lines) == 10
+    assert lines[0] == (
+        "Chord.getColor was deprecated on v11 and will disappear at or after "
+        "v12. read a component color via c[query].style.color"
+    )
+    assert lines[9] == (
+        "Chord.setTie was deprecated on v11 and will disappear at or after "
+        "v12. index the component and set .tie, e.g. c[query].tie = ..."
+    )
+
+
+def test_a_chord_is_indexed_by_int_name_or_pitch_only():
+    """music21 f9f96d9a1: a chord's key is an int, a pitch name with its
+    octave, or a Pitch. A Note, or anything else, is a KeyError."""
+    chord = m.Chord("C#4 D-4 G4")
+    assert chord[1].pitch.name == "D-"
+    assert chord["g4"].pitch.name == "G"
+    assert chord[m.Pitch("C#4")].pitch.name == "C#"
+    for key in (m.Note("C#4"), None):
+        with pytest.raises(KeyError):
+            chord[key]
+    with pytest.raises(KeyError):
+        chord[m.Note("G4")] = "A4"
+    chord[m.Pitch("G4")] = "A4"
+    assert chord.pitchNames == ["C#", "D-", "A"]
