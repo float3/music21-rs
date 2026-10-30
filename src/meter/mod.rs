@@ -724,7 +724,9 @@ impl TimeSignature {
     ///   3/4 at 1:  element at 2.5  ->  (2.5 - 1.0) % 3.0 = 1.5
     /// ```
     pub fn offset_in_bar(&self, element_offset: FloatType, meter_offset: FloatType) -> FloatType {
-        let bar = self.bar_quarter_length();
+        // music21 wraps at `barDuration`, a length written over the meter's
+        // own included.
+        let bar = self.bar_duration().quarter_length();
 
         // music21 adds to test and subtracts to wrap; the two differ where
         // the meter does not start the bar.

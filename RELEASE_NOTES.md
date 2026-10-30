@@ -12,6 +12,12 @@
   `Chord('C4 E4 G4').pitches` drops from 26.8µs to 8.9µs. A note built
   later carries the pitch object already handed out.
 
+- **A placed element tells its beat.** `Placed::bar_offset`, `beat`,
+  `beat_string`, `beat_duration` and `beat_strength` are music21's
+  `getMeasureOffsetOrMeterModulusOffset`, `beat`, `beatStr`,
+  `beatDuration` and `beatStrength`, read from the meter in force with no
+  sites. `TimeSignature::offset_in_bar` wraps at a written bar length.
+
 - **music21 11.0.0b14, whose instrument module grew by ten classes and
   moved its percussion map into a mixin of its own.** `Instrument::of_kind`
   covers all 125 of music21's classes -- `BellTree`, `Cabasa`, `Claves`,

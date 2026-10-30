@@ -83,10 +83,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
    values and answers where an element sits with `Stream::placed`, the
    composite "Music21's Mistakes" (point 2) recommends over storing sites
    on objects. the wheel still keeps music21's sites for compatibility. this is what would let the facade stop building
-   `Music21Object`s. `getMeasureOffsetOrMeterModulusOffset` has moved as far
-   as it can without them: the arithmetic is the crate's
-   `TimeSignature::offset_in_bar`, and the wheel only asks music21 where the
-   element and the meter sit.
+   `Music21Object`s.
+
+   **measure-relative offsets and the beat are in.** a `Placed` now answers
+   music21's `getMeasureOffsetOrMeterModulusOffset` (`bar_offset`, a
+   measure's `paddingLeft` counted as music21 counts it) and the four
+   members music21 hangs on every object through its sites -- `beat`,
+   `beatStr`, `beatDuration`, `beatStrength` -- from the meter in force,
+   with no site anywhere. music21's own examples for them are its tests.
+   the wheel does not read them yet: its elements still answer through
+   music21's half, which is the step left. derivations are not started.
 
    It is also what the wheel waits on to carry `FiguredBassLine` and
    `Realization`, which build their bass line and realizations as music21
