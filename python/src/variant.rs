@@ -152,10 +152,19 @@ pub fn add_variant_py(
     replacementQuarterLength: Option<FloatType>,
     replacementDuration: Option<FloatType>,
 ) -> PyResult<()> {
-    // music21 renamed the length in v10.3 and keeps the old name beside
-    // it, keyword-only, until v12.
-    let replacementQuarterLength = replacementQuarterLength.or(replacementDuration);
     let py = s.py();
+    // music21 renamed the length in v10.3 and warns for the old name, on
+    // every call, until v12 takes it away.
+    if replacementDuration.is_some() {
+        crate::warn_deprecated(py, REPLACEMENT_DURATION_DEPRECATED)?;
+        if replacementQuarterLength.is_some() {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "addVariant() received both 'replacementQuarterLength' and its former \
+                 name 'replacementDuration'; pass only 'replacementQuarterLength'.",
+            ));
+        }
+    }
+    let replacementQuarterLength = replacementQuarterLength.or(replacementDuration);
     needs_variant_class(py)?;
     let mut stream = read(s)?;
     let contents = match sVariant.filter(|given| !given.is_none()) {
@@ -192,6 +201,11 @@ pub fn add_variant_py(
     s.call_method1("insert", (offset, made))?;
     Ok(())
 }
+
+/// What music21 says for `addVariant`'s old keyword.
+const REPLACEMENT_DURATION_DEPRECATED: &str = "addVariant()'s 'replacementDuration' keyword \
+     was renamed to 'replacementQuarterLength' in v10.3; 'replacementDuration' is deprecated \
+     and will be removed in v12.";
 
 /// That music21 is there to be asked for its `Variant` class, which every
 /// one of these needs: the answer is made of variants, and a stream built

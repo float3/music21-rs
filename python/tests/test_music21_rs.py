@@ -5885,3 +5885,15 @@ def test_an_abstract_scale_says_its_mode_as_music21_does():
         m.RagMarwa("C4"),
     ):
         assert made.abstract.mode is None
+
+
+def test_add_variant_warns_for_its_old_keyword():
+    """music21 v11: `addVariant`'s old `replacementDuration` warns on every
+    call, and giving it beside `replacementQuarterLength` is a TypeError.
+    Both are checked before music21 is needed."""
+    one = m.Stream()
+    with pytest.warns(Warning, match="'replacementDuration' is deprecated"):
+        with pytest.raises(TypeError, match="received both"):
+            m.addVariant(
+                one, 0.0, None, replacementQuarterLength=2.0, replacementDuration=1.0
+            )
