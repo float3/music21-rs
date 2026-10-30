@@ -26,6 +26,15 @@ DECISIONS.md; these are the changes they called for.
 
 ## added
 
+- **The wheel's streams write themselves**: `Stream.write` writes MusicXML
+  (made notation first, as music21 does), MIDI, text, LilyPond, braille,
+  RomanText and Volpiano to a path, an open file or a temporary file.
+
+- **The wheel's streams have music21's timespan tree.** `asTimespans`
+  answers a `TimespanTree` over the crate's, with its verticalities, the
+  voice-leading quartets between them and the timespans' parentage, the
+  stream's own notes handed back; a tree is read, not edited in place.
+
 - **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,
   matching music21's output; once installed they are no longer blocked.
 
