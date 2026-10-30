@@ -490,6 +490,13 @@ fixes found while porting went upstream:
 - [cuthbertLab/music21#2057](https://github.com/cuthbertLab/music21/pull/2057):
   `nextPitch` on a cyclical scale answering below the pitch it was given:
   F#3 after C4 on a scale of major thirds from D3.
+- [cuthbertLab/music21#2110](https://github.com/cuthbertLab/music21/pull/2110):
+  a missing comma that merged the NoteWorthy tenor and percussion clef names
+  (open).
+- [cuthbertLab/music21#2111](https://github.com/cuthbertLab/music21/pull/2111):
+  MusicXML export failing on an arpeggio mark over a single note (open).
+- [cuthbertLab/music21#2112](https://github.com/cuthbertLab/music21/pull/2112):
+  an empty `TimespanTree` yielding a verticality at `-inf` (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - corrections to the Xenharmonic Wiki's temperament pages, found while
