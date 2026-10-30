@@ -4467,6 +4467,20 @@ pub(crate) fn from_crate_as<'py>(
     stream: &RsStream,
     whose: Whose,
 ) -> PyResult<Bound<'py, PyAny>> {
+    Ok(build_as(py, stream, whose)?.made)
+}
+
+/// What a crate stream became, and what each of its leaves became, in the
+/// order the crate counts them: `None` for one this package has no class
+/// for and leaves out. Spanners name their notes by that order, so a leaf
+/// left out must still hold its place.
+struct Built<'py> {
+    made: Bound<'py, PyAny>,
+    leaves: Vec<Option<Py<PyAny>>>,
+}
+
+/// [`from_crate_as`], keeping what each leaf became.
+fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<Built<'py>> {
     let made = match whose {
         Whose::Wheel => {
             let class = match stream.kind() {
@@ -4494,8 +4508,23 @@ pub(crate) fn from_crate_as<'py>(
         }
     };
     let mut objects = Vec::new();
+    let mut leaves: Vec<Option<Py<PyAny>>> = Vec::new();
     for event in stream.events() {
-        if let Some(object) = element_object_as(py, event.element(), whose)? {
+        // A nested stream's leaves are its own, in its order; anything else
+        // is one leaf, built or left out.
+        let object = match event.element() {
+            StreamElement::Stream(inner) => {
+                let built = build_as(py, inner, whose)?;
+                leaves.extend(built.leaves);
+                Some(built.made)
+            }
+            element => {
+                let object = element_object_as(py, element, whose)?;
+                leaves.push(object.as_ref().map(|made| made.clone().unbind()));
+                object
+            }
+        };
+        if let Some(object) = object {
             objects.push((event.offset(), object));
         }
     }
@@ -4523,20 +4552,12 @@ pub(crate) fn from_crate_as<'py>(
     // goes in at nought, as music21 keeps one, holding the very objects
     // just built.
     if !stream.spanners().is_empty() {
-        let leaves: Vec<Py<PyAny>> = match whose {
-            Whose::Wheel => {
-                let cell = made.cast::<Stream>()?;
-                let held = cell.borrow();
-                leaves_of(py, &held)?
-            }
-            Whose::Music21 => music21_leaves_of(&made)?,
-        };
         for spanner in stream.spanners() {
             let joined: Vec<Py<PyAny>> = spanner
                 .spanned()
                 .iter()
                 .filter_map(|place| place.and_then(|place| leaves.get(place)))
-                .map(|object| object.clone_ref(py))
+                .filter_map(|leaf| leaf.as_ref().map(|object| object.clone_ref(py)))
                 .collect();
             let built = crate::spanner::Spanner::object_as(py, spanner, joined, whose)?;
             match whose {
@@ -4588,49 +4609,7 @@ pub(crate) fn from_crate_as<'py>(
         }
         _ => {}
     }
-    Ok(made)
-}
-
-/// Every leaf of a music21 stream, in the order the crate counts them:
-/// what `recurse` walks past the streams themselves.
-fn music21_leaves_of(stream: &Bound<'_, PyAny>) -> PyResult<Vec<Py<PyAny>>> {
-    let mut out = Vec::new();
-    for element in stream.call_method0("recurse")?.walk()? {
-        let element = element?;
-        let held = element
-            .getattr("isStream")
-            .and_then(|flag| flag.is_truthy())
-            .unwrap_or(false);
-        if held {
-            continue;
-        }
-
-        // music21 holds a measure's own barlines among its elements; the
-        // crate keeps them on the measure and counts no leaf for them.
-        let container = element.getattr("activeSite")?;
-        if !container.is_none() && !is_inner_barline(&container, &element)? && is_barline(&element)?
-        {
-            continue;
-        }
-        out.push(element.unbind());
-    }
-    Ok(out)
-}
-
-/// Every leaf of a stream of this package's, in the order the crate
-/// counts them: a nested stream's leaves where it holds one, itself
-/// otherwise. A spanner names what it joins by that position.
-fn leaves_of(py: Python<'_>, stream: &Stream) -> PyResult<Vec<Py<PyAny>>> {
-    let mut out = Vec::new();
-    for one in stream.sorted() {
-        let object = one.object.bind(py);
-        if let Ok(inner) = object.cast::<Stream>() {
-            out.extend(leaves_of(py, &inner.borrow())?);
-        } else {
-            out.push(one.object.clone_ref(py));
-        }
-    }
-    Ok(out)
+    Ok(Built { made, leaves })
 }
 
 /// The wheel's object for one element of a crate stream, where it has a

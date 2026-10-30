@@ -6202,6 +6202,34 @@ print(read.metadata.title, read.metadata.composer)
     assert done.stdout.splitlines() == ["Little Tune Somebody"]
 
 
+@pytest.mark.parametrize("extra", ["RehearsalMark", "Segno", "SystemLayout"])
+def test_a_slur_joins_its_notes_past_what_the_wheel_drops(extra):
+    """Something the wheel has no class for, standing before a slur, is
+    left out of what a reader hands back; the slur still joins its own
+    notes rather than the ones a place further on."""
+    music21_stream = pytest.importorskip("music21.stream")
+    from music21 import expressions, layout, note, repeat, spanner
+    from music21.musicxml.m21ToXml import GeneralObjectExporter
+
+    made = {
+        "RehearsalMark": lambda: expressions.RehearsalMark("A"),
+        "Segno": repeat.Segno,
+        "SystemLayout": lambda: layout.SystemLayout(isNew=True),
+    }[extra]
+    first = music21_stream.Measure(number=1)
+    first.insert(0, made())
+    first.append([note.Note(name) for name in ("C4", "E4", "G4", "B4")])
+    second = music21_stream.Measure(number=2)
+    second.append([note.Note(name) for name in ("D5", "F5", "A5", "C6")])
+    part = music21_stream.Part([first, second])
+    part.insert(0, spanner.Slur(first.notes[1], second.notes[1]))
+    written = GeneralObjectExporter(music21_stream.Score([part])).parse().decode()
+
+    read = m.from_musicxml(written)
+    slurs = [e for e in read.recurse() if type(e).__name__ == "Slur"]
+    assert [n.nameWithOctave for n in slurs[0].getSpannedElements()] == ["E4", "F5"]
+
+
 def test_a_key_signatures_count_and_flag_are_set_apart():
     """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
     a flag of its own, so writing pitches over a signature leaves it
