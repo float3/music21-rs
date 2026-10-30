@@ -24,6 +24,7 @@ use music21_rs::alpha::analysis::aligner::{ChangeOp, StreamAligner};
 use music21_rs::alpha::analysis::hasher::{HashReference, HashValue, Hasher, NoteHash};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::{Stream, StreamElement};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -309,12 +310,7 @@ fn the_crate_hashes_and_aligns_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
-            py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
-            c"alpha_parity_music21.py",
-            c"alpha_parity_music21",
-        )?;
+        let music21 = answers::helpers(py, MUSIC21, c"alpha_parity_music21.py", c"alpha_parity_music21", &["report"])?;
         let mut failures = Vec::new();
         let chosen: Vec<String> = match std::env::var("ALPHA_PARITY_SCORES") {
             Ok(list) => list

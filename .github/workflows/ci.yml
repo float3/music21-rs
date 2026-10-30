@@ -110,9 +110,16 @@ jobs:
           # `--all-targets` excludes doctests, so they need their own run.
           cargo test --workspace --doc $FLAGS
 
+  # Each test runs in a process of its own under nextest, four at a time on
+  # each of three runners, which share the tests out by a hash of their
+  # names, so a test stays on the same runner from run to run.
   python-parity:
-    name: Python Parity
+    name: Python Parity (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -127,10 +134,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      # python-parity is its own workspace, built into its own target.
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: xtask-python
+          shared-key: python-parity
+          workspaces: python-parity -> target
 
       # The doctest harness imports the whole of music21, which needs its
       # own dependencies; the table bridge stubs them out and does not.
@@ -139,14 +148,38 @@ jobs:
       - name: Install music21's dependencies
         run: python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors scipy
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Find the music21 commit
+        id: music21
+        shell: bash
+        run: echo "commit=$(git -C music21 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # music21's answers to the tests' questions, kept by music21 commit
+      # (`python-parity/src/answers.rs`). Each run saves what it has under a
+      # new key and the next run restores the newest for its commit and
+      # shard.
+      - name: Restore music21's answers
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/music21-answers
+          key: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
+
       - name: Run Python parity tests
         shell: bash
+        env:
+          MUSIC21_PARITY_ANSWERS: ${{ runner.temp }}/music21-answers
         run: |
           set -euo pipefail
 
           export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
           echo "Using PYO3_PYTHON=$PYO3_PYTHON"
-          cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
+          cargo nextest run --manifest-path python-parity/Cargo.toml \
+            --no-fail-fast --partition hash:${{ matrix.shard }}/3
 
   wheel:
     name: Python Wheel

@@ -20,6 +20,7 @@
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::notation::TieType;
 use music21_rs::{Stream, StreamElement, StreamEvent, StreamKind};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -373,11 +374,12 @@ fn the_crate_keeps_and_takes_out_elements_as_music21_does() {
     let (failures, compared) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
-        let music21 = PyModule::from_code(
+        let music21 = answers::helpers(
             py,
-            &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+            MUSIC21,
             c"stream_context_parity_music21.py",
             c"stream_context_parity_music21",
+            &["report"],
         )?;
         let mut failures = Vec::new();
         let chosen: Vec<String> = match std::env::var("STREAM_CONTEXT_PARITY_SCORES") {

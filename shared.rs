@@ -201,6 +201,30 @@ mod module {
             to_extend.push(venv_site);
         }
         path.call_method1("extend", (to_extend,))?;
+        private_temp_under_nextest(py)
+    }
+
+    /// Under nextest, test processes run side by side, and each gets an empty
+    /// temporary directory of its own for music21's parsed-score pickles, so
+    /// no process reads a pickle another wrote with its classes swapped, or
+    /// clears a cache another is reading. A directory belongs to one of
+    /// nextest's slots, which two running processes never share, and is
+    /// emptied when a process takes it. Under `cargo test` the processes run
+    /// one after another and share music21's own directory.
+    #[cfg(feature = "python")]
+    fn private_temp_under_nextest(py: Python<'_>) -> pyo3::PyResult<()> {
+        if std::env::var_os("NEXTEST").is_none() {
+            return Ok(());
+        }
+        let slot = std::env::var("NEXTEST_TEST_GLOBAL_SLOT")
+            .unwrap_or_else(|_| format!("pid-{}", std::process::id()));
+        let directory = std::env::temp_dir()
+            .join("music21-rs-parity")
+            .join(format!("slot-{slot}"));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory)?;
+        py.import("tempfile")?
+            .setattr("tempdir", directory.to_string_lossy().to_string())?;
         Ok(())
     }
 

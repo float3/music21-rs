@@ -20,6 +20,7 @@ use music21_rs::musicxml::from_musicxml;
 use music21_rs::omr::correctors::{MeasureRelationship, ScoreCorrector};
 use music21_rs::omr::evaluators::{auto_correlation_best_measure, evaluate_correcting_model};
 use music21_rs::{Stream, StreamElement};
+use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -343,11 +344,12 @@ fn first_difference(ours: &[String], theirs: &[String]) -> String {
 fn load<'py>(py: Python<'py>, root: &std::path::Path) -> PyResult<Bound<'py, PyModule>> {
     init_py(py)?;
     add_dependency_venv(py, root)?;
-    PyModule::from_code(
+    answers::helpers(
         py,
-        &std::ffi::CString::new(MUSIC21).expect("no nul in the helper"),
+        MUSIC21,
         c"omr_parity_music21.py",
         c"omr_parity_music21",
+        &["auto", "k525", "report"],
     )
 }
 
