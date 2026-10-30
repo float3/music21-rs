@@ -40,6 +40,13 @@ and `testRagMarwaC` count both answers. the fork the submodule pins
 answers by the same rule (`b68a661af`), so `music21-suite` runs with no
 expected divergences; following upstream instead would bring both back.
 
+*debated 2026-10-30, kept, with one exception.* a lookup that answers
+differently each call cannot be compared, and where a caller wants chance
+the crate takes a chooser or a seed. but ids counted from one in every
+process named two workers' first parts alike, so an id's first half is now
+drawn once per process and only its second half counts. the fork commit
+behind Rag Marwa's rule (`b68a661af`) has not been offered upstream.
+
 **where music21's author names a mistake, the crate does not repeat it.**
 *Changed 2026-09-25.* Cuthbert's "Music21's Mistakes"
 (`music21/documentation/source/developerReference/startingOver.ipynb`) lists
@@ -54,6 +61,14 @@ stored on it as a site.
 `-` (`python/src/spelling.rs`), and a name built anywhere else in the wheel
 that skips that module leaks `b` into music21's output. the parity suites
 catch it: they compare in music21's spelling.
+
+*debated 2026-10-30, kept.* each change is an item of Cuthbert's own list,
+and `-` would make B flat 1 (`B-1`) and B in octave -1 the same name; going
+back would break some 500 call sites a second time. the cost the other side
+found was real but local: the parity tests held seven copies of the
+respelling, now one (`utils::music21_name`), and `flat_spelling_parity`
+asks some thousand names of the wheel and music21 alike and fails on a `b`
+music21 does not write itself.
 
 **nothing is cached.** a value that answers the same question twice does the
 arithmetic twice. music21 memoizes on the object; this does not.
@@ -256,6 +271,15 @@ written through one of them sticks.
 *costs:* reference cycles that Python's collector cannot see through Rust
 fields — every such class implements `__traverse__`/`__clear__` for exactly
 this reason, and before that every note that went into a stream leaked.
+
+*debated 2026-10-30, kept.* sixty of music21's passing docstrings change a
+note's duration, volume or beams through the object it hands back, and
+seventy-seven check `is`; values would lose those writes silently. what the
+debate found instead were cycles nobody had shown the collector: a note,
+chord or rest whose editorial points back at it, a slur its note keeps, a
+Clercq-Temperley song and its rules. those traverse now, and a test scans
+every class holding a Python object: each traverses it or gives the reason
+no cycle runs through it.
 
 **where music21's class is the better one, music21's is the one that
 answers.** `style.Style` is the long-standing example -- a note's `style` is
