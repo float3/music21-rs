@@ -628,6 +628,53 @@ def test_a_measures_barlines_are_in_its_listings():
     assert len(part.recurse().getElementsByClass("Barline")) == 2
 
 
+def test_a_flattened_parts_barlines_stand_nowhere_again():
+    """Flattening lists a measure's barlines, as music21's does; read back
+    out of a flat stream they are no barline inside a measure, so music21's
+    `makeMeasures` and braille, which pass over them, are matched."""
+    bar = m.Measure()
+    bar.append(m.Note("C4", quarterLength=4))
+    bar.leftBarline = "heavy"
+    bar.rightBarline = "double"
+    part = m.Part()
+    part.append([bar, m.Measure([m.Note("D4", quarterLength=4)])])
+    flat = part.flatten()
+
+    remade = flat.makeMeasures().getElementsByClass("Measure")
+    # music21 counts [3, 2]: its `len` holds the closing barline.
+    assert [len(each) for each in remade] == [3, 1]
+    assert [str(each.rightBarline) for each in remade] == [
+        "None",
+        "<music21.bar.Barline type=final>",
+    ]
+    # music21: two whole notes, the last measure closed and nothing between.
+    assert m.objectToBraille(flat) == "⠀⠀⠀⠼⠙⠲⠀⠀⠀\n⠼⠁⠀⠐⠽⠀⠵⠣⠅"
+
+
+def test_a_measures_barlines_are_found_where_they_are_listed():
+    """What the listings show, the lookups find: music21's answers for a
+    measure's own barlines, the left at nought, the right at its end."""
+    bar = m.Measure()
+    bar.append(m.Note("C4", quarterLength=4))
+    bar.rightBarline = m.Barline("final")
+    bar.leftBarline = m.Barline("heavy")
+    right = bar.rightBarline
+    named = lambda found: [type(each).__name__ for each in found]
+
+    assert bar.index(right) == 2
+    assert float(bar.elementOffset(right)) == 4.0
+    assert right in bar
+    assert named(bar.getElementsByOffset(4.0)) == ["Barline"]
+    assert named(bar.getElementsByOffset(0.0)) == ["Barline", "Note"]
+    assert bar.getElementAtOrBefore(4.0) is right
+    assert bar.containerInHierarchy(right) is bar
+    assert named(bar.iter()) == ["Barline", "Note", "Barline"]
+
+    bar.remove(right)
+    assert bar.rightBarline is None
+    assert named(bar.getElementsByClass("Barline")) == ["Barline"]
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.

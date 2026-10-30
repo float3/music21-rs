@@ -498,19 +498,39 @@ impl Stream {
 
     /// Where an object stands in this stream, as a number.
     fn offset_of(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
-        self.held
+        let py = element.py();
+        if let Some(held) = self
+            .held
             .iter()
-            .find(|held| held.object.bind(element.py()).is(element))
-            .map(|held| held.offset)
-            .ok_or_else(|| {
-                StreamException::new_err(format!(
-                    "an entry for this object {} is not stored in this stream",
-                    element
-                        .repr()
-                        .map(|text| text.to_string())
-                        .unwrap_or_default()
-                ))
-            })
+            .find(|held| held.object.bind(py).is(element))
+        {
+            return Ok(held.offset);
+        }
+
+        // A measure's own barlines, at nought and at its end.
+        if self
+            .left_barline
+            .as_ref()
+            .is_some_and(|bar| bar.bind(py).is(element))
+        {
+            return Ok(0.0);
+        }
+        if self
+            .right_barline
+            .as_ref()
+            .is_some_and(|bar| bar.bind(py).is(element))
+        {
+            return self.end(py);
+        }
+        None.ok_or_else(|| {
+            StreamException::new_err(format!(
+                "an entry for this object {} is not stored in this stream",
+                element
+                    .repr()
+                    .map(|text| text.to_string())
+                    .unwrap_or_default()
+            ))
+        })
     }
 
     /// What this stream holds, in music21's order.
@@ -551,12 +571,7 @@ impl Stream {
         strictly: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         let py = slf.py();
-        let listed: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
+        let listed = slf.borrow().placed_listed(py)?;
         let mut nearest: Option<(f64, Bound<'py, PyAny>)> = None;
         for (at, object) in listed {
             if at > offset || (strictly && at == offset) {
@@ -743,6 +758,16 @@ impl Stream {
             }
         }
         Bound::new(py, out)
+    }
+
+    /// [`Stream::listed`] as offsets and objects, for the lookups that
+    /// must find what the listings show.
+    fn placed_listed(&self, py: Python<'_>) -> PyResult<Vec<(f64, Py<PyAny>)>> {
+        Ok(self
+            .listed(py)?
+            .into_iter()
+            .map(|(offset, object, _)| (offset, object))
+            .collect())
     }
 
     /// What this stream holds, in order, with a measure's own barlines
@@ -1082,6 +1107,25 @@ impl Stream {
 
     /// Takes an object out, found by identity.
     fn remove(&mut self, target: &Bound<'_, PyAny>) -> PyResult<()> {
+        // A measure's own barline, which the listings show, is taken off.
+        let py = target.py();
+        if self
+            .left_barline
+            .as_ref()
+            .is_some_and(|bar| bar.bind(py).is(target))
+        {
+            self.left_barline = None;
+            return Ok(());
+        }
+        if self
+            .right_barline
+            .as_ref()
+            .is_some_and(|bar| bar.bind(py).is(target))
+        {
+            self.right_barline = None;
+            return Ok(());
+        }
+
         match self
             .held
             .iter()
@@ -1101,9 +1145,9 @@ impl Stream {
     /// Where an object stands among `elements`, found by identity:
     /// music21's `index`.
     fn index(&self, el: &Bound<'_, PyAny>) -> PyResult<usize> {
-        self.sorted()
+        self.placed_listed(el.py())?
             .iter()
-            .position(|held| held.object.bind(el.py()).is(el))
+            .position(|(_, object)| object.bind(el.py()).is(el))
             .ok_or_else(|| {
                 let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
                 StreamException::new_err(format!("cannot find object ({shown}) in Stream"))
@@ -1186,11 +1230,7 @@ impl Stream {
     /// This stream's own elements, in order, as music21's `iter` hands
     /// them: a `StreamIterator`, which filters as `recurse` does.
     fn iter<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Walked>> {
-        let found = self
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
+        let found = self.placed_listed(py)?;
         Bound::new(py, Walked::of(found, self.kind))
     }
 
@@ -1206,9 +1246,9 @@ impl Stream {
         let py = slf.py();
         let held: Vec<Py<PyAny>> = slf
             .borrow()
-            .sorted()
-            .iter()
-            .map(|held| held.object.clone_ref(py))
+            .placed_listed(py)?
+            .into_iter()
+            .map(|(_, object)| object)
             .collect();
         if held.iter().any(|object| object.bind(py).is(el)) {
             return Ok(Some(slf.clone().into_any()));
@@ -3186,10 +3226,12 @@ impl Stream {
         Ok(self.elements(py)?.try_iter()?.into_any())
     }
 
-    fn __contains__(&self, element: &Bound<'_, PyAny>) -> bool {
-        self.held
+    fn __contains__(&self, element: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let py = element.py();
+        Ok(self
+            .placed_listed(py)?
             .iter()
-            .any(|held| held.object.bind(element.py()).is(element))
+            .any(|(_, object)| object.bind(py).is(element)))
     }
 
     fn __getitem__<'py>(
@@ -3377,12 +3419,7 @@ impl Stream {
         };
         // The offsets live beside the objects, so the span is asked of
         // each rather than read into the crate.
-        let placed: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(slf.py())))
-            .collect();
+        let placed = slf.borrow().placed_listed(slf.py())?;
         let py = slf.py();
         let mut out = Self::empty(slf.borrow().kind);
         for (offset, object) in placed {
