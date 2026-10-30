@@ -61,6 +61,20 @@ impl Editorial {
 
 #[pymethods]
 impl Editorial {
+    /// What it holds may point back at the note it is on (`n.editorial.x
+    /// = n`), a cycle through Rust that Python's collector frees only if it
+    /// is shown the dictionary.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.held)
+    }
+
+    fn __clear__(&mut self) {
+        Python::attach(|py| self.held.bind(py).clear());
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn make(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {

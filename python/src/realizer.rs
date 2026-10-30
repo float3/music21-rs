@@ -349,7 +349,7 @@ impl Realization {
     }
 
     #[setter]
-    fn set_keyboardStyleOutput(&mut self, value: bool) {
+    fn set_keyboardStyleOutput(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_keyboard_style_output(value);
     }
 

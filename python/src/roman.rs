@@ -1346,7 +1346,10 @@ impl RomanNumeral {
 
     /// music21's `isNeapolitan`.
     #[pyo3(signature = (require1stInversion = true))]
-    fn isNeapolitan(&self, require1stInversion: bool) -> bool {
+    fn isNeapolitan(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] require1stInversion: bool,
+    ) -> bool {
         self.inner.is_neapolitan(require1stInversion)
     }
 
@@ -1359,7 +1362,7 @@ impl RomanNumeral {
     fn isMixture(
         slf: &Bound<'_, Self>,
         py: Python<'_>,
-        evaluateSecondaryNumeral: bool,
+        #[pyo3(from_py_with = crate::truthy)] evaluateSecondaryNumeral: bool,
     ) -> PyResult<bool> {
         let key = Self::get_key(slf, py)?;
         let mode = key
@@ -1382,7 +1385,7 @@ impl RomanNumeral {
         slf: &Bound<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<Self>>> {
         let interval = crate::interval::interval_from_any(value)?;
         let (moved, octave) = {
@@ -1428,7 +1431,7 @@ impl RomanNumeral {
     }
 
     #[setter]
-    fn set_followsKeyChange(&mut self, value: bool) {
+    fn set_followsKeyChange(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.follows_key_change = value;
     }
 
@@ -1504,7 +1507,7 @@ impl RomanNumeral {
     }
 
     #[setter]
-    fn set_writeAsChord(&mut self, value: bool) {
+    fn set_writeAsChord(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.write_as_chord = value;
     }
 
@@ -1661,7 +1664,7 @@ pub(crate) fn romanNumeralFromChord(
     py: Python<'_>,
     chordObj: &Bound<'_, PyAny>,
     keyObj: Option<&Bound<'_, PyAny>>,
-    preferSecondaryDominants: bool,
+    #[pyo3(from_py_with = crate::truthy)] preferSecondaryDominants: bool,
 ) -> PyResult<Py<RomanNumeral>> {
     if preferSecondaryDominants {
         return Err(pyo3::exceptions::PyNotImplementedError::new_err(
@@ -1835,7 +1838,7 @@ fn correctRNAlterationForMinor<'py>(
     py: Python<'py>,
     figureTuple: &Bound<'py, PyAny>,
     keyObj: &Bound<'py, PyAny>,
-    chordHasMajorThird: bool,
+    #[pyo3(from_py_with = crate::truthy)] chordHasMajorThird: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (degree, given_alter, prefix): (u8, Bound<'py, PyAny>, String) = figureTuple.extract()?;
     let alter: f64 = given_alter.extract()?;

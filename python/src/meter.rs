@@ -170,7 +170,7 @@ impl TimeSignature {
     }
 
     #[setter]
-    fn set_symbolizeDenominator(&mut self, symbolize: bool) {
+    fn set_symbolizeDenominator(&mut self, #[pyo3(from_py_with = crate::truthy)] symbolize: bool) {
         self.inner.set_symbolize_denominator(symbolize);
     }
 
@@ -323,7 +323,7 @@ impl TimeSignature {
     }
 
     #[setter]
-    fn set_summedNumerator(&mut self, value: bool) {
+    fn set_summedNumerator(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_summed_numerator(value);
     }
 
@@ -598,7 +598,7 @@ impl TimeSignature {
     fn averageBeatStrength(
         &self,
         streamIn: &Bound<'_, PyAny>,
-        notesOnly: bool,
+        #[pyo3(from_py_with = crate::truthy)] notesOnly: bool,
     ) -> PyResult<FloatType> {
         let elements = if notesOnly {
             streamIn.getattr("notes")?
@@ -638,8 +638,8 @@ impl TimeSignature {
         &self,
         qLenPos: FloatType,
         level: u32,
-        forcePositionMatch: bool,
-        permitMeterModulus: bool,
+        #[pyo3(from_py_with = crate::truthy)] forcePositionMatch: bool,
+        #[pyo3(from_py_with = crate::truthy)] permitMeterModulus: bool,
     ) -> PyResult<FloatType> {
         self.inner
             .accent_weight_at_level(
@@ -1516,7 +1516,11 @@ impl MeterSequence {
     }
 
     #[setter]
-    fn set_summedNumerator(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+    fn set_summedNumerator(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         let mut span = self.held.read(py)?;
         span.set_summed_numerator(value);
         self.held.write(py, span)
@@ -1550,7 +1554,7 @@ impl MeterSequence {
         &mut self,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        loadDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] loadDefault: bool,
     ) -> PyResult<()> {
         let mut span = self.held.read(py)?;
         if let Ok(count) = value.extract::<usize>() {
@@ -1641,7 +1645,12 @@ impl MeterSequence {
 
     /// music21's `getLevel`: one level of this sequence, as a sequence.
     #[pyo3(signature = (level = 0, flat = true))]
-    fn getLevel(&self, py: Python<'_>, level: usize, flat: bool) -> PyResult<Py<PyAny>> {
+    fn getLevel(
+        &self,
+        py: Python<'_>,
+        level: usize,
+        #[pyo3(from_py_with = crate::truthy)] flat: bool,
+    ) -> PyResult<Py<PyAny>> {
         let span = self
             .held
             .read(py)?
@@ -1677,7 +1686,7 @@ impl MeterSequence {
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
         partitionRequest: Option<&Bound<'_, PyAny>>,
-        autoWeight: bool,
+        #[pyo3(from_py_with = crate::truthy)] autoWeight: bool,
         targetWeight: Option<FloatType>,
     ) -> PyResult<()> {
         let mut loaded = Self::new(py, Some(value), partitionRequest)?
@@ -1707,7 +1716,7 @@ impl MeterSequence {
         &mut self,
         py: Python<'_>,
         countRequest: usize,
-        loadDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] loadDefault: bool,
     ) -> PyResult<()> {
         let mut span = self.held.read(py)?;
         span.partition_by_count(countRequest, loadDefault)
@@ -1787,7 +1796,11 @@ impl MeterSequence {
     /// The list is kept, so asking twice answers the same objects, which is
     /// what music21 does and what its own docstrings check.
     #[pyo3(signature = (levelCount, flat = true))]
-    fn getLevelList(slf: &Bound<'_, Self>, levelCount: usize, flat: bool) -> PyResult<Py<PyAny>> {
+    fn getLevelList(
+        slf: &Bound<'_, Self>,
+        levelCount: usize,
+        #[pyo3(from_py_with = crate::truthy)] flat: bool,
+    ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let key = (levelCount, flat).into_pyobject(py)?;
         let cache = slf.borrow_mut()._levelListCache(py)?;
@@ -1888,7 +1901,7 @@ impl MeterSequence {
         &self,
         py: Python<'_>,
         qLenPos: FloatType,
-        permitMeterModulus: bool,
+        #[pyo3(from_py_with = crate::truthy)] permitMeterModulus: bool,
     ) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
         let (start, end) = self
             .held
@@ -1911,7 +1924,7 @@ impl MeterSequence {
         py: Python<'_>,
         depth: usize,
         firstPartitionForm: Option<&Bound<'_, PyAny>>,
-        normalizeDenominators: bool,
+        #[pyo3(from_py_with = crate::truthy)] normalizeDenominators: bool,
     ) -> PyResult<()> {
         // music21 takes either a number to divide by first or a sequence
         // whose first level is loaded as the first partition, parts of
@@ -2004,7 +2017,7 @@ impl MeterSequence {
         &self,
         py: Python<'_>,
         qLenPos: FloatType,
-        includeCoincidentBoundaries: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeCoincidentBoundaries: bool,
     ) -> PyResult<Vec<usize>> {
         // music21 takes the flag and passes it to `offsetToIndex`, which does
         // nothing with it either.

@@ -620,7 +620,11 @@ impl GenericInterval {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    fn transposePitch(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn transposePitch(
+        &self,
+        p: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let (pitch, inferred) = pitch_and_inferred(p)?;
         let transposed = self.inner.transpose_pitch(&pitch).map_err(interval_error)?;
         deliver_pitch(p, transposed, inferred, inPlace)
@@ -631,7 +635,7 @@ impl GenericInterval {
         &self,
         p: &Bound<'_, PyAny>,
         k: Option<&Bound<'_, PyAny>>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let (pitch, inferred) = pitch_and_inferred(p)?;
         let key_signature = key_signature_from_any(k)?;
@@ -864,7 +868,11 @@ impl DiatonicInterval {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    fn transposePitch(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn transposePitch(
+        &self,
+        p: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let (pitch, inferred) = pitch_and_inferred(p)?;
         let transposed = self.inner.transpose_pitch(&pitch).map_err(interval_error)?;
         deliver_pitch(p, transposed, inferred, inPlace)
@@ -1041,7 +1049,11 @@ impl ChromaticInterval {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    fn transposePitch(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn transposePitch(
+        &self,
+        p: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let (pitch, _) = pitch_and_inferred(p)?;
         let transposed = self.inner.transpose_pitch(&pitch).map_err(interval_error)?;
         deliver_pitch(p, transposed, true, inPlace)
@@ -1588,9 +1600,9 @@ impl Interval {
     fn transposePitch(
         &self,
         p: &Bound<'_, PyAny>,
-        reverse: bool,
+        #[pyo3(from_py_with = crate::truthy)] reverse: bool,
         maxAccidental: Option<i32>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let (pitch, inferred) = pitch_and_inferred(p)?;
         let transposed = self
@@ -1991,7 +2003,7 @@ fn get_absolute_lower_note<'py>(
 fn transpose_pitch(
     pitch1: &Bound<'_, PyAny>,
     interval1: &Bound<'_, PyAny>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Option<Pitch>> {
     let (pitch, inferred) = pitch_and_inferred(pitch1)?;
     let transposed = transpose_pitch_by_any(&pitch, interval1)?;

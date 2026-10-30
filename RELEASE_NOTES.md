@@ -1,3 +1,72 @@
+# Unreleased
+
+Seven design questions were debated and their verdicts recorded in
+DECISIONS.md; these are the changes they called for.
+
+## changed
+
+- **Once installed, the readers hand back music21's own streams.** After
+  `install_into_music21()`, `from_musicxml`, `from_humdrum`,
+  `from_tiny_notation` and the rest build music21's streams, so a note
+  answers `offset`, `beat` and `measureNumber`, and the score nests in a
+  `Score` and writes through music21. Standalone they hand back the wheel's
+  own, and music21 merely being importable changes nothing.
+
+- **Flags are read for their truth.** Every flag the wheel takes accepts
+  `1`, `0` and `None` as music21 does; a string is still a `TypeError`.
+
+## added
+
+- **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,
+  matching music21's output; once installed they are no longer blocked.
+
+- **A measure's barlines are listed where music21 lists them**:
+  `getElementsByClass`, `getElementsNotOfClass`, `flatten` and `recurse`
+  include its left barline first and its right one last.
+
+## fixed
+
+- **Appending to a wheel stream is ten times faster** on long streams:
+  356µs to 35µs per note at 1,600 notes.
+
+- **Read back once installed, a slur crossing a barline joins its own
+  notes**, and slurs and text expressions are classes music21's streams
+  hold; before, they were refused.
+
+- **`template(removeAll=True)` takes a measure's barlines too**, as
+  music21's does.
+
+- **A blocked member says it is not ported to music21-rs**, rather than
+  reading like a typo.
+
+- **Chord analyses find the root once**: an augmented-sixth test runs in
+  430-560ns rather than 1.3µs.
+
+- **A spanner keeps its notes past what the wheel leaves out.** A rehearsal
+  mark, segno or layout before a slur moved every later spanner one note
+  on: none of Der Lindenbaum's 65 matched music21's, and 63 do now.
+
+- **A score read once installed keeps its metadata**, which music21's
+  setter had dropped without a word, so an opus is searchable again.
+
+- **A measure's barlines are found where they are listed**: `index`,
+  `elementOffset`, `in`, `getElementsByOffset`, `getElementAtOrBefore`,
+  `containerInHierarchy`, `iter` and `remove` see them too.
+
+- **`make_measures` puts no loose barline into a measure**, as music21's
+  passes over them, so a flattened part made into measures again, and its
+  braille, hold no stray barline.
+
+- **Part and instrument ids differ between processes**: their first half is
+  drawn once per process, so two workers' scores do not share part ids.
+
+- **Objects pointing back at their owners are freed**: a note, chord or rest
+  whose editorial names it, a slur its note keeps, and a Clercq-Temperley
+  song were never collected.
+
+- **`sortByCreationTime='reverse'` and `atSoundingPitch=1` are taken**, as
+  music21 takes them.
+
 # music21-rs 0.11.0
 
 The Python package carries much more of music21: braille, OMR, the `alpha`

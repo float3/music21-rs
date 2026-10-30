@@ -18,15 +18,8 @@ pub mod doctest;
 pub mod suite;
 
 /// A name the crate writes with `b` for flat, as music21 writes it with
-/// `-`: `Bb4` is `B-4`, `bb` (B-flat minor) `b-`. The first letter is the
-/// step; every `b` after it is a flat. The fixtures hold music21's.
-pub fn music21_name(name: &str) -> String {
-    let mut letters = name.chars();
-    let Some(step) = letters.next() else {
-        return String::new();
-    };
-    format!("{step}{}", letters.as_str().replace('b', "-"))
-}
+/// `-`; shared with `harte`'s parity test through `utils`.
+pub use utils::music21_name;
 
 /// A chord-symbol figure as music21 writes it: `Bbm7/Ab` is `B-m7/A-`,
 /// `CaddDb` `CaddD-`. The root opens the figure, the bass follows `/`, and

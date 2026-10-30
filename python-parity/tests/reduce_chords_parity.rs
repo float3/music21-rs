@@ -30,6 +30,7 @@ use music21_rs::analysis::reduce_chords::{ReductionOptions, reduce_chords};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::{Stream, StreamElement};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
@@ -207,12 +208,14 @@ fn listed(reduction: &Stream) -> String {
                         chord
                             .pitches()
                             .iter()
-                            .map(music21_name)
+                            .map(|pitch| music21_name(&pitch.name_with_octave()))
                             .collect::<Vec<String>>()
                             .join(" "),
                     )),
                     StreamElement::Rest(_) => Some(("Rest", String::new())),
-                    StreamElement::Note(note) => Some(("Note", music21_name(note.pitch()))),
+                    StreamElement::Note(note) => {
+                        Some(("Note", music21_name(&note.pitch().name_with_octave())))
+                    }
                     _ => None,
                 };
                 match sounding {
@@ -256,15 +259,6 @@ fn named(barline: &music21_rs::bar::Barline) -> &'static str {
     } else {
         "Barline"
     }
-}
-
-/// A note as music21 names it: the crate spells a flat `b` where music21
-/// spells it `-`, and the step letter may be a `B`.
-fn music21_name(pitch: &music21_rs::Pitch) -> String {
-    let mut name = pitch.name_with_octave();
-    let accidental = name.split_off(1);
-    name.push_str(&accidental.replace('b', "-"));
-    name
 }
 
 /// Both sides of a difference, left where a reader can look at them.

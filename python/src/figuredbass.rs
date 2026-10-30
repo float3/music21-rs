@@ -122,7 +122,7 @@ impl Modifier {
         &self,
         py: Python<'_>,
         pitchToAlter: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Py<PyAny>> {
         let modified = self
             .inner
@@ -207,7 +207,11 @@ impl Figure {
 
     #[new]
     #[pyo3(signature = (number = Some(1), modifierString = Some(String::new()), *, extender = false))]
-    fn new(number: Option<i32>, modifierString: Option<String>, extender: bool) -> PyResult<Self> {
+    fn new(
+        number: Option<i32>,
+        modifierString: Option<String>,
+        #[pyo3(from_py_with = crate::truthy)] extender: bool,
+    ) -> PyResult<Self> {
         let modifier = RsModifier::new(modifierString.as_deref()).map_err(modifier_error)?;
         Ok(Self {
             inner: RsFigure::new(number, modifier, extender),

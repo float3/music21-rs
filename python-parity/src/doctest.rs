@@ -18,13 +18,15 @@
 //!
 //! Each docstring is one unit: it passes when all of its examples pass.
 //! `python-parity/doctest/<name>.toml` lists the docstrings that pass. The run
-//! fails when one of those stops passing, and says so by name; a docstring
-//! that starts passing is reported but not required, so the list only ever
-//! needs to grow. `UPDATE_DOCTEST_EXPECTATIONS=1` rewrites the list from the
-//! current run. The full doctest report of every failing docstring is written
-//! to `target/doctest_<name>.log`.
+//! fails both ways, and says so by name: when a listed docstring stops
+//! passing, and when one passes that is not listed, so the list is always
+//! exactly what passes. `UPDATE_DOCTEST_EXPECTATIONS=1` rewrites the list from
+//! the current run. An optional `[not_passing]` table maps a docstring to the
+//! reason it fails on purpose; the rewrite keeps it, and a failure needs no
+//! entry there. The full doctest report of every failing docstring is
+//! written to `target/doctest_<name>.log`.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use pyo3::prelude::*;
@@ -115,6 +117,100 @@ pub use music21_rs_python::windowed::NAMES as WINDOWED_NAMES;
 struct Expectations {
     #[serde(default)]
     passing: Vec<String>,
+    /// Docstrings that fail on purpose, each with its reason. Only the
+    /// deliberate ones are here; any other failure is simply unlisted.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    not_passing: BTreeMap<String, String>,
+}
+
+/// Where one run and the listed expectations disagree.
+#[derive(Debug, Default, PartialEq)]
+struct Mismatch {
+    /// Listed as passing, and failed.
+    regressions: Vec<String>,
+    /// Passed, and not listed as passing.
+    unlisted: Vec<String>,
+}
+
+impl Mismatch {
+    fn is_empty(&self) -> bool {
+        self.regressions.is_empty() && self.unlisted.is_empty()
+    }
+
+    /// The failure message, naming every docstring on either side.
+    fn message(&self, expected: &Expectations, path: &Path, log_path: &Path) -> String {
+        let mut text = String::new();
+
+        if !self.regressions.is_empty() {
+            text.push_str(&format!(
+                "{} docstrings that used to pass against the crate now fail:\n    {}\nsee {}\n",
+                self.regressions.len(),
+                self.regressions.join("\n    "),
+                log_path.display()
+            ));
+        }
+
+        if !self.unlisted.is_empty() {
+            // A docstring kept as a deliberate non-pass says so, since that
+            // entry is now stale too.
+            let names: Vec<String> = self
+                .unlisted
+                .iter()
+                .map(|name| match expected.not_passing.get(name) {
+                    Some(reason) => format!("{name} (listed as not passing: {reason})"),
+                    None => name.clone(),
+                })
+                .collect();
+            text.push_str(&format!(
+                "{} docstrings pass that {} does not list; rerun with UPDATE_DOCTEST_EXPECTATIONS=1 to record them:\n    {}\n",
+                names.len(),
+                path.display(),
+                names.join("\n    ")
+            ));
+        }
+        text
+    }
+}
+
+/// Compares the docstrings that passed with the listed ones, both ways.
+fn compare(expected: &Expectations, passing: &BTreeSet<&str>) -> Mismatch {
+    let regressions = expected
+        .passing
+        .iter()
+        .filter(|name| !passing.contains(name.as_str()))
+        .cloned()
+        .collect();
+    let unlisted = passing
+        .iter()
+        .filter(|name| !expected.passing.iter().any(|known| known == *name))
+        .map(|name| name.to_string())
+        .collect();
+    Mismatch {
+        regressions,
+        unlisted,
+    }
+}
+
+/// The expectations to write after a run: what passed, and the deliberate
+/// non-passes of `old` that still fail.
+fn rewritten(old: Expectations, passing: &BTreeSet<&str>) -> Expectations {
+    let not_passing = old
+        .not_passing
+        .into_iter()
+        .filter(|(name, _)| !passing.contains(name.as_str()))
+        .collect();
+    Expectations {
+        passing: passing.iter().map(|name| name.to_string()).collect(),
+        not_passing,
+    }
+}
+
+/// Reads `python-parity/doctest/<name>.toml`, or nothing listed when absent.
+fn read_expectations(path: &Path) -> Expectations {
+    match std::fs::read_to_string(path) {
+        Ok(text) => toml::from_str(&text).expect("doctest expectations parse"),
+        Err(_) => Expectations::default(),
+    }
 }
 
 /// The counts of one module's run, written beside the log as
@@ -376,8 +472,8 @@ fn run_doctests(py: Python<'_>, module: &str, swaps: &[(&str, &[&str])]) -> PyRe
 }
 
 /// Runs the doctests of `module` (`"music21.pitch"`) with the swapped names
-/// in place, records the report under `name` (`"pitch"`), and panics on a
-/// regression against `python-parity/doctest/<name>.toml`.
+/// in place, records the report under `name` (`"pitch"`), and panics when
+/// the run and `python-parity/doctest/<name>.toml` disagree either way.
 ///
 /// The caller must have registered the facade module with
 /// `pyo3::append_to_inittab!(music21_rs_facade)` before the interpreter
@@ -438,12 +534,12 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     );
 
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("doctest/{name}.toml"));
+    let expected = read_expectations(&path);
+
     if std::env::var("UPDATE_DOCTEST_EXPECTATIONS").is_ok_and(|v| v == "1") {
-        let expectations = Expectations {
-            passing: passing.iter().map(|name| name.to_string()).collect(),
-        };
+        let expectations = rewritten(expected, &passing);
         let text = format!(
-            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test doctest_{name}`; the test\n# fails when one of these stops passing.\n\n{}",
+            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test doctest_{name}`; the test\n# fails when one of these stops passing or one passes that is not listed.\n# `[not_passing]`, kept by the rewrite, names deliberate failures and why.\n\n{}",
             toml::to_string_pretty(&expectations).expect("serialize expectations")
         );
         if let Some(parent) = path.parent() {
@@ -454,40 +550,81 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
         return;
     }
 
-    let expected: Expectations = match std::fs::read_to_string(&path) {
-        Ok(text) => toml::from_str(&text).expect("doctest expectations parse"),
-        Err(_) => Expectations::default(),
-    };
-    let regressions: Vec<&String> = expected
-        .passing
-        .iter()
-        .filter(|name| !passing.contains(name.as_str()))
-        .collect();
-    let newly_passing: Vec<&&str> = passing
-        .iter()
-        .filter(|name| !expected.passing.iter().any(|known| known == *name))
-        .collect();
-    if !newly_passing.is_empty() {
-        println!(
-            "{} docstrings pass that {} does not list yet; rerun with UPDATE_DOCTEST_EXPECTATIONS=1 to record them:\n    {}",
-            newly_passing.len(),
-            path.display(),
-            newly_passing
+    let mismatch = compare(&expected, &passing);
+    assert!(
+        mismatch.is_empty(),
+        "{}",
+        mismatch.message(&expected, &path, &log_path)
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn listed(passing: &[&str], not_passing: &[(&str, &str)]) -> Expectations {
+        Expectations {
+            passing: passing.iter().map(|name| name.to_string()).collect(),
+            not_passing: not_passing
                 .iter()
-                .map(|name| name.to_string())
-                .collect::<Vec<_>>()
-                .join("\n    ")
+                .map(|(name, reason)| (name.to_string(), reason.to_string()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn matching_run_passes() {
+        let expected = listed(&["m.a", "m.b"], &[("m.c", "by design")]);
+        let passing = BTreeSet::from(["m.a", "m.b"]);
+        assert!(compare(&expected, &passing).is_empty());
+    }
+
+    #[test]
+    fn gate_fails_both_ways() {
+        let expected = listed(&["m.a", "m.b"], &[]);
+        let passing = BTreeSet::from(["m.a", "m.c"]);
+        let mismatch = compare(&expected, &passing);
+        assert_eq!(
+            mismatch,
+            Mismatch {
+                regressions: vec!["m.b".to_string()],
+                unlisted: vec!["m.c".to_string()],
+            }
+        );
+        let message = mismatch.message(&expected, Path::new("m.toml"), Path::new("m.log"));
+        assert!(message.contains("now fail:\n    m.b"));
+        assert!(message.contains("UPDATE_DOCTEST_EXPECTATIONS=1"));
+    }
+
+    #[test]
+    fn stale_reason_is_named() {
+        let expected = listed(&[], &[("m.c", "needs matplotlib")]);
+        let passing = BTreeSet::from(["m.c"]);
+        let mismatch = compare(&expected, &passing);
+        let message = mismatch.message(&expected, Path::new("m.toml"), Path::new("m.log"));
+        assert!(message.contains("m.c (listed as not passing: needs matplotlib)"));
+    }
+
+    #[test]
+    fn rewrite_keeps_reasons() {
+        let old = listed(&["m.a"], &[("m.b", "refused"), ("m.c", "stale")]);
+        let passing = BTreeSet::from(["m.a", "m.c"]);
+        let new = rewritten(old, &passing);
+        assert_eq!(new.passing, ["m.a", "m.c"]);
+        assert_eq!(
+            new.not_passing,
+            BTreeMap::from([("m.b".to_string(), "refused".to_string())])
         );
     }
-    assert!(
-        regressions.is_empty(),
-        "{} docstrings that used to pass against the crate now fail:\n    {}\nsee {}",
-        regressions.len(),
-        regressions
-            .iter()
-            .map(|name| name.to_string())
-            .collect::<Vec<_>>()
-            .join("\n    "),
-        log_path.display()
-    );
+
+    #[test]
+    fn reasons_round_trip() {
+        let expectations = listed(&["m.a"], &[("m.b.C.plot", "needs matplotlib")]);
+        let text = toml::to_string_pretty(&expectations).expect("serialize");
+        let back: Expectations = toml::from_str(&text).expect("parse");
+        assert_eq!(back.not_passing, expectations.not_passing);
+        // A file without the table still reads.
+        let bare: Expectations = toml::from_str("passing = []").expect("parse");
+        assert!(bare.not_passing.is_empty());
+    }
 }

@@ -119,7 +119,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidIncompletePossibilities(&mut self, value: bool) {
+    fn set_forbidIncompletePossibilities(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.forbid_incomplete_possibilities = value;
     }
 
@@ -129,7 +132,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidVoiceCrossing(&mut self, value: bool) {
+    fn set_forbidVoiceCrossing(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_voice_crossing = value;
     }
 
@@ -139,7 +142,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidParallelFifths(&mut self, value: bool) {
+    fn set_forbidParallelFifths(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_parallel_fifths = value;
     }
 
@@ -149,7 +152,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidParallelOctaves(&mut self, value: bool) {
+    fn set_forbidParallelOctaves(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_parallel_octaves = value;
     }
 
@@ -159,7 +162,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidHiddenFifths(&mut self, value: bool) {
+    fn set_forbidHiddenFifths(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_hidden_fifths = value;
     }
 
@@ -169,7 +172,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidHiddenOctaves(&mut self, value: bool) {
+    fn set_forbidHiddenOctaves(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_hidden_octaves = value;
     }
 
@@ -179,7 +182,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_forbidVoiceOverlap(&mut self, value: bool) {
+    fn set_forbidVoiceOverlap(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.forbid_voice_overlap = value;
     }
 
@@ -189,7 +192,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_resolveDominantSeventhProperly(&mut self, value: bool) {
+    fn set_resolveDominantSeventhProperly(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.resolve_dominant_seventh_properly = value;
     }
 
@@ -199,7 +205,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_resolveDiminishedSeventhProperly(&mut self, value: bool) {
+    fn set_resolveDiminishedSeventhProperly(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.resolve_diminished_seventh_properly = value;
     }
 
@@ -209,7 +218,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_resolveAugmentedSixthProperly(&mut self, value: bool) {
+    fn set_resolveAugmentedSixthProperly(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.resolve_augmented_sixth_properly = value;
     }
 
@@ -219,7 +231,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set_doubledRootInDim7(&mut self, value: bool) {
+    fn set_doubledRootInDim7(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.doubled_root_in_dim7 = value;
     }
 
@@ -229,7 +241,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_applySinglePossibRulesToResolution(&mut self, value: bool) {
+    fn set_applySinglePossibRulesToResolution(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.apply_single_possib_rules_to_resolution = value;
     }
 
@@ -239,7 +254,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_applyConsecutivePossibRulesToResolution(&mut self, value: bool) {
+    fn set_applyConsecutivePossibRulesToResolution(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.apply_consecutive_possib_rules_to_resolution = value;
     }
 
@@ -249,7 +267,10 @@ impl Rules {
     }
 
     #[setter]
-    fn set_restrictDoublingsInItalianA6Resolution(&mut self, value: bool) {
+    fn set_restrictDoublingsInItalianA6Resolution(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.inner.restrict_doublings_in_italian_a6_resolution = value;
     }
 
@@ -259,7 +280,7 @@ impl Rules {
     }
 
     #[setter]
-    fn set__upperPartsRemainSame(&mut self, value: bool) {
+    fn set__upperPartsRemainSame(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.upper_parts_remain_same = value;
     }
 

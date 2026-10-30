@@ -172,6 +172,12 @@ impl Stream {
         template.set_measure_numbering(None);
         template.set_name_hidden(false);
         template.set_abbreviation_hidden(false);
+        // A measure's barlines are among the elements music21 takes away
+        // when it takes everything.
+        if options.remove_all {
+            template.set_left_barline(None);
+            template.set_right_barline(None);
+        }
         if !options.remove_all {
             for spanner in self.spanners() {
                 let mut spanner = spanner.clone();
@@ -492,6 +498,22 @@ mod tests {
             .collect();
         // music21: one rest a measure, as long as what it held.
         assert_eq!(rests, [(0.0, 4.0), (4.0, 4.0)]);
+        Ok(())
+    }
+
+    /// `remove_all` takes a measure's barlines with everything else, which
+    /// music21 holds among the elements it removes.
+    #[test]
+    fn removing_all_takes_the_barlines() -> Result<()> {
+        let line = from_tiny_notation("4/4 c4 d e f")?;
+        let options = TemplateOptions {
+            remove_all: true,
+            ..TemplateOptions::default()
+        };
+        let template = line.template(&options);
+        let measures = template.measures();
+        assert!(measures.iter().all(|bar| bar.right_barline().is_none()));
+        assert!(line.measures()[0].right_barline().is_some());
         Ok(())
     }
 

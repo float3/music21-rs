@@ -238,7 +238,7 @@ pub fn merge_variants_py<'py>(
     streamX: &Bound<'py, PyAny>,
     streamY: &Bound<'py, PyAny>,
     variantName: String,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(streamX.py())?;
     let made =
@@ -258,7 +258,7 @@ pub fn merge_variant_scores_py<'py>(
     aScore: &Bound<'py, PyAny>,
     vScore: &Bound<'py, PyAny>,
     variantName: String,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(aScore.py())?;
     let made = merge_variant_scores(&read(aScore)?, &read(vScore)?, &variantName)
@@ -279,7 +279,7 @@ pub fn merge_variant_measure_streams_py<'py>(
     streamX: &Bound<'py, PyAny>,
     streamY: &Bound<'py, PyAny>,
     variantName: String,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(streamX.py())?;
     let made = merge_variant_measure_streams(&read(streamX)?, &read(streamY)?, &variantName)
@@ -300,7 +300,7 @@ pub fn merge_variants_equal_duration_py<'py>(
     py: Python<'py>,
     streams: &Bound<'py, PyAny>,
     variantNames: Vec<String>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(py)?;
     let mut read_streams = Vec::new();
@@ -333,9 +333,9 @@ pub fn merge_part_as_ossia_py<'py>(
     mainPart: &Bound<'py, PyAny>,
     ossiaPart: &Bound<'py, PyAny>,
     ossiaName: String,
-    inPlace: bool,
-    compareByMeasureNumber: bool,
-    recurseInMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] compareByMeasureNumber: bool,
+    #[pyo3(from_py_with = crate::truthy)] recurseInMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(mainPart.py())?;
     let made = merge_part_as_ossia(
@@ -361,7 +361,7 @@ pub fn merge_part_as_ossia_py<'py>(
 pub fn refine_variant_py<'py>(
     s: &Bound<'py, PyAny>,
     sVariant: &Bound<'py, PyAny>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     needs_variant_class(s.py())?;
     let mut stream = read(s)?;
@@ -418,8 +418,8 @@ fn variant_place(
 pub fn make_all_variants_replacements_py<'py>(
     streamWithVariants: &Bound<'py, PyAny>,
     variantNames: Option<Vec<String>>,
-    inPlace: bool,
-    recurse: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] recurse: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     // music21 skips every variant where `variantNames` is a list at all --
     // both branches of its test `continue`, which its own source marks

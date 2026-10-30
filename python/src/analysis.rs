@@ -252,7 +252,7 @@ impl Segmenter {
     fn getSegmentsList<'py>(
         _cls: &Bound<'py, pyo3::types::PyType>,
         workOrPart: &Bound<'py, PyAny>,
-        removeEmptyLists: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeEmptyLists: bool,
     ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
         let py = workOrPart.py();
         let (stream, leaves) = crate::stream::read_with_leaves(workOrPart)?;

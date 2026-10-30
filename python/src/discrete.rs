@@ -397,8 +397,8 @@ impl MelodicIntervalDiversity {
         &self,
         sStream: &Bound<'py, PyAny>,
         found: Option<&Bound<'py, PyDict>>,
-        ignoreDirection: bool,
-        ignoreUnison: bool,
+        #[pyo3(from_py_with = crate::truthy)] ignoreDirection: bool,
+        #[pyo3(from_py_with = crate::truthy)] ignoreUnison: bool,
     ) -> PyResult<Bound<'py, PyDict>> {
         let py = sStream.py();
         let counts = match found {
@@ -455,7 +455,7 @@ impl MelodicIntervalDiversity {
     fn process<'py>(
         &self,
         sStream: &Bound<'py, PyAny>,
-        ignoreDirection: bool,
+        #[pyo3(from_py_with = crate::truthy)] ignoreDirection: bool,
     ) -> PyResult<(usize, &'static str)> {
         let count = self
             .countMelodicIntervals(sStream, None, ignoreDirection, true)?

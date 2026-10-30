@@ -48,8 +48,7 @@ fn chord_text(symbol: &ChordSymbol) -> Option<String> {
     if symbol.is_no_chord() {
         return None;
     }
-    let flat = |name: String| name.replace('-', "b");
-    let mut text = flat(symbol.root().name());
+    let mut text = symbol.root().name();
     text.push_str(match symbol.kind_text() {
         Some(written) => written,
         None => match symbol.kind().unwrap_or("") {
@@ -81,7 +80,7 @@ fn chord_text(symbol: &ChordSymbol) -> Option<String> {
         .filter(|bass| bass.name() != symbol.root().name())
     {
         text.push('/');
-        text.push_str(&flat(bass.name()));
+        text.push_str(&bass.name());
     }
     Some(text)
 }

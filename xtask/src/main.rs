@@ -7,6 +7,7 @@ mod downstream;
 mod facade;
 #[cfg(feature = "python")]
 mod fixtures;
+mod harness;
 #[cfg(feature = "python")]
 mod music21_suite;
 mod report;

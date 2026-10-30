@@ -591,7 +591,7 @@ impl Accidental {
     fn set(
         slf: &Bound<'_, Self>,
         specifier: &Bound<'_, PyAny>,
-        allowNonStandardValue: bool,
+        #[pyo3(from_py_with = crate::truthy)] allowNonStandardValue: bool,
     ) -> PyResult<()> {
         let py = slf.py();
         if let Some(standard) = looked_up(specifier) {
@@ -1480,7 +1480,10 @@ impl Pitch {
     /// in the default octave. Setting it to what it already is does nothing,
     /// as upstream's does.
     #[setter]
-    fn set_octaveIsImplicit(&mut self, value: bool) -> PyResult<()> {
+    fn set_octaveIsImplicit(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         if value == self.inner.octave_is_implicit() {
             return Ok(());
         }
@@ -1642,7 +1645,7 @@ impl Pitch {
     }
 
     #[setter]
-    fn set_spellingIsInferred(&mut self, value: bool) {
+    fn set_spellingIsInferred(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.mark_inferred(value);
     }
 
@@ -1778,7 +1781,7 @@ impl Pitch {
     fn transpose(
         mut slf: PyRefMut<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let transposed = crate::interval::transpose_pitch_by_any(&slf.inner, value)?;
         // Transposing by a bare number of semitones says nothing about how
@@ -1796,7 +1799,10 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn getEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn getEnharmonic(
+        mut slf: PyRefMut<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
@@ -1808,7 +1814,10 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn getHigherEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn getHigherEnharmonic(
+        mut slf: PyRefMut<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_higher_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
@@ -1820,7 +1829,10 @@ impl Pitch {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn getLowerEnharmonic(mut slf: PyRefMut<'_, Self>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn getLowerEnharmonic(
+        mut slf: PyRefMut<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let result = slf.inner.get_lower_enharmonic().map_err(pitch_error)?;
         if inPlace {
             slf.inner = result;
@@ -1834,8 +1846,8 @@ impl Pitch {
     #[pyo3(signature = (*, inPlace = false, mostCommon = false))]
     fn simplifyEnharmonic(
         mut slf: PyRefMut<'_, Self>,
-        inPlace: bool,
-        mostCommon: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] mostCommon: bool,
     ) -> PyResult<Option<Pitch>> {
         let result = slf
             .inner
@@ -1909,8 +1921,8 @@ impl Pitch {
     fn transposeBelowTarget(
         mut slf: PyRefMut<'_, Self>,
         target: &Bound<'_, PyAny>,
-        minimize: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] minimize: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let result = slf
             .inner
@@ -1930,8 +1942,8 @@ impl Pitch {
     fn transposeAboveTarget(
         mut slf: PyRefMut<'_, Self>,
         target: &Bound<'_, PyAny>,
-        minimize: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] minimize: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let result = slf
             .inner
@@ -1950,7 +1962,7 @@ impl Pitch {
     #[pyo3(signature = (*, inPlace = false))]
     fn convertQuarterTonesToMicrotones(
         mut slf: PyRefMut<'_, Self>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let result = slf
             .inner
@@ -1969,7 +1981,7 @@ impl Pitch {
     #[pyo3(signature = (*, inPlace = false))]
     fn convertMicrotonesToQuarterTones(
         mut slf: PyRefMut<'_, Self>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Pitch>> {
         let result = slf
             .inner
@@ -2029,11 +2041,11 @@ impl Pitch {
         pitchPastMeasure: Option<&Bound<'_, PyAny>>,
         otherSimultaneousPitches: Option<&Bound<'_, PyAny>>,
         alteredPitches: Option<&Bound<'_, PyAny>>,
-        cautionaryPitchClass: bool,
-        cautionaryAll: bool,
-        overrideStatus: bool,
-        cautionaryNotImmediateRepeat: bool,
-        lastNoteWasTied: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryPitchClass: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryAll: bool,
+        #[pyo3(from_py_with = crate::truthy)] overrideStatus: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryNotImmediateRepeat: bool,
+        #[pyo3(from_py_with = crate::truthy)] lastNoteWasTied: bool,
     ) -> PyResult<()> {
         let past = pitch_list(pitchPast)?;
         let past_measure = pitch_list(pitchPastMeasure)?;

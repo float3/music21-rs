@@ -485,7 +485,12 @@ fn unitNormEqual(parts: usize) -> Vec<f64> {
 /// of `step`, scaled onto the unit interval unless `normalized` is off.
 #[pyfunction]
 #[pyo3(name = "unitNormStep", signature = (step, a = 0.0, b = 1.0, normalized = true))]
-fn unitNormStep(step: f64, a: f64, b: f64, normalized: bool) -> PyResult<Vec<f64>> {
+fn unitNormStep(
+    step: f64,
+    a: f64,
+    b: f64,
+    #[pyo3(from_py_with = crate::truthy)] normalized: bool,
+) -> PyResult<Vec<f64>> {
     music21_rs_crate::sieve::unit_norm_step(step, a, b, normalized).map_err(sieve_error)
 }
 

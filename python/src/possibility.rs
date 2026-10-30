@@ -214,7 +214,7 @@ fn couldBeItalianA6Resolution(
     possibA: &Bound<'_, PyAny>,
     possibB: &Bound<'_, PyAny>,
     threePartChordInfo: Option<&Bound<'_, PyAny>>,
-    restrictDoublings: bool,
+    #[pyo3(from_py_with = crate::truthy)] restrictDoublings: bool,
 ) -> PyResult<bool> {
     let sixth = match threePartChordInfo.filter(|given| !given.is_none()) {
         Some(given) => {

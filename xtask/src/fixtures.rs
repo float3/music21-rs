@@ -263,33 +263,9 @@ pub(crate) fn scoped_modules(workspace_root: &Path) -> PyResult<Vec<String>> {
 /// this repository has had go stale twice.
 fn harness_modules(workspace_root: &Path) -> Vec<String> {
     let mut found = Vec::new();
-    let Ok(entries) = fs::read_dir(workspace_root.join("python-parity/tests")) else {
-        return found;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("doctest_") && name.ends_with(".rs"))
-        {
-            continue;
-        }
-        let Ok(text) = fs::read_to_string(&path) else {
-            continue;
-        };
-        // `doctest_suite!(name, "music21.x", "expectations", [...])`
-        let Some(at) = text.find("doctest_suite!(") else {
-            continue;
-        };
-        let rest = &text[at..];
-        let mut quoted = rest.split('"');
-        let _ = quoted.next();
-        if let Some(module) = quoted.next()
-            && module.starts_with("music21.")
-            && !found.contains(&module.to_string())
-        {
-            found.push(module.to_string());
+    for suite in crate::harness::harness_suites(workspace_root) {
+        if !found.contains(&suite.module) {
+            found.push(suite.module);
         }
     }
     found

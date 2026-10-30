@@ -117,6 +117,26 @@ impl CTSong {
 
 #[pymethods]
 impl CTSong {
+    /// Its rules name it as their parent, a cycle through Rust that
+    /// Python's collector frees only if it is shown them.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self._title)?;
+        visit.call(&self.text)?;
+        visit.call(&self.lines)?;
+        visit.call(&self.year)?;
+        visit.call(&self.keyObjList)?;
+        visit.call(&self.tsList)?;
+        visit.call(&self._partObj)?;
+        visit.call(&self._rules)
+    }
+
+    fn __clear__(&mut self) {
+        self._rules = None;
+    }
+
     /// music21's `CTSong(textFile, title=..., year=...)`.
     #[new]
     #[pyo3(signature = (textFile = None, **keywords))]
@@ -304,8 +324,8 @@ impl CTSong {
     #[pyo3(signature = (labelRomanNumerals = true, labelSubsectionsOnScore = true))]
     fn toPart(
         slf: &Bound<'_, Self>,
-        labelRomanNumerals: bool,
-        labelSubsectionsOnScore: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelRomanNumerals: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelSubsectionsOnScore: bool,
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         {
@@ -335,8 +355,8 @@ impl CTSong {
     #[pyo3(signature = (labelRomanNumerals = true, labelSubsectionsOnScore = true))]
     fn toScore(
         slf: &Bound<'_, Self>,
-        labelRomanNumerals: bool,
-        labelSubsectionsOnScore: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelRomanNumerals: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelSubsectionsOnScore: bool,
     ) -> PyResult<Py<PyAny>> {
         Self::toPart(slf, labelRomanNumerals, labelSubsectionsOnScore)
     }
@@ -424,6 +444,22 @@ impl CTRule {
 
 #[pymethods]
 impl CTRule {
+    /// The song it belongs to, which holds it: see `CTSong.__traverse__`.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.text)?;
+        visit.call(&self._parent)?;
+        visit.call(&self._musicText)?;
+        visit.call(&self._LHS)?;
+        visit.call(&self.measures)
+    }
+
+    fn __clear__(&mut self) {
+        Python::attach(|py| self._parent = py.None());
+    }
+
     /// music21's `CTRule(text, parent)`.
     #[new]
     #[pyo3(signature = (text = None, parent = None))]

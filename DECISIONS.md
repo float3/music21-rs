@@ -40,6 +40,13 @@ and `testRagMarwaC` count both answers. the fork the submodule pins
 answers by the same rule (`b68a661af`), so `music21-suite` runs with no
 expected divergences; following upstream instead would bring both back.
 
+*debated 2026-10-30, kept, with one exception.* a lookup that answers
+differently each call cannot be compared, and where a caller wants chance
+the crate takes a chooser or a seed. but ids counted from one in every
+process named two workers' first parts alike, so an id's first half is now
+drawn once per process and only its second half counts. the fork commit
+behind Rag Marwa's rule (`b68a661af`) has not been offered upstream.
+
 **where music21's author names a mistake, the crate does not repeat it.**
 *Changed 2026-09-25.* Cuthbert's "Music21's Mistakes"
 (`music21/documentation/source/developerReference/startingOver.ipynb`) lists
@@ -55,6 +62,14 @@ stored on it as a site.
 that skips that module leaks `b` into music21's output. the parity suites
 catch it: they compare in music21's spelling.
 
+*debated 2026-10-30, kept.* each change is an item of Cuthbert's own list,
+and `-` would make B flat 1 (`B-1`) and B in octave -1 the same name; going
+back would break some 500 call sites a second time. the cost the other side
+found was real but local: the parity tests held seven copies of the
+respelling, now one (`utils::music21_name`), and `flat_spelling_parity`
+asks some thousand names of the wheel and music21 alike and fails on a `b`
+music21 does not write itself.
+
 **nothing is cached.** a value that answers the same question twice does the
 arithmetic twice. music21 memoizes on the object; this does not.
 
@@ -62,6 +77,14 @@ arithmetic twice. music21 memoizes on the object; this does not.
 answer is free. the benchmark shows it: warm-object cases are the only two
 where music21 is within reach. the wheel does cache, because a facade object
 is asked the same question repeatedly by music21's own code.
+
+*debated 2026-10-30, kept.* recomputing in Rust (0.4-1µs for a forte class)
+beats music21's *cached* answer (2µs); what loses to a warm music21 object is
+the Python call, which the wheel's cache already removes. a cache on `Chord`
+would go stale through `notes_mut`, and music21 itself fixed five
+cache-correctness bugs in six weeks of 2026. what was wasteful was an
+algorithm asking the same chord for its root four times, so the analyses
+find it once and hand it on.
 
 **errors are values.** every fallible operation returns `Result`; nothing
 panics on bad input. the `panic!`s and `expect`s that exist are on constant
@@ -148,6 +171,15 @@ has to ask the stream instead. the gain is that nothing holds a reference back
 to what holds it, so there are no cycles for the garbage collector to break
 and no object that is in two streams at two offsets.
 
+*debated 2026-10-30, kept.* the harm was narrower than the rule: an installed
+note in one of these streams read `offset` as 0.0 and `beat` as nan without
+complaint. so once the wheel is installed into music21 its readers hand back
+music21's own streams, whose sites answer, and standalone they hand back the
+package's own; music21 merely being importable decides nothing. building
+music21's containers costs about 3.8 times the read on a large score, still
+under music21's own parser. weak sites in the package's streams were tried
+on paper and stall on music21's tree walk, which a context search needs.
+
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
 from the pyo3 class and from music21's own, so music21 will keep it in a
@@ -187,6 +219,36 @@ lacks raises `AttributeError` rather than falling through to music21's
 implementation. a partial port that silently answered from music21 would make
 the parity numbers meaningless.
 
+*debated 2026-10-30, kept.* falling through was tried: music21's `Chord.add`
+and `remove` and its pitch `octave` and `name` setters run on a facade object
+and change nothing, raising nothing, because they write state the facade does
+not keep. the message now ends "not ported to music21-rs", so a blocked member
+is not taken for a typo; `show` and `write` on keys and scales, most of what
+was blocked, are ported.
+
+**a measure's barlines are listed, not held.** music21 holds a measure's left
+barline at nought and its right one at the end among its elements. the
+package keeps them as `leftBarline` and `rightBarline` and lists them where a
+stream is asked what it holds by class, flattened or walked, the right one
+last. *debated 2026-10-30.* holding them would shift the places spanners name
+their notes by, silently, across forty sites that touch what a stream holds,
+for a pattern music21's own code barely uses; listing them closes what callers
+see. *costs:* `len(measure)`, indexing and plain iteration leave them out
+where music21's count them.
+
+**a flag is read for its truth; a string is refused.** music21 asks
+`if inPlace:`, so `inPlace=1` and a forwarded `None` work there, and every
+flag the wheel takes reads its argument's truth. a string is a `TypeError`
+where music21 takes it: `'False'` is true. *debated 2026-10-30;* no caller in
+music21 or its corpus passes either, so this is drop-in compatibility, not
+repair.
+
+**a negative length is refused.** music21 takes `Duration(-1)` and calls it
+`zero`; a note of that length makes the next one overlap it, and MusicXML
+export of it fails. the crate's arithmetic assumes lengths of nought or more,
+so a negative one is refused rather than answered wrongly. *debated
+2026-10-30, kept;* nothing in music21 makes one on purpose.
+
 **exceptions stand on music21's own base, and are built on first asking.**
 music21 catches `Music21Exception` throughout, so an exception of ours that
 was not one would escape its own reader. building one imports music21, so
@@ -209,6 +271,15 @@ written through one of them sticks.
 *costs:* reference cycles that Python's collector cannot see through Rust
 fields — every such class implements `__traverse__`/`__clear__` for exactly
 this reason, and before that every note that went into a stream leaked.
+
+*debated 2026-10-30, kept.* sixty of music21's passing docstrings change a
+note's duration, volume or beams through the object it hands back, and
+seventy-seven check `is`; values would lose those writes silently. what the
+debate found instead were cycles nobody had shown the collector: a note,
+chord or rest whose editorial points back at it, a slur its note keeps, a
+Clercq-Temperley song and its rules. those traverse now, and a test scans
+every class holding a Python object: each traverses it or gives the reason
+no cycle runs through it.
 
 **where music21's class is the better one, music21's is the one that
 answers.** `style.Style` is the long-standing example -- a note's `style` is
@@ -256,6 +327,16 @@ absent, so the file only ever grows.
 *costs:* a docstring that fails for a deliberate reason looks the same as one
 that fails by accident. `sieve` is 24/25 because the compressed reading of a
 sieve is not modelled.
+
+*debated 2026-10-30, changed.* a newly passing docstring only printed a line
+that nextest hides, so the list fell behind what passes. the gate now fails
+both ways: a listed docstring that fails, and a passing one that is not
+listed, which `UPDATE_DOCTEST_EXPECTATIONS=1` records. an optional
+`[not_passing]` table names deliberate failures with a reason
+(`collapseArpeggios` refused, `Stream.plot` without matplotlib), and the
+rewrite keeps it; an unexplained failure still needs no entry. `sieve` now
+passes 25/25. `xtask report` reads summaries only for suites that exist, and
+shows the reasons.
 
 **music21's own suite is a comparison, not a pass mark.** it has failures of
 its own in any environment, so only a test failing under `music21_rs` that

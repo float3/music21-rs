@@ -784,6 +784,9 @@ pub fn make_measures_by(stream: &Stream, given: &[(FloatType, TimeSignature)]) -
             waiting.push(placed(event.offset(), None, event.element()));
         }
     }
+    // music21's `offsetMap` passes over barlines, so a loose one -- a
+    // flattened measure's, say -- goes into no measure.
+    waiting.retain(|item| !matches!(item.element, StreamElement::Barline(_)));
 
     // The meters, with 4/4 at the start where the stream says nothing there.
     let mut meters: Vec<(FloatType, TimeSignature)> = waiting
@@ -2044,6 +2047,44 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
 mod tests {
     use super::*;
     use crate::{Duration, Note};
+
+    /// A barline standing loose in what is cut into measures stands
+    /// nowhere: music21's `offsetMap` passes over barlines, so
+    /// `makeMeasures` puts none of them into a measure.
+    #[test]
+    fn loose_barlines_go_into_no_measure() -> Result<()> {
+        let mut line = Stream::new();
+        line.insert(
+            0.0,
+            crate::bar::Barline::new(crate::bar::BarlineType::Heavy),
+        );
+        line.insert(
+            0.0,
+            Note::from_name("C4")?.with_duration(Duration::new(4.0)?),
+        );
+        line.insert(
+            4.0,
+            crate::bar::Barline::new(crate::bar::BarlineType::Double),
+        );
+        line.insert(
+            4.0,
+            Note::from_name("D4")?.with_duration(Duration::new(4.0)?),
+        );
+        let measures = make_measures(&line)?;
+        let held: usize = measures
+            .measures()
+            .iter()
+            .map(|measure| {
+                measure
+                    .events()
+                    .iter()
+                    .filter(|event| matches!(event.element(), StreamElement::Barline(_)))
+                    .count()
+            })
+            .sum();
+        assert_eq!(held, 0);
+        Ok(())
+    }
 
     fn eighths(names: &[&str]) -> Stream {
         let mut measure = Stream::with_kind(StreamKind::Measure);

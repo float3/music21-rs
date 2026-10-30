@@ -858,7 +858,7 @@ impl Text {
     fn new(
         data: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
-        isTranslated: Option<bool>,
+        #[pyo3(from_py_with = crate::truthy_or_none)] isTranslated: Option<bool>,
         encodingScheme: Option<String>,
     ) -> PyResult<Self> {
         let mut inner = match data.filter(|data| !data.is_none()) {
@@ -895,7 +895,10 @@ impl Text {
     }
 
     #[setter]
-    fn set_isTranslated(&mut self, value: Option<bool>) {
+    fn set_isTranslated(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>,
+    ) {
         self.inner.set_translated(value);
     }
 
@@ -994,7 +997,7 @@ impl Copyright {
     fn new(
         data: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
-        isTranslated: Option<bool>,
+        #[pyo3(from_py_with = crate::truthy_or_none)] isTranslated: Option<bool>,
         role: Option<String>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let mut base = Text::new(data, language, isTranslated, None)?;

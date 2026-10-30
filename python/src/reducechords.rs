@@ -169,7 +169,7 @@ impl ChordReducer {
         slf: &Bound<'py, Self>,
         inputScore: &Bound<'py, PyAny>,
         allowableChords: Option<&Bound<'py, PyAny>>,
-        closedPosition: bool,
+        #[pyo3(from_py_with = crate::truthy)] closedPosition: bool,
         forbiddenChords: Option<&Bound<'py, PyAny>>,
         maximumNumberOfChords: usize,
     ) -> PyResult<Bound<'py, PyAny>> {

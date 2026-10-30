@@ -30,9 +30,7 @@ impl Chord {
     /// Returns the semitones from the root to the given chord step, within an
     /// octave, if the chord has that step.
     pub fn semitones_from_chord_step(&self, step: u8) -> Option<u8> {
-        let root = self.root()?;
-        let pitch = self.chord_step_from(step, root)?;
-        Some(semitones_above(root, pitch))
+        self.semitones_from_chord_step_with_root(step, self.root()?)
     }
 
     /// Returns whether the chord has the given step spelled two different
@@ -41,6 +39,13 @@ impl Chord {
         let Some(root) = self.root() else {
             return false;
         };
+
+        self.has_repeated_step_from(step, root)
+    }
+
+    /// [`Self::has_repeated_chord_step`] above a root already found, so a
+    /// caller asking about several steps finds the root only once.
+    fn has_repeated_step_from(&self, step: u8, root: &Pitch) -> bool {
         let step = fold_chord_step(step);
         let Some(first) = self
             .chord_step_from(step, root)
@@ -62,47 +67,68 @@ impl Chord {
     /// Returns whether the chord is exactly three distinct pitch names with a
     /// third and a fifth above the root, of any quality.
     pub fn is_triad(&self) -> bool {
-        self.unique_pitch_name_count() == 3 && self.third().is_some() && self.fifth().is_some()
+        self.root().is_some_and(|root| self.is_triad_from(root))
     }
 
     /// Returns whether the chord is exactly four distinct pitch names with a
     /// third, fifth and seventh above the root, of any quality.
     pub fn is_seventh(&self) -> bool {
-        self.unique_pitch_name_count() == 4
-            && self.third().is_some()
-            && self.fifth().is_some()
-            && self.seventh().is_some()
+        self.root().is_some_and(|root| self.is_seventh_from(root))
+    }
+
+    /// [`Self::is_triad`] above a root already found.
+    pub(super) fn is_triad_from(&self, root: &Pitch) -> bool {
+        self.unique_pitch_name_count() == 3 && self.has_steps_from(root, &[3, 5])
+    }
+
+    /// [`Self::is_seventh`] above a root already found.
+    pub(super) fn is_seventh_from(&self, root: &Pitch) -> bool {
+        self.unique_pitch_name_count() == 4 && self.has_steps_from(root, &[3, 5, 7])
     }
 
     /// Returns whether the chord is a correctly spelled major triad.
     pub fn is_major_triad(&self) -> bool {
-        self.is_triad_of_type((3, 11, -1), 4, 7)
+        self.is_triad_of_type((3, 11, -1), TriadQuality::Major)
     }
 
     /// Returns whether the chord is a correctly spelled minor triad.
     pub fn is_minor_triad(&self) -> bool {
-        self.is_triad_of_type((3, 11, 1), 3, 7)
+        self.is_triad_of_type((3, 11, 1), TriadQuality::Minor)
     }
 
     /// Returns whether the chord is a correctly spelled diminished triad.
     pub fn is_diminished_triad(&self) -> bool {
-        self.is_triad_of_type((3, 10, 0), 3, 6)
+        self.is_triad_of_type((3, 10, 0), TriadQuality::Diminished)
     }
 
     /// Returns whether the chord is a correctly spelled augmented triad.
     pub fn is_augmented_triad(&self) -> bool {
-        self.is_triad_of_type((3, 12, 0), 4, 8)
+        self.is_triad_of_type((3, 12, 0), TriadQuality::Augmented)
     }
 
     /// Returns whether the chord is a seventh chord whose pitches all lie at
     /// the given semitone offsets above the root.
     pub fn is_seventh_of_type(&self, semitones: &[u8]) -> bool {
-        if !self.is_seventh() {
+        // The cheap count first, so a chord that is no seventh never looks
+        // for its root.
+        if self.unique_pitch_name_count() != 4 {
             return false;
         }
+
         let Some(root) = self.root() else {
             return false;
         };
+
+        self.seventh_of_type_from(semitones, root)
+    }
+
+    /// [`Self::is_seventh_of_type`] above a root already found, for callers
+    /// that ask a chord several questions about the same root.
+    pub(crate) fn seventh_of_type_from(&self, semitones: &[u8], root: &Pitch) -> bool {
+        if !self.is_seventh_from(root) {
+            return false;
+        }
+
         self.pitch_refs()
             .all(|pitch| semitones.contains(&semitones_above(root, pitch)))
     }
@@ -136,42 +162,47 @@ impl Chord {
     /// Returns whether the chord has a third and a fifth above its root. A
     /// dominant seventh is not a triad but contains one.
     pub fn contains_triad(&self) -> bool {
-        self.third().is_some() && self.fifth().is_some()
+        self.root()
+            .is_some_and(|root| self.has_steps_from(root, &[3, 5]))
     }
 
     /// Returns whether the chord contains a triad and a seventh above its root.
     pub fn contains_seventh(&self) -> bool {
-        self.contains_triad() && self.seventh().is_some()
+        self.root()
+            .is_some_and(|root| self.has_steps_from(root, &[3, 5, 7]))
     }
 
     /// Returns the quality of the triad above the root, following music21's
     /// `Chord.quality`: incomplete triads still count, and a chord with a
     /// repeated or missing chord step is [`TriadQuality::Other`].
     pub fn quality(&self) -> TriadQuality {
-        let Some(third) = self.semitones_from_chord_step(3) else {
+        // Every step below is measured from this one root, found once.
+        let Some(root) = self.root() else {
+            return TriadQuality::Other;
+        };
+
+        let Some(third) = self.semitones_from_chord_step_with_root(3, root) else {
             return TriadQuality::Other;
         };
         // A third or fifth a fraction of a semitone off is neither major nor
         // minor, as music21 reads it.
-        if self.root().is_some_and(|root| {
-            [3, 5].into_iter().any(|step| {
-                self.chord_step_from(step, root)
-                    .is_some_and(|pitch| ((pitch.ps() - root.ps()) * 100.0).round() % 100.0 != 0.0)
-            })
+        if [3, 5].into_iter().any(|step| {
+            self.chord_step_from(step, root)
+                .is_some_and(|pitch| ((pitch.ps() - root.ps()) * 100.0).round() % 100.0 != 0.0)
         }) {
             return TriadQuality::Other;
         }
-        if self.has_repeated_chord_step(1) || self.has_repeated_chord_step(3) {
+        if self.has_repeated_step_from(1, root) || self.has_repeated_step_from(3, root) {
             return TriadQuality::Other;
         }
-        let Some(fifth) = self.semitones_from_chord_step(5) else {
+        let Some(fifth) = self.semitones_from_chord_step_with_root(5, root) else {
             return match third {
                 4 => TriadQuality::Major,
                 3 => TriadQuality::Minor,
                 _ => TriadQuality::Other,
             };
         };
-        if self.has_repeated_chord_step(5) {
+        if self.has_repeated_step_from(5, root) {
             return TriadQuality::Other;
         }
         match (third, fifth) {
@@ -220,27 +251,33 @@ impl Chord {
         self.inversion_with_root(root)
     }
 
+    /// Whether the chord has a pitch on every one of these steps above the
+    /// root, which is how the triad and seventh predicates ask for their
+    /// third, fifth and seventh without finding the root for each.
+    pub(super) fn has_steps_from(&self, root: &Pitch, steps: &[u8]) -> bool {
+        steps
+            .iter()
+            .all(|&step| self.chord_step_from(step, root).is_some())
+    }
+
     pub(crate) fn chord_step_from(&self, step: u8, root: &Pitch) -> Option<&Pitch> {
         let step = fold_chord_step(step);
         self.pitch_refs()
             .find(|pitch| diatonic_steps_above(root, pitch) == step)
     }
 
-    pub(super) fn is_triad_of_type(
-        &self,
-        address: (u8, u8, i8),
-        third_semitones: u8,
-        fifth_semitones: u8,
-    ) -> bool {
-        if !self.is_triad() || self.has_any_enharmonic_spelled_pitches() {
+    pub(super) fn is_triad_of_type(&self, address: (u8, u8, i8), quality: TriadQuality) -> bool {
+        // The cheap count first, so a chord that is no triad never looks for
+        // its root.
+        if self.unique_pitch_name_count() != 3 {
             return false;
         }
-        let (Some(root), Some(third), Some(fifth)) = (self.root(), self.third(), self.fifth())
-        else {
+
+        let Some(root) = self.root() else {
             return false;
         };
-        let spelled = semitones_above(root, third) == third_semitones
-            && semitones_above(root, fifth) == fifth_semitones;
+
+        let spelled = self.spelled_triad_from(root) == Some(quality);
         // music21 asks the chord tables first. Three names with no two of
         // them one pitch class, a third and a fifth at these distances: that
         // *is* the set class, so the search through the tables -- the dear
@@ -248,6 +285,25 @@ impl Chord {
         // say so again. The tests hold it to that.
         debug_assert!(!spelled || self.forte_address() == Some(address));
         spelled
+    }
+
+    /// The quality of a correctly spelled major, minor, diminished or
+    /// augmented triad above a root already found, and `None` for any other
+    /// chord. One look at the root answers all four triad predicates.
+    pub(crate) fn spelled_triad_from(&self, root: &Pitch) -> Option<TriadQuality> {
+        if !self.is_triad_from(root) || self.has_any_enharmonic_spelled_pitches() {
+            return None;
+        }
+
+        let third = semitones_above(root, self.chord_step_from(3, root)?);
+        let fifth = semitones_above(root, self.chord_step_from(5, root)?);
+        match (third, fifth) {
+            (4, 7) => Some(TriadQuality::Major),
+            (3, 7) => Some(TriadQuality::Minor),
+            (3, 6) => Some(TriadQuality::Diminished),
+            (4, 8) => Some(TriadQuality::Augmented),
+            _ => None,
+        }
     }
 
     pub(super) fn is_incomplete_triad_of_type(
@@ -261,9 +317,13 @@ impl Chord {
         {
             return false;
         }
-        let (Some(root), Some(_)) = (self.root(), self.third()) else {
+        let Some(root) = self.root() else {
             return false;
         };
+        if self.chord_step_from(3, root).is_none() {
+            return false;
+        }
+
         self.pitch_refs()
             .all(|pitch| [0, third_semitones].contains(&semitones_above(root, pitch)))
     }
@@ -275,9 +335,11 @@ impl Chord {
         match self.pitch_class_cardinality() {
             3 => self.is_italian_augmented_sixth(permit_any_inversion, false),
             4 => {
-                self.is_french_augmented_sixth(permit_any_inversion)
-                    || self.is_german_augmented_sixth(permit_any_inversion)
-                    || self.is_swiss_augmented_sixth(permit_any_inversion)
+                // One look in the chord tables serves all three types.
+                let found = self.forte_address();
+                self.is_french_from(found, permit_any_inversion)
+                    || self.is_german_from(found, permit_any_inversion)
+                    || self.is_swiss_from(found, permit_any_inversion)
             }
             _ => false,
         }
@@ -290,18 +352,22 @@ impl Chord {
         permit_any_inversion: bool,
         restrict_doublings: bool,
     ) -> bool {
-        if !self.is_augmented_sixth_of_type(
+        let Some(root) = self.augmented_sixth_root(
+            self.forte_address(),
             (3, 8, 1),
             1,
             permit_any_inversion,
             &AUGMENTED_SIXTHS.italian,
-        ) {
+        ) else {
             return false;
-        }
+        };
         if !restrict_doublings {
             return true;
         }
-        let (Some(root), Some(third), Some(fifth)) = (self.root(), self.third(), self.fifth())
+
+        // The third and fifth above the root the type check already found.
+        let (Some(third), Some(fifth)) =
+            (self.chord_step_from(3, root), self.chord_step_from(5, root))
         else {
             return false;
         };
@@ -313,44 +379,79 @@ impl Chord {
     /// Returns whether the chord is a French augmented sixth, such as
     /// `A- C D F#`.
     pub fn is_french_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
-        self.is_augmented_sixth_of_type(
+        self.is_french_from(self.forte_address(), permit_any_inversion)
+    }
+
+    /// [`Self::is_french_augmented_sixth`] given the chord's Forte address,
+    /// so a caller testing several types looks it up once.
+    pub(super) fn is_french_from(
+        &self,
+        found: Option<(u8, u8, i8)>,
+        permit_any_inversion: bool,
+    ) -> bool {
+        self.augmented_sixth_root(
+            found,
             (4, 25, 0),
             2,
             permit_any_inversion,
             &AUGMENTED_SIXTHS.french,
         )
+        .is_some()
     }
 
     /// Returns whether the chord is a German augmented sixth, such as
     /// `A- C E- F#`.
     pub fn is_german_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
-        self.is_augmented_sixth_of_type(
+        self.is_german_from(self.forte_address(), permit_any_inversion)
+    }
+
+    /// [`Self::is_german_augmented_sixth`] given the chord's Forte address,
+    /// so a caller testing several types looks it up once.
+    pub(super) fn is_german_from(
+        &self,
+        found: Option<(u8, u8, i8)>,
+        permit_any_inversion: bool,
+    ) -> bool {
+        self.augmented_sixth_root(
+            found,
             (4, 27, -1),
             1,
             permit_any_inversion,
             &AUGMENTED_SIXTHS.german,
         )
+        .is_some()
     }
 
     /// Returns whether the chord is a Swiss augmented sixth, such as
     /// `A- C D# F#`.
     pub fn is_swiss_augmented_sixth(&self, permit_any_inversion: bool) -> bool {
-        self.is_augmented_sixth_of_type(
+        self.is_swiss_from(self.forte_address(), permit_any_inversion)
+    }
+
+    /// [`Self::is_swiss_augmented_sixth`] given the chord's Forte address,
+    /// so a caller testing several types looks it up once.
+    pub(super) fn is_swiss_from(
+        &self,
+        found: Option<(u8, u8, i8)>,
+        permit_any_inversion: bool,
+    ) -> bool {
+        self.augmented_sixth_root(
+            found,
             (4, 27, -1),
             2,
             permit_any_inversion,
             &AUGMENTED_SIXTHS.swiss,
         )
+        .is_some()
     }
 
     /// Returns whether the chord is five distinct pitch names with a third,
     /// fifth, seventh and ninth above the root.
     pub fn is_ninth(&self) -> bool {
         self.unique_pitch_name_count() == 5
-            && self.third().is_some()
-            && self.fifth().is_some()
-            && self.seventh().is_some()
-            && self.chord_step(2).is_some()
+            && self
+                .root()
+                .is_some_and(|root| self.has_steps_from(root, &[3, 5, 7, 2]))
     }
 
     /// Returns whether some transposition other than the octave maps the
@@ -390,31 +491,38 @@ impl Chord {
         steps.len() != self.unique_pitch_name_count()
     }
 
-    pub(super) fn is_augmented_sixth_of_type(
+    /// The root of the chord when it is the augmented sixth these
+    /// arguments describe, and `None` when it is not. `found` is the chord's
+    /// own Forte address, passed in so a caller testing several types looks
+    /// it up once; the root is found once and handed back for the same
+    /// reason.
+    pub(super) fn augmented_sixth_root(
         &self,
+        found: Option<(u8, u8, i8)>,
         address: (u8, u8, i8),
         required_inversion: u8,
         permit_any_inversion: bool,
         intervals: &[[Interval; 2]],
-    ) -> bool {
-        if self.forte_address() != Some(address) || self.has_any_enharmonic_spelled_pitches() {
-            return false;
+    ) -> Option<&Pitch> {
+        if found != Some(address) || self.has_any_enharmonic_spelled_pitches() {
+            return None;
         }
-        if !permit_any_inversion && self.inversion() != Some(required_inversion) {
-            return false;
+
+        let root = self.root()?;
+        if !permit_any_inversion && self.inversion_with_root(root) != Some(required_inversion) {
+            return None;
         }
-        let Some(root) = self.root() else {
-            return false;
-        };
-        let steps = [self.third(), self.fifth(), self.seventh()];
-        intervals.iter().zip(steps).all(|(accepted, step)| {
+
+        let steps = [3, 5, 7].map(|step| self.chord_step_from(step, root));
+        let matches = intervals.iter().zip(steps).all(|(accepted, step)| {
             step.and_then(|pitch| Interval::between_pitches(root, pitch).ok())
                 .is_some_and(|interval| {
                     accepted.iter().any(|candidate| {
                         candidate.directed_simple_key() == interval.directed_simple_key()
                     })
                 })
-        })
+        });
+        matches.then_some(root)
     }
 
     pub(super) fn has_intervals_above_root(&self, intervals: &[u8]) -> bool {

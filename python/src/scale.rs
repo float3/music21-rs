@@ -24,6 +24,7 @@ use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch, StepScale as Rs
 
 use crate::interval::interval_from_any;
 use crate::pitch::{Pitch, pitch_from_any};
+use crate::scalewrite::{Kind, show_scale, write_scale};
 
 /// The names the `scale` facade replaces in `music21.scale`.
 ///
@@ -129,7 +130,7 @@ impl Scale {
     fn extractPitchList(
         other: &Bound<'_, PyAny>,
         comparisonAttribute: &str,
-        removeDuplicates: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeDuplicates: bool,
     ) -> PyResult<Vec<Pitch>> {
         let read = pitch_list(other)?;
         if !removeDuplicates {
@@ -296,6 +297,35 @@ impl AbstractScale {
             }),
         )?
         .into_any())
+    }
+
+    /// The pattern stood on C4: the concrete scale whose steps are this
+    /// pattern's, as a Scala file lists them. `None` for a pattern with no
+    /// steps at all.
+    fn on_middle_c<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyAny>>> {
+        if let Some(scale_type) = self.scale_type {
+            let tonic = RsPitch::from_name("C4").map_err(scale_error)?;
+            let scale = ConcreteScale::object(py, RsScale::new(scale_type, tonic))?;
+            return Ok(Some(scale.into_bound(py)));
+        }
+
+        // A pattern of steps a caller gave, stood on the way the scales
+        // built from steps stand on theirs.
+        if self.unnamed_steps.is_empty() {
+            return Ok(None);
+        }
+        let steps: Vec<crate::interval::Interval> = self
+            .unnamed_steps
+            .iter()
+            .cloned()
+            .map(crate::interval::Interval::wrap)
+            .collect();
+        let scale = py.get_type::<ConcreteScale>().call1(("C4",))?;
+        scale.call_method1(
+            "_standOnSteps",
+            (steps, self.octave_duplicating, self.unnamed_simplification),
+        )?;
+        Ok(Some(scale))
     }
 
     /// The pattern named by an abstract scale of any kind — one of these, or
@@ -537,6 +567,45 @@ impl AbstractScale {
         Self::scale_type_of(other) == self.scale_type
     }
 
+    /// music21's `write`: the pattern written in `fmt` to `fp`, or to a
+    /// temporary file, and the path written. Having no tonic it has no
+    /// pitches for MusicXML; `'scala'` lists its steps in `direction`.
+    #[pyo3(signature = (fmt = None, fp = None, direction = None, **keywords))]
+    fn write(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        fp: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let scale = slf.borrow().on_middle_c(slf.py())?;
+        let scale = scale.as_ref();
+        write_scale(
+            slf.as_any(),
+            scale,
+            Kind::Abstract,
+            fmt,
+            fp,
+            direction,
+            keywords,
+        )
+    }
+
+    /// music21's `show`: `'text'` prints the pattern's `repr` and
+    /// `'textline'` answers it. A format opened in another program is
+    /// refused.
+    #[pyo3(signature = (fmt = None, app = None, direction = None, **keywords))]
+    fn show(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        app: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<String>> {
+        let _ = (app, direction, keywords);
+        show_scale(slf.as_any(), fmt)
+    }
+
     /// music21 restores hashing on identity where it defines equality, so
     /// that a set or a dictionary can hold one of these however it compares.
     fn __hash__(slf: &Bound<'_, Self>) -> isize {
@@ -680,6 +749,22 @@ impl ConcreteScale {
         } else {
             scale.clone()
         })
+    }
+
+    /// The step from each degree to the next over an octave, the lines of
+    /// the scale's Scala file.
+    pub(crate) fn scala_steps(
+        &self,
+        direction: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Vec<crate::interval::Interval>> {
+        let pitches = self.heard(direction)?.pitches().map_err(scale_error)?;
+        let mut steps = Vec::with_capacity(pitches.len().saturating_sub(1));
+        for pair in pitches.windows(2) {
+            steps.push(crate::interval::Interval::wrap(
+                RsInterval::between_pitches(&pair[0], &pair[1]).map_err(scale_error)?,
+            ));
+        }
+        Ok(steps)
     }
 
     /// music21's complaint about a collection that rises and falls back to
@@ -983,7 +1068,7 @@ impl ConcreteScale {
     fn _standOnSteps(
         slf: &Bound<'_, Self>,
         intervalList: &Bound<'_, PyAny>,
-        closes: bool,
+        #[pyo3(from_py_with = crate::truthy)] closes: bool,
         pitchSimplification: Option<&str>,
     ) -> PyResult<()> {
         let mut steps = Vec::new();
@@ -1304,17 +1389,7 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        let pitches = slf
-            .borrow()
-            .heard(direction)?
-            .pitches()
-            .map_err(scale_error)?;
-        let mut steps = Vec::with_capacity(pitches.len().saturating_sub(1));
-        for pair in pitches.windows(2) {
-            steps.push(crate::interval::Interval::wrap(
-                RsInterval::between_pitches(&pair[0], &pair[1]).map_err(scale_error)?,
-            ));
-        }
+        let steps = slf.borrow().scala_steps(direction)?;
         let data = py
             .import("music21.scale.scala")?
             .getattr("ScalaData")?
@@ -1322,6 +1397,43 @@ impl ConcreteScale {
         data.call_method1("setIntervalSequence", (steps,))?;
         data.setattr("description", slf.repr()?)?;
         Ok(data.unbind())
+    }
+
+    /// music21's `write`: the scale written in `fmt` to `fp`, or to a
+    /// temporary file, and the path written.
+    ///
+    /// `'musicxml'` (the default) is a measure of the scale's degrees,
+    /// `'midi'` a file sounding nothing, `'text'` and `'textline'` its
+    /// `repr`, and `'scala'` the file of its steps in `direction`.
+    #[pyo3(signature = (fmt = None, fp = None, direction = None, **keywords))]
+    fn write(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        fp: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let kind = match slf.is_instance_of::<DiatonicScale>() {
+            true => Kind::Diatonic,
+            false => Kind::Concrete,
+        };
+        let scale = Some(slf.as_any());
+        write_scale(slf.as_any(), scale, kind, fmt, fp, direction, keywords)
+    }
+
+    /// music21's `show`: `'text'` prints the scale's `repr` and
+    /// `'textline'` answers it. A format opened in another program is
+    /// refused; write it and open the file instead.
+    #[pyo3(signature = (fmt = None, app = None, direction = None, **keywords))]
+    fn show(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        app: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<String>> {
+        let _ = (app, direction, keywords);
+        show_scale(slf.as_any(), fmt)
     }
 
     /// music21's `abstract`: the pattern of steps this scale stands on,
@@ -1391,7 +1503,7 @@ impl ConcreteScale {
         other: &Bound<'_, PyAny>,
         resultsReturned: Option<usize>,
         comparisonAttribute: &str,
-        removeDuplicates: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeDuplicates: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
         Self::must_be_realizable(slf)?;
@@ -1464,7 +1576,7 @@ impl ConcreteScale {
         &self,
         pitchTarget: Option<&Bound<'_, PyAny>>,
         variant: &str,
-        chromatic: bool,
+        #[pyo3(from_py_with = crate::truthy)] chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
         let pitch = match pitchTarget.filter(|value| !value.is_none()) {
@@ -1581,7 +1693,7 @@ impl ConcreteScale {
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
-        equateTermini: bool,
+        #[pyo3(from_py_with = crate::truthy)] equateTermini: bool,
     ) -> PyResult<Option<Pitch>> {
         if let Some(pattern) = &self.abstract_scale {
             let pattern = pattern.bind(py);
@@ -1813,7 +1925,7 @@ impl ConcreteScale {
     fn transpose(
         slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval: RsInterval = interval_from_any(value)?;
         // music21 transposes the tonic, and a scale that has none is given

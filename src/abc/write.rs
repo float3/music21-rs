@@ -181,10 +181,6 @@ fn signature_of(element: &StreamElement) -> Option<KeySignature> {
     }
 }
 
-fn abc_tonic(pitch: &Pitch) -> String {
-    pitch.name().replace('-', "b")
-}
-
 /// The clef as ABC names one.
 fn clef_name(clef: &Clef) -> Result<String> {
     let mut name = match (clef.sign(), clef.line()) {
@@ -241,7 +237,7 @@ fn key_field(element: &StreamElement, clef: Option<&Clef>) -> Result<String> {
             } else {
                 mode
             };
-            format!("{}{mode}", abc_tonic(key.tonic_pitch()))
+            format!("{}{mode}", key.tonic_pitch().name())
         }
         _ => {
             // A signature with no mode: the major tonic it would have, and
@@ -253,7 +249,7 @@ fn key_field(element: &StreamElement, clef: Option<&Clef>) -> Result<String> {
                 "C".to_string()
             } else {
                 let key = KeySignature::new(signature.sharps()).as_key("major");
-                abc_tonic(key.tonic_pitch())
+                key.tonic_pitch().name()
             };
             let mut text = format!("{tonic} exp");
             for pitch in signature.altered_pitches()? {

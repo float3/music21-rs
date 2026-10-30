@@ -83,7 +83,7 @@ impl BrailleTextLine {
     }
 
     #[setter]
-    fn set_isHeading(&mut self, value: bool) {
+    fn set_isHeading(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.is_heading = value;
     }
 
@@ -94,7 +94,7 @@ impl BrailleTextLine {
     }
 
     #[setter]
-    fn set_containsNoteGrouping(&mut self, value: bool) {
+    fn set_containsNoteGrouping(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.contains_note_grouping = value;
     }
 
@@ -144,7 +144,11 @@ impl BrailleTextLine {
     /// Writes text at the end, after a space where asked: music21's
     /// `append`.
     #[pyo3(signature = (text, addSpace = true))]
-    fn append(&mut self, text: &str, addSpace: bool) -> PyResult<()> {
+    fn append(
+        &mut self,
+        text: &str,
+        #[pyo3(from_py_with = crate::truthy)] addSpace: bool,
+    ) -> PyResult<()> {
         self.inner
             .append(text, addSpace)
             .map_err(|error| text_error(&error))
@@ -159,7 +163,7 @@ impl BrailleTextLine {
 
     /// Whether text would fit at the end: music21's `canAppend`.
     #[pyo3(signature = (text, addSpace = true))]
-    fn canAppend(&self, text: &str, addSpace: bool) -> bool {
+    fn canAppend(&self, text: &str, #[pyo3(from_py_with = crate::truthy)] addSpace: bool) -> bool {
         self.inner.can_append(text, addSpace)
     }
 
@@ -321,7 +325,7 @@ impl BrailleText {
     }
 
     #[setter]
-    fn set_rightHandSymbol(&mut self, value: bool) {
+    fn set_rightHandSymbol(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.right_hand_symbol = value;
     }
 
@@ -332,7 +336,7 @@ impl BrailleText {
     }
 
     #[setter]
-    fn set_leftHandSymbol(&mut self, value: bool) {
+    fn set_leftHandSymbol(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.left_hand_symbol = value;
     }
 
@@ -391,7 +395,7 @@ impl BrailleText {
     fn appendOrInsertCurrent(
         slf: &Bound<'_, Self>,
         brailleExpr: &str,
-        addSpace: bool,
+        #[pyo3(from_py_with = crate::truthy)] addSpace: bool,
     ) -> PyResult<()> {
         Self::step(slf, |text| {
             text.append_or_insert_current(brailleExpr, addSpace)

@@ -250,9 +250,9 @@ fn scoreSimilarity<'py>(
     py: Python<'py>,
     scoreDict: &Bound<'py, PyAny>,
     minimumLength: usize,
-    giveUpdates: bool,
-    includeReverse: bool,
-    forceDifflib: bool,
+    #[pyo3(from_py_with = crate::truthy)] giveUpdates: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeReverse: bool,
+    #[pyo3(from_py_with = crate::truthy)] forceDifflib: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     if !forceDifflib && py.import("Levenshtein").is_ok() {
         return Err(crate::stream::StreamException::new_err(

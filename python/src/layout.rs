@@ -403,7 +403,7 @@ impl PageLayout {
     }
 
     #[setter]
-    fn set_isNew(&mut self, value: Option<bool>) {
+    fn set_isNew(&mut self, #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>) {
         self.inner.is_new = value;
     }
 
@@ -561,7 +561,7 @@ impl SystemLayout {
     }
 
     #[setter]
-    fn set_isNew(&mut self, value: Option<bool>) {
+    fn set_isNew(&mut self, #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>) {
         self.inner.is_new = value;
     }
 
@@ -732,7 +732,7 @@ impl StaffLayout {
     }
 
     #[setter]
-    fn set_hidden(&mut self, value: Option<bool>) {
+    fn set_hidden(&mut self, #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>) {
         self.inner.hidden = value;
     }
 

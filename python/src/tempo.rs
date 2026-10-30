@@ -275,7 +275,10 @@ impl MetronomeMark {
     }
 
     #[setter]
-    fn set_numberImplicit(&mut self, value: Option<bool>) {
+    fn set_numberImplicit(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>,
+    ) {
         self.inner.set_number_implicit(value.unwrap_or(false));
     }
 
@@ -352,7 +355,11 @@ impl MetronomeMark {
     }
 
     #[setter]
-    fn set_textImplicit(&mut self, _value: Option<bool>) {}
+    fn set_textImplicit(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] _value: Option<bool>,
+    ) {
+    }
 
     #[getter]
     fn get_referent(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Duration>> {
@@ -379,7 +386,7 @@ impl MetronomeMark {
     }
 
     #[setter]
-    fn set_parentheses(&mut self, value: bool) {
+    fn set_parentheses(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_parentheses(value);
     }
 
@@ -407,7 +414,10 @@ impl MetronomeMark {
     /// It is always a plain count of quarters, so it reads as a float even
     /// where the mark's own number is whole.
     #[pyo3(signature = (useNumberSounding = true))]
-    fn getQuarterBPM(&self, useNumberSounding: bool) -> Option<f64> {
+    fn getQuarterBPM(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] useNumberSounding: bool,
+    ) -> Option<f64> {
         if useNumberSounding {
             return self.inner.sounding_quarter_bpm();
         }
@@ -417,7 +427,7 @@ impl MetronomeMark {
     /// music21's `setQuarterBPM`: sets the tempo by quarter notes, leaving
     /// the mark counting whatever it counted.
     #[pyo3(signature = (value, setNumber = true))]
-    fn setQuarterBPM(&mut self, value: f64, setNumber: bool) {
+    fn setQuarterBPM(&mut self, value: f64, #[pyo3(from_py_with = crate::truthy)] setNumber: bool) {
         let counted =
             rs_convert_tempo_by_referent(value, 1.0, self.inner.referent().quarter_length());
         if !setNumber {
@@ -490,7 +500,7 @@ impl MetronomeMark {
     fn getTextExpression(
         slf: &Bound<'_, Self>,
         py: Python<'_>,
-        returnImplicit: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnImplicit: bool,
     ) -> PyResult<Py<PyAny>> {
         let (text, number_implicit) = {
             let mark = slf.borrow();
@@ -781,7 +791,11 @@ impl TempoText {
     /// music21's `getTextExpression`: a copy of the text expression, or
     /// nothing where there is none.
     #[pyo3(signature = (numberImplicit = false))]
-    fn getTextExpression(&self, py: Python<'_>, numberImplicit: bool) -> PyResult<Py<PyAny>> {
+    fn getTextExpression(
+        &self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] numberImplicit: bool,
+    ) -> PyResult<Py<PyAny>> {
         let _ = numberImplicit;
         match &self.text_expression {
             Some(expression) => Ok(py
@@ -819,7 +833,7 @@ impl TempoText {
         &self,
         py: Python<'_>,
         te: Option<&Bound<'_, PyAny>>,
-        numberImplicit: bool,
+        #[pyo3(from_py_with = crate::truthy)] numberImplicit: bool,
     ) -> PyResult<Py<PyAny>> {
         let expression = match te.filter(|te| !te.is_none()) {
             Some(te) => te.clone(),

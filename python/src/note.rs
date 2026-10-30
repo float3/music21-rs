@@ -856,6 +856,7 @@ impl Note {
         visit.call(&self.unread_pitch)?;
         visit.call(&self.style)?;
         visit.call(&self.beams)?;
+        visit.call(&self.editorial)?;
         Ok(())
     }
 
@@ -871,6 +872,7 @@ impl Note {
         self.unread_pitch = None;
         self.style = None;
         self.beams = None;
+        self.editorial = None;
     }
 
     /// A note is written out as text and read back, and its pitch and its
@@ -1095,7 +1097,10 @@ impl Note {
     }
 
     #[setter]
-    fn set_octaveIsImplicit(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_octaveIsImplicit(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         Self::get_pitch(slf).setattr(slf.py(), "octaveIsImplicit", value)?;
         Self::broadcast_pitch(slf.py(), &slf.clone().unbind())
     }
@@ -1529,7 +1534,7 @@ impl Note {
         &mut self,
         text: &Bound<'_, PyAny>,
         index: usize,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         identifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
@@ -1550,7 +1555,7 @@ impl Note {
         &mut self,
         text: &Bound<'_, PyAny>,
         lyricNumber: Option<i32>,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         lyricIdentifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
@@ -1571,7 +1576,7 @@ impl Note {
     fn augmentOrDiminish<'py>(
         slf: &Bound<'py, Self>,
         scalar: f64,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         augment_or_diminish_note(slf.as_any(), scalar, inPlace)
     }
@@ -1580,8 +1585,8 @@ impl Note {
     #[pyo3(signature = (*, appoggiatura = false, inPlace = false))]
     fn getGrace<'py>(
         slf: &Bound<'py, Self>,
-        appoggiatura: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] appoggiatura: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         grace_note(slf.as_any(), appoggiatura, inPlace)
     }
@@ -1590,7 +1595,7 @@ impl Note {
     fn transpose(
         slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<Self>>> {
         let py = slf.py();
         let mut pitch = transpose_pitch_by_any(slf.borrow().inner.pitch(), value)?;
@@ -1709,7 +1714,7 @@ impl Note {
     #[pyo3(signature = (*, returnDefault = true))]
     fn getInstrument<'py>(
         slf: &Bound<'py, Self>,
-        returnDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         instrument_for_note(slf.as_any(), returnDefault)
     }
