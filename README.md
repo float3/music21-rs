@@ -447,6 +447,13 @@ fixes found while porting went upstream:
   fractional offset, so `extendTies` missed ties after triplets.
 - [cuthbertLab/music21#2115](https://github.com/cuthbertLab/music21/pull/2115):
   pitch detection without scipy overflowing on sixteen-bit samples.
+- [cuthbertLab/music21#2116](https://github.com/cuthbertLab/music21/pull/2116):
+  a metadata search failing on a query that will not compile as a regular
+  expression.
+- [cuthbertLab/music21#2117](https://github.com/cuthbertLab/music21/pull/2117):
+  the complement of an empty residual class in sieve.
+- [cuthbertLab/music21#2118](https://github.com/cuthbertLab/music21/pull/2118):
+  a stage-1 MuseData part getting a name it does not have.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - corrections to the Xenharmonic Wiki's temperament pages, found while
