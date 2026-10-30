@@ -1186,6 +1186,10 @@
 
 ## fixed
 
+- **A keyboard heading reads a lone key signature.** music21 now reads
+  each element of a heading's signatures by what it is; the port still
+  took a lone signature for a meter and failed on a key signature.
+
 - **A whistle's stroke is written on its percussion key.** music21 reads
   the MIDI percussion map of any `MidiPercussionMapMixin`, a `Whistle`
   among them though it is a `Flute`; the writer only read

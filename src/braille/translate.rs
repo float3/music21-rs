@@ -343,3 +343,37 @@ pub fn element_to_braille(element: StreamElement, options: &BrailleOptions) -> R
         },
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Duration, KeySignature, Note, StreamKind};
+
+    /// Two measures of one whole note, a key of two sharps in the first.
+    fn staff(name: &str) -> Stream {
+        let mut staff = Stream::with_kind(StreamKind::PartStaff);
+        for number in 1..=2 {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(number);
+            if number == 1 {
+                measure.push(KeySignature::new(2));
+            }
+            let note = Note::from_name(name)
+                .unwrap()
+                .with_duration(Duration::new(4.0).unwrap());
+            measure.push(note);
+            staff.insert(4.0 * (number - 1) as f64, measure);
+        }
+        staff
+    }
+
+    /// music21 36d9144c0: a key signature standing alone heads the two
+    /// hands as a key signature, where it used to be read as a meter.
+    #[test]
+    fn a_lone_key_signature_heads_the_keyboard() {
+        let written =
+            keyboard_parts_to_braille(&staff("D5"), &staff("D3"), &BrailleOptions::default())
+                .unwrap();
+        assert_eq!(written, "⠀⠀⠩⠩⠀⠀\n⠁⠀⠨⠜⠨⠵\n⠀⠀⠸⠜⠸⠵");
+    }
+}
