@@ -24,6 +24,7 @@ passing = [
     "music21.metadata.Metadata.add",
     "music21.metadata.Metadata.addContributor",
     "music21.metadata.Metadata.addCustom",
+    "music21.metadata.Metadata.all",
     "music21.metadata.Metadata.alternativeTitle",
     "music21.metadata.Metadata.bestTitle",
     "music21.metadata.Metadata.composer",

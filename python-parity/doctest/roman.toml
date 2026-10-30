@@ -30,6 +30,7 @@ passing = [
     "music21.roman.RomanNumeral.romanNumeral",
     "music21.roman.RomanNumeral.scaleDegreeWithAlteration",
     "music21.roman.RomanNumeral.transpose",
+    "music21.roman._isDiatonicToKey",
     "music21.roman._postFigureFromChordAndKey",
     "music21.roman.correctRNAlterationForMinor",
     "music21.roman.correctSuffixForChordQuality",
