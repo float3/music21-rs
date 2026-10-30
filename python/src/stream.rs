@@ -1338,6 +1338,20 @@ impl Stream {
         Ok(lines.join(joint))
     }
 
+    /// music21's `write`: this stream written by the wheel's own writers in
+    /// `fmt` -- MusicXML (the default, made notation first unless
+    /// `makeNotation=False`), MIDI, text, LilyPond, braille, RomanText or
+    /// Volpiano -- to `fp` or a temporary file, and the path written.
+    #[pyo3(signature = (fmt = None, fp = None, **keywords))]
+    fn write(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        fp: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        crate::scalewrite::write_stream(slf.as_any(), fmt, fp, keywords)
+    }
+
     /// music21's `show` for its text formats: `'text'` (or `'txt'`, `'t'`)
     /// prints the `recurseRepr` listing, taking `addEndTimes` and
     /// `useMixedNumerals`, and `'textline'` answers it on one line. A
