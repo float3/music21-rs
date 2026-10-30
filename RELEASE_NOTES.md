@@ -1,5 +1,20 @@
 # Unreleased
 
+## added
+
+- **The wheel's `Stream` has `index`, `replace`, `getElementById` and
+  `clear`**, as music21's: `replace` keeps the target's offset, refuses a
+  replacement already held and with `recurse` looks inside held streams;
+  `clear` takes a measure's barlines with its elements.
+
+## fixed
+
+- **The report counts the metadata names the wheel serves by lookup.**
+  `composer`, `copyright` and 18 more are answered through `__getattr__`,
+  which the static scan read as missing.
+
+# music21-rs 0.11.0
+
 ## breaking changes
 
 - **`KeySignature::sharps` is always a count**, as music21's `sharps` has

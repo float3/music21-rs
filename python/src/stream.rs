@@ -1033,6 +1033,100 @@ impl Stream {
         }
     }
 
+    /// Where an object stands among `elements`, found by identity:
+    /// music21's `index`.
+    fn index(&self, el: &Bound<'_, PyAny>) -> PyResult<usize> {
+        self.sorted()
+            .iter()
+            .position(|held| held.object.bind(el.py()).is(el))
+            .ok_or_else(|| {
+                let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
+                StreamException::new_err(format!("cannot find object ({shown}) in Stream"))
+            })
+    }
+
+    /// Puts `replacement` where `target` stands: music21's `replace`. A
+    /// replacement already held is refused, and a target not held is
+    /// passed over, or with `recurse` looked for in the streams held.
+    /// `allDerived` is accepted and has nothing to follow: a stream here
+    /// keeps no derivation chain.
+    #[pyo3(signature = (target, replacement, *, recurse = false, allDerived = true))]
+    fn replace(
+        &mut self,
+        target: &Bound<'_, PyAny>,
+        replacement: &Bound<'_, PyAny>,
+        recurse: bool,
+        allDerived: bool,
+    ) -> PyResult<()> {
+        let _ = allDerived;
+        let py = target.py();
+        if self
+            .held
+            .iter()
+            .any(|held| held.object.bind(py).is(replacement))
+        {
+            let shown = replacement.str()?.to_string();
+            return Err(StreamException::new_err(format!(
+                "{shown} already in this stream"
+            )));
+        }
+        if let Some(held) = self
+            .held
+            .iter_mut()
+            .find(|held| held.object.bind(py).is(target))
+        {
+            held.object = replacement.clone().unbind();
+            held.order = sort_order(replacement);
+            return Ok(());
+        }
+        if !recurse {
+            return Ok(());
+        }
+        let nested: Vec<Py<PyAny>> = self
+            .held
+            .iter()
+            .map(|held| held.object.clone_ref(py))
+            .collect();
+        for inner in nested {
+            let Ok(inner) = inner.bind(py).cast::<Stream>() else {
+                continue;
+            };
+            inner
+                .borrow_mut()
+                .replace(target, replacement, recurse, allDerived)?;
+        }
+        Ok(())
+    }
+
+    /// The first element held whose `id` is `elementId`, or `None`:
+    /// music21's `getElementById`, which looks at this stream's own
+    /// elements and not into the streams they hold.
+    fn getElementById<'py>(
+        &self,
+        py: Python<'py>,
+        elementId: &Bound<'py, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        for held in self.sorted() {
+            let object = held.object.bind(py);
+            let Ok(id) = object.getattr("id") else {
+                continue;
+            };
+            if id.eq(elementId)? {
+                return Ok(Some(object.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Takes everything out, keeping what else the stream says of itself:
+    /// music21's `clear`. A measure's barlines go too, being among
+    /// music21's elements.
+    fn clear(&mut self) {
+        self.held.clear();
+        self.left_barline = None;
+        self.right_barline = None;
+    }
+
     /// The element of this stream sounding where another element starts:
     /// music21's `playingWhenAttacked`, which answers the one sounding
     /// there, or of several the first of that element's own class, and

@@ -484,6 +484,47 @@ def test_a_stream_holds_the_objects_it_is_given():
     assert repr(score.parts[0]) == "<music21.stream.Part upper>"
 
 
+def test_a_stream_finds_and_swaps_what_it_holds():
+    """music21's `index`, `replace`, `getElementById` and `clear`."""
+    line = m.Stream()
+    first, second = m.Note("C4"), m.Note("D4")
+    line.append([first, second])
+    assert line.index(second) == 1
+    with pytest.raises(m.StreamException, match="cannot find object"):
+        line.index(m.Note("D4"))
+
+    # A replacement stands where the target stood; one already held is
+    # refused, and a target the stream lacks is passed over.
+    third = m.Note("E4")
+    line.replace(second, third)
+    assert line.elements == (first, third)
+    assert line.elementOffset(third) == 1.0
+    with pytest.raises(m.StreamException):
+        line.replace(first, third)
+    line.replace(m.Note("F4"), m.Note("G4"))
+    assert len(line) == 2
+
+    # With recurse, a stream nested inside is searched too.
+    outer, inner = m.Stream(), m.Stream()
+    inner.id = "inner"
+    inner.append(first)
+    outer.insert(0, inner)
+    fourth = m.Note("A4")
+    outer.replace(first, fourth, recurse=True)
+    assert inner.elements == (fourth,)
+
+    assert outer.getElementById("inner") is inner
+    assert outer.getElementById("nothing") is None
+
+    line.clear()
+    assert len(line) == 0
+    bar = m.Measure()
+    bar.append(m.Note("C4"))
+    bar.rightBarline = "final"
+    bar.clear()
+    assert bar.rightBarline is None
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.
