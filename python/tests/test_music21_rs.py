@@ -6804,3 +6804,252 @@ def test_a_streams_offsets_are_fractions_where_music21s_are():
     loose.insert(Fraction(1, 3), m.Note("C4"))
     assert isinstance(loose.lowestOffset, Fraction)
     assert isinstance(loose.highestTime, Fraction)
+
+
+def _two_part_score():
+    """Two parts of two measures each, a chord and a rest among them: the
+    score the timespan tree tests read, which music21 reads the same."""
+    upper = m.Part()
+    upper.id = "upper"
+    first = m.Measure(number=1)
+    first.append([m.Note("G4"), m.Note("C5"), m.Note("E5", quarterLength=2)])
+    second = m.Measure(number=2)
+    second.append([m.Note("D5", quarterLength=2), m.Rest(), m.Note("C5")])
+    upper.append([first, second])
+    lower = m.Part()
+    lower.id = "lower"
+    third = m.Measure(number=1)
+    third.append([m.Note("C4", quarterLength=2), m.Chord(["E3", "G3"]), m.Note("F3")])
+    fourth = m.Measure(number=2)
+    fourth.append(
+        [
+            m.Note("G3", quarterLength=1.5),
+            m.Note("A3", quarterLength=0.5),
+            m.Note("C4", quarterLength=2),
+        ]
+    )
+    lower.append([third, fourth])
+    score = m.Score()
+    score.insert(0, upper)
+    score.insert(0, lower)
+    return score, upper, lower
+
+
+def test_as_timespans_reads_every_element_as_music21_does():
+    """Each element as a timespan, in music21's order, with the streams it
+    stands in and its measure; the notes are the stream's own objects."""
+    score, upper, lower = _two_part_score()
+    tree = score.asTimespans()
+    assert len(tree) == 12
+    assert [repr(span) for span in tree][:4] == [
+        "<PitchedTimespan (0.0 to 1.0) <music21.note.Note G>>",
+        "<PitchedTimespan (0.0 to 2.0) <music21.note.Note C>>",
+        "<PitchedTimespan (1.0 to 2.0) <music21.note.Note C>>",
+        "<PitchedTimespan (2.0 to 3.0) <music21.chord.Chord E3 G3>>",
+    ]
+    assert repr(tree[9]) == "<ElementTimespan (6.0 to 7.0) <music21.note.Rest quarter>>"
+    assert type(tree[9]).__name__ == "ElementTimespan"
+    assert [(span.parentOffset, span.parentEndTime, span.measureNumber) for span in tree][
+        5:8
+    ] == [(0.0, 4.0, 1), (4.0, 8.0, 2), (4.0, 8.0, 2)]
+    assert [span.part is upper for span in tree] == [
+        True, False, True, False, True, False, False, True, False, True, False, True,
+    ]
+    first = tree[0]
+    assert first.element is upper[0][0]
+    assert first.parentage == (upper[0], upper, score)
+    assert first.getParentageByClass((m.Measure,)) is upper[0]
+    assert first.getParentageByClass((m.Score,)) is score
+    assert tree[4].quarterLength == 2.0
+    assert tree[0] is tree[0]
+    assert tree[1:3] == [tree[1], tree[2]]
+    assert tree[-1].element is upper[1][2]
+    assert tree[0] in tree
+    assert tree.index(tree[5]) == 5
+    assert tree.source is score
+    assert tree.element is score
+    assert repr(tree).startswith("<TimespanTree {12} (0.0 to 8.0) ")
+    assert str(tree).splitlines()[1] == "\t" + repr(tree[0])
+
+
+def test_as_timespans_takes_music21s_class_list_and_flatten():
+    score, upper, _ = _two_part_score()
+    notes = score.asTimespans(classList=(m.Note,))
+    assert len(notes) == 10
+    assert [span.endTime for span in notes][-3:] == [6.0, 8.0, 8.0]
+    assert score.asTimespans(classList=(m.Note, m.Rest)).maximumOverlap() == 2
+    assert len(score.asTimespans(classList=(m.Chord,))) == 1
+    semi = score.asTimespans(flatten="semiFlat")
+    assert len(semi) == 18
+    # The streams are timespans too, each its own.
+    assert [(span.offset, span.endTime) for span in semi][2:6] == [
+        (0.0, 4.0), (0.0, 4.0), (0.0, 8.0), (0.0, 8.0),
+    ]
+    assert type(semi[2]).__name__ == "PitchedTimespan"
+    assert semi[2].element is upper[0]
+    assert semi[4].element is upper
+    assert semi[2].measureNumber == 1
+
+
+def test_a_timespan_tree_answers_positions_as_music21s():
+    score, _, _ = _two_part_score()
+    tree = score.asTimespans()
+    assert (tree.lowestPosition(), tree.highestPosition()) == (0.0, 7.0)
+    assert (tree.endTime, tree.offset) == (8.0, 0.0)
+    assert tree.getPositionAfter(1.0) == 2.0
+    assert tree.getPositionBefore(1.0) == 0.0
+    assert tree.getPositionAfter(7.0) is None
+    assert tree.getPositionBefore(0.0) is None
+    assert tree.elementsStartingAt(2.0) == (tree[3], tree[4])
+    assert tree.elementsStoppingAt(4.0) == (tree[4], tree[5])
+    assert tree.elementsOverlappingOffset(2.5) == (tree[3], tree[4])
+    assert tree.allOffsets() == (0.0, 1.0, 2.0, 3.0, 4.0, 5.5, 6.0, 7.0)
+    assert tree.allTimePoints()[-1] == 8.0
+    assert tree.overlapTimePoints() == [1.0, 3.0, 5.5, 7.0]
+    assert tree.maximumOverlap() == 2
+    _, upper, lower = _two_part_score()
+    assert score.asTimespans().allParts()[0].id == "upper"
+    empty = m.Score().asTimespans()
+    assert (empty.lowestPosition(), empty.highestPosition()) == (-math.inf, -math.inf)
+    assert empty.endTime == math.inf
+    assert empty.maximumOverlap() is None
+    assert list(empty.iterateVerticalities()) == []
+    assert list(empty.iterateVerticalitiesNwise(n=2)) == []
+    assert repr(empty.getVerticalityAt(1.0)) == "<music21.tree.verticality.Verticality 1.0 {}>"
+
+
+def test_a_timespan_trees_verticalities_are_music21s():
+    score, _, _ = _two_part_score()
+    tree = score.asTimespans()
+    assert [repr(v) for v in tree.iterateVerticalities()] == [
+        "<music21.tree.verticality.Verticality 0.0 {C4 G4}>",
+        "<music21.tree.verticality.Verticality 1.0 {C4 C5}>",
+        "<music21.tree.verticality.Verticality 2.0 {E3 G3 E5}>",
+        "<music21.tree.verticality.Verticality 3.0 {F3 E5}>",
+        "<music21.tree.verticality.Verticality 4.0 {G3 D5}>",
+        "<music21.tree.verticality.Verticality 5.5 {A3 D5}>",
+        "<music21.tree.verticality.Verticality 6.0 {C4}>",
+        "<music21.tree.verticality.Verticality 7.0 {C4 C5}>",
+    ]
+    assert [v.offset for v in tree.iterateVerticalities(reverse=True)][:3] == [7.0, 6.0, 5.5]
+    assert [
+        (v.measureNumber, v.nextStartOffset, v.timeToNextEvent)
+        for v in tree.iterateVerticalities()
+    ][-2:] == [(2, 7.0, 1.0), (2, None, 1.0)]
+    assert [repr(v.bassTimespan) for v in tree.iterateVerticalities()][2:4] == [
+        "<PitchedTimespan (2.0 to 3.0) <music21.chord.Chord E3 G3>>",
+        "<PitchedTimespan (3.0 to 4.0) <music21.note.Note F>>",
+    ]
+    assert [sorted(p.pitchClass for p in v.pitchClassSet) for v in tree.iterateVerticalities()][
+        4:6
+    ] == [[2, 7], [2, 9]]
+    middle = tree.getVerticalityAt(2.5)
+    assert middle.startTimespans == ()
+    assert middle.overlapTimespans == (tree[3], tree[4])
+    assert middle.stopTimespans == ()
+    assert middle.startAndOverlapTimespans == (tree[3], tree[4])
+    assert middle.nextVerticality.offset == 3.0
+    assert middle.previousVerticality.offset == 2.0
+    assert repr(middle.toChord()) == "<music21.chord.Chord E3 G3 E5>"
+    assert [p.nameWithOctave for p in sorted(middle.pitchSet, key=lambda p: p.ps)] == [
+        "E3", "G3", "E5",
+    ]
+    # The pitches are the notes' own.
+    opening = tree.getVerticalityAt(0.0)
+    assert opening.pitchSet == {p for span in opening.startTimespans for p in span.pitches}
+    assert middle.timespanTree is tree
+    assert tree.getVerticalityAtOrBefore(2.5).offset == 2.0
+    assert tree.getVerticalityAtOrBefore(3.0).offset == 3.0
+    assert repr(tree.getVerticalityAt(100)) == "<music21.tree.verticality.Verticality 100 {}>"
+
+
+def test_verticalities_run_n_wise_and_consonance_bounded():
+    score, upper, _ = _two_part_score()
+    tree = score.asTimespans()
+    pairs = [[v.offset for v in run] for run in tree.iterateVerticalitiesNwise(n=2, padEnd=True)]
+    assert pairs[0] == [0.0, 1.0]
+    assert pairs[-1] == [7.0, 8.0]
+    assert len(pairs) == 8
+    backwards = [[v.offset for v in run] for run in tree.iterateVerticalitiesNwise(n=3, reverse=True)]
+    assert backwards[0] == [5.5, 6.0, 7.0]
+    assert backwards[-1] == [0.0, 1.0, 2.0]
+    assert [[v.offset for v in run] for run in tree.iterateConsonanceBoundedVerticalities()] == [
+        [2.0, 3.0, 4.0],
+        [4.0, 5.5, 6.0],
+    ]
+    run = next(iter(tree.iterateVerticalitiesNwise(n=3)))
+    unwrapped = tree.unwrapVerticalities(run)
+    assert [part is upper for part in unwrapped] == [True, False]
+    melody = unwrapped[upper]
+    assert list(melody) == [tree[0], tree[2], tree[4]]
+    assert (melody.hasPassingTone, melody.hasNeighborTone, melody.hasNoMotion) == (
+        True, False, False,
+    )
+
+
+def test_a_verticality_pairs_each_part_with_its_last_note():
+    score, _, _ = _two_part_score()
+    tree = score.asTimespans()
+    assert tree.findNextPitchedTimespanInSameStreamByClass(tree[0]) is tree[2]
+    assert tree.findPreviousPitchedTimespanInSameStreamByClass(tree[-1]) is tree[9]
+    assert tree.findNextPitchedTimespanInSameStreamByClass(tree[0], classList=(m.Score,)) is tree[2]
+    fourth = tree.getVerticalityAt(4.0)
+    expected = [(tree[5], tree[6]), (tree[4], tree[7])]
+    assert fourth.getPairedMotion() == expected
+    assert fourth.getPairedMotion(includeRests=False, includeOblique=False) == expected
+    assert tree.getVerticalityAt(3.0).getPairedMotion(includeOblique=False) == [
+        (tree[3], tree[5])
+    ]
+    assert [repr(q) for q in fourth.getAllVoiceLeadingQuartets()] == [
+        "<music21.voiceLeading.VoiceLeadingQuartet v1n1=F3, v1n2=G3, v2n1=E5, v2n2=D5>"
+    ]
+    quartet = fourth.getAllVoiceLeadingQuartets()[0]
+    assert quartet.v1n1 is tree[5].element
+    assert fourth.getAllVoiceLeadingQuartets(returnObjects=False, includeNoMotion=True) == [
+        ((tree[5], tree[6]), (tree[4], tree[7]))
+    ]
+    assert tree.getVerticalityAt(2.0).getAllVoiceLeadingQuartets() == []
+
+
+def test_a_verticality_makes_music21s_chord_or_rest():
+    score, _, _ = _two_part_score()
+    tree = score.asTimespans()
+    made = tree.getVerticalityAt(4.0).makeElement()
+    assert repr(made) == "<music21.chord.Chord G3 D5>"
+    assert made.duration.quarterLength == 1.5
+    assert repr(tree.getVerticalityAt(6.0).makeElement(1.0)) == "<music21.chord.Chord C4>"
+    rest = tree.getVerticalityAt(20).makeElement(2.0)
+    assert repr(rest) == "<music21.note.Rest half>"
+    tied = tree.getVerticalityAt(1.0).makeElement(addTies=True)
+    assert tied.notes[0].tie.type == "stop"
+
+
+def test_timespans_hold_floats_and_a_measures_barline():
+    """music21's timespans make every offset a float, a length between
+    verticalities goes through `opFrac`, a measure's final barline is a
+    timespan of its own, and a class list leaves the measures as long."""
+    from fractions import Fraction
+
+    part = m.from_tiny_notation("tinyNotation: 4/4 c4 trip{d8 e f} g4 r4 a2 r2")
+    tree = part.asTimespans()
+    assert len(tree) == 11
+    assert repr(tree[3]) == (
+        "<PitchedTimespan (1.0 to 1.3333333333333333) <music21.note.Note D>>"
+    )
+    assert repr(tree[-1]) == "<ElementTimespan (8.0 to 8.0) <music21.bar.Barline type=final>>"
+    notes = part.asTimespans(classList=(m.Note,))
+    assert [span.parentEndTime for span in notes][-1] == 8.0
+    assert notes.endTime == 6.0
+    triplet = notes.getVerticalityAt(1.0)
+    assert triplet.timeToNextEvent == Fraction(1, 3)
+    assert triplet.nextStartOffset == 1.3333333333333333
+
+
+def test_what_as_timespans_leaves_unported_says_so():
+    score, _, _ = _two_part_score()
+    with pytest.raises(NotImplementedError):
+        score.asTimespans(flatten=False)
+    loose = m.Stream([m.Note("C4"), m.Note("D4")])
+    assert len(loose.asTimespans(flatten=False)) == 2
+    with pytest.raises(NotImplementedError):
+        score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)

@@ -4175,6 +4175,21 @@ impl Stream {
         Ok(copied)
     }
 
+    /// music21's `asTimespans`: every element as a timespan in a
+    /// `TimespanTree`, those of the streams held too; `flatten='semiFlat'`
+    /// keeps the streams as timespans of their own, and `classList` keeps
+    /// only elements of those classes.
+    ///
+    /// music21 caches the tree on the stream; this reads it afresh.
+    #[pyo3(signature = (*, flatten = None, classList = None))]
+    fn asTimespans(
+        slf: &Bound<'_, Self>,
+        flatten: Option<&Bound<'_, PyAny>>,
+        classList: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<crate::tree::TimespanTree> {
+        crate::tree::as_timespans(slf.as_any(), flatten, classList)
+    }
+
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let py = slf.py();
         let label = match &slf.borrow().id {

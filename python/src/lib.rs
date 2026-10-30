@@ -108,6 +108,7 @@ pub mod tablature;
 pub mod tempo;
 pub mod text;
 pub mod transposition;
+pub mod tree;
 pub mod tsvconverter;
 pub mod variant;
 pub mod voiceleading;
@@ -1903,6 +1904,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     articulations::register(m)?;
     expressions::register(m)?;
     stream::register(m)?;
+    tree::register(m)?;
     formats::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
