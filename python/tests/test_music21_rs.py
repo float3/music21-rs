@@ -9,6 +9,7 @@ handful of behaviours a caller reaches for first are right.
 
 import gc
 import os
+import pickle
 import copy
 import random
 import math
@@ -687,6 +688,17 @@ def test_the_flags_music21_takes_more_than_truth_for():
     assert line.atSoundingPitch is False
     with pytest.raises(m.StreamException):
         line.atSoundingPitch = 2
+
+
+def test_a_tempo_marks_referent_is_changed_through_the_one_handed_out():
+    """music21: a mark's referent written through the object it hands out
+    is the mark's, in its tempo, its repr, a copy and a pickle."""
+    mark = m.MetronomeMark(number=60)
+    mark.referent.type = "half"
+    assert mark.getQuarterBPM() == 120.0
+    assert repr(mark) == "<music21.tempo.MetronomeMark larghetto Half=60>"
+    assert copy.deepcopy(mark).referent.quarterLength == 2.0
+    assert pickle.loads(pickle.dumps(mark)).referent.quarterLength == 2.0
 
 
 def test_the_stream_walks_answer_with_the_objects_held():

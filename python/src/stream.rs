@@ -5256,7 +5256,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         return Ok(Some(StreamElement::TimeSignature(value)));
     }
     if let Ok(mark) = object.extract::<PyRef<'_, MetronomeMark>>() {
-        return Ok(Some(StreamElement::MetronomeMark(mark.inner.clone())));
+        return Ok(Some(StreamElement::MetronomeMark(
+            mark.current(object.py()),
+        )));
     }
     // The walks keep a metric modulation as the stand-in it has always been.
     if !stand_ins

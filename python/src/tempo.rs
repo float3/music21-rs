@@ -136,12 +136,23 @@ impl MetronomeMark {
     /// The same mark again. A copy has no referent object and no words of
     /// its own yet; it makes them when something asks, so that the copy's
     /// are its own and share the copy's style rather than the original's.
-    fn copied(&self) -> Self {
+    fn copied(&self, py: Python<'_>) -> Self {
         Self {
-            inner: self.inner.clone(),
+            inner: self.current(py),
             referent: None,
             tempo_text: None,
         }
+    }
+
+    /// The mark as it stands: its value with the referent read back from
+    /// the object handed out, so `mark.referent.type = 'half'` is the mark's
+    /// as music21's is.
+    pub(crate) fn current(&self, py: Python<'_>) -> RsMetronomeMark {
+        let mut mark = self.inner.clone();
+        if let Some(referent) = &self.referent {
+            mark.set_referent(referent.bind(py).borrow().inner.clone());
+        }
+        mark
     }
 
     /// The referent as an object, made on first asking and the same after.
@@ -201,7 +212,7 @@ impl MetronomeMark {
         // What it is played at goes with it: a mark imported from a score
         // often says nothing and sounds at ninety-six.
         let written = (
-            me.inner.clone(),
+            me.current(slf.py()),
             me.inner.parentheses(),
             me.inner
                 .placement()
@@ -416,18 +427,26 @@ impl MetronomeMark {
     #[pyo3(signature = (useNumberSounding = true))]
     fn getQuarterBPM(
         &self,
+        py: Python<'_>,
         #[pyo3(from_py_with = crate::truthy)] useNumberSounding: bool,
     ) -> Option<f64> {
+        let mark = self.current(py);
         if useNumberSounding {
-            return self.inner.sounding_quarter_bpm();
+            return mark.sounding_quarter_bpm();
         }
-        self.inner.quarter_bpm()
+        mark.quarter_bpm()
     }
 
     /// music21's `setQuarterBPM`: sets the tempo by quarter notes, leaving
     /// the mark counting whatever it counted.
     #[pyo3(signature = (value, setNumber = true))]
-    fn setQuarterBPM(&mut self, value: f64, #[pyo3(from_py_with = crate::truthy)] setNumber: bool) {
+    fn setQuarterBPM(
+        &mut self,
+        py: Python<'_>,
+        value: f64,
+        #[pyo3(from_py_with = crate::truthy)] setNumber: bool,
+    ) {
+        self.inner = self.current(py);
         let counted =
             rs_convert_tempo_by_referent(value, 1.0, self.inner.referent().quarter_length());
         if !setNumber {
@@ -445,7 +464,7 @@ impl MetronomeMark {
         referent: &Bound<'_, PyAny>,
     ) -> PyResult<Py<Self>> {
         let equivalent = self
-            .inner
+            .current(py)
             .equivalent_by_referent(referent_duration(Some(referent))?);
         crate::installed_new(py, "music21.tempo", "MetronomeMark", Self::wrap(equivalent))
     }
@@ -458,16 +477,16 @@ impl MetronomeMark {
         referent: &Bound<'_, PyAny>,
     ) -> PyResult<Py<Self>> {
         let moved = self
-            .inner
+            .current(py)
             .maintained_number_with_referent(referent_duration(Some(referent))?);
         crate::installed_new(py, "music21.tempo", "MetronomeMark", Self::wrap(moved))
     }
 
     /// music21's `secondsPerQuarter`, which counts what the mark is played
     /// at where that differs from what it says.
-    fn secondsPerQuarter(&self) -> PyResult<f64> {
+    fn secondsPerQuarter(&self, py: Python<'_>) -> PyResult<f64> {
         let quarter_bpm = self
-            .getQuarterBPM(true)
+            .getQuarterBPM(py, true)
             .ok_or_else(|| MetronomeMarkException::new_err("this mark says no tempo"))?;
         if quarter_bpm == 0.0 {
             return Err(pyo3::exceptions::PyZeroDivisionError::new_err(
@@ -480,7 +499,7 @@ impl MetronomeMark {
     /// music21's `durationToSeconds`: how long a span lasts at this tempo.
     fn durationToSeconds(&self, durationOrQuarterLength: &Bound<'_, PyAny>) -> PyResult<f64> {
         let duration = duration_from_any(durationOrQuarterLength)?;
-        Ok(self.secondsPerQuarter()? * duration.quarter_length())
+        Ok(self.secondsPerQuarter(durationOrQuarterLength.py())? * duration.quarter_length())
     }
 
     /// music21's `secondsToDuration`: the span that lasts that long.
@@ -490,7 +509,8 @@ impl MetronomeMark {
                 "seconds must be a number greater than zero",
             ));
         }
-        let duration = RsDuration::new(seconds / self.secondsPerQuarter()?).map_err(tempo_error)?;
+        let duration =
+            RsDuration::new(seconds / self.secondsPerQuarter(py)?).map_err(tempo_error)?;
         crate::installed_new(py, "music21.duration", "Duration", Duration::wrap(duration))
     }
 
@@ -559,20 +579,21 @@ impl MetronomeMark {
         Self::getSoundingMetronomeMark(slf, py, Some(&found))
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&self, py: Python<'_>) -> String {
+        let mark = self.current(py);
         let mut sounding = "";
-        let mut number = self.inner.number();
-        if self.inner.number().is_none() && self.inner.number_sounding().is_some() {
+        let mut number = mark.number();
+        if mark.number().is_none() && mark.number_sounding().is_some() {
             sounding = " (playback only)";
-            number = self.inner.number_sounding();
+            number = mark.number_sounding();
         }
         let written = match number {
             Some(number) if number.fract() == 0.0 => format!("{}", number as i64),
             Some(number) => format!("{number}"),
             None => "None".to_string(),
         };
-        let full = self.inner.referent().full_name();
-        match self.inner.text() {
+        let full = mark.referent().full_name();
+        match mark.text() {
             Some(text) => {
                 format!("<music21.tempo.MetronomeMark {text} {full}={written}{sounding}>")
             }
@@ -581,9 +602,10 @@ impl MetronomeMark {
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
+        let py = other.py();
         other
             .extract::<PyRef<'_, Self>>()
-            .is_ok_and(|other| other.inner == self.inner)
+            .is_ok_and(|other| other.current(py) == self.current(py))
     }
 
     /// music21 restores hashing on identity where it defines equality, so
@@ -596,12 +618,12 @@ impl MetronomeMark {
         slf: &Bound<'py, Self>,
         _memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().copied();
+        let copied = slf.borrow().copied(slf.py());
         crate::copy_as_same_type(slf, copied)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().copied();
+        let copied = slf.borrow().copied(slf.py());
         crate::copy_as_same_type(slf, copied)
     }
 }
@@ -933,7 +955,7 @@ fn new_mark(py: Python<'_>, inner: RsMetronomeMark) -> PyResult<Py<PyAny>> {
 /// The crate's value of a metronome mark, whichever class holds it.
 fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
     match mark.extract::<PyRef<'_, MetronomeMark>>() {
-        Ok(ours) => Ok(ours.inner.clone()),
+        Ok(ours) => Ok(ours.current(mark.py())),
         Err(_) => {
             let number: Option<f64> = mark.getattr("number")?.extract()?;
             let mut value = RsMetronomeMark::default()
