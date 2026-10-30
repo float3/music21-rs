@@ -43,6 +43,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
+use music21_rs_crate::braille::SegmentDivision;
 use music21_rs_crate::voiceleading::QuartetOptions;
 use music21_rs_crate::{Stream as RsStream, StreamElement, StreamEvent, StreamKind};
 
@@ -4417,7 +4418,8 @@ fn element_object_as<'py>(
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
-        | StreamElement::GlobalComment(_) => return Ok(None),
+        | StreamElement::GlobalComment(_)
+        | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
     Ok(Some(made))
@@ -4681,6 +4683,21 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
     // its groups and how much of the stream it replaces.
     if is_of_class(object, &pyo3::types::PyString::new(py, "Variant"))? {
         return Ok(Some(variant_value(object)?.into()));
+    }
+    // music21's own `braille.objects` divisions, which the package has no
+    // class for: where braille starts a new segment.
+    if !stand_ins
+        && is_of_class(
+            object,
+            &pyo3::types::PyString::new(py, "BrailleSegmentDivision"),
+        )?
+    {
+        let optional = pyo3::types::PyString::new(py, "BrailleOptionalSegmentDivision");
+        let division = match is_of_class(object, &optional)? {
+            true => SegmentDivision::Optional,
+            false => SegmentDivision::Required,
+        };
+        return Ok(Some(StreamElement::BrailleSegmentDivision(division)));
     }
     if let Ok(symbol) = object.cast::<ChordSymbol>() {
         return Ok(Some(StreamElement::ChordSymbol(

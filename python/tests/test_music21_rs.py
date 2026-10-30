@@ -4901,6 +4901,17 @@ def test_a_score_is_written_in_braille():
         m.objectToBraille(line, segmentBreaks=[(1, 2.0)])
 
 
+def test_music21s_segment_division_divides_braille():
+    """music21's `BrailleSegmentDivision` in a measure starts a new
+    segment there, as its `getRawSegments` example shows."""
+    objects = pytest.importorskip("music21.braille.objects")
+    part = m.from_tiny_notation("3/4 c4 c c e e e g g g c'2.").makeNotation()
+    part.measure(2).insert(1.0, objects.BrailleSegmentDivision())
+    assert m.objectToBraille(part) == (
+        "⠀⠀⠀⠼⠉⠲⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠹⠹⠀⠫⠐\n⠼⠃⠄⠀⠐⠫⠫⠀⠳⠳⠳⠀⠨⠝⠄⠣⠅"
+    )
+
+
 def test_a_grouping_of_elements_is_written_in_braille():
     """The elements braille writes together, and the transcriber that
     writes them one at a time."""

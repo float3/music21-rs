@@ -1957,7 +1957,8 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             | StreamElement::Layout(_)
             | StreamElement::TextBox(_)
             | StreamElement::Variant(_)
-            | StreamElement::GlobalComment(_) => {}
+            | StreamElement::GlobalComment(_)
+            | StreamElement::BrailleSegmentDivision(_) => {}
         }
         Ok(())
     }

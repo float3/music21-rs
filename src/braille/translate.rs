@@ -347,6 +347,8 @@ pub fn element_to_braille(element: StreamElement, options: &BrailleOptions) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::braille::SegmentDivision;
+    use crate::defaults::IntegerType;
     use crate::{Duration, KeySignature, Note, StreamKind};
 
     /// Two measures of one whole note, a key of two sharps in the first.
@@ -375,5 +377,37 @@ mod tests {
             keyboard_parts_to_braille(&staff("D5"), &staff("D3"), &BrailleOptions::default())
                 .unwrap();
         assert_eq!(written, "⠀⠀⠩⠩⠀⠀\n⠁⠀⠨⠜⠨⠵\n⠀⠀⠸⠜⠸⠵");
+    }
+
+    /// music21's `getRawSegments` example: `3/4 c4 c c e e e g g g c'2.`
+    /// with a division in a measure, transcribed.
+    fn divided(measure: IntegerType, offset: f64, division: SegmentDivision) -> String {
+        let mut part =
+            crate::tinynotation::from_tiny_notation("3/4 c4 c c e e e g g g c'2.").unwrap();
+        crate::makenotation::make_notation(&mut part).unwrap();
+        for event in part.events_mut() {
+            let StreamElement::Stream(held) = event.element_mut() else {
+                continue;
+            };
+            if held.number() != measure {
+                continue;
+            }
+            held.insert(offset, division);
+        }
+        stream_to_braille(&part, &BrailleOptions::default()).unwrap()
+    }
+
+    /// A division starts a new segment there, in the middle of a measure
+    /// or not at all where the segment is empty; an optional one only once
+    /// the segment holds 48 elements.
+    #[test]
+    fn a_segment_division_divides_the_segment() {
+        let whole = "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠼⠉⠲⠀⠀⠀⠀⠀⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠹⠹⠀⠫⠫⠫⠀⠳⠳⠳⠀⠨⠝⠄⠣⠅";
+        assert_eq!(
+            divided(2, 1.0, SegmentDivision::Required),
+            "⠀⠀⠀⠼⠉⠲⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠹⠹⠀⠫⠐\n⠼⠃⠄⠀⠐⠫⠫⠀⠳⠳⠳⠀⠨⠝⠄⠣⠅"
+        );
+        assert_eq!(divided(1, 1.0, SegmentDivision::Optional), whole);
+        assert_eq!(divided(1, 0.0, SegmentDivision::Required), whole);
     }
 }

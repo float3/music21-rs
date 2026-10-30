@@ -102,6 +102,16 @@ impl StreamElement {
             StreamElement::TextBox(_) => vec!["TextBox"],
             StreamElement::Variant(_) => vec!["Variant"],
             StreamElement::GlobalComment(_) => vec!["GlobalComment"],
+            StreamElement::BrailleSegmentDivision(division) => match division {
+                crate::braille::SegmentDivision::Required => {
+                    vec!["BrailleSegmentDivision", "BrailleTranscriptionHelper"]
+                }
+                crate::braille::SegmentDivision::Optional => vec![
+                    "BrailleOptionalSegmentDivision",
+                    "BrailleSegmentDivision",
+                    "BrailleTranscriptionHelper",
+                ],
+            },
         };
         names.push("Music21Object");
         names

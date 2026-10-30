@@ -10,6 +10,7 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
+use super::SegmentDivision;
 use super::basic::{
     self, NoteContext, Transcription, barline_to_braille, chord_to_braille, clef_to_braille,
     dynamic_to_braille, note_to_braille, number_to_braille, rest_to_braille,
@@ -368,6 +369,9 @@ fn affinity_of(element: &StreamElement) -> Option<(Affinity, i32)> {
         StreamElement::Stream(inner) if inner.kind() == StreamKind::Voice => {
             (Affinity::Inaccord, 10)
         }
+        // music21's `BrailleTranscriptionHelper` takes no affinity; the
+        // segmenting reads it before asking for one.
+        StreamElement::BrailleSegmentDivision(_) => (Affinity::NoteGrouping, -100),
         StreamElement::TextExpression(text) => {
             if text.content().split_whitespace().count() > 1 {
                 (Affinity::LongTextExpression, 8)
@@ -914,6 +918,16 @@ pub fn get_raw_segments(
                     ordinal += 1;
                 }
                 start_new = false;
+            }
+            // A division ends the segment unless it is empty, or optional
+            // and the segment not yet past its length; it is never written.
+            if let StreamElement::BrailleSegmentDivision(division) = &element.element {
+                let waits =
+                    *division == SegmentDivision::Optional && in_current <= MAX_ELEMENTS_IN_SEGMENT;
+                if !waits && in_current > 0 {
+                    start_new = true;
+                }
+                continue;
             }
             if let StreamElement::Barline(barline) = &element.element
                 && in_current > MAX_ELEMENTS_IN_SEGMENT

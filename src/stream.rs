@@ -202,6 +202,8 @@ pub enum StreamElement {
     Variant(Box<crate::variant::Variant>),
     /// A `!!` line of a Humdrum file, kept where it was written.
     GlobalComment(crate::humdrum::GlobalComment),
+    /// Where a braille segment divides; nothing is written for it.
+    BrailleSegmentDivision(crate::braille::SegmentDivision),
 }
 
 impl StreamElement {
@@ -238,7 +240,8 @@ impl StreamElement {
             | Self::Layout(_)
             | Self::TextBox(_)
             | Self::Variant(_)
-            | Self::GlobalComment(_) => None,
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => None,
         }
     }
 
@@ -268,7 +271,8 @@ impl StreamElement {
             | Self::Layout(_)
             | Self::TextBox(_)
             | Self::Variant(_)
-            | Self::GlobalComment(_) => 0.0,
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => 0.0,
             _ => self
                 .duration()
                 .map(Duration::quarter_length)
@@ -305,7 +309,8 @@ impl StreamElement {
             | Self::Layout(_)
             | Self::TextBox(_)
             | Self::Variant(_)
-            | Self::GlobalComment(_) => Vec::new(),
+            | Self::GlobalComment(_)
+            | Self::BrailleSegmentDivision(_) => Vec::new(),
         }
     }
 
@@ -321,6 +326,8 @@ impl StreamElement {
     /// at one offset.
     pub(crate) fn class_sort_order(&self) -> i32 {
         match self {
+            // music21's `BrailleTranscriptionHelper`.
+            Self::BrailleSegmentDivision(_) => -100,
             Self::TextBox(_) => -31,
             Self::TextExpression(_) | Self::RehearsalMark(_) => -30,
             Self::Instrument(_) => -25,
@@ -387,6 +394,7 @@ impl StreamElement {
             Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
             Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
             Self::GlobalComment(said) => Ok(Self::GlobalComment(said.clone())),
+            Self::BrailleSegmentDivision(division) => Ok(Self::BrailleSegmentDivision(*division)),
         }
     }
 }
@@ -406,6 +414,12 @@ impl From<PedalObject> for StreamElement {
 impl From<crate::humdrum::GlobalComment> for StreamElement {
     fn from(value: crate::humdrum::GlobalComment) -> Self {
         Self::GlobalComment(value)
+    }
+}
+
+impl From<crate::braille::SegmentDivision> for StreamElement {
+    fn from(value: crate::braille::SegmentDivision) -> Self {
+        Self::BrailleSegmentDivision(value)
     }
 }
 

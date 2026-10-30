@@ -192,7 +192,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
      streams even with music21 installed, so an installed note in one
      answers music21's `offset` as 0.0: it has no site. Handing back
      music21's streams there is a design call, not yet made.
-   - `BrailleSegmentDivision` is not ported.
    - wheel argument handling: negative quarter lengths refused, non-bool
      truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
 

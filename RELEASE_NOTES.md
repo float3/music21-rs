@@ -14,10 +14,16 @@
   a non-traditional signature handed back to music21 keeps its pitches
   where it used to be dropped.
 
-- **`StreamElement::GlobalComment`** is a new variant, so a `match` over
-  every variant needs an arm for it.
+- **`StreamElement::GlobalComment` and `BrailleSegmentDivision`** are new
+  variants, so a `match` over every variant needs arms for them.
 
 ## added
+
+- **A braille segment divides where a stream says.**
+  `braille::SegmentDivision` is music21's `BrailleSegmentDivision` and
+  `BrailleOptionalSegmentDivision`: standing in a measure, it starts a new
+  segment there, the optional one only past 48 elements. The wheel reads
+  music21's own objects into it.
 
 - **Humdrum `!!` comments are kept.** Each stands in the score as a
   `humdrum::GlobalComment`, at the offset and priority music21's

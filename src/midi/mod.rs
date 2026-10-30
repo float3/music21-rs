@@ -121,7 +121,8 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::Layout(_)
             | StreamElement::TextBox(_)
             | StreamElement::Variant(_)
-            | StreamElement::GlobalComment(_) => {}
+            | StreamElement::GlobalComment(_)
+            | StreamElement::BrailleSegmentDivision(_) => {}
         }
     }
     Ok(notes)

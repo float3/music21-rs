@@ -1658,7 +1658,8 @@ impl<'a> Tune<'a> {
                 StreamElement::Stream(_)
                 | StreamElement::Instrument(_)
                 | StreamElement::Variant(_)
-                | StreamElement::GlobalComment(_) => {}
+                | StreamElement::GlobalComment(_)
+                | StreamElement::BrailleSegmentDivision(_) => {}
                 StreamElement::Clef(clef) => {
                     if !header {
                         lead.push_str(&format!("[K:clef={}]", clef_name(clef)?));

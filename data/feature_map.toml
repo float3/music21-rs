@@ -2654,6 +2654,6 @@ reason = "the 131-property vocabulary, which is `metadata::STANDARD_PROPERTIES` 
 python = ["metadata/properties.py"]
 
 [[unlisted]]
-reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, which no stream here holds"
+reason = "the nine markers a caller stands in a stream to divide a braille transcription by hand, each a class with no members: the two segment divisions are `braille::SegmentDivision`, read from music21's own objects by the wheel; the other seven no stream here holds"
 python = ["braille/objects.py"]
 
