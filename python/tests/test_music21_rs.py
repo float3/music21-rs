@@ -701,6 +701,33 @@ def test_a_tempo_marks_referent_is_changed_through_the_one_handed_out():
     assert pickle.loads(pickle.dumps(mark)).referent.quarterLength == 2.0
 
 
+def test_a_rests_full_measure_reaches_what_is_written():
+    """music21's `fullMeasure` decides how a rest is written: `False`
+    writes no measure rest though the rest fills its bar, and in braille
+    `True` is a measure rest though it does not, where `'always'` is not."""
+    def part_of(length, said, *more):
+        bar = m.Measure()
+        bar.append(m.TimeSignature("4/4"))
+        rest = m.Rest(quarterLength=length)
+        rest.fullMeasure = said
+        assert rest.fullMeasure == said
+        bar.append([rest, *more])
+        part = m.Part()
+        part.append(bar)
+        return part
+
+    def rests(said):
+        written = m.to_musicxml(part_of(4, said))
+        return re.findall(r"<rest[^>]*/?>", written)
+
+    assert rests(False) == ["<rest />"]
+    assert rests(True) == rests("always") == rests("auto") == ['<rest measure="yes" />']
+
+    short = lambda said: m.objectToBraille(part_of(2, said, m.Note("C4", quarterLength=2)))
+    assert short(True) == "⠀⠼⠙⠲⠀⠀\n⠼⠚⠀⠍⠐⠝"
+    assert short("always") == short("auto") == "⠀⠼⠙⠲⠀⠀\n⠼⠚⠀⠥⠐⠝"
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.

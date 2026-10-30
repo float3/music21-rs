@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::{Duration as RsDuration, Rest as RsRest};
+use music21_rs_crate::{Duration as RsDuration, FullMeasure, Rest as RsRest};
 
 use crate::duration::{
     Duration, adopt_duration, copied_duration, duration_from_any, duration_object_for,
@@ -51,13 +51,42 @@ pub struct Rest {
     /// music21's `stepShift`: how many lines or spaces the rest is drawn
     /// above or below where it would be. Layout, so the facade's alone.
     step_shift: i32,
-    /// music21's `fullMeasure`: `'auto'`, `True`, `False` or `'always'`,
-    /// kept as the object it was given.
-    full_measure: Py<PyAny>,
+}
+
+/// music21's `fullMeasure` value for the crate's: `True`, `False`, `'auto'`
+/// or `'always'`.
+fn full_measure_object(py: Python<'_>, said: FullMeasure) -> PyResult<Py<PyAny>> {
+    let made = match said {
+        FullMeasure::Yes => true.into_pyobject(py)?.to_owned().into_any(),
+        FullMeasure::No => false.into_pyobject(py)?.to_owned().into_any(),
+        FullMeasure::Auto => "auto".into_pyobject(py)?.into_any(),
+        FullMeasure::Always => "always".into_pyobject(py)?.into_any(),
+    };
+    Ok(made.unbind())
+}
+
+/// The crate's value for music21's `fullMeasure`. Anything but its four is
+/// refused: music21 takes anything and its writers then read it as `'auto'`
+/// or not at all.
+fn full_measure_from(value: &Bound<'_, PyAny>) -> PyResult<FullMeasure> {
+    if value.is_instance_of::<pyo3::types::PyBool>() {
+        return Ok(match value.extract::<bool>()? {
+            true => FullMeasure::Yes,
+            false => FullMeasure::No,
+        });
+    }
+    match value.extract::<String>().ok().as_deref() {
+        Some("auto") => Ok(FullMeasure::Auto),
+        Some("always") => Ok(FullMeasure::Always),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "fullMeasure is True, False, 'auto' or 'always', not {}",
+            value.repr()?
+        ))),
+    }
 }
 
 impl Rest {
-    pub(crate) fn wrap(py: Python<'_>, inner: RsRest) -> Self {
+    pub(crate) fn wrap(_py: Python<'_>, inner: RsRest) -> Self {
         Self {
             inner,
             duration: None,
@@ -68,9 +97,6 @@ impl Rest {
             articulations: None,
             style: None,
             step_shift: 0,
-            full_measure: "auto"
-                .into_pyobject(py)
-                .map_or_else(|_| py.None(), |value| value.into_any().unbind()),
         }
     }
 
@@ -122,7 +148,6 @@ impl Rest {
         copy.articulations = copied_list(py, self.articulations.as_ref())?;
         copy.style = crate::notation::copied_style(py, self.style.as_ref());
         copy.step_shift = self.step_shift;
-        copy.full_measure = self.full_measure.clone_ref(py);
         if let Some(duration) = &self.duration {
             copy.duration = Some(copied_duration(py, duration)?);
         }
@@ -190,7 +215,6 @@ impl Rest {
         visit.call(&self.expressions)?;
         visit.call(&self.articulations)?;
         visit.call(&self.style)?;
-        visit.call(&self.full_measure)?;
         visit.call(&self.editorial)?;
         Ok(())
     }
@@ -248,7 +272,7 @@ impl Rest {
         }
         rest.step_shift = stepShift;
         if let Some(full) = fullMeasure.filter(|value| !value.is_none()) {
-            rest.full_measure = full.clone().unbind();
+            rest.inner.set_full_measure(full_measure_from(full)?);
         }
         Ok(rest)
     }
@@ -266,7 +290,6 @@ impl Rest {
             extra.set_item("tie", rest.tie.as_ref())?;
             extra.set_item("style", rest.style.as_ref())?;
             extra.set_item("stepShift", rest.step_shift)?;
-            extra.set_item("fullMeasure", rest.full_measure.bind(py))?;
         }
         crate::pickled_extra(slf, &slf.borrow().synced(py), Some(&extra))
     }
@@ -295,8 +318,9 @@ impl Rest {
             if let Some(shift) = present("stepShift")? {
                 rest.step_shift = shift.extract()?;
             }
+            // A pickle from before the crate held it.
             if let Some(full) = present("fullMeasure")? {
-                rest.full_measure = full.unbind();
+                rest.inner.set_full_measure(full_measure_from(&full)?);
             }
         }
         Ok(())
@@ -394,13 +418,14 @@ impl Rest {
     }
 
     #[getter]
-    fn get_fullMeasure(&self, py: Python<'_>) -> Py<PyAny> {
-        self.full_measure.clone_ref(py)
+    fn get_fullMeasure(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        full_measure_object(py, self.inner.full_measure())
     }
 
     #[setter]
-    fn set_fullMeasure(&mut self, value: &Bound<'_, PyAny>) {
-        self.full_measure = value.clone().unbind();
+    fn set_fullMeasure(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.set_full_measure(full_measure_from(value)?);
+        Ok(())
     }
 
     #[getter]

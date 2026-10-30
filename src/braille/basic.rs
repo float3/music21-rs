@@ -696,7 +696,7 @@ fn handle_expressions(expressions: &[Expression], braille: &mut String, english:
 /// `restToBraille`.
 pub fn rest_to_braille(rest: &Rest) -> Transcription {
     let mut english = Vec::new();
-    let (value, dots) = if rest.full_measure() == Some(true) {
+    let (value, dots) = if rest.full_measure() == crate::rest::FullMeasure::Yes {
         ("whole".to_string(), 0)
     } else {
         (
