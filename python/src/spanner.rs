@@ -183,6 +183,25 @@ impl Spanner {
 
 #[pymethods]
 impl Spanner {
+    /// What it joins may point back at it, a note keeping its slur; Python's
+    /// collector frees such a cycle only if it is shown these.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.idLocal)?;
+        for held in &self.spanned {
+            visit.call(held)?;
+        }
+        visit.call(&self.storage)
+    }
+
+    fn __clear__(&mut self) {
+        self.idLocal = None;
+        self.spanned.clear();
+        self.storage = None;
+    }
+
     /// music21's `Spanner(*spannedElements)`: the notes to join, given one
     /// by one or as a list.
     #[new]
@@ -1127,6 +1146,22 @@ impl SpannerBundle {
 
 #[pymethods]
 impl SpannerBundle {
+    /// The spanners it holds, which may point back at it through what they
+    /// join.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in &self.held {
+            visit.call(held)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.held.clear();
+    }
+
     /// music21's `SpannerBundle(*spanners)`.
     #[new]
     #[pyo3(signature = (*spanners))]

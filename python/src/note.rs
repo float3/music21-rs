@@ -856,6 +856,7 @@ impl Note {
         visit.call(&self.unread_pitch)?;
         visit.call(&self.style)?;
         visit.call(&self.beams)?;
+        visit.call(&self.editorial)?;
         Ok(())
     }
 
@@ -871,6 +872,7 @@ impl Note {
         self.unread_pitch = None;
         self.style = None;
         self.beams = None;
+        self.editorial = None;
     }
 
     /// A note is written out as text and read back, and its pitch and its

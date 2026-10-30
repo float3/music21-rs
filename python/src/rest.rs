@@ -191,10 +191,12 @@ impl Rest {
         visit.call(&self.articulations)?;
         visit.call(&self.style)?;
         visit.call(&self.full_measure)?;
+        visit.call(&self.editorial)?;
         Ok(())
     }
 
     fn __clear__(&mut self) {
+        self.editorial = None;
         self.duration = None;
         self.lyrics = None;
         self.tie = None;

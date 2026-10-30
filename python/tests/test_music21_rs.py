@@ -914,6 +914,158 @@ def test_an_object_and_what_it_hands_out_are_freed_together(cls, argument, linke
     assert freed() is None
 
 
+def _editorial_cycle():
+    note = type("Held", (m.Note,), {})("C4")
+    note.editorial.back = note
+    return note
+
+
+def _spanner_cycle():
+    note = type("HeldNote", (m.Note,), {})("C4")
+    slur = type("HeldSlur", (m.Slur,), {})(note)
+    note.slur = slur
+    return slur
+
+
+def _song_cycle():
+    song = type("HeldSong", (m.CTSong,), {})("Song: x\nVP: I | IV |\nS: [C] $VP\n")
+    assert song.rules["VP"].parent is song
+    return song
+
+
+def _chord_editorial_cycle():
+    chord = type("HeldChord", (m.Chord,), {})("C4 E4")
+    chord.editorial.back = chord
+    return chord
+
+
+def _rest_editorial_cycle():
+    rest = type("HeldRest", (m.Rest,), {})()
+    rest.editorial.back = rest
+    return rest
+
+
+@pytest.mark.parametrize(
+    "made",
+    [
+        _editorial_cycle,
+        _chord_editorial_cycle,
+        _rest_editorial_cycle,
+        _spanner_cycle,
+        _song_cycle,
+    ],
+)
+def test_an_object_pointing_back_through_rust_is_freed(made):
+    """A note its editorial points back at, a slur its note points back at,
+    and a song whose rules name it as their parent: each is a cycle through
+    a Rust field, which Python's collector frees only if it is shown it."""
+    held = made()
+    freed = weakref.ref(held)
+    del held
+    gc.collect()
+    assert freed() is None
+
+
+def _untraversed(src: pathlib.Path):
+    """Each #[pyclass] struct holding a Py<...> field whose impl blocks
+    define no __traverse__."""
+    found = {}
+    for path in sorted(src.glob("*.rs")):
+        text = path.read_text()
+        for match in re.finditer(
+            r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
+            text,
+            re.S,
+        ):
+            name, body = match.group(1), match.group(2)
+            if not re.search(r":\s*[^,\n]*\bPy<", body):
+                continue
+            traversed = False
+            for block in re.finditer(r"\bimpl\s+%s\s*\{" % re.escape(name), text):
+                depth, at = 0, block.end() - 1
+                while at < len(text):
+                    depth += {"{": 1, "}": -1}.get(text[at], 0)
+                    if depth == 0:
+                        break
+                    at += 1
+                if "fn __traverse__" in text[block.end():at]:
+                    traversed = True
+                    break
+            if not traversed:
+                found[name] = path.name
+    return found
+
+
+# A class holding Python objects in Rust fields with no `__traverse__`, and
+# why no cycle runs through it: Python's collector frees a cycle only where
+# each object in it shows what it holds.
+_UNTRAVERSED = {
+    # Tools built over a stream or a score they analyse, search or correct,
+    # holding it and their own results; nothing they hold is given a way
+    # back to the tool.
+    "ActivityMatch": "an analysis over a stream",
+    "Ambitus": "an analysis over a stream",
+    "ContiguousSegmentOfNotes": "a search result over a stream",
+    "ContiguousSegmentSearcher": "a search over a stream",
+    "EnharmonicFixer": "a corrector over two streams",
+    "Hasher": "settings and the hashes it made",
+    "IndexedLyric": "a search result over a stream",
+    "KeyAnalyzer": "an analysis over a stream",
+    "KeyWeightKeyAnalysis": "an analysis over a stream",
+    "LyricSearcher": "a search over a stream",
+    "MeasureHash": "a hash over a measure",
+    "MeasureSlice": "a corrector's slice of a score",
+    "MelodicIntervalDiversity": "an analysis over a stream",
+    "ScoreReduction": "a reduction over a score",
+    "SegmentMatcher": "a search over a stream",
+    "SinglePart": "a corrector's part of a score",
+    "StreamAligner": "an alignment over two streams",
+    "StreamSearcher": "a search over a stream",
+    "TranspositionChecker": "pitches and the chords made of them",
+    "WindowedAnalysis": "an analysis over a stream",
+    # Values: numbers, names, pitches, keys, meters and lists of them, which
+    # hold nothing of their own.
+    "Articulation": "a bend's interval",
+    "Barline": "a pause, a fermata or a rest",
+    "Contributor": "dates",
+    "DataSet": "feature extractor classes",
+    "EnharmonicScoreRules": "penalty weights",
+    "EnharmonicSimplifier": "pitches and spellings",
+    "FiguredBassLine": "a key and a meter",
+    "FiguredBassScale": "a scale and a key signature",
+    "MeterSequence": "meter terminals and sequences, which hold no parent",
+    "Ornament": "accidentals and a size",
+    "Realization": "a key and a meter",
+    "Rules": "voice-leading limits",
+    "ScoreLayout": "page, system and staff layouts",
+    "StaffLayout": "a size",
+    "TabChord": "the text and numbers of a TSV row",
+    "TabChordV2": "the text and numbers of a TSV row",
+    "TempoText": "a text expression",
+    "TextBox": "a style and a place",
+    # Braille's working parts, made and dropped inside one transcription.
+    "BrailleElementGrouping": "a transcription's grouping",
+    "BrailleText": "lines of braille",
+    "NoteGroupingTranscriber": "a transcription's settings",
+    # Unpitched notes, which the wheel exposes only once installed, where
+    # music21's own collector-visible classes hold them.
+    "PercussionChord": "its unpitched notes",
+}
+
+
+def test_every_class_holding_python_objects_is_traversed_or_says_why():
+    """A Rust field holding a Python object is invisible to Python's
+    collector unless its class says what it holds; before the classes said
+    so, every note put into a stream leaked. A new class either says, or
+    gives here the reason no cycle runs through it."""
+    source = pathlib.Path(__file__).resolve().parents[1] / "src"
+    found = _untraversed(source)
+    unexplained = sorted(set(found) - set(_UNTRAVERSED))
+    stale = sorted(set(_UNTRAVERSED) - set(found))
+    assert unexplained == [], f"traverse these or say why: {unexplained}"
+    assert stale == [], f"these traverse now; drop them here: {stale}"
+
+
 def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     """Each object a facade builds is made as the class music21 has installed
     under its name, where there is one. Nothing is installed here, and asking

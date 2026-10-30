@@ -1613,10 +1613,12 @@ impl Chord {
         visit.call(&self.overrides)?;
         visit.call(&self.beams)?;
         visit.call(&self.style)?;
+        visit.call(&self.editorial)?;
         Ok(())
     }
 
     fn __clear__(&mut self) {
+        self.editorial = None;
         self.notes.clear();
         self.loose_pitches.clear();
         self.duration = None;
