@@ -435,8 +435,7 @@ impl Chord {
     /// is `0`, and the number climbs with the chord step the bass sits on,
     /// so a bass on the seventh is `3`. `None` only for an empty chord.
     pub fn inversion(&self) -> Option<u8> {
-        let bass_to_root = diatonic_steps_above(self.bass()?, self.root()?);
-        Some([0, 3, 6, 2, 5, 1, 4][usize::from(bass_to_root - 1)])
+        self.inversion_with_root(self.root()?)
     }
 
     /// The inversion the way [`Self::inversion`] counts it, but measured from a
@@ -455,11 +454,17 @@ impl Chord {
     /// triad nor a seventh, as music21 raises there. For the words, see
     /// [`Self::inversion_text`].
     pub fn inversion_name(&self) -> Result<Option<IntegerType>> {
-        let Some(inversion) = self.inversion() else {
+        // The root is found once and every question below is asked of it.
+        let Some(root) = self.root() else {
             return Ok(None);
         };
+        let Some(inversion) = self.inversion_with_root(root) else {
+            return Ok(None);
+        };
+
         let inversion = usize::from(inversion);
-        if self.is_seventh() || self.seventh().is_some() {
+        // A seventh chord has a seventh, so having one is the whole test.
+        if self.chord_step_from(7, root).is_some() {
             return [7, 65, 43, 42]
                 .get(inversion)
                 .copied()
@@ -468,7 +473,7 @@ impl Chord {
                     Error::Chord(format!("Not a normal inversion for a seventh: {inversion}"))
                 });
         }
-        if self.is_triad() {
+        if self.is_triad_from(root) {
             return [53, 6, 64]
                 .get(inversion)
                 .copied()

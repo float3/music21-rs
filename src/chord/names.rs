@@ -229,7 +229,10 @@ impl Chord {
         let forte_name = tables::address_to_forte_name(address, "tn").ok();
 
         if let Some(forte_name) = forte_name.as_deref() {
-            if let Some(name) = self.augmented_sixth_common_name(forte_name, &common_names) {
+            // The address is already in hand, so the augmented-sixth tests
+            // below need not look it up again.
+            let found = Some((address.0, address.1, address.2));
+            if let Some(name) = self.augmented_sixth_common_name(forte_name, found, &common_names) {
                 return name;
             }
             if let Some(first) = common_names.first() {
@@ -265,6 +268,7 @@ impl Chord {
     pub(super) fn augmented_sixth_common_name(
         &self,
         forte_name: &str,
+        found: Option<(u8, u8, i8)>,
         common_names: &[&str],
     ) -> Option<String> {
         let named = |index: usize| common_names.get(index).map(|name| (*name).to_string());
@@ -275,22 +279,22 @@ impl Chord {
             "4-27B" => {
                 if self.is_dominant_seventh() {
                     named(0)
-                } else if self.is_german_augmented_sixth(false) {
+                } else if self.is_german_from(found, false) {
                     named(2)
-                } else if self.is_german_augmented_sixth(true) {
+                } else if self.is_german_from(found, true) {
                     in_inversion(2)
-                } else if self.is_swiss_augmented_sixth(false) {
+                } else if self.is_swiss_from(found, false) {
                     named(3)
-                } else if self.is_swiss_augmented_sixth(true) {
+                } else if self.is_swiss_from(found, true) {
                     in_inversion(3)
                 } else {
                     named(0).map(|name| format!("enharmonic to {name}"))
                 }
             }
             "4-25" => {
-                if self.is_french_augmented_sixth(false) {
+                if self.is_french_from(found, false) {
                     named(1)
-                } else if self.is_french_augmented_sixth(true) {
+                } else if self.is_french_from(found, true) {
                     in_inversion(1)
                 } else {
                     named(0)
@@ -329,7 +333,11 @@ impl Chord {
     /// spelled several ways: a real major or minor seventh has a perfect
     /// fifth above both its root and its third.
     pub(super) fn is_seventh_with_perfect_fifths_above_root_and_third(&self) -> bool {
-        if !self.is_seventh() {
+        // The root is found once, for the seventh test and the fifths alike.
+        let Some(root) = self.root() else {
+            return false;
+        };
+        if !self.is_seventh_from(root) {
             return false;
         }
         let names = self.pitch_names();
@@ -341,7 +349,7 @@ impl Chord {
                 .transpose(&PERFECT_FIFTH)
                 .is_ok_and(|above| names.contains(&above.name()))
         };
-        let (Some(root), Some(third)) = (self.root(), self.third()) else {
+        let Some(third) = self.chord_step_from(3, root) else {
             return false;
         };
         has_fifth_above(root) && has_fifth_above(third)
