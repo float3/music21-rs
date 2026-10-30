@@ -20,6 +20,17 @@ fn of_classes(element: &StreamElement, classes: &[&str]) -> bool {
     classes.is_empty() || classes.iter().any(|class| element.is_instance(class))
 }
 
+/// The time signatures a stream holds directly, with where each stands.
+fn time_signatures_in(stream: &Stream) -> impl Iterator<Item = (FloatType, TimeSignature)> + '_ {
+    stream
+        .events
+        .iter()
+        .filter_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some((event.offset(), meter.clone())),
+            _ => None,
+        })
+}
+
 /// The measure an event is, with where it stands.
 fn measure_of(event: &StreamEvent) -> Option<(FloatType, &Stream)> {
     match event.element() {
@@ -191,16 +202,38 @@ impl Stream {
             });
         match previous {
             Some((previous_offset, previous)) => {
-                let earlier = holder.time_signature_at(previous_offset).ok_or_else(|| {
+                let opening = holder.time_signature_at(previous_offset).ok_or_else(|| {
                     stream_error(
                         "beatAndMeasureFromOffset: partial measure found, but could not find a time signature for the preceding measure",
                     )
                 })?;
+                // Each time signature in the first half counts the stretch up
+                // to the next one; one standing where another does replaces it.
+                let mut segments = vec![(opening, 0.0)];
+                for (start, meter) in time_signatures_in(previous) {
+                    if segments.last().is_some_and(|(_, last)| *last == start) {
+                        segments.pop();
+                    }
+                    segments.push((meter, start));
+                }
                 let filled = op_frac(previous.end_offset());
-                let pad = if filled == earlier.bar_quarter_length() {
-                    Exact::integer(i64::from(earlier.beat_count()))
-                } else {
-                    Exact::held(earlier.beat_proportion(filled)?).plus(Exact::integer(-1))
+                let mut pad = Exact::integer(0);
+                for (index, (meter, start)) in segments.iter().enumerate() {
+                    let end = segments.get(index + 1).map_or(filled, |(_, next)| *next);
+                    let length = op_frac(end - start);
+                    pad = pad.plus(if length == meter.bar_quarter_length() {
+                        Exact::integer(i64::from(meter.beat_count()))
+                    } else {
+                        Exact::held(meter.beat_proportion(length)?).plus(Exact::integer(-1))
+                    });
+                }
+                let beat = match segments.last() {
+                    Some((closing, _))
+                        if !time_signatures_in(measure).any(|(start, _)| start == 0.0) =>
+                    {
+                        closing.beat_proportion(op_frac(offset - measure_offset))?
+                    }
+                    _ => beat,
                 };
                 Ok((Exact::held(beat).plus(pad).to_float(), previous))
             }
@@ -331,6 +364,39 @@ mod tests {
         assert_eq!((beat, measure.number()), (4.0, 0));
         let (beat, measure) = part.beat_and_measure_from_offset(3.0, true)?;
         assert_eq!((beat, measure.number()), (3.0, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn a_meter_changing_at_a_split_counts_each_half_in_its_own() -> Result<()> {
+        let mut part = Stream::with_kind(StreamKind::Part);
+        let mut whole = Stream::with_kind(StreamKind::Measure);
+        whole.set_number(1);
+        whole.insert(0.0, TimeSignature::new(4, 4)?);
+        whole.insert(0.0, Note::from_name("C4")?.with_duration(Duration::whole()));
+        let mut first_half = Stream::with_kind(StreamKind::Measure);
+        first_half.set_number(2);
+        first_half.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
+        first_half.insert(2.0, TimeSignature::new(12, 16)?);
+        let mut second_half = Stream::with_kind(StreamKind::Measure);
+        second_half.set_number(2);
+        second_half.set_number_suffix(Some("X1".to_string()));
+        second_half.insert(
+            0.0,
+            Note::from_name("C4")?.with_duration(Duration::new(0.75)?),
+        );
+        second_half.insert(
+            0.75,
+            Note::from_name("C4")?.with_duration(Duration::new(0.75)?),
+        );
+        part.insert(0.0, whole);
+        part.insert(4.0, first_half);
+        part.insert(6.0, second_half);
+        let beats = [5.0, 6.0, 6.75]
+            .into_iter()
+            .map(|offset| Ok(part.beat_and_measure_from_offset(offset, true)?.0))
+            .collect::<Result<Vec<_>>>()?;
+        assert_eq!(beats, [2.0, 3.0, 4.0]);
         Ok(())
     }
 
