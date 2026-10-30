@@ -1032,12 +1032,14 @@ class NotPorted:
 
     def __get__(self, instance, owner=None):
         raise AttributeError(
-            f'{self.owner!r} object has no attribute {self.name!r}'
+            f'{self.owner!r} object has no attribute {self.name!r}: '
+            'not ported to music21-rs'
         )
 
     def __set__(self, instance, value):
         raise AttributeError(
-            f'{self.owner!r} object has no attribute {self.name!r}'
+            f'{self.owner!r} object has no attribute {self.name!r}: '
+            'not ported to music21-rs'
         )
 
 

@@ -787,8 +787,7 @@ def test_a_scale_and_a_key_write_the_musicxml_music21_writes(tmp_path):
 def test_a_scale_and_a_key_write_and_show_once_installed():
     """Under `install_into_music21` a key's and a scale's `write` and `show`
     are the wheel's rather than blocked as unported."""
-    if importlib.util.find_spec("music21") is None:
-        pytest.skip("music21 is not on the path")
+    pytest.importorskip("music21.stream")
     # In a process of its own, as installing cannot be undone.
     code = (
         "import music21_rs; music21_rs.install_into_music21()\n"
@@ -6060,6 +6059,31 @@ print("<score-partwise" in m.to_musicxml(part))
         "2 2.0",
         "1",
         "True",
+    ]
+
+
+def test_a_blocked_member_says_it_is_not_ported():
+    """A member music21 has and the wheel has not ported stays absent once
+    installed, and says why, so it is not taken for a typo."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import roman
+numeral = roman.RomanNumeral("V7")
+print(hasattr(numeral, "findFigure"))
+try:
+    numeral.findFigure
+except AttributeError as error:
+    print(error)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "False",
+        "'RomanNumeral' object has no attribute 'findFigure': "
+        "not ported to music21-rs",
     ]
 
 
