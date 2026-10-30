@@ -5869,3 +5869,19 @@ def test_a_length_that_is_no_number_is_refused_as_music21_refuses_it():
         length.linked = linked
         with pytest.raises(raised):
             length.quarterLength = value
+
+
+def test_an_abstract_scale_says_its_mode_as_music21_does():
+    """music21 a0358751c: every abstract scale has a `mode`. A diatonic one
+    names its mode, an octatonic one keeps the number it was built with,
+    and the rest have none."""
+    assert m.DorianScale("C4").abstract.mode == "dorian"
+    assert m.OctatonicScale("C4", mode=1).abstract.mode == 1
+    assert m.OctatonicScale("C4", mode=2).abstract.mode == 2
+    for made in (
+        m.OctatonicScale("C4"),
+        m.HarmonicMinorScale("C4"),
+        m.WholeToneScale("C4"),
+        m.RagMarwa("C4"),
+    ):
+        assert made.abstract.mode is None

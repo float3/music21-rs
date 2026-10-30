@@ -267,6 +267,9 @@ pub struct AbstractScale {
     /// realizes, which is what its network is built from.
     unnamed_steps: Vec<RsInterval>,
     unnamed_simplification: Option<&'static str>,
+    /// A mode given as a number, as music21's `AbstractOctatonicScale`
+    /// keeps the `1` or `2` it was built with.
+    numbered_mode: Option<i64>,
 }
 
 impl AbstractScale {
@@ -275,11 +278,13 @@ impl AbstractScale {
         scale_type: Option<RsScaleType>,
         octave_duplicating: bool,
         unnamed: Option<&RsScale>,
+        numbered_mode: Option<i64>,
     ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
             PyClassInitializer::from(Scale).add_subclass(Self {
                 scale_type,
+                numbered_mode,
                 octave_duplicating,
                 unnamed_degrees: unnamed.map_or(0, RsScale::degree_count),
                 unnamed_steps: unnamed
@@ -334,6 +339,7 @@ impl AbstractScale {
             .and_then(|value| Self::scale_type_of(value));
         Ok(PyClassInitializer::from(Scale).add_subclass(Self {
             scale_type,
+            numbered_mode: mode.and_then(|value| value.extract::<i64>().ok()),
             // A pattern named by mode alone repeats at the octave.
             octave_duplicating: true,
             unnamed_degrees: 0,
@@ -510,9 +516,21 @@ impl AbstractScale {
         self.r#type()
     }
 
+    /// music21's `mode`: a diatonic pattern's mode name, the number an
+    /// octatonic one was built with, and `None` for the rest (a0358751c).
     #[getter]
-    fn mode(&self) -> Option<&'static str> {
-        self.scale_type.map(RsScaleType::music21_descriptive_name)
+    fn mode(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(number) = self.numbered_mode {
+            return Ok(number.into_pyobject(py)?.into_any().unbind());
+        }
+        match self.scale_type.filter(|kind| is_diatonic_mode(*kind)) {
+            Some(kind) => Ok(kind
+                .music21_descriptive_name()
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()),
+            None => Ok(py.None()),
+        }
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
@@ -634,6 +652,9 @@ pub struct ConcreteScale {
     /// knows. Nothing here reads such a network; it is handed straight back
     /// to the code that made it.
     abstract_scale: Option<Py<PyAny>>,
+    /// The mode an `OctatonicScale` was built in, `1` or `2`, which its
+    /// abstract scale reports as music21's does; `None` where none was said.
+    octatonic_mode: Option<i64>,
 }
 
 impl ConcreteScale {
@@ -646,6 +667,7 @@ impl ConcreteScale {
             has_tonic: true,
             tonic_object: None,
             abstract_scale: None,
+            octatonic_mode: None,
         }
     }
 
@@ -752,6 +774,7 @@ impl ConcreteScale {
                 has_tonic: true,
                 tonic_object: None,
                 abstract_scale: None,
+                octatonic_mode: None,
             };
             built.named_pattern = false;
             return Ok(
@@ -778,6 +801,7 @@ impl ConcreteScale {
                 has_tonic: true,
                 tonic_object: None,
                 abstract_scale: None,
+                octatonic_mode: None,
             }),
         )?
         .into_any())
@@ -921,6 +945,9 @@ impl ConcreteScale {
         let Some(mode) = mode else {
             return Ok(());
         };
+        if scale_type == RsScaleType::Octatonic {
+            me.octatonic_mode = mode.extract::<i64>().ok();
+        }
         if !named && family == "diatonic" {
             // `DiatonicScale(tonic, mode=...)`: the mode names the pattern,
             // and the scale is still called diatonic.
@@ -1315,6 +1342,7 @@ impl ConcreteScale {
             self.named_pattern.then(|| self.inner.scale_type()),
             self.inner.octave_duplicating(),
             self.inner.is_custom().then_some(&self.inner),
+            self.octatonic_mode,
         )
     }
 
@@ -2230,6 +2258,33 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add(name.extract::<String>()?.as_str(), class)?;
     }
     Ok(())
+}
+
+/// Whether music21 builds this pattern as an `AbstractDiatonicScale`, the
+/// one kind that names its mode.
+fn is_diatonic_mode(kind: RsScaleType) -> bool {
+    match kind {
+        RsScaleType::Major
+        | RsScaleType::Minor
+        | RsScaleType::Dorian
+        | RsScaleType::Phrygian
+        | RsScaleType::Lydian
+        | RsScaleType::Mixolydian
+        | RsScaleType::Locrian
+        | RsScaleType::Hypodorian
+        | RsScaleType::Hypophrygian
+        | RsScaleType::Hypolydian
+        | RsScaleType::Hypomixolydian
+        | RsScaleType::Hypolocrian
+        | RsScaleType::Hypoaeolian => true,
+        RsScaleType::HarmonicMinor
+        | RsScaleType::MelodicMinor
+        | RsScaleType::Chromatic
+        | RsScaleType::WholeTone
+        | RsScaleType::Octatonic
+        | RsScaleType::RagAsawari
+        | RsScaleType::RagMarwa => false,
+    }
 }
 
 /// Whether an octatonic mode is music21's first, which starts with the half
