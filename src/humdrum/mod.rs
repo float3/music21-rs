@@ -1507,15 +1507,49 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
             vec![crate::metadata::MetadataValue::new((index + 1).to_string())],
         );
         score.set_metadata(Some(metadata));
+        score.set_id(Some(format!("section_{}", index + 1)));
         let length = score.end_offset();
         events.push(StreamEvent::new(offset, score));
         offset = op_frac(offset + length);
     }
-    Ok(Stream::with_kind(StreamKind::Opus).with_events(events))
+    // The opus says what its first score says, numbered `0`.
+    let mut metadata = events
+        .first()
+        .and_then(|event| event.element().as_stream())
+        .and_then(Stream::metadata)
+        .cloned()
+        .unwrap_or_default();
+    metadata.set(
+        "number",
+        vec![crate::metadata::MetadataValue::new("0".to_string())],
+    );
+    let mut opus = Stream::with_kind(StreamKind::Opus).with_events(events);
+    opus.set_metadata(Some(metadata));
+    Ok(opus)
 }
 
 #[cfg(test)]
 mod tests {
+    /// An opus is named as music21 names it: its scores `section_1` on,
+    /// and its own metadata a copy of the first score's, numbered `0`.
+    #[test]
+    fn an_opus_takes_its_first_scores_metadata() {
+        let text = "!!!OTL: Piece\n**kern\n4c\n*-\n!!!OTL: Other\n**kern\n4d\n*-\n";
+        let opus = from_humdrum(text).unwrap();
+        let read = |stream: &Stream, name: &str| -> String {
+            stream.metadata().unwrap().get(name)[0].text().to_string()
+        };
+        assert_eq!(read(&opus, "title"), "Piece");
+        assert_eq!(read(&opus, "number"), "0");
+        let ids: Vec<Option<&str>> = opus
+            .events()
+            .iter()
+            .filter_map(|event| event.element().as_stream())
+            .map(Stream::id)
+            .collect();
+        assert_eq!(ids, [Some("section_1"), Some("section_2")]);
+    }
+
     /// A first measure shorter than its bar is a pickup, padded on the left
     /// by what it lacks, as music21's `moveElementsIntoMeasures` pads it.
     #[test]

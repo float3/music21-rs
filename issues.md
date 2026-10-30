@@ -185,8 +185,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - humdrum: an opus carries no metadata; `!!` global comments are
-     dropped (a pickup's `paddingLeft` is fixed).
+   - humdrum: `!!` global comments are dropped.
    - `from_clercq_temperley` answers an empty part for text with no `|`
      or `S:`, where music21 raises `CTSongException`.
    - the wheel's hand-back loses grace durations, humdrum barlines and

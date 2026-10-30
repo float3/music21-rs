@@ -1201,7 +1201,9 @@
 ## fixed
 
 - **A Humdrum pickup is padded**, as music21 pads a first measure shorter
-  than the bar of the meter it opens with.
+  than the bar of the meter it opens with, and **a Humdrum opus is named
+  as music21 names it**: its scores `section_1` on, its own metadata a
+  copy of the first score's numbered `0`.
 
 - **`TimeSignature::beat_progress` is read through `op_frac`**, and the
   wheel's `getBeatProgress`, `offsetToSpan` and `getLevelSpan` answer
