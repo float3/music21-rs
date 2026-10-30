@@ -579,6 +579,27 @@ def test_a_stream_finds_where_an_element_is_held():
     assert mixed.splitlines()[1] == "{1 - 1 1/3} <music21.note.Note E>"
 
 
+def test_a_stream_shows_itself_as_text(capsys):
+    """music21's `show('text')`, which prints the `recurseRepr` listing,
+    and `show('textline')`, which answers it on one line; the formats
+    that render are the caller's to reach."""
+    line = m.Stream()
+    line.append([m.Note("C4"), m.Note("D4", quarterLength=0.5)])
+    assert line.show("text") is None
+    assert capsys.readouterr().out == (
+        "{0.0} <music21.note.Note C>\n{1.0} <music21.note.Note D>\n"
+    )
+    line.show("txt", addEndTimes=True)
+    assert capsys.readouterr().out == (
+        "{0.0 - 1.0} <music21.note.Note C>\n{1.0 - 1.5} <music21.note.Note D>\n"
+    )
+    assert line.show("textline") == (
+        "{0.0} <music21.note.Note C> / {1.0} <music21.note.Note D>"
+    )
+    with pytest.raises(m.StreamException):
+        line.show("musicxml")
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.

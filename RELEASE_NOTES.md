@@ -16,7 +16,9 @@
   `recurseRepr`**: `iter` hands its own elements back as a
   `StreamIterator`, `containerInHierarchy` finds the stream holding an
   element at any depth, and `recurseRepr` writes music21's text listing,
-  end times and mixed numerals included.
+  end times and mixed numerals included. `show('text')` prints that
+  listing and `show('textline')` answers it on one line; a format that
+  renders is refused, the wheel leaving the showing to its caller.
 
 ## fixed
 

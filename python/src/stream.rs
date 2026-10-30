@@ -1249,6 +1249,59 @@ impl Stream {
         Ok(lines.join(joint))
     }
 
+    /// music21's `show` for its text formats: `'text'` (or `'txt'`, `'t'`)
+    /// prints the `recurseRepr` listing, taking `addEndTimes` and
+    /// `useMixedNumerals`, and `'textline'` answers it on one line. A
+    /// format that renders -- MusicXML, MIDI, an image -- is refused: the
+    /// wheel writes those documents and leaves showing them to its caller.
+    #[pyo3(signature = (fmt = None, app = None, **keywords))]
+    fn show<'py>(
+        slf: &Bound<'py, Self>,
+        fmt: Option<&str>,
+        app: Option<&Bound<'py, PyAny>>,
+        keywords: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Option<String>> {
+        let _ = app;
+        let py = slf.py();
+        let said = |name: &str| -> PyResult<bool> {
+            match keywords
+                .map(|given| given.get_item(name))
+                .transpose()?
+                .flatten()
+            {
+                Some(value) => value.is_truthy(),
+                None => Ok(false),
+            }
+        };
+        let format = fmt.unwrap_or("").to_lowercase();
+        match format.as_str() {
+            "text" | "txt" | "t" => {
+                let listing = Self::recurseRepr(
+                    slf,
+                    0,
+                    true,
+                    true,
+                    said("addEndTimes")?,
+                    said("useMixedNumerals")?,
+                )?;
+                py.import("builtins")?.getattr("print")?.call1((listing,))?;
+                Ok(None)
+            }
+            "textline" => Ok(Some(Self::recurseRepr(
+                slf,
+                0,
+                false,
+                false,
+                said("addEndTimes")?,
+                said("useMixedNumerals")?,
+            )?)),
+            _ => Err(StreamException::new_err(format!(
+                "cannot show {fmt:?} here: only 'text' and 'textline' are shown; \
+                 write the document and open it instead"
+            ))),
+        }
+    }
+
     /// Takes everything out, keeping what else the stream says of itself:
     /// music21's `clear`. A measure's barlines go too, being among
     /// music21's elements.
