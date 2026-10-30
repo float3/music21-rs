@@ -1,0 +1,21 @@
+# Docstrings of music21.tree.spans whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_treespans`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.tree.spans.ElementTimespan",
+    "music21.tree.spans.ElementTimespan.getParentageByClass",
+    "music21.tree.spans.ElementTimespan.measureNumber",
+    "music21.tree.spans.ElementTimespan.new",
+    "music21.tree.spans.ElementTimespan.part",
+    "music21.tree.spans.ElementTimespan.quarterLength",
+    "music21.tree.spans.PitchedTimespan.canMerge",
+    "music21.tree.spans.PitchedTimespan.pitches",
+    "music21.tree.spans.Timespan",
+    "music21.tree.spans.Timespan.canMerge",
+    "music21.tree.spans.Timespan.endTime",
+    "music21.tree.spans.Timespan.mergeWith",
+    "music21.tree.spans.Timespan.offset",
+    "music21.tree.spans.Timespan.splitAt",
+]

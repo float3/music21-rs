@@ -1,0 +1,21 @@
+# Docstrings of music21.tree.verticality whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_treeverticality`; the test
+# fails when one of these stops passing.
+
+passing = [
+    "music21.tree.verticality.Verticality",
+    "music21.tree.verticality.Verticality.bassTimespan",
+    "music21.tree.verticality.Verticality.beatStrength",
+    "music21.tree.verticality.Verticality.getAllVoiceLeadingQuartets",
+    "music21.tree.verticality.Verticality.getPairedMotion",
+    "music21.tree.verticality.Verticality.makeElement",
+    "music21.tree.verticality.Verticality.measureNumber",
+    "music21.tree.verticality.Verticality.nextStartOffset",
+    "music21.tree.verticality.Verticality.nextVerticality",
+    "music21.tree.verticality.Verticality.pitchClassSet",
+    "music21.tree.verticality.Verticality.pitchSet",
+    "music21.tree.verticality.Verticality.previousVerticality",
+    "music21.tree.verticality.Verticality.startAndOverlapTimespans",
+    "music21.tree.verticality.Verticality.toChord",
+]
