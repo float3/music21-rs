@@ -13,7 +13,7 @@
   the order MusicXML import stores them in (cuthbertLab/music21#2126). A
   chord read from a file that lists its notes out of order keeps each
   fingering on its note when written again.
-- The music21 submodule follows the fork's master at 2af061849.
+- The music21 submodule follows the fork's master at df3fbc6c.
 
 # music21-rs 0.11.0
 
