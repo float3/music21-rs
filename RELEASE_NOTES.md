@@ -1,3 +1,47 @@
+# Unreleased
+
+Seven design questions were debated and their verdicts recorded in
+DECISIONS.md; these are the changes they called for.
+
+## changed
+
+- **Once installed, the readers hand back music21's own streams.** After
+  `install_into_music21()`, `from_musicxml`, `from_humdrum`,
+  `from_tiny_notation` and the rest build music21's streams, so a note
+  answers `offset`, `beat` and `measureNumber`, and the score nests in a
+  `Score` and writes through music21. Standalone they hand back the wheel's
+  own, and music21 merely being importable changes nothing.
+
+- **Flags are read for their truth.** Every flag the wheel takes accepts
+  `1`, `0` and `None` as music21 does; a string is still a `TypeError`.
+
+## added
+
+- **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,
+  matching music21's output; once installed they are no longer blocked.
+
+- **A measure's barlines are listed where music21 lists them**:
+  `getElementsByClass`, `getElementsNotOfClass`, `flatten` and `recurse`
+  include its left barline first and its right one last.
+
+## fixed
+
+- **Appending to a wheel stream is ten times faster** on long streams:
+  356µs to 35µs per note at 1,600 notes.
+
+- **Read back once installed, a slur crossing a barline joins its own
+  notes**, and slurs and text expressions are classes music21's streams
+  hold; before, they were refused.
+
+- **`template(removeAll=True)` takes a measure's barlines too**, as
+  music21's does.
+
+- **A blocked member says it is not ported to music21-rs**, rather than
+  reading like a typo.
+
+- **Chord analyses find the root once**: an augmented-sixth test runs in
+  430-560ns rather than 1.3µs.
+
 # music21-rs 0.11.0
 
 The Python package carries much more of music21: braille, OMR, the `alpha`

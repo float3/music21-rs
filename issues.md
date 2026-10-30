@@ -22,11 +22,18 @@ music21 is an *optional* integration, used only when already installed:
 
 two rules, set 2026-09-12, that most of the open work now serves:
 
-- **the crate is meant to be a strict superset of the wheel**, caches aside.
-  As little as possible belongs in the facade — only what genuinely cannot
-  live in Rust. 124 members answer in the wheel today with no crate
-  function behind them, and each carries its reason in
-  `data/feature_map.toml`.
+- **the crate owns the music, the facade owns Python's object protocol.**
+  *Rewritten 2026-10-30 after a debate; it was "the crate is a strict
+  superset of the wheel".* The crate holds every musical computation and
+  any state that survives a copy or a pickle (`barDuration` moved for that
+  reason). The facade holds identity and object references, observer
+  callbacks, caches, randomness and the clock, music21's global registries,
+  Python standard-library types, deprecated aliases, in-place rebuilds and
+  loops over a crate function. A facade member is ported into the crate
+  when a caller outside Python (the web example, a Rust user, a parity test)
+  needs it, and its reason is in `data/feature_map.toml` either way. Facade
+  logic drifts where it duplicates the crate, which the drift audit's fixes
+  show; that, not the count of wheel-only members, is what to keep down.
 - **the crate should have streams.** it has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
   parts, measures, voices, `transpose`, and the `*_at` lookups). what it
@@ -185,19 +192,21 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - the wheel's hand-back loses humdrum tandems and `!!` comments. Its
-     measures keep their barlines beside their elements, so a Humdrum or
-     RomanText measure's barline or repeat is its `rightBarline` but not
-     one of its elements, as music21's is (stored at the end). Its readers hand back the wheel's own
-     streams even with music21 installed, so an installed note in one
-     answers music21's `offset` as 0.0: it has no site. Handing back
-     music21's streams there is a design call, not yet made.
-   - wheel argument handling: negative quarter lengths refused, non-bool
-     truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
+   - the wheel's hand-back loses humdrum tandems and `!!` comments.
+   - standalone, a wheel measure is listed as music21 lists it only where a
+     stream is asked by class, flattened or walked: `len`, indexing and
+     plain iteration leave its barlines out (DECISIONS.md, "a measure's
+     barlines are listed, not held"), and `storeAtEnd` and `isAtEnd` are
+     missing.
    - a wheel measure's repr is `<music21.stream.Measure m1>` where
      music21's is `<music21.stream.Measure 1 offset=4.0>`: the offset is
      the measure's in its part, which needs the sites the wheel's streams
-     do not keep.
+     do not keep. Once installed, readers hand back music21's own
+     measures, which have it.
+
+   Settled by debate on 2026-10-30 and recorded in DECISIONS.md: readers
+   hand back music21's streams once installed; flags are read for their
+   truth; negative lengths stay refused.
 
 ## closed
 
