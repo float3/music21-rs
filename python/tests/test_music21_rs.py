@@ -1753,6 +1753,7 @@ def test_elements_are_found_by_offset_as_music21_finds_them():
     ]
 
 
+@pytest.mark.filterwarnings("ignore:Stream.hasElementOfClass was deprecated")
 def test_a_stream_is_asked_what_classes_it_holds():
     flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
     assert flat.hasElementOfClass("Note")
@@ -2805,6 +2806,7 @@ def test_what_sounds_where_a_note_is_struck_is_found():
     assert m.Stream().playingWhenAttacked(list(upper)[0], upper) is None
 
 
+@pytest.mark.filterwarnings("ignore:Stream.hasElementOfClass was deprecated")
 def test_a_class_filter_reads_what_music21_says_a_thing_is():
     """Every count is music21's own for the same stream.
 
@@ -5734,3 +5736,33 @@ def test_a_loose_pitch_reaches_its_note_when_asked_for_its_client():
     client = third._client
     assert client.pitch is third
     assert chord.notes[1] is client
+
+
+def test_has_element_of_class_warns_it_is_deprecated_once():
+    """music21 deprecated `hasElementOfClass` in v11 and warns on the first
+    call in a process, as its `common.deprecated` does. Run apart, since
+    the warning is spent once given."""
+    code = """
+import warnings
+import music21_rs as m
+line = m.Stream()
+line.append(m.Note("C4"))
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    first = line.hasElementOfClass("Note")
+    second = line.hasElementOfClass("Rest")
+print(first, second, len(caught))
+print(caught[0].category.__name__)
+print(caught[0].message)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    lines = done.stdout.splitlines()
+    assert lines[0] == "True False 1"
+    # music21's own class where music21 is there, Python's where not.
+    assert lines[1] in ("Music21DeprecationWarning", "DeprecationWarning")
+    assert lines[2] == (
+        "Stream.hasElementOfClass was deprecated on v11 and will disappear at "
+        "or after v12. use `bool(s.getElementsByClass(className))` instead"
+    )
