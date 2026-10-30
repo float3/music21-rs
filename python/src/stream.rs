@@ -142,10 +142,33 @@ fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
         // holds.
         return Stream::quarterLength(stream)?.extract();
     }
-    match object.getattr("duration") {
-        Ok(duration) if !duration.is_none() => duration.getattr("quarterLength")?.extract(),
-        _ => Ok(0.0),
+    // A note of this package hands its duration over without going through
+    // Python's attribute lookup, which is most of what an append costs.
+    if let Ok(note) = object.cast::<crate::note::Note>()
+        && let Ok(mut note) = note.try_borrow_mut()
+    {
+        let held = note.duration_object(object.py())?;
+        drop(note);
+        if let Ok(ours) = held.bind(object.py()).cast::<crate::duration::Duration>()
+            && let Ok(ours) = ours.try_borrow()
+        {
+            return Ok(ours.inner.quarter_length());
+        }
     }
+
+    let Ok(duration) = object.getattr("duration") else {
+        return Ok(0.0);
+    };
+    if duration.is_none() {
+        return Ok(0.0);
+    }
+
+    // One of this package's durations is read in Rust, which is what its
+    // `quarterLength` answers, without building the Python number.
+    if let Ok(ours) = duration.cast::<crate::duration::Duration>() {
+        return Ok(ours.borrow().inner.quarter_length());
+    }
+    duration.getattr("quarterLength")?.extract()
 }
 
 /// Whether an object is of a class, named or given: a name matches any
@@ -993,9 +1016,12 @@ impl Stream {
             } else {
                 vec![others.clone()]
             };
+        // The end is found once and carried along, so appending a list
+        // reads each held length once rather than once per item.
+        let mut offset = slf.borrow().end(py)?;
         for other in &others {
-            let offset = slf.borrow().end(py)?;
             slf.borrow_mut().put(offset, other);
+            offset = offset.max(offset + length_of(other)?);
         }
         Ok(())
     }
