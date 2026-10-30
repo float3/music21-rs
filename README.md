@@ -400,10 +400,11 @@ feature.
 
 ### contributed back
 
-fixes found while porting went upstream:
+contributed upstream, mostly fixes found while porting:
 
 - [cuthbertLab/music21#1746](https://github.com/cuthbertLab/music21/pull/1746):
-  the `Pitch` constructor's type annotation admits a `Pitch`.
+  the `Pitch` constructor's undocumented copy of a `Pitch` argument,
+  removed, and `ChordReducer`'s interval-class helper typed.
 - [cuthbertLab/music21#2003](https://github.com/cuthbertLab/music21/pull/2003):
   a malformed ratio in the Scala archive's `sparschuh-stanhope.scl`.
 - [cuthbertLab/music21#2004](https://github.com/cuthbertLab/music21/pull/2004):
@@ -429,6 +430,8 @@ fixes found while porting went upstream:
   not in the music.
 - [cuthbertLab/music21#2048](https://github.com/cuthbertLab/music21/pull/2048):
   two deepcopies in `AbstractScale` of values that are already copies.
+- [cuthbertLab/music21#2049](https://github.com/cuthbertLab/music21/pull/2049):
+  a test-first approach in music21's `AGENTS.md`.
 - [cuthbertLab/music21#2054](https://github.com/cuthbertLab/music21/pull/2054):
   a realization cached without its altered degrees, so a harmonic minor lost
   its raised seventh after `nextPitch`.
@@ -469,6 +472,16 @@ fixes found while porting went upstream:
   being called.
 - [cuthbertLab/music21#2122](https://github.com/cuthbertLab/music21/pull/2122):
   Humdrum spines split a second time losing their notes (open).
+- [cuthbertLab/music21#2123](https://github.com/cuthbertLab/music21/pull/2123):
+  Capella single barlines failing to import, and prolonged tuplets read
+  as 3:2.
+- [cuthbertLab/music21#2124](https://github.com/cuthbertLab/music21/pull/2124):
+  `ChordBassMotionFeature` failing on a `NoChord`.
+- [cuthbertLab/music21#2125](https://github.com/cuthbertLab/music21/pull/2125):
+  ABC import losing the overflow of a measure no time signature fits
+  (open).
+- issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
+  `chordToXml` sorting a copy of the chord and discarding it (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - corrections to the Xenharmonic Wiki's temperament pages, found while
