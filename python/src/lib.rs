@@ -93,6 +93,7 @@ pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
+mod scalewrite;
 pub mod searchbase;
 pub mod searchlyrics;
 pub mod searchsegment;

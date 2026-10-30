@@ -684,6 +684,124 @@ def test_a_scala_scale_is_read_from_the_text_of_its_file():
     assert slendro.type == "Scala: slendro.scl"
 
 
+# What music21 11.0.0b14 writes for `MajorScale('C').write('midi')` and
+# `Key('G').write('midi')`: no notes, as a scale or a key is put in a stream
+# as it is and sounds nothing; the key is a key signature in the conductor
+# track.
+SCALE_MIDI = (
+    b"MThd\x00\x00\x00\x06\x00\x01\x00\x02'`MTrk\x00\x00\x00\x14\x00\xffQ\x03"
+    b"\x07\xa1 \x00\xffX\x04\x04\x02\x18\x08\xce`\xff/\x00MTrk\x00\x00\x00\t"
+    b"\x00\xff\x03\x00\xce`\xff/\x00"
+)
+G_MAJOR_MIDI = (
+    b"MThd\x00\x00\x00\x06\x00\x01\x00\x02'`MTrk\x00\x00\x00\x1a\x00\xffQ\x03"
+    b"\x07\xa1 \x00\xffY\x02\x01\x00\x00\xffX\x04\x04\x02\x18\x08\xce`\xff/\x00"
+    b"MTrk\x00\x00\x00\t\x00\xff\x03\x00\xce`\xff/\x00"
+)
+
+
+def test_a_scale_and_a_key_show_themselves_as_text(capsys):
+    """Not being streams, a scale and a key show as their `repr`: printed
+    for `'text'`, answered for `'textline'`. The formats that render are
+    the caller's to open."""
+    assert m.MajorScale("C").show("text") is None
+    m.Key("G").show("txt")
+    assert capsys.readouterr().out == (
+        "<music21.scale.MajorScale C major>\n<music21.key.Key of G major>\n"
+    )
+    assert m.Key("G").show("textline") == "<music21.key.Key of G major>"
+    with pytest.raises(m.ScaleException):
+        m.MajorScale("C").show("musicxml")
+    with pytest.raises(m.ScaleException):
+        m.Key("G").show()
+
+
+def test_a_scale_and_a_key_write_text_scala_and_midi(tmp_path):
+    written = m.Key("G").write("text", fp=tmp_path / "key.txt")
+    assert written == tmp_path / "key.txt"
+    assert written.read_text() == "<music21.key.Key of G major>"
+
+    # Each line after the description as music21 writes it.
+    scala = m.MajorScale("C").write("scala", fp=str(tmp_path / "c.scl"))
+    lines = scala.read_text().splitlines()
+    assert lines[0] == "!" and lines[1].startswith("<music21.scale.Abstract")
+    assert lines[2:] == [
+        "7", "!", "200.0", "400.0", "500.0", "700.0", "900.0", "1100.0", "1200.0"
+    ]
+    octatonic = m.OctatonicScale("C").write("scl", fp=tmp_path / "o.scl")
+    assert octatonic.read_text().splitlines()[2:5] == ["8", "!", "200.0"]
+
+    assert m.MajorScale("C").write("midi", fp=tmp_path / "c.mid").read_bytes() == SCALE_MIDI
+    assert m.Key("G").write(".mid", fp=tmp_path / "g.mid").read_bytes() == G_MAJOR_MIDI
+
+    # With nowhere given, a temporary file with the format's extension.
+    temporary = m.Key("G").write("midi")
+    assert temporary.suffix == ".mid" and temporary.read_bytes() == G_MAJOR_MIDI
+    temporary.unlink()
+    with pytest.raises(m.ScaleException):
+        m.MajorScale("C").write("lilypond")
+
+
+def test_a_scale_and_a_key_write_musicxml(tmp_path):
+    """A measure of the scale's degrees, the tonic held for a whole note and
+    a diatonic scale's dominant for a half, the first under the scale's
+    name, as music21's exporter writes one."""
+    # music21 puts its own extension on a file named without one.
+    written = m.Key("G").write("musicxml", fp=tmp_path / "g")
+    assert written == tmp_path / "g.musicxml"
+    text = written.read_text()
+    assert re.search(r"<encoding-date>\d{4}-\d\d-\d\d</encoding-date>", text)
+    notes = list(m.from_musicxml(text).recurse().notes)
+    assert [n.nameWithOctave for n in notes] == ["G4", "A4", "B4", "C5", "D5", "E5", "F#5"]
+    assert [n.quarterLength for n in notes] == [4, 1, 1, 1, 2, 1, 1]
+    assert notes[0].lyric == "G major"
+
+    # musicxml is the format written when none is named.
+    octatonic = m.OctatonicScale("C").write(fp=tmp_path / "o.musicxml")
+    lengths = [n.quarterLength for n in m.from_musicxml(octatonic.read_text()).recurse().notes]
+    assert lengths == [4, 1, 1, 1, 1, 1, 1, 1]
+
+
+def test_a_scale_and_a_key_write_the_musicxml_music21_writes(tmp_path):
+    key = pytest.importorskip("music21.key")
+    scale = pytest.importorskip("music21.scale")
+
+    def normalized(path):
+        # The date, the software and the part's random id are the volatile
+        # parts of a document.
+        text = pathlib.Path(path).read_text()
+        text = re.sub(r"\s*<(encoding-date|software)>[^<]*</\1>", "", text)
+        return re.sub(r'id="P[0-9a-f]*"', 'id="P1"', text)
+
+    cases = [
+        (m.MajorScale("C"), scale.MajorScale("C")),
+        (m.OctatonicScale("C"), scale.OctatonicScale("C")),
+        (m.Key("G"), key.Key("G")),
+        (m.Key("b-", "minor"), key.Key("b-", "minor")),
+    ]
+    for ours, theirs in cases:
+        written = ours.write("musicxml", fp=tmp_path / "ours.musicxml")
+        assert normalized(written) == normalized(theirs.write("musicxml")), repr(ours)
+
+
+def test_a_scale_and_a_key_write_and_show_once_installed():
+    """Under `install_into_music21` a key's and a scale's `write` and `show`
+    are the wheel's rather than blocked as unported."""
+    if importlib.util.find_spec("music21") is None:
+        pytest.skip("music21 is not on the path")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import key, scale\n"
+        "key.Key('G').write('musicxml').unlink()\n"
+        "print(scale.MajorScale('C').show('textline'))\n"
+        "print(scale.MajorScale('C').write('midi').read_bytes() == %r)\n" % SCALE_MIDI
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["<music21.scale.MajorScale", "C", "major>", "True"]
+
+
 @pytest.mark.parametrize(
     ("cls", "argument", "linked"),
     [
