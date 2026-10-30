@@ -8,3 +8,7 @@ mod shared {
 }
 
 pub use shared::*;
+
+mod spelling;
+
+pub use spelling::music21_name;

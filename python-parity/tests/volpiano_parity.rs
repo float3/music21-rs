@@ -27,6 +27,7 @@ use music21_rs::musicxml::{ExportOptions, from_musicxml, to_musicxml};
 use music21_rs::volpiano::{from_volpiano, to_volpiano};
 use music21_rs::{SpannerKind, Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
@@ -190,16 +191,6 @@ fn number(value: f64) -> String {
     format!("{value:.5}")
 }
 
-/// A pitch's name and octave as music21 writes them, a flat as `-`.
-fn music21_name(pitch: &music21_rs::Pitch) -> String {
-    let name = pitch.name_with_octave();
-    let mut letters = name.chars();
-    let Some(step) = letters.next() else {
-        return String::new();
-    };
-    format!("{step}{}", letters.as_str().replace('b', "-"))
-}
-
 /// The part as `MUSIC21`'s `outline` writes of music21's.
 fn outline(part: &Stream) -> String {
     let mut out = Vec::new();
@@ -224,7 +215,7 @@ fn outline(part: &Stream) -> String {
             out.push(match held.element() {
                 StreamElement::Note(note) => format!(
                     "  {at} Note {} {} {} {}",
-                    music21_name(note.pitch()),
+                    music21_name(&note.pitch().name_with_octave()),
                     note.notehead().as_str(),
                     note.stem_direction().as_str(),
                     number(held.element().quarter_length())

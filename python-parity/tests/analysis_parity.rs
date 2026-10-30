@@ -19,13 +19,13 @@ use music21_rs::analysis::{elements, metrical, patel, pitch_analysis, segment_by
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::{ConsecutiveOptions, StreamElement};
 use music21_rs::{FloatType, Stream, StreamKind};
-use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::{answers, music21_name};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
 mod musicxml_common;
-use musicxml_common::{SCORES, music21_name};
+use musicxml_common::SCORES;
 
 const MUSIC21: &str = r#"
 import copy
@@ -214,7 +214,10 @@ fn describe(offset: FloatType, element: &StreamElement) -> String {
         StreamElement::ChordSymbol(symbol) => symbol.pitches().expect("a chord symbol sounds"),
         element => element.pitches(),
     };
-    let names: Vec<String> = pitches.iter().map(music21_name).collect();
+    let names: Vec<String> = pitches
+        .iter()
+        .map(|pitch| music21_name(&pitch.name_with_octave()))
+        .collect();
     format!("{} {} @{offset:.6}", kind(element), names.join(" "))
 }
 
@@ -330,17 +333,19 @@ fn report(score: &Stream) -> (String, Vec<Option<FloatType>>) {
         .map(|interval| interval.directed_name())
         .collect();
     lines.push(format!("interval list: {}", names.join(" ")));
-    let counts: Vec<String> = pitch_analysis::pitch_attribute_count(score, music21_name)
-        .expect("the pitches are counted")
-        .into_iter()
-        .map(|(name, count)| format!("{name}:{count}"))
-        .collect();
+    let counts: Vec<String> = pitch_analysis::pitch_attribute_count(score, |pitch| {
+        music21_name(&pitch.name_with_octave())
+    })
+    .expect("the pitches are counted")
+    .into_iter()
+    .map(|(name, count)| format!("{name}:{count}"))
+    .collect();
     lines.push(format!("pitch counts: {}", counts.join(" ")));
     // A note is the only thing music21 keeps a `nameWithOctave` on, so
     // nothing else is counted.
     let named: Vec<String> =
         elements::attribute_count(score.recurse(), |(_, element)| match element {
-            StreamElement::Note(note) => Some(music21_name(note.pitch())),
+            StreamElement::Note(note) => Some(music21_name(&note.pitch().name_with_octave())),
             _ => None,
         })
         .into_iter()

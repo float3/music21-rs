@@ -20,13 +20,13 @@ use music21_rs::analysis::{KeyProfile, estimate_key_of_stream};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs::stream::StreamElement;
 use music21_rs::{FloatType, Stream, StreamKind};
-use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::{answers, music21_name};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
 mod musicxml_common;
-use musicxml_common::{SCORES, music21_name};
+use musicxml_common::SCORES;
 
 const MUSIC21: &str = r#"
 import zipfile
@@ -124,15 +124,6 @@ fn is_general_note(element: &StreamElement) -> bool {
     )
 }
 
-/// A key name as music21 writes it, a flat as `-`.
-fn music21_key(name: &str) -> String {
-    let mut letters = name.chars();
-    match letters.next() {
-        Some(step) => format!("{step}{}", letters.as_str().replace('b', "-")),
-        None => String::new(),
-    }
-}
-
 fn report(score: &Stream) -> (String, Vec<FloatType>) {
     let mut lines = Vec::new();
     let mut numbers = Vec::new();
@@ -164,7 +155,7 @@ fn report(score: &Stream) -> (String, Vec<FloatType>) {
                 match found {
                     Some(estimates) => {
                         let best = &estimates[0];
-                        let tonic = music21_name(best.key().tonic_pitch());
+                        let tonic = music21_name(&best.key().tonic_pitch().name_with_octave());
                         names.push(format!("{tonic} {}", best.key().mode()));
                         numbers.push(best.score());
                     }
@@ -199,7 +190,7 @@ fn report(score: &Stream) -> (String, Vec<FloatType>) {
     for found in analyzer.raw_key_by_measure() {
         match found {
             Some(estimates) => {
-                names.push(music21_key(
+                names.push(music21_name(
                     &estimates[0].key().tonic_pitch_name_with_case(),
                 ));
                 numbers.push(estimates[0].score());
@@ -214,7 +205,7 @@ fn report(score: &Stream) -> (String, Vec<FloatType>) {
             .run()
             .expect("the keys are smoothed")
             .iter()
-            .map(|key| music21_key(&key.tonic_pitch_name_with_case()))
+            .map(|key| music21_name(&key.tonic_pitch_name_with_case()))
             .collect();
         lines.push(format!("smoothed {size}: {}", keys.join(" ")));
     }
