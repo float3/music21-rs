@@ -3,6 +3,15 @@
 Seven design questions were debated and their verdicts recorded in
 DECISIONS.md; these are the changes they called for.
 
+## breaking changes
+
+- **`Rest::full_measure` is a `FullMeasure`**, music21's `True`, `False`,
+  `'auto'` and `'always'`, where it was an `Option<bool>` that could not
+  say `'always'`. The MusicXML writer now reads it: `No` writes no measure
+  rest though the rest fills its bar, and `Always` writes one though it
+  does not. Saved rests with `null`, `true` or `false` read back as `Auto`,
+  `Yes` and `No`. `harte` 0.5.0 depends on this release.
+
 ## changed
 
 - **Once installed, the readers hand back music21's own streams.** After
@@ -66,6 +75,17 @@ DECISIONS.md; these are the changes they called for.
 
 - **`sortByCreationTime='reverse'` and `atSoundingPitch=1` are taken**, as
   music21 takes them.
+
+- **A rest's `fullMeasure` reaches what is written.** The wheel kept it
+  beside the crate value, so `fullMeasure=False` still wrote a measure
+  rest and braille never drew `True` as one.
+
+- **A tempo mark's referent is changed through the one it hands out**:
+  `mark.referent.type = 'half'` is the mark's, in its tempo, its repr, a
+  copy and a pickle.
+
+- **Read once installed, a Humdrum `!!` comment is music21's own
+  `GlobalComment`.**
 
 # music21-rs 0.11.0
 
