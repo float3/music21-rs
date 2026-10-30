@@ -59,7 +59,7 @@ fn to_musicxml(
     score: &Bound<'_, PyAny>,
     encoding_date: Option<String>,
     software: Option<String>,
-    make_notation: bool,
+    #[pyo3(from_py_with = crate::truthy)] make_notation: bool,
 ) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
     let mut options = ExportOptions {
@@ -111,8 +111,8 @@ fn to_abc(
 fn to_midi<'py>(
     py: Python<'py>,
     score: &Bound<'py, PyAny>,
-    add_start_delay: bool,
-    add_end_delay: bool,
+    #[pyo3(from_py_with = crate::truthy)] add_start_delay: bool,
+    #[pyo3(from_py_with = crate::truthy)] add_end_delay: bool,
     acceptable_channels: Option<Vec<u8>>,
 ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
     let stream = crate::stream::crate_stream(score)?;

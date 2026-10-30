@@ -569,7 +569,11 @@ pub fn is_minor_py(test_key: &str) -> bool {
 #[pyfunction]
 #[pyo3(name = "characterSwaps")]
 #[pyo3(signature = (preString, minor = true, direction = "m21-DCML"))]
-pub fn character_swaps_py(preString: &str, minor: bool, direction: &str) -> PyResult<String> {
+pub fn character_swaps_py(
+    preString: &str,
+    #[pyo3(from_py_with = crate::truthy)] minor: bool,
+    direction: &str,
+) -> PyResult<String> {
     let _ = minor;
     Ok(character_swaps(preString, direction_of(direction)?))
 }
@@ -582,7 +586,7 @@ pub fn character_swaps_py(preString: &str, minor: bool, direction: &str) -> PyRe
 pub fn get_local_key_py(
     local_key: &str,
     global_key: &str,
-    convertDCMLToM21: bool,
+    #[pyo3(from_py_with = crate::truthy)] convertDCMLToM21: bool,
 ) -> PyResult<String> {
     local_key_py(local_key, global_key, convertDCMLToM21)
 }

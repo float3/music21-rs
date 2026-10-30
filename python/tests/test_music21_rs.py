@@ -6170,6 +6170,22 @@ print([t.content for t in read.recurse().getElementsByClass("TextExpression")])
     assert done.stdout.splitlines() == ["['cresc.']"]
 
 
+def test_a_flag_is_read_for_its_truth_as_music21_reads_it():
+    """music21 asks `if inPlace:`, so 1, 0 and None do for True and False;
+    a string is refused, `'False'` being true in Python."""
+    chord = m.Chord("G4 E4 C4")
+    assert chord.sortDiatonicAscending(inPlace=1) is None
+    assert [p.nameWithOctave for p in chord.pitches] == ["C4", "E4", "G4"]
+
+    pitch = m.Pitch("C4")
+    moved = pitch.transpose(2, inPlace=0)
+    assert (moved.nameWithOctave, pitch.nameWithOctave) == ("D4", "C4")
+    assert pitch.transpose(2, inPlace=None).nameWithOctave == "D4"
+
+    with pytest.raises(TypeError):
+        pitch.transpose(2, inPlace="False")
+
+
 def test_a_key_signatures_count_and_flag_are_set_apart():
     """music21 14acfa0f2: `sharps` is always an int and `isNonTraditional`
     a flag of its own, so writing pitches over a signature leaves it

@@ -368,10 +368,10 @@ impl Metadata {
     fn all<'py>(
         &self,
         py: Python<'py>,
-        skipContributors: bool,
-        skipNonContributors: bool,
-        returnPrimitives: bool,
-        returnSorted: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipContributors: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipNonContributors: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnPrimitives: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnSorted: bool,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let pairs: Vec<(&str, &MetadataValue)> = if returnSorted {
             self.inner.all_sorted()
@@ -405,7 +405,7 @@ impl Metadata {
         &self,
         py: Python<'py>,
         name: &str,
-        isCustom: bool,
+        #[pyo3(from_py_with = crate::truthy)] isCustom: bool,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let unique = if isCustom {
             name.to_string()
@@ -425,7 +425,12 @@ impl Metadata {
     /// music21's `_add`: one value or several under a name, keeping what
     /// is there.
     #[pyo3(signature = (name, value, isCustom))]
-    fn _add(&mut self, name: &str, value: &Bound<'_, PyAny>, isCustom: bool) -> PyResult<()> {
+    fn _add(
+        &mut self,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] isCustom: bool,
+    ) -> PyResult<()> {
         let unique = if isCustom {
             name.to_string()
         } else {
@@ -443,7 +448,12 @@ impl Metadata {
     /// music21's `_set`: one value or several under a name, in place of
     /// whatever was there.
     #[pyo3(signature = (name, value, isCustom))]
-    fn _set(&mut self, name: &str, value: &Bound<'_, PyAny>, isCustom: bool) -> PyResult<()> {
+    fn _set(
+        &mut self,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] isCustom: bool,
+    ) -> PyResult<()> {
         let unique = if isCustom {
             name.to_string()
         } else {

@@ -1120,8 +1120,8 @@ impl Stream {
         &mut self,
         target: &Bound<'_, PyAny>,
         replacement: &Bound<'_, PyAny>,
-        recurse: bool,
-        allDerived: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] allDerived: bool,
     ) -> PyResult<()> {
         let _ = allDerived;
         let py = target.py();
@@ -1201,7 +1201,7 @@ impl Stream {
     fn containerInHierarchy<'py>(
         slf: &Bound<'py, Self>,
         el: &Bound<'py, PyAny>,
-        setActiveSite: bool,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         let py = slf.py();
         let held: Vec<Py<PyAny>> = slf
@@ -1243,10 +1243,10 @@ impl Stream {
     fn recurseRepr(
         slf: &Bound<'_, Self>,
         prefixSpaces: usize,
-        addBreaks: bool,
-        addIndent: bool,
-        addEndTimes: bool,
-        useMixedNumerals: bool,
+        #[pyo3(from_py_with = crate::truthy)] addBreaks: bool,
+        #[pyo3(from_py_with = crate::truthy)] addIndent: bool,
+        #[pyo3(from_py_with = crate::truthy)] addEndTimes: bool,
+        #[pyo3(from_py_with = crate::truthy)] useMixedNumerals: bool,
     ) -> PyResult<String> {
         let py = slf.py();
         let held: Vec<(f64, Py<PyAny>)> = slf
@@ -1677,8 +1677,8 @@ impl Stream {
         numberStart: &Bound<'py, PyAny>,
         numberEnd: &Bound<'py, PyAny>,
         collect: Option<&Bound<'py, PyAny>>,
-        gatherSpanners: bool,
-        indicesNotNumbers: bool,
+        #[pyo3(from_py_with = crate::truthy)] gatherSpanners: bool,
+        #[pyo3(from_py_with = crate::truthy)] indicesNotNumbers: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = gatherSpanners;
         let py = slf.py();
@@ -1784,8 +1784,8 @@ impl Stream {
         slf: &Bound<'py, Self>,
         measureNumber: &Bound<'py, PyAny>,
         collect: Option<&Bound<'py, PyAny>>,
-        gatherSpanners: bool,
-        indicesNotNumbers: bool,
+        #[pyo3(from_py_with = crate::truthy)] gatherSpanners: bool,
+        #[pyo3(from_py_with = crate::truthy)] indicesNotNumbers: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         let py = slf.py();
         let measured = Self::measures(
@@ -2030,7 +2030,7 @@ impl Stream {
         slf: &Bound<'_, Self>,
         offset: f64,
         noteOrChord: &Bound<'_, PyAny>,
-        chordsOnly: bool,
+        #[pyo3(from_py_with = crate::truthy)] chordsOnly: bool,
     ) -> PyResult<()> {
         let py = slf.py();
         let Some(added) = element_value(noteOrChord, false)? else {
@@ -2110,7 +2110,7 @@ impl Stream {
     fn beatAndMeasureFromOffset<'py>(
         slf: &Bound<'py, Self>,
         searchOffset: f64,
-        fixZeros: bool,
+        #[pyo3(from_py_with = crate::truthy)] fixZeros: bool,
     ) -> PyResult<(f64, Option<Bound<'py, PyAny>>)> {
         let py = slf.py();
         let stream = crate_stream(slf.as_any())?;
@@ -2164,7 +2164,7 @@ impl Stream {
     #[pyo3(signature = (copySpanners = true))]
     fn expandRepeats<'py>(
         slf: &Bound<'py, Self>,
-        copySpanners: bool,
+        #[pyo3(from_py_with = crate::truthy)] copySpanners: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         // The package keeps no spanners, so there are none to copy.
         let _ = copySpanners;
@@ -2322,10 +2322,10 @@ impl Stream {
     #[pyo3(signature = (*, searchContext = true, returnDefault = true, recurse = true, sortByCreationTime = true))]
     fn getTimeSignatures<'py>(
         slf: &Bound<'py, Self>,
-        searchContext: bool,
-        returnDefault: bool,
-        recurse: bool,
-        sortByCreationTime: bool,
+        #[pyo3(from_py_with = crate::truthy)] searchContext: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] sortByCreationTime: bool,
     ) -> PyResult<Bound<'py, Stream>> {
         let _ = (searchContext, sortByCreationTime);
         let py = slf.py();
@@ -2357,9 +2357,9 @@ impl Stream {
     #[pyo3(signature = (*, searchActiveSite = true, returnDefault = true, recurse = true))]
     fn getInstruments<'py>(
         slf: &Bound<'py, Self>,
-        searchActiveSite: bool,
-        returnDefault: bool,
-        recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] searchActiveSite: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
     ) -> PyResult<Bound<'py, Stream>> {
         let _ = searchActiveSite;
         let py = slf.py();
@@ -2387,9 +2387,9 @@ impl Stream {
     #[pyo3(signature = (*, searchActiveSite = true, returnDefault = true, recurse = false))]
     fn getInstrument<'py>(
         slf: &Bound<'py, Self>,
-        searchActiveSite: bool,
-        returnDefault: bool,
-        recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] searchActiveSite: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         let found = Self::getInstruments(slf, searchActiveSite, returnDefault, recurse)?;
         let py = slf.py();
@@ -2596,8 +2596,8 @@ impl Stream {
     #[pyo3(signature = (*, useGaps = true, useInitialRests = false))]
     fn padAsAnacrusis<'py>(
         slf: &Bound<'py, Self>,
-        useGaps: bool,
-        useInitialRests: bool,
+        #[pyo3(from_py_with = crate::truthy)] useGaps: bool,
+        #[pyo3(from_py_with = crate::truthy)] useInitialRests: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         if !useGaps {
             return Err(StreamException::new_err(
@@ -2788,11 +2788,11 @@ impl Stream {
     #[pyo3(signature = (*, addTies = true, addPartIdAsGroup = false, removeRedundantPitches = true, toSoundingPitch = true, copyPitches = true))]
     fn chordify<'py>(
         slf: &Bound<'py, Self>,
-        addTies: bool,
-        addPartIdAsGroup: bool,
-        removeRedundantPitches: bool,
-        toSoundingPitch: bool,
-        copyPitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] addPartIdAsGroup: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeRedundantPitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] toSoundingPitch: bool,
+        #[pyo3(from_py_with = crate::truthy)] copyPitches: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = copyPitches;
         if addPartIdAsGroup {
@@ -2819,13 +2819,13 @@ impl Stream {
     #[allow(clippy::too_many_arguments)]
     fn findConsecutiveNotes<'py>(
         slf: &Bound<'py, Self>,
-        skipRests: bool,
-        skipChords: bool,
-        skipUnisons: bool,
-        skipOctaves: bool,
-        skipGaps: bool,
-        getOverlaps: bool,
-        noNone: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipRests: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipChords: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipUnisons: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipOctaves: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipGaps: bool,
+        #[pyo3(from_py_with = crate::truthy)] getOverlaps: bool,
+        #[pyo3(from_py_with = crate::truthy)] noNone: bool,
         _keywords: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyList>> {
         let options = music21_rs_crate::stream::ConsecutiveOptions {
@@ -2913,8 +2913,8 @@ impl Stream {
         slf: &Bound<'py, Self>,
         quarterLengthList: &Bound<'py, PyAny>,
         target: Option<&Bound<'py, PyAny>>,
-        addTies: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(target.is_some(), !addTies, inPlace)?;
         let lengths: Vec<f64> = match quarterLengthList.extract::<f64>() {
@@ -2930,8 +2930,8 @@ impl Stream {
     #[pyo3(signature = (*, addTies = true, inPlace = false))]
     fn sliceByGreatestDivisor<'py>(
         slf: &Bound<'py, Self>,
-        addTies: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, !addTies, inPlace)?;
         edited(slf, RsStream::slice_by_greatest_divisor)
@@ -2944,9 +2944,9 @@ impl Stream {
         slf: &Bound<'py, Self>,
         offsetList: Vec<f64>,
         target: Option<&Bound<'py, PyAny>>,
-        addTies: bool,
-        inPlace: bool,
-        displayTiedAccidentals: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] displayTiedAccidentals: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = displayTiedAccidentals;
         refuse_unported(target.is_some(), !addTies, inPlace)?;
@@ -2959,9 +2959,9 @@ impl Stream {
     fn sliceByBeat<'py>(
         slf: &Bound<'py, Self>,
         target: Option<&Bound<'py, PyAny>>,
-        addTies: bool,
-        inPlace: bool,
-        displayTiedAccidentals: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] displayTiedAccidentals: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = displayTiedAccidentals;
         refuse_unported(target.is_some(), !addTies, inPlace)?;
@@ -2977,7 +2977,7 @@ impl Stream {
         amountToScale: f64,
         anchorZero: Option<String>,
         anchorZeroRecurse: Option<String>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         let anchor = anchor_of(anchorZero.as_deref())?;
@@ -2992,7 +2992,7 @@ impl Stream {
     fn scaleDurations<'py>(
         slf: &Bound<'py, Self>,
         amountToScale: f64,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         edited(slf, |stream| stream.scale_durations(amountToScale))
@@ -3004,7 +3004,7 @@ impl Stream {
     fn augmentOrDiminish<'py>(
         slf: &Bound<'py, Self>,
         amountToScale: f64,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         edited(slf, |stream| stream.augment_or_diminish(amountToScale))
@@ -3016,7 +3016,7 @@ impl Stream {
     fn invertDiatonic<'py>(
         slf: &Bound<'py, Self>,
         inversionNote: Option<&Bound<'py, PyAny>>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         let pitch = match inversionNote {
@@ -3038,7 +3038,7 @@ impl Stream {
     #[pyo3(signature = (*, separateById = false))]
     fn voicesToParts<'py>(
         slf: &Bound<'py, Self>,
-        separateById: bool,
+        #[pyo3(from_py_with = crate::truthy)] separateById: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         edited(slf, |stream| stream.voices_to_parts(separateById))
     }
@@ -3055,8 +3055,8 @@ impl Stream {
     fn partsToVoices<'py>(
         slf: &Bound<'py, Self>,
         voiceAllocation: Option<&Bound<'py, PyAny>>,
-        permitOneVoicePerPart: bool,
-        setStems: bool,
+        #[pyo3(from_py_with = crate::truthy)] permitOneVoicePerPart: bool,
+        #[pyo3(from_py_with = crate::truthy)] setStems: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         use music21_rs_crate::stream::VoiceAllocation;
         let allocation = match voiceAllocation {
@@ -3174,7 +3174,7 @@ impl Stream {
     /// music21's `sort`. A stream here answers in order whenever it is
     /// read, so there is nothing to do; `force` is accepted for that.
     #[pyo3(signature = (force = false))]
-    fn sort(&self, force: bool) {
+    fn sort(&self, #[pyo3(from_py_with = crate::truthy)] force: bool) {
         let _ = force;
     }
 
@@ -3316,7 +3316,7 @@ impl Stream {
     fn hasElementOfClass(
         slf: &Bound<'_, Self>,
         className: &Bound<'_, PyAny>,
-        forceFlat: bool,
+        #[pyo3(from_py_with = crate::truthy)] forceFlat: bool,
     ) -> PyResult<bool> {
         let _ = forceFlat;
         let py = slf.py();
@@ -3361,10 +3361,10 @@ impl Stream {
         slf: &Bound<'py, Self>,
         offsetStart: f64,
         offsetEnd: Option<f64>,
-        includeEndBoundary: bool,
-        mustFinishInSpan: bool,
-        mustBeginInSpan: bool,
-        includeElementsThatEndAtStart: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeEndBoundary: bool,
+        #[pyo3(from_py_with = crate::truthy)] mustFinishInSpan: bool,
+        #[pyo3(from_py_with = crate::truthy)] mustBeginInSpan: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeElementsThatEndAtStart: bool,
         classList: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, Stream>> {
         let span = music21_rs_crate::stream::OffsetSpan {
@@ -3422,7 +3422,7 @@ impl Stream {
     fn extendDuration<'py>(
         slf: &Bound<'py, Self>,
         objName: &Bound<'py, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         let names = class_names(objName)?;
@@ -3559,7 +3559,7 @@ impl Stream {
     fn transpose<'py>(
         slf: &Bound<'py, Self>,
         value: &Bound<'py, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         classFilterList: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(
@@ -3576,8 +3576,8 @@ impl Stream {
     #[pyo3(signature = (*, matchByPitch = true, inPlace = false))]
     fn stripTies<'py>(
         slf: &Bound<'py, Self>,
-        matchByPitch: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] matchByPitch: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         remade(slf, |stream| stream.strip_ties(matchByPitch))
@@ -3591,10 +3591,10 @@ impl Stream {
     fn quantize<'py>(
         slf: &Bound<'py, Self>,
         quarterLengthDivisors: Option<Vec<u32>>,
-        processOffsets: bool,
-        processDurations: bool,
-        inPlace: bool,
-        recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] processOffsets: bool,
+        #[pyo3(from_py_with = crate::truthy)] processDurations: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         if !processOffsets || !processDurations || !recurse {
@@ -3613,10 +3613,10 @@ impl Stream {
     #[pyo3(signature = (*, fillWithRests = true, removeClasses = None, retainVoices = true, removeAll = false, exemptFromRemove = None))]
     fn template<'py>(
         slf: &Bound<'py, Self>,
-        fillWithRests: bool,
+        #[pyo3(from_py_with = crate::truthy)] fillWithRests: bool,
         removeClasses: Option<&Bound<'py, PyAny>>,
-        retainVoices: bool,
-        removeAll: bool,
+        #[pyo3(from_py_with = crate::truthy)] retainVoices: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeAll: bool,
         exemptFromRemove: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         // The classes taken out, and the ones kept whatever else says, are
@@ -3650,10 +3650,10 @@ impl Stream {
     fn splitAtQuarterLength<'py>(
         slf: &Bound<'py, Self>,
         quarterLength: f64,
-        retainOrigin: bool,
-        addTies: bool,
-        displayTiedAccidentals: bool,
-        searchContext: bool,
+        #[pyo3(from_py_with = crate::truthy)] retainOrigin: bool,
+        #[pyo3(from_py_with = crate::truthy)] addTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] displayTiedAccidentals: bool,
+        #[pyo3(from_py_with = crate::truthy)] searchContext: bool,
     ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
         let _ = (displayTiedAccidentals, searchContext);
         refuse_unported(false, !addTies, false)?;
@@ -3678,7 +3678,11 @@ impl Stream {
     /// it: the crate is asked which notes are tied and the answer is
     /// carried back by position.
     #[pyo3(signature = (ignoreRests = false, pitchAttr = "nameWithOctave"))]
-    fn extendTies(slf: &Bound<'_, Self>, ignoreRests: bool, pitchAttr: &str) -> PyResult<()> {
+    fn extendTies(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] ignoreRests: bool,
+        pitchAttr: &str,
+    ) -> PyResult<()> {
         if pitchAttr != "nameWithOctave" {
             return Err(StreamException::new_err(
                 "a pitchAttr other than 'nameWithOctave' is not supported here: notes are tied where they are the same note",
@@ -3741,8 +3745,8 @@ impl Stream {
     #[pyo3(signature = (*, force = false, inPlace = false))]
     fn flattenUnnecessaryVoices<'py>(
         slf: &Bound<'py, Self>,
-        force: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] force: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         remade(slf, |stream| {
@@ -3755,7 +3759,10 @@ impl Stream {
     /// written: music21's `toSoundingPitch`, which moves each stretch by
     /// the transposition of the instrument playing it.
     #[pyo3(signature = (*, inPlace = false))]
-    fn toSoundingPitch<'py>(slf: &Bound<'py, Self>, inPlace: bool) -> PyResult<Bound<'py, PyAny>> {
+    fn toSoundingPitch<'py>(
+        slf: &Bound<'py, Self>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         edited(slf, RsStream::to_sounding_pitch)
     }
@@ -3767,8 +3774,8 @@ impl Stream {
     #[pyo3(signature = (*, inPlace = false, ottavasToSounding = false))]
     fn toWrittenPitch<'py>(
         slf: &Bound<'py, Self>,
-        inPlace: bool,
-        ottavasToSounding: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] ottavasToSounding: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         edited(slf, |stream| stream.to_written_pitch_by(ottavasToSounding))
@@ -3832,11 +3839,11 @@ impl Stream {
         slf: &Bound<'py, Self>,
         meterStream: Option<&Bound<'py, PyAny>>,
         refStreamOrTimeRange: Option<&Bound<'py, PyAny>>,
-        searchContext: bool,
+        #[pyo3(from_py_with = crate::truthy)] searchContext: bool,
         innerBarline: Option<&Bound<'py, PyAny>>,
         finalBarline: Option<String>,
-        bestClef: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] bestClef: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         if refStreamOrTimeRange.is_some_and(|given| !given.is_none())
@@ -3880,10 +3887,10 @@ impl Stream {
     fn makeRests<'py>(
         slf: &Bound<'py, Self>,
         refStreamOrTimeRange: Option<&Bound<'py, PyAny>>,
-        fillGaps: bool,
-        timeRangeFromBarDuration: bool,
-        inPlace: bool,
-        hideRests: bool,
+        #[pyo3(from_py_with = crate::truthy)] fillGaps: bool,
+        #[pyo3(from_py_with = crate::truthy)] timeRangeFromBarDuration: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] hideRests: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         if !fillGaps || !timeRangeFromBarDuration {
@@ -3905,8 +3912,8 @@ impl Stream {
     fn makeTies<'py>(
         slf: &Bound<'py, Self>,
         meterStream: Option<&Bound<'py, PyAny>>,
-        inPlace: bool,
-        displayTiedAccidentals: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] displayTiedAccidentals: bool,
         classFilterList: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(
@@ -3927,9 +3934,9 @@ impl Stream {
     #[pyo3(signature = (*, inPlace = false, setStemDirections = true, failOnNoTimeSignature = false))]
     fn makeBeams<'py>(
         slf: &Bound<'py, Self>,
-        inPlace: bool,
-        setStemDirections: bool,
-        failOnNoTimeSignature: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] setStemDirections: bool,
+        #[pyo3(from_py_with = crate::truthy)] failOnNoTimeSignature: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         if !setStemDirections || failOnNoTimeSignature {
@@ -3945,7 +3952,7 @@ impl Stream {
     #[pyo3(signature = (*, inPlace = false, **keywords))]
     fn makeAccidentals<'py>(
         slf: &Bound<'py, Self>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         keywords: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
@@ -3969,8 +3976,8 @@ impl Stream {
     #[pyo3(signature = (*, inPlace = false, fillGaps = true))]
     fn makeVoices<'py>(
         slf: &Bound<'py, Self>,
-        inPlace: bool,
-        fillGaps: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] fillGaps: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
         if fillGaps {
@@ -3990,7 +3997,7 @@ impl Stream {
     #[pyo3(signature = (*, inPlace = false, **keywords))]
     fn makeNotation<'py>(
         slf: &Bound<'py, Self>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         keywords: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
@@ -4015,9 +4022,9 @@ impl Stream {
     #[pyo3(signature = (*, ignoreBarlines = true, recurse = false, skipTies = false))]
     fn lyrics<'py>(
         slf: &Bound<'py, Self>,
-        ignoreBarlines: bool,
-        recurse: bool,
-        skipTies: bool,
+        #[pyo3(from_py_with = crate::truthy)] ignoreBarlines: bool,
+        #[pyo3(from_py_with = crate::truthy)] recurse: bool,
+        #[pyo3(from_py_with = crate::truthy)] skipTies: bool,
     ) -> PyResult<Bound<'py, PyDict>> {
         let options = music21_rs_crate::stream::LyricsOptions {
             ignore_barlines: ignoreBarlines,
@@ -7117,9 +7124,9 @@ fn is_true(value: &Bound<'_, PyAny>) -> bool {
 fn realizeVolume(
     py: Python<'_>,
     srcStream: &Bound<'_, PyAny>,
-    setAbsoluteVelocity: bool,
+    #[pyo3(from_py_with = crate::truthy)] setAbsoluteVelocity: bool,
     useDynamicContext: Option<&Bound<'_, PyAny>>,
-    useVelocity: bool,
+    #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
     useArticulations: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<()> {
     let read = read(srcStream)?;
@@ -7177,7 +7184,7 @@ fn interpolateElements(
     element2: &Bound<'_, PyAny>,
     sourceStream: &Bound<'_, PyAny>,
     destinationStream: &Bound<'_, PyAny>,
-    autoAdd: bool,
+    #[pyo3(from_py_with = crate::truthy)] autoAdd: bool,
 ) -> PyResult<()> {
     let offset_in = |element: &Bound<'_, PyAny>,
                      stream: &Bound<'_, PyAny>,
@@ -7404,10 +7411,10 @@ fn getVerticalityFromObject(
 fn iterateAllVoiceLeadingQuartets<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
-    includeRests: bool,
-    includeOblique: bool,
-    includeNoMotion: bool,
-    reverse: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeRests: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeOblique: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeNoMotion: bool,
+    #[pyo3(from_py_with = crate::truthy)] reverse: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     let read = read(s)?;
     let mut found = music21_rs_crate::voiceleading::voice_leading_quartet_positions(

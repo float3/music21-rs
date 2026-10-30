@@ -124,19 +124,28 @@ fn transforms_of(symbols: &str) -> PyResult<Vec<Transform>> {
 
 #[pyfunction]
 #[pyo3(signature = (c, raiseException = true))]
-fn L<'py>(c: &Bound<'py, PyAny>, raiseException: bool) -> PyResult<Bound<'py, PyAny>> {
+fn L<'py>(
+    c: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] raiseException: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     transform(c, Transform::L, raiseException)
 }
 
 #[pyfunction]
 #[pyo3(signature = (c, raiseException = true))]
-fn P<'py>(c: &Bound<'py, PyAny>, raiseException: bool) -> PyResult<Bound<'py, PyAny>> {
+fn P<'py>(
+    c: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] raiseException: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     transform(c, Transform::P, raiseException)
 }
 
 #[pyfunction]
 #[pyo3(signature = (c, raiseException = true))]
-fn R<'py>(c: &Bound<'py, PyAny>, raiseException: bool) -> PyResult<Bound<'py, PyAny>> {
+fn R<'py>(
+    c: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] raiseException: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     transform(c, Transform::R, raiseException)
 }
 
@@ -203,10 +212,10 @@ fn isChromaticMediant(c1: &Bound<'_, PyAny>, c2: &Bound<'_, PyAny>) -> PyResult<
 fn LRP_combinations<'py>(
     c: &Bound<'py, PyAny>,
     transformationString: &str,
-    raiseException: bool,
-    leftOrdered: bool,
-    simplifyEnharmonics: bool,
-    eachOne: bool,
+    #[pyo3(from_py_with = crate::truthy)] raiseException: bool,
+    #[pyo3(from_py_with = crate::truthy)] leftOrdered: bool,
+    #[pyo3(from_py_with = crate::truthy)] simplifyEnharmonics: bool,
+    #[pyo3(from_py_with = crate::truthy)] eachOne: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let chord = chord_of(c)?;
     if !raiseException && !is_triad(&chord) {
@@ -243,8 +252,8 @@ fn LRP_combinations<'py>(
 #[pyo3(signature = (c, simplifyEnharmonics = false, raiseException = true))]
 fn completeHexatonic<'py>(
     c: &Bound<'py, PyAny>,
-    simplifyEnharmonics: bool,
-    raiseException: bool,
+    #[pyo3(from_py_with = crate::truthy)] simplifyEnharmonics: bool,
+    #[pyo3(from_py_with = crate::truthy)] raiseException: bool,
 ) -> PyResult<Option<Bound<'py, PyList>>> {
     let respell = if simplifyEnharmonics {
         Respell::Simplify

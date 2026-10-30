@@ -174,8 +174,8 @@ impl Clef {
     fn getStemDirectionForPitches(
         &self,
         pitches: &Bound<'_, PyAny>,
-        firstLastOnly: bool,
-        extremePitchOnly: bool,
+        #[pyo3(from_py_with = crate::truthy)] firstLastOnly: bool,
+        #[pyo3(from_py_with = crate::truthy)] extremePitchOnly: bool,
     ) -> PyResult<&'static str> {
         let read = match pitch_from_any(pitches) {
             Ok(one) => vec![one],
@@ -361,8 +361,8 @@ fn clefFromString(py: Python<'_>, clefString: &str, octaveShift: i32) -> PyResul
 fn bestClef(
     py: Python<'_>,
     streamObj: &Bound<'_, PyAny>,
-    allowTreble8vb: bool,
-    recurse: bool,
+    #[pyo3(from_py_with = crate::truthy)] allowTreble8vb: bool,
+    #[pyo3(from_py_with = crate::truthy)] recurse: bool,
 ) -> PyResult<Py<PyAny>> {
     let walked = if recurse {
         streamObj.call_method0("recurse")?

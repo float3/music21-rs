@@ -108,7 +108,10 @@ impl NoteGroupingTranscriber {
     }
 
     #[setter]
-    fn set_showClefSigns(&mut self, new: Option<bool>) {
+    fn set_showClefSigns(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] new: Option<bool>,
+    ) {
         self.shown_clef_signs = new;
     }
 
@@ -127,7 +130,10 @@ impl NoteGroupingTranscriber {
     }
 
     #[setter]
-    fn set_upperFirstInFingering(&mut self, new: Option<bool>) {
+    fn set_upperFirstInFingering(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] new: Option<bool>,
+    ) {
         self.upper_first = new;
     }
 

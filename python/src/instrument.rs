@@ -307,7 +307,7 @@ impl Instrument {
     }
 
     #[setter]
-    fn set_inGMPercMap(&mut self, value: bool) {
+    fn set_inGMPercMap(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_in_percussion_map(value);
     }
 
@@ -348,7 +348,10 @@ impl Instrument {
     }
 
     #[setter]
-    fn set_muted(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_muted(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         // Read first, so that anything the property is not defined on
         // raises rather than quietly doing nothing.
         let _ = Self::get_muted(slf)?;
@@ -406,7 +409,7 @@ impl Instrument {
     }
 
     #[setter]
-    fn set_headless(&mut self, value: bool) -> PyResult<()> {
+    fn set_headless(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) -> PyResult<()> {
         self.member_of("Tambourine", "headless")?;
         self.inner.set_headless(value);
         Ok(())
@@ -421,7 +424,7 @@ impl Instrument {
     }
 
     #[setter]
-    fn set_pitched(&mut self, value: bool) -> PyResult<()> {
+    fn set_pitched(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) -> PyResult<()> {
         self.member_of("Whistle", "pitched")?;
         self.inner.set_pitched(value);
         Ok(())
@@ -623,7 +626,7 @@ fn ensembleNameBySize(number: usize) -> Option<&'static str> {
 #[pyo3(signature = (streamIn, *, inPlace = false))]
 fn unbundleInstruments<'py>(
     streamIn: &Bound<'py, PyAny>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(streamIn, inPlace, |stream| {
         music21_rs_crate::instrument::unbundle_instruments(stream);
@@ -637,7 +640,7 @@ fn unbundleInstruments<'py>(
 #[pyo3(signature = (streamIn, *, inPlace = false))]
 fn bundleInstruments<'py>(
     streamIn: &Bound<'py, PyAny>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(streamIn, inPlace, |stream| {
         music21_rs_crate::instrument::bundle_instruments(stream);
@@ -650,7 +653,10 @@ fn bundleInstruments<'py>(
 /// instrument.
 #[pyfunction]
 #[pyo3(signature = (s, *, inPlace = false))]
-fn deduplicate<'py>(s: &Bound<'py, PyAny>, inPlace: bool) -> PyResult<Bound<'py, PyAny>> {
+fn deduplicate<'py>(
+    s: &Bound<'py, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(s, inPlace, |stream| {
         music21_rs_crate::instrument::deduplicate(stream);
         Ok(())

@@ -564,7 +564,7 @@ impl Segment {
     fn resolveDiminishedSeventhSegment<'py>(
         slf: &Bound<'py, Self>,
         segmentB: &Bound<'py, PyAny>,
-        doubledRoot: bool,
+        #[pyo3(from_py_with = crate::truthy)] doubledRoot: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         Self::resolved(slf.as_any(), segmentB, true, |me, other| {
             me.resolve_diminished_seventh_segment(other, doubledRoot)

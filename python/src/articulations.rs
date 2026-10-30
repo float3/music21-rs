@@ -222,7 +222,7 @@ impl Articulation {
     }
 
     #[setter]
-    fn set_substitution(&mut self, value: bool) {
+    fn set_substitution(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_substitution(value);
     }
 
@@ -233,7 +233,7 @@ impl Articulation {
     }
 
     #[setter]
-    fn set_alternate(&mut self, value: bool) {
+    fn set_alternate(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_alternate(value);
     }
 
@@ -321,7 +321,7 @@ impl Articulation {
     }
 
     #[setter]
-    fn set_preBend(&mut self, value: bool) {
+    fn set_preBend(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_pre_bend(value);
     }
 

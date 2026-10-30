@@ -123,7 +123,7 @@ impl RepeatExpression {
     }
 
     #[setter]
-    fn set_useSymbol(&mut self, value: bool) {
+    fn set_useSymbol(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_use_symbol(value);
     }
 

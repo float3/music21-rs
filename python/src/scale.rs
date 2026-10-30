@@ -130,7 +130,7 @@ impl Scale {
     fn extractPitchList(
         other: &Bound<'_, PyAny>,
         comparisonAttribute: &str,
-        removeDuplicates: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeDuplicates: bool,
     ) -> PyResult<Vec<Pitch>> {
         let read = pitch_list(other)?;
         if !removeDuplicates {
@@ -1068,7 +1068,7 @@ impl ConcreteScale {
     fn _standOnSteps(
         slf: &Bound<'_, Self>,
         intervalList: &Bound<'_, PyAny>,
-        closes: bool,
+        #[pyo3(from_py_with = crate::truthy)] closes: bool,
         pitchSimplification: Option<&str>,
     ) -> PyResult<()> {
         let mut steps = Vec::new();
@@ -1503,7 +1503,7 @@ impl ConcreteScale {
         other: &Bound<'_, PyAny>,
         resultsReturned: Option<usize>,
         comparisonAttribute: &str,
-        removeDuplicates: bool,
+        #[pyo3(from_py_with = crate::truthy)] removeDuplicates: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Vec<(usize, Py<PyAny>)>> {
         Self::must_be_realizable(slf)?;
@@ -1576,7 +1576,7 @@ impl ConcreteScale {
         &self,
         pitchTarget: Option<&Bound<'_, PyAny>>,
         variant: &str,
-        chromatic: bool,
+        #[pyo3(from_py_with = crate::truthy)] chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
         let pitch = match pitchTarget.filter(|value| !value.is_none()) {
@@ -1693,7 +1693,7 @@ impl ConcreteScale {
         minPitch: Option<&Bound<'_, PyAny>>,
         maxPitch: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
-        equateTermini: bool,
+        #[pyo3(from_py_with = crate::truthy)] equateTermini: bool,
     ) -> PyResult<Option<Pitch>> {
         if let Some(pattern) = &self.abstract_scale {
             let pattern = pattern.bind(py);
@@ -1925,7 +1925,7 @@ impl ConcreteScale {
     fn transpose(
         slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval: RsInterval = interval_from_any(value)?;
         // music21 transposes the tonic, and a scale that has none is given

@@ -1911,7 +1911,11 @@ impl Chord {
     }
 
     #[pyo3(signature = (notes, *, runSort = true))]
-    fn add(slf: &Bound<'_, Self>, notes: &Bound<'_, PyAny>, runSort: bool) -> PyResult<()> {
+    fn add(
+        slf: &Bound<'_, Self>,
+        notes: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] runSort: bool,
+    ) -> PyResult<()> {
         let py = slf.py();
         let shared = slf.borrow_mut().duration_object(py)?;
         // One note is a list of one: the reader below takes a sequence, and
@@ -2075,7 +2079,7 @@ impl Chord {
     fn root(
         slf: &Bound<'_, Self>,
         newroot: Option<&Bound<'_, PyAny>>,
-        find: Option<bool>,
+        #[pyo3(from_py_with = crate::truthy_or_none)] find: Option<bool>,
     ) -> PyResult<Option<Py<Pitch>>> {
         // An answer fixed by hand in `_overrides` wins, `None` included.
         if newroot.is_none_or(|value| value.is_none())
@@ -2129,8 +2133,8 @@ impl Chord {
     fn bass(
         slf: &Bound<'_, Self>,
         newbass: Option<&Bound<'_, PyAny>>,
-        find: Option<bool>,
-        allow_add: bool,
+        #[pyo3(from_py_with = crate::truthy_or_none)] find: Option<bool>,
+        #[pyo3(from_py_with = crate::truthy)] allow_add: bool,
     ) -> PyResult<Option<Py<Pitch>>> {
         let py = slf.py();
         if let Some(newbass) = newbass.filter(|value| !value.is_none()) {
@@ -2319,9 +2323,9 @@ impl Chord {
     fn inversion(
         slf: &Bound<'_, Self>,
         newInversion: Option<&Bound<'_, PyAny>>,
-        find: bool,
+        #[pyo3(from_py_with = crate::truthy)] find: bool,
         testRoot: Option<&Bound<'_, PyAny>>,
-        transposeOnSet: bool,
+        #[pyo3(from_py_with = crate::truthy)] transposeOnSet: bool,
     ) -> PyResult<Option<i32>> {
         if slf.borrow().inner.pitches().is_empty() {
             return Ok(Some(-1));
@@ -2359,8 +2363,8 @@ impl Chord {
     fn setInversion(
         slf: &Bound<'_, Self>,
         newInversion: &Bound<'_, PyAny>,
-        transpose: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] transpose: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let target = if inPlace {
             slf.clone().into_any()
@@ -2497,7 +2501,10 @@ impl Chord {
     }
 
     #[pyo3(signature = (*, requireIntervallicEvenness = false))]
-    fn isTranspositionallySymmetrical(&self, requireIntervallicEvenness: bool) -> bool {
+    fn isTranspositionallySymmetrical(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] requireIntervallicEvenness: bool,
+    ) -> bool {
         self.inner
             .is_transpositionally_symmetrical(requireIntervallicEvenness)
     }
@@ -2581,28 +2588,44 @@ impl Chord {
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
-    fn isAugmentedSixth(&self, permitAnyInversion: bool) -> bool {
+    fn isAugmentedSixth(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] permitAnyInversion: bool,
+    ) -> bool {
         self.inner.is_augmented_sixth(permitAnyInversion)
     }
 
     #[pyo3(signature = (*, restrictDoublings = false, permitAnyInversion = false))]
-    fn isItalianAugmentedSixth(&self, restrictDoublings: bool, permitAnyInversion: bool) -> bool {
+    fn isItalianAugmentedSixth(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] restrictDoublings: bool,
+        #[pyo3(from_py_with = crate::truthy)] permitAnyInversion: bool,
+    ) -> bool {
         self.inner
             .is_italian_augmented_sixth(permitAnyInversion, restrictDoublings)
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
-    fn isFrenchAugmentedSixth(&self, permitAnyInversion: bool) -> bool {
+    fn isFrenchAugmentedSixth(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] permitAnyInversion: bool,
+    ) -> bool {
         self.inner.is_french_augmented_sixth(permitAnyInversion)
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
-    fn isGermanAugmentedSixth(&self, permitAnyInversion: bool) -> bool {
+    fn isGermanAugmentedSixth(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] permitAnyInversion: bool,
+    ) -> bool {
         self.inner.is_german_augmented_sixth(permitAnyInversion)
     }
 
     #[pyo3(signature = (*, permitAnyInversion = false))]
-    fn isSwissAugmentedSixth(&self, permitAnyInversion: bool) -> bool {
+    fn isSwissAugmentedSixth(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] permitAnyInversion: bool,
+    ) -> bool {
         self.inner.is_swiss_augmented_sixth(permitAnyInversion)
     }
 
@@ -2636,8 +2659,8 @@ impl Chord {
         &mut self,
         py: Python<'_>,
         forceOctave: Option<i32>,
-        inPlace: bool,
-        leaveRedundantPitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] leaveRedundantPitches: bool,
     ) -> PyResult<Option<Chord>> {
         let closed = self
             .inner
@@ -2655,8 +2678,8 @@ impl Chord {
         &mut self,
         py: Python<'_>,
         forceOctave: Option<i32>,
-        inPlace: bool,
-        leaveRedundantPitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] leaveRedundantPitches: bool,
     ) -> PyResult<Option<Chord>> {
         let moved = self
             .inner
@@ -2673,7 +2696,7 @@ impl Chord {
     fn removeRedundantPitches(
         &mut self,
         py: Python<'_>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let (reduced, removed) = self.inner.remove_redundant_pitches_reporting();
         self.deliver_reduced(py, reduced, removed, inPlace)
@@ -2683,7 +2706,7 @@ impl Chord {
     fn removeRedundantPitchNames(
         &mut self,
         py: Python<'_>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let (reduced, removed) = self.inner.remove_redundant_pitch_names_reporting();
         self.deliver_reduced(py, reduced, removed, inPlace)
@@ -2693,14 +2716,18 @@ impl Chord {
     fn removeRedundantPitchClasses(
         &mut self,
         py: Python<'_>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let (reduced, removed) = self.inner.remove_redundant_pitch_classes_reporting();
         self.deliver_reduced(py, reduced, removed, inPlace)
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortAscending(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_ascending();
         if inPlace {
             self.sort_in_place(py);
@@ -2711,7 +2738,11 @@ impl Chord {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortDiatonicAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortDiatonicAscending(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_diatonic_ascending();
         if inPlace {
             self.sort_in_place(py);
@@ -2722,7 +2753,11 @@ impl Chord {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortChromaticAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortChromaticAscending(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_chromatic_ascending();
         if inPlace {
             self.replace_inner(py, sorted)?;
@@ -2733,7 +2768,11 @@ impl Chord {
     }
 
     #[pyo3(signature = (*, inPlace = false))]
-    fn sortFrequencyAscending(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Chord>> {
+    fn sortFrequencyAscending(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Chord>> {
         let sorted = self.inner.sort_frequency_ascending();
         if inPlace {
             self.replace_inner(py, sorted)?;
@@ -2748,7 +2787,7 @@ impl Chord {
     fn augmentOrDiminish<'py>(
         slf: &Bound<'py, Self>,
         scalar: f64,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         augment_or_diminish_note(slf.as_any(), scalar, inPlace)
     }
@@ -2757,7 +2796,7 @@ impl Chord {
     #[pyo3(signature = (*, returnDefault = true))]
     fn getInstrument<'py>(
         slf: &Bound<'py, Self>,
-        returnDefault: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         instrument_for_note(slf.as_any(), returnDefault)
     }
@@ -2783,8 +2822,8 @@ impl Chord {
     #[pyo3(signature = (*, appoggiatura = false, inPlace = false))]
     fn getGrace<'py>(
         slf: &Bound<'py, Self>,
-        appoggiatura: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] appoggiatura: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         grace_note(slf.as_any(), appoggiatura, inPlace)
     }
@@ -2793,7 +2832,7 @@ impl Chord {
     fn transpose(
         slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let py = slf.py();
         let interval: RsInterval = interval_from_any(value)?;
@@ -2881,7 +2920,10 @@ impl Chord {
     }
 
     #[setter]
-    fn set_noteheadFill(&mut self, value: Option<bool>) {
+    fn set_noteheadFill(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy_or_none)] value: Option<bool>,
+    ) {
         self.inner.set_notehead_fill(value);
     }
 
@@ -2892,7 +2934,7 @@ impl Chord {
     }
 
     #[setter]
-    fn set_noteheadParenthesis(&mut self, value: bool) {
+    fn set_noteheadParenthesis(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_notehead_parenthesis(value);
     }
 
@@ -3191,7 +3233,7 @@ impl Chord {
     fn simplifyEnharmonics(
         &mut self,
         py: Python<'_>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         keyContext: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Option<Chord>> {
         let key_context = match keyContext.filter(|value| !value.is_none()) {
@@ -3379,7 +3421,7 @@ impl Chord {
         py: Python<'_>,
         text: &Bound<'_, PyAny>,
         index: usize,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         identifier: Option<String>,
     ) -> PyResult<()> {
         match self.made_notes(py)?.first() {
@@ -3396,7 +3438,7 @@ impl Chord {
         py: Python<'_>,
         text: &Bound<'_, PyAny>,
         lyricNumber: Option<i32>,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         lyricIdentifier: Option<String>,
     ) -> PyResult<()> {
         match self.made_notes(py)?.first() {
@@ -3416,10 +3458,10 @@ impl Chord {
     fn annotateIntervals(
         &mut self,
         py: Python<'_>,
-        inPlace: bool,
-        stripSpecifiers: bool,
-        sortPitches: bool,
-        returnList: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] stripSpecifiers: bool,
+        #[pyo3(from_py_with = crate::truthy)] sortPitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] returnList: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let names = self
             .inner
@@ -3598,7 +3640,7 @@ fn fromForteClass(py: Python<'_>, notation: &Bound<'_, PyAny>) -> PyResult<Chord
 fn fromIntervalVector(
     py: Python<'_>,
     vector: Vec<u8>,
-    getZRelation: bool,
+    #[pyo3(from_py_with = crate::truthy)] getZRelation: bool,
 ) -> PyResult<Option<Chord>> {
     let vector: [u8; 6] = vector
         .try_into()

@@ -304,8 +304,8 @@ impl CTSong {
     #[pyo3(signature = (labelRomanNumerals = true, labelSubsectionsOnScore = true))]
     fn toPart(
         slf: &Bound<'_, Self>,
-        labelRomanNumerals: bool,
-        labelSubsectionsOnScore: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelRomanNumerals: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelSubsectionsOnScore: bool,
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         {
@@ -335,8 +335,8 @@ impl CTSong {
     #[pyo3(signature = (labelRomanNumerals = true, labelSubsectionsOnScore = true))]
     fn toScore(
         slf: &Bound<'_, Self>,
-        labelRomanNumerals: bool,
-        labelSubsectionsOnScore: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelRomanNumerals: bool,
+        #[pyo3(from_py_with = crate::truthy)] labelSubsectionsOnScore: bool,
     ) -> PyResult<Py<PyAny>> {
         Self::toPart(slf, labelRomanNumerals, labelSubsectionsOnScore)
     }

@@ -216,7 +216,10 @@ impl KeySignature {
     }
 
     #[setter]
-    fn set_accidentalsApplyOnlyToOctave(&mut self, value: bool) {
+    fn set_accidentalsApplyOnlyToOctave(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.signature.set_accidentals_apply_only_to_octave(value);
     }
 
@@ -240,7 +243,7 @@ impl KeySignature {
     }
 
     #[setter]
-    fn set_isNonTraditional(&mut self, value: bool) {
+    fn set_isNonTraditional(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.signature.set_non_traditional(value);
     }
 
@@ -302,7 +305,7 @@ impl KeySignature {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval = interval_from_any(value)?;
         let transposed = slf.inner().transpose(&interval).map_err(signature_error)?;
@@ -323,7 +326,11 @@ impl KeySignature {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    fn transposePitchFromC(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn transposePitchFromC(
+        &self,
+        p: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let transposed = self
             .inner()
             .transpose_pitch_from_c(&pitch_from_any(p)?)
@@ -1136,7 +1143,7 @@ impl Key {
         &self,
         pitchTarget: Option<&Bound<'_, PyAny>>,
         variant: &str,
-        chromatic: bool,
+        #[pyo3(from_py_with = crate::truthy)] chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
         let scale = self.inner.scale();
@@ -1223,7 +1230,7 @@ impl Key {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval = interval_from_any(value)?;
         let transposed = slf.inner.transpose(&interval).map_err(key_error)?;

@@ -114,7 +114,7 @@ fn functionToRoman<'py>(
 fn romanToFunction<'py>(
     py: Python<'py>,
     rn: PyRef<'py, RomanNumeral>,
-    onlyHauptHarmonicFunction: bool,
+    #[pyo3(from_py_with = crate::truthy)] onlyHauptHarmonicFunction: bool,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let detail = if onlyHauptHarmonicFunction {
         FunctionDetail::MainOnly

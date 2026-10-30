@@ -92,7 +92,7 @@ impl ActivityMatch {
     fn pitchToDynamic<'py>(
         &self,
         py: Python<'py>,
-        dataPoints: bool,
+        #[pyo3(from_py_with = crate::truthy)] dataPoints: bool,
     ) -> PyResult<Bound<'py, PyList>> {
         let stream = crate::stream::crate_stream(self.streamObj.bind(py))?;
         let pairs = pitch_to_dynamic(&stream)

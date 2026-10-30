@@ -620,14 +620,22 @@ impl DataSet {
 
     /// music21's `getAttributeLabels`: the name of every column.
     #[pyo3(signature = (includeClassLabel = true, includeId = true))]
-    fn getAttributeLabels(&self, includeClassLabel: bool, includeId: bool) -> Vec<String> {
+    fn getAttributeLabels(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] includeClassLabel: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeId: bool,
+    ) -> Vec<String> {
         self.set()
             .attribute_labels(includeClassLabel && self.class_label.is_some(), includeId)
     }
 
     /// music21's `getDiscreteLabels`: whether each column is discrete.
     #[pyo3(signature = (includeClassLabel = true, includeId = true))]
-    fn getDiscreteLabels(&self, includeClassLabel: bool, includeId: bool) -> Vec<Option<bool>> {
+    fn getDiscreteLabels(
+        &self,
+        #[pyo3(from_py_with = crate::truthy)] includeClassLabel: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeId: bool,
+    ) -> Vec<Option<bool>> {
         self.set()
             .discrete_labels(includeClassLabel && self.class_label.is_some(), includeId)
     }
@@ -637,8 +645,8 @@ impl DataSet {
     #[pyo3(signature = (includeId = true, includeClassLabel = true))]
     fn getClassPositionLabels(
         &self,
-        includeId: bool,
-        includeClassLabel: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeId: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeClassLabel: bool,
     ) -> Vec<Option<bool>> {
         self.set()
             .class_position_labels(includeId, includeClassLabel && self.class_label.is_some())
@@ -790,9 +798,9 @@ impl DataSet {
     fn getFeaturesAsList(
         &self,
         py: Python<'_>,
-        includeClassLabel: bool,
-        includeId: bool,
-        concatenateLists: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeClassLabel: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeId: bool,
+        #[pyo3(from_py_with = crate::truthy)] concatenateLists: bool,
     ) -> PyResult<Py<PyAny>> {
         let table = PyList::empty(py);
         for (piece, features) in self.pieces.iter().zip(&self.rows) {
@@ -896,7 +904,7 @@ impl DataSet {
         slf: &Bound<'_, Self>,
         fp: Option<&Bound<'_, PyAny>>,
         format: Option<&str>,
-        includeClassLabel: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeClassLabel: bool,
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let writer = match (format, fp) {
