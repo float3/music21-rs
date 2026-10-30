@@ -2,6 +2,11 @@
 
 ## added
 
+- **A meter carries a bar length written over its own.**
+  `TimeSignature::set_bar_duration` is music21's `barDuration` setter, and
+  `bar_duration` answers it. The wheel kept it as a Python object beside
+  the meter; now copies, pickles and the crate's own readers see it.
+
 - **music21 11.0.0b14, whose instrument module grew by ten classes and
   moved its percussion map into a mixin of its own.** `Instrument::of_kind`
   covers all 125 of music21's classes -- `BellTree`, `Cabasa`, `Claves`,

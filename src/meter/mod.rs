@@ -122,6 +122,10 @@ pub struct TimeSignature {
     restated: crate::display::Drawn<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
     hidden: crate::display::Drawn<bool>,
+    /// A bar length written over the meter's own: music21's
+    /// `_overriddenBarDuration`, which contradicts the meter on purpose.
+    #[cfg_attr(feature = "serde", serde(default))]
+    overridden_bar_duration: Option<Duration>,
 }
 
 impl Default for TimeSignature {
@@ -160,6 +164,7 @@ impl TimeSignature {
             color: crate::display::Drawn(None),
             restated: crate::display::Drawn(false),
             hidden: crate::display::Drawn(false),
+            overridden_bar_duration: None,
         };
         signature.set_default_partitions()?;
         Ok(signature)
@@ -678,10 +683,31 @@ impl TimeSignature {
         FloatType::from(self.numerator) * 4.0 / FloatType::from(self.denominator)
     }
 
-    /// Returns the length of one bar as a [`Duration`].
+    /// Returns the length of one bar as a [`Duration`]: the one written
+    /// with [`TimeSignature::set_bar_duration`] where there is one, else the
+    /// meter's own.
     pub fn bar_duration(&self) -> Duration {
+        if let Some(written) = &self.overridden_bar_duration {
+            return written.clone();
+        }
         Duration::new(self.bar_quarter_length())
             .expect("a non-zero numerator and denominator give a positive finite bar length")
+    }
+
+    /// Writes a bar length over the meter's own, or clears it with `None`:
+    /// music21's `barDuration` setter. Only the bar this meter reports
+    /// changes; its beats and partitions stay the meter's.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, TimeSignature};
+    ///
+    /// let mut meter = TimeSignature::new(3, 8)?;
+    /// meter.set_bar_duration(Some(Duration::new(1.75)?));
+    /// assert_eq!(meter.bar_duration().quarter_length(), 1.75);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn set_bar_duration(&mut self, written: Option<Duration>) {
+        self.overridden_bar_duration = written;
     }
 
     /// Where an element falls in the bar this meter measures: music21's
@@ -2185,6 +2211,18 @@ mod tests {
         let six_eight = TimeSignature::new(6, 8).unwrap();
         assert_eq!((six_eight.numerator(), six_eight.denominator()), (6, 8));
         assert_eq!(six_eight.bar_duration().quarter_length(), 3.0);
+    }
+
+    #[test]
+    fn a_written_bar_length_stands_over_the_meters_own() {
+        let mut three_eight = TimeSignature::new(3, 8).unwrap();
+        three_eight.set_bar_duration(Some(Duration::new(1.75).unwrap()));
+        assert_eq!(three_eight.bar_duration().quarter_length(), 1.75);
+        // The meter itself is unchanged: only the bar it reports.
+        assert_eq!(three_eight.bar_quarter_length(), 1.5);
+
+        three_eight.set_bar_duration(None);
+        assert_eq!(three_eight.bar_duration().quarter_length(), 1.5);
     }
 
     #[test]

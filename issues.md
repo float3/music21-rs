@@ -24,8 +24,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
 - **the crate is meant to be a strict superset of the wheel**, caches aside.
   As little as possible belongs in the facade — only what genuinely cannot
-  live in Rust. 29 members answer in the wheel today with no crate function
-  behind them; each is either work to move or a documented exception.
+  live in Rust. 124 members answer in the wheel today with no crate
+  function behind them, and each carries its reason in
+  `data/feature_map.toml`.
 - **the crate should have streams.** it has a `Stream` already
   (`src/stream.rs`, 678 lines: elements at offsets, `flatten`, `recurse`,
   parts, measures, voices, `transpose`, and the `*_at` lookups). what it
@@ -98,22 +99,29 @@ two rules, set 2026-09-12, that most of the open work now serves:
    with no contexts anywhere. What is left of them in the wheel is the
    classes themselves and `MelodicIntervalDiversity`'s counts.
 
-3. **the 29 wheel-only members.** caches (`cachedRealized`,
-   `cachedRealizedStr`) stay Python-side by design. the rest — observer
-   callbacks (`informClient`, `pitchChanged`), `groups`, `storedInstrument`
-   and `getInstrument`, the `AbstractScale` layer, `Sieve`'s settable state,
-   `Duration`'s component machinery — are either work to move into the crate
-   or exceptions that should say why in `data/feature_map.toml`. the count is
-   read off the page `xtask report` writes, which is where it is made;
-   `naiveBeams`, `getDynamicContext`, `getGrace`, `isConcrete` and meter's
-   two exclusions are in it too.
+3. **the 124 wheel-only members.** every one is an exclusion with a
+   reason in `data/feature_map.toml`; none is left undecided. caches
+   (`cachedRealized`, `cachedRealizedStr`) stay Python-side by design, and
+   most of the rest are observer callbacks (`informClient`,
+   `pitchChanged`), music21's own object machinery (`Spanner`'s by-object
+   members, `Stream.elementOffset`), or steps the crate runs inside one
+   function (`ChordReducer`, `Hasher`). the count is read off the page
+   `xtask report --features-only` writes; it grew from 29 because the map
+   now lists far more classes, not because members moved out.
 
-   **One deviation that count cannot see.** `barDuration` reads as ported,
-   because `bar_duration` exists — but its *setter* keeps music21's
-   `_overriddenBarDuration` as a Python object in the wheel, and the crate
-   has nothing of the kind. a member can be ported and still carry state
-   that lives only in the facade, so 30 is a floor rather than the whole of
-   what the rule has to answer for.
+   **`barDuration` no longer keeps state in the facade.** its setter kept
+   music21's `_overriddenBarDuration` as a Python object in the wheel; the
+   crate's `TimeSignature` now carries it (`set_bar_duration`), so a copy,
+   a pickle and every crate reader of `bar_duration` see it. the one thing
+   given up is identity: `ts.barDuration is d` is false, as no music21
+   example asks.
+
+   **What the count still cannot see.** a member can be ported and keep
+   state only in the facade. 146 fields of the wheel's classes hold Python
+   objects. many hold identity rather than value — the `Duration` a note
+   hands back, the chord a note sits in — which Python callers rely on and
+   the crate cannot carry; which of them hold only a value, as
+   `barDuration` did, is not yet sorted.
 
 4. **CI has now run all of this green**, music21's own suite and the docs
    build included. two things it caught that no local gate did: `cargo fmt`
