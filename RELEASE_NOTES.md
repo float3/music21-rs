@@ -1214,6 +1214,11 @@
 
 ## fixed
 
+- **MuseData files with Windows line endings read as with Unix ones.**
+  `from_musedata` split lines on `\n` alone, so every line kept a `\r` and
+  titles came out with one at the end. It now reads `\r\n` as `\n`, as
+  music21 does since its PR 2119.
+
 - **The wheel's `OctatonicScale(tonic, mode=1)` stops at its octave.**
   It realized a tenth pitch an octave up (`B#5` on C) and counted its
   degrees from there; it now stands on the crate's step scale, which
