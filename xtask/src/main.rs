@@ -2,6 +2,7 @@
 
 #[cfg(feature = "python")]
 mod bench;
+mod contributed_back;
 mod downstream;
 mod facade;
 #[cfg(feature = "python")]
@@ -154,6 +155,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(not(feature = "python"))]
         Some("music21-suite") => Err(PYTHON_FEATURE.into()),
+        Some("contributed-back") => {
+            let check = args[2..].iter().any(|arg| arg == "--check");
+            let code = contributed_back::run(&workspace_root, check)?;
+            std::process::exit(code);
+        }
         Some("downstream") => {
             let directory = flag_value(&args[2..], "--directory").map(PathBuf::from);
             let code = downstream::run(&workspace_root, directory)?;
@@ -195,6 +201,7 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask -- verify-tuning-tables");
     eprintln!("  cargo run --release -p xtask --features python -- bench");
     eprintln!("  cargo run --release -p xtask -- downstream");
+    eprintln!("  cargo run --release -p xtask -- contributed-back [--check]");
     eprintln!("  cargo run --release -p xtask --features python -- music21-suite");
     eprintln!("  cargo run --release -p xtask -- emit-report-script");
     eprintln!("  cargo run --release -p xtask -- verify-report-script");
