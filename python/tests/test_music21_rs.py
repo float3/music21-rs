@@ -5962,3 +5962,11 @@ def test_meter_spans_are_fractions_where_music21s_are():
     assert spans[1] == (Fraction(1, 3), Fraction(2, 3))
     assert all(isinstance(end, Fraction) for _, end in spans[:2])
     assert spans[2][1] == 1.0
+
+
+def test_clercq_temperley_text_that_is_no_song_is_refused():
+    """music21 b30248a6a: the converter refuses data with no barline or no
+    `S:` rule, as a `CTSongException`, rather than opening it as a file."""
+    with pytest.raises(Exception, match='must contain "\\|" and "S:"') as raised:
+        m.from_clercq_temperley("S: [C] I IV V I\n")
+    assert type(raised.value).__name__ == "CTSongException"

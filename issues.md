@@ -186,8 +186,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
    were never followed rather than left behind:
 
    - humdrum: `!!` global comments are dropped.
-   - `from_clercq_temperley` answers an empty part for text with no `|`
-     or `S:`, where music21 raises `CTSongException`.
    - the wheel's hand-back loses grace durations, humdrum barlines and
      tandems, RomanText repeats, and gives offsets as floats where music21
      gives `Fraction`s.

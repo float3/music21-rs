@@ -1200,6 +1200,10 @@
 
 ## fixed
 
+- **De Clercq-Temperley text with no barline or no `S:` rule is
+  refused**, as music21's converter refuses it, where it read as an empty
+  part; the wheel raises `CTSongException`.
+
 - **A Humdrum pickup is padded**, as music21 pads a first measure shorter
   than the bar of the meter it opens with, and **a Humdrum opus is named
   as music21 names it**: its scores `section_1` on, its own metadata a

@@ -69,10 +69,11 @@ impl Default for CtLabels {
 ///
 /// # Errors
 ///
-/// A song with no `S:` rule, a rule naming one the song has not got, a dot
-/// with no chord before it, or a key, a meter or a figure the crate cannot
-/// read.
+/// Text with no barline or no `S:` rule, as music21's converter refuses
+/// it; a rule naming one the song has not got, a dot with no chord before
+/// it, or a key, a meter or a figure the crate cannot read.
 pub fn from_clercq_temperley(text: &str) -> Result<Stream> {
+    song_text(text)?;
     CtSong::parse(text).to_part()
 }
 
@@ -82,7 +83,20 @@ pub fn from_clercq_temperley(text: &str) -> Result<Stream> {
 ///
 /// As [`from_clercq_temperley`].
 pub fn from_clercq_temperley_with(text: &str, labels: CtLabels) -> Result<Stream> {
+    song_text(text)?;
     CtSong::parse(text).to_part_with(labels)
+}
+
+/// Refuses text that is no song: music21's converter asks for a barline and
+/// an `S:` rule both, where its `CTSong` would take anything else for the
+/// name of a file to open.
+fn song_text(text: &str) -> Result<()> {
+    if text.contains('|') && text.contains("S:") {
+        return Ok(());
+    }
+    Err(ct_error(
+        r#"Clercq-Temperley data must contain "|" and "S:""#,
+    ))
 }
 
 /// A song as its text says: music21's `CTSong`.
@@ -1057,6 +1071,19 @@ mod tests {
     }
 
     /// The song music21 measures in its own `toPart` docstring.
+    /// music21's converter refuses text with no barline or no `S:` rule
+    /// rather than reading it as a song of nothing (b30248a6a).
+    #[test]
+    fn text_with_no_barline_or_no_song_is_refused() {
+        for text in ["S: [C] I IV V I\n", "Vr: I | IV |\n"] {
+            let refused = from_clercq_temperley(text).unwrap_err();
+            assert!(
+                refused.to_string().contains(r#"must contain "|" and "S:""#),
+                "{refused}"
+            );
+        }
+    }
+
     #[test]
     fn blitzkrieg_bop_is_as_long_as_music21_makes_it() {
         let song = "% Blitzkrieg Bop\n\

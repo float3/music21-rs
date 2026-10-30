@@ -407,10 +407,10 @@ fn tsv_version(number: u8) -> PyResult<music21_rs_crate::romantext::tsv::Version
 /// across a barline is tied rather than struck again, and an `R` is a rest.
 #[pyfunction]
 fn from_clercq_temperley<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(
-        py,
-        music21_rs_crate::romantext::clercq_temperley::from_clercq_temperley(text),
-    )
+    // music21's converter raises `CTSongException` for text that is no song.
+    let read = music21_rs_crate::romantext::clercq_temperley::from_clercq_temperley(text)
+        .map_err(crate::clercqtemperley::song_error)?;
+    crate::stream::from_crate(py, &read)
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
