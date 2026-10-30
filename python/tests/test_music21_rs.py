@@ -5989,3 +5989,24 @@ def test_an_accidental_is_not_named_in_the_crates_own_flats():
     for name in ("bb", "BB"):
         with pytest.raises(Exception, match="not a supported accidental type"):
             m.Accidental(name)
+
+
+def test_a_duration_is_set_only_from_a_duration():
+    """music21's `duration` setter reads `quarterLength` off what it is
+    given and raises TypeError for anything that has none: a bare number
+    is not a duration."""
+    for made in (m.Note("C4"), m.Chord("C4 E4"), m.Rest()):
+        with pytest.raises(TypeError, match="this must be a Duration object, not 3"):
+            made.duration = 3
+        made.duration = m.Duration(2.0)
+        assert made.quarterLength == 2.0
+
+
+def test_set_inversion_reads_its_number_through_int():
+    """music21's `setInversion` reads the inversion through `int()`, so a
+    numeral written as text works, and a copy says it came from it."""
+    triad = m.Chord("C4 E4 G4")
+    turned = triad.setInversion("1")
+    assert [p.nameWithOctave for p in turned.pitches] == ["E4", "G4", "C5"]
+    with pytest.raises(Exception, match="Inversion must be an integer"):
+        triad.setInversion("first")

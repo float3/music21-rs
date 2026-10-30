@@ -811,6 +811,18 @@ fn quarter_length_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
         })
 }
 
+/// music21's `duration` setter, which reads `quarterLength` off what it is
+/// given and refuses anything that has none: a bare number is no duration.
+pub(crate) fn require_duration(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    if value.hasattr("quarterLength")? {
+        return Ok(());
+    }
+    Err(pyo3::exceptions::PyTypeError::new_err(format!(
+        "this must be a Duration object, not {}",
+        value.str()?
+    )))
+}
+
 /// What music21 raises for a length that is not finite: an unlinked
 /// duration checks it (71c384b69), and a linked one fails making a ratio of
 /// it in `opFrac`, as Python's `float.as_integer_ratio` does.

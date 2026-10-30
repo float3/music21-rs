@@ -1973,6 +1973,7 @@ impl Chord {
 
     #[setter]
     fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::duration::require_duration(value)?;
         let py = slf.py();
         let inner = duration_from_any(value)?;
         let duration = duration_object_for(py, value, &inner)?;
@@ -2364,7 +2365,9 @@ impl Chord {
         let target = if inPlace {
             slf.clone().into_any()
         } else {
-            slf.py().import("copy")?.call_method1("deepcopy", (slf,))?
+            let copy = slf.py().import("copy")?.call_method1("deepcopy", (slf,))?;
+            crate::derived_from(&copy, slf.as_any(), "setInversion")?;
+            copy
         };
         let target = target.cast::<Chord>()?;
         if newInversion.is_none() {
@@ -3620,7 +3623,15 @@ fn set_inversion_of(
     newInversion: &Bound<'_, PyAny>,
     transpose: bool,
 ) -> PyResult<()> {
-    let Ok(inversion) = newInversion.extract::<i32>() else {
+    // Through Python's `int`, as music21 reads it: `'1'` is the first.
+    let Some(inversion) = slf
+        .py()
+        .import("builtins")?
+        .getattr("int")?
+        .call1((newInversion,))
+        .ok()
+        .and_then(|number| number.extract::<i32>().ok())
+    else {
         return Err(ChordException::new_err(format!(
             "Inversion must be an integer, got: {}",
             newInversion.get_type()

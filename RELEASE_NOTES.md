@@ -1200,10 +1200,12 @@
 
 ## fixed
 
-- **The wheel reads two more arguments as music21 does**:
+- **The wheel reads more arguments as music21 does**:
   `VoiceLeadingQuartet(..., key='C')` hands back the Key the name names,
-  and `Accidental('bb')` is refused, `bb` being the crate's spelling and
-  not music21's.
+  `Accidental('bb')` is refused, `bb` being the crate's spelling and not
+  music21's, a `duration` is set only from a Duration (a bare number is a
+  `TypeError`), and `setInversion` reads its number through `int()`, a
+  copy saying it came from `setInversion`.
 
 - **De Clercq-Temperley text with no barline or no `S:` rule is
   refused**, as music21's converter refuses it, where it read as an empty

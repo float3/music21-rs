@@ -198,8 +198,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
    - MusicXML `<transpose>` with `<diatonic>` and no `<chromatic>` reads
      as a unison; music21 reads a generic interval.
    - `BrailleSegmentDivision` is not ported.
-   - wheel argument handling: negative quarter lengths refused,
-     `chord.duration = 3` accepted, `setInversion('1')` refused, non-bool
+   - wheel argument handling: negative quarter lengths refused, non-bool
      truthy flags refused, `Stream.isAtEnd` and `storeAtEnd` missing.
 
 ## closed

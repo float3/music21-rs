@@ -1178,6 +1178,7 @@ impl Note {
 
     #[setter]
     fn set_duration(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::duration::require_duration(value)?;
         let py = slf.py();
         let had_one = slf.borrow().duration.is_some();
         let duration = slf.borrow_mut().attach_duration(py, value)?;
