@@ -35,10 +35,10 @@ chance and a caller may want to make is an argument or a seed
 (`next_pitch_below_from`, `WeightedHexatonicBlues::sample`), never a
 random number generator.
 
-*costs:* music21's `testRagMarwaB` and `testRagMarwaC` count both random
-answers, so they fail on the crate's side of `music21-suite`; both are
-listed in `EXPECTED_DIVERGENCES`. the fork's
-`relative-node-id-deterministic` branch makes music21 answer the same way.
+*costs:* upstream music21 still picks at random, so its `testRagMarwaB`
+and `testRagMarwaC` count both answers. the fork the submodule pins
+answers by the same rule (`b68a661af`), so `music21-suite` runs with no
+expected divergences; following upstream instead would bring both back.
 
 **where music21's author names a mistake, the crate does not repeat it.**
 *Changed 2026-09-25.* Cuthbert's "Music21's Mistakes"
