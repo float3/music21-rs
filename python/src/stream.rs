@@ -1022,9 +1022,13 @@ impl Stream {
     /// setter, which refuses anything but `True`, `False` and `'unknown'`.
     #[setter]
     fn set_atSoundingPitch(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        if value.is_instance_of::<pyo3::types::PyBool>() {
-            self.sounding = Some(value.extract()?);
-            return Ok(());
+        // What equals True or False, as music21's `in [True, False,
+        // 'unknown']` takes it: 1 and 0 too.
+        for flag in [true, false] {
+            if value.eq(flag)? {
+                self.sounding = Some(flag);
+                return Ok(());
+            }
         }
         if value
             .extract::<String>()
@@ -2359,13 +2363,15 @@ impl Stream {
     /// With `returnDefault`, a stream stating none answers a four-four of
     /// its own, as music21's does. There is no context to search outside
     /// the stream here, so `searchContext` reaches no further than it.
-    #[pyo3(signature = (*, searchContext = true, returnDefault = true, recurse = true, sortByCreationTime = true))]
+    #[pyo3(signature = (*, searchContext = true, returnDefault = true, recurse = true, sortByCreationTime = None))]
     fn getTimeSignatures<'py>(
         slf: &Bound<'py, Self>,
         #[pyo3(from_py_with = crate::truthy)] searchContext: bool,
         #[pyo3(from_py_with = crate::truthy)] returnDefault: bool,
         #[pyo3(from_py_with = crate::truthy)] recurse: bool,
-        #[pyo3(from_py_with = crate::truthy)] sortByCreationTime: bool,
+        // music21's `True`, `False` or `'reverse'`; with no contexts to
+        // order here, whichever it is changes nothing.
+        sortByCreationTime: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, Stream>> {
         let _ = (searchContext, sortByCreationTime);
         let py = slf.py();

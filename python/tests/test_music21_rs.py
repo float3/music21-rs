@@ -675,6 +675,20 @@ def test_a_measures_barlines_are_found_where_they_are_listed():
     assert named(bar.getElementsByClass("Barline")) == ["Barline"]
 
 
+def test_the_flags_music21_takes_more_than_truth_for():
+    """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
+    documented spelling, and `atSoundingPitch` takes what equals True or
+    False as music21's `in [True, False, 'unknown']` does."""
+    line = m.from_tiny_notation("3/4 c4 d e")
+    assert len(line.getTimeSignatures(sortByCreationTime="reverse")) == 1
+    line.atSoundingPitch = 1
+    assert line.atSoundingPitch is True
+    line.atSoundingPitch = 0
+    assert line.atSoundingPitch is False
+    with pytest.raises(m.StreamException):
+        line.atSoundingPitch = 2
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.
