@@ -106,6 +106,9 @@ pub struct Stream {
     /// instrument it holds, as music21's property does.
     part_name: Option<String>,
     part_abbreviation: Option<String>,
+    /// music21's `_unlinkedDuration`: a duration set apart from what the
+    /// stream holds, which `duration` and `quarterLength` then answer.
+    unlinked_duration: Option<Py<PyAny>>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -117,11 +120,13 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
-/// How long an object lasts: a stream as long as what it holds, anything
+/// How long an object lasts: a stream as long as its `duration`, anything
 /// else as long as its duration, a thing with no duration no time at all.
 fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
     if let Ok(stream) = object.cast::<Stream>() {
-        return Stream::highest_time(stream);
+        // As long as its `duration` says, which is set apart or what it
+        // holds.
+        return Stream::quarterLength(stream)?.extract();
     }
     match object.getattr("duration") {
         Ok(duration) if !duration.is_none() => duration.getattr("quarterLength")?.extract(),
@@ -333,6 +338,7 @@ impl Stream {
             padding_right: 0.0,
             part_name: None,
             part_abbreviation: None,
+            unlinked_duration: None,
         }
     }
 
@@ -2902,7 +2908,51 @@ impl Stream {
     /// How long the stream lasts, which is its highest time.
     #[getter]
     fn quarterLength<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
+        let py = slf.py();
+        if let Some(set) = &slf.borrow().unlinked_duration {
+            let length: f64 = set.bind(py).getattr("quarterLength")?.extract()?;
+            return crate::duration::op_frac(py, length);
+        }
+        crate::duration::op_frac(py, Self::highest_time(slf)?)
+    }
+
+    /// The length of the whole stream: music21's `duration`, the highest
+    /// time unless a duration has been set apart from it.
+    #[getter]
+    fn get_duration(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(set) = &slf.borrow().unlinked_duration {
+            return Ok(set.clone_ref(py));
+        }
+        let length = music21_rs_crate::Duration::new(Self::highest_time(slf)?)
+            .map_err(|error| StreamException::new_err(error.to_string()))?;
+        crate::duration::Duration::object(py, length)
+    }
+
+    /// Sets a duration apart from what the stream holds, or with `None`
+    /// goes back to the highest time. Anything but a duration is refused,
+    /// as music21 refuses it.
+    #[setter]
+    fn set_duration(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let Some(value) = value.filter(|given| !given.is_none()) else {
+            self.unlinked_duration = None;
+            return Ok(());
+        };
+        if !is_of_class(value, &pyo3::types::PyString::new(value.py(), "Duration"))? {
+            let shown = value.str()?.to_string();
+            return Err(StreamException::new_err(format!(
+                "this must be a Duration object, not {shown}"
+            )));
+        }
+        self.unlinked_duration = Some(value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `sort`. A stream here answers in order whenever it is
+    /// read, so there is nothing to do; `force` is accepted for that.
+    #[pyo3(signature = (force = false))]
+    fn sort(&self, force: bool) {
+        let _ = force;
     }
 
     fn __len__(&self) -> usize {
@@ -3799,6 +3849,9 @@ impl Stream {
             let stream = copied.cast::<Stream>()?;
             let mut stream = stream.borrow_mut();
             stream.id = slf.borrow().id.as_ref().map(|id| id.clone_ref(py));
+            if let Some(set) = &slf.borrow().unlinked_duration {
+                stream.unlinked_duration = Some(deepcopy.call1((set, memo))?.unbind());
+            }
             for (offset, object) in held {
                 let object = deepcopy.call1((object, memo))?;
                 stream.put(offset, &object);
@@ -3815,6 +3868,7 @@ impl Stream {
             let mut stream = stream.borrow_mut();
             let me = slf.borrow();
             stream.id = me.id.as_ref().map(|id| id.clone_ref(py));
+            stream.unlinked_duration = me.unlinked_duration.as_ref().map(|set| set.clone_ref(py));
             for held in me.sorted() {
                 stream.put(held.offset, held.object.bind(py));
             }

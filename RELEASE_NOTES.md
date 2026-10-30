@@ -7,6 +7,11 @@
   replacement already held and with `recurse` looks inside held streams;
   `clear` takes a measure's barlines with its elements.
 
+- **The wheel's `Stream` has a `duration`**, the highest time unless one
+  is set apart, which `quarterLength` and a holding stream's own length
+  then follow; anything but a duration is refused, as music21 refuses
+  it. `sort` is accepted and has nothing to do.
+
 ## fixed
 
 - **The report counts the metadata names the wheel serves by lookup.**

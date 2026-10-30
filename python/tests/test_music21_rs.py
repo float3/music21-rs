@@ -525,6 +525,26 @@ def test_a_stream_finds_and_swaps_what_it_holds():
     assert bar.rightBarline is None
 
 
+def test_a_stream_has_a_duration_that_can_be_set_apart():
+    """music21's `Stream.duration`: the highest time, unless a duration is
+    set, which `quarterLength` then answers; `sort` leaves a stream that
+    is always in order as it is."""
+    line = m.Stream()
+    line.append([m.Note("C4"), m.Note("D4", quarterLength=2)])
+    assert line.duration.quarterLength == 3.0
+    line.duration = m.Duration(8.0)
+    assert line.duration.quarterLength == 8.0
+    assert line.quarterLength == 8.0
+    assert line.highestTime == 3.0
+    assert copy.deepcopy(line).quarterLength == 8.0
+    with pytest.raises(m.StreamException):
+        line.duration = 4.0
+    line.duration = None
+    assert line.quarterLength == 3.0
+    assert line.sort() is None
+    assert line.sort(force=True) is None
+
+
 def test_the_stream_walks_answer_with_the_objects_held():
     # Each answer read off music21 11.0.0b9, which finds the same quartets,
     # the same verticality, the same lengths and the same loudness.
