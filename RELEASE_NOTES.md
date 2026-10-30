@@ -1200,6 +1200,11 @@
 
 ## fixed
 
+- **The wheel's streams answer offsets through `opFrac`**:
+  `elementOffset`, `highestTime`, `highestOffset`, `lowestOffset` and
+  `quarterLength` give `Fraction(1, 3)` for a triplet, as music21's do,
+  where they gave a float.
+
 - **The wheel reads more arguments as music21 does**:
   `VoiceLeadingQuartet(..., key='C')` hands back the Key the name names,
   `Accidental('bb')` is refused, `bb` being the crate's spelling and not

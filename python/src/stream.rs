@@ -442,6 +442,23 @@ impl Stream {
         self.next += 1;
     }
 
+    /// Where an object stands in this stream, as a number.
+    fn offset_of(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
+        self.held
+            .iter()
+            .find(|held| held.object.bind(element.py()).is(element))
+            .map(|held| held.offset)
+            .ok_or_else(|| {
+                StreamException::new_err(format!(
+                    "an entry for this object {} is not stored in this stream",
+                    element
+                        .repr()
+                        .map(|text| text.to_string())
+                        .unwrap_or_default()
+                ))
+            })
+    }
+
     /// What this stream holds, in music21's order.
     fn sorted(&self) -> Vec<&Held> {
         let mut sorted: Vec<&Held> = self.held.iter().collect();
@@ -1035,7 +1052,7 @@ impl Stream {
             Some(given) => given
                 .call_method1("elementOffset", (el,))?
                 .extract::<f64>()?,
-            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+            None => slf.borrow().offset_of(el).unwrap_or(0.0),
         };
         let span = music21_rs_crate::stream::OffsetSpan {
             must_begin_in_span: false,
@@ -1088,7 +1105,7 @@ impl Stream {
             Some(given) => given
                 .call_method1("elementOffset", (el,))?
                 .extract::<f64>()?,
-            None => slf.borrow().elementOffset(el).unwrap_or(0.0),
+            None => slf.borrow().offset_of(el).unwrap_or(0.0),
         };
         let length = length_of(el)?;
         let end = offset + length;
@@ -2298,20 +2315,9 @@ impl Stream {
     }
 
     /// Where an object stands in this stream.
-    fn elementOffset(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
-        self.held
-            .iter()
-            .find(|held| held.object.bind(element.py()).is(element))
-            .map(|held| held.offset)
-            .ok_or_else(|| {
-                StreamException::new_err(format!(
-                    "an entry for this object {} is not stored in this stream",
-                    element
-                        .repr()
-                        .map(|text| text.to_string())
-                        .unwrap_or_default()
-                ))
-            })
+    fn elementOffset<'py>(&self, element: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        // Through `opFrac`, as music21's: a triplet stands at a third.
+        crate::duration::op_frac(element.py(), self.offset_of(element)?)
     }
 
     /// Moves an object this stream holds to another offset.
@@ -2445,8 +2451,8 @@ impl Stream {
 
     /// The offset just past the last thing held.
     #[getter]
-    fn highestTime(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Self::highest_time(slf)
+    fn highestTime<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
     }
 
     /// The stream as one line of chords, as music21's `chordify` makes it:
@@ -2759,15 +2765,15 @@ impl Stream {
     /// Where the last element this stream holds itself starts: music21's
     /// `highestOffset`.
     #[getter]
-    fn highestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(crate_stream(slf.as_any())?.highest_offset())
+    fn highestOffset<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), crate_stream(slf.as_any())?.highest_offset())
     }
 
     /// Where the first element this stream holds itself starts: music21's
     /// `lowestOffset`.
     #[getter]
-    fn lowestOffset(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Ok(crate_stream(slf.as_any())?.lowest_offset())
+    fn lowestOffset<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), crate_stream(slf.as_any())?.lowest_offset())
     }
 
     /// Whether the stream holds a measure itself: music21's `hasMeasures`.
@@ -2800,8 +2806,8 @@ impl Stream {
 
     /// How long the stream lasts, which is its highest time.
     #[getter]
-    fn quarterLength(slf: &Bound<'_, Self>) -> PyResult<f64> {
-        Self::highest_time(slf)
+    fn quarterLength<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(slf.py(), Self::highest_time(slf)?)
     }
 
     fn __len__(&self) -> usize {

@@ -187,8 +187,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
    - humdrum: `!!` global comments are dropped.
    - the wheel's hand-back loses grace durations, humdrum barlines and
-     tandems, RomanText repeats, and gives offsets as floats where music21
-     gives `Fraction`s.
+     tandems, and RomanText repeats. Its readers hand back the wheel's own
+     streams even with music21 installed, so an installed note in one
+     answers music21's `offset` as 0.0: it has no site. Handing back
+     music21's streams there is a design call, not yet made.
    - `OctatonicScale(tonic, mode=1)` closes on the tonic an octave up
      (`B#4` for C); music21 stacks the steps (`C5`, and `G-5` for F#).
      A cyclical step scale matches that but spells ranged realizations

@@ -6010,3 +6010,21 @@ def test_set_inversion_reads_its_number_through_int():
     assert [p.nameWithOctave for p in turned.pitches] == ["E4", "G4", "C5"]
     with pytest.raises(Exception, match="Inversion must be an integer"):
         triad.setInversion("first")
+
+
+def test_a_streams_offsets_are_fractions_where_music21s_are():
+    """music21 answers offsets through `opFrac`: a triplet note stands at
+    `Fraction(1, 3)`, not at the float that only nearly says it."""
+    from fractions import Fraction
+
+    line = m.from_tiny_notation("4/4 trip{c8 d e} f4")
+    measure = line.getElementsByClass("Measure")[0]
+    notes = list(measure.notes)
+    assert measure.elementOffset(notes[1]) == Fraction(1, 3)
+    assert isinstance(measure.elementOffset(notes[1]), Fraction)
+    assert measure.elementOffset(notes[3]) == 1.0
+    assert isinstance(measure.highestOffset, float)
+    loose = m.Stream()
+    loose.insert(Fraction(1, 3), m.Note("C4"))
+    assert isinstance(loose.lowestOffset, Fraction)
+    assert isinstance(loose.highestTime, Fraction)
