@@ -4,10 +4,10 @@
 # table is checked behaviourally, by classifying a row built from each
 # of music21's interval strings.
 #
-# music21 11.0.0b14 at 841bfd0cf8a801a3fd4f43c3aed169f7b02debd2
+# music21 11.0.0b14 at df3fbc6c7a3df133005d24ad489b0cf12240cc20
 
 music21_version = "11.0.0b14"
-music21_commit = "841bfd0cf8a801a3fd4f43c3aed169f7b02debd2"
+music21_commit = "df3fbc6c7a3df133005d24ad489b0cf12240cc20"
 
 [[historical_row]]
 name = "WebernOp29"
