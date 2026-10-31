@@ -1714,7 +1714,9 @@ impl Chord {
             extra.set_item("style", chord.style.as_ref())?;
         }
         slf.borrow_mut().settle_beams(py);
-        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
+        // Through the objects handed out, as for writing: a volume edited
+        // in place is in them and not yet in the value.
+        crate::pickled_extra(slf, &slf.borrow().synced_inner(py), Some(&extra))
     }
 
     fn __setstate__(
@@ -3378,7 +3380,12 @@ impl Chord {
             .into_iter()
             .flatten()
             .collect();
-        let inner = if velocities.is_empty() {
+        // A value with a volume of its own, as one read back from a pickle
+        // is, answers with it: music21's own comes first.
+        let own = slf.borrow().inner.has_volume_information();
+        let inner = if own {
+            slf.borrow().inner.volume()
+        } else if velocities.is_empty() {
             RsVolume::new()
         } else {
             let total: i32 = velocities.iter().sum();

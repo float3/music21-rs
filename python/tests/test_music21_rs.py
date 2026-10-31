@@ -7495,3 +7495,13 @@ def test_a_notes_instrument_and_editorial_survive_a_copy():
     assert copied.storedInstrument.instrumentName == "Violin"
     assert copied.storedInstrument is not note.storedInstrument
 
+
+def test_a_chords_edits_in_place_survive_a_pickle():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.volume.velocity = 100
+    chord.notes[0].pitch.name = "D"
+    chord.notes[1].volume.velocity = 40
+    thawed = pickle.loads(pickle.dumps(chord))
+    assert thawed.volume.velocity == 100
+    assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
+    assert thawed.notes[1].volume.velocity == 40
