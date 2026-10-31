@@ -7075,3 +7075,17 @@ def test_a_global_comment_strips_its_bangs():
     assert [e.comment for e in held.flatten() if type(e).__name__ == "GlobalComment"] == [
         "this is a global comment"
     ]
+
+
+def test_a_humdrum_tandem_read_standalone_stays_in_the_score():
+    """An instruction the reader has no object for stands where it was
+    written as a `MiscTandem`, as music21's reader keeps it."""
+    read = m.from_humdrum("**kern\n*Xtandy\n*M2/4\n=1\n4c\n*foo\n4d\n==\n*-\n")
+    part = read[1]
+    at_start = [(e.tandem, e.priority) for e in part if type(e).__name__ == "MiscTandem"]
+    assert at_start == [("**kern", 1), ("*Xtandy", 2)]
+
+    measure = [e for e in part if type(e).__name__ == "Measure"][0]
+    later = [e for e in measure if type(e).__name__ == "MiscTandem"]
+    assert [(e.tandem, measure.elementOffset(e)) for e in later] == [("*foo", 1.0)]
+    assert repr(later[0]) == "<music21.humdrum.spineParser.MiscTandem *foo>"

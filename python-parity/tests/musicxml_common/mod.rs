@@ -1028,11 +1028,16 @@ pub fn outline(score: &Stream) -> String {
                 measure.number(),
                 number(event.offset())
             ));
-            for held in measure.events() {
+            // A humdrum instruction is compared on its own, and music21's
+            // outline says nothing for it.
+            let said = |event: &&music21_rs::StreamEvent| {
+                !matches!(event.element(), StreamElement::MiscTandem(_))
+            };
+            for held in measure.events().iter().filter(said) {
                 match held.element().as_stream() {
                     Some(voice) if voice.kind() == StreamKind::Voice => {
                         out.push("   Voice".to_string());
-                        out.extend(voice.events().iter().map(line));
+                        out.extend(voice.events().iter().filter(said).map(line));
                     }
                     _ => out.push(line(held)),
                 }

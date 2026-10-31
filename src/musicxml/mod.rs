@@ -1958,6 +1958,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             | StreamElement::TextBox(_)
             | StreamElement::Variant(_)
             | StreamElement::GlobalComment(_)
+            | StreamElement::MiscTandem(_)
             | StreamElement::BrailleSegmentDivision(_) => {}
         }
         Ok(())

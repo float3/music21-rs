@@ -1,4 +1,5 @@
-//! music21's `humdrum.spineParser.GlobalComment`: a `!!` line kept in the
+//! music21's `humdrum.spineParser.GlobalComment` and `MiscTandem`: a `!!`
+//! line and an instruction with no object of its own, each kept in the
 //! score where it was written.
 //!
 //! The rest of `spineParser` is the reader, which is `from_humdrum`.
@@ -9,7 +10,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::humdrum::GlobalComment as RsGlobalComment;
+use music21_rs_crate::humdrum::{GlobalComment as RsGlobalComment, MiscTandem as RsMiscTandem};
 
 /// music21's `GlobalComment`: a comment on the whole score.
 ///
@@ -93,6 +94,77 @@ impl GlobalComment {
     }
 }
 
+/// music21's `MiscTandem`: an instruction of a spine the reader has no
+/// object for.
+///
+/// **Nothing is installed over music21's own**, as for `GlobalComment`.
+#[pyclass(
+    name = "MiscTandem",
+    module = "music21.humdrum.spineParser",
+    subclass,
+    skip_from_py_object
+)]
+pub struct MiscTandem {
+    pub(crate) inner: RsMiscTandem,
+}
+
+impl MiscTandem {
+    /// The facade around an instruction of the crate's.
+    pub(crate) fn wrap(inner: RsMiscTandem) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl MiscTandem {
+    /// music21's `MiscTandem(tandem='')`.
+    #[new]
+    #[pyo3(signature = (tandem = "", **_keywords))]
+    fn new(tandem: &str, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
+        Self::wrap(RsMiscTandem::new(tandem, 0))
+    }
+
+    /// What music21 says this is, as its `classes` answers.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        crate::stream::lineage_of(slf.as_any())
+    }
+
+    /// The instruction as written: music21's `tandem`.
+    #[getter]
+    fn get_tandem(&self) -> &str {
+        self.inner.tandem()
+    }
+
+    #[setter]
+    fn set_tandem(&mut self, value: &str) {
+        self.inner = RsMiscTandem::new(value, self.inner.priority());
+    }
+
+    /// music21's `priority`: the line it was written on.
+    #[getter]
+    fn get_priority(&self) -> i32 {
+        self.inner.priority()
+    }
+
+    #[setter]
+    fn set_priority(&mut self, value: i32) {
+        self.inner = RsMiscTandem::new(self.inner.tandem(), value);
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<music21.humdrum.spineParser.MiscTandem {}>",
+            self.inner.tandem()
+        )
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<GlobalComment>()
+    m.add_class::<GlobalComment>()?;
+    m.add_class::<MiscTandem>()
 }

@@ -11,6 +11,7 @@
 mod comment;
 pub mod harm;
 mod tables;
+mod tandem;
 
 use std::collections::BTreeMap;
 
@@ -38,6 +39,7 @@ use crate::tempo::MetronomeMark;
 
 pub use comment::GlobalComment;
 pub use tables::{INSTRUMENT_CLASSES, INSTRUMENTS};
+pub use tandem::MiscTandem;
 
 use tables::REFERENCE_NAMES;
 
@@ -1168,14 +1170,10 @@ fn measure_stream(gathered: Gathered) -> Stream {
     let events = |things: Vec<Placed>| -> Vec<(FloatType, usize, i32, StreamElement)> {
         things
             .into_iter()
-            .filter_map(|thing| match thing.thing {
-                Thing::Element(element) => Some((
-                    thing.offset,
-                    thing.priority,
-                    element.class_sort_order(),
-                    element,
-                )),
-                _ => None,
+            .filter_map(|thing| {
+                let priority = thing.priority;
+                let element = element_of(thing.thing, priority)?;
+                Some((thing.offset, priority, element.class_sort_order(), element))
             })
             .collect()
     };
@@ -1205,6 +1203,17 @@ fn measure_stream(gathered: Gathered) -> Stream {
     measure.set_left_barline(gathered.measure.left);
     measure.set_right_barline(gathered.measure.right);
     measure
+}
+
+/// What a thing stands in the score as: an element as itself, an
+/// instruction as a `MiscTandem` sorted by its priority, and nothing for
+/// the rest.
+fn element_of(thing: Thing, priority: usize) -> Option<StreamElement> {
+    match thing {
+        Thing::Element(element) => Some(element),
+        Thing::Tandem(tandem) => Some(MiscTandem::new(tandem, priority as i32).into()),
+        Thing::Measure(_) | Thing::Word(_) => None,
+    }
 }
 
 /// A first measure shorter than the bar of the meter it opens with is a
@@ -1425,8 +1434,17 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
     // The parts come out in the order opposite to the file's, which is
     // written lowest part first.
     let mut events = Vec::new();
-    for (_, measures, _) in parts.into_iter().rev() {
-        let mut held = Vec::new();
+    for (_, measures, loose) in parts.into_iter().rev() {
+        // The instructions before the first barline stay in the part, ahead
+        // of its measures, where music21 leaves them.
+        let mut held: Vec<StreamEvent> = loose
+            .into_iter()
+            .filter(|thing| matches!(thing.thing, Thing::Tandem(_)))
+            .filter_map(|thing| {
+                let element = element_of(thing.thing, thing.priority)?;
+                Some(StreamEvent::new(thing.offset, element))
+            })
+            .collect();
         let mut offset = 0.0;
         for (index, gathered) in measures.into_iter().enumerate() {
             let mut measure = measure_stream(gathered);
@@ -1655,6 +1673,47 @@ mod tests {
             .map(|(offset, said, priority)| (*offset, said.to_string(), *priority))
             .collect();
         assert_eq!(seen, expected);
+    }
+
+    /// An instruction the reader has no object for stands where it was
+    /// written as a `MiscTandem`, its line its priority, as music21 keeps
+    /// it: those before the first barline in the part, the rest in their
+    /// measure.
+    #[test]
+    fn tandems_stand_where_they_were_written() {
+        let text = "**kern\t**dynam\n*staff1\t*staff1\n*clefG2\t*\n*Xtandy\t*\n\
+                    *M2/4\t*\n=1\t=1\n4c\tp\n*foo\t*\n4d\t.\n==\t==\n*-\t*-\n";
+        let score = from_humdrum(text).unwrap();
+        let tandems = |stream: &Stream| -> Vec<(FloatType, String, i32)> {
+            stream
+                .events()
+                .iter()
+                .filter_map(|event| match event.element() {
+                    StreamElement::MiscTandem(tandem) => Some((
+                        event.offset(),
+                        tandem.tandem().to_string(),
+                        tandem.priority(),
+                    )),
+                    _ => None,
+                })
+                .collect()
+        };
+        let part = score.events()[0].element().as_stream().unwrap();
+        let measure = part
+            .events()
+            .iter()
+            .find_map(|event| event.element().as_stream())
+            .unwrap();
+        let owned = |held: &[(FloatType, &str, i32)]| -> Vec<(FloatType, String, i32)> {
+            held.iter()
+                .map(|(offset, said, priority)| (*offset, said.to_string(), *priority))
+                .collect()
+        };
+        assert_eq!(
+            tandems(part),
+            owned(&[(0.0, "**kern", 1), (0.0, "*staff1", 2), (0.0, "*Xtandy", 4)])
+        );
+        assert_eq!(tandems(measure), owned(&[(1.0, "*foo", 8)]));
     }
 
     /// An opus is named as music21 names it: its scores `section_1` on,

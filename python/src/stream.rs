@@ -4880,6 +4880,23 @@ fn element_object_as<'py>(
             made.setattr("priority", said.priority())?;
             made
         }
+        StreamElement::MiscTandem(tandem) if whose == Whose::Music21 => {
+            let made = py
+                .import("music21.humdrum.spineParser")?
+                .getattr("MiscTandem")?
+                .call1((tandem.tandem(),))?;
+            made.setattr("priority", tandem.priority())?;
+            made
+        }
+        StreamElement::MiscTandem(tandem) => element_new(
+            py,
+            "music21.humdrum.spineParser",
+            "MiscTandem",
+            crate::spineparser::MiscTandem::wrap(tandem.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::GlobalComment(said) => element_new(
             py,
             "music21.humdrum.spineParser",
@@ -5327,6 +5344,13 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
             object.getattr("priority")?.extract()?,
         );
         return Ok(Some(StreamElement::GlobalComment(said)));
+    }
+    if is_of_class(object, &pyo3::types::PyString::new(py, "MiscTandem"))? {
+        let tandem = music21_rs_crate::humdrum::MiscTandem::new(
+            object.getattr("tandem")?.str()?.to_string(),
+            object.getattr("priority")?.extract()?,
+        );
+        return Ok(Some(StreamElement::MiscTandem(tandem)));
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "RepeatExpression"))? {
         let class: String = object.get_type().getattr("__name__")?.extract()?;
