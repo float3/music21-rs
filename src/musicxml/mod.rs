@@ -43,7 +43,7 @@ use crate::notation::{
 use crate::note::Note;
 use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
-use crate::rest::Rest;
+use crate::rest::{FullMeasure, Rest};
 use crate::spanner::{
     PedalForm, PedalObject, PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
 };
@@ -2277,9 +2277,14 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             mxnote.set("print-spacing", "yes");
         }
         let duration = rest.duration();
-        let full_measure = self
-            .meter_at(offset)
-            .is_some_and(|meter| meter.bar_quarter_length() == duration.quarter_length());
+        // music21's `fullMeasure` first, and for its `'auto'` the bar.
+        let full_measure = match rest.full_measure() {
+            FullMeasure::Yes | FullMeasure::Always => true,
+            FullMeasure::No => false,
+            FullMeasure::Auto => self
+                .meter_at(offset)
+                .is_some_and(|meter| meter.bar_quarter_length() == duration.quarter_length()),
+        };
         let mxrest = mxnote.sub("rest");
         if full_measure {
             mxrest.set("measure", "yes");
@@ -4602,6 +4607,38 @@ mod tests {
   </note>
 </measure>"
         );
+    }
+
+    /// music21's `fullMeasure` decides before the bar does: `False` is no
+    /// measure rest though it fills the bar, `'always'` is one though it
+    /// does not, and `'auto'` asks the bar.
+    #[test]
+    fn a_rest_says_whether_it_is_a_measure_rest() {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(0.0, TimeSignature::new(4, 4).unwrap());
+        let mut context = PartContext {
+            instruments: &[],
+            own_instruments: Vec::new(),
+            own_clefs: Vec::new(),
+            meter: None,
+            last_divisions: None,
+            spanners: Vec::new(),
+            clef: None,
+            previous: None,
+            voice_bases: &NO_BASES,
+            modulations: Vec::new(),
+        };
+        let exporter = MeasureExporter::new(&measure, 0.0, &mut context);
+        let written = |length: Duration, said: FullMeasure| {
+            let mut rest = Rest::new(length);
+            rest.set_full_measure(said);
+            exporter.rest_element(&rest, 0.0, None).unwrap().dump()
+        };
+        let whole = || Duration::new(4.0).unwrap();
+        assert!(!written(whole(), FullMeasure::No).contains("measure=\"yes\""));
+        assert!(written(whole(), FullMeasure::Auto).contains("measure=\"yes\""));
+        assert!(written(Duration::half(), FullMeasure::Always).contains("measure=\"yes\""));
+        assert!(written(Duration::half(), FullMeasure::Yes).contains("measure=\"yes\""));
     }
 
     #[test]

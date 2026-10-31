@@ -9,6 +9,7 @@ handful of behaviours a caller reaches for first are right.
 
 import gc
 import os
+import pickle
 import copy
 import random
 import math
@@ -687,6 +688,44 @@ def test_the_flags_music21_takes_more_than_truth_for():
     assert line.atSoundingPitch is False
     with pytest.raises(m.StreamException):
         line.atSoundingPitch = 2
+
+
+def test_a_tempo_marks_referent_is_changed_through_the_one_handed_out():
+    """music21: a mark's referent written through the object it hands out
+    is the mark's, in its tempo, its repr, a copy and a pickle."""
+    mark = m.MetronomeMark(number=60)
+    mark.referent.type = "half"
+    assert mark.getQuarterBPM() == 120.0
+    assert repr(mark) == "<music21.tempo.MetronomeMark larghetto Half=60>"
+    assert copy.deepcopy(mark).referent.quarterLength == 2.0
+    assert pickle.loads(pickle.dumps(mark)).referent.quarterLength == 2.0
+
+
+def test_a_rests_full_measure_reaches_what_is_written():
+    """music21's `fullMeasure` decides how a rest is written: `False`
+    writes no measure rest though the rest fills its bar, and in braille
+    `True` is a measure rest though it does not, where `'always'` is not."""
+    def part_of(length, said, *more):
+        bar = m.Measure()
+        bar.append(m.TimeSignature("4/4"))
+        rest = m.Rest(quarterLength=length)
+        rest.fullMeasure = said
+        assert rest.fullMeasure == said
+        bar.append([rest, *more])
+        part = m.Part()
+        part.append(bar)
+        return part
+
+    def rests(said):
+        written = m.to_musicxml(part_of(4, said))
+        return re.findall(r"<rest[^>]*/?>", written)
+
+    assert rests(False) == ["<rest />"]
+    assert rests(True) == rests("always") == rests("auto") == ['<rest measure="yes" />']
+
+    short = lambda said: m.objectToBraille(part_of(2, said, m.Note("C4", quarterLength=2)))
+    assert short(True) == "⠀⠼⠙⠲⠀⠀\n⠼⠚⠀⠍⠐⠝"
+    assert short("always") == short("auto") == "⠀⠼⠙⠲⠀⠀\n⠼⠚⠀⠥⠐⠝"
 
 
 def test_the_stream_walks_answer_with_the_objects_held():
@@ -6452,6 +6491,23 @@ def test_a_slur_joins_its_notes_past_what_the_wheel_drops(extra):
     read = m.from_musicxml(written)
     slurs = [e for e in read.recurse() if type(e).__name__ == "Slur"]
     assert [n.nameWithOctave for n in slurs[0].getSpannedElements()] == ["E4", "F5"]
+
+
+def test_a_humdrum_comment_read_once_installed_is_music21s():
+    """A `!!` line read once installed stands in the score as music21's
+    own `GlobalComment`, where music21's reader puts it."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+read = m.from_humdrum("!!first\\n**kern\\n*M2/4\\n=1\\n4c\\n4d\\n==\\n*-\\n")
+said = [e for e in read if type(e).__name__ == "GlobalComment"]
+print([(e.comment, float(e.offset), e.priority) for e in said])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["[('first', 0.0, -37)]"]
 
 
 def test_a_key_signatures_count_and_flag_are_set_apart():

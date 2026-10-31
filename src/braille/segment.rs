@@ -1052,7 +1052,7 @@ impl BrailleSegment {
                 if let [only] = general.as_slice()
                     && let StreamElement::Rest(rest) = &mut grouping.elements[*only].element
                 {
-                    rest.set_full_measure(Some(true));
+                    rest.set_full_measure(crate::rest::FullMeasure::Yes);
                 }
             }
             grouping.key_signature = current_key;

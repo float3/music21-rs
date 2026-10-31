@@ -233,7 +233,7 @@ pub use pitch::{
 };
 pub use polyrhythm::{Polyrhythm, PolyrhythmAnalysis, PolyrhythmEvent, PolyrhythmRatioTone};
 pub use repeat::{RepeatExpression, RepeatExpressionKind};
-pub use rest::Rest;
+pub use rest::{FullMeasure, Rest};
 pub use roman::roman_numeral_from_chord;
 pub use roman::{
     ImpliedQuality, Minor67Default, NumeralAlone, RomanNumeral, analyze_chord,

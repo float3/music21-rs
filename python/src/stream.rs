@@ -4841,6 +4841,16 @@ fn element_object_as<'py>(
             Some(made) => made,
             None => return Ok(None),
         },
+        // music21's own, on music21's streams: the package has no class for
+        // a Humdrum comment, and its own streams leave one out.
+        StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
+            let made = py
+                .import("music21.humdrum.spineParser")?
+                .getattr("GlobalComment")?
+                .call1((said.comment(),))?;
+            made.setattr("priority", said.priority())?;
+            made
+        }
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -5246,7 +5256,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         return Ok(Some(StreamElement::TimeSignature(value)));
     }
     if let Ok(mark) = object.extract::<PyRef<'_, MetronomeMark>>() {
-        return Ok(Some(StreamElement::MetronomeMark(mark.inner.clone())));
+        return Ok(Some(StreamElement::MetronomeMark(
+            mark.current(object.py()),
+        )));
     }
     // The walks keep a metric modulation as the stand-in it has always been.
     if !stand_ins

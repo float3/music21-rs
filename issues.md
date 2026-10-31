@@ -192,12 +192,18 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - the wheel's hand-back loses humdrum tandems and `!!` comments.
+   - the wheel's hand-back loses humdrum tandems, and standalone its `!!`
+     comments (installed, they are music21's own `GlobalComment`).
    - standalone, a wheel measure is listed as music21 lists it only where a
      stream is asked by class, flattened or walked: `len`, indexing and
      plain iteration leave its barlines out (DECISIONS.md, "a measure's
      barlines are listed, not held"), and `storeAtEnd` and `isAtEnd` are
      missing.
+   - an edit through the tonic a key hands out (`k.tonic.name = 'B'`) is
+     lost: the key keeps its own value, and six modules read it directly.
+     music21 renames the key but keeps its signature and a stale scale;
+     no music21 code writes through `tonic`, so this waits on a way for a
+     pitch to write back into the key it came from.
    - a wheel measure's repr is `<music21.stream.Measure m1>` where
      music21's is `<music21.stream.Measure 1 offset=4.0>`: the offset is
      the measure's in its part, which needs the sites the wheel's streams

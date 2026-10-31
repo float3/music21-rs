@@ -4,6 +4,62 @@ use crate::duration::Duration;
 use crate::expressions::Expression;
 use crate::notation::{Lyric, verses};
 
+/// What a rest says of its measure: music21's `fullMeasure`, which is
+/// `True`, `False`, `'auto'` or `'always'`.
+///
+/// ```
+/// use music21_rs::{Duration, FullMeasure, Rest};
+///
+/// let mut rest = Rest::new(Duration::half());
+/// assert_eq!(rest.full_measure(), FullMeasure::Auto);
+/// rest.set_full_measure(FullMeasure::Always);
+/// assert_eq!(rest.full_measure(), FullMeasure::Always);
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+pub enum FullMeasure {
+    /// music21's `'auto'`: a whole-measure rest where it fills its measure.
+    #[default]
+    Auto,
+    /// music21's `True`: it stands for its whole measure. Braille writes it
+    /// as a measure rest whatever its length.
+    Yes,
+    /// music21's `False`: it is only as long as it is written.
+    No,
+    /// music21's `'always'`: MusicXML writes it as a measure rest whatever
+    /// its length; braille writes it at its length.
+    Always,
+}
+
+/// Reads a saved `FullMeasure`, or what was saved before there was one:
+/// `null`, `true` or `false`.
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for FullMeasure {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(serde::Deserialize)]
+        enum Named {
+            Auto,
+            Yes,
+            No,
+            Always,
+        }
+
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum Saved {
+            Flag(Option<bool>),
+            Named(Named),
+        }
+
+        Ok(match Saved::deserialize(deserializer)? {
+            Saved::Flag(None) | Saved::Named(Named::Auto) => Self::Auto,
+            Saved::Flag(Some(true)) | Saved::Named(Named::Yes) => Self::Yes,
+            Saved::Flag(Some(false)) | Saved::Named(Named::No) => Self::No,
+            Saved::Named(Named::Always) => Self::Always,
+        })
+    }
+}
+
 /// A silent musical event with a duration.
 ///
 /// A rest may still carry words: a syllable written under a rest is how a
@@ -33,7 +89,7 @@ pub struct Rest {
     #[cfg_attr(feature = "serde", serde(default))]
     tie: Option<crate::notation::Tie>,
     #[cfg_attr(feature = "serde", serde(default))]
-    full_measure: Option<bool>,
+    full_measure: FullMeasure,
 }
 
 impl PartialEq for Rest {
@@ -54,19 +110,18 @@ impl Rest {
             step_shift: 0,
             size: None,
             tie: None,
-            full_measure: None,
+            full_measure: FullMeasure::Auto,
         }
     }
 
-    /// Whether the rest stands for the whole of its measure, however long
-    /// it is written: music21's `fullMeasure`, nothing for its `auto`. The
-    /// MusicXML reader says so where music21's does.
-    pub fn full_measure(&self) -> Option<bool> {
+    /// What the rest says of its measure: music21's `fullMeasure`. The
+    /// MusicXML reader says `Yes` where music21's does.
+    pub fn full_measure(&self) -> FullMeasure {
         self.full_measure
     }
 
-    /// Says whether the rest stands for the whole of its measure.
-    pub fn set_full_measure(&mut self, full_measure: Option<bool>) {
+    /// Says what the rest says of its measure.
+    pub fn set_full_measure(&mut self, full_measure: FullMeasure) {
         self.full_measure = full_measure;
     }
 

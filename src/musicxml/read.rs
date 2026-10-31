@@ -1114,7 +1114,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 ) && duration.tuplets().is_empty();
                 if marked_full || (duration.quarter_length() != bar_length && whole) {
                     rest.set_duration(Duration::new(bar_length)?);
-                    rest.set_full_measure(Some(true));
+                    rest.set_full_measure(crate::rest::FullMeasure::Yes);
                 }
             }
         }
@@ -2062,7 +2062,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             if written.is_empty() || matches!(written, "whole" | "breve") {
                 self.full_measure_rest = true;
                 self.marking_full = true;
-                rest.set_full_measure(Some(true));
+                rest.set_full_measure(crate::rest::FullMeasure::Yes);
             }
         }
         let step = tag.child_text("display-step");
