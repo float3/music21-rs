@@ -20,7 +20,10 @@
 
 use super::{Stream, StreamElement, StreamKind};
 use crate::{
-    Duration, Result, defaults::FloatType, key::KeySignature, meter::TimeSignature,
+    Duration, Result,
+    defaults::{FloatType, IntegerType},
+    key::KeySignature,
+    meter::TimeSignature,
     tempo::MetronomeMark,
 };
 
@@ -39,13 +42,14 @@ impl Scope {
 }
 
 /// One element of a stream with its place in it: its offset, its offset in
-/// the measure holding it, and the key signature, metre and tempo in force
-/// where it stands.
+/// the measure holding it and that measure's number, and the key signature,
+/// metre and tempo in force where it stands.
 #[derive(Clone, Debug)]
 pub struct Placed<'a> {
     element: &'a StreamElement,
     offset: FloatType,
     measure_offset: Option<FloatType>,
+    measure_number: Option<IntegerType>,
     /// Where the element stands in the bar before its meter is applied:
     /// music21's `_getMeasureOffset`, the offset in its measure plus the
     /// measure's padding, or its offset in the stream holding it.
@@ -73,6 +77,12 @@ impl<'a> Placed<'a> {
     /// `None` outside any measure.
     pub fn measure_offset(&self) -> Option<FloatType> {
         self.measure_offset
+    }
+
+    /// The number of the innermost measure holding the element, or `None`
+    /// outside any measure: music21's `measureNumber`.
+    pub fn measure_number(&self) -> Option<IntegerType> {
+        self.measure_number
     }
 
     /// The key signature in force where the element stands.
@@ -162,6 +172,7 @@ struct Leaf<'a> {
     element: &'a StreamElement,
     offset: FloatType,
     measure_start: Option<FloatType>,
+    measure_number: Option<IntegerType>,
     /// The offset in the stream directly holding it.
     site_offset: FloatType,
     /// The padding of the measure holding it, nothing outside one.
@@ -214,6 +225,7 @@ impl Stream {
                     element: &event.element,
                     offset: event.offset,
                     measure_start: self.measure_start(0.0),
+                    measure_number: self.measure_number(None),
                     site_offset: event.offset,
                     padding: self.measure_padding(),
                     scope: Scope::Shared,
@@ -230,6 +242,7 @@ impl Stream {
             stream.gather(
                 event.offset,
                 measure_start,
+                self.measure_number(None),
                 self.measure_padding(),
                 scope,
                 &mut leaves,
@@ -247,6 +260,7 @@ impl Stream {
                     element: leaf.element,
                     offset: leaf.offset,
                     measure_offset: leaf.measure_start.map(|start| leaf.offset - start),
+                    measure_number: leaf.measure_number,
                     bar_position: leaf.bar_position(true),
                     key_signature: in_force(&leaves, leaf, |element| match element {
                         StreamElement::KeySignature(key) => Some(key),
@@ -271,6 +285,14 @@ impl Stream {
         (self.kind == StreamKind::Measure).then_some(base)
     }
 
+    /// A measure's number, or `outer`'s for any other stream.
+    fn measure_number(&self, outer: Option<IntegerType>) -> Option<IntegerType> {
+        match self.kind {
+            StreamKind::Measure => Some(self.number()),
+            _ => outer,
+        }
+    }
+
     /// A measure's padding, nothing for any other stream.
     fn measure_padding(&self) -> FloatType {
         match self.kind {
@@ -283,6 +305,7 @@ impl Stream {
         &'a self,
         base: FloatType,
         measure_start: Option<FloatType>,
+        measure_number: Option<IntegerType>,
         padding: FloatType,
         scope: Scope,
         out: &mut Vec<Leaf<'a>>,
@@ -292,10 +315,11 @@ impl Stream {
             Some(start) => (Some(start), self.measure_padding()),
             None => (measure_start, padding),
         };
+        let measure_number = self.measure_number(measure_number);
         for event in &self.events {
             let offset = base + event.offset;
             if let StreamElement::Stream(stream) = &event.element {
-                stream.gather(offset, measure_start, padding, scope, out);
+                stream.gather(offset, measure_start, measure_number, padding, scope, out);
                 continue;
             }
 
@@ -303,6 +327,7 @@ impl Stream {
                 element: &event.element,
                 offset,
                 measure_start,
+                measure_number,
                 site_offset: event.offset,
                 padding,
                 scope,
@@ -379,6 +404,26 @@ mod tests {
         assert_eq!(notes[3].measure_offset(), Some(3.0));
         assert_eq!(sharps(5), None);
         assert!(notes.iter().all(|placed| placed.time_signature().is_some()));
+    }
+
+    /// An element names the innermost measure holding it, through a voice;
+    /// one outside every measure names none.
+    #[test]
+    fn each_element_names_its_measure() {
+        let mut voice = Stream::with_kind(StreamKind::Voice);
+        voice.push(Note::from_name("C4").unwrap());
+        let mut first = Stream::with_kind(StreamKind::Measure);
+        first.set_number(1);
+        first.insert(0.0, voice);
+        let mut second = measure(&["D4"]);
+        second.set_number(2);
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, KeySignature::new(0));
+        part.insert(0.0, first);
+        part.insert(1.0, second);
+
+        let numbers: Vec<_> = part.placed().iter().map(Placed::measure_number).collect();
+        assert_eq!(numbers, [None, Some(1), Some(2)]);
     }
 
     /// The composite lists what `leaves` lists, in the same order.

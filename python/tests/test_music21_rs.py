@@ -913,6 +913,55 @@ def test_store_at_end_refuses_what_it_cannot_keep():
     assert len(line.getElementsByClass("Barline")) == 1
 
 
+def test_placed_answers_where_each_element_stands():
+    """`placed` answers, for every element, what music21 asks the element's
+    sites for: the element itself, where it stands in the stream asked,
+    its measure and its beat."""
+    meter = m.TimeSignature("3/4")
+    first_note, long_note, last_note = m.Note("C4"), m.Note("D4", quarterLength=2), m.Note("E4")
+    first = m.Measure(number=1)
+    first.insert(0, meter)
+    first.append([first_note, long_note])
+    second = m.Measure(number=2)
+    second.append(last_note)
+    part = m.Part()
+    part.append([first, second])
+
+    placed = part.placed()
+    assert [each.element for each in placed] == [meter, first_note, long_note, last_note]
+    assert all(
+        each.element is held for each, held in zip(placed, [meter, first_note, long_note, last_note])
+    )
+    assert [float(each.offset) for each in placed] == [0.0, 0.0, 1.0, 3.0]
+    assert [each.measureNumber for each in placed] == [1, 1, 1, 2]
+    assert [each.beat for each in placed] == [1.0, 1.0, 2.0, 1.0]
+    assert placed[2].beatStr == "2"
+    assert placed[2].beatDuration.quarterLength == 1.0
+    assert [each.beatStrength for each in placed] == [1.0, 1.0, 0.5, 1.0]
+    with pytest.raises(AttributeError):
+        placed[0].offset = 2.0
+
+
+def test_placed_without_a_meter_answers_as_music21_does():
+    """With no meter in force music21 answers `nan`, `'nan'` and a
+    duration of nothing; outside a measure there is no measure number."""
+    alone = m.Stream([m.Note("C4")]).placed()[0]
+    assert math.isnan(alone.beat)
+    assert alone.beatStr == "nan"
+    assert alone.beatDuration.quarterLength == 0.0
+    assert math.isnan(alone.beatStrength)
+    assert alone.measureNumber is None
+
+
+def test_placed_names_an_object_held_twice_once():
+    """An object held twice is placed once, where `elementOffset` puts it."""
+    line = m.Stream()
+    twice = m.Note("C4")
+    line.insert(0, twice)
+    line.insert(2, twice)
+    assert [float(each.offset) for each in line.placed()] == [float(line.elementOffset(twice))]
+
+
 def test_the_flags_music21_takes_more_than_truth_for():
     """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
     documented spelling, and `atSoundingPitch` takes what equals True or

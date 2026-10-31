@@ -1172,7 +1172,7 @@ splitByClass = "split_by"
 [class.excluded]
 addGroupForElements = "the group names music21 picks elements out of a stream by; nothing a crate stream holds carries them"
 attachMelodicIntervals = "attaches an interval to each note; `melodic_intervals` answers them instead, a crate note carrying nothing of its line"
-beat = "where one element sits in its bar; `placed` answers it for every element at once, and `beat_and_measure_from_offset` for a point"
+beat = "where one element sits in its bar; `placed` answers it for every element at once, and `beat_and_measure_from_offset` for a point. The wheel's `Stream.placed()`, its own member, hands the crate's answers back with each element, its offset and its measure number"
 beatStr = "as `beat`"
 beatStrength = "as `beat`"
 clear = "empties a stream in place; `clone_empty` answers an empty one of the same kind"
