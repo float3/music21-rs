@@ -1,31 +1,11 @@
 # Unreleased
 
-Seven design questions were debated and their verdicts recorded in
-DECISIONS.md; these are the changes they called for.
+`harte` 0.6.0 depends on this release.
 
 ## breaking changes
 
-- **`Rest::full_measure` is a `FullMeasure`**, music21's `True`, `False`,
-  `'auto'` and `'always'`, where it was an `Option<bool>` that could not
-  say `'always'`. The MusicXML writer now reads it: `No` writes no measure
-  rest though the rest fills its bar, and `Always` writes one though it
-  does not. Saved rests with `null`, `true` or `false` read back as `Auto`,
-  `Yes` and `No`. `harte` 0.5.0 depends on this release.
-
 - **`StreamElement::MiscTandem`** is a new variant, so a `match` over
   every variant needs an arm for it.
-
-## changed
-
-- **Once installed, the readers hand back music21's own streams.** After
-  `install_into_music21()`, `from_musicxml`, `from_humdrum`,
-  `from_tiny_notation` and the rest build music21's streams, so a note
-  answers `offset`, `beat` and `measureNumber`, and the score nests in a
-  `Score` and writes through music21. Standalone they hand back the wheel's
-  own, and music21 merely being importable changes nothing.
-
-- **Flags are read for their truth.** Every flag the wheel takes accepts
-  `1`, `0` and `None` as music21 does; a string is still a `TypeError`.
 
 ## added
 
@@ -46,6 +26,34 @@ DECISIONS.md; these are the changes they called for.
   as a `MiscTandem` (`humdrum::MiscTandem` in the crate), its line its
   priority: those before the first barline in the part, the rest in their
   measure, as music21's reader keeps them. `humdrum_parity` compares them.
+
+# music21-rs 0.12.0
+
+Seven design questions were debated and their verdicts recorded in
+DECISIONS.md; these are the changes they called for.
+
+## breaking changes
+
+- **`Rest::full_measure` is a `FullMeasure`**, music21's `True`, `False`,
+  `'auto'` and `'always'`, where it was an `Option<bool>` that could not
+  say `'always'`. The MusicXML writer now reads it: `No` writes no measure
+  rest though the rest fills its bar, and `Always` writes one though it
+  does not. Saved rests with `null`, `true` or `false` read back as `Auto`,
+  `Yes` and `No`. `harte` 0.5.0 depends on this release.
+
+## changed
+
+- **Once installed, the readers hand back music21's own streams.** After
+  `install_into_music21()`, `from_musicxml`, `from_humdrum`,
+  `from_tiny_notation` and the rest build music21's streams, so a note
+  answers `offset`, `beat` and `measureNumber`, and the score nests in a
+  `Score` and writes through music21. Standalone they hand back the wheel's
+  own, and music21 merely being importable changes nothing.
+
+- **Flags are read for their truth.** Every flag the wheel takes accepts
+  `1`, `0` and `None` as music21 does; a string is still a `TypeError`.
+
+## added
 
 - **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,
   matching music21's output; once installed they are no longer blocked.
