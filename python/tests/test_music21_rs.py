@@ -735,13 +735,13 @@ def test_a_stream_writes_itself_in_each_format_music21_writes(tmp_path):
     part = m.from_tiny_notation("4/4 c4 d e f")
     musicxml = part.write("musicxml", fp=tmp_path / "out")
     assert musicxml == tmp_path / "out.musicxml"
-    assert "<score-partwise" in musicxml.read_text()
+    assert "<score-partwise" in musicxml.read_text(encoding="utf-8")
     assert part.write().suffix == ".musicxml"
     assert part.write("midi").read_bytes() == m.to_midi(part)
-    assert part.write("lily", fp=tmp_path / "a.ly").read_text() == m.to_lilypond(part)
-    assert part.write("braille", fp=tmp_path / "b.txt").read_text() == m.objectToBraille(part)
-    assert part.write("text", fp=tmp_path / "t.txt").read_text() == part.recurseRepr()
-    assert part.write("volpiano", fp=tmp_path / "v.txt").read_text() == m.to_volpiano(part)
+    assert part.write("lily", fp=tmp_path / "a.ly").read_text(encoding="utf-8") == m.to_lilypond(part)
+    assert part.write("braille", fp=tmp_path / "b.txt").read_text(encoding="utf-8") == m.objectToBraille(part)
+    assert part.write("text", fp=tmp_path / "t.txt").read_text(encoding="utf-8") == part.recurseRepr()
+    assert part.write("volpiano", fp=tmp_path / "v.txt").read_text(encoding="utf-8") == m.to_volpiano(part)
     with pytest.raises(m.StreamException):
         part.write("png")
 
