@@ -136,6 +136,11 @@ impl Rest {
     pub(crate) fn synced(&self, py: Python<'_>) -> RsRest {
         let mut rest = self.inner.clone();
         rest.set_duration(self.duration_value(py));
+        // The tie object is the one a caller holds, and music21's note
+        // splitting writes through it.
+        if let Some(tie) = &self.tie {
+            rest.set_tie(Some(tie.borrow(py).inner.clone()));
+        }
         if let Some(lyrics) = &self.lyrics {
             fold_lyric_objects(py, lyrics, rest.lyrics_mut());
         }
@@ -428,24 +433,39 @@ impl Rest {
         Ok(())
     }
 
+    /// The `Tie` holding this rest over to the next, or `None`: the value's
+    /// own, as an object made on first asking and kept after that.
     #[getter]
-    fn get_tie(slf: &Bound<'_, Self>) -> Option<Py<Tie>> {
-        slf.borrow().tie.as_ref().map(|tie| tie.clone_ref(slf.py()))
+    fn get_tie(slf: &Bound<'_, Self>) -> PyResult<Option<Py<Tie>>> {
+        let py = slf.py();
+        if let Some(tie) = &slf.borrow().tie {
+            return Ok(Some(tie.clone_ref(py)));
+        }
+        let Some(value) = slf.borrow().inner.tie().cloned() else {
+            return Ok(None);
+        };
+        let tie = crate::installed_new(py, "music21.tie", "Tie", Tie::wrap(value))?;
+        slf.borrow_mut().tie = Some(tie.clone_ref(py));
+        Ok(Some(tie))
     }
 
     #[setter]
     fn set_tie(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let py = slf.py();
-        let tie = match value.filter(|value| !value.is_none()) {
-            None => None,
-            Some(value) => Some(match value.extract::<Py<Tie>>() {
-                Ok(object) => object,
-                Err(_) => {
-                    crate::installed_new(py, "music21.tie", "Tie", Tie::wrap(tie_from_any(value)?))?
-                }
-            }),
+        let Some(value) = value.filter(|value| !value.is_none()) else {
+            let mut rest = slf.borrow_mut();
+            rest.inner.set_tie(None);
+            rest.tie = None;
+            return Ok(());
         };
-        slf.borrow_mut().tie = tie;
+        let inner = tie_from_any(value)?;
+        let tie = match value.extract::<Py<Tie>>() {
+            Ok(object) => object,
+            Err(_) => crate::installed_new(py, "music21.tie", "Tie", Tie::wrap(inner.clone()))?,
+        };
+        let mut rest = slf.borrow_mut();
+        rest.inner.set_tie(Some(inner));
+        rest.tie = Some(tie);
         Ok(())
     }
 

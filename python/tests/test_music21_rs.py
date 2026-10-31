@@ -7134,3 +7134,17 @@ def test_a_chords_colour_set_on_its_style_is_written():
     chord.style.color = "red"
     written = m.to_musicxml(bar_of(chord, m.Rest(3.0)))
     assert 'color="#FF0000"' in written
+
+
+def test_a_rests_tie_reaches_the_value_and_back():
+    # RomanText holds a rest over the barline with a tie, as music21 does.
+    read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")
+    rests = list(read.recurse().getElementsByClass("Rest"))
+    assert [rest.tie.type for rest in rests] == ["start", "stop"]
+
+    first, second = m.Rest(2.0), m.Rest(2.0)
+    first.tie = m.Tie("start")
+    second.tie = m.Tie("start")
+    second.tie.type = "stop"
+    written = m.to_musicxml(bar_of(first, second))
+    assert re.findall(r"<tie type=\"(\w+)\" />", written) == ["start", "stop"]
