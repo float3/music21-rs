@@ -189,7 +189,7 @@ impl Ornament {
     /// The crate's ornament with the accidentals read afresh off the objects
     /// a caller handed over, since a caller may have changed one since --
     /// shown or hidden it, most often.
-    fn synced(&self, py: Python<'_>) -> PyResult<RsOrnament> {
+    pub(crate) fn synced(&self, py: Python<'_>) -> PyResult<RsOrnament> {
         let mut inner = self.inner.clone();
         if let Some(accidental) = &self.accidental {
             inner

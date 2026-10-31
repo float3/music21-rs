@@ -6011,7 +6011,7 @@ fn expressions_of(
     for expression in expressions.walk()? {
         let expression = expression?;
         if let Ok(ornament) = expression.extract::<PyRef<'_, crate::expressions::Ornament>>() {
-            out.push(Expression::Ornament(Box::new(ornament.inner.clone())));
+            out.push(Expression::Ornament(Box::new(ornament.synced(py)?)));
         } else if let Some(read) = music21_ornament(&expression)? {
             out.push(Expression::Ornament(Box::new(read)));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "Fermata"))? {

@@ -7148,3 +7148,19 @@ def test_a_rests_tie_reaches_the_value_and_back():
     second.tie.type = "stop"
     written = m.to_musicxml(bar_of(first, second))
     assert re.findall(r"<tie type=\"(\w+)\" />", written) == ["start", "stop"]
+
+
+def test_an_ornaments_accidental_edited_in_place_is_written():
+    # As music21 writes them, making notation: a hidden accidental is not.
+    def marks(edit):
+        trill = m.Trill()
+        trill.accidental = m.Accidental("sharp")
+        edit(trill.accidental)
+        note = m.Note("C4", quarterLength=4.0)
+        note.expressions.append(trill)
+        written = m.to_musicxml(bar_of(note), make_notation=True)
+        return re.findall(r"<accidental-mark[^>]*>(\S+)</accidental-mark>", written)
+
+    assert marks(lambda accidental: None) == ["sharp"]
+    assert marks(lambda accidental: setattr(accidental, "displayStatus", False)) == []
+    assert marks(lambda accidental: accidental.set("flat")) == ["flat"]
