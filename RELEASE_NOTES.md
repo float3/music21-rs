@@ -1,5 +1,54 @@
 # Unreleased
 
+Five design questions were debated and their verdicts recorded in
+DECISIONS.md; these are the changes they called for, and the bugs the
+debates found.
+
+## added
+
+- **`Stream.placed()`** answers, for every element a wheel stream holds,
+  its offset, measure number and the four beat members, from the crate's
+  `Stream::placed` (`Placed::measure_number` is new). It is the package's
+  own member: standalone code asks the stream where a note stands.
+
+- **`storeAtEnd` and `isAtEnd`** on the wheel's streams keep a barline as
+  the stream's right barline; anything else music21 keeps at the end is
+  refused as not ported.
+
+- **A chord's inversion fixed by hand** (`inversion(n,
+  transposeOnSet=False)`) is kept in the crate
+  (`Chord::set_inversion_override`) and survives copying.
+
+- **`Key::with_sharps`** gives a key the signature it is written with.
+
+- **`data/py_fields.toml`** lists every Python object a facade holds and
+  how an edit through it reaches the crate; a test keeps it complete.
+
+## changed
+
+- **A key follows its tonic edited in place** (`k.tonic.name = 'B'` gives
+  B major) and keeps the Pitch it was given. As in music21, setting or
+  editing the tonic or the mode leaves the signature alone: what is read
+  off the sharps (relative, transpose, the written signature) stays, and
+  key equality compares signatures too.
+
+- **A standalone measure's repr names its number**
+  (`<music21.stream.Measure 3>`), and `offset`, `activeSite`, `beat` and
+  the other members that need a site raise an `AttributeError` saying why
+  and what to ask instead.
+
+## fixed
+
+- **Edits made in place reach the writers**: a chord's duration, volume,
+  beams and style colour, a rest's tie and an ornament's accidental now
+  reach MusicXML and MIDI, and a rest read tied answers its tie.
+
+- **Copies and pickles keep what was handed out**: a note's or chord's
+  copy keeps its `storedInstrument` and editorial, and a pickled chord
+  keeps an in-place volume edit.
+
+# music21-rs 0.13.0
+
 `harte` 0.6.0 depends on this release.
 
 ## breaking changes
