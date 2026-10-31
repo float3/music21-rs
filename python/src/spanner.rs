@@ -183,6 +183,12 @@ impl Spanner {
 
 #[pymethods]
 impl Spanner {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What it joins may point back at it, a note keeping its slur; Python's
     /// collector frees such a cycle only if it is shown these.
     fn __traverse__(

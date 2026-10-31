@@ -37,7 +37,7 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
-use pyo3::exceptions::{PyIndexError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
@@ -128,6 +128,46 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
 enum Placing {
     Held,
     Last,
+}
+
+/// What music21 hangs on every element through its sites, which the
+/// package does not keep (see `DECISIONS.md`).
+const SITE_MEMBERS: [&str; 7] = [
+    "offset",
+    "activeSite",
+    "beat",
+    "beatStr",
+    "beatStrength",
+    "beatDuration",
+    "measureNumber",
+];
+
+/// Whether music21 answers a member through an element's sites.
+pub(crate) fn is_site_member(name: &str) -> bool {
+    SITE_MEMBERS.contains(&name)
+}
+
+/// What an element's `__getattr__` answers, which runs only once nothing
+/// else has -- so an installed class still reads music21's own. A member
+/// music21 answers through a site, and nothing here defines, says why it
+/// is absent and where to ask; anything else is refused as Python refused
+/// it, a member blocked as not ported included.
+pub(crate) fn no_site(object: &Bound<'_, PyAny>, name: &str) -> PyResult<Py<PyAny>> {
+    let class = object.get_type();
+    if is_site_member(name) && class.getattr(name).is_err() {
+        let named = class.fully_qualified_name()?;
+        return Err(PyAttributeError::new_err(format!(
+            "'{named}' object has no attribute '{name}': the package keeps no sites, so \
+             an element cannot say where it stands; ask the stream holding it, \
+             `stream.elementOffset(element)` or `stream.placed()`, or call \
+             `music21_rs.install_into_music21()` for music21's own"
+        )));
+    }
+    let generic = object
+        .py()
+        .get_type::<pyo3::types::PyAny>()
+        .getattr("__getattribute__")?;
+    Ok(generic.call1((object, name))?.unbind())
 }
 
 /// How far `recurseRepr` indents what a held stream holds.
@@ -835,6 +875,12 @@ impl Stream {
 
 #[pymethods]
 impl Stream {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers.
     #[getter]
@@ -7383,6 +7429,12 @@ pub struct Verticality {
 
 #[pymethods]
 impl Verticality {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (contentDict = None))]
     fn new(py: Python<'_>, contentDict: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {

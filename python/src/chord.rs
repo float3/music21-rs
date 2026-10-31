@@ -1643,6 +1643,12 @@ fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
 
 #[pymethods]
 impl Chord {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers -- so a note is a
     /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.

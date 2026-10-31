@@ -63,6 +63,12 @@ impl RepeatExpression {
 
 #[pymethods]
 impl RepeatExpression {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// music21's `RepeatExpression()`, which is the base class its kinds
     /// extend; a mark with no kind is a `Coda`, as nothing else can be
     /// said of it.

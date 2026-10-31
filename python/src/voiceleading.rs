@@ -187,6 +187,12 @@ impl VoiceLeadingQuartet {
 
 #[pymethods]
 impl VoiceLeadingQuartet {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// The Python objects this holds, shown to the cycle collector. A note
     /// and the pitch it hands out point at each other through Rust, and
     /// without this neither of them is ever freed.

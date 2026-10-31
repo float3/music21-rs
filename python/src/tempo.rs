@@ -173,6 +173,12 @@ impl MetronomeMark {
 
 #[pymethods]
 impl MetronomeMark {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers.
     #[getter]
@@ -702,6 +708,12 @@ impl TempoText {
 
 #[pymethods]
 impl TempoText {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (text = None, **_keywords))]
     fn new(
@@ -1124,6 +1136,12 @@ impl MetricModulation {
 
 #[pymethods]
 impl MetricModulation {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers.
     #[getter]

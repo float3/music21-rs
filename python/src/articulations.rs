@@ -134,6 +134,12 @@ impl Articulation {
 
 #[pymethods]
 impl Articulation {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {

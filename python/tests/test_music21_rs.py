@@ -790,6 +790,91 @@ def test_a_measure_names_itself_by_its_number():
     assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "offset",
+        "activeSite",
+        "beat",
+        "beatStr",
+        "beatStrength",
+        "beatDuration",
+        "measureNumber",
+    ],
+)
+def test_an_element_says_why_it_cannot_say_where_it_stands(name):
+    """The package keeps no sites, so what an element would answer through
+    one is refused with the reason and where to ask instead."""
+    for element in (
+        m.Note("C4"),
+        m.Rest(),
+        m.Chord("C4 E4"),
+        m.TimeSignature("3/4"),
+        m.TrebleClef(),
+        m.Barline(),
+        m.Measure(),
+    ):
+        if name == "beatDuration" and isinstance(element, m.TimeSignature):
+            # A meter's own beat, which music21's meter answers too.
+            continue
+        with pytest.raises(AttributeError, match=r"elementOffset.*placed\(\).*install_into_music21"):
+            getattr(element, name)
+        assert not hasattr(element, name)
+    with pytest.raises(AttributeError, match=r"has no attribute 'nonesuch'$"):
+        m.Note().nonesuch
+
+
+def test_every_element_class_refuses_a_site():
+    """Every class standing in for one of music21's `Music21Object`s
+    refuses what a site would answer, not only the few tried above."""
+    base = pytest.importorskip("music21.base")
+    import importlib
+
+    unhooked = []
+    for name in dir(m.music21_rs):
+        cls = getattr(m.music21_rs, name)
+        if not isinstance(cls, type) or issubclass(cls, BaseException):
+            continue
+        try:
+            original = getattr(importlib.import_module(cls.__module__), cls.__name__)
+        except (ImportError, AttributeError):
+            continue
+        if not (isinstance(original, type) and issubclass(original, base.Music21Object)):
+            continue
+        if cls.__getattribute__ is object.__getattribute__:
+            unhooked.append(name)
+    assert unhooked == []
+
+
+def test_an_installed_element_answers_where_it_stands():
+    """Installed, music21's own `offset` and `beat` answer: the refusal
+    only runs where nothing else does."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import meter, note, stream
+n = note.Note()
+print(n.offset, n.activeSite)
+s = stream.Stream([meter.TimeSignature('3/4')])
+s.append([note.Note(), note.Note()])
+second = s.notes[1]
+print(second.offset, second.beat, second.beatStr, second.measureNumber)
+try:
+    n.nonesuch
+except AttributeError as error:
+    print(type(error).__name__)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "0.0 None",
+        "1.0 2.0 2 None",
+        "AttributeError",
+    ]
+
+
 def test_the_flags_music21_takes_more_than_truth_for():
     """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
     documented spelling, and `atSoundingPitch` takes what equals True or
