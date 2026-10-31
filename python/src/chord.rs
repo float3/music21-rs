@@ -933,6 +933,17 @@ impl Chord {
         if self.style.is_some() {
             chord.set_color(crate::notation::style_colour(py, self.style.as_ref()));
         }
+        // music21's own doctests write `_overrides` directly, so the
+        // dictionary, once there is one, is where a fixed inversion is.
+        if let Some(overrides) = &self.overrides {
+            let fixed = overrides
+                .bind(py)
+                .get_item("inversion")
+                .ok()
+                .flatten()
+                .and_then(|fixed| fixed.extract::<u8>().ok());
+            chord.set_inversion_override(fixed);
+        }
         chord
     }
 
@@ -1466,7 +1477,7 @@ fn override_with(chord: &Bound<'_, Chord>, key: &str, value: &RsPitch) -> PyResu
             Pitch::wrap(value.clone(), false),
         )?,
     };
-    let overrides = chord.borrow_mut()._overrides(py);
+    let overrides = chord.borrow_mut()._overrides(py)?;
     overrides.bind(py).set_item(key, pitch)
 }
 
@@ -1492,6 +1503,9 @@ fn chord_pitch_named(chord: &Bound<'_, Chord>, value: &RsPitch) -> PyResult<Opti
 /// asks the chord to work the answer out again and to go on doing so.
 fn clear_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
     let py = chord.py();
+    if key == "inversion" {
+        chord.borrow_mut().inner.set_inversion_override(None);
+    }
     let Some(overrides) = chord.borrow().overrides.as_ref().map(|d| d.clone_ref(py)) else {
         return Ok(());
     };
@@ -2113,12 +2127,20 @@ impl Chord {
     /// music21's `_overrides`: the answers fixed by hand, as a live
     /// dictionary. Writing `_overrides['root'] = None` is how music21's own
     /// doctests say a chord has no root.
+    ///
+    /// An inversion fixed in the value is in it from the start, so the
+    /// dictionary and the value say the same.
     #[getter]
-    fn _overrides(&mut self, py: Python<'_>) -> Py<PyDict> {
-        let overrides = self
-            .overrides
-            .get_or_insert_with(|| PyDict::new(py).unbind());
-        overrides.clone_ref(py)
+    fn _overrides(&mut self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        if let Some(overrides) = &self.overrides {
+            return Ok(overrides.clone_ref(py));
+        }
+        let overrides = PyDict::new(py);
+        if let Some(fixed) = self.inner.overridden_inversion() {
+            overrides.set_item("inversion", fixed)?;
+        }
+        self.overrides = Some(overrides.clone().unbind());
+        Ok(overrides.unbind())
     }
 
     #[pyo3(signature = (newroot = None, *, find = None))]
@@ -2399,7 +2421,14 @@ impl Chord {
         if !find {
             return Ok(Some(-1));
         }
-        Ok(Some(slf.borrow().inner.inversion().map_or(-1, i32::from)))
+        // With a dictionary, what is not in it is not fixed; without one,
+        // the value says.
+        let me = slf.borrow();
+        let found = match me.overrides {
+            Some(_) => me.inner.found_inversion(),
+            None => me.inner.inversion(),
+        };
+        Ok(Some(found.map_or(-1, i32::from)))
     }
 
     /// The chord in a new inversion, its lowest note raised by octaves until
@@ -3658,6 +3687,19 @@ impl Chord {
         copied.expressions = crate::note::copied_list(py, self.expressions.as_ref())?;
         copied.articulations = crate::note::copied_list(py, self.articulations.as_ref())?;
         copied.style = crate::notation::copied_style(py, self.style.as_ref());
+        // What music21's deep copy carries along: the answers fixed by hand,
+        // the instrument and what an analysis wrote on the chord.
+        let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        let copied_of = |held: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+            held.as_ref()
+                .map(|held| deepcopy.call1((held,)).map(pyo3::Bound::unbind))
+                .transpose()
+        };
+        copied.stored_instrument = copied_of(&self.stored_instrument)?;
+        copied.editorial = copied_of(&self.editorial)?;
+        if let Some(overrides) = &self.overrides {
+            copied.overrides = Some(deepcopy.call1((overrides,))?.extract()?);
+        }
         Ok(copied)
     }
 }
@@ -3738,8 +3780,14 @@ fn set_inversion_of(
         // music21 records the answer without moving anything, which is how
         // a chord badly spelt or with a note added is told what inversion it
         // stands in.
-        let overrides = slf.borrow_mut()._overrides(py);
+        let overrides = slf.borrow_mut()._overrides(py)?;
         overrides.bind(py).set_item("inversion", inversion)?;
+        // The value carries it too, for whatever reads the chord as one;
+        // one past what the crate can hold stays in the dictionary alone.
+        let mut me = slf.borrow_mut();
+        me.inner
+            .set_inversion_override(u8::try_from(inversion).ok());
+        me.clear_cache();
         return Ok(());
     }
     if slf.borrow().inner.pitches().is_empty() {

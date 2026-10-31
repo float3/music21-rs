@@ -7164,3 +7164,20 @@ def test_an_ornaments_accidental_edited_in_place_is_written():
     assert marks(lambda accidental: None) == ["sharp"]
     assert marks(lambda accidental: setattr(accidental, "displayStatus", False)) == []
     assert marks(lambda accidental: accidental.set("flat")) == ["flat"]
+
+
+def test_a_chords_fixed_inversion_survives_a_copy():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.inversion(1, transposeOnSet=False)
+    chord.editorial.comment = "read in first inversion"
+    chord.storedInstrument = m.Piano()
+    copied = copy.deepcopy(chord)
+    assert copied.inversion() == 1 and copied.inversionName() == 6
+    assert copied._overrides == {"inversion": 1}
+    assert copied._overrides is not chord._overrides
+    assert copied.editorial.comment == "read in first inversion"
+    assert copied.storedInstrument.instrumentName == "Piano"
+    assert copied.storedInstrument is not chord.storedInstrument
+
+    chord.setInversion(None, inPlace=True)
+    assert chord.inversion() == 0 and copy.deepcopy(chord).inversion() == 0
