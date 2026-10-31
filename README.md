@@ -471,29 +471,46 @@ contributed upstream, mostly fixes found while porting:
   `ScoreReduction` failing on a lone part, from a method tested without
   being called.
 - [cuthbertLab/music21#2122](https://github.com/cuthbertLab/music21/pull/2122):
-  Humdrum spines split a second time losing their notes (open).
+  Humdrum spines split a second time losing their notes.
 - [cuthbertLab/music21#2123](https://github.com/cuthbertLab/music21/pull/2123):
   Capella single barlines failing to import, and prolonged tuplets read
   as 3:2.
 - [cuthbertLab/music21#2124](https://github.com/cuthbertLab/music21/pull/2124):
   `ChordBassMotionFeature` failing on a `NoChord`.
 - [cuthbertLab/music21#2125](https://github.com/cuthbertLab/music21/pull/2125):
-  ABC import losing the overflow of a measure no time signature fits
-  (open).
+  ABC import losing the overflow of a measure no time signature fits.
 - [cuthbertLab/music21#2126](https://github.com/cuthbertLab/music21/pull/2126):
   MusicXML export writing a chord in the order it holds its notes, with
   `non-arpeggiate` on the wrong ends (open).
 - [cuthbertLab/music21#2127](https://github.com/cuthbertLab/music21/pull/2127):
-  a `ReductiveNote` on a chord looking for a C when it names no pitch
-  (open).
+  a `ReductiveNote` on a chord looking for a C when it names no pitch.
 - [cuthbertLab/music21#2128](https://github.com/cuthbertLab/music21/pull/2128):
   tuplets set on a duration before it worked out its own being overwritten,
-  so `augmentOrDiminish` kept the old length (open).
+  so `augmentOrDiminish` kept the old length.
 - [cuthbertLab/music21#2129](https://github.com/cuthbertLab/music21/pull/2129):
-  `PartReduction` lengthening the score's own dynamics (open).
+  `PartReduction` lengthening the score's own dynamics.
 - [cuthbertLab/music21#2130](https://github.com/cuthbertLab/music21/pull/2130):
   TinyNotation's `}` closing a tie instead of its bracket, and ties and
-  tuplets counting a time signature as a note (open).
+  tuplets counting a time signature as a note.
+- [cuthbertLab/music21#2132](https://github.com/cuthbertLab/music21/pull/2132):
+  Decide a trill's undecided ornamental accidental.
+- [cuthbertLab/music21#2133](https://github.com/cuthbertLab/music21/pull/2133):
+  Count a split measure's second half in the meter its first half opens
+  with.
+- [cuthbertLab/music21#2134](https://github.com/cuthbertLab/music21/pull/2134):
+  Keep a split measure's right barline at the end of its second half.
+- [cuthbertLab/music21#2136](https://github.com/cuthbertLab/music21/pull/2136):
+  Allow chords and unpitched notes in mostCommonMeasureRhythms.
+- [cuthbertLab/music21#2137](https://github.com/cuthbertLab/music21/pull/2137):
+  Close an octave-repeating scale without a zero-width step.
+- [cuthbertLab/music21#2138](https://github.com/cuthbertLab/music21/pull/2138):
+  Give figured-bass realizations their own pitches.
+- [cuthbertLab/music21#2139](https://github.com/cuthbertLab/music21/pull/2139):
+  Read NWC Dur2/Pos2 chord notes and rest chords at the same offset (open).
+- [cuthbertLab/music21#2140](https://github.com/cuthbertLab/music21/pull/2140):
+  Build harmonic minor from its own intervals (open).
+- [cuthbertLab/music21#2141](https://github.com/cuthbertLab/music21/pull/2141):
+  Put volpiano breaks and neumes in the measure being read (open).
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it (open).
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
