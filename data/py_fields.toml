@@ -1,0 +1,378 @@
+# Every Python object a facade class holds, and how what is done to it
+# reaches the crate. Read by
+# `test_every_python_object_a_facade_holds_is_accounted_for` in
+# `python/tests/test_music21_rs.py`, which scans `python/src` for
+# `#[pyclass]` structs with `Py<...>` fields and fails on a field or class
+# missing here, and on a row naming one that no longer exists.
+#
+# The bugs this guards against have one shape: an object handed out, edited
+# in place, and a crate reader that reads the value and never the object.
+#
+# A class that carries a crate value (an `inner`, a `stored`, a crate stream
+# or grouping it reads) has one row per Py field:
+#
+#   field = { kind = "identity", sync = "synced" }
+#       The caller gets this very object back and may edit it. `sync` names
+#       the function that folds it into the value before the crate reads it
+#       (`synced`, `synced_inner`, `current`, `write_back`, ...), or is
+#       "read live" with a `why`: the facade reads the object itself each
+#       time, or the crate keeps nothing of it.
+#   field = { kind = "value", note = "..." }
+#       A copy of something the crate carries, taken when it was set. An
+#       edit made in place is not seen: a debt, with what it costs.
+#   field = { kind = "cache", note = "..." }
+#       Worked out from the value and kept; nothing edits the value through
+#       it.
+#
+# A class with no crate value is listed once, as
+#
+#   [Class]
+#   kind = "facade-only"
+#   reason = "..."
+#
+# and the test refuses that for a class with a field named `inner` or
+# `stored`.
+
+# --- Classes carrying a crate value ---------------------------------------
+
+[Accidental]
+owner = { kind = "identity", sync = "read live", why = "the pitch it belongs to, which write_back writes into" }
+style = { kind = "value", note = "folded into the pitch only by write_back, which runs on the accidental's own setters: `p.accidental.style.color = 'red'` alone never reaches the pitch or the MusicXML writer" }
+client = { kind = "identity", sync = "read live", why = "music21's _client, told by informClient; not part of the value" }
+
+[Articulation]
+bend_alter = { kind = "value", note = "read into inner's bend semitones when set; an interval edited in place is not read again" }
+
+[Barline]
+pause = { kind = "identity", sync = "read live", why = "a Fermata or Rest the crate does not model, handed back as given" }
+
+[Beam]
+identifier = { kind = "identity", sync = "read live", why = "music21's id; the crate keeps none" }
+independent_angle = { kind = "identity", sync = "read live", why = "the page, which the crate does not model" }
+style = { kind = "identity", sync = "read live", why = "the crate's beam has no style; music21's writer reads the object" }
+
+[Beams]
+beams = { kind = "identity", sync = "settled_value", why = "settle folds the list into inner" }
+
+[BrailleText]
+lines = { kind = "identity", sync = "synced" }
+
+[Chord]
+notes = { kind = "identity", sync = "synced_inner" }
+loose_pitches = { kind = "identity", sync = "Pitch::write_back", why = "a loose pitch writes into the chord through loose_in" }
+duration = { kind = "identity", sync = "synced_inner" }
+volume = { kind = "identity", sync = "synced_inner" }
+stored_instrument = { kind = "value", note = "read into inner by the setter only; an instrument edited in place is not seen by the crate's readers (MIDI percussion, instrument streams)" }
+expressions = { kind = "identity", sync = "read live", why = "the crate's chord holds no expressions; readers walk the list" }
+articulations = { kind = "identity", sync = "read live", why = "the crate's chord holds no articulations; readers walk the list" }
+overrides = { kind = "identity", sync = "synced_inner" }
+beams = { kind = "identity", sync = "synced_inner" }
+style = { kind = "identity", sync = "synced_inner" }
+editorial = { kind = "identity", sync = "read live", why = "the crate does not model editorials" }
+
+[ChordStepModification]
+interval = { kind = "identity", sync = "read live", why = "modification_value reads it off the object each time" }
+
+[ChordSymbol]
+modifications = { kind = "identity", sync = "read live", why = "_updatePitches reads the list each time" }
+key = { kind = "identity", sync = "read live", why = "handed to romanNumeralFromChord as the object" }
+roman = { kind = "cache", note = "the numeral worked out on first asking, as music21 caches it" }
+placement = { kind = "identity", sync = "read live", why = "the page, which the crate does not model" }
+
+[ConcreteScale]
+tonic_object = { kind = "value", note = "handed back only while it equals inner's tonic: `sc.tonic.name = 'D'` leaves the scale on C, where music21 moves it to D" }
+abstract_scale = { kind = "identity", sync = "read live", why = "a network the crate has no counterpart for, asked directly" }
+
+[Contributor]
+birth = { kind = "value", note = "read into inner when set; a date edited in place is not" }
+death = { kind = "value", note = "read into inner when set; a date edited in place is not" }
+
+[DataSet]
+classes = { kind = "identity", sync = "read live", why = "extractor classes handed back as given; the crate's extractor is looked up from each when added" }
+
+[Duration]
+tuplets = { kind = "identity", sync = "written_value" }
+client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
+
+[FiguredBassLine]
+key = { kind = "value", note = "read into inner when set; a key edited in place is not (music21 also builds its scale from the key once)" }
+time = { kind = "value", note = "read into inner when set; a meter edited in place is not" }
+
+[FiguredBassScale]
+realizer_scale = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back, where music21 reads realizerScale live" }
+key_sig = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back" }
+
+[GenericInterval]
+complemented = { kind = "cache", note = "the complement, made on first asking" }
+
+[Interval]
+pitch_start = { kind = "identity", sync = "read live", why = "music21 works the interval out once too; reverse reads the pitches" }
+pitch_end = { kind = "identity", sync = "read live", why = "as pitch_start" }
+
+[Key]
+alternate_interpretations = { kind = "identity", sync = "read live", why = "tonalCertainty reads the list" }
+abstract_scale = { kind = "identity", sync = "read live", why = "abstract_scale_type reads its class each time" }
+tonic_object = { kind = "identity", sync = "current" }
+
+[Lyric]
+components = { kind = "identity", sync = "synced" }
+style = { kind = "identity", sync = "synced" }
+
+[MeterSequence]
+parts = { kind = "identity", sync = "read live", why = "each part is a view whose reads and writes go to the meter" }
+level_list_cache = { kind = "cache", note = "music21's _levelListCache" }
+
+[MetronomeMark]
+referent = { kind = "identity", sync = "current" }
+tempo_text = { kind = "value", note = "built from inner's text on first asking; once installed, `mm._tempoText.text = 'Lento'` leaves `mm.text` as it was, where music21 reads the text off it" }
+
+[Note]
+pitch = { kind = "identity", sync = "synced" }
+volume = { kind = "identity", sync = "synced" }
+duration = { kind = "identity", sync = "synced" }
+chord = { kind = "identity", sync = "read live", why = "the chord the note belongs to; not part of the value" }
+expressions = { kind = "identity", sync = "read live", why = "the crate's note holds no expressions; readers walk the list" }
+articulations = { kind = "identity", sync = "read live", why = "the crate's note holds no articulations; readers walk the list" }
+tie = { kind = "identity", sync = "synced" }
+lyrics = { kind = "identity", sync = "synced" }
+stored_instrument = { kind = "value", note = "read into inner by the setter only; an instrument edited in place is not seen by the crate's readers (MIDI percussion, instrument streams)" }
+unread_pitch = { kind = "identity", sync = "read live", why = "a non-pitch music21 stores and only .pitch hands back" }
+style = { kind = "identity", sync = "synced" }
+beams = { kind = "identity", sync = "synced" }
+editorial = { kind = "identity", sync = "read live", why = "the crate does not model editorials" }
+
+[NoteGroupingTranscriber]
+brailleElementGrouping = { kind = "identity", sync = "read live", why = "read into a crate grouping each time a transcription starts" }
+written = { kind = "cache", note = "the elements written so far, beside the crate's transcriber" }
+
+[Ornament]
+accidental = { kind = "identity", sync = "synced" }
+upper_accidental = { kind = "identity", sync = "synced" }
+lower_accidental = { kind = "identity", sync = "synced" }
+size = { kind = "value", note = "an appoggiatura's interval, read into inner when set; one edited in place is not" }
+ornamental = { kind = "cache", note = "the pitches resolveOrnamentalPitches last worked out" }
+
+[Pitch]
+owner = { kind = "identity", sync = "read live", why = "the note this pitch belongs to, which write_back writes into" }
+loose_in = { kind = "identity", sync = "read live", why = "the chord this pitch belongs to, which write_back writes into" }
+accidental = { kind = "identity", sync = "Accidental::write_back" }
+
+[Realization]
+key = { kind = "identity", sync = "read live", why = "only handed back; the realization is already worked out" }
+time = { kind = "identity", sync = "read live", why = "only handed back; the realization is already worked out" }
+
+[Rest]
+duration = { kind = "identity", sync = "synced" }
+lyrics = { kind = "identity", sync = "synced" }
+tie = { kind = "identity", sync = "synced" }
+expressions = { kind = "identity", sync = "read live", why = "the crate's rest holds no expressions; readers walk the list" }
+articulations = { kind = "identity", sync = "read live", why = "the crate's rest holds no articulations; readers walk the list" }
+editorial = { kind = "identity", sync = "read live", why = "the crate does not model editorials" }
+style = { kind = "identity", sync = "read live", why = "the MusicXML writer reads hideObjectOnPrint off it; the crate's rest has no colour, so `r.style.color` is not written (music21 writes it)" }
+
+[RomanNumeral]
+key_object = { kind = "identity", sync = "read live", why = "handed back as given; the chord is worked out when the key is set, as music21 caches its pitches" }
+pivot = { kind = "identity", sync = "read live", why = "music21's pivotChord, which the crate does not model" }
+
+[Rules]
+part_movement_limits = { kind = "identity", sync = "synced" }
+part_pitch_limits = { kind = "identity", sync = "synced" }
+parts_to_check = { kind = "identity", sync = "synced" }
+
+[ScoreLayout]
+pageLayout = { kind = "identity", sync = "read live", why = "the stream writer reads the objects off the layout" }
+systemLayout = { kind = "identity", sync = "read live", why = "the stream writer reads the objects off the layout" }
+staffLayoutList = { kind = "identity", sync = "read live", why = "the stream writer reads the list off the layout" }
+
+[Spanner]
+idLocal = { kind = "identity", sync = "read live", why = "music21's idLocal; the crate keeps none" }
+spanned = { kind = "identity", sync = "read live", why = "the crate keeps no positions; the objects are the spanner's notes" }
+storage = { kind = "cache", note = "music21's SpannerStorage, rebuilt from spanned whenever it changes" }
+
+[StaffLayout]
+given_size = { kind = "identity", sync = "read live", why = "a number, which cannot be edited in place" }
+
+[TempoText]
+text_expression = { kind = "identity", sync = "read live", why = "the text is read off the expression each time" }
+
+[Tie]
+identifier = { kind = "identity", sync = "read live", why = "music21's id; the crate keeps none" }
+
+[TimespanTree]
+source = { kind = "identity", sync = "read live", why = "the stream read, handed back and asked for its parts" }
+spans = { kind = "cache", note = "the timespans, in the crate tree's order" }
+
+[TwelveToneMatrix]
+source = { kind = "identity", sync = "read live", why = "the row the matrix was made from, which only its repr reads" }
+
+[VoiceLeadingQuartet]
+notes = { kind = "value", note = "read into inner when set; a note edited in place is not, as music21 works its intervals out when the notes are set" }
+key_object = { kind = "value", note = "read into inner when set; a key edited in place is not, where music21 reads its key live" }
+
+[Volume]
+client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
+
+[WindowedAnalysis]
+processor = { kind = "identity", sync = "read live", why = "called for each window" }
+
+# --- Classes with no crate value -------------------------------------------
+
+[ActivityMatch]
+kind = "facade-only"
+reason = "an analysis over a stream it holds"
+
+[Ambitus]
+kind = "facade-only"
+reason = "an analysis over a stream it holds"
+
+[BrailleElementGrouping]
+kind = "facade-only"
+reason = "music21's attributes, read into a crate grouping by whoever transcribes it"
+
+[CTRule]
+kind = "facade-only"
+reason = "a rule's text and what it parsed into"
+
+[CTSong]
+kind = "facade-only"
+reason = "a song's text and what it parsed into"
+
+[ContiguousSegmentOfNotes]
+kind = "facade-only"
+reason = "a search result over a stream"
+
+[ContiguousSegmentSearcher]
+kind = "facade-only"
+reason = "a search over a stream"
+
+[Editorial]
+kind = "facade-only"
+reason = "a dictionary of what an analysis wrote"
+
+[ElementTimespan]
+kind = "facade-only"
+reason = "an element and its parentage"
+
+[EnharmonicFixer]
+kind = "facade-only"
+reason = "a corrector over two streams"
+
+[EnharmonicScoreRules]
+kind = "facade-only"
+reason = "penalty weights"
+
+[EnharmonicSimplifier]
+kind = "facade-only"
+reason = "pitches and the spellings tried"
+
+[Hasher]
+kind = "facade-only"
+reason = "settings and the hashes it made"
+
+[Horizontality]
+kind = "facade-only"
+reason = "timespans"
+
+[IndexedLyric]
+kind = "facade-only"
+reason = "a search result; its measure number is a crate integer, not a value"
+
+[KeyAnalyzer]
+kind = "facade-only"
+reason = "an analysis over a stream"
+
+[KeyWeightKeyAnalysis]
+kind = "facade-only"
+reason = "an analysis over a stream; its profile is a setting, not a value"
+
+[LyricSearcher]
+kind = "facade-only"
+reason = "a search over a stream"
+
+[MeasureHash]
+kind = "facade-only"
+reason = "a hash over a measure"
+
+[MeasureSlice]
+kind = "facade-only"
+reason = "a corrector's slice of a score"
+
+[MelodicIntervalDiversity]
+kind = "facade-only"
+reason = "an analysis over a stream"
+
+[MetricModulation]
+kind = "facade-only"
+reason = "two marks and how the change is drawn"
+
+[PercussionChord]
+kind = "facade-only"
+reason = "its unpitched notes"
+
+[Placed]
+kind = "facade-only"
+reason = "an answer about where an element stands; its beat duration is a computed answer"
+
+[ScalaData]
+kind = "facade-only"
+reason = "a file's lines, which it writes from the objects"
+
+[ScoreReduction]
+kind = "facade-only"
+reason = "a reduction over a score"
+
+[SegmentMatcher]
+kind = "facade-only"
+reason = "a search over a stream; its matching is a setting, not a value"
+
+[SinglePart]
+kind = "facade-only"
+reason = "a corrector's part of a score"
+
+[SpannerBundle]
+kind = "facade-only"
+reason = "spanners"
+
+[Stream]
+kind = "facade-only"
+reason = "Python elements; the crate stream is built from them when asked, and its kind is a tag"
+
+[StreamAligner]
+kind = "facade-only"
+reason = "an alignment over two streams"
+
+[StreamSearcher]
+kind = "facade-only"
+reason = "a search over a stream"
+
+[TabChord]
+kind = "facade-only"
+reason = "the text and numbers of a TSV row"
+
+[TabChordV2]
+kind = "facade-only"
+reason = "the text and numbers of a TSV row"
+
+[TextBox]
+kind = "facade-only"
+reason = "a style and a place"
+
+[TranspositionChecker]
+kind = "facade-only"
+reason = "pitches and the chords made of them"
+
+[TreeVerticality]
+kind = "facade-only"
+reason = "a tree and the offset asked about"
+
+[Verticality]
+kind = "facade-only"
+reason = "a dictionary of what sounds at one offset"
+
+[VerticalitySequence]
+kind = "facade-only"
+reason = "verticalities"
+
+[Walked]
+kind = "facade-only"
+reason = "elements and their offsets; its kind is a tag"

@@ -1426,6 +1426,89 @@ def test_every_class_holding_python_objects_is_traversed_or_says_why():
     assert stale == [], f"these traverse now; drop them here: {stale}"
 
 
+def _struct_fields(src: pathlib.Path):
+    """Each #[pyclass] struct's fields, name to type, comments and
+    attributes left out, keyed by class name."""
+    found = {}
+    for path in sorted(src.glob("*.rs")):
+        text = path.read_text()
+        for match in re.finditer(
+            r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
+            text,
+            re.S,
+        ):
+            name, body = match.group(1), match.group(2)
+            assert name not in found, f"two #[pyclass] structs named {name}"
+            lines = [
+                line
+                for line in body.splitlines()
+                if not line.strip().startswith(("//", "#["))
+            ]
+            fields, depth, current = {}, 0, ""
+            for char in "\n".join(lines) + ",":
+                depth += {"<": 1, "(": 1, ">": -1, ")": -1}.get(char, 0)
+                if char == "," and depth == 0:
+                    field = re.match(
+                        r"\s*(?:pub(?:\([^)]*\))?\s+)?(\w+)\s*:\s*(.+)", current, re.S
+                    )
+                    if field:
+                        fields[field.group(1)] = " ".join(field.group(2).split())
+                    current = ""
+                    continue
+                current += char
+            found[name] = fields
+    return found
+
+
+def test_every_python_object_a_facade_holds_is_accounted_for():
+    """An object handed out and edited in place is lost if the crate reads
+    the value and never the object. `data/py_fields.toml` says, for every
+    Python object a class carrying a crate value holds, how an edit to it
+    reaches the value, and why a class with no value has none to reach."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    table = tomllib.loads((root / "data" / "py_fields.toml").read_text())
+    structs = _struct_fields(root / "python" / "src")
+    holding = {
+        name: [field for field, kind in fields.items() if re.search(r"\bPy<", kind)]
+        for name, fields in structs.items()
+    }
+    holding = {name: held for name, held in holding.items() if held}
+
+    problems = []
+    for name in sorted(set(table) - set(holding)):
+        problems.append(f"{name}: no #[pyclass] holding Python objects")
+    for name, held in sorted(holding.items()):
+        rows = table.get(name)
+        if rows is None:
+            problems.append(f"{name}: not listed")
+            continue
+        if rows.get("kind") == "facade-only":
+            if not rows.get("reason"):
+                problems.append(f"{name}: facade-only with no reason")
+            for carried in ("inner", "stored"):
+                if carried in structs[name]:
+                    problems.append(f"{name}: has `{carried}`, so list its fields")
+            continue
+        for field in sorted(set(held) - set(rows)):
+            problems.append(f"{name}.{field}: not listed")
+        for field in sorted(set(rows) - set(held)):
+            problems.append(f"{name}.{field}: no such Py field")
+        for field, row in rows.items():
+            kind = row.get("kind") if isinstance(row, dict) else None
+            if kind == "identity":
+                sync = row.get("sync")
+                if not sync or (sync == "read live" and not row.get("why")):
+                    problems.append(f"{name}.{field}: identity needs a sync or a why")
+            elif kind in ("value", "cache"):
+                if not row.get("note"):
+                    problems.append(f"{name}.{field}: {kind} needs a note")
+            else:
+                problems.append(f"{name}.{field}: unknown kind {kind!r}")
+    assert problems == [], "\n".join(problems)
+
+
 def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     """Each object a facade builds is made as the class music21 has installed
     under its name, where there is one. Nothing is installed here, and asking
