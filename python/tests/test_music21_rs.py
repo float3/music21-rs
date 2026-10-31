@@ -778,6 +778,18 @@ def test_a_measures_barlines_are_found_where_they_are_listed():
     assert named(bar.getElementsByClass("Barline")) == ["Barline"]
 
 
+def test_a_measure_names_itself_by_its_number():
+    """A measure's repr names its number, suffix and all, as music21's
+    does; an id a caller gave still wins, and other streams keep theirs."""
+    bar = m.Measure(number=3)
+    assert repr(bar) == "<music21.stream.Measure 3>"
+    bar.numberSuffix = "a"
+    assert repr(bar) == "<music21.stream.Measure 3a>"
+    bar.id = "pickup"
+    assert repr(bar) == "<music21.stream.Measure pickup>"
+    assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
+
+
 def test_the_flags_music21_takes_more_than_truth_for():
     """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
     documented spelling, and `atSoundingPitch` takes what equals True or
