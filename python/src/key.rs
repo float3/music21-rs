@@ -434,6 +434,7 @@ impl KeySignature {
             let mut target = target.borrow_mut();
             target.as_super().signature = signature;
             target.stored = stored;
+            target.named_type = key.named_type.clone();
             return Ok(copy);
         }
         if let Ok(target) = copy.cast::<Self>() {
@@ -801,13 +802,17 @@ impl Key {
         )
     }
 
+    /// As in music21, where the mode is a plain attribute, the signature and
+    /// the type the key was made with stay: `Key('B')` set to minor is
+    /// b minor with five sharps.
     #[setter]
     fn set_mode(mut slf: PyRefMut<'_, Self>, value: &str) -> PyResult<()> {
         let tonic = slf.current(slf.py()).tonic().name();
         let rebuilt = RsKey::from_tonic_mode(&tonic, Some(value)).map_err(key_error)?;
-        let sharps = rebuilt.sharps();
+        if slf.named_type.is_none() {
+            slf.named_type = Some(slf.stored.mode().to_string());
+        }
         slf.stored = rebuilt;
-        slf.as_super().signature = RsKeySignature::new(sharps);
         Ok(())
     }
 

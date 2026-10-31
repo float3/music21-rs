@@ -247,6 +247,23 @@ def test_a_tonic_set_on_a_key_leaves_its_signature():
     assert re.findall(r"<fifths>(-?\d+)</fifths>", written) == ["0"]
 
 
+def test_a_mode_set_on_a_key_leaves_its_signature():
+    """music21's mode is a plain attribute: setting it renames the key and
+    leaves the sharps and the scale type it was made with."""
+    key = m.Key("B")
+    key.mode = "minor"
+    assert str(key) == "b minor"
+    assert key.sharps == 5
+    assert key.type == "major"
+    assert key.name == "B major"
+    assert key.tonicPitchNameWithCase == "b"
+    assert repr(key.relative) == "<music21.key.Key of B major>"
+    assert repr(key.parallel) == "<music21.key.Key of B major>"
+    assert key != m.Key("b")
+    assert key != m.Key("B")
+    assert copy.deepcopy(key).type == "major"
+
+
 def test_a_numeral_and_a_score_read_a_key_edited_in_place():
     key = m.Key("C")
     key.tonic.name = "B"
@@ -7467,3 +7484,4 @@ def test_a_chords_fixed_inversion_survives_a_copy():
 
     chord.setInversion(None, inPlace=True)
     assert chord.inversion() == 0 and copy.deepcopy(chord).inversion() == 0
+
