@@ -24,6 +24,21 @@ DECISIONS.md; these are the changes they called for.
 - **Flags are read for their truth.** Every flag the wheel takes accepts
   `1`, `0` and `None` as music21 does; a string is still a `TypeError`.
 
+- `Stream::beat_and_measure_from_offset` counts the first half of a split
+  measure in each time signature it holds, from where each stands, and the
+  second half in the one in force where the first half ends, as music21
+  does since cuthbertLab/music21#2133. A meter that changes at the split
+  (4/4 to 12/16 after two beats) now gives beat 4 one dotted eighth into
+  the second half, where it gave 3.75.
+
+- MusicXML export sorts a chord's notes lowest first and leaves its
+  fingerings where they stand, so they go to the notes from the lowest up,
+  the order MusicXML import stores them in (cuthbertLab/music21#2126). A
+  chord read from a file that lists its notes out of order keeps each
+  fingering on its note when written again.
+
+- The music21 submodule follows the fork's master at df3fbc6c.
+
 ## added
 
 - **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,

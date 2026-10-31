@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b14 at 841bfd0cf8a801a3fd4f43c3aed169f7b02debd2
+# music21 11.0.0b14 at df3fbc6c7a3df133005d24ad489b0cf12240cc20
 
 music21_version = "11.0.0b14"
-music21_commit = "841bfd0cf8a801a3fd4f43c3aed169f7b02debd2"
+music21_commit = "df3fbc6c7a3df133005d24ad489b0cf12240cc20"
 
 [[module]]
 module = "music21.alpha.analysis.aligner"
@@ -198,15 +198,15 @@ tests = 3
 
 [[module]]
 module = "music21.chord"
-docstrings = 108
-examples = 988
-tests = 31
+docstrings = 107
+examples = 986
+tests = 30
 
 [[module]]
 module = "music21.chord.tables"
 docstrings = 10
 examples = 65
-tests = 34
+tests = 33
 
 [[module]]
 module = "music21.clef"
@@ -236,7 +236,7 @@ tests = 12
 module = "music21.features.base"
 docstrings = 16
 examples = 82
-tests = 11
+tests = 10
 
 [[module]]
 module = "music21.features.jSymbolic"
@@ -320,7 +320,7 @@ tests = 28
 module = "music21.humdrum.harmParser"
 docstrings = 1
 examples = 11
-tests = 41
+tests = 42
 
 [[module]]
 module = "music21.instrument"
@@ -440,13 +440,13 @@ tests = 7
 module = "music21.scale"
 docstrings = 62
 examples = 344
-tests = 59
+tests = 58
 
 [[module]]
 module = "music21.scale.scala"
 docstrings = 7
 examples = 55
-tests = 64
+tests = 63
 
 [[module]]
 module = "music21.search.base"
@@ -482,7 +482,7 @@ tests = 6
 module = "music21.sieve"
 docstrings = 25
 examples = 107
-tests = 8
+tests = 9
 
 [[module]]
 module = "music21.spanner"
@@ -494,13 +494,13 @@ tests = 30
 module = "music21.stream.base"
 docstrings = 144
 examples = 2278
-tests = 271
+tests = 272
 
 [[module]]
 module = "music21.stream.makeNotation"
 docstrings = 11
 examples = 255
-tests = 283
+tests = 284
 
 [[module]]
 module = "music21.style"

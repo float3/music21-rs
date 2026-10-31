@@ -21,7 +21,7 @@ mod tree;
 
 pub use read::from_musicxml;
 
-use crate::articulations::{Articulation, ArticulationKind};
+use crate::articulations::Articulation;
 use crate::bar::{Barline, Ending, RepeatDirection};
 use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
@@ -2717,35 +2717,10 @@ fn notations(
 }
 
 /// A chord in the order music21's exporter writes it: sorted by staff
-/// position and pitch space, each fingering moved with the note it is the
-/// turn of. A chord where a note with no fingering would sort before one
-/// with a fingering is written as it stands.
+/// position and pitch space. Its fingerings stay as they are, since they
+/// go to the notes from the lowest up.
 fn written_order(chord: &Chord) -> Chord {
-    let order = chord.ascending_order();
-    if order
-        .iter()
-        .enumerate()
-        .all(|(place, &index)| place == index)
-    {
-        return chord.clone();
-    }
-    let slots: Vec<usize> = chord
-        .articulations()
-        .iter()
-        .enumerate()
-        .filter(|(_, articulation)| articulation.kind() == ArticulationKind::Fingering)
-        .map(|(slot, _)| slot)
-        .collect();
-    let fingered = slots.len().min(order.len());
-    if order[..fingered].iter().any(|&index| index >= fingered) {
-        return chord.clone();
-    }
-    let mut sorted = chord.sort_ascending();
-    let articulations = sorted.articulations_mut();
-    for (place, &index) in order[..fingered].iter().enumerate() {
-        articulations[slots[place]] = chord.articulations()[slots[index]].clone();
-    }
-    sorted
+    chord.sort_ascending()
 }
 
 /// The `<articulations>` and `<technical>` of a note, the `index`th of its
