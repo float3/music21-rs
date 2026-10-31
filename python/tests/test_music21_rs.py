@@ -7485,3 +7485,13 @@ def test_a_chords_fixed_inversion_survives_a_copy():
     chord.setInversion(None, inPlace=True)
     assert chord.inversion() == 0 and copy.deepcopy(chord).inversion() == 0
 
+
+def test_a_notes_instrument_and_editorial_survive_a_copy():
+    note = m.Note("C4")
+    note.editorial.comment = "a passing tone"
+    note.storedInstrument = m.Violin()
+    copied = copy.deepcopy(note)
+    assert copied.editorial.comment == "a passing tone"
+    assert copied.storedInstrument.instrumentName == "Violin"
+    assert copied.storedInstrument is not note.storedInstrument
+
