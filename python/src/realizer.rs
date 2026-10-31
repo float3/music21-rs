@@ -51,7 +51,7 @@ fn line_error(error: &music21_rs_crate::Error) -> PyErr {
 /// own read by its tonic and mode.
 fn key_of(object: &Bound<'_, PyAny>) -> PyResult<RsKey> {
     if let Ok(ours) = object.extract::<PyRef<'_, crate::key::Key>>() {
-        return Ok(ours.inner.clone());
+        return Ok(ours.current(object.py()));
     }
     let tonic = object
         .getattr("tonic")?

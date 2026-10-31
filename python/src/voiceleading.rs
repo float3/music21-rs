@@ -53,7 +53,7 @@ fn analytic_key(value: &Bound<'_, PyAny>) -> PyResult<RsKey> {
         });
     }
     if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
-        return Ok(key.inner.clone());
+        return Ok(key.current(value.py()));
     }
     let tonic: String = value.getattr("tonic")?.getattr("name")?.extract()?;
     let mode: Option<String> = value

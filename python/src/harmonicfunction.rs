@@ -72,9 +72,10 @@ fn member<'py>(py: Python<'py>, function: HarmonicFunction) -> PyResult<Bound<'p
 /// The mode whose table a key or scale is read with: a minor key's own,
 /// anything else major's.
 fn mode_of(key_or_scale: &Bound<'_, PyAny>) -> String {
-    key_or_scale
-        .extract::<PyRef<Key>>()
-        .map_or_else(|_| "major".to_string(), |key| key.inner.mode().to_string())
+    key_or_scale.extract::<PyRef<Key>>().map_or_else(
+        |_| "major".to_string(),
+        |key| key.current(key_or_scale.py()).mode().to_string(),
+    )
 }
 
 #[pyfunction]

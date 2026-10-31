@@ -5290,9 +5290,10 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         value.set_placement(placement_of(object));
         return Ok(Some(StreamElement::Dynamic(value)));
     }
-    if let Ok(key) = object.extract::<PyRef<'_, crate::key::Key>>() {
-        let mut value = key.inner.clone();
-        drop(key);
+    if let Ok(key) = object.cast::<crate::key::Key>() {
+        // Under the sharps the key holds, which music21 writes even after
+        // its tonic was edited by hand.
+        let mut value = crate::key::Key::written(key);
         value.set_color(style_color(object));
         return Ok(Some(StreamElement::Key(value)));
     }

@@ -1626,7 +1626,7 @@ fn chord_key_in_force(chord: &Bound<'_, Chord>) -> PyResult<Option<RsKey>> {
 /// ours — the chord doctests build one without the key facade in place.
 fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
     if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
-        return Some(key.inner.clone());
+        return Some(key.current(value.py()));
     }
     let tonic = value.getattr("tonic").ok()?;
     let name: String = tonic

@@ -183,6 +183,108 @@ def test_key_and_signature():
     assert [p.name for p in m.KeySignature(2).alteredPitches] == ["F#", "C#"]
 
 
+def test_a_key_follows_its_tonic_edited_in_place():
+    """music21's tonic is a plain attribute: an edit to it moves what the
+    key reads off the tonic, while what it reads off its sharps stays."""
+    key = m.Key("C")
+    key.tonic.name = "B"
+    assert str(key) == "B major"
+    assert repr(key) == "<music21.key.Key of B major>"
+    assert key.name == "B major"
+    assert [p.nameWithOctave for p in key.pitches] == [
+        "B4", "C#5", "D#5", "E5", "F#5", "G#5", "A#5", "B5",
+    ]
+    assert key.pitchFromDegree(3).nameWithOctave == "D#5"
+    assert key.tonicPitchNameWithCase == "B"
+    assert repr(key.getRelativeMinor()) == "<music21.scale.MinorScale G# minor>"
+    assert repr(key.parallel) == "<music21.key.Key of b minor>"
+
+    assert key.sharps == 0
+    assert repr(key.relative) == "<music21.key.Key of a minor>"
+    assert repr(key.asKey()) == "<music21.key.Key of C major>"
+    assert repr(key.getScale()) == "<music21.scale.MajorScale C major>"
+    assert repr(key.transpose(2)) == "<music21.key.Key of D major>"
+    assert key.alteredPitches == []
+    assert key != m.Key("B")
+
+
+def test_a_key_follows_an_accidental_put_on_its_tonic():
+    key = m.Key("C")
+    key.tonic.accidental = m.Accidental("sharp")
+    assert str(key) == "C# major"
+    assert key.sharps == 0
+
+
+def test_a_key_keeps_the_pitch_it_was_given():
+    tonic = m.Pitch("E")
+    key = m.Key(tonic)
+    assert key.tonic is tonic
+    tonic.name = "F"
+    assert str(key) == "F major"
+    assert key.sharps == 4
+
+    note = m.Note("E")
+    assert m.Key(note).tonic is note.pitch
+
+
+def test_a_tonic_set_on_a_key_leaves_its_signature():
+    key = m.Key("C")
+    old = key.tonic
+    key.tonic = m.Pitch("D")
+    assert str(key) == "D major"
+    assert key.sharps == 0
+    assert repr(key.relative) == "<music21.key.Key of a minor>"
+    assert repr(key.parallel) == "<music21.key.Key of d minor>"
+
+    # The pitch handed over before is no longer the key's.
+    old.name = "E"
+    assert str(key) == "D major"
+
+    line = m.Stream()
+    line.insert(0.0, key)
+    line.insert(0.0, m.Note("C4"))
+    written = m.to_musicxml(line, make_notation=True)
+    assert re.findall(r"<fifths>(-?\d+)</fifths>", written) == ["0"]
+
+
+def test_a_numeral_and_a_score_read_a_key_edited_in_place():
+    key = m.Key("C")
+    key.tonic.name = "B"
+    numeral = m.RomanNumeral("V", key)
+    assert [p.nameWithOctave for p in numeral.pitches] == ["F#5", "A#5", "C#6"]
+
+    line = m.Stream()
+    line.insert(0.0, key)
+    line.insert(0.0, m.Note("C4"))
+    written = m.to_musicxml(line, make_notation=True)
+    assert re.findall(r"<fifths>(-?\d+)</fifths>", written) == ["0"]
+
+
+def test_a_key_edited_in_place_answers_as_music21s_once_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import re
+import music21_rs as m
+m.install_into_music21()
+from music21 import key, roman, stream, note
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+k = key.Key('C')
+k.tonic.name = 'B'
+print(k, k.sharps, k.relative, k.parallel)
+print([p.nameWithOctave for p in roman.RomanNumeral('V', k).pitches])
+written = GeneralObjectExporter(stream.Stream([k, note.Note()])).parse().decode()
+print(re.findall(r'<fifths>(-?[0-9]+)</fifths>', written))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "B major 0 a minor b minor",
+        "['F#5', 'A#5', 'C#6']",
+        "['0']",
+    ]
+
+
 def test_tone_row_operations():
     row = m.pcToToneRow([0, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     assert row.pitchClasses() == [0, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11]

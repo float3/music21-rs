@@ -129,6 +129,15 @@ fn tonic_name(value: &Bound<'_, PyAny>) -> PyResult<String> {
     Ok(pitch_from_any(value)?.name())
 }
 
+/// The `Pitch` object a key given this as its tonic keeps: a pitch itself,
+/// or a note's own pitch, as music21's `Key(n)` keeps `n.pitch`.
+fn given_pitch(value: &Bound<'_, PyAny>) -> Option<Py<Pitch>> {
+    if let Ok(pitch) = value.extract::<Py<Pitch>>() {
+        return Some(pitch);
+    }
+    value.getattr("pitch").ok()?.extract::<Py<Pitch>>().ok()
+}
+
 #[pymethods]
 impl KeySignature {
     /// What music21 says this is: its own class and every class it is a
@@ -347,7 +356,7 @@ impl KeySignature {
 
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         if let Ok(key) = slf.extract::<PyRef<Key>>() {
-            return Ok(format!("<music21.key.Key of {}>", key.__str__()));
+            return Ok(format!("<music21.key.Key of {}>", key.__str__(slf.py())));
         }
         Ok(format!(
             "<music21.key.KeySignature of {}>",
@@ -357,7 +366,7 @@ impl KeySignature {
 
     fn __str__(slf: &Bound<'_, Self>) -> PyResult<String> {
         if let Ok(key) = slf.extract::<PyRef<Key>>() {
-            return Ok(key.__str__());
+            return Ok(key.__str__(slf.py()));
         }
         Self::__repr__(slf)
     }
@@ -366,7 +375,7 @@ impl KeySignature {
         if let Ok(key) = slf.extract::<PyRef<Key>>() {
             return Ok(other
                 .extract::<PyRef<Key>>()
-                .is_ok_and(|other| key.same_key(&other)));
+                .is_ok_and(|other| Key::same_key(&key, &other)));
         }
         if other.extract::<PyRef<Key>>().is_ok() {
             return Ok(false);
@@ -414,10 +423,11 @@ impl KeySignature {
         if let Ok(key) = slf.extract::<PyRef<Key>>()
             && let Ok(target) = copy.cast::<Key>()
         {
-            let inner = key.inner.clone();
+            let stored = key.current(slf.py());
+            let signature = key.as_super().signature.clone();
             let mut target = target.borrow_mut();
-            target.as_super().signature = inner.key_signature();
-            target.inner = inner;
+            target.as_super().signature = signature;
+            target.stored = stored;
             return Ok(copy);
         }
         if let Ok(target) = copy.cast::<Self>() {
@@ -430,7 +440,9 @@ impl KeySignature {
 /// music21's `key.Key`: a key signature with a tonic and a mode.
 #[pyclass(name = "Key", module = "music21.key", extends = KeySignature, subclass)]
 pub struct Key {
-    pub(crate) inner: RsKey,
+    /// The key as last built. Read it through [`Key::current`]: the tonic
+    /// object handed out may have been edited since.
+    stored: RsKey,
     /// How well this key fitted the music it was analysed from, and the
     /// keys that fitted less well, best first.
     ///
@@ -455,7 +467,8 @@ pub struct Key {
     abstract_scale: Option<Py<PyAny>>,
     /// The `Pitch` object the key stands on, once something has asked for it
     /// or handed one over. music21 keeps what it was given and hands the
-    /// same object back, so `k.tonic = b` leaves `k.tonic is b` true.
+    /// same object back, so `k.tonic = b` leaves `k.tonic is b` true, and an
+    /// edit to that object moves the key's tonic.
     tonic_object: Option<Py<Pitch>>,
     /// A type name a caller wrote over the mode's.
     ///
@@ -468,7 +481,7 @@ impl Key {
     pub(crate) fn object(py: Python<'_>, inner: RsKey) -> PyResult<Py<PyAny>> {
         let signature = KeySignature::of(inner.sharps());
         let key = Key {
-            inner,
+            stored: inner,
             correlation_coefficient: 0.0,
             alternate_interpretations: None,
             abstract_scale: None,
@@ -490,6 +503,35 @@ impl Key {
         }
         let init = PyClassInitializer::from(signature).add_subclass(key);
         Ok(Py::new(py, init)?.into_any())
+    }
+
+    /// The key as it stands now: on the tonic object as that reads now, in
+    /// the stored mode.
+    ///
+    /// music21's tonic is a plain attribute, so `k.tonic.name = 'B'` moves
+    /// every answer read off the tonic. The signature is not touched; it
+    /// lives in the `KeySignature` this extends, and music21 leaves it too.
+    pub(crate) fn current(&self, py: Python<'_>) -> RsKey {
+        let Some(object) = &self.tonic_object else {
+            return self.stored.clone();
+        };
+        let tonic = object.bind(py).borrow().inner.clone();
+        if tonic == *self.stored.tonic_pitch() {
+            return self.stored.clone();
+        }
+        let Ok(mut key) = RsKey::from_tonic_mode(&tonic.name(), self.stored.mode()) else {
+            return self.stored.clone();
+        };
+        key.set_color(self.stored.color().map(str::to_string));
+        key
+    }
+
+    /// The key as it stands now, under the sharps its signature holds:
+    /// what music21 reads a key's `sharps` off, which a tonic edited by
+    /// hand leaves where it was.
+    pub(crate) fn written(slf: &Bound<'_, Self>) -> RsKey {
+        let sharps = slf.as_super().borrow().signature.sharps();
+        slf.borrow().current(slf.py()).with_sharps(sharps)
     }
 
     /// The list of alternatives, made on first asking and then kept, so
@@ -523,7 +565,7 @@ impl Key {
     /// The scale of the key's mode, as the object music21 would hand back
     /// for it: a key is that scale, and answers what it answers.
     fn scale_object<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        Ok(ConcreteScale::object(py, self.inner.scale())?.into_bound(py))
+        Ok(ConcreteScale::object(py, self.current(py).scale())?.into_bound(py))
     }
 
     /// Asks the key's scale a question a key inherits from it.
@@ -550,9 +592,17 @@ impl Key {
         slf.get_type().call1((scale.getattr("tonic")?,))
     }
 
-    fn same_key(&self, other: &Key) -> bool {
-        self.inner.tonic().name() == other.inner.tonic().name()
-            && self.inner.mode() == other.inner.mode()
+    /// music21's key equality: the signatures' count and flag, then the
+    /// tonic's name and the mode.
+    fn same_key(slf: &PyRef<'_, Self>, other: &PyRef<'_, Self>) -> bool {
+        let (mine, theirs) = (&slf.as_super().signature, &other.as_super().signature);
+        if mine.sharps() != theirs.sharps()
+            || mine.is_non_traditional() != theirs.is_non_traditional()
+        {
+            return false;
+        }
+        let (mine, theirs) = (slf.current(slf.py()), other.current(slf.py()));
+        mine.tonic().name() == theirs.tonic().name() && mine.mode() == theirs.mode()
     }
 }
 
@@ -578,9 +628,10 @@ impl Key {
     }
 
     /// A key is written out as text and read back, and its signature is made
-    /// again from what it says.
+    /// again from what it says: its sharps, which a tonic edited by hand
+    /// leaves behind.
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        crate::pickled(slf, &Key::written(slf))
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -588,8 +639,10 @@ impl Key {
             return Ok(());
         };
         let sharps = inner.sharps();
+        let stored = RsKey::from_tonic_mode(&inner.tonic().name(), inner.mode()).unwrap_or(inner);
         let mut me = slf.borrow_mut();
-        me.inner = inner;
+        me.stored = stored;
+        me.tonic_object = None;
         me.as_super().signature = RsKeySignature::new(sharps);
         Ok(())
     }
@@ -659,58 +712,61 @@ impl Key {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let _ = kwargs;
+        let tonic_object = tonic.and_then(given_pitch);
         let tonic = match tonic {
             Some(value) if !value.is_none() => tonic_name(value)?,
             _ => "C".to_string(),
         };
         let mode = mode_of(mode)?;
-        let inner = RsKey::from_tonic_mode(&tonic, mode.as_deref()).map_err(key_error)?;
+        let stored = RsKey::from_tonic_mode(&tonic, mode.as_deref()).map_err(key_error)?;
         Ok(
-            PyClassInitializer::from(KeySignature::of(inner.sharps())).add_subclass(Key {
-                inner,
+            PyClassInitializer::from(KeySignature::of(stored.sharps())).add_subclass(Key {
+                stored,
                 correlation_coefficient: 0.0,
                 alternate_interpretations: None,
                 abstract_scale: None,
-                tonic_object: None,
+                tonic_object,
                 named_type: None,
             }),
         )
     }
 
-    /// The key's tonic `Pitch`. Assigning a `Pitch` keeps that very object,
-    /// and changes the key's signature to match.
+    /// The key's tonic `Pitch`: the very object it was given or last handed
+    /// out, so an edit to it moves the key's tonic.
     #[getter]
     fn tonic(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<Py<Pitch>> {
-        let wanted = slf.borrow().inner.tonic();
-        if let Some(object) = &slf.borrow().tonic_object
-            && object.borrow(py).inner == wanted
-        {
+        if let Some(object) = &slf.borrow().tonic_object {
             return Ok(object.clone_ref(py));
         }
+        let wanted = slf.borrow().stored.tonic();
         let object =
             crate::installed_new(py, "music21.pitch", "Pitch", Pitch::wrap(wanted, false))?;
         slf.borrow_mut().tonic_object = Some(object.clone_ref(py));
         Ok(object)
     }
 
+    /// Assigning a `Pitch` keeps that very object. As in music21, the
+    /// signature stays as it was: `Key('C')` given a D tonic is D major
+    /// with no sharps.
     #[setter]
     fn set_tonic(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
         let name = tonic_name(value)?;
-        let mode = slf.borrow().inner.mode().to_string();
-        let inner = RsKey::from_tonic_mode(&name, Some(mode.as_str())).map_err(key_error)?;
-        let sharps = inner.sharps();
-        {
-            let mut me = slf.borrow_mut();
-            me.inner = inner;
-            me.tonic_object = value.extract::<Py<Pitch>>().ok();
-        }
-        slf.as_super().borrow_mut().signature = RsKeySignature::new(sharps);
+        let mode = slf.borrow().stored.mode().to_string();
+        let tonic = RsKey::from_tonic_mode(&name, Some(mode.as_str()))
+            .map_err(key_error)?
+            .tonic();
+        let object = match given_pitch(value) {
+            Some(object) => object,
+            None => crate::installed_new(py, "music21.pitch", "Pitch", Pitch::wrap(tonic, false))?,
+        };
+        slf.borrow_mut().tonic_object = Some(object);
         Ok(())
     }
 
     #[getter]
     fn mode(&self) -> String {
-        self.inner.mode().to_string()
+        self.stored.mode().to_string()
     }
 
     /// music21's `type`, which a key inherits from `ConcreteScale` and
@@ -719,7 +775,7 @@ impl Key {
     fn get_type(&self) -> String {
         match &self.named_type {
             Some(named) => named.clone(),
-            None => self.inner.mode().to_string(),
+            None => self.stored.mode().to_string(),
         }
     }
 
@@ -731,28 +787,28 @@ impl Key {
     /// music21's `name`, which for a scale is its tonic and its type:
     /// `E- major`.
     #[getter]
-    fn name(&self) -> String {
+    fn name(&self, py: Python<'_>) -> String {
         format!(
             "{} {}",
-            music21_name(&self.inner.tonic().name()),
+            music21_name(&self.current(py).tonic().name()),
             self.get_type()
         )
     }
 
     #[setter]
     fn set_mode(mut slf: PyRefMut<'_, Self>, value: &str) -> PyResult<()> {
-        let tonic = slf.inner.tonic().name();
+        let tonic = slf.current(slf.py()).tonic().name();
         let rebuilt = RsKey::from_tonic_mode(&tonic, Some(value)).map_err(key_error)?;
         let sharps = rebuilt.sharps();
-        slf.inner = rebuilt;
+        slf.stored = rebuilt;
         slf.as_super().signature = RsKeySignature::new(sharps);
         Ok(())
     }
 
     #[getter]
-    fn pitches(&self) -> PyResult<Vec<Pitch>> {
+    fn pitches(&self, py: Python<'_>) -> PyResult<Vec<Pitch>> {
         Ok(self
-            .inner
+            .current(py)
             .pitches()
             .map_err(key_error)?
             .into_iter()
@@ -761,18 +817,21 @@ impl Key {
     }
 
     #[getter]
-    fn tonicPitchNameWithCase(&self) -> String {
-        music21_name(&self.inner.tonic_pitch_name_with_case())
+    fn tonicPitchNameWithCase(&self, py: Python<'_>) -> String {
+        music21_name(&self.current(py).tonic_pitch_name_with_case())
     }
 
+    /// The relative key, read off the sharps as music21 reads it: a tonic
+    /// edited by hand leaves it where it was.
     #[getter]
-    fn relative(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Key::object(py, self.inner.relative().map_err(key_error)?)
+    fn relative(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let relative = Key::written(slf).relative().map_err(key_error)?;
+        Key::object(slf.py(), relative)
     }
 
     #[getter]
     fn parallel(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        Key::object(py, self.inner.parallel().map_err(key_error)?)
+        Key::object(py, self.current(py).parallel().map_err(key_error)?)
     }
 
     // music21's Key is a DiatonicScale, and every scale question below is
@@ -1100,11 +1159,12 @@ impl Key {
     #[pyo3(signature = (pitchTarget, comparisonAttribute = "name", **_keywords))]
     fn getScaleDegreeFromPitch(
         &self,
+        py: Python<'_>,
         pitchTarget: &Bound<'_, PyAny>,
         comparisonAttribute: &str,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
-        let scale = self.inner.scale();
+        let scale = self.current(py).scale();
         let pitch = pitch_from_any(pitchTarget)?;
         scale
             .degree_of_by(&pitch, crate::scale::comparison_of(comparisonAttribute))
@@ -1120,7 +1180,7 @@ impl Key {
         pitchTarget: &Bound<'_, PyAny>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Py<PyAny>> {
-        let scale = self.inner.scale();
+        let scale = self.current(py).scale();
         let (degree, accidental) = scale
             .degree_and_accidental_of(&pitch_from_any(pitchTarget)?)
             .map_err(key_error)?;
@@ -1141,15 +1201,17 @@ impl Key {
     #[pyo3(signature = (pitchTarget = None, *, variant = "music21", chromatic = true, **_keywords))]
     fn solfeg(
         &self,
+        py: Python<'_>,
         pitchTarget: Option<&Bound<'_, PyAny>>,
         variant: &str,
         #[pyo3(from_py_with = crate::truthy)] chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
-        let scale = self.inner.scale();
+        let key = self.current(py);
+        let scale = key.scale();
         let pitch = match pitchTarget.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
-            None => self.inner.tonic(),
+            None => key.tonic(),
         };
         let variant = match variant {
             "humdrum" => RsSolfegVariant::Humdrum,
@@ -1193,15 +1255,12 @@ impl Key {
         pitchRef: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         let pitch = pitch_from_any(pitchRef)?;
+        let key = self.current(py);
         let derived = match self.abstract_scale_type(py) {
-            Some(scale_type) => self
-                .inner
+            Some(scale_type) => key
                 .derive_by_degree_of(scale_type, degree, &pitch)
                 .map_err(key_error)?,
-            None => self
-                .inner
-                .derive_by_degree(degree, &pitch)
-                .map_err(key_error)?,
+            None => key.derive_by_degree(degree, &pitch).map_err(key_error)?,
         };
         Key::object(py, derived)
     }
@@ -1209,6 +1268,7 @@ impl Key {
     #[pyo3(signature = (degree, *args, **kwargs))]
     fn pitchFromDegree(
         &self,
+        py: Python<'_>,
         degree: usize,
         args: &Bound<'_, pyo3::types::PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
@@ -1220,35 +1280,42 @@ impl Key {
         // a thirteenth as degree seventeen and expects the third back.
         let wrapped = degree.checked_sub(1).map_or(degree, |below| below % 7 + 1);
         Ok(Pitch::wrap(
-            self.inner.pitch_from_degree(wrapped).map_err(key_error)?,
+            self.current(py)
+                .pitch_from_degree(wrapped)
+                .map_err(key_error)?,
             false,
         ))
     }
 
     #[pyo3(signature = (value, *, inPlace = false))]
     fn transpose(
-        mut slf: PyRefMut<'_, Self>,
+        slf: &Bound<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval = interval_from_any(value)?;
-        let transposed = slf.inner.transpose(&interval).map_err(key_error)?;
+        // music21 moves the signature and reads the key off it: the tonic,
+        // edited or not, plays no part.
+        let transposed = Key::written(slf).transpose(&interval).map_err(key_error)?;
         if inPlace {
             let sharps = transposed.sharps();
-            slf.inner = transposed;
-            slf.as_super().signature = RsKeySignature::new(sharps);
+            let mut me = slf.borrow_mut();
+            me.stored = transposed;
+            me.tonic_object = None;
+            me.as_super().signature = RsKeySignature::new(sharps);
             Ok(None)
         } else {
             Ok(Some(Key::object(py, transposed)?))
         }
     }
 
-    fn __str__(&self) -> String {
+    fn __str__(&self, py: Python<'_>) -> String {
+        let key = self.current(py);
         format!(
             "{} {}",
-            music21_name(&self.inner.tonic_pitch_name_with_case()),
-            self.inner.mode()
+            music21_name(&key.tonic_pitch_name_with_case()),
+            key.mode()
         )
     }
 }
