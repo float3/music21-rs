@@ -16,10 +16,10 @@
 //! of. `HUMDRUM_PARITY_FILES`, a `;`-separated list of such names or `@`
 //! and the path of a file of them, runs those instead of the ones below.
 
-use music21_rs::StreamElement;
 use music21_rs::humdrum::from_humdrum;
 use music21_rs::metadata::MetadataValue;
 use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21_rs::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -50,6 +50,66 @@ const FILES: &[(&str, &str)] = &[
     ),
 ];
 
+/// music21's `MiscTandem`s in each part, a line each: the part, the
+/// measure and voice holding it, its offset there, its priority and what
+/// it says.
+const TANDEMS: &str = r#"
+def tandems(score):
+    found = []
+
+    def walk(stream, where):
+        for held in stream.elements:
+            kind = type(held).__name__
+            if kind == 'MiscTandem':
+                at = float(stream.elementOffset(held))
+                found.append(f'{where} {at:.5f} {held.priority} {held.tandem}')
+            elif kind == 'Measure':
+                walk(held, f'{where} m{held.number}')
+            elif kind == 'Voice':
+                walk(held, f'{where} v')
+
+    for index, part in enumerate(score.parts):
+        walk(part, f'p{index}')
+    return found
+"#;
+
+/// The crate's `MiscTandem`s, written as [`TANDEMS`] writes music21's.
+fn tandems_of(score: &Stream) -> Vec<String> {
+    fn walk(stream: &Stream, place: &str, found: &mut Vec<String>) {
+        for event in stream.events() {
+            if let StreamElement::MiscTandem(tandem) = event.element() {
+                found.push(format!(
+                    "{place} {:.5} {} {}",
+                    event.offset(),
+                    tandem.priority(),
+                    tandem.tandem()
+                ));
+                continue;
+            }
+            let Some(inner) = event.element().as_stream() else {
+                continue;
+            };
+            match inner.kind() {
+                StreamKind::Measure => {
+                    walk(inner, &format!("{place} m{}", inner.number()), found);
+                }
+                StreamKind::Voice => walk(inner, &format!("{place} v"), found),
+                _ => {}
+            }
+        }
+    }
+    let mut found = Vec::new();
+    let parts = score
+        .events()
+        .iter()
+        .filter_map(|event| event.element().as_stream())
+        .filter(|inner| inner.kind() == StreamKind::Part);
+    for (index, part) in parts.enumerate() {
+        walk(part, &format!("p{index}"), &mut found);
+    }
+    found
+}
+
 #[test]
 fn the_crate_reads_humdrum_as_music21_does() {
     let root = repo_root();
@@ -71,6 +131,12 @@ fn the_crate_reads_humdrum_as_music21_does() {
             &std::ffi::CString::new(OUTLINE).expect("no nul in the helper"),
             c"outline_helpers.py",
             c"outline_helpers",
+        )?;
+        let tandem_helpers = PyModule::from_code(
+            py,
+            &std::ffi::CString::new(TANDEMS).expect("no nul in the helper"),
+            c"tandem_helpers.py",
+            c"tandem_helpers",
         )?;
         let converter = py.import("music21.converter")?;
         let exporter = py.import("music21.musicxml.m21ToXml")?;
@@ -154,6 +220,21 @@ fn the_crate_reads_humdrum_as_music21_does() {
             if our_comments != their_comments {
                 failures.push(format!(
                     "{line}: comments {our_comments:?}, music21 {their_comments:?}"
+                ));
+                continue;
+            }
+            // The instructions standing in each part, which neither the
+            // outline nor the MusicXML says either.
+            let mut their_tandems: Vec<String> = tandem_helpers
+                .getattr("tandems")?
+                .call1((&read,))?
+                .extract()?;
+            let mut our_tandems = tandems_of(&ours);
+            their_tandems.sort();
+            our_tandems.sort();
+            if our_tandems != their_tandems {
+                failures.push(format!(
+                    "{line}: tandems {our_tandems:?}, music21 {their_tandems:?}"
                 ));
                 continue;
             }

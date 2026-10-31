@@ -202,6 +202,9 @@ pub enum StreamElement {
     Variant(Box<crate::variant::Variant>),
     /// A `!!` line of a Humdrum file, kept where it was written.
     GlobalComment(crate::humdrum::GlobalComment),
+    /// A `*` instruction of a Humdrum spine with no object of its own,
+    /// kept where it was written.
+    MiscTandem(crate::humdrum::MiscTandem),
     /// Where a braille segment divides; nothing is written for it.
     BrailleSegmentDivision(crate::braille::SegmentDivision),
 }
@@ -241,6 +244,7 @@ impl StreamElement {
             | Self::TextBox(_)
             | Self::Variant(_)
             | Self::GlobalComment(_)
+            | Self::MiscTandem(_)
             | Self::BrailleSegmentDivision(_) => None,
         }
     }
@@ -272,6 +276,7 @@ impl StreamElement {
             | Self::TextBox(_)
             | Self::Variant(_)
             | Self::GlobalComment(_)
+            | Self::MiscTandem(_)
             | Self::BrailleSegmentDivision(_) => 0.0,
             _ => self
                 .duration()
@@ -310,6 +315,7 @@ impl StreamElement {
             | Self::TextBox(_)
             | Self::Variant(_)
             | Self::GlobalComment(_)
+            | Self::MiscTandem(_)
             | Self::BrailleSegmentDivision(_) => Vec::new(),
         }
     }
@@ -394,6 +400,7 @@ impl StreamElement {
             Self::TextBox(text) => Ok(Self::TextBox(text.clone())),
             Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
             Self::GlobalComment(said) => Ok(Self::GlobalComment(said.clone())),
+            Self::MiscTandem(tandem) => Ok(Self::MiscTandem(tandem.clone())),
             Self::BrailleSegmentDivision(division) => Ok(Self::BrailleSegmentDivision(*division)),
         }
     }
@@ -414,6 +421,12 @@ impl From<PedalObject> for StreamElement {
 impl From<crate::humdrum::GlobalComment> for StreamElement {
     fn from(value: crate::humdrum::GlobalComment) -> Self {
         Self::GlobalComment(value)
+    }
+}
+
+impl From<crate::humdrum::MiscTandem> for StreamElement {
+    fn from(value: crate::humdrum::MiscTandem) -> Self {
+        Self::MiscTandem(value)
     }
 }
 

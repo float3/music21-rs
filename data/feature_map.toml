@@ -1771,6 +1771,7 @@ makeElement = "the element itself, which an `ElementTimespan` holds a reference 
 python = "tree/spans.py"
 name = "Timespan"
 rust = ["src/tree.rs"]
+facade = "ElementTimespan"
 
 [class.excluded]
 new = "a copy with some of its values changed"
@@ -1810,6 +1811,7 @@ python = "tree/verticality.py"
 name = "Verticality"
 rust = ["src/tree.rs"]
 note = "Everything sounding at one offset, which is what a chord of a chordified score is made of."
+facade = "TreeVerticality"
 
 [class.excluded]
 beatStrength = "the accent weight of the offset in the measure holding it, which music21 asks the note and the note asks its site; `TimeSignature::accent_weight` answers it given the meter"

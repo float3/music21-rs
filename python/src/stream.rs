@@ -1338,6 +1338,20 @@ impl Stream {
         Ok(lines.join(joint))
     }
 
+    /// music21's `write`: this stream written by the wheel's own writers in
+    /// `fmt` -- MusicXML (the default, made notation first unless
+    /// `makeNotation=False`), MIDI, text, LilyPond, braille, RomanText or
+    /// Volpiano -- to `fp` or a temporary file, and the path written.
+    #[pyo3(signature = (fmt = None, fp = None, **keywords))]
+    fn write(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        fp: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        crate::scalewrite::write_stream(slf.as_any(), fmt, fp, keywords)
+    }
+
     /// music21's `show` for its text formats: `'text'` (or `'txt'`, `'t'`)
     /// prints the `recurseRepr` listing, taking `addEndTimes` and
     /// `useMixedNumerals`, and `'textline'` answers it on one line. A
@@ -4161,6 +4175,21 @@ impl Stream {
         Ok(copied)
     }
 
+    /// music21's `asTimespans`: every element as a timespan in a
+    /// `TimespanTree`, those of the streams held too; `flatten='semiFlat'`
+    /// keeps the streams as timespans of their own, and `classList` keeps
+    /// only elements of those classes.
+    ///
+    /// music21 caches the tree on the stream; this reads it afresh.
+    #[pyo3(signature = (*, flatten = None, classList = None))]
+    fn asTimespans(
+        slf: &Bound<'_, Self>,
+        flatten: Option<&Bound<'_, PyAny>>,
+        classList: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<crate::tree::TimespanTree> {
+        crate::tree::as_timespans(slf.as_any(), flatten, classList)
+    }
+
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let py = slf.py();
         let label = match &slf.borrow().id {
@@ -4841,8 +4870,8 @@ fn element_object_as<'py>(
             Some(made) => made,
             None => return Ok(None),
         },
-        // music21's own, on music21's streams: the package has no class for
-        // a Humdrum comment, and its own streams leave one out.
+        // music21's own on music21's streams, which install nothing over
+        // it; the package's own on the package's.
         StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
             let made = py
                 .import("music21.humdrum.spineParser")?
@@ -4851,6 +4880,32 @@ fn element_object_as<'py>(
             made.setattr("priority", said.priority())?;
             made
         }
+        StreamElement::MiscTandem(tandem) if whose == Whose::Music21 => {
+            let made = py
+                .import("music21.humdrum.spineParser")?
+                .getattr("MiscTandem")?
+                .call1((tandem.tandem(),))?;
+            made.setattr("priority", tandem.priority())?;
+            made
+        }
+        StreamElement::MiscTandem(tandem) => element_new(
+            py,
+            "music21.humdrum.spineParser",
+            "MiscTandem",
+            crate::spineparser::MiscTandem::wrap(tandem.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
+        StreamElement::GlobalComment(said) => element_new(
+            py,
+            "music21.humdrum.spineParser",
+            "GlobalComment",
+            crate::spineparser::GlobalComment::wrap(said.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -4861,7 +4916,6 @@ fn element_object_as<'py>(
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
-        | StreamElement::GlobalComment(_)
         | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
@@ -5281,6 +5335,22 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         );
         text.set_placement(placement_of(object));
         return Ok(Some(StreamElement::TextExpression(text)));
+    }
+    // The package's own or music21's: both say what they say and where
+    // they sort.
+    if is_of_class(object, &pyo3::types::PyString::new(py, "GlobalComment"))? {
+        let said = music21_rs_crate::humdrum::GlobalComment::new(
+            object.getattr("comment")?.str()?.to_string(),
+            object.getattr("priority")?.extract()?,
+        );
+        return Ok(Some(StreamElement::GlobalComment(said)));
+    }
+    if is_of_class(object, &pyo3::types::PyString::new(py, "MiscTandem"))? {
+        let tandem = music21_rs_crate::humdrum::MiscTandem::new(
+            object.getattr("tandem")?.str()?.to_string(),
+            object.getattr("priority")?.extract()?,
+        );
+        return Ok(Some(StreamElement::MiscTandem(tandem)));
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "RepeatExpression"))? {
         let class: String = object.get_type().getattr("__name__")?.extract()?;

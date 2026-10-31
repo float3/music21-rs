@@ -1,5 +1,34 @@
 # Unreleased
 
+`harte` 0.6.0 depends on this release.
+
+## breaking changes
+
+- **`StreamElement::MiscTandem`** is a new variant, so a `match` over
+  every variant needs an arm for it.
+
+## added
+
+- **The wheel's streams write themselves**: `Stream.write` writes MusicXML
+  (made notation first, as music21 does), MIDI, text, LilyPond, braille,
+  RomanText and Volpiano to a path, an open file or a temporary file.
+
+- **The wheel's streams have music21's timespan tree.** `asTimespans`
+  answers a `TimespanTree` over the crate's, with its verticalities, the
+  voice-leading quartets between them and the timespans' parentage, the
+  stream's own notes handed back; a tree is read, not edited in place.
+
+- **A humdrum `!!` comment read standalone stays in the score** as the
+  wheel's `GlobalComment`, as music21's reader keeps it; once installed it
+  is music21's own.
+
+- **A humdrum instruction with no object of its own stays in the score**
+  as a `MiscTandem` (`humdrum::MiscTandem` in the crate), its line its
+  priority: those before the first barline in the part, the rest in their
+  measure, as music21's reader keeps them. `humdrum_parity` compares them.
+
+# music21-rs 0.12.0
+
 Seven design questions were debated and their verdicts recorded in
 DECISIONS.md; these are the changes they called for.
 

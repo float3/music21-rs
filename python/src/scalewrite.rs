@@ -1,5 +1,6 @@
 //! music21's `write` and `show` for a scale and a key, which are not
-//! streams but which music21 writes as one.
+//! streams but which music21 writes as one, and `write` for the wheel's
+//! own streams.
 //!
 //! music21 hands either to its converters: MusicXML is a measure of the
 //! scale's degrees, MIDI a stream holding the object as it is, the text
@@ -36,6 +37,10 @@ enum Format {
     Text,
     TextLine,
     Scala,
+    LilyPond,
+    Braille,
+    RomanText,
+    Volpiano,
 }
 
 impl Format {
@@ -46,6 +51,9 @@ impl Format {
             Self::Midi => ".mid",
             Self::Text | Self::TextLine => ".txt",
             Self::Scala => ".scl",
+            Self::LilyPond => ".ly",
+            Self::RomanText => ".rntxt",
+            Self::Braille | Self::Volpiano => ".txt",
         }
     }
 }
@@ -79,6 +87,100 @@ fn format_of(fmt: Option<&str>) -> PyResult<Format> {
     Ok(format)
 }
 
+/// The format a stream's `fmt` names: those music21 writes a stream in that
+/// the wheel writes too. No format at all is MusicXML, music21's default.
+fn stream_format_of(fmt: Option<&str>) -> PyResult<Format> {
+    let given = fmt.unwrap_or("musicxml");
+    let name = given.trim_start_matches('.').to_lowercase();
+    let format = match name.as_str() {
+        "musicxml" | "xml" => Format::MusicXml,
+        "midi" | "mid" => Format::Midi,
+        "text" | "txt" | "t" => Format::Text,
+        "textline" => Format::TextLine,
+        "lily" | "lilypond" => Format::LilyPond,
+        "braille" => Format::Braille,
+        "romantext" | "rntxt" => Format::RomanText,
+        "volpiano" => Format::Volpiano,
+        // A compressed file, or something rendered: the crate renders
+        // nothing and zips nothing.
+        _ => {
+            return Err(crate::stream::StreamException::new_err(format!(
+                "cannot write {given:?} here: a stream is written as 'musicxml', \
+                 'midi', 'text', 'textline', 'lilypond', 'braille', 'romantext' \
+                 or 'volpiano'"
+            )));
+        }
+    };
+    Ok(format)
+}
+
+/// music21's `Stream.write`: the stream written in `fmt` by the wheel's own
+/// writers, to `fp` or a temporary file, and the path written. MusicXML is
+/// made notation first unless `makeNotation=False`, as music21 makes it.
+pub(crate) fn write_stream(
+    stream: &Bound<'_, PyAny>,
+    fmt: Option<&str>,
+    fp: Option<&Bound<'_, PyAny>>,
+    keywords: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Py<PyAny>> {
+    let py = stream.py();
+    let format = stream_format_of(fmt)?;
+    let package = py
+        .import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))?;
+    let said = |name: &str, default: bool| -> PyResult<bool> {
+        match keywords
+            .map(|given| given.get_item(name))
+            .transpose()?
+            .flatten()
+        {
+            Some(value) => value.is_truthy(),
+            None => Ok(default),
+        }
+    };
+    let text = |name: &str| -> PyResult<Written> {
+        Ok(Written::Text(
+            package.getattr(name)?.call1((stream,))?.extract()?,
+        ))
+    };
+
+    let written = match format {
+        Format::MusicXml => {
+            let options = PyDict::new(py);
+            options.set_item("make_notation", said("makeNotation", true)?)?;
+            Written::Text(
+                package
+                    .getattr("to_musicxml")?
+                    .call((stream,), Some(&options))?
+                    .extract()?,
+            )
+        }
+        Format::Midi => {
+            let options = PyDict::new(py);
+            options.set_item("add_start_delay", said("addStartDelay", false)?)?;
+            options.set_item("add_end_delay", said("addEndDelay", true)?)?;
+            Written::Bytes(
+                package
+                    .getattr("to_midi")?
+                    .call((stream,), Some(&options))?
+                    .extract()?,
+            )
+        }
+        Format::Text => Written::Text(stream.call_method0("recurseRepr")?.extract()?),
+        Format::TextLine => Written::Text(stream.call_method1("show", ("textline",))?.extract()?),
+        Format::LilyPond => text("to_lilypond")?,
+        Format::Braille => text("objectToBraille")?,
+        Format::RomanText => text("to_roman_text")?,
+        Format::Volpiano => text("to_volpiano")?,
+        Format::Scala => {
+            return Err(crate::stream::StreamException::new_err(
+                "a stream is not written as a Scala file",
+            ));
+        }
+    };
+    written_to(py, fp, &written, format)
+}
+
 /// music21's `write` for a scale or a key: `obj` written in `fmt` to `fp`,
 /// or to a temporary file where `fp` is not given, and the path written.
 ///
@@ -100,6 +202,12 @@ pub(crate) fn write_scale(
         Format::Midi => Written::Bytes(midi_of(obj, keywords)?),
         Format::Text | Format::TextLine => Written::Text(obj.repr()?.to_string()),
         Format::Scala => Written::Text(scala_of(obj, scale, kind, direction)?),
+        Format::LilyPond | Format::Braille | Format::RomanText | Format::Volpiano => {
+            return Err(ScaleException::new_err(
+                "a scale or a key is written as 'musicxml', 'midi', 'text', \
+                 'textline' or 'scala'",
+            ));
+        }
     };
     written_to(obj.py(), fp, &written, format)
 }
