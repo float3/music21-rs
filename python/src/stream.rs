@@ -868,6 +868,33 @@ impl Stream {
         Ok(())
     }
 
+    /// [`Stream::storeAtEnd`] of one object, or of each in a list.
+    fn store_at_end(slf: &Bound<'_, Self>, item: &Bound<'_, PyAny>) -> PyResult<()> {
+        if item.is_instance_of::<PyList>() {
+            for each in item.walk()? {
+                Self::store_at_end(slf, &each?)?;
+            }
+            return Ok(());
+        }
+
+        if length_of(item)? != 0.0 {
+            return Err(StreamException::new_err(
+                "cannot insert an object with a non-zero Duration into the highest time \
+                 elements list",
+            ));
+        }
+        let mut me = slf.borrow_mut();
+        if !is_barline(item)? || me.right_barline.is_some() {
+            return Err(StreamException::new_err(format!(
+                "storeAtEnd of {}: the package keeps one barline at the end, as the \
+                 stream's rightBarline, and nothing else; not ported to music21-rs",
+                item.repr()?
+            )));
+        }
+        me.right_barline = Some(item.clone().unbind());
+        Ok(())
+    }
+
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
     }
@@ -2748,6 +2775,37 @@ impl Stream {
     fn elementOffset<'py>(&self, element: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         // Through `opFrac`, as music21's: a triplet stands at a third.
         crate::duration::op_frac(element.py(), self.offset_of(element)?)
+    }
+
+    /// Keeps something at the end, after whatever is appended later:
+    /// music21's `storeAtEnd`, which takes one object or a list of them.
+    ///
+    /// music21 keeps any number of things of no length there; the package
+    /// keeps one, a barline, as the stream's `rightBarline`, and refuses
+    /// the rest. `ignoreSort` is taken and, as in music21, changes nothing.
+    #[pyo3(signature = (itemOrList, ignoreSort = false))]
+    fn storeAtEnd(
+        slf: &Bound<'_, Self>,
+        itemOrList: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] ignoreSort: bool,
+    ) -> PyResult<()> {
+        let _ = ignoreSort;
+        Self::store_at_end(slf, itemOrList)
+    }
+
+    /// Whether something is kept at the end: music21's `isAtEnd`, which is
+    /// the right barline here. Something this stream does not hold raises.
+    fn isAtEnd(&self, element: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let py = element.py();
+        if self
+            .right_barline
+            .as_ref()
+            .is_some_and(|bar| bar.bind(py).is(element))
+        {
+            return Ok(true);
+        }
+        self.offset_of(element)?;
+        Ok(false)
     }
 
     /// Moves an object this stream holds to another offset.

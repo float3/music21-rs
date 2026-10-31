@@ -875,6 +875,44 @@ except AttributeError as error:
     ]
 
 
+def test_store_at_end_keeps_a_barline_as_the_right_one():
+    """music21's `storeAtEnd` and `isAtEnd`: a barline stored at the end is
+    the stream's right barline, listed last and left out of `len`."""
+    line = m.Stream()
+    first = m.Note("C")
+    line.append(first)
+    closing = m.Barline("final")
+    line.storeAtEnd(closing)
+    assert line.rightBarline is closing
+    assert line.isAtEnd(closing)
+    assert not line.isAtEnd(first)
+    assert closing in line
+    assert len(line) == 1
+    assert float(line.elementOffset(closing)) == 1.0
+    assert list(line.getElementsByClass("Barline")) == [closing]
+    with pytest.raises(m.StreamException):
+        line.isAtEnd(m.Note("E"))
+
+    repeated = m.Measure()
+    repeat = m.Repeat(direction="start")
+    repeated.storeAtEnd([repeat])
+    assert repeated.rightBarline is repeat
+    assert repeat.direction == "start"
+
+
+def test_store_at_end_refuses_what_it_cannot_keep():
+    """A length music21 refuses too; a second barline, or anything that is
+    not one, music21 keeps and the package does not."""
+    line = m.Stream()
+    with pytest.raises(m.StreamException, match="non-zero Duration"):
+        line.storeAtEnd(m.Note("C"))
+    line.storeAtEnd(m.Barline())
+    for other in (m.Barline("double"), m.TrebleClef()):
+        with pytest.raises(m.StreamException, match="not ported to music21-rs$"):
+            line.storeAtEnd(other)
+    assert len(line.getElementsByClass("Barline")) == 1
+
+
 def test_the_flags_music21_takes_more_than_truth_for():
     """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
     documented spelling, and `atSoundingPitch` takes what equals True or
