@@ -918,7 +918,31 @@ impl Chord {
                 *held = object.borrow(py).synced(py);
             }
         }
+        // The chord's own objects, as a note's: an edit through
+        // `c.duration`, `c.volume`, `c.beams` or `c.style` is an edit to the
+        // chord.
+        if let Some(duration) = self.duration_value(py) {
+            chord.set_duration(duration);
+        }
+        if let Some(volume) = &self.volume {
+            fold_volume(&mut chord, volume.borrow(py).inner.clone());
+        }
+        if let Some(beams) = &self.beams {
+            chord.set_beams(beams.borrow_mut(py).settled_value(py));
+        }
+        if self.style.is_some() {
+            chord.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+        }
         chord
+    }
+
+    /// The duration this chord actually has: the object music21 hands out
+    /// when something has asked for one, and `inner`'s otherwise.
+    fn duration_value(&self, py: Python<'_>) -> Option<RsDuration> {
+        match &self.duration {
+            Some(object) => crate::duration::duration_value_of(py, object),
+            None => self.inner.duration().cloned(),
+        }
     }
 
     /// The chord with the notation its note objects carry written back onto
@@ -1501,6 +1525,26 @@ fn repoint_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
         }
     }
     Ok(())
+}
+
+/// Writes the chord's own volume into it, keeping whatever its notes carry.
+///
+/// The crate's `set_volume` drops the notes' volumes, as music21's setter
+/// does; but a volume read off the chord and then edited in place leaves
+/// music21's notes alone, and a writer reads theirs first where every note
+/// has one.
+fn fold_volume(chord: &mut RsChord, volume: RsVolume) {
+    let kept: Vec<Option<RsVolume>> = chord
+        .notes()
+        .iter()
+        .map(|note| note.has_volume_information().then(|| note.volume()))
+        .collect();
+    chord.set_volume(Some(volume));
+    for (note, kept) in chord.notes_mut().iter_mut().zip(kept) {
+        if kept.is_some() {
+            note.set_volume(kept);
+        }
+    }
 }
 
 /// A chord's fixed answers moved by an interval: music21 transposes every
@@ -3063,6 +3107,11 @@ impl Chord {
         warn_accessor(py, NoteAccessor::SetColor)?;
         match pitchTarget.filter(|target| !target.is_none()) {
             None => {
+                // The style is where the colour is read from once there is
+                // one, as music21's `setColor` writes it there.
+                if let Some(style) = &self.style {
+                    style.bind(py).setattr("color", value.clone())?;
+                }
                 self.inner.set_color(value);
                 Ok(())
             }
@@ -3336,8 +3385,11 @@ impl Chord {
                 Volume::wrap(volume_from_any(value)?),
             )?,
         };
+        let inner = object.borrow(py).inner.clone();
         object.borrow_mut(py).set_client(Some(slf.as_any()));
-        slf.borrow_mut().volume = Some(object);
+        let mut me = slf.borrow_mut();
+        me.inner.set_volume(Some(inner));
+        me.volume = Some(object);
         Ok(())
     }
 

@@ -7089,3 +7089,48 @@ def test_a_humdrum_tandem_read_standalone_stays_in_the_score():
     later = [e for e in measure if type(e).__name__ == "MiscTandem"]
     assert [(e.tandem, measure.elementOffset(e)) for e in later] == [("*foo", 1.0)]
     assert repr(later[0]) == "<music21.humdrum.spineParser.MiscTandem *foo>"
+
+
+def bar_of(*elements):
+    """A part of one 4/4 bar holding `elements`, to be written out."""
+    bar = m.Measure()
+    bar.append(m.TimeSignature("4/4"))
+    bar.append(list(elements))
+    part = m.Part()
+    part.append(bar)
+    return part
+
+
+def test_a_chords_duration_edited_in_place_is_written():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.duration.type = "half"
+    (read,) = m.from_midi(m.to_midi(bar_of(chord, m.Rest(2.0)))).recurse().getElementsByClass(
+        "Chord"
+    )
+    assert read.quarterLength == 2.0
+
+
+def test_a_chords_volume_edited_in_place_is_played():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.volume.velocity = 100
+    given = m.Chord(["C4", "E4", "G4"])
+    given.volume = m.Volume(velocity=100)
+    for each in (chord, given):
+        read = m.from_midi(m.to_midi(bar_of(each, m.Rest(3.0))))
+        assert {note.volume.velocity for note in read.recurse().notes[0]} == {100}
+
+
+def test_a_chords_beams_edited_in_place_are_written():
+    first = m.Chord(["C4", "E4"], quarterLength=0.5)
+    first.beams.append("start")
+    second = m.Chord(["C4", "E4"], quarterLength=0.5)
+    second.beams.append("stop")
+    written = m.to_musicxml(bar_of(first, second, m.Rest(3.0)))
+    assert re.findall(r"<beam number=\"1\">(\w+)</beam>", written) == ["begin", "end"]
+
+
+def test_a_chords_colour_set_on_its_style_is_written():
+    chord = m.Chord(["C4", "E4"])
+    chord.style.color = "red"
+    written = m.to_musicxml(bar_of(chord, m.Rest(3.0)))
+    assert 'color="#FF0000"' in written
