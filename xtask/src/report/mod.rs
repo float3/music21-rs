@@ -373,6 +373,10 @@ struct ModuleDoctests {
     /// counted at nought rather than left out.
     #[serde(default = "yes")]
     harnessed: bool,
+    /// Docstrings that fail on purpose, with the reason the expectation
+    /// file gives.
+    #[serde(default)]
+    not_passing: BTreeMap<String, String>,
 }
 
 fn yes() -> bool {
@@ -912,9 +916,6 @@ fn read_timings(workspace_root: &Path) -> Option<Timings> {
 /// they describe the run that just happened when the suites ran, and the last
 /// one otherwise.
 fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
-    let Ok(entries) = fs::read_dir(workspace_root.join("target")) else {
-        return Vec::new();
-    };
     // The doctest totals come from the fixture whether a harness covers the
     // module or not, so a module with no harness is counted at nought rather
     // than left off the page.
@@ -935,17 +936,10 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
     };
 
     let mut modules = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        let Some(name) = name
-            .strip_prefix("doctest_")
-            .and_then(|name| name.strip_suffix(".toml"))
-        else {
-            continue;
-        };
+    // Only the suites that exist: a summary left in `target` by a suite
+    // since renamed or removed describes nothing the harness runs now.
+    for suite in crate::harness::harness_suites(workspace_root) {
+        let path = workspace_root.join(format!("target/doctest_{}.toml", suite.name));
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
@@ -955,7 +949,8 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
         let module = summary.module;
         let (tests_passing, tests) = unit_tests(&module);
         modules.push(ModuleDoctests {
-            name: name.to_string(),
+            not_passing: read_not_passing(workspace_root, &suite.name),
+            name: suite.name,
             docstrings_passing: summary.docstrings_passing,
             docstrings: summary.docstrings,
             examples_passing: summary.examples_passing,
@@ -992,10 +987,29 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
             tests_passing,
             tests,
             harnessed: false,
+            not_passing: BTreeMap::new(),
         });
     }
     modules.sort_by(|a, b| b.examples.cmp(&a.examples).then(a.name.cmp(&b.name)));
     modules
+}
+
+/// The docstrings a suite's expectation file says fail on purpose, each
+/// with its reason; empty when it lists none.
+fn read_not_passing(workspace_root: &Path, name: &str) -> BTreeMap<String, String> {
+    #[derive(Deserialize)]
+    struct Expectations {
+        #[serde(default)]
+        not_passing: BTreeMap<String, String>,
+    }
+
+    let path = workspace_root.join(format!("python-parity/doctest/{name}.toml"));
+    let Ok(text) = fs::read_to_string(path) else {
+        return BTreeMap::new();
+    };
+    toml::from_str::<Expectations>(&text)
+        .map(|expectations| expectations.not_passing)
+        .unwrap_or_default()
 }
 
 /// The checked-in totals for every music21 module the crate ports, generated
@@ -1112,6 +1126,45 @@ mod tests {
             subject,
             ..Suite::new(name, String::new(), status)
         }
+    }
+
+    /// A summary in `target` with no suite behind it is left out, and a
+    /// suite's deliberate failures come with their reasons.
+    #[test]
+    fn stale_summaries_are_skipped() {
+        let root = env::temp_dir().join(format!("xtask-doctests-{}", std::process::id()));
+        let write = |relative: &str, text: &str| {
+            let path = root.join(relative);
+            fs::create_dir_all(path.parent().expect("a parent")).expect("mkdir");
+            fs::write(path, text).expect("write");
+        };
+        let summary = |module: &str| {
+            format!(
+                "module = \"{module}\"\ndocstrings_passing = 1\ndocstrings = 2\nexamples_passing = 1\nexamples = 2\n"
+            )
+        };
+        write(
+            "python-parity/tests/doctest_sieve.rs",
+            "doctest_suite!(t, \"music21.sieve\", \"sieve\", []);",
+        );
+        write(
+            "python-parity/doctest/sieve.toml",
+            "passing = []\n[not_passing]\n\"music21.sieve.Sieve\" = \"not modelled\"\n",
+        );
+        write("target/doctest_sieve.toml", &summary("music21.sieve"));
+        write("target/doctest_style.toml", &summary("music21.style"));
+
+        let doctests = read_doctests(&root);
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(doctests.len(), 1);
+        assert_eq!(doctests[0].module, "music21.sieve");
+        assert_eq!(
+            doctests[0]
+                .not_passing
+                .get("music21.sieve.Sieve")
+                .map(String::as_str),
+            Some("not modelled")
+        );
     }
 
     #[test]

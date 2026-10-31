@@ -180,7 +180,7 @@ fn augmentedSixthToMinorTonic<'py>(
 #[pyo3(signature = (domPossib, resolveV43toI6 = false, domChordInfo = None))]
 fn dominantSeventhToMajorTonic<'py>(
     domPossib: &Bound<'py, PyAny>,
-    resolveV43toI6: bool,
+    #[pyo3(from_py_with = crate::truthy)] resolveV43toI6: bool,
     domChordInfo: Option<&Bound<'py, PyAny>>,
 ) -> Resolved<'py> {
     let info = chord_info(domChordInfo)?;
@@ -194,7 +194,7 @@ fn dominantSeventhToMajorTonic<'py>(
 #[pyo3(signature = (domPossib, resolveV43toi6 = false, domChordInfo = None))]
 fn dominantSeventhToMinorTonic<'py>(
     domPossib: &Bound<'py, PyAny>,
-    resolveV43toi6: bool,
+    #[pyo3(from_py_with = crate::truthy)] resolveV43toi6: bool,
     domChordInfo: Option<&Bound<'py, PyAny>>,
 ) -> Resolved<'py> {
     let info = chord_info(domChordInfo)?;
@@ -260,7 +260,7 @@ fn dominantSeventhToMinorSubdominant<'py>(
 #[pyo3(signature = (dimPossib, doubledRoot = false, dimChordInfo = None))]
 fn diminishedSeventhToMajorTonic<'py>(
     dimPossib: &Bound<'py, PyAny>,
-    doubledRoot: bool,
+    #[pyo3(from_py_with = crate::truthy)] doubledRoot: bool,
     dimChordInfo: Option<&Bound<'py, PyAny>>,
 ) -> Resolved<'py> {
     let info = chord_info(dimChordInfo)?;
@@ -274,7 +274,7 @@ fn diminishedSeventhToMajorTonic<'py>(
 #[pyo3(signature = (dimPossib, doubledRoot = false, dimChordInfo = None))]
 fn diminishedSeventhToMinorTonic<'py>(
     dimPossib: &Bound<'py, PyAny>,
-    doubledRoot: bool,
+    #[pyo3(from_py_with = crate::truthy)] doubledRoot: bool,
     dimChordInfo: Option<&Bound<'py, PyAny>>,
 ) -> Resolved<'py> {
     let info = chord_info(dimChordInfo)?;

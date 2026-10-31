@@ -15,6 +15,7 @@ use music21_rs_crate::scale::{
 };
 
 use crate::scale::ConcreteScale;
+use crate::scalewrite::{Kind, show_scale, write_scale};
 
 use music21_rs_crate::{
     Key as RsKey, KeySignature as RsKeySignature, Pitch as RsPitch,
@@ -215,7 +216,10 @@ impl KeySignature {
     }
 
     #[setter]
-    fn set_accidentalsApplyOnlyToOctave(&mut self, value: bool) {
+    fn set_accidentalsApplyOnlyToOctave(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) {
         self.signature.set_accidentals_apply_only_to_octave(value);
     }
 
@@ -239,7 +243,7 @@ impl KeySignature {
     }
 
     #[setter]
-    fn set_isNonTraditional(&mut self, value: bool) {
+    fn set_isNonTraditional(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.signature.set_non_traditional(value);
     }
 
@@ -301,7 +305,7 @@ impl KeySignature {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval = interval_from_any(value)?;
         let transposed = slf.inner().transpose(&interval).map_err(signature_error)?;
@@ -322,7 +326,11 @@ impl KeySignature {
     }
 
     #[pyo3(signature = (p, *, inPlace = false))]
-    fn transposePitchFromC(&self, p: &Bound<'_, PyAny>, inPlace: bool) -> PyResult<Option<Pitch>> {
+    fn transposePitchFromC(
+        &self,
+        p: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Pitch>> {
         let transposed = self
             .inner()
             .transpose_pitch_from_c(&pitch_from_any(p)?)
@@ -951,6 +959,48 @@ impl Key {
         self.ask_scale(py, "getScalaData", args, kwargs)
     }
 
+    /// music21's `write`: the key written in `fmt` to `fp`, or to a
+    /// temporary file, and the path written.
+    ///
+    /// A key is written as its scale is — `'musicxml'` (the default) a
+    /// measure of its degrees, `'scala'` the file of its steps — except that
+    /// in `'midi'` it is a key signature, and `'text'` and `'textline'`
+    /// write its own `repr`.
+    #[pyo3(signature = (fmt = None, fp = None, direction = None, **keywords))]
+    fn write(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        fp: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Py<PyAny>> {
+        let scale = slf.borrow().scale_object(slf.py())?;
+        write_scale(
+            slf.as_any(),
+            Some(&scale),
+            Kind::Diatonic,
+            fmt,
+            fp,
+            direction,
+            keywords,
+        )
+    }
+
+    /// music21's `show`: `'text'` prints the key's `repr` and `'textline'`
+    /// answers it. A format opened in another program is refused; write it
+    /// and open the file instead.
+    #[pyo3(signature = (fmt = None, app = None, direction = None, **keywords))]
+    fn show(
+        slf: &Bound<'_, Self>,
+        fmt: Option<&str>,
+        app: Option<&Bound<'_, PyAny>>,
+        direction: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Option<String>> {
+        let _ = (app, direction, keywords);
+        show_scale(slf.as_any(), fmt)
+    }
+
     #[pyo3(signature = (*args, **kwargs))]
     fn tune(
         &self,
@@ -1093,7 +1143,7 @@ impl Key {
         &self,
         pitchTarget: Option<&Bound<'_, PyAny>>,
         variant: &str,
-        chromatic: bool,
+        #[pyo3(from_py_with = crate::truthy)] chromatic: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<String> {
         let scale = self.inner.scale();
@@ -1180,7 +1230,7 @@ impl Key {
         mut slf: PyRefMut<'_, Self>,
         py: Python<'_>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let interval = interval_from_any(value)?;
         let transposed = slf.inner.transpose(&interval).map_err(key_error)?;

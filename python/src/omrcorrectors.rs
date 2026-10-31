@@ -649,7 +649,7 @@ impl SinglePart {
     #[pyo3(signature = (runFast = false))]
     fn getIncorrectMeasureIndices<'py>(
         slf: &Bound<'py, Self>,
-        runFast: bool,
+        #[pyo3(from_py_with = crate::truthy)] runFast: bool,
     ) -> PyResult<Bound<'py, PyList>> {
         let py = slf.py();
         let part = slf.borrow().read(py)?;
@@ -685,7 +685,7 @@ impl SinglePart {
     #[pyo3(signature = (regenerate = false))]
     fn horizontalProbabilityDist<'py>(
         slf: &Bound<'py, Self>,
-        regenerate: bool,
+        #[pyo3(from_py_with = crate::truthy)] regenerate: bool,
     ) -> PyResult<Bound<'py, PyList>> {
         let py = slf.py();
         {

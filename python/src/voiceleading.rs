@@ -362,7 +362,11 @@ impl VoiceLeadingQuartet {
 
     /// music21's `motionType`: what the two voices do together.
     #[pyo3(signature = (*, allowAntiParallel = false))]
-    fn motionType(&self, py: Python<'_>, allowAntiParallel: bool) -> PyResult<Py<PyAny>> {
+    fn motionType(
+        &self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] allowAntiParallel: bool,
+    ) -> PyResult<Py<PyAny>> {
         let motion = self.inner.motion_type(allowAntiParallel);
         Ok(py
             .import("music21.voiceLeading")?
@@ -389,7 +393,7 @@ impl VoiceLeadingQuartet {
     fn parallelMotion(
         &self,
         requiredInterval: Option<&Bound<'_, PyAny>>,
-        allowOctaveDisplacement: bool,
+        #[pyo3(from_py_with = crate::truthy)] allowOctaveDisplacement: bool,
     ) -> PyResult<bool> {
         let required = match requiredInterval.filter(|value| !value.is_none()) {
             Some(value) => Some(parallel_requirement(value)?),

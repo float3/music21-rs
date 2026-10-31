@@ -660,7 +660,7 @@ fn written<'py>(
 fn translateStreamToString<'py>(
     py: Python<'py>,
     inputStreamOrIterator: &Bound<'py, PyAny>,
-    returnMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] returnMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let handed = Handed::of(inputStreamOrIterator)?;
     written(
@@ -677,7 +677,7 @@ fn translateStreamToString<'py>(
 fn translateDiatonicStreamToString<'py>(
     py: Python<'py>,
     inputStreamOrIterator: &Bound<'py, PyAny>,
-    returnMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] returnMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let handed = Handed::of(inputStreamOrIterator)?;
     let translation = translate_diatonic_stream_to_string(&handed.searched())
@@ -692,7 +692,7 @@ fn translateDiatonicStreamToString<'py>(
 fn translateIntervalsAndSpeed<'py>(
     py: Python<'py>,
     inputStreamOrIterator: &Bound<'py, PyAny>,
-    returnMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] returnMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let handed = Handed::of(inputStreamOrIterator)?;
     let translation =
@@ -706,7 +706,7 @@ fn translateIntervalsAndSpeed<'py>(
 fn translateStreamToStringNoRhythm<'py>(
     py: Python<'py>,
     inputStreamOrIterator: &Bound<'py, PyAny>,
-    returnMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] returnMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let handed = Handed::of(inputStreamOrIterator)?;
     written(
@@ -722,7 +722,7 @@ fn translateStreamToStringNoRhythm<'py>(
 fn translateStreamToStringOnlyRhythm<'py>(
     py: Python<'py>,
     inputStreamOrIterator: &Bound<'py, PyAny>,
-    returnMeasures: bool,
+    #[pyo3(from_py_with = crate::truthy)] returnMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let handed = Handed::of(inputStreamOrIterator)?;
     written(
@@ -757,7 +757,7 @@ fn translateNoteToByte(n: &Bound<'_, PyAny>) -> PyResult<String> {
 #[pyo3(signature = (n, includeTieByte = true))]
 fn translateNoteWithDurationToBytes(
     n: &Bound<'_, PyAny>,
-    includeTieByte: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeTieByte: bool,
 ) -> PyResult<String> {
     Ok(translate_note_with_duration_to_bytes(
         &one(n)?,
@@ -842,7 +842,7 @@ fn transposed_to_c5<'py>(measure: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyA
 fn mostCommonMeasureRhythms<'py>(
     py: Python<'py>,
     streamIn: &Bound<'py, PyAny>,
-    transposeDiatonic: bool,
+    #[pyo3(from_py_with = crate::truthy)] transposeDiatonic: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     let _ = transposeDiatonic;
     let (stream, _) = crate::stream::read_with_leaves(streamIn)?;

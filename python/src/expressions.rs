@@ -417,7 +417,7 @@ impl Ornament {
     }
 
     #[setter]
-    fn set_autoScale(&mut self, value: bool) {
+    fn set_autoScale(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_auto_scale(value);
     }
 
@@ -427,7 +427,7 @@ impl Ornament {
     }
 
     #[setter]
-    fn set_connectedToPrevious(&mut self, value: bool) {
+    fn set_connectedToPrevious(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.connected_to_previous = value;
     }
 
@@ -559,7 +559,10 @@ impl Ornament {
     }
 
     #[setter]
-    fn set_nachschlag(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_nachschlag(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         Self::member(slf, "nachschlag", &[Shape::Trill])?;
         slf.borrow_mut().inner.set_nachschlag(value);
         Ok(())
@@ -602,7 +605,10 @@ impl Ornament {
     }
 
     #[setter]
-    fn set_measured(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_measured(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         Self::member(slf, "measured", &[Shape::Tremolo])?;
         slf.borrow_mut().inner.set_measured(value);
         Ok(())
@@ -818,10 +824,10 @@ impl Ornament {
         pitchPastMeasure: Option<&Bound<'_, PyAny>>,
         otherSimultaneousPitches: Option<&Bound<'_, PyAny>>,
         alteredPitches: Option<&Bound<'_, PyAny>>,
-        cautionaryPitchClass: bool,
-        cautionaryAll: bool,
-        overrideStatus: bool,
-        cautionaryNotImmediateRepeat: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryPitchClass: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryAll: bool,
+        #[pyo3(from_py_with = crate::truthy)] overrideStatus: bool,
+        #[pyo3(from_py_with = crate::truthy)] cautionaryNotImmediateRepeat: bool,
     ) -> PyResult<()> {
         let _ = otherSimultaneousPitches;
         let py = slf.py();
@@ -932,7 +938,7 @@ impl Ornament {
         slf: &Bound<'py, Self>,
         srcObj: &Bound<'py, PyAny>,
         keySig: Option<&Bound<'py, PyAny>>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyTuple>> {
         let py = slf.py();
         let shape = slf.borrow().shape();

@@ -113,7 +113,7 @@ impl FretNote {
     }
 
     #[setter]
-    fn set_displayFingerNumber(&mut self, value: bool) {
+    fn set_displayFingerNumber(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.display_finger_number = value;
     }
 

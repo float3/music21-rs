@@ -1444,10 +1444,25 @@ pub(super) fn render_doctests(doctests: &[ModuleDoctests]) -> String {
         )
     };
     for module in doctests {
+        // A docstring that fails on purpose is named with its reason, so it
+        // does not read as a gap.
+        let mut reasons = String::new();
+        for (docstring, reason) in &module.not_passing {
+            let short = docstring
+                .strip_prefix(&format!("{}.", module.module))
+                .unwrap_or(docstring);
+            let _ = write!(
+                reasons,
+                "<span class=\"detail\"><code>{}</code> fails on purpose: {}</span>",
+                escape(short),
+                escape(reason)
+            );
+        }
+
         let _ = write!(
             html,
             r#"                            <tr>
-                                <td class="name"><code>{module}</code>{note}</td>
+                                <td class="name"><code>{module}</code>{note}{reasons}</td>
                                 <td>{docstrings}</td>
                                 <td>{examples}</td>
                                 <td>{tests}</td>

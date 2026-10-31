@@ -12,6 +12,7 @@
 
 use music21_rs::pitch::{Language, from_language_name, language_dictionary};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use utils::{init_py, prepare};
@@ -78,7 +79,7 @@ fn the_crate_reads_a_name_in_another_language_as_music21_does() {
                     .getattr("read")?
                     .call1((name.as_str(), code))?
                     .extract()?;
-                let ours = music21_name(&from_language_name(&name, language));
+                let ours = music21_name(&from_language_name(&name, language).name());
                 if ours != theirs {
                     failures.push(format!(
                         "{code}: `{name}` is {ours} here and {theirs} to music21"
@@ -102,14 +103,4 @@ fn the_crate_reads_a_name_in_another_language_as_music21_does() {
         "the two readings differ:\n  {}",
         failures.join("\n  ")
     );
-}
-
-/// A pitch's name as music21 writes it, a flat as `-`.
-fn music21_name(pitch: &music21_rs::Pitch) -> String {
-    let name = pitch.name();
-    let mut letters = name.chars();
-    let Some(step) = letters.next() else {
-        return String::new();
-    };
-    format!("{step}{}", letters.as_str().replace('b', "-"))
 }

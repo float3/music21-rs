@@ -2,6 +2,7 @@
 //! the layout a score is stripped of, and how two documents are compared.
 
 use music21_rs::{Stream, StreamElement, StreamKind};
+use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 
 /// Scores that are written the same by both, and what each exercises.
@@ -950,7 +951,7 @@ fn describe(element: &StreamElement) -> String {
         ),
         StreamElement::Note(note) => format!(
             "Note {} {} {}",
-            music21_name(note.pitch()),
+            music21_name(&note.pitch().name_with_octave()),
             tie(note),
             sung(note.lyric())
         ),
@@ -961,7 +962,11 @@ fn describe(element: &StreamElement) -> String {
             chord
                 .notes()
                 .iter()
-                .map(|note| format!("{}/{}", music21_name(note.pitch()), tie(note)))
+                .map(|note| format!(
+                    "{}/{}",
+                    music21_name(&note.pitch().name_with_octave()),
+                    tie(note)
+                ))
                 .collect::<Vec<_>>()
                 .join(" "),
             sung(chord.notes().first().and_then(music21_rs::Note::lyric))
@@ -994,18 +999,6 @@ fn describe(element: &StreamElement) -> String {
         ),
         other => format!("{other:?}"),
     }
-}
-
-/// A pitch's name and octave as music21 writes them, a flat as `-`: the
-/// crate's `Bb4` is `B-4`, and its `Bb-1` `B--1`.
-#[allow(dead_code)]
-pub fn music21_name(pitch: &music21_rs::Pitch) -> String {
-    let name = pitch.name_with_octave();
-    let mut letters = name.chars();
-    let Some(step) = letters.next() else {
-        return String::new();
-    };
-    format!("{step}{}", letters.as_str().replace('b', "-"))
 }
 
 /// The score as the outline `HELPERS` writes of music21's.

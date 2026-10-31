@@ -145,9 +145,25 @@ impl Spanner {
         inner: &RsSpanner,
         spanned: Vec<Py<PyAny>>,
     ) -> PyResult<Py<PyAny>> {
+        Self::object_as(py, inner, spanned, crate::stream::Whose::Wheel)
+    }
+
+    /// The same, for one kind of streams or the other: one music21's own
+    /// streams will hold where they are what it goes into, as they refuse
+    /// anything that is not a `Music21Object`.
+    pub(crate) fn object_as(
+        py: Python<'_>,
+        inner: &RsSpanner,
+        spanned: Vec<Py<PyAny>>,
+        whose: crate::stream::Whose,
+    ) -> PyResult<Py<PyAny>> {
         let name = inner.kind().class_name();
         let module = module_of(inner.kind());
-        let class = match crate::installed_class(py, module, name) {
+        let found = match whose {
+            crate::stream::Whose::Music21 => crate::holdable_class(py, module, name),
+            crate::stream::Whose::Wheel => crate::installed_class(py, module, name),
+        };
+        let class = match found {
             Some(class) => class,
             None => py
                 .import("music21_rs")
@@ -167,6 +183,25 @@ impl Spanner {
 
 #[pymethods]
 impl Spanner {
+    /// What it joins may point back at it, a note keeping its slur; Python's
+    /// collector frees such a cycle only if it is shown these.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.idLocal)?;
+        for held in &self.spanned {
+            visit.call(held)?;
+        }
+        visit.call(&self.storage)
+    }
+
+    fn __clear__(&mut self) {
+        self.idLocal = None;
+        self.spanned.clear();
+        self.storage = None;
+    }
+
     /// music21's `Spanner(*spannedElements)`: the notes to join, given one
     /// by one or as a list.
     #[new]
@@ -470,7 +505,10 @@ impl Spanner {
     /// music21's `purgeLocations`, which purges the storage holding what
     /// this joins and then does what every `Music21Object` does.
     #[pyo3(signature = (rescanIsDead = false))]
-    fn purgeLocations(slf: &Bound<'_, Self>, rescanIsDead: bool) -> PyResult<()> {
+    fn purgeLocations(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] rescanIsDead: bool,
+    ) -> PyResult<()> {
         let py = slf.py();
         if let Some(storage) = slf.borrow().storage.as_ref().map(|held| held.clone_ref(py)) {
             let keywords = PyDict::new(py);
@@ -492,7 +530,10 @@ impl Spanner {
 
     /// music21's `purgeOrphans`, likewise.
     #[pyo3(signature = (excludeStorageStreams = true))]
-    fn purgeOrphans(slf: &Bound<'_, Self>, excludeStorageStreams: bool) -> PyResult<()> {
+    fn purgeOrphans(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] excludeStorageStreams: bool,
+    ) -> PyResult<()> {
         let py = slf.py();
         if let Some(storage) = slf.borrow().storage.as_ref().map(|held| held.clone_ref(py)) {
             storage
@@ -530,10 +571,10 @@ impl Spanner {
     fn fill(
         slf: &Bound<'_, Self>,
         searchStream: Option<&Bound<'_, PyAny>>,
-        includeEndBoundary: bool,
-        mustFinishInSpan: bool,
-        mustBeginInSpan: bool,
-        includeElementsThatEndAtStart: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeEndBoundary: bool,
+        #[pyo3(from_py_with = crate::truthy)] mustFinishInSpan: bool,
+        #[pyo3(from_py_with = crate::truthy)] mustBeginInSpan: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeElementsThatEndAtStart: bool,
     ) -> PyResult<()> {
         let py = slf.py();
         let kinds = slf.getattr("fillElementTypes")?;
@@ -832,7 +873,10 @@ impl Spanner {
     /// Writes whether the notes under the line are written where they
     /// sound.
     #[setter]
-    fn set_transposing(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_transposing(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         only(slf, SpannerKind::Ottava, "transposing")?;
         let Some(shift) = slf.borrow().inner.shift() else {
             return Ok(());
@@ -847,7 +891,10 @@ impl Spanner {
     /// `shiftDirection`, `up` for a mark ending `a` and `down` for one
     /// ending `b`, the other way round when read in reverse.
     #[pyo3(signature = (reverse = false))]
-    fn shiftDirection(slf: &Bound<'_, Self>, reverse: bool) -> PyResult<Option<&'static str>> {
+    fn shiftDirection(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] reverse: bool,
+    ) -> PyResult<Option<&'static str>> {
         only(slf, SpannerKind::Ottava, "shiftDirection")?;
         let Some(shift) = slf.borrow().inner.shift() else {
             return Ok(None);
@@ -859,7 +906,10 @@ impl Spanner {
     /// music21's `interval`, which is the crate's `OctaveShift::interval`
     /// turned round where it is read in reverse.
     #[pyo3(signature = (reverse = false))]
-    fn interval<'py>(slf: &Bound<'py, Self>, reverse: bool) -> PyResult<Bound<'py, PyAny>> {
+    fn interval<'py>(
+        slf: &Bound<'py, Self>,
+        #[pyo3(from_py_with = crate::truthy)] reverse: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         only(slf, SpannerKind::Ottava, "interval")?;
         let Some(shift) = slf.borrow().inner.shift() else {
@@ -1096,6 +1146,22 @@ impl SpannerBundle {
 
 #[pymethods]
 impl SpannerBundle {
+    /// The spanners it holds, which may point back at it through what they
+    /// join.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in &self.held {
+            visit.call(held)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.held.clear();
+    }
+
     /// music21's `SpannerBundle(*spanners)`.
     #[new]
     #[pyo3(signature = (*spanners))]
@@ -1152,7 +1218,10 @@ impl SpannerBundle {
 
     /// Those whose joining is finished, or those whose is not, as a bundle
     /// of their own: music21's `getByCompleteStatus`.
-    fn getByCompleteStatus(slf: &Bound<'_, Self>, completeStatus: bool) -> PyResult<Self> {
+    fn getByCompleteStatus(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] completeStatus: bool,
+    ) -> PyResult<Self> {
         let py = slf.py();
         let mut found = Vec::new();
         for spanner in &slf.borrow().held {
@@ -1174,7 +1243,7 @@ impl SpannerBundle {
         slf: &Bound<'py, Self>,
         className: &Bound<'py, PyAny>,
         idLocal: Option<&Bound<'py, PyAny>>,
-        completeStatus: bool,
+        #[pyo3(from_py_with = crate::truthy)] completeStatus: bool,
     ) -> PyResult<Bound<'py, Self>> {
         let py = slf.py();
         let by_class = Bound::new(py, Self::getByClass(slf, className)?)?;

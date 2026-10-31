@@ -506,7 +506,7 @@ impl ContiguousSegmentSearcher {
         py: Python<'_>,
         inputStream: Option<&Bound<'_, PyAny>>,
         reps: String,
-        includeChords: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
     ) -> Self {
         Self {
             stream: match inputStream.filter(|given| !given.is_none()) {
@@ -639,7 +639,7 @@ impl SegmentMatcher {
         py: Python<'_>,
         inputStream: Option<&Bound<'_, PyAny>>,
         reps: String,
-        includeChords: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
     ) -> PyResult<Self> {
         Self::of(py, Matching::Exact, inputStream, reps, includeChords)
     }
@@ -722,7 +722,7 @@ macro_rules! matchers {
                     py: Python<'_>,
                     inputStream: Option<&Bound<'_, PyAny>>,
                     reps: String,
-                    includeChords: bool,
+                    #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
                 ) -> PyResult<PyClassInitializer<Self>> {
                     Ok(
                         PyClassInitializer::from(SegmentMatcher::of(
@@ -998,7 +998,7 @@ fn labelTransformedSegments<'py>(
     inputStream: &Bound<'py, PyAny>,
     segmentDict: &Bound<'py, PyDict>,
     reps: String,
-    includeChords: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
     convention: String,
 ) -> PyResult<Bound<'py, PyAny>> {
     let convention = match convention.as_str() {

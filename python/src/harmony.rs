@@ -140,7 +140,7 @@ fn figure_and_kind(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<(Stri
 pub fn chordSymbolFigureFromChord<'py>(
     py: Python<'py>,
     inChord: &Bound<'py, PyAny>,
-    includeChordType: bool,
+    #[pyo3(from_py_with = crate::truthy)] includeChordType: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (figure, kind) = figure_and_kind(py, inChord)?;
     if !includeChordType || figure.is_empty() {
@@ -333,7 +333,7 @@ impl ChordStepModification {
         Ok((slf.get_type().into_any(), arguments, me.interval.is_none()))
     }
 
-    fn __setstate__(&mut self, interval_unset: bool) {
+    fn __setstate__(&mut self, #[pyo3(from_py_with = crate::truthy)] interval_unset: bool) {
         if interval_unset {
             self.interval = None;
         }
@@ -676,7 +676,7 @@ impl ChordSymbol {
         inversion: Option<&Bound<'_, PyAny>>,
         kind: Option<String>,
         kindStr: Option<String>,
-        updatePitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] updatePitches: bool,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         let py = slf.py();
@@ -939,7 +939,7 @@ impl ChordSymbol {
     fn transpose(
         slf: &Bound<'_, Self>,
         value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         let py = slf.py();
         let keywords = PyDict::new(py);
@@ -1098,7 +1098,7 @@ impl ChordSymbol {
     fn addChordStepModification(
         slf: &Bound<'_, Self>,
         degree: &Bound<'_, PyAny>,
-        updatePitches: bool,
+        #[pyo3(from_py_with = crate::truthy)] updatePitches: bool,
     ) -> PyResult<()> {
         let py = slf.py();
         let is_modification = degree.hasattr("modType")? && degree.hasattr("degree")?;
@@ -1127,7 +1127,10 @@ impl ChordSymbol {
     }
 
     #[setter]
-    fn set_writeAsChord(slf: &Bound<'_, Self>, value: bool) -> PyResult<()> {
+    fn set_writeAsChord(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         slf.borrow_mut().write_as_chord = value;
         if value {
             let length: f64 = slf.getattr("quarterLength")?.extract()?;
@@ -1451,7 +1454,11 @@ impl NoChord {
 
     /// A no-chord has no root, whatever it is told.
     #[pyo3(signature = (newroot = None, *, find = None))]
-    fn root(&self, newroot: Option<&Bound<'_, PyAny>>, find: Option<bool>) -> Option<Py<PyAny>> {
+    fn root(
+        &self,
+        newroot: Option<&Bound<'_, PyAny>>,
+        #[pyo3(from_py_with = crate::truthy_or_none)] find: Option<bool>,
+    ) -> Option<Py<PyAny>> {
         let _ = (newroot, find);
         None
     }
@@ -1461,8 +1468,8 @@ impl NoChord {
     fn bass(
         &self,
         newbass: Option<&Bound<'_, PyAny>>,
-        find: Option<bool>,
-        allow_add: bool,
+        #[pyo3(from_py_with = crate::truthy_or_none)] find: Option<bool>,
+        #[pyo3(from_py_with = crate::truthy)] allow_add: bool,
     ) -> Option<Py<PyAny>> {
         let _ = (newbass, find, allow_add);
         None
@@ -1477,7 +1484,7 @@ impl NoChord {
     fn transpose(
         slf: &Bound<'_, Self>,
         _value: &Bound<'_, PyAny>,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Py<PyAny>>> {
         if inPlace {
             return Ok(None);

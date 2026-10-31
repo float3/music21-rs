@@ -378,7 +378,7 @@ impl Lyric {
     fn new(
         text: Option<&str>,
         number: i32,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         syllabic: Option<&str>,
         identifier: Option<String>,
     ) -> PyResult<Self> {
@@ -581,7 +581,11 @@ impl Lyric {
     /// the text and the syllabic is left as it was, except that a lyric that
     /// never had one becomes a whole word.
     #[pyo3(signature = (rawText, applyRaw = false))]
-    fn setTextAndSyllabic(&mut self, rawText: &str, applyRaw: bool) {
+    fn setTextAndSyllabic(
+        &mut self,
+        rawText: &str,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
+    ) {
         self.inner.set_text_and_syllabic(rawText, applyRaw);
     }
 
@@ -1365,7 +1369,7 @@ impl Beams {
     }
 
     #[setter]
-    fn set_feathered(&mut self, value: bool) {
+    fn set_feathered(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_feathered(value);
     }
 
@@ -1595,7 +1599,7 @@ impl Volume {
         client: Option<&Bound<'_, PyAny>>,
         velocity: Option<i32>,
         velocityScalar: Option<f64>,
-        velocityIsRelative: bool,
+        #[pyo3(from_py_with = crate::truthy)] velocityIsRelative: bool,
     ) -> PyResult<Self> {
         let mut inner = RsVolume::new();
         if let Some(velocity) = velocity {
@@ -1659,7 +1663,7 @@ impl Volume {
     }
 
     #[setter]
-    fn set_velocityIsRelative(&mut self, value: bool) {
+    fn set_velocityIsRelative(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.inner.set_velocity_is_relative(value);
     }
 
@@ -1720,10 +1724,10 @@ impl Volume {
         &mut self,
         py: Python<'_>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
-        useVelocity: bool,
+        #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
-        clip: bool,
+        #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<f64> {
         let dynamic = self.dynamic_scalar(py, useDynamicContext)?;
         let shift = self.articulation_shift(py, useArticulations)?;
@@ -1750,10 +1754,10 @@ impl Volume {
         &mut self,
         py: Python<'_>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
-        useVelocity: bool,
+        #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
-        clip: bool,
+        #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<String> {
         let realized = self.getRealized(
             py,

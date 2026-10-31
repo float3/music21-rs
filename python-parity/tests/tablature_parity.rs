@@ -9,6 +9,7 @@
 use music21_rs::IntegerType;
 use music21_rs::tablature::{FretBoard, FretNote};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
+use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
@@ -54,14 +55,6 @@ type Answer = (
     Vec<Option<(f64, String)>>,
     String,
 );
-
-/// A pitch's name as music21 writes it, a flat as `-`.
-fn music21_name(pitch: &music21_rs::pitch::Pitch) -> String {
-    let name = pitch.name_with_octave();
-    let mut letters = name.chars();
-    let step = letters.next().map(String::from).unwrap_or_default();
-    step + &letters.as_str().replace('b', "-")
-}
 
 fn board(kind: usize, notes: Vec<FretNote>) -> FretBoard {
     match kind {
@@ -131,7 +124,11 @@ fn the_crate_reads_fretboards_as_music21_does() {
                 Ok(pitches) => (
                     pitches
                         .iter()
-                        .map(|pitch| pitch.as_ref().map(|p| (p.ps(), music21_name(p))))
+                        .map(|pitch| {
+                            pitch
+                                .as_ref()
+                                .map(|p| (p.ps(), music21_name(&p.name_with_octave())))
+                        })
                         .collect(),
                     String::new(),
                 ),

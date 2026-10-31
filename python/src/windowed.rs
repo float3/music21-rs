@@ -168,7 +168,7 @@ impl WindowedAnalysis {
         maxWindow: Option<usize>,
         windowStepSize: Option<&Bound<'py, PyAny>>,
         windowType: Option<&Bound<'py, PyAny>>,
-        includeTotalWindow: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeTotalWindow: bool,
     ) -> PyResult<(Bound<'py, PyList>, Bound<'py, PyList>, Bound<'py, PyList>)> {
         let py = slf.py();
         let kind = loose_window_type(windowType)?;

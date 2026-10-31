@@ -191,10 +191,12 @@ impl Rest {
         visit.call(&self.articulations)?;
         visit.call(&self.style)?;
         visit.call(&self.full_measure)?;
+        visit.call(&self.editorial)?;
         Ok(())
     }
 
     fn __clear__(&mut self) {
+        self.editorial = None;
         self.duration = None;
         self.lyrics = None;
         self.tie = None;
@@ -514,7 +516,7 @@ impl Rest {
         &mut self,
         text: &Bound<'_, PyAny>,
         index: usize,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         identifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
@@ -534,7 +536,7 @@ impl Rest {
         &mut self,
         text: &Bound<'_, PyAny>,
         lyricNumber: Option<i32>,
-        applyRaw: bool,
+        #[pyo3(from_py_with = crate::truthy)] applyRaw: bool,
         lyricIdentifier: Option<String>,
     ) -> PyResult<()> {
         self.settle_lyrics(text.py());
@@ -582,7 +584,7 @@ impl Rest {
     fn augmentOrDiminish<'py>(
         slf: &Bound<'py, Self>,
         scalar: f64,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         augment_or_diminish_note(slf.as_any(), scalar, inPlace)
     }
@@ -591,8 +593,8 @@ impl Rest {
     #[pyo3(signature = (*, appoggiatura = false, inPlace = false))]
     fn getGrace<'py>(
         slf: &Bound<'py, Self>,
-        appoggiatura: bool,
-        inPlace: bool,
+        #[pyo3(from_py_with = crate::truthy)] appoggiatura: bool,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         grace_note(slf.as_any(), appoggiatura, inPlace)
     }

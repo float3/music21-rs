@@ -288,7 +288,7 @@ pub fn smooth_frequencies_py<'py>(
     py: Python<'py>,
     frequencyList: &Bound<'py, PyAny>,
     smoothLevels: usize,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Option<Bound<'py, PyList>>> {
     let read = frequencies(frequencyList)?;
     let smoothed = smooth_frequencies(&read, smoothLevels).map_err(audio_error)?;
@@ -412,7 +412,7 @@ pub fn notes_and_durations_to_stream_py<'py>(
     notesList: &Bound<'py, PyAny>,
     durationList: &Bound<'py, PyAny>,
     scNotes: Option<&Bound<'py, PyAny>>,
-    removeRestsAtBeginning: bool,
+    #[pyo3(from_py_with = crate::truthy)] removeRestsAtBeginning: bool,
     qle: Option<FloatType>,
 ) -> PyResult<Bound<'py, PyTuple>> {
     let _ = qle;

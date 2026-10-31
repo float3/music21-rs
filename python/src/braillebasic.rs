@@ -196,8 +196,8 @@ fn barlineToBraille(music21Barline: &Bound<'_, PyAny>) -> PyResult<String> {
 #[pyo3(signature = (music21Chord, descending = true, showOctave = true))]
 fn chordToBraille(
     music21Chord: &Bound<'_, PyAny>,
-    descending: bool,
-    showOctave: bool,
+    #[pyo3(from_py_with = crate::truthy)] descending: bool,
+    #[pyo3(from_py_with = crate::truthy)] showOctave: bool,
 ) -> PyResult<String> {
     match value_of(music21Chord)? {
         StreamElement::Chord(chord) => transcribed(
@@ -221,7 +221,10 @@ fn pitchToOctave(music21PitchOrInt: &Bound<'_, PyAny>) -> PyResult<String> {
 /// music21's `clefToBraille`.
 #[pyfunction]
 #[pyo3(signature = (music21Clef, keyboardHandSwitched = false))]
-fn clefToBraille(music21Clef: &Bound<'_, PyAny>, keyboardHandSwitched: bool) -> PyResult<String> {
+fn clefToBraille(
+    music21Clef: &Bound<'_, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] keyboardHandSwitched: bool,
+) -> PyResult<String> {
     match value_of(music21Clef)? {
         StreamElement::Clef(clef) => transcribed(
             music21Clef,
@@ -236,7 +239,7 @@ fn clefToBraille(music21Clef: &Bound<'_, PyAny>, keyboardHandSwitched: bool) -> 
 #[pyo3(signature = (music21Dynamic, precedeByWordSign = true))]
 fn dynamicToBraille(
     music21Dynamic: &Bound<'_, PyAny>,
-    precedeByWordSign: bool,
+    #[pyo3(from_py_with = crate::truthy)] precedeByWordSign: bool,
 ) -> PyResult<String> {
     match value_of(music21Dynamic)? {
         StreamElement::Dynamic(dynamic) => transcribed(
@@ -336,8 +339,8 @@ fn note_context(object: &Bound<'_, PyAny>) -> basic::NoteContext {
 #[pyo3(signature = (music21Note, *, showOctave = true, upperFirstInFingering = true))]
 fn noteToBraille(
     music21Note: &Bound<'_, PyAny>,
-    showOctave: bool,
-    upperFirstInFingering: bool,
+    #[pyo3(from_py_with = crate::truthy)] showOctave: bool,
+    #[pyo3(from_py_with = crate::truthy)] upperFirstInFingering: bool,
 ) -> PyResult<String> {
     match value_of(music21Note)? {
         StreamElement::Note(note) => transcribed(
@@ -384,7 +387,7 @@ fn tempoTextToBraille(
 #[pyo3(signature = (music21TextExpression, precedeByWordSign = true))]
 fn textExpressionToBraille(
     music21TextExpression: &Bound<'_, PyAny>,
-    precedeByWordSign: bool,
+    #[pyo3(from_py_with = crate::truthy)] precedeByWordSign: bool,
 ) -> PyResult<String> {
     match value_of(music21TextExpression)? {
         StreamElement::TextExpression(text) => transcribed(
@@ -478,7 +481,7 @@ fn transcribeHeading(
 #[pyo3(signature = (sampleNoteFingering = "1".to_string(), upperFirstInFingering = true))]
 fn transcribeNoteFingering(
     sampleNoteFingering: String,
-    upperFirstInFingering: bool,
+    #[pyo3(from_py_with = crate::truthy)] upperFirstInFingering: bool,
 ) -> PyResult<String> {
     basic::transcribe_note_fingering(&sampleNoteFingering, upperFirstInFingering)
         .map_err(|error| braille_error(&error))
@@ -547,7 +550,10 @@ fn yieldDots<'py>(py: Python<'py>, brailleCharacter: &str) -> PyResult<Bound<'py
 /// music21's `wordToBraille`.
 #[pyfunction]
 #[pyo3(signature = (sampleWord, isTextExpression = false))]
-fn wordToBraille(sampleWord: &str, isTextExpression: bool) -> PyResult<String> {
+fn wordToBraille(
+    sampleWord: &str,
+    #[pyo3(from_py_with = crate::truthy)] isTextExpression: bool,
+) -> PyResult<String> {
     basic::word_to_braille(sampleWord, isTextExpression).map_err(|error| braille_error(&error))
 }
 
@@ -556,8 +562,8 @@ fn wordToBraille(sampleWord: &str, isTextExpression: bool) -> PyResult<String> {
 #[pyo3(signature = (sampleNumber, withNumberSign = true, lower = false))]
 fn numberToBraille(
     sampleNumber: &Bound<'_, PyAny>,
-    withNumberSign: bool,
-    lower: bool,
+    #[pyo3(from_py_with = crate::truthy)] withNumberSign: bool,
+    #[pyo3(from_py_with = crate::truthy)] lower: bool,
 ) -> PyResult<String> {
     // music21 takes the number itself, and its own code hands this one
     // strings as readily as integers.

@@ -108,7 +108,7 @@ impl PercussionMapper {
         &self,
         py: Python<'py>,
         midiPitch: &Bound<'py, PyAny>,
-        raiseIfUnmapped: bool,
+        #[pyo3(from_py_with = crate::truthy)] raiseIfUnmapped: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let key: i64 = match midiPitch.extract::<i64>() {
             Ok(key) => key,

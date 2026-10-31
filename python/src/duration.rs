@@ -400,7 +400,7 @@ impl Tuplet {
         placement: Option<String>,
         tupletActualShow: Option<String>,
         tupletNormalShow: Option<String>,
-        frozen: bool,
+        #[pyo3(from_py_with = crate::truthy)] frozen: bool,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Self> {
         // music21 fills whichever side was left out from the one given.
@@ -684,7 +684,7 @@ impl Tuplet {
     }
 
     #[setter]
-    fn set_frozen(&mut self, value: bool) {
+    fn set_frozen(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.frozen = value;
     }
 
@@ -1580,7 +1580,11 @@ impl Duration {
     }
 
     #[setter(_componentsNeedUpdating)]
-    fn set_componentsNeedUpdating(&mut self, py: Python<'_>, value: bool) -> PyResult<()> {
+    fn set_componentsNeedUpdating(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
         if value {
             self.components = None;
             return Ok(());
@@ -1814,7 +1818,7 @@ impl Duration {
     }
 
     #[setter]
-    fn set_expressionIsInferred(&mut self, value: bool) {
+    fn set_expressionIsInferred(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
         self.expression_is_inferred = value;
     }
 
@@ -1854,7 +1858,11 @@ impl Duration {
     /// singly dotted values, which is how a program with no dot groups can
     /// still show the notes.
     #[pyo3(signature = (*, inPlace = false))]
-    fn splitDotGroups(&mut self, py: Python<'_>, inPlace: bool) -> PyResult<Option<Self>> {
+    fn splitDotGroups(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Option<Self>> {
         let written_type = self.get_type(py)?;
         let groups: Vec<u32> = self.get_dotGroups(py)?.extract()?;
         let mut split = if inPlace { None } else { Some(self.clone()) };
@@ -1890,7 +1898,7 @@ impl Duration {
         &mut self,
         py: Python<'_>,
         amountToScale: f64,
-        retainComponents: bool,
+        #[pyo3(from_py_with = crate::truthy)] retainComponents: bool,
     ) -> PyResult<Self> {
         if amountToScale <= 0.0 || amountToScale.is_nan() {
             return Err(PyValueError::new_err(
@@ -1919,7 +1927,11 @@ impl Duration {
     /// music21's `getGraceDuration`: the same written values, sounding
     /// nothing at all.
     #[pyo3(signature = (appoggiatura = false))]
-    fn getGraceDuration(&mut self, py: Python<'_>, appoggiatura: bool) -> PyResult<Py<PyAny>> {
+    fn getGraceDuration(
+        &mut self,
+        py: Python<'_>,
+        #[pyo3(from_py_with = crate::truthy)] appoggiatura: bool,
+    ) -> PyResult<Py<PyAny>> {
         self.materialize(py)?;
         let mut written_type = self.get_type(py)?;
         if written_type == "zero" {

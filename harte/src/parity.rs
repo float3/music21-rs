@@ -13,6 +13,9 @@ use std::path::Path;
 
 use crate::{Harte, degree_sort_key};
 use serde::Deserialize;
+// music21-rs writes a flat `b` (`Bb4`) and music21, which harte-library
+// builds its chords with, writes it `-` (`B-4`).
+use utils::music21_name;
 
 #[derive(Debug, Deserialize)]
 struct Expectations {
@@ -30,17 +33,6 @@ struct Case {
     degrees: Vec<String>,
     pretty: Option<String>,
     error: Option<String>,
-}
-
-/// A pitch name as the fixture holds it. music21-rs writes a flat `b`
-/// (`Bb4`) and music21, which harte-library builds its chords with, writes
-/// it `-` (`B-4`): the first letter is the step, every `b` after it a flat.
-fn music21_name(name: &str) -> String {
-    let mut letters = name.chars();
-    let Some(step) = letters.next() else {
-        return String::new();
-    };
-    format!("{step}{}", letters.as_str().replace('b', "-"))
 }
 
 fn expectations() -> Expectations {

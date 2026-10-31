@@ -177,9 +177,9 @@ fn beams_object(py: Python<'_>, beams: RsBeams) -> PyResult<Py<PyAny>> {
 #[pyo3(signature = (s, *, inPlace = false, setStemDirections = true, failOnNoTimeSignature = false))]
 pub fn make_beams_py<'py>(
     s: &Bound<'py, PyAny>,
-    inPlace: bool,
-    setStemDirections: bool,
-    failOnNoTimeSignature: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] setStemDirections: bool,
+    #[pyo3(from_py_with = crate::truthy)] failOnNoTimeSignature: bool,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let _ = failOnNoTimeSignature;
     let made = target(s, inPlace, "makeBeams")?;
@@ -213,7 +213,7 @@ pub fn make_beams_py<'py>(
 #[pyo3(signature = (s, *, inPlace = false))]
 pub fn make_tuplet_brackets_py<'py>(
     s: &Bound<'py, PyAny>,
-    inPlace: bool,
+    #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let made = target(s, inPlace, "makeTupletBrackets")?;
     carry(&made, |read| {
@@ -230,8 +230,8 @@ pub fn make_tuplet_brackets_py<'py>(
 #[pyo3(signature = (s, *, setNewStems = true, overrideConsistentStemDirections = false))]
 pub fn set_stem_direction_py(
     s: &Bound<'_, PyAny>,
-    setNewStems: bool,
-    overrideConsistentStemDirections: bool,
+    #[pyo3(from_py_with = crate::truthy)] setNewStems: bool,
+    #[pyo3(from_py_with = crate::truthy)] overrideConsistentStemDirections: bool,
 ) -> PyResult<()> {
     if !setNewStems || overrideConsistentStemDirections {
         return Err(MakeNotationException::new_err(
@@ -347,8 +347,8 @@ pub(crate) fn iterate_beam_groups(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> 
 fn beam_groups_py<'py>(
     py: Python<'py>,
     s: &Bound<'py, PyAny>,
-    skipNoBeams: bool,
-    recurse: bool,
+    #[pyo3(from_py_with = crate::truthy)] skipNoBeams: bool,
+    #[pyo3(from_py_with = crate::truthy)] recurse: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     beam_groups(py, s, skipNoBeams, recurse)
 }

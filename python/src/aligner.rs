@@ -400,7 +400,7 @@ impl StreamAligner {
         targetStream: Option<Py<PyAny>>,
         sourceStream: Option<Py<PyAny>>,
         hasher_func: Option<Py<PyAny>>,
-        preHashed: bool,
+        #[pyo3(from_py_with = crate::truthy)] preHashed: bool,
     ) -> PyResult<Self> {
         let hasher = match hasher_func {
             Some(given) if !given.bind(py).is_none() => given,
@@ -642,7 +642,10 @@ impl StreamAligner {
     /// Each changed note coloured and numbered on both streams, and the
     /// two named: music21's `showChanges`.
     #[pyo3(signature = (show = false))]
-    fn showChanges(slf: &Bound<'_, Self>, show: bool) -> PyResult<()> {
+    fn showChanges(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] show: bool,
+    ) -> PyResult<()> {
         let py = slf.py();
         let (changes, target, source) = {
             let me = slf.borrow();

@@ -93,6 +93,7 @@ pub mod rest;
 pub mod roman;
 pub mod scala;
 pub mod scale;
+mod scalewrite;
 pub mod searchbase;
 pub mod searchlyrics;
 pub mod searchsegment;
@@ -172,6 +173,29 @@ pub(crate) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
     py.import("warnings")?
         .call_method1("warn", (message, deprecation_category(py)?, 2))?;
     Ok(())
+}
+
+/// A flag read for its truth, as music21 reads one with `if inPlace:`, so
+/// `1`, `0` and `None` do for `True` and `False`. A string is refused:
+/// `'False'` is true in Python, and taking it would hide the mistake.
+pub(crate) fn truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if value.is_instance_of::<pyo3::types::PyString>()
+        || value.is_instance_of::<pyo3::types::PyBytes>()
+    {
+        let shown = value.repr()?.to_string();
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "a flag is True or False, not the text {shown}"
+        )));
+    }
+    value.is_truthy()
+}
+
+/// [`truthy`] for a flag whose `None` means it was not said.
+pub(crate) fn truthy_or_none(value: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    if value.is_none() {
+        return Ok(None);
+    }
+    truthy(value).map(Some)
 }
 
 /// music21's `common.deprecated`: one warning per process, the first time
@@ -1031,12 +1055,14 @@ class NotPorted:
 
     def __get__(self, instance, owner=None):
         raise AttributeError(
-            f'{self.owner!r} object has no attribute {self.name!r}'
+            f'{self.owner!r} object has no attribute {self.name!r}: '
+            'not ported to music21-rs'
         )
 
     def __set__(self, instance, value):
         raise AttributeError(
-            f'{self.owner!r} object has no attribute {self.name!r}'
+            f'{self.owner!r} object has no attribute {self.name!r}: '
+            'not ported to music21-rs'
         )
 
 
