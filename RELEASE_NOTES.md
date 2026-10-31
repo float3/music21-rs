@@ -35,6 +35,10 @@ DECISIONS.md; these are the changes they called for.
   voice-leading quartets between them and the timespans' parentage, the
   stream's own notes handed back; a tree is read, not edited in place.
 
+- **A humdrum `!!` comment read standalone stays in the score** as the
+  wheel's `GlobalComment`, as music21's reader keeps it; once installed it
+  is music21's own.
+
 - **Keys and scales `write` and `show`**: MusicXML, MIDI, Scala and text,
   matching music21's output; once installed they are no longer blocked.
 

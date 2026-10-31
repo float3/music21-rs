@@ -7053,3 +7053,25 @@ def test_what_as_timespans_leaves_unported_says_so():
     assert len(loose.asTimespans(flatten=False)) == 2
     with pytest.raises(NotImplementedError):
         score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)
+
+
+def test_a_humdrum_comment_read_standalone_stays_in_the_score():
+    """A `!!` line read without music21 stands in the score as the
+    package's `GlobalComment`, as music21's reader puts it there."""
+    read = m.from_humdrum("!!first\n**kern\n*M2/4\n=1\n4c\n4d\n==\n*-\n")
+    said = [e for e in read if type(e).__name__ == "GlobalComment"]
+    assert [(e.comment, e.priority) for e in said] == [("first", -37)]
+    assert repr(said[0]) == "<music21.humdrum.spineParser.GlobalComment 'first'>"
+
+
+def test_a_global_comment_strips_its_bangs():
+    """music21's `GlobalComment('!! this is a global comment')`."""
+    said = m.GlobalComment("!! this is a global comment")
+    assert said.comment == "this is a global comment"
+    assert "GlobalComment" in said.classes
+
+    held = m.Stream()
+    held.append(said)
+    assert [e.comment for e in held.flatten() if type(e).__name__ == "GlobalComment"] == [
+        "this is a global comment"
+    ]

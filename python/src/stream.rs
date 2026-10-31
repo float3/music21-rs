@@ -4870,8 +4870,8 @@ fn element_object_as<'py>(
             Some(made) => made,
             None => return Ok(None),
         },
-        // music21's own, on music21's streams: the package has no class for
-        // a Humdrum comment, and its own streams leave one out.
+        // music21's own on music21's streams, which install nothing over
+        // it; the package's own on the package's.
         StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
             let made = py
                 .import("music21.humdrum.spineParser")?
@@ -4880,6 +4880,15 @@ fn element_object_as<'py>(
             made.setattr("priority", said.priority())?;
             made
         }
+        StreamElement::GlobalComment(said) => element_new(
+            py,
+            "music21.humdrum.spineParser",
+            "GlobalComment",
+            crate::spineparser::GlobalComment::wrap(said.clone()),
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -4890,7 +4899,6 @@ fn element_object_as<'py>(
         | StreamElement::Break(_)
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
-        | StreamElement::GlobalComment(_)
         | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
     };
     carry_notation(py, element, &made)?;
@@ -5310,6 +5318,15 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         );
         text.set_placement(placement_of(object));
         return Ok(Some(StreamElement::TextExpression(text)));
+    }
+    // The package's own or music21's: both say what they say and where
+    // they sort.
+    if is_of_class(object, &pyo3::types::PyString::new(py, "GlobalComment"))? {
+        let said = music21_rs_crate::humdrum::GlobalComment::new(
+            object.getattr("comment")?.str()?.to_string(),
+            object.getattr("priority")?.extract()?,
+        );
+        return Ok(Some(StreamElement::GlobalComment(said)));
     }
     if is_of_class(object, &pyo3::types::PyString::new(py, "RepeatExpression"))? {
         let class: String = object.get_type().getattr("__name__")?.extract()?;

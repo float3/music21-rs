@@ -192,8 +192,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - the wheel's hand-back loses humdrum tandems, and standalone its `!!`
-     comments (installed, they are music21's own `GlobalComment`).
+   - the wheel's hand-back loses humdrum tandems.
    - standalone, a wheel measure is listed as music21 lists it only where a
      stream is asked by class, flattened or walked: `len`, indexing and
      plain iteration leave its barlines out (DECISIONS.md, "a measure's

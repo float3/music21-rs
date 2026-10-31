@@ -103,6 +103,7 @@ pub mod serial;
 pub mod sieve;
 pub mod spanner;
 mod spelling;
+pub mod spineparser;
 pub mod stream;
 pub mod tablature;
 pub mod tempo;
@@ -1871,6 +1872,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     primitives::register(m)?;
     fixer::register(m)?;
     harmparser::register(m)?;
+    spineparser::register(m)?;
     hasher::register(m)?;
     searchbase::register(m)?;
     searchlyrics::register(m)?;
