@@ -398,7 +398,7 @@ fn key_and_octave(value: Option<&Bound<'_, PyAny>>) -> PyResult<(RsKey, Option<i
         return Ok((RsKey::from_tonic(&name).map_err(roman_error)?, None));
     }
     if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
-        return Ok((key.inner.clone(), None));
+        return Ok((key.current(value.py()), None));
     }
     // Anything else that has a tonic and a mode: a scale of ours, or one of
     // music21's own.
@@ -589,7 +589,7 @@ fn degree_mode(key_or_scale: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Strin
         }));
     }
     if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
-        return Ok(Some(key.inner.mode().to_string()));
+        return Ok(Some(key.current(value.py()).mode().to_string()));
     }
     if value.is_instance_of::<crate::scale::DiatonicScale>() {
         return value.getattr("type")?.extract().map(Some);

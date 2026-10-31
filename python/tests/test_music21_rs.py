@@ -183,6 +183,125 @@ def test_key_and_signature():
     assert [p.name for p in m.KeySignature(2).alteredPitches] == ["F#", "C#"]
 
 
+def test_a_key_follows_its_tonic_edited_in_place():
+    """music21's tonic is a plain attribute: an edit to it moves what the
+    key reads off the tonic, while what it reads off its sharps stays."""
+    key = m.Key("C")
+    key.tonic.name = "B"
+    assert str(key) == "B major"
+    assert repr(key) == "<music21.key.Key of B major>"
+    assert key.name == "B major"
+    assert [p.nameWithOctave for p in key.pitches] == [
+        "B4", "C#5", "D#5", "E5", "F#5", "G#5", "A#5", "B5",
+    ]
+    assert key.pitchFromDegree(3).nameWithOctave == "D#5"
+    assert key.tonicPitchNameWithCase == "B"
+    assert repr(key.getRelativeMinor()) == "<music21.scale.MinorScale G# minor>"
+    assert repr(key.parallel) == "<music21.key.Key of b minor>"
+
+    assert key.sharps == 0
+    assert repr(key.relative) == "<music21.key.Key of a minor>"
+    assert repr(key.asKey()) == "<music21.key.Key of C major>"
+    assert repr(key.getScale()) == "<music21.scale.MajorScale C major>"
+    assert repr(key.transpose(2)) == "<music21.key.Key of D major>"
+    assert key.alteredPitches == []
+    assert key != m.Key("B")
+
+
+def test_a_key_follows_an_accidental_put_on_its_tonic():
+    key = m.Key("C")
+    key.tonic.accidental = m.Accidental("sharp")
+    assert str(key) == "C# major"
+    assert key.sharps == 0
+
+
+def test_a_key_keeps_the_pitch_it_was_given():
+    tonic = m.Pitch("E")
+    key = m.Key(tonic)
+    assert key.tonic is tonic
+    tonic.name = "F"
+    assert str(key) == "F major"
+    assert key.sharps == 4
+
+    note = m.Note("E")
+    assert m.Key(note).tonic is note.pitch
+
+
+def test_a_tonic_set_on_a_key_leaves_its_signature():
+    key = m.Key("C")
+    old = key.tonic
+    key.tonic = m.Pitch("D")
+    assert str(key) == "D major"
+    assert key.sharps == 0
+    assert repr(key.relative) == "<music21.key.Key of a minor>"
+    assert repr(key.parallel) == "<music21.key.Key of d minor>"
+
+    # The pitch handed over before is no longer the key's.
+    old.name = "E"
+    assert str(key) == "D major"
+
+    line = m.Stream()
+    line.insert(0.0, key)
+    line.insert(0.0, m.Note("C4"))
+    written = m.to_musicxml(line, make_notation=True)
+    assert re.findall(r"<fifths>(-?\d+)</fifths>", written) == ["0"]
+
+
+def test_a_mode_set_on_a_key_leaves_its_signature():
+    """music21's mode is a plain attribute: setting it renames the key and
+    leaves the sharps and the scale type it was made with."""
+    key = m.Key("B")
+    key.mode = "minor"
+    assert str(key) == "b minor"
+    assert key.sharps == 5
+    assert key.type == "major"
+    assert key.name == "B major"
+    assert key.tonicPitchNameWithCase == "b"
+    assert repr(key.relative) == "<music21.key.Key of B major>"
+    assert repr(key.parallel) == "<music21.key.Key of B major>"
+    assert key != m.Key("b")
+    assert key != m.Key("B")
+    assert copy.deepcopy(key).type == "major"
+
+
+def test_a_numeral_and_a_score_read_a_key_edited_in_place():
+    key = m.Key("C")
+    key.tonic.name = "B"
+    numeral = m.RomanNumeral("V", key)
+    assert [p.nameWithOctave for p in numeral.pitches] == ["F#5", "A#5", "C#6"]
+
+    line = m.Stream()
+    line.insert(0.0, key)
+    line.insert(0.0, m.Note("C4"))
+    written = m.to_musicxml(line, make_notation=True)
+    assert re.findall(r"<fifths>(-?\d+)</fifths>", written) == ["0"]
+
+
+def test_a_key_edited_in_place_answers_as_music21s_once_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import re
+import music21_rs as m
+m.install_into_music21()
+from music21 import key, roman, stream, note
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+k = key.Key('C')
+k.tonic.name = 'B'
+print(k, k.sharps, k.relative, k.parallel)
+print([p.nameWithOctave for p in roman.RomanNumeral('V', k).pitches])
+written = GeneralObjectExporter(stream.Stream([k, note.Note()])).parse().decode()
+print(re.findall(r'<fifths>(-?[0-9]+)</fifths>', written))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "B major 0 a minor b minor",
+        "['F#5', 'A#5', 'C#6']",
+        "['0']",
+    ]
+
+
 def test_tone_row_operations():
     row = m.pcToToneRow([0, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11])
     assert row.pitchClasses() == [0, 2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -676,6 +795,190 @@ def test_a_measures_barlines_are_found_where_they_are_listed():
     assert named(bar.getElementsByClass("Barline")) == ["Barline"]
 
 
+def test_a_measure_names_itself_by_its_number():
+    """A measure's repr names its number, suffix and all, as music21's
+    does; an id a caller gave still wins, and other streams keep theirs."""
+    bar = m.Measure(number=3)
+    assert repr(bar) == "<music21.stream.Measure 3>"
+    bar.numberSuffix = "a"
+    assert repr(bar) == "<music21.stream.Measure 3a>"
+    bar.id = "pickup"
+    assert repr(bar) == "<music21.stream.Measure pickup>"
+    assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "offset",
+        "activeSite",
+        "beat",
+        "beatStr",
+        "beatStrength",
+        "beatDuration",
+        "measureNumber",
+    ],
+)
+def test_an_element_says_why_it_cannot_say_where_it_stands(name):
+    """The package keeps no sites, so what an element would answer through
+    one is refused with the reason and where to ask instead."""
+    for element in (
+        m.Note("C4"),
+        m.Rest(),
+        m.Chord("C4 E4"),
+        m.TimeSignature("3/4"),
+        m.TrebleClef(),
+        m.Barline(),
+        m.Measure(),
+    ):
+        if name == "beatDuration" and isinstance(element, m.TimeSignature):
+            # A meter's own beat, which music21's meter answers too.
+            continue
+        with pytest.raises(AttributeError, match=r"elementOffset.*placed\(\).*install_into_music21"):
+            getattr(element, name)
+        assert not hasattr(element, name)
+    with pytest.raises(AttributeError, match=r"has no attribute 'nonesuch'$"):
+        m.Note().nonesuch
+
+
+def test_every_element_class_refuses_a_site():
+    """Every class standing in for one of music21's `Music21Object`s
+    refuses what a site would answer, not only the few tried above."""
+    base = pytest.importorskip("music21.base")
+    import importlib
+
+    unhooked = []
+    for name in dir(m.music21_rs):
+        cls = getattr(m.music21_rs, name)
+        if not isinstance(cls, type) or issubclass(cls, BaseException):
+            continue
+        try:
+            original = getattr(importlib.import_module(cls.__module__), cls.__name__)
+        except (ImportError, AttributeError):
+            continue
+        if not (isinstance(original, type) and issubclass(original, base.Music21Object)):
+            continue
+        if cls.__getattribute__ is object.__getattribute__:
+            unhooked.append(name)
+    assert unhooked == []
+
+
+def test_an_installed_element_answers_where_it_stands():
+    """Installed, music21's own `offset` and `beat` answer: the refusal
+    only runs where nothing else does."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import meter, note, stream
+n = note.Note()
+print(n.offset, n.activeSite)
+s = stream.Stream([meter.TimeSignature('3/4')])
+s.append([note.Note(), note.Note()])
+second = s.notes[1]
+print(second.offset, second.beat, second.beatStr, second.measureNumber)
+try:
+    n.nonesuch
+except AttributeError as error:
+    print(type(error).__name__)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "0.0 None",
+        "1.0 2.0 2 None",
+        "AttributeError",
+    ]
+
+
+def test_store_at_end_keeps_a_barline_as_the_right_one():
+    """music21's `storeAtEnd` and `isAtEnd`: a barline stored at the end is
+    the stream's right barline, listed last and left out of `len`."""
+    line = m.Stream()
+    first = m.Note("C")
+    line.append(first)
+    closing = m.Barline("final")
+    line.storeAtEnd(closing)
+    assert line.rightBarline is closing
+    assert line.isAtEnd(closing)
+    assert not line.isAtEnd(first)
+    assert closing in line
+    assert len(line) == 1
+    assert float(line.elementOffset(closing)) == 1.0
+    assert list(line.getElementsByClass("Barline")) == [closing]
+    with pytest.raises(m.StreamException):
+        line.isAtEnd(m.Note("E"))
+
+    repeated = m.Measure()
+    repeat = m.Repeat(direction="start")
+    repeated.storeAtEnd([repeat])
+    assert repeated.rightBarline is repeat
+    assert repeat.direction == "start"
+
+
+def test_store_at_end_refuses_what_it_cannot_keep():
+    """A length music21 refuses too; a second barline, or anything that is
+    not one, music21 keeps and the package does not."""
+    line = m.Stream()
+    with pytest.raises(m.StreamException, match="non-zero Duration"):
+        line.storeAtEnd(m.Note("C"))
+    line.storeAtEnd(m.Barline())
+    for other in (m.Barline("double"), m.TrebleClef()):
+        with pytest.raises(m.StreamException, match="not ported to music21-rs$"):
+            line.storeAtEnd(other)
+    assert len(line.getElementsByClass("Barline")) == 1
+
+
+def test_placed_answers_where_each_element_stands():
+    """`placed` answers, for every element, what music21 asks the element's
+    sites for: the element itself, where it stands in the stream asked,
+    its measure and its beat."""
+    meter = m.TimeSignature("3/4")
+    first_note, long_note, last_note = m.Note("C4"), m.Note("D4", quarterLength=2), m.Note("E4")
+    first = m.Measure(number=1)
+    first.insert(0, meter)
+    first.append([first_note, long_note])
+    second = m.Measure(number=2)
+    second.append(last_note)
+    part = m.Part()
+    part.append([first, second])
+
+    placed = part.placed()
+    assert [each.element for each in placed] == [meter, first_note, long_note, last_note]
+    assert all(
+        each.element is held for each, held in zip(placed, [meter, first_note, long_note, last_note])
+    )
+    assert [float(each.offset) for each in placed] == [0.0, 0.0, 1.0, 3.0]
+    assert [each.measureNumber for each in placed] == [1, 1, 1, 2]
+    assert [each.beat for each in placed] == [1.0, 1.0, 2.0, 1.0]
+    assert placed[2].beatStr == "2"
+    assert placed[2].beatDuration.quarterLength == 1.0
+    assert [each.beatStrength for each in placed] == [1.0, 1.0, 0.5, 1.0]
+    with pytest.raises(AttributeError):
+        placed[0].offset = 2.0
+
+
+def test_placed_without_a_meter_answers_as_music21_does():
+    """With no meter in force music21 answers `nan`, `'nan'` and a
+    duration of nothing; outside a measure there is no measure number."""
+    alone = m.Stream([m.Note("C4")]).placed()[0]
+    assert math.isnan(alone.beat)
+    assert alone.beatStr == "nan"
+    assert alone.beatDuration.quarterLength == 0.0
+    assert math.isnan(alone.beatStrength)
+    assert alone.measureNumber is None
+
+
+def test_placed_names_an_object_held_twice_once():
+    """An object held twice is placed once, where `elementOffset` puts it."""
+    line = m.Stream()
+    twice = m.Note("C4")
+    line.insert(0, twice)
+    line.insert(2, twice)
+    assert [float(each.offset) for each in line.placed()] == [float(line.elementOffset(twice))]
+
+
 def test_the_flags_music21_takes_more_than_truth_for():
     """`getTimeSignatures(sortByCreationTime='reverse')` is music21's own
     documented spelling, and `atSoundingPitch` takes what equals True or
@@ -1121,6 +1424,89 @@ def test_every_class_holding_python_objects_is_traversed_or_says_why():
     stale = sorted(set(_UNTRAVERSED) - set(found))
     assert unexplained == [], f"traverse these or say why: {unexplained}"
     assert stale == [], f"these traverse now; drop them here: {stale}"
+
+
+def _struct_fields(src: pathlib.Path):
+    """Each #[pyclass] struct's fields, name to type, comments and
+    attributes left out, keyed by class name."""
+    found = {}
+    for path in sorted(src.glob("*.rs")):
+        text = path.read_text()
+        for match in re.finditer(
+            r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
+            text,
+            re.S,
+        ):
+            name, body = match.group(1), match.group(2)
+            assert name not in found, f"two #[pyclass] structs named {name}"
+            lines = [
+                line
+                for line in body.splitlines()
+                if not line.strip().startswith(("//", "#["))
+            ]
+            fields, depth, current = {}, 0, ""
+            for char in "\n".join(lines) + ",":
+                depth += {"<": 1, "(": 1, ">": -1, ")": -1}.get(char, 0)
+                if char == "," and depth == 0:
+                    field = re.match(
+                        r"\s*(?:pub(?:\([^)]*\))?\s+)?(\w+)\s*:\s*(.+)", current, re.S
+                    )
+                    if field:
+                        fields[field.group(1)] = " ".join(field.group(2).split())
+                    current = ""
+                    continue
+                current += char
+            found[name] = fields
+    return found
+
+
+def test_every_python_object_a_facade_holds_is_accounted_for():
+    """An object handed out and edited in place is lost if the crate reads
+    the value and never the object. `data/py_fields.toml` says, for every
+    Python object a class carrying a crate value holds, how an edit to it
+    reaches the value, and why a class with no value has none to reach."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    table = tomllib.loads((root / "data" / "py_fields.toml").read_text())
+    structs = _struct_fields(root / "python" / "src")
+    holding = {
+        name: [field for field, kind in fields.items() if re.search(r"\bPy<", kind)]
+        for name, fields in structs.items()
+    }
+    holding = {name: held for name, held in holding.items() if held}
+
+    problems = []
+    for name in sorted(set(table) - set(holding)):
+        problems.append(f"{name}: no #[pyclass] holding Python objects")
+    for name, held in sorted(holding.items()):
+        rows = table.get(name)
+        if rows is None:
+            problems.append(f"{name}: not listed")
+            continue
+        if rows.get("kind") == "facade-only":
+            if not rows.get("reason"):
+                problems.append(f"{name}: facade-only with no reason")
+            for carried in ("inner", "stored"):
+                if carried in structs[name]:
+                    problems.append(f"{name}: has `{carried}`, so list its fields")
+            continue
+        for field in sorted(set(held) - set(rows)):
+            problems.append(f"{name}.{field}: not listed")
+        for field in sorted(set(rows) - set(held)):
+            problems.append(f"{name}.{field}: no such Py field")
+        for field, row in rows.items():
+            kind = row.get("kind") if isinstance(row, dict) else None
+            if kind == "identity":
+                sync = row.get("sync")
+                if not sync or (sync == "read live" and not row.get("why")):
+                    problems.append(f"{name}.{field}: identity needs a sync or a why")
+            elif kind in ("value", "cache"):
+                if not row.get("note"):
+                    problems.append(f"{name}.{field}: {kind} needs a note")
+            else:
+                problems.append(f"{name}.{field}: unknown kind {kind!r}")
+    assert problems == [], "\n".join(problems)
 
 
 def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
@@ -7089,3 +7475,116 @@ def test_a_humdrum_tandem_read_standalone_stays_in_the_score():
     later = [e for e in measure if type(e).__name__ == "MiscTandem"]
     assert [(e.tandem, measure.elementOffset(e)) for e in later] == [("*foo", 1.0)]
     assert repr(later[0]) == "<music21.humdrum.spineParser.MiscTandem *foo>"
+
+
+def bar_of(*elements):
+    """A part of one 4/4 bar holding `elements`, to be written out."""
+    bar = m.Measure()
+    bar.append(m.TimeSignature("4/4"))
+    bar.append(list(elements))
+    part = m.Part()
+    part.append(bar)
+    return part
+
+
+def test_a_chords_duration_edited_in_place_is_written():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.duration.type = "half"
+    (read,) = m.from_midi(m.to_midi(bar_of(chord, m.Rest(2.0)))).recurse().getElementsByClass(
+        "Chord"
+    )
+    assert read.quarterLength == 2.0
+
+
+def test_a_chords_volume_edited_in_place_is_played():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.volume.velocity = 100
+    given = m.Chord(["C4", "E4", "G4"])
+    given.volume = m.Volume(velocity=100)
+    for each in (chord, given):
+        read = m.from_midi(m.to_midi(bar_of(each, m.Rest(3.0))))
+        assert {note.volume.velocity for note in read.recurse().notes[0]} == {100}
+
+
+def test_a_chords_beams_edited_in_place_are_written():
+    first = m.Chord(["C4", "E4"], quarterLength=0.5)
+    first.beams.append("start")
+    second = m.Chord(["C4", "E4"], quarterLength=0.5)
+    second.beams.append("stop")
+    written = m.to_musicxml(bar_of(first, second, m.Rest(3.0)))
+    assert re.findall(r"<beam number=\"1\">(\w+)</beam>", written) == ["begin", "end"]
+
+
+def test_a_chords_colour_set_on_its_style_is_written():
+    chord = m.Chord(["C4", "E4"])
+    chord.style.color = "red"
+    written = m.to_musicxml(bar_of(chord, m.Rest(3.0)))
+    assert 'color="#FF0000"' in written
+
+
+def test_a_rests_tie_reaches_the_value_and_back():
+    # RomanText holds a rest over the barline with a tie, as music21 does.
+    read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")
+    rests = list(read.recurse().getElementsByClass("Rest"))
+    assert [rest.tie.type for rest in rests] == ["start", "stop"]
+
+    first, second = m.Rest(2.0), m.Rest(2.0)
+    first.tie = m.Tie("start")
+    second.tie = m.Tie("start")
+    second.tie.type = "stop"
+    written = m.to_musicxml(bar_of(first, second))
+    assert re.findall(r"<tie type=\"(\w+)\" />", written) == ["start", "stop"]
+
+
+def test_an_ornaments_accidental_edited_in_place_is_written():
+    # As music21 writes them, making notation: a hidden accidental is not.
+    def marks(edit):
+        trill = m.Trill()
+        trill.accidental = m.Accidental("sharp")
+        edit(trill.accidental)
+        note = m.Note("C4", quarterLength=4.0)
+        note.expressions.append(trill)
+        written = m.to_musicxml(bar_of(note), make_notation=True)
+        return re.findall(r"<accidental-mark[^>]*>(\S+)</accidental-mark>", written)
+
+    assert marks(lambda accidental: None) == ["sharp"]
+    assert marks(lambda accidental: setattr(accidental, "displayStatus", False)) == []
+    assert marks(lambda accidental: accidental.set("flat")) == ["flat"]
+
+
+def test_a_chords_fixed_inversion_survives_a_copy():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.inversion(1, transposeOnSet=False)
+    chord.editorial.comment = "read in first inversion"
+    chord.storedInstrument = m.Piano()
+    copied = copy.deepcopy(chord)
+    assert copied.inversion() == 1 and copied.inversionName() == 6
+    assert copied._overrides == {"inversion": 1}
+    assert copied._overrides is not chord._overrides
+    assert copied.editorial.comment == "read in first inversion"
+    assert copied.storedInstrument.instrumentName == "Piano"
+    assert copied.storedInstrument is not chord.storedInstrument
+
+    chord.setInversion(None, inPlace=True)
+    assert chord.inversion() == 0 and copy.deepcopy(chord).inversion() == 0
+
+
+def test_a_notes_instrument_and_editorial_survive_a_copy():
+    note = m.Note("C4")
+    note.editorial.comment = "a passing tone"
+    note.storedInstrument = m.Violin()
+    copied = copy.deepcopy(note)
+    assert copied.editorial.comment == "a passing tone"
+    assert copied.storedInstrument.instrumentName == "Violin"
+    assert copied.storedInstrument is not note.storedInstrument
+
+
+def test_a_chords_edits_in_place_survive_a_pickle():
+    chord = m.Chord(["C4", "E4", "G4"])
+    chord.volume.velocity = 100
+    chord.notes[0].pitch.name = "D"
+    chord.notes[1].volume.velocity = 40
+    thawed = pickle.loads(pickle.dumps(chord))
+    assert thawed.volume.velocity == 100
+    assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
+    assert thawed.notes[1].volume.velocity == 40

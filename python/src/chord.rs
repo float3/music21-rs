@@ -918,7 +918,42 @@ impl Chord {
                 *held = object.borrow(py).synced(py);
             }
         }
+        // The chord's own objects, as a note's: an edit through
+        // `c.duration`, `c.volume`, `c.beams` or `c.style` is an edit to the
+        // chord.
+        if let Some(duration) = self.duration_value(py) {
+            chord.set_duration(duration);
+        }
+        if let Some(volume) = &self.volume {
+            fold_volume(&mut chord, volume.borrow(py).inner.clone());
+        }
+        if let Some(beams) = &self.beams {
+            chord.set_beams(beams.borrow_mut(py).settled_value(py));
+        }
+        if self.style.is_some() {
+            chord.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+        }
+        // music21's own doctests write `_overrides` directly, so the
+        // dictionary, once there is one, is where a fixed inversion is.
+        if let Some(overrides) = &self.overrides {
+            let fixed = overrides
+                .bind(py)
+                .get_item("inversion")
+                .ok()
+                .flatten()
+                .and_then(|fixed| fixed.extract::<u8>().ok());
+            chord.set_inversion_override(fixed);
+        }
         chord
+    }
+
+    /// The duration this chord actually has: the object music21 hands out
+    /// when something has asked for one, and `inner`'s otherwise.
+    fn duration_value(&self, py: Python<'_>) -> Option<RsDuration> {
+        match &self.duration {
+            Some(object) => crate::duration::duration_value_of(py, object),
+            None => self.inner.duration().cloned(),
+        }
     }
 
     /// The chord with the notation its note objects carry written back onto
@@ -1442,7 +1477,7 @@ fn override_with(chord: &Bound<'_, Chord>, key: &str, value: &RsPitch) -> PyResu
             Pitch::wrap(value.clone(), false),
         )?,
     };
-    let overrides = chord.borrow_mut()._overrides(py);
+    let overrides = chord.borrow_mut()._overrides(py)?;
     overrides.bind(py).set_item(key, pitch)
 }
 
@@ -1468,6 +1503,9 @@ fn chord_pitch_named(chord: &Bound<'_, Chord>, value: &RsPitch) -> PyResult<Opti
 /// asks the chord to work the answer out again and to go on doing so.
 fn clear_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
     let py = chord.py();
+    if key == "inversion" {
+        chord.borrow_mut().inner.set_inversion_override(None);
+    }
     let Some(overrides) = chord.borrow().overrides.as_ref().map(|d| d.clone_ref(py)) else {
         return Ok(());
     };
@@ -1501,6 +1539,26 @@ fn repoint_override(chord: &Bound<'_, Chord>, key: &str) -> PyResult<()> {
         }
     }
     Ok(())
+}
+
+/// Writes the chord's own volume into it, keeping whatever its notes carry.
+///
+/// The crate's `set_volume` drops the notes' volumes, as music21's setter
+/// does; but a volume read off the chord and then edited in place leaves
+/// music21's notes alone, and a writer reads theirs first where every note
+/// has one.
+fn fold_volume(chord: &mut RsChord, volume: RsVolume) {
+    let kept: Vec<Option<RsVolume>> = chord
+        .notes()
+        .iter()
+        .map(|note| note.has_volume_information().then(|| note.volume()))
+        .collect();
+    chord.set_volume(Some(volume));
+    for (note, kept) in chord.notes_mut().iter_mut().zip(kept) {
+        if kept.is_some() {
+            note.set_volume(kept);
+        }
+    }
 }
 
 /// A chord's fixed answers moved by an interval: music21 transposes every
@@ -1568,7 +1626,7 @@ fn chord_key_in_force(chord: &Bound<'_, Chord>) -> PyResult<Option<RsKey>> {
 /// ours — the chord doctests build one without the key facade in place.
 fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
     if let Ok(key) = value.extract::<PyRef<'_, crate::key::Key>>() {
-        return Some(key.inner.clone());
+        return Some(key.current(value.py()));
     }
     let tonic = value.getattr("tonic").ok()?;
     let name: String = tonic
@@ -1585,6 +1643,12 @@ fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
 
 #[pymethods]
 impl Chord {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers -- so a note is a
     /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.
@@ -1650,7 +1714,9 @@ impl Chord {
             extra.set_item("style", chord.style.as_ref())?;
         }
         slf.borrow_mut().settle_beams(py);
-        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
+        // Through the objects handed out, as for writing: a volume edited
+        // in place is in them and not yet in the value.
+        crate::pickled_extra(slf, &slf.borrow().synced_inner(py), Some(&extra))
     }
 
     fn __setstate__(
@@ -2069,12 +2135,20 @@ impl Chord {
     /// music21's `_overrides`: the answers fixed by hand, as a live
     /// dictionary. Writing `_overrides['root'] = None` is how music21's own
     /// doctests say a chord has no root.
+    ///
+    /// An inversion fixed in the value is in it from the start, so the
+    /// dictionary and the value say the same.
     #[getter]
-    fn _overrides(&mut self, py: Python<'_>) -> Py<PyDict> {
-        let overrides = self
-            .overrides
-            .get_or_insert_with(|| PyDict::new(py).unbind());
-        overrides.clone_ref(py)
+    fn _overrides(&mut self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        if let Some(overrides) = &self.overrides {
+            return Ok(overrides.clone_ref(py));
+        }
+        let overrides = PyDict::new(py);
+        if let Some(fixed) = self.inner.overridden_inversion() {
+            overrides.set_item("inversion", fixed)?;
+        }
+        self.overrides = Some(overrides.clone().unbind());
+        Ok(overrides.unbind())
     }
 
     #[pyo3(signature = (newroot = None, *, find = None))]
@@ -2355,7 +2429,14 @@ impl Chord {
         if !find {
             return Ok(Some(-1));
         }
-        Ok(Some(slf.borrow().inner.inversion().map_or(-1, i32::from)))
+        // With a dictionary, what is not in it is not fixed; without one,
+        // the value says.
+        let me = slf.borrow();
+        let found = match me.overrides {
+            Some(_) => me.inner.found_inversion(),
+            None => me.inner.inversion(),
+        };
+        Ok(Some(found.map_or(-1, i32::from)))
     }
 
     /// The chord in a new inversion, its lowest note raised by octaves until
@@ -3063,6 +3144,11 @@ impl Chord {
         warn_accessor(py, NoteAccessor::SetColor)?;
         match pitchTarget.filter(|target| !target.is_none()) {
             None => {
+                // The style is where the colour is read from once there is
+                // one, as music21's `setColor` writes it there.
+                if let Some(style) = &self.style {
+                    style.bind(py).setattr("color", value.clone())?;
+                }
                 self.inner.set_color(value);
                 Ok(())
             }
@@ -3294,7 +3380,12 @@ impl Chord {
             .into_iter()
             .flatten()
             .collect();
-        let inner = if velocities.is_empty() {
+        // A value with a volume of its own, as one read back from a pickle
+        // is, answers with it: music21's own comes first.
+        let own = slf.borrow().inner.has_volume_information();
+        let inner = if own {
+            slf.borrow().inner.volume()
+        } else if velocities.is_empty() {
             RsVolume::new()
         } else {
             let total: i32 = velocities.iter().sum();
@@ -3336,8 +3427,11 @@ impl Chord {
                 Volume::wrap(volume_from_any(value)?),
             )?,
         };
+        let inner = object.borrow(py).inner.clone();
         object.borrow_mut(py).set_client(Some(slf.as_any()));
-        slf.borrow_mut().volume = Some(object);
+        let mut me = slf.borrow_mut();
+        me.inner.set_volume(Some(inner));
+        me.volume = Some(object);
         Ok(())
     }
 
@@ -3606,6 +3700,19 @@ impl Chord {
         copied.expressions = crate::note::copied_list(py, self.expressions.as_ref())?;
         copied.articulations = crate::note::copied_list(py, self.articulations.as_ref())?;
         copied.style = crate::notation::copied_style(py, self.style.as_ref());
+        // What music21's deep copy carries along: the answers fixed by hand,
+        // the instrument and what an analysis wrote on the chord.
+        let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        let copied_of = |held: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+            held.as_ref()
+                .map(|held| deepcopy.call1((held,)).map(pyo3::Bound::unbind))
+                .transpose()
+        };
+        copied.stored_instrument = copied_of(&self.stored_instrument)?;
+        copied.editorial = copied_of(&self.editorial)?;
+        if let Some(overrides) = &self.overrides {
+            copied.overrides = Some(deepcopy.call1((overrides,))?.extract()?);
+        }
         Ok(copied)
     }
 }
@@ -3686,8 +3793,14 @@ fn set_inversion_of(
         // music21 records the answer without moving anything, which is how
         // a chord badly spelt or with a note added is told what inversion it
         // stands in.
-        let overrides = slf.borrow_mut()._overrides(py);
+        let overrides = slf.borrow_mut()._overrides(py)?;
         overrides.bind(py).set_item("inversion", inversion)?;
+        // The value carries it too, for whatever reads the chord as one;
+        // one past what the crate can hold stays in the dictionary alone.
+        let mut me = slf.borrow_mut();
+        me.inner
+            .set_inversion_override(u8::try_from(inversion).ok());
+        me.clear_cache();
         return Ok(());
     }
     if slf.borrow().inner.pitches().is_empty() {

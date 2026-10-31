@@ -121,6 +121,12 @@ pub struct TextBox {
 
 #[pymethods]
 impl TextBox {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// music21's `TextBox(content=None, x=500, y=500)`, which hangs the
     /// text from the top of the page and centres it across.
     #[new]

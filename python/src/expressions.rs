@@ -189,7 +189,7 @@ impl Ornament {
     /// The crate's ornament with the accidentals read afresh off the objects
     /// a caller handed over, since a caller may have changed one since --
     /// shown or hidden it, most often.
-    fn synced(&self, py: Python<'_>) -> PyResult<RsOrnament> {
+    pub(crate) fn synced(&self, py: Python<'_>) -> PyResult<RsOrnament> {
         let mut inner = self.inner.clone();
         if let Some(accidental) = &self.accidental {
             inner
@@ -386,6 +386,12 @@ fn direction_word(direction: Option<IntervalDirection>) -> &'static str {
 
 #[pymethods]
 impl Ornament {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
@@ -1373,6 +1379,12 @@ impl TextExpression {
 
 #[pymethods]
 impl TextExpression {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// music21's `TextExpression(content=None)`.
     #[new]
     #[pyo3(signature = (content = None, **_keywords))]

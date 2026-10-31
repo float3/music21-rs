@@ -164,6 +164,23 @@ impl Key {
         KeySignature::new(self.sharps)
     }
 
+    /// This key written under another signature, its tonic and mode kept.
+    ///
+    /// music21 keeps a key's tonic and its sharps apart, so a tonic moved by
+    /// hand leaves the signature behind; this is such a key.
+    ///
+    /// ```
+    /// use music21_rs::key::Key;
+    ///
+    /// let key = Key::from_tonic("B").unwrap().with_sharps(0);
+    /// assert_eq!(key.tonic().name(), "B");
+    /// assert_eq!(key.sharps(), 0);
+    /// ```
+    pub fn with_sharps(mut self, sharps: IntegerType) -> Self {
+        self.sharps = sharps;
+        self
+    }
+
     /// The pitch on a one-based scale degree, counting on up past the
     /// octave: in C major the ninth degree is `D5`, which is what stacking
     /// thirds on the upper degrees needs. A tonic given with no octave is

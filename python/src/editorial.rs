@@ -87,6 +87,18 @@ impl Editorial {
         Ok(made)
     }
 
+    /// A copy holding copies of what was written, as music21's deep copy
+    /// of a note carries its editorial along.
+    fn __deepcopy__(&self, py: Python<'_>, memo: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let copied = py
+            .import("copy")?
+            .getattr("deepcopy")?
+            .call1((self.held.bind(py), memo))?;
+        Ok(Self {
+            held: copied.cast_into::<PyDict>()?.unbind(),
+        })
+    }
+
     /// Reads a name: what was written under it, an empty list or `None`
     /// for the names music21 answers those for, and otherwise an error.
     fn __getattr__<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {

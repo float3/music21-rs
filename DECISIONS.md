@@ -180,6 +180,19 @@ music21's containers costs about 3.8 times the read on a large score, still
 under music21's own parser. weak sites in the package's streams were tried
 on paper and stall on music21's tree walk, which a context search needs.
 
+*debated 2026-10-31.* a member that needs a site is refused, not absent:
+`offset`, `activeSite`, the four beat members and `measureNumber` raise an
+`AttributeError` that says why and names `elementOffset`, `placed()` and
+`install_into_music21()`. it is a `__getattr__`, never a getter, so an
+installed class still reads music21's own property. `Stream.placed()` is
+the package's own answer: one record per element, built from the crate's
+`Stream::placed`. a measure's repr names its number, as music21's does,
+without the offset, which is the part's to say. snapshots of the offset at
+hand-out and weak back-references were weighed and rejected: a snapshot is
+wrong after the first edit, and a back-reference is the site this rule
+refuses. *costs:* `placed()` is a member music21 does not have, and a
+stream's barlines and spanners get no record from it.
+
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
 from the pyo3 class and from music21's own, so music21 will keep it in a
@@ -236,6 +249,14 @@ for a pattern music21's own code barely uses; listing them closes what callers
 see. *costs:* `len(measure)`, indexing and plain iteration leave them out
 where music21's count them.
 
+*debated 2026-10-31.* `storeAtEnd` keeps one barline, as the stream's right
+barline, and `isAtEnd` asks whether something is that barline. every
+music21 path that stores at the end in practice stores a right barline; a
+courtesy clef or a second barline appears only in its examples, and a
+general box of end elements would cost every walk and writer. *costs:*
+`s.storeAtEnd(clef.TrebleClef())` is refused as not ported where music21
+accepts it.
+
 **a flag is read for its truth; a string is refused.** music21 asks
 `if inPlace:`, so `inPlace=1` and a forwarded `None` work there, and every
 flag the wheel takes reads its argument's truth. a string is a `TypeError`
@@ -280,6 +301,23 @@ chord or rest whose editorial points back at it, a slur its note keeps, a
 Clercq-Temperley song and its rules. those traverse now, and a test scans
 every class holding a Python object: each traverses it or gives the reason
 no cycle runs through it.
+
+**every Python object a facade holds is listed with what it is for.**
+`data/py_fields.toml` names each `Py` field of a class that carries a crate
+value as *identity* (a caller gets the same object back and edits it, with
+the function that folds it back in, or why it is read live), *value* (a
+copy of something the crate could carry: a debt) or *cache*; a class with no
+crate value is listed once, as facade-only. a test scans the wheel and fails
+on a field not listed or a row naming one that is gone. *debated
+2026-10-31.* the bugs this was built after were all one shape: an object
+handed out, edited in place, and a crate reader that never looked at it --
+a chord's duration, volume, beams and colour, a rest's tie, an ornament's
+accidental. a key reads its tonic the same way a tempo mark reads its
+referent: `Key::current` pulls from the Pitch it holds before every read,
+and what music21 takes from `sharps` goes through `Key::written`, so an
+edit through the tonic renames the key and leaves its signature stale, as
+music21's does. *costs:* a row per field, and an author has to say how an
+edit through an object reaches the crate before adding one.
 
 **where music21's class is the better one, music21's is the one that
 answers.** `style.Style` is the long-standing example -- a note's `style` is

@@ -80,6 +80,10 @@ pub struct Chord {
     /// A bass the caller decided on, which wins over the lowest pitch.
     #[cfg_attr(feature = "serde", serde(default))]
     bass_override: Option<Pitch>,
+    /// An inversion the caller decided on, which wins over the one the
+    /// bass and root imply: music21's `setInversion(n, transpose=False)`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    inversion_override: Option<u8>,
     /// The fermatas, ornaments and arpeggios written on the chord as a
     /// whole.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -231,6 +235,7 @@ impl Chord {
             stored_instrument: None,
             root_override: None,
             bass_override: None,
+            inversion_override: None,
             expressions: Vec::new(),
             articulations: Vec::new(),
             numeral: None,
@@ -434,8 +439,47 @@ impl Chord {
     /// Returns the inversion number the way music21 finds it: root position
     /// is `0`, and the number climbs with the chord step the bass sits on,
     /// so a bass on the seventh is `3`. `None` only for an empty chord.
+    ///
+    /// An inversion fixed with [`Self::set_inversion_override`] is the
+    /// answer, whatever the notes say.
     pub fn inversion(&self) -> Option<u8> {
+        if self.notes.is_empty() {
+            return None;
+        }
+        if let Some(fixed) = self.inversion_override {
+            return Some(fixed);
+        }
+        self.found_inversion()
+    }
+
+    /// The inversion the notes imply, ignoring any override.
+    pub fn found_inversion(&self) -> Option<u8> {
         self.inversion_with_root(self.root()?)
+    }
+
+    /// The inversion a caller fixed with [`Self::set_inversion_override`],
+    /// and nothing when none was.
+    pub fn overridden_inversion(&self) -> Option<u8> {
+        self.inversion_override
+    }
+
+    /// Fixes the inversion the chord reports without moving a note, or
+    /// clears the override with `None`: music21's
+    /// `setInversion(n, transpose=False)`, for a chord badly spelt or with a
+    /// note added that is to be read in a given inversion all the same.
+    ///
+    /// ```
+    /// use music21_rs::Chord;
+    ///
+    /// let mut chord = Chord::new("C4 E4 G4")?;
+    /// chord.set_inversion_override(Some(1));
+    /// assert_eq!(chord.inversion(), Some(1));
+    /// assert_eq!(chord.found_inversion(), Some(0));
+    /// assert_eq!(chord.inversion_name()?, Some(6));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
+    pub fn set_inversion_override(&mut self, inversion: Option<u8>) {
+        self.inversion_override = inversion;
     }
 
     /// The inversion the way [`Self::inversion`] counts it, but measured from a
@@ -458,7 +502,10 @@ impl Chord {
         let Some(root) = self.root() else {
             return Ok(None);
         };
-        let Some(inversion) = self.inversion_with_root(root) else {
+        let Some(inversion) = self
+            .inversion_override
+            .or_else(|| self.inversion_with_root(root))
+        else {
             return Ok(None);
         };
 
@@ -580,9 +627,11 @@ impl Chord {
 
     /// Rearranges the chord so it stands in the given inversion, raising the
     /// bass by octaves until it does: music21's `inversion(newInversion)`.
-    /// An inversion the chord cannot reach is an error.
+    /// An inversion or bass fixed by hand is forgotten, as music21 forgets
+    /// them. An inversion the chord cannot reach is an error.
     pub fn set_inversion(&mut self, inversion: u8) -> Result<()> {
         self.bass_override = None;
+        self.inversion_override = None;
         let mut runs = self.notes.len() + 2;
         while self.inversion() != Some(inversion) {
             if runs == 0 {
@@ -1051,7 +1100,11 @@ impl Chord {
     pub fn inversion_text(&self) -> String {
         match self.inversion() {
             Some(0) => "Root Position".to_string(),
-            Some(inversion) => format!("{} Inversion", ORDINALS[usize::from(inversion)]),
+            // An inversion fixed by hand may be past any ordinal.
+            Some(inversion) => match ORDINALS.get(usize::from(inversion)) {
+                Some(ordinal) => format!("{ordinal} Inversion"),
+                None => "Unknown Position".to_string(),
+            },
             None => "Unknown Position".to_string(),
         }
     }
@@ -1714,6 +1767,43 @@ mod tests {
         chord.set_inversion(0).unwrap();
         assert_eq!(chord.bass().map(Pitch::name), Some("C".to_string()));
         assert!(chord.set_inversion(5).is_err());
+    }
+
+    #[test]
+    fn a_fixed_inversion_wins_until_it_is_cleared() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.set_inversion_override(Some(2));
+        assert_eq!(chord.inversion(), Some(2));
+        assert_eq!(chord.overridden_inversion(), Some(2));
+        assert_eq!(chord.found_inversion(), Some(0));
+        assert_eq!(chord.inversion_name().unwrap(), Some(64));
+        assert_eq!(chord.inversion_text(), "Second Inversion");
+
+        // A copy keeps it, and so does a chord moved to another key.
+        assert_eq!(chord.clone().inversion(), Some(2));
+        let up = Interval::from_name("M2").unwrap();
+        assert_eq!(chord.transpose(&up).unwrap().inversion(), Some(2));
+
+        chord.set_inversion_override(None);
+        assert_eq!(chord.inversion(), Some(0));
+        assert_eq!(Chord::empty().inversion(), None);
+    }
+
+    #[test]
+    fn a_fixed_inversion_past_any_ordinal_is_an_unknown_position() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.set_inversion_override(Some(200));
+        assert_eq!(chord.inversion_text(), "Unknown Position");
+        assert!(chord.inversion_name().is_err());
+    }
+
+    #[test]
+    fn moving_a_chord_to_an_inversion_forgets_a_fixed_one() {
+        let mut chord = Chord::new("C4 E4 G4").unwrap();
+        chord.set_inversion_override(Some(2));
+        chord.set_inversion(1).unwrap();
+        assert_eq!(chord.overridden_inversion(), None);
+        assert_eq!(chord.bass().map(Pitch::name), Some("E".to_string()));
     }
 
     #[test]

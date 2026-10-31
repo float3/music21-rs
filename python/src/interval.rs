@@ -436,6 +436,12 @@ fn generic_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsGeneric> {
 
 #[pymethods]
 impl GenericInterval {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// The Python objects this holds, shown to the cycle collector. A note
     /// and the pitch it hands out point at each other through Rust, and
     /// without this neither of them is ever freed.
@@ -701,6 +707,12 @@ impl DiatonicInterval {
 
 #[pymethods]
 impl DiatonicInterval {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -949,6 +961,12 @@ fn semitone_object(py: Python<'_>, semitones: f64) -> PyResult<Py<PyAny>> {
 
 #[pymethods]
 impl ChromaticInterval {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// music21 freezes a score by pickling it, and what this object is lives
     /// in Rust where a pickle cannot see it — so it is written out as text,
     /// and read back into a fresh one of these.
@@ -1341,6 +1359,12 @@ pub(crate) fn transpose_pitch_by_any(
 
 #[pymethods]
 impl Interval {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// The Python objects this holds, shown to the cycle collector. A note
     /// and the pitch it hands out point at each other through Rust, and
     /// without this neither of them is ever freed.

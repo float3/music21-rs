@@ -78,6 +78,12 @@ pub struct LayoutBase;
 
 #[pymethods]
 impl LayoutBase {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**_keywords))]
     fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
@@ -117,6 +123,12 @@ pub struct ScoreLayout {
 
 #[pymethods]
 impl ScoreLayout {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -284,6 +296,12 @@ pub struct PageLayout {
 
 #[pymethods]
 impl PageLayout {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -454,6 +472,12 @@ pub struct SystemLayout {
 
 #[pymethods]
 impl SystemLayout {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -621,6 +645,12 @@ pub struct StaffLayout {
 
 #[pymethods]
 impl StaffLayout {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     #[new]
     #[pyo3(signature = (**keywords))]
     fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {

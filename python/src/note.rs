@@ -783,6 +783,16 @@ impl Note {
         copy.expressions = copied_list(py, self.expressions.as_ref())?;
         copy.articulations = copied_list(py, self.articulations.as_ref())?;
         copy.style = crate::notation::copied_style(py, self.style.as_ref());
+        // What music21's deep copy carries along: the instrument and what an
+        // analysis wrote on the note.
+        let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        let copied_of = |held: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+            held.as_ref()
+                .map(|held| deepcopy.call1((held,)).map(pyo3::Bound::unbind))
+                .transpose()
+        };
+        copy.stored_instrument = copied_of(&self.stored_instrument)?;
+        copy.editorial = copied_of(&self.editorial)?;
         // The duration comes across as the kind of duration it is: a grace
         // note whose copy carried a plain duration would stop being one.
         if let Some(duration) = &self.duration {
@@ -830,6 +840,12 @@ pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
 
 #[pymethods]
 impl Note {
+    /// Refuses what music21 answers through a site, which the package
+    /// keeps none of.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        crate::stream::no_site(slf.as_any(), name)
+    }
+
     /// What music21 says this is: its own class and every class it is a
     /// kind of, as music21's `classes` answers -- so a note is a
     /// `NotRest`, a `GeneralNote` and a `Music21Object` besides.

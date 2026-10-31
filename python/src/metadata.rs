@@ -115,9 +115,16 @@ impl Metadata {
     /// Reads one name: music21's `__getattr__`, which answers a string or
     /// nothing -- or, for one of its four plural names, every value under
     /// the name it stands for.
-    fn __getattr__<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+    ///
+    /// What music21 answers through a site is refused, as on every element.
+    fn __getattr__<'py>(slf: &Bound<'py, Self>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        if crate::stream::is_site_member(name) {
+            return crate::stream::no_site(slf.as_any(), name).map(|found| found.into_bound(py));
+        }
+        let me = slf.borrow();
         if let Some(unique) = unique_name_of_plural(name) {
-            let values: Vec<&str> = self
+            let values: Vec<&str> = me
                 .inner
                 .get(unique)
                 .iter()
@@ -130,7 +137,7 @@ impl Metadata {
                 "invalid attributeName: {name}"
             )));
         };
-        Ok(match self.inner.string_value(unique) {
+        Ok(match me.inner.string_value(unique) {
             Some(text) => pyo3::types::PyString::new(py, &text).into_any(),
             None => py.None().into_bound(py),
         })

@@ -195,22 +195,38 @@ two rules, set 2026-09-12, that most of the open work now serves:
    - standalone, a wheel measure is listed as music21 lists it only where a
      stream is asked by class, flattened or walked: `len`, indexing and
      plain iteration leave its barlines out (DECISIONS.md, "a measure's
-     barlines are listed, not held"), and `storeAtEnd` and `isAtEnd` are
-     missing.
-   - an edit through the tonic a key hands out (`k.tonic.name = 'B'`) is
-     lost: the key keeps its own value, and six modules read it directly.
-     music21 renames the key but keeps its signature and a stale scale;
-     no music21 code writes through `tonic`, so this waits on a way for a
-     pitch to write back into the key it came from.
-   - a wheel measure's repr is `<music21.stream.Measure m1>` where
+     barlines are listed, not held"), and `storeAtEnd` keeps only a
+     barline.
+   - a wheel measure's repr is `<music21.stream.Measure 1>` where
      music21's is `<music21.stream.Measure 1 offset=4.0>`: the offset is
-     the measure's in its part, which needs the sites the wheel's streams
-     do not keep. Once installed, readers hand back music21's own
-     measures, which have it.
+     the measure's in its part, which the wheel's streams answer through
+     `placed()` rather than on the measure. Once installed, readers hand
+     back music21's own measures, which have it.
+   - after `k.mode = 'minor'` a wheel key's `pitches` follow the new mode,
+     where music21's keep the old one; a pickle of such a key forgets the
+     old mode.
 
    Settled by debate on 2026-10-30 and recorded in DECISIONS.md: readers
    hand back music21's streams once installed; flags are read for their
-   truth; negative lengths stay refused.
+   truth; negative lengths stay refused. Settled on 2026-10-31: a key
+   follows its tonic edited in place and keeps its signature, as music21's
+   does; members that need a site say why they are refused.
+
+9. **edits through a handed-out object that still miss the crate.**
+   `data/py_fields.toml` lists them as *value*. Confirmed against music21:
+
+   - `p.accidental.style.color = 'red'` never reaches the pitch or the
+     MusicXML written.
+   - `sc.tonic.name = 'D'` leaves a concrete scale on C.
+   - installed, `mm._tempoText.text = 'Lento'` is not what `mm.text`
+     answers; with music21 importable but not installed, `_tempoText`
+     raises `AttributeError`.
+   - a rest's `style.color` is not written: the crate's rest has no colour.
+
+   Suspected, not yet shown: a note's or chord's `storedInstrument` against
+   the crate's MIDI and instrument readers, `FiguredBassScale`'s scale and
+   key, `VoiceLeadingQuartet.key`. A chord's inversion fixed past 255 stays
+   in the facade only; the crate keeps a `u8`.
 
 ## closed
 
