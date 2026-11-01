@@ -13,8 +13,8 @@ use music21_rs::{
     MetronomeMark, MidiNote, Minor67Default, Note, Pitch, Placement, Rest, RomanNumeral, Stream,
     StreamElement, StreamKind, Tie, TieType, TimeSignature, TuningSystem, Tuplet, TupletType,
     VoiceLeadingQuartet, abc_note, chord_symbol_figure_from_chord, estimate_key_from_pitches,
-    interval::convert_diatonic_number_to_step, roman_numeral_from_chord, tonal_certainty,
-    write_midi_bytes,
+    interval::convert_diatonic_number_to_step, midi::write_midi_bytes, roman_numeral_from_chord,
+    tonal_certainty,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -1645,7 +1645,7 @@ fn spell_midi_in_chord(midi: i32, figure: &str, tonic: &str, mode: &str) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use music21_rs::read_midi_bytes_with_tempo;
+    use music21_rs::midi::read_midi_bytes_with_tempo;
 
     /// One voice per list, each note a quarter long at the start given.
     type Notes<'a> = &'a [(f64, &'a [(i32, i32)])];

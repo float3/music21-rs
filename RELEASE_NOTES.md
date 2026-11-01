@@ -32,6 +32,9 @@
 
 ## added
 
+- **`from_midi`, `to_midi`, `from_abc`, `from_abc_number` and `to_abc`
+  at the crate root**, beside the token helpers the root already offered.
+
 - **Multi-measure rests**: MusicXML's `<multiple-rest>` is read and
   written as music21 reads and writes it, as a
   `SpannerKind::MultiMeasureRest` carrying a `MultiRest` (whether it is
@@ -59,6 +62,14 @@
 - **`Chord::inversion_name_of` and `Chord::inversion_text_of`**: the
   figured-bass number and the words for a chord standing in a given
   inversion.
+
+## changed
+
+- **The root's `read_midi_bytes`, `read_midi_bytes_with_tempo`,
+  `write_midi_bytes`, `midi_notes_from_stream` and
+  `stream_from_midi_notes` are deprecated**: they keep only note events
+  and a tempo. `from_midi` and `to_midi` read and write the score; the
+  bare-event helpers stay, undeprecated, in `midi`.
 
 ## fixed
 
