@@ -45,6 +45,21 @@
 
 ## fixed
 
+- **Bugs the seeded fuzzers found**: a placed beat reads the meter that
+  stands where it is and counts bars in fractions, so a meter starting at
+  2/3 still wraps on whole bars; `make_measures`, ties and rest filling
+  cut at a meter's written bar length; in the wheel, setting a
+  `TimeSignature`'s numerator, denominator, `ratioString` or
+  `resetValues` clears its symbol and written bar length while `load`
+  keeps them, moving a pitch keeps how its accidental is shown,
+  `Chord.add` sorts by staff position before `ps`, and a pickled tuplet
+  duration keeps its written value, all as in music21. New:
+  `TimeSignature::written_bar_duration`.
+
+- **Seeded fuzzers stay in the suite**: facade edits, placed beats,
+  `makeNotation` and the MIDI round trip are compared with music21 over
+  fixed seeds on every run.
+
 - **Indexing and looking things up in a wheel stream no longer slow down
   as it grows**: `s[i]`, `index`, `elementOffset`, `remove` and `in` keep
   the stream's order and a map of its objects until it changes. A loop of

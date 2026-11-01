@@ -230,6 +230,19 @@ two rules, set 2026-09-12, that most of the open work now serves:
     the replacement after what else stands at its offset, and the wheel
     lets one object be inserted twice, which music21 refuses.
 
+11. **music21 bugs the seeded fuzzers step around**, not yet fixed on the
+    fork:
+    - `k = key.Key('G'); k.mode = 'minor'` leaves `k.pitches` listing F#.
+    - `n = note.Note(quarterLength=0.25)`, then
+      `n.duration.appendTuplet(duration.Tuplet(5, 4))` and
+      `n.quarterLength = 1.5` keeps the tuplet, so the note is written as
+      1.2.
+    - a 3/4 part with `Note('C4', quarterLength=1/3)` at 0 and
+      `Note('D4', quarterLength=0.25)` at 1/12 makes
+      `GeneralObjectExporter(p).parse()` raise `MeterException: cannot
+      access qLenPos 3.0`; makeNotation fuzzer seeds 491, 802, 894, 1061
+      and 1962 hit it.
+
 ## closed
 
 - **edits through a handed-out object now reach the crate** for an
