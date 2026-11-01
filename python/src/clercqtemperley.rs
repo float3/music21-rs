@@ -180,38 +180,27 @@ impl CTSong {
         Ok(())
     }
 
-    /// The text of a song, read from a string or from the file a path
-    /// names: music21's `parse`.
+    /// The text of a song: music21's `parse`.
     ///
-    /// music21 reads the string as the analysis itself where it holds a
-    /// `|` and an `S:`, and otherwise opens it as a file -- which is file
-    /// IO, so the lines are read here and the reading of them is the
-    /// crate's.
+    /// Every string is read as the song itself, and no file is opened:
+    /// read a file and pass its text. music21 opens a string holding no
+    /// `|` or no `S:` as a file. Anything but a string or `None` is a
+    /// `TypeError`.
     fn parse(slf: &Bound<'_, Self>, textFile: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
-        let given = if textFile.is_none() {
-            String::new()
-        } else {
-            textFile.str()?.to_str()?.to_string()
-        };
-        let song = if given.contains('|') && given.contains("S:") {
-            read(&given)
-        } else if given.is_empty() {
+        let song = if textFile.is_none() {
             read("")
         } else {
-            let keywords = PyDict::new(py);
-            keywords.set_item("encoding", "utf-8")?;
-            keywords.set_item("errors", "replace")?;
-            let opened = py
-                .import("io")?
-                .call_method("open", (textFile, "r"), Some(&keywords))
-                .map_err(|_| CTSongException::new_err(format!("Cannot find file: {given}")))?;
-            let mut lines = Vec::new();
-            for line in opened.call_method0("readlines")?.walk()? {
-                lines.push(line?.str()?.to_str()?.to_string());
-            }
-            opened.call_method0("close")?;
-            RsCtSong::from_lines(lines)
+            let text = textFile.cast::<PyString>().map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(format!(
+                    "a song is its text, a str, not {}; music21_rs opens no file",
+                    textFile
+                        .get_type()
+                        .name()
+                        .map_or_else(|_| "this".to_string(), |name| name.to_string())
+                ))
+            })?;
+            read(text.to_str()?)
         };
         let listed = PyList::empty(py);
         for line in song.lines() {
