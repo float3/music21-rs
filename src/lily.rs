@@ -1348,7 +1348,15 @@ fn clef_scheme(clef: &Clef) -> String {
 }
 
 /// `lyEmbeddedScmFromKeySignature`.
+///
+/// The mode is written as a LilyPond command, so only a name from
+/// [`crate::key::MODES`] is written. A key holding any other mode, which
+/// only a deserialized one can, is written as the major key of its
+/// signature.
 fn key_scheme(key: &Key) -> String {
+    if !crate::key::MODES.contains(&key.mode()) {
+        return key_scheme(&key.key_signature().as_key("major"));
+    }
     format!("\\key {} \\{} \n", base_name(&key.tonic()), key.mode())
 }
 
@@ -1609,5 +1617,25 @@ mod tests {
             text.contains(&format!("\\override Stem.color = {ESCAPED}\n")),
             "{text}"
         );
+    }
+
+    #[test]
+    fn a_key_writes_only_a_mode_lilypond_knows() {
+        let mut line = Stream::new();
+        line.push(Key::new(
+            crate::Pitch::from_name("C").unwrap(),
+            "major #(system \"touch x\") %",
+            0,
+        ));
+        line.push(crate::Note::from_name("C4").unwrap());
+        let text = to_lilypond(&line, &LilyOptions::default()).unwrap();
+        assert!(!text.contains("#(system"), "{text}");
+        assert!(text.contains("\\key c \\major"), "{text}");
+
+        let mut line = Stream::new();
+        line.push(Key::from_tonic_mode("D", "dorian").unwrap());
+        line.push(crate::Note::from_name("D4").unwrap());
+        let text = to_lilypond(&line, &LilyOptions::default()).unwrap();
+        assert!(text.contains("\\key d \\dorian"), "{text}");
     }
 }

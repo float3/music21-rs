@@ -15,6 +15,26 @@ use std::str::FromStr;
 /// Key-signature conversion and spelling helpers.
 pub mod keysignature;
 
+/// The modes a [`Key`] can be in, as music21 names them: the ones its
+/// diatonic scale builds.
+pub const MODES: [&str; 15] = [
+    "major",
+    "minor",
+    "ionian",
+    "dorian",
+    "phrygian",
+    "lydian",
+    "mixolydian",
+    "aeolian",
+    "locrian",
+    "hypodorian",
+    "hypophrygian",
+    "hypolydian",
+    "hypomixolydian",
+    "hypoaeolian",
+    "hypolocrian",
+];
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A tonal key with a tonic pitch and mode.
@@ -47,14 +67,13 @@ impl Key {
         self.color = color;
     }
 
-    /// Builds a key from a tonic and mode.
-    ///
-    /// Pass a mode string such as `"major"`, `"minor"`, `"dorian"`, or
-    /// `None::<&str>` to infer major/minor from tonic case.
     /// Builds a key from a tonic name and a mode. Without a mode the name
     /// decides, as music21's `Key` reads it: a trailing `m` is minor and a
     /// trailing `M` major (`F#m`, `EM`), otherwise a lower-case name is minor
     /// and an upper-case one major.
+    ///
+    /// The mode is one of [`MODES`], in any case. Any other mode is an
+    /// error, as music21's `Key` raises for a mode it builds no scale for.
     pub fn from_tonic_mode<'a, M>(tonic: &str, mode: M) -> Result<Self>
     where
         M: Into<Option<&'a str>>,
@@ -69,6 +88,11 @@ impl Key {
             }
             None => (tonic.to_string(), "major".to_string()),
         };
+        if !MODES.contains(&resolved_mode.as_str()) {
+            return Err(Error::Key(format!(
+                "Cannot create a scale of the following mode: {resolved_mode:?}"
+            )));
+        }
         let tonic_pitch = Pitch::from_name(tonic.as_str())?;
 
         let sharps = pitch_to_sharps(&tonic_pitch, Some(&resolved_mode))?;
@@ -578,6 +602,32 @@ mod tests {
         assert_eq!(a_minor.sharps(), 0);
         let e_phrygian = Key::from_tonic_mode("E", Some("phrygian")).unwrap();
         assert_eq!(e_phrygian.sharps(), 0);
+    }
+
+    #[test]
+    fn a_mode_music21_builds_no_scale_for_is_refused() {
+        for mode in [
+            "major",
+            "Minor",
+            "ionian",
+            "aeolian",
+            "dorian",
+            "phrygian",
+            "lydian",
+            "mixolydian",
+            "locrian",
+            "hypodorian",
+            "hypophrygian",
+            "hypolydian",
+            "hypomixolydian",
+            "hypoaeolian",
+            "hypolocrian",
+        ] {
+            assert!(Key::from_tonic_mode("c", mode).is_ok(), "{mode}");
+        }
+        for mode in ["blues-like", "", "major #(system \"touch x\") %"] {
+            assert!(Key::from_tonic_mode("c", mode).is_err(), "{mode}");
+        }
     }
 
     #[test]

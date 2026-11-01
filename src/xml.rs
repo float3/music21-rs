@@ -99,10 +99,15 @@ impl Xml {
             at: 0,
         };
         reader.skip_misc()?;
-        let root = reader.element()?;
+        let root = reader.element(1)?;
         Ok(root)
     }
 }
+
+/// How deeply elements may nest, the root counted as one: libxml2's
+/// default limit. MusicXML and MEI nest a dozen deep; a document nested
+/// deeper is refused rather than read by recursion without end.
+pub(crate) const MAX_DEPTH: usize = 256;
 
 struct Reader<'a> {
     text: &'a str,
@@ -184,8 +189,13 @@ impl Reader<'_> {
         self.at = self.text.len() - remaining;
     }
 
-    /// One element, the reader standing on its `<`.
-    fn element(&mut self) -> Result<Xml> {
+    /// One element, the reader standing on its `<`, nested `depth` deep.
+    fn element(&mut self, depth: usize) -> Result<Xml> {
+        if depth > MAX_DEPTH {
+            return Err(malformed(format!(
+                "elements are nested more than {MAX_DEPTH} deep"
+            )));
+        }
         if !self.rest().starts_with('<') {
             return Err(malformed("an element was expected"));
         }
@@ -266,7 +276,7 @@ impl Reader<'_> {
                 self.skip_past("?>")?;
             } else {
                 close(&mut element, std::mem::take(&mut text));
-                element.children.push(self.element()?);
+                element.children.push(self.element(depth + 1)?);
             }
         }
     }
@@ -362,5 +372,16 @@ mod tests {
     fn a_document_that_does_not_close_is_refused() {
         assert!(Xml::parse("<a><b></a").is_err());
         assert!(Xml::parse("not xml").is_err());
+    }
+
+    fn nested(depth: usize) -> String {
+        format!("{}{}", "<a>".repeat(depth), "</a>".repeat(depth))
+    }
+
+    #[test]
+    fn elements_nested_deeper_than_the_limit_are_refused() {
+        assert!(Xml::parse(&nested(MAX_DEPTH)).is_ok());
+        assert!(Xml::parse(&nested(MAX_DEPTH + 1)).is_err());
+        assert!(Xml::parse(&nested(100_000)).is_err());
     }
 }

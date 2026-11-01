@@ -135,10 +135,16 @@ impl Default for TimeSignature {
     }
 }
 
+/// The largest numerator a [`TimeSignature`] takes. A meter is built with
+/// a part for each beat it counts, so the limit bounds the work one
+/// signature costs; meters in use count far fewer.
+pub const MAX_NUMERATOR: UnsignedIntegerType = 1024;
+
 impl TimeSignature {
     /// Creates a time signature from a numerator and denominator.
     ///
-    /// Both must be non-zero. The denominator need not be a power of two —
+    /// Both must be non-zero, and the numerator no more than
+    /// [`MAX_NUMERATOR`]. The denominator need not be a power of two —
     /// music21 accepts irrational meters such as `4/3`, and so does this.
     pub fn new(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Result<Self> {
         if numerator == 0 {
@@ -150,6 +156,11 @@ impl TimeSignature {
             return Err(Error::Meter(
                 "time signature denominator must be non-zero".to_string(),
             ));
+        }
+        if numerator > MAX_NUMERATOR {
+            return Err(Error::Meter(format!(
+                "time signature numerator {numerator} is more than {MAX_NUMERATOR}"
+            )));
         }
         let mut signature = Self {
             numerator,
@@ -309,8 +320,9 @@ impl TimeSignature {
             .unwrap_or(self.denominator);
         let numerator = parts
             .iter()
-            .map(|(count, part)| count * (denominator / part))
-            .sum();
+            .fold(0, |sum: UnsignedIntegerType, (count, part)| {
+                sum.saturating_add(count.saturating_mul(denominator / part))
+            });
         let mut display = whole_bar(numerator, denominator)?;
         if (display.quarter_length() - self.bar_quarter_length()).abs() > OFFSET_TOLERANCE {
             return Err(Error::Meter(format!(
@@ -511,7 +523,11 @@ impl TimeSignature {
         let summed = ratio.split('+').any(|part| !part.contains('/'));
         let denominator = parts[0].1;
         if parts.iter().all(|(_, part)| *part == denominator) {
-            let numerator = parts.iter().map(|(count, _)| count).sum();
+            let numerator = parts
+                .iter()
+                .fold(0, |sum: UnsignedIntegerType, (count, _)| {
+                    sum.saturating_add(*count)
+                });
             let mut signature = Self::new(numerator, denominator)?;
             signature.write_as(&parts, word, summed)?;
             return Ok(signature);
@@ -525,8 +541,9 @@ impl TimeSignature {
             .unwrap_or(denominator);
         let numerator = parts
             .iter()
-            .map(|(count, part)| count * (denominator / part))
-            .sum();
+            .fold(0, |sum: UnsignedIntegerType, (count, part)| {
+                sum.saturating_add(count.saturating_mul(denominator / part))
+            });
         let mut signature = Self::new(numerator, denominator)?;
         signature.write_as(&parts, word, summed)?;
         Ok(signature)
@@ -1824,6 +1841,18 @@ fn offset_within(offset: FloatType, length: FloatType) -> Result<FloatType> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_meter_counting_more_beats_than_the_limit_is_refused() {
+        use super::{MAX_NUMERATOR, TimeSignature};
+
+        assert!(TimeSignature::new(MAX_NUMERATOR, 4).is_ok());
+        assert!(TimeSignature::new(MAX_NUMERATOR + 1, 4).is_err());
+        assert!(TimeSignature::from_ratio_string("99999999/1").is_err());
+        assert!(TimeSignature::from_ratio_string("1000/4+1000/4").is_err());
+        assert!(TimeSignature::from_ratio_string("4000000000/4+4000000000/4").is_err());
+        assert!(TimeSignature::from_ratio_string("4000000000/4+1/8").is_err());
+    }
 
     #[test]
     fn an_offset_past_the_bar_wraps_from_where_the_meter_stands() {

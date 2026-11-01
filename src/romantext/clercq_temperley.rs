@@ -70,8 +70,9 @@ impl Default for CtLabels {
 /// # Errors
 ///
 /// Text with no barline or no `S:` rule, as music21's converter refuses
-/// it; a rule naming one the song has not got, a dot with no chord before
-/// it, or a key, a meter or a figure the crate cannot read.
+/// it; a rule naming one the song has not got, a rule that expands itself
+/// directly or through others, rules nested more than 64 deep, a dot with
+/// no chord before it, or a key, a meter or a figure the crate cannot read.
 pub fn from_clercq_temperley(text: &str) -> Result<Stream> {
     song_text(text)?;
     CtSong::parse(text).to_part()
@@ -484,6 +485,7 @@ impl CtRule {
             built: Vec::new(),
             meters_said: Vec::new(),
             keys_said: Vec::new(),
+            expanding: Vec::new(),
         };
         let places = expansion.expand(0, None, None)?;
         places
@@ -687,6 +689,11 @@ struct RuleState {
     last_chord: Option<Place>,
 }
 
+/// How many rules may be expanding at once, the song rule counted: a song
+/// nests three or four deep, and one nested deeper is refused rather than
+/// expanded by recursion without end.
+const MAX_DEPTH: usize = 64;
+
 /// A song being expanded: every measure made so far, in the order they were
 /// made, and what each rule is keeping.
 struct Expansion<'a> {
@@ -701,6 +708,8 @@ struct Expansion<'a> {
     built: Vec<Built>,
     meters_said: Vec<TimeSignature>,
     keys_said: Vec<Key>,
+    /// The rules being expanded, outermost first.
+    expanding: Vec<usize>,
 }
 
 impl<'a> Expansion<'a> {
@@ -729,13 +738,41 @@ impl<'a> Expansion<'a> {
             built: Vec::new(),
             meters_said: Vec::new(),
             keys_said: Vec::new(),
+            expanding: Vec::new(),
         })
     }
 
     /// One rule expanded whole: music21's `expand`, which reads its groups
     /// in the key and the meter it is given and puts its own back
     /// afterwards.
+    ///
+    /// A rule that is already being expanded is refused, where music21
+    /// raises a `RecursionError`, and so is a rule nested more than
+    /// [`MAX_DEPTH`] deep.
     fn expand(
+        &mut self,
+        rule: usize,
+        meter: Option<TimeSignature>,
+        key: Option<Key>,
+    ) -> Result<Vec<usize>> {
+        if self.expanding.contains(&rule) {
+            return Err(ct_error(format!(
+                "rule {} expands itself",
+                self.rules[rule].left_hand_side()
+            )));
+        }
+        if self.expanding.len() >= MAX_DEPTH {
+            return Err(ct_error(format!(
+                "rules are nested more than {MAX_DEPTH} deep"
+            )));
+        }
+        self.expanding.push(rule);
+        let expanded = self.expand_groups(rule, meter, key);
+        self.expanding.pop();
+        expanded
+    }
+
+    fn expand_groups(
         &mut self,
         rule: usize,
         meter: Option<TimeSignature>,
@@ -1162,5 +1199,34 @@ mod tests {
         assert_eq!(named("S: $Vr"), "Song");
         assert_eq!(named("Fadeout: I |"), "Fadeout");
         assert_eq!(named("Xx: I |"), "Xx");
+    }
+
+    #[test]
+    fn a_rule_expanding_itself_is_refused() {
+        for text in [
+            "A: $A |\nS: [C] $A |",
+            "A: $B |\nB: $A |\nS: [C] $A |",
+            "A: I | $A |\nS: [C] $A |",
+        ] {
+            assert!(from_clercq_temperley(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn rules_nested_deeper_than_the_limit_are_refused() {
+        // R0 plays a bar, and each later rule plays the one before it.
+        let song = |rules: usize| {
+            let mut text = String::from("R0: I |\n");
+            for rule in 1..rules {
+                text.push_str(&format!("R{rule}: $R{}\n", rule - 1));
+            }
+            text.push_str(&format!("S: [C] $R{}\n", rules - 1));
+            text
+        };
+        // The song rule is one level, so MAX_DEPTH - 1 rules below it fill
+        // the limit.
+        assert!(from_clercq_temperley(&song(MAX_DEPTH - 1)).is_ok());
+        assert!(from_clercq_temperley(&song(MAX_DEPTH)).is_err());
+        assert!(from_clercq_temperley(&song(10_000)).is_err());
     }
 }
