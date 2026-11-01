@@ -3443,6 +3443,108 @@ def test_what_stands_at_one_offset_is_listed_in_music21s_order():
     assert m.Part().classSortOrder == -20
 
 
+def _edited_stream_log(stream_class, note_class, measure_class, barline_class):
+    """What a stream answers through a run of edits to it and to what it
+    holds, for comparing with music21's own answers."""
+    log = []
+    names = lambda s: [each.name for each in s]
+    s = stream_class()
+    a = note_class("C4")
+    s.append(a)
+    # A note lengthened after it went in: the next goes after its new end.
+    a.duration.quarterLength = 3
+    b = note_class("D4")
+    s.append(b)
+    log.append(("lengthened", float(s.elementOffset(b)), float(s.highestTime)))
+    a.quarterLength = 0.5
+    c = note_class("E4")
+    s.append(c)
+    log.append(("shortened", float(s.elementOffset(c)), float(s.highestTime)))
+
+    s.setElementOffset(c, 0.0)
+    log.append(("moved", names(s), s.index(c), s[1].name, s[-1].name))
+    s.remove(a)
+    log.append(("removed", names(s), s.index(b), a in s, len(s)))
+    # Equal offsets keep the order they were put in.
+    f, g = note_class("F4"), note_class("G4")
+    s.insert(1.0, f)
+    s.insert(1.0, g)
+    log.append(("equal", names(s), s.index(g), [x.name for x in s[1:3]]))
+    s.shiftElements(2.0, startOffset=1.0)
+    log.append(("shifted", names(s), [float(s.elementOffset(x)) for x in s]))
+    h = note_class("A4")
+    s.insertAndShift(3.0, h)
+    log.append(("inserted", names(s), s.index(h), float(s.elementOffset(b))))
+
+    bar = measure_class()
+    held = note_class("B4", quarterLength=2)
+    bar.append(held)
+    right = barline_class("final")
+    bar.rightBarline = right
+    log.append(("barline", bar.index(right), float(bar.elementOffset(right))))
+    held.quarterLength = 3
+    log.append(("barline after", bar.index(right), float(bar.elementOffset(right)),
+                right in bar, [type(x).__name__ for x in bar.flatten()]))
+    return log
+
+
+EDITED_STREAM_LOG = [
+    ("lengthened", 3.0, 4.0),
+    ("shortened", 4.0, 5.0),
+    ("moved", ["C", "E", "D"], 1, "E", "D"),
+    ("removed", ["E", "D"], 1, False, 2),
+    ("equal", ["E", "F", "G", "D"], 2, ["F", "G"]),
+    ("shifted", ["E", "F", "G", "D"], [0.0, 3.0, 3.0, 5.0]),
+    ("inserted", ["E", "A", "F", "G", "D"], 1, 6.0),
+    ("barline", 1, 2.0),
+    ("barline after", 1, 3.0, True, ["Note", "Barline"]),
+]
+
+
+def test_a_stream_answers_after_edits_to_it_and_what_it_holds():
+    """Lookups, indexing and appends follow every edit: to the stream, and
+    to the lengths of notes it already holds, which it is not told of."""
+    log = _edited_stream_log(m.Stream, m.Note, m.Measure, m.Barline)
+    assert log == EDITED_STREAM_LOG
+
+
+def test_a_streams_answers_after_edits_are_music21s():
+    """The same run of edits on music21's own stream answers the same."""
+    pytest.importorskip("music21.stream")
+    from music21 import bar, note, stream
+
+    log = _edited_stream_log(stream.Stream, note.Note, stream.Measure, bar.Barline)
+    assert log == EDITED_STREAM_LOG
+
+
+def test_an_object_held_twice_is_found_where_it_was_put_first():
+    """An object held at two offsets answers `elementOffset` and `remove`
+    for the one put in first, and `index` for the one listed first."""
+    s = m.Stream()
+    twice, other = m.Note("C4"), m.Note("D4")
+    s.insert(2.0, twice)
+    s.insert(0.0, other)
+    s.insert(0.0, twice)
+    assert float(s.elementOffset(twice)) == 2.0
+    assert s.index(twice) == 1
+    assert [each.name for each in s] == ["D", "C", "C"]
+
+    s.remove(twice)
+    assert float(s.elementOffset(twice)) == 0.0
+    assert s.index(twice) == 1
+
+    replacement = m.Note("E4")
+    s.replace(other, replacement)
+    assert s[0] is replacement and other not in s
+    assert s.index(replacement) == 0
+
+    first = m.Metadata()
+    s.metadata = first
+    assert s[0] is first and s.index(first) == 0
+    s.metadata = m.Metadata()
+    assert len(s) == 3 and first not in s
+
+
 def test_elements_are_taken_out_by_class_and_by_index():
     """Every answer is music21's own for the same stream."""
     line = m.Stream()
