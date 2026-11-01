@@ -1,0 +1,25 @@
+# Docstrings of music21.style whose every example passes against the
+# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
+# --manifest-path python-parity/Cargo.toml --test doctest_style`; the test
+# fails when one of these stops passing or one passes that is not listed.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why;
+# `[optional]` names those that need a package the harness may lack.
+
+passing = [
+    "music21.style.Style",
+    "music21.style.Style.absoluteY",
+    "music21.style.Style.enclosure",
+    "music21.style.StyleMixin.editorial",
+    "music21.style.StyleMixin.hasEditorialInformation",
+    "music21.style.StyleMixin.hasStyleInformation",
+    "music21.style.StyleMixin.style",
+    "music21.style.TextStyle",
+    "music21.style.TextStyle.alignHorizontal",
+    "music21.style.TextStyle.alignVertical",
+    "music21.style.TextStyle.fontFamily",
+    "music21.style.TextStyle.fontSize",
+    "music21.style.TextStyle.fontStyle",
+    "music21.style.TextStyle.fontWeight",
+    "music21.style.TextStyle.justify",
+    "music21.style.TextStyle.letterSpacing",
+]
