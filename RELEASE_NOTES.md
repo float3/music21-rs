@@ -4,6 +4,9 @@
 
 ## breaking changes
 
+- **`SpannerKind::MultiMeasureRest`** is a new variant, so a `match` over
+  every kind needs an arm for it.
+
 - **`ReductionOptions::remove_dissonances`** is new, so a
   `ReductionOptions` written out field by field needs it; music21's
   `removeDissonances` is off by default.
@@ -28,6 +31,13 @@
   descriptor 3.
 
 ## added
+
+- **Multi-measure rests**: MusicXML's `<multiple-rest>` is read and
+  written as music21 reads and writes it, as a
+  `SpannerKind::MultiMeasureRest` carrying a `MultiRest` (whether it is
+  drawn with symbols, at most how many, an overriding count). The wheel
+  gains `spanner.MultiMeasureRest` (`numRests`, `useSymbols`,
+  `maxSymbols`).
 
 - **`FiguredBassLine::set_time_signature` and `set_key_signature`, and
   `VoiceLeadingQuartet::set_pitches`**, which the wheel's in-place edits
