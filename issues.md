@@ -217,11 +217,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
    Checked against music21 on 2026-11-01; each is a bug being fixed:
 
-   - `FiguredBassScale.realizerScale`, assigned or edited in place
-     (`fbs.realizerScale = MajorScale('D')`), is not read:
-     `getPitchNames('D3', '6')` answers `D F B` on the old C major where
-     music21 answers `D F# B`. music21 reads `realizerScale` and `keySig`
-     afresh on every call.
    - `VoiceLeadingQuartet.key` edited in place (`q.key.tonic.name = 'D'`)
      is not read: `clausulaVera` and `modalOpening` answer for the old
      key, where music21 reads the tonic it now has.
@@ -237,7 +232,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
   `_tempoText`, and a rest's colour, which the crate's `Rest` now carries.
   A note's or chord's `storedInstrument` edited in place is read too, so
   `unbundleInstruments` and `partitionByInstrument` answer the instrument
-  as it now stands.
+  as it now stands. A `FiguredBassScale` counts in its `realizerScale` and
+  spells a chromatic bass by its `keySig` as they stand, assigned or edited
+  in place, since music21 reads both afresh on every call.
   A deep copy of a pitch keeps its accidental's style, which music21's own
   writer relies on once installed.
 

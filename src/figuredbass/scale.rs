@@ -148,6 +148,21 @@ impl FiguredBassScale {
         })
     }
 
+    /// The same, counting its figures in `scale`: music21's `realizerScale`
+    /// assigned. The key signature and mode are left as they were, as
+    /// music21 leaves them.
+    pub fn with_scale(mut self, scale: Scale) -> Self {
+        self.scale = scale;
+        self
+    }
+
+    /// The same, spelling a bass the scale does not carry by
+    /// `key_signature`: music21's `keySig` assigned.
+    pub fn with_key_signature(mut self, key_signature: KeySignature) -> Self {
+        self.key_signature = key_signature;
+        self
+    }
+
     /// The mode it is in.
     pub fn mode(&self) -> FiguredBassMode {
         self.mode

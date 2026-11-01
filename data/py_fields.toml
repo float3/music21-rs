@@ -99,8 +99,8 @@ key = { kind = "value", note = "read into inner when set; a key edited in place 
 time = { kind = "value", note = "read into inner when set; a meter edited in place is not" }
 
 [FiguredBassScale]
-realizer_scale = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back, where music21 reads realizerScale live" }
-key_sig = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back" }
+realizer_scale = { kind = "identity", sync = "current" }
+key_sig = { kind = "identity", sync = "current" }
 
 [GenericInterval]
 complemented = { kind = "cache", note = "the complement, made on first asking" }

@@ -7705,3 +7705,22 @@ def test_a_stored_instrument_edited_in_place_is_read():
         ]
         parted = m.partitionByInstrument(unbundled)
         assert [p.getInstrument().instrumentName for p in parted.parts] == ["Piccolo"]
+
+
+def test_a_figured_bass_scale_reads_its_scale_as_it_stands():
+    # music21 reads realizerScale afresh on every call: D F# B both ways.
+    assigned = m.FiguredBassScale("C", "major")
+    assigned.realizerScale = m.MajorScale("D")
+    assert assigned.getPitchNames("D3", "6") == ["D", "F#", "B"]
+    edited = m.FiguredBassScale("C", "major")
+    edited.realizerScale.tonic.name = "D"
+    assert edited.getPitchNames("D3", "6") == ["D", "F#", "B"]
+    # A bass the scale lacks is spelled by keySig: B-flat in F, so B D G.
+    for spell in (
+        lambda fbs: setattr(fbs, "keySig", m.KeySignature(-1)),
+        lambda fbs: setattr(fbs.keySig, "sharps", -1),
+    ):
+        spelled = m.FiguredBassScale("C", "major")
+        spelled.realizerScale = m.MajorScale("F")
+        spell(spelled)
+        assert spelled.getPitchNames("B3", "6") == ["B", "D", "G"]
