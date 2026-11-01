@@ -1,5 +1,7 @@
 # Unreleased
 
+`harte` 0.7.0 depends on this release.
+
 Five design questions were debated and their verdicts recorded in
 DECISIONS.md; these are the changes they called for, and the bugs the
 debates found.
