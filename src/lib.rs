@@ -107,10 +107,9 @@ pub mod mei;
 pub mod metadata;
 /// Time signatures: bar length, beat count, beat length and beat division.
 pub mod meter;
-/// Minimal MIDI import/export helpers.
+/// MIDI files read into scores and scores written as MIDI: [`midi::from_midi`]
+/// and [`midi::to_midi`].
 pub mod midi;
-/// MuseScore's own `.mscx` files, and MuseScore run as a converter for the
-/// formats it opens.
 pub mod musedata;
 pub mod musescore;
 /// MusicXML import and export: music21's `musicxml.xmlToM21` and

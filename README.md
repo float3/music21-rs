@@ -72,10 +72,10 @@ times per call, from the
 | `Pitch::get_enharmonic` | 22.7 us | 0.37 us | 62x |
 | `Interval::new(p1, p2)` | 9.7 us | 0.47 us | 21x |
 
-the published crate is 0.7 MB of source, with the chord tables and scale
-definitions compiled in and five small dependencies. a release binary that
-names chords and transposes pitches, the benchmark example, is 441 KB.
-music21 installs 105 MB.
+the published crate is 8.9 MB of source, 2.4 MB compressed, with the chord
+tables and scale definitions compiled in and six small dependencies. a
+release binary that names chords and transposes pitches, the benchmark
+example, is 441 KB. music21 installs 105 MB.
 
 ## using the crate
 
