@@ -220,6 +220,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
    key, `VoiceLeadingQuartet.key`. A chord's inversion fixed past 255 stays
    in the facade only; the crate keeps a `u8`.
 
+10. **appending to a wheel stream still reads every held note's length.**
+    2,000 appends take 47.8ms where music21 takes 28ms: a note's duration
+    can be edited from Python without the stream hearing of it, and the
+    package keeps no sites to tell it, so the stream's end is worked out
+    afresh each time. An edit counter shared by `Note` and `Duration`
+    would let it keep its end. Two smaller differences found on the way:
+    `replace` keeps the old element's insertion order where music21 puts
+    the replacement after what else stands at its offset, and the wheel
+    lets one object be inserted twice, which music21 refuses.
+
 ## closed
 
 - **edits through a handed-out object now reach the crate** for an
