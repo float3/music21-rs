@@ -212,16 +212,8 @@ two rules, set 2026-09-12, that most of the open work now serves:
    follows its tonic edited in place and keeps its signature, as music21's
    does; members that need a site say why they are refused.
 
-9. **edits through a handed-out object that still miss the crate.**
-   `data/py_fields.toml` lists them as *value*. Confirmed against music21:
-
-   - `p.accidental.style.color = 'red'` never reaches the pitch or the
-     MusicXML written.
-   - `sc.tonic.name = 'D'` leaves a concrete scale on C.
-   - installed, `mm._tempoText.text = 'Lento'` is not what `mm.text`
-     answers; with music21 importable but not installed, `_tempoText`
-     raises `AttributeError`.
-   - a rest's `style.color` is not written: the crate's rest has no colour.
+9. **edits through a handed-out object that may still miss the crate.**
+   `data/py_fields.toml` lists them as *value*.
 
    Suspected, not yet shown: a note's or chord's `storedInstrument` against
    the crate's MIDI and instrument readers, `FiguredBassScale`'s scale and
@@ -229,6 +221,12 @@ two rules, set 2026-09-12, that most of the open work now serves:
    in the facade only; the crate keeps a `u8`.
 
 ## closed
+
+- **edits through a handed-out object now reach the crate** for an
+  accidental's style colour, a scale's tonic, a metronome mark's
+  `_tempoText`, and a rest's colour, which the crate's `Rest` now carries.
+  A deep copy of a pitch keeps its accidental's style, which music21's own
+  writer relies on once installed.
 
 - **random comparison with music21 found what the fixtures could not.**
   Chords, pitches, intervals, keys, Roman numerals, meters and the

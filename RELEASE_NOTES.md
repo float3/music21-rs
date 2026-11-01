@@ -1,5 +1,22 @@
 # Unreleased
 
+## added
+
+- **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
+  rest's colour, as music21 does.
+
+## fixed
+
+- **More edits made in place take effect**: `p.accidental.style.color`,
+  `sc.tonic.name = ...` and `mm._tempoText.text = ...` reach the crate, as
+  in music21, and a pitch's deep copy keeps its accidental's style.
+
+- **The braille music21 could not write is compared**: with music21's
+  `makeTies` fixed on the fork, `demos/incorrect_time_signature_pv.mxl`
+  writes in English braille on both sides, alike.
+
+# music21-rs 0.14.0
+
 `harte` 0.7.0 depends on this release.
 
 Five design questions were debated and their verdicts recorded in
