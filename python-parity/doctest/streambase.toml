@@ -150,5 +150,5 @@ passing = [
     "music21.stream.base.Stream.voicesToParts",
 ]
 
-[not_passing]
-"music21.stream.base.Stream.plot" = "needs matplotlib, which the harness does not install"
+[optional]
+"music21.stream.base.Stream.plot" = "needs matplotlib, which the parity job does not install and the report job does"
