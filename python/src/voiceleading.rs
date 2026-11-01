@@ -143,6 +143,18 @@ impl VoiceLeadingQuartet {
         Self::assemble(py, notes, key.as_ref())
     }
 
+    /// The quartet as it stands: music21 reads its notes and its key as
+    /// they are now, but its intervals as they were when the notes were set.
+    fn current(&self, py: Python<'_>) -> PyResult<RsQuartet> {
+        let mut quartet = self.inner.clone();
+        let pitch = |index: usize| self.notes[index].borrow(py).synced(py).pitch().clone();
+        quartet.set_pitches(pitch(0), pitch(1), pitch(2), pitch(3));
+        if let Some(key) = &self.key_object {
+            quartet.set_key(Some(analytic_key(key.bind(py))?));
+        }
+        Ok(quartet)
+    }
+
     /// Reads the four notes again, after one of them has been replaced.
     fn refresh(slf: &Bound<'_, Self>, py: Python<'_>) -> PyResult<()> {
         let (notes, key) = {
@@ -469,17 +481,19 @@ impl VoiceLeadingQuartet {
         self.inner.hidden_octave()
     }
 
-    fn voiceOverlap(&self) -> bool {
-        self.inner.voice_overlap()
+    fn voiceOverlap(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self.current(py)?.voice_overlap())
     }
 
-    fn voiceCrossing(&self) -> bool {
-        self.inner.voice_crossing()
+    fn voiceCrossing(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(self.current(py)?.voice_crossing())
     }
 
     /// music21's `isProperResolution`.
-    fn isProperResolution(&self) -> PyResult<bool> {
-        self.inner.is_proper_resolution().map_err(quartet_error)
+    fn isProperResolution(&self, py: Python<'_>) -> PyResult<bool> {
+        self.current(py)?
+            .is_proper_resolution()
+            .map_err(quartet_error)
     }
 
     fn leapNotSetWithStep(&self) -> bool {
@@ -487,23 +501,23 @@ impl VoiceLeadingQuartet {
     }
 
     /// music21's `modalOpening`.
-    fn modalOpening(&self) -> PyResult<bool> {
-        self.inner.modal_opening().map_err(quartet_error)
+    fn modalOpening(&self, py: Python<'_>) -> PyResult<bool> {
+        self.current(py)?.modal_opening().map_err(quartet_error)
     }
 
     /// music21's `opensIncorrectly`, the older name for the other answer.
-    fn opensIncorrectly(&self) -> PyResult<bool> {
-        Ok(!self.modalOpening()?)
+    fn opensIncorrectly(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(!self.modalOpening(py)?)
     }
 
     /// music21's `clausulaVera`.
-    fn clausulaVera(&self) -> PyResult<bool> {
-        self.inner.clausula_vera().map_err(quartet_error)
+    fn clausulaVera(&self, py: Python<'_>) -> PyResult<bool> {
+        self.current(py)?.clausula_vera().map_err(quartet_error)
     }
 
     /// music21's `closesIncorrectly`, the older name for the other answer.
-    fn closesIncorrectly(&self) -> PyResult<bool> {
-        Ok(!self.clausulaVera()?)
+    fn closesIncorrectly(&self, py: Python<'_>) -> PyResult<bool> {
+        Ok(!self.clausulaVera(py)?)
     }
 
     fn __deepcopy__<'py>(

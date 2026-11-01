@@ -1509,6 +1509,136 @@ def test_every_python_object_a_facade_holds_is_accounted_for():
     assert problems == [], "\n".join(problems)
 
 
+# What each `kind = "value"` row of `data/py_fields.toml` costs: an object
+# handed out, edited in place, then read through the crate. The answers are
+# music21's.
+
+
+def test_a_stored_instrument_edited_in_place_is_unbundled():
+    # music21 puts the very instrument the note holds into the stream.
+    note = m.Note("C4")
+    note.storedInstrument = m.Violin()
+    note.storedInstrument.instrumentName = "Fiddle"
+    note.storedInstrument.midiProgram = 41
+    chord = m.Chord("E4 G4")
+    chord.storedInstrument = m.Flute()
+    chord.storedInstrument.instrumentName = "Fife"
+    line = m.Stream()
+    line.insert(0.0, note)
+    line.insert(1.0, chord)
+    unbundled = m.unbundleInstruments(line)
+    assert [
+        (e.instrumentName, e.midiProgram)
+        for e in unbundled
+        if isinstance(e, m.Instrument)
+    ] == [("Fiddle", 41), ("Fife", 73)]
+
+
+def test_a_bend_edited_in_place_is_written():
+    bend = m.FretBend(bendAlter=m.ChromaticInterval(2))
+    bend.bendAlter.semitones = 3
+    note = m.Note("C4", quarterLength=4.0)
+    note.articulations.append(bend)
+    measure = m.Measure()
+    measure.append(note)
+    written = m.to_musicxml(measure, make_notation=True)
+    assert re.findall(r"<bend-alter>.*?</bend-alter>", written) == [
+        "<bend-alter>3</bend-alter>"
+    ]
+
+
+def test_a_contributors_date_edited_in_place_is_kept():
+    # music21 copies, pickles and compares the date objects themselves.
+    contributor = m.Contributor(name="X", birth=1800, death=1850)
+    contributor.birth.relevance = "approximate"
+    assert copy.deepcopy(contributor).birth.relevance == "approximate"
+    assert pickle.loads(pickle.dumps(contributor)).birth.relevance == "approximate"
+    assert contributor != m.Contributor(name="X", birth=1800, death=1850)
+    contributor.death.relevance = "uncertain"
+    assert copy.deepcopy(contributor).death.relevance == "uncertain"
+
+
+def _figured_line():
+    line = m.FiguredBassLine(m.Key("C"), m.TimeSignature("4/4"))
+    for name in ("C3", "F3", "G3", "C3"):
+        line.addElement(m.Note(name, quarterLength=2.0), "")
+    return line
+
+
+def test_a_figured_bass_lines_meter_edited_in_place_is_written():
+    line = _figured_line()
+    line.inTime.ratioString = "2/4"
+    written = line.generateBassLine()
+    assert len(written.getElementsByClass("Measure")) == 4
+    assert [
+        ts.ratioString for ts in written.recurse().getElementsByClass("TimeSignature")
+    ] == ["2/4"]
+
+
+def test_a_figured_bass_lines_key_edited_in_place_is_written():
+    # music21 writes `inKey.sharps` as it stands, but counts the figures in
+    # the scale it built from the key when the line was made.
+    line = _figured_line()
+    line.inKey.sharps = 1
+    written = line.generateBassLine()
+    assert [k.sharps for k in written.recurse().getElementsByClass("KeySignature")] == [1]
+    realization = line.realize()
+    assert realization.getNumSolutions() == 105
+    progression = realization.getAllPossibilityProgressions()[0]
+    score = realization.generateRealizationFromPossibilityProgression(progression)
+    signatures = score.recurse().getElementsByClass("KeySignature")
+    assert {k.sharps for k in signatures} == {1}
+
+
+def test_a_figured_bass_scale_edited_in_place_is_counted_in():
+    scale = m.FiguredBassScale("C", "major")
+    scale.realizerScale.tonic = m.Pitch("D")
+    assert scale.getPitchNames("E3", "6") == ["E", "G", "C#"]
+    # C is on no degree of D major until the key signature sharpens it.
+    scale.keySig.sharps = 2
+    assert scale.getPitchNames("C3", "4") == ["C", "F#"]
+    assigned = m.FiguredBassScale("C", "major")
+    assigned.realizerScale = m.MajorScale("D")
+    assert assigned.getPitchNames("E3", "6") == ["E", "G", "C#"]
+
+
+def test_an_appoggiaturas_size_edited_in_place_is_realized():
+    appoggiatura = m.Appoggiatura()
+    appoggiatura.size = m.ChromaticInterval(1)
+    appoggiatura.size.semitones = 3
+    before, _, _ = appoggiatura.realize(m.Note("C4", quarterLength=1.0))
+    assert [n.nameWithOctave for n in before] == ["E-4"]
+
+
+def test_a_voice_leading_quartets_notes_edited_in_place():
+    # music21 works the intervals out when a note is set, and reads the
+    # notes themselves everywhere else.
+    quartet = m.VoiceLeadingQuartet(m.Note("C5"), m.Note("D5"), m.Note("A4"), m.Note("B4"))
+    quartet.v1n1.pitch.nameWithOctave = "G4"
+    assert repr(quartet) == (
+        "<music21.voiceLeading.VoiceLeadingQuartet v1n1=G4, v1n2=D5, v2n1=A4, v2n2=B4>"
+    )
+    assert [i.name for i in quartet.vIntervals] == ["m3", "m3"]
+    assert quartet.parallelMotion()
+    assert quartet.voiceCrossing()
+    assert quartet.voiceOverlap()
+
+    closing = m.VoiceLeadingQuartet(
+        m.Note("D5"), m.Note("C5"), m.Note("B4"), m.Note("C5"), key=m.Key("C")
+    )
+    closing.v2n2.pitch.name = "D"
+    assert not closing.clausulaVera()
+
+
+def test_a_voice_leading_quartets_key_edited_in_place():
+    quartet = m.VoiceLeadingQuartet(
+        m.Note("D5"), m.Note("C5"), m.Note("B4"), m.Note("C5"), key=m.Key("C")
+    )
+    assert quartet.clausulaVera()
+    quartet.key.tonic = m.Pitch("G")
+    assert not quartet.clausulaVera()
+
+
 def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     """Each object a facade builds is made as the class music21 has installed
     under its name, where there is one. Nothing is installed here, and asking

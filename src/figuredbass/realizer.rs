@@ -105,6 +105,7 @@ type Moment = ((FloatType, FloatType), Vec<Voice>);
 #[must_use]
 pub struct FiguredBassLine {
     scale: FiguredBassScale,
+    key_signature: KeySignature,
     time: TimeSignature,
     elements: Vec<Element>,
     overlaid: Vec<Vec<Sounding>>,
@@ -126,6 +127,7 @@ impl FiguredBassLine {
     /// An empty line in common time whose figures are read in `scale`.
     pub fn new(scale: FiguredBassScale) -> Self {
         Self {
+            key_signature: scale.key_signature().clone(),
             scale,
             time: common_time(),
             elements: Vec::new(),
@@ -165,6 +167,23 @@ impl FiguredBassLine {
     /// The meter it is written in: music21's `inTime`.
     pub fn time_signature(&self) -> &TimeSignature {
         &self.time
+    }
+
+    /// Writes it in another meter. The figures are counted as before.
+    pub fn set_time_signature(&mut self, time: TimeSignature) {
+        self.time = time;
+    }
+
+    /// The key signature it is written with: the scale's, unless set.
+    pub fn key_signature(&self) -> &KeySignature {
+        &self.key_signature
+    }
+
+    /// Writes it with another key signature, as music21 writes
+    /// `inKey.sharps` as it stands. The figures are still counted in the
+    /// scale the line was made with, as music21's are.
+    pub fn set_key_signature(&mut self, key_signature: KeySignature) {
+        self.key_signature = key_signature;
     }
 
     /// Adds a bass note lasting `quarter_length`, with the figures written
@@ -268,7 +287,7 @@ impl FiguredBassLine {
     pub fn generate_bass_line(&self) -> Result<Stream> {
         let mut line = Stream::with_kind(StreamKind::Part);
         line.push(Clef::bass());
-        line.push(self.scale.key_signature().clone());
+        line.push(self.key_signature.clone());
         line.push(self.time.clone());
         for element in &self.elements {
             let Element::Figured {
@@ -583,7 +602,7 @@ impl FiguredBassLine {
             .into_iter()
             .unzip();
         let mut realization = Realization::of(segments)?;
-        realization.key_signature = self.scale.key_signature().clone();
+        realization.key_signature = self.key_signature.clone();
         realization.time = self.time.clone();
         realization.bass_notes = bass_notes;
         Ok(realization)

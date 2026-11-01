@@ -951,6 +951,11 @@ impl Chord {
                 .and_then(|fixed| fixed.extract::<u8>().ok());
             chord.set_inversion_override(fixed);
         }
+        if let Some(stored) = &self.stored_instrument
+            && let Ok((_, value)) = crate::instrument::stored_instrument(Some(stored.bind(py)))
+        {
+            chord.set_stored_instrument(value);
+        }
         chord
     }
 

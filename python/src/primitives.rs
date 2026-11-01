@@ -1137,7 +1137,7 @@ pub(crate) fn read_date(value: &Bound<'_, PyAny>) -> PyResult<RsDatePrimitive> {
 /// name.
 pub(crate) fn read_contributor(value: &Bound<'_, PyAny>) -> PyResult<RsContributor> {
     if let Ok(ours) = value.cast::<Contributor>() {
-        return Ok(ours.borrow().inner.clone());
+        return ours.borrow().current(value.py());
     }
     let mut made = RsContributor::unnamed();
     if let Ok(role) = value.getattr("role")
@@ -1398,7 +1398,8 @@ impl Contributor {
         if !slf.get_type().is(other.get_type()) {
             return Ok(false);
         }
-        Ok(slf.borrow().inner == other.borrow().inner)
+        let py = slf.py();
+        Ok(slf.borrow().current(py)? == other.borrow().current(py)?)
     }
 
     fn __deepcopy__<'py>(
@@ -1407,7 +1408,7 @@ impl Contributor {
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let copied = crate::blank_installed(&slf.get_type())?;
-        let made = Self::wrap(py, slf.borrow().inner.clone())?;
+        let made = Self::wrap(py, slf.borrow().current(py)?)?;
         let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
         copy.inner = made.inner;
         copy.birth = made.birth;
@@ -1421,7 +1422,7 @@ impl Contributor {
     }
 
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
-        crate::pickled(slf, &slf.borrow().inner)
+        crate::pickled(slf, &slf.borrow().current(slf.py())?)
     }
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -1438,6 +1439,19 @@ impl Contributor {
 }
 
 impl Contributor {
+    /// The contributor as it stands: music21 copies, pickles and compares
+    /// the date objects it holds, so an edit to one is an edit here.
+    pub(crate) fn current(&self, py: Python<'_>) -> PyResult<RsContributor> {
+        let mut inner = self.inner.clone();
+        if !self.birth.bind(py).is_none() {
+            inner.set_birth(Some(read_date(self.birth.bind(py))?));
+        }
+        if !self.death.bind(py).is_none() {
+            inner.set_death(Some(read_date(self.death.bind(py))?));
+        }
+        Ok(inner)
+    }
+
     /// Writes a birth or a death, which music21 reads as a `DateSingle`
     /// where it was given anything else.
     fn write_date(&mut self, py: Python<'_>, value: &Bound<'_, PyAny>, born: bool) -> PyResult<()> {

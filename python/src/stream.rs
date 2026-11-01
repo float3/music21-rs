@@ -6227,7 +6227,7 @@ fn articulations_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<music21_rs_crate:
     for articulation in articulations.walk()? {
         let articulation = articulation?;
         if let Ok(ours) = articulation.extract::<PyRef<'_, crate::articulations::Articulation>>() {
-            out.push(ours.inner.clone());
+            out.push(ours.current(articulation.py()));
         } else if let Some(read) = music21_articulation(&articulation)? {
             out.push(read);
         }

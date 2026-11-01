@@ -164,6 +164,18 @@ impl FiguredBassScale {
         &self.key_signature
     }
 
+    /// Counts in another scale: music21's `realizerScale` assigned or
+    /// edited. The mode is kept, only to be named in errors.
+    pub fn set_scale(&mut self, scale: Scale) {
+        self.scale = scale;
+    }
+
+    /// Spells a bass off the scale with another key signature: music21's
+    /// `keySig` assigned or edited.
+    pub fn set_key_signature(&mut self, key_signature: KeySignature) {
+        self.key_signature = key_signature;
+    }
+
     /// The names of the notes `bass` and `notation` stand for, the bass
     /// first and the rest in the order the figures give them: music21's
     /// `getPitchNames`.

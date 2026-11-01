@@ -22,8 +22,8 @@ use music21_rs_crate::expressions::{
     TextExpression as RsTextExpression,
 };
 use music21_rs_crate::{
-    Duration as RsDuration, IntervalDirection, KeySignature as RsKeySignature, Note as RsNote,
-    Pitch as RsPitch,
+    Duration as RsDuration, Interval as RsInterval, IntervalDirection,
+    KeySignature as RsKeySignature, Note as RsNote, Pitch as RsPitch,
 };
 
 use crate::pitch::{Pitch, accidental_from_any, pitch_from_any};
@@ -201,6 +201,12 @@ impl Ornament {
         }
         if let Some(accidental) = &self.lower_accidental {
             inner.set_lower_accidental(Some(accidental_from_any(accidental.bind(py))?));
+        }
+        // music21 transposes by the interval object an appoggiatura holds.
+        if self.shape() == Shape::Appoggiatura
+            && let Some(size) = &self.size
+        {
+            inner.set_appoggiatura_size(appoggiatura_size(size.bind(py))?);
         }
         Ok(inner)
     }
@@ -382,6 +388,15 @@ fn direction_word(direction: Option<IntervalDirection>) -> &'static str {
         Some(IntervalDirection::Descending) => "down",
         _ => "",
     }
+}
+
+/// An appoggiatura's size as the crate keeps it: nothing for music21's
+/// empty string or `None`, the interval otherwise.
+fn appoggiatura_size(value: &Bound<'_, PyAny>) -> PyResult<Option<RsInterval>> {
+    if value.is_none() || value.extract::<String>().is_ok_and(|text| text.is_empty()) {
+        return Ok(None);
+    }
+    crate::interval::interval_from_any(value).map(Some)
 }
 
 #[pymethods]
@@ -656,12 +671,7 @@ impl Ornament {
     fn set_size(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let shape = slf.borrow().shape();
         if shape == Shape::Appoggiatura {
-            let read =
-                if value.is_none() || value.extract::<String>().is_ok_and(|text| text.is_empty()) {
-                    None
-                } else {
-                    Some(crate::interval::interval_from_any(value)?)
-                };
+            let read = appoggiatura_size(value)?;
             slf.borrow_mut().inner.set_appoggiatura_size(read);
         }
         slf.borrow_mut().size = Some(value.clone().unbind());

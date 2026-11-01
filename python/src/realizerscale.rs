@@ -58,6 +58,29 @@ impl FiguredBassScale {
         }
     }
 
+    /// The scale as it stands: music21 counts in `realizerScale` and spells
+    /// in `keySig` as they are now, so assigning either, or editing the
+    /// object handed out, changes the answers. A scale or key signature of
+    /// music21's own is not read.
+    fn current(&self, py: Python<'_>) -> RsFiguredBassScale {
+        let mut inner = self.inner.clone();
+        if let Some(scale) = &self.realizer_scale
+            && let Ok(ours) = scale
+                .bind(py)
+                .extract::<PyRef<'_, crate::scale::ConcreteScale>>()
+        {
+            inner.set_scale(ours.current());
+        }
+        if let Some(signature) = &self.key_sig
+            && let Ok(ours) = signature
+                .bind(py)
+                .extract::<PyRef<'_, crate::key::KeySignature>>()
+        {
+            inner.set_key_signature(ours.signature.clone());
+        }
+        inner
+    }
+
     /// Pitches as the objects music21 would hand back.
     fn objects<'py>(py: Python<'py>, pitches: Vec<RsPitch>) -> PyResult<Bound<'py, PyList>> {
         let list = PyList::empty(py);
@@ -139,7 +162,7 @@ impl FiguredBassScale {
         notationString: &str,
     ) -> PyResult<Vec<String>> {
         let names = self
-            .inner
+            .current(bassPitch.py())
             .pitch_names(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Ok(names.iter().map(|name| music21_name(name)).collect())
@@ -155,7 +178,7 @@ impl FiguredBassScale {
         notationString: &str,
     ) -> PyResult<Bound<'py, PyList>> {
         let pitches = self
-            .inner
+            .current(bassPitch.py())
             .sample_pitches(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Self::objects(py, pitches)
@@ -176,7 +199,7 @@ impl FiguredBassScale {
             .map(pitch_from_any)
             .transpose()?;
         let pitches = self
-            .inner
+            .current(bassPitch.py())
             .pitches(
                 &pitch_from_any(bassPitch)?,
                 &notation_from(notationString)?,

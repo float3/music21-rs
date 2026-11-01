@@ -27,7 +27,7 @@ use music21_rs_crate::figuredbass::realizer::{
     FiguredBassLine as RsLine, Realization as RsRealization,
 };
 use music21_rs_crate::figuredbass::segment::Possibility;
-use music21_rs_crate::key::Key as RsKey;
+use music21_rs_crate::key::{Key as RsKey, KeySignature as RsKeySignature};
 use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
 use music21_rs_crate::{Pitch as RsPitch, Stream as RsStream};
 
@@ -124,6 +124,23 @@ pub struct FiguredBassLine {
     inner: RsLine,
     key: Py<PyAny>,
     time: Py<PyAny>,
+}
+
+impl FiguredBassLine {
+    /// The line as it stands: music21 writes `inKey.sharps` and `inTime`
+    /// off the objects it holds, so an edit to either is an edit here. The
+    /// figures are counted in the scale the key made, as music21's are.
+    fn current(&self, py: Python<'_>) -> PyResult<RsLine> {
+        let mut line = self.inner.clone();
+        line.set_time_signature(time_of(self.time.bind(py))?);
+        let sharps = self
+            .key
+            .bind(py)
+            .getattr("sharps")?
+            .extract::<music21_rs_crate::IntegerType>()?;
+        line.set_key_signature(RsKeySignature::new(sharps));
+        Ok(line)
+    }
 }
 
 #[pymethods]
@@ -242,7 +259,7 @@ impl FiguredBassLine {
         let py = slf.py();
         let made = slf
             .borrow()
-            .inner
+            .current(py)?
             .generate_bass_line()
             .map_err(|error| line_error(&error))?;
         made_stream(py, &made)
@@ -269,7 +286,7 @@ impl FiguredBassLine {
         let (rules, top) = read_rules(py, fbRules, maxPitch)?;
         let found = slf
             .borrow()
-            .inner
+            .current(py)?
             .segments(&rules, numParts, &top)
             .map_err(|error| line_error(&error))?;
         found
@@ -292,7 +309,7 @@ impl FiguredBassLine {
         let (rules, top) = read_rules(py, fbRules, maxPitch)?;
         let me = slf.borrow();
         let realization = me
-            .inner
+            .current(py)?
             .realize(&rules, numParts, &top)
             .map_err(|error| line_error(&error))?;
         Bound::new(

@@ -41,7 +41,7 @@ style = { kind = "identity", sync = "Pitch::current" }
 client = { kind = "identity", sync = "read live", why = "music21's _client, told by informClient; not part of the value" }
 
 [Articulation]
-bend_alter = { kind = "value", note = "read into inner's bend semitones when set; an interval edited in place is not read again" }
+bend_alter = { kind = "identity", sync = "Articulation::current" }
 
 [Barline]
 pause = { kind = "identity", sync = "read live", why = "a Fermata or Rest the crate does not model, handed back as given" }
@@ -62,7 +62,7 @@ notes = { kind = "identity", sync = "synced_inner" }
 loose_pitches = { kind = "identity", sync = "Pitch::write_back", why = "a loose pitch writes into the chord through loose_in" }
 duration = { kind = "identity", sync = "synced_inner" }
 volume = { kind = "identity", sync = "synced_inner" }
-stored_instrument = { kind = "value", note = "read into inner by the setter only; an instrument edited in place is not seen by the crate's readers (MIDI percussion, instrument streams)" }
+stored_instrument = { kind = "identity", sync = "synced_inner" }
 expressions = { kind = "identity", sync = "read live", why = "the crate's chord holds no expressions; readers walk the list" }
 articulations = { kind = "identity", sync = "read live", why = "the crate's chord holds no articulations; readers walk the list" }
 overrides = { kind = "identity", sync = "synced_inner" }
@@ -84,8 +84,8 @@ tonic_object = { kind = "identity", sync = "current" }
 abstract_scale = { kind = "identity", sync = "read live", why = "a network the crate has no counterpart for, asked directly" }
 
 [Contributor]
-birth = { kind = "value", note = "read into inner when set; a date edited in place is not" }
-death = { kind = "value", note = "read into inner when set; a date edited in place is not" }
+birth = { kind = "identity", sync = "Contributor::current" }
+death = { kind = "identity", sync = "Contributor::current" }
 
 [DataSet]
 classes = { kind = "identity", sync = "read live", why = "extractor classes handed back as given; the crate's extractor is looked up from each when added" }
@@ -95,12 +95,12 @@ tuplets = { kind = "identity", sync = "written_value" }
 client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
 
 [FiguredBassLine]
-key = { kind = "value", note = "read into inner when set; a key edited in place is not (music21 also builds its scale from the key once)" }
-time = { kind = "value", note = "read into inner when set; a meter edited in place is not" }
+key = { kind = "identity", sync = "FiguredBassLine::current", why = "its sharps are written; the figures stay counted in the scale the line was made with, as music21's do" }
+time = { kind = "identity", sync = "FiguredBassLine::current" }
 
 [FiguredBassScale]
-realizer_scale = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back, where music21 reads realizerScale live" }
-key_sig = { kind = "value", note = "built from inner on first asking, and assignable; neither an assignment nor an edit in place is read back" }
+realizer_scale = { kind = "identity", sync = "FiguredBassScale::current", why = "a scale of music21's own is not read" }
+key_sig = { kind = "identity", sync = "FiguredBassScale::current" }
 
 [GenericInterval]
 complemented = { kind = "cache", note = "the complement, made on first asking" }
@@ -135,7 +135,7 @@ expressions = { kind = "identity", sync = "read live", why = "the crate's note h
 articulations = { kind = "identity", sync = "read live", why = "the crate's note holds no articulations; readers walk the list" }
 tie = { kind = "identity", sync = "synced" }
 lyrics = { kind = "identity", sync = "synced" }
-stored_instrument = { kind = "value", note = "read into inner by the setter only; an instrument edited in place is not seen by the crate's readers (MIDI percussion, instrument streams)" }
+stored_instrument = { kind = "identity", sync = "synced" }
 unread_pitch = { kind = "identity", sync = "read live", why = "a non-pitch music21 stores and only .pitch hands back" }
 style = { kind = "identity", sync = "synced" }
 beams = { kind = "identity", sync = "synced" }
@@ -149,7 +149,7 @@ written = { kind = "cache", note = "the elements written so far, beside the crat
 accidental = { kind = "identity", sync = "synced" }
 upper_accidental = { kind = "identity", sync = "synced" }
 lower_accidental = { kind = "identity", sync = "synced" }
-size = { kind = "value", note = "an appoggiatura's interval, read into inner when set; one edited in place is not" }
+size = { kind = "identity", sync = "synced" }
 ornamental = { kind = "cache", note = "the pitches resolveOrnamentalPitches last worked out" }
 
 [Pitch]
@@ -206,8 +206,8 @@ spans = { kind = "cache", note = "the timespans, in the crate tree's order" }
 source = { kind = "identity", sync = "read live", why = "the row the matrix was made from, which only its repr reads" }
 
 [VoiceLeadingQuartet]
-notes = { kind = "value", note = "read into inner when set; a note edited in place is not, as music21 works its intervals out when the notes are set" }
-key_object = { kind = "value", note = "read into inner when set; a key edited in place is not, where music21 reads its key live" }
+notes = { kind = "identity", sync = "VoiceLeadingQuartet::current", why = "the intervals stay as worked out when a note was set, as music21's do" }
+key_object = { kind = "identity", sync = "VoiceLeadingQuartet::current" }
 
 [Volume]
 client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
