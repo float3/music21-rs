@@ -135,6 +135,14 @@ fn wrap(value: IntegerType) -> u8 {
 impl ToneRow {
     /// Builds a row from pitch-class integers, which are reduced modulo 12 the
     /// way music21's `pcToToneRow` does, so `[-6, 19, 128]` is `[6, 7, 8]`.
+    ///
+    /// ```
+    /// use music21_rs::ToneRow;
+    ///
+    /// let row = ToneRow::new([0, 11, 7, 8, 3, 1, 2, 10, 6, 5, 4, 9]);
+    /// assert!(row.is_twelve_tone_row());
+    /// assert_eq!(row[1], 11);
+    /// ```
     pub fn new(pitch_classes: impl IntoIterator<Item = IntegerType>) -> Self {
         Self {
             pitch_classes: pitch_classes.into_iter().map(wrap).collect(),
@@ -176,6 +184,12 @@ impl ToneRow {
     }
 
     /// The note names of the row, music21's `noteNames`.
+    ///
+    /// ```
+    /// use music21_rs::ToneRow;
+    ///
+    /// assert_eq!(ToneRow::new([0, 4, 7]).note_names(), ["C", "E", "G"]);
+    /// ```
     pub fn note_names(&self) -> Vec<String> {
         self.pitches().iter().map(Pitch::name).collect()
     }
@@ -221,6 +235,16 @@ impl ToneRow {
 
     /// Transforms the row in the zero-centered convention, where `P(n)` and
     /// `I(n)` start on pitch class `n` and `R(n)` and `RI(n)` end on it.
+    ///
+    /// ```
+    /// use music21_rs::{ToneRow, Transformation};
+    ///
+    /// let row = ToneRow::new([0, 4, 7]);
+    /// let inverted = row.zero_centered_transformation(Transformation::Inversion, 2);
+    /// assert_eq!(inverted.pitch_classes(), [2, 10, 7]);
+    /// let backwards = row.zero_centered_transformation(Transformation::Retrograde, 0);
+    /// assert_eq!(backwards.pitch_classes(), [7, 4, 0]);
+    /// ```
     pub fn zero_centered_transformation(
         &self,
         transformation: Transformation,
@@ -362,6 +386,17 @@ impl ToneRow {
 
     /// The row's matrix: every transposition of the row, ordered so that the
     /// leading diagonal is zero and each column reads the inversion.
+    ///
+    /// ```
+    /// use music21_rs::ToneRow;
+    ///
+    /// let row = ToneRow::new([0, 11, 7, 8, 3, 1, 2, 10, 6, 5, 4, 9]);
+    /// let matrix = row.matrix();
+    /// assert_eq!(matrix.rows().len(), 12);
+    /// // The second row is the prime starting where the inversion's second
+    /// // note does.
+    /// assert_eq!(matrix.row(1).map(|row| row[0]), Some(1));
+    /// ```
     pub fn matrix(&self) -> TwelveToneMatrix {
         let rows = self
             .pitch_classes
@@ -415,6 +450,14 @@ impl ToneRow {
     /// consecutive members of the row.
     ///
     /// Errors unless the row is a twelve-tone row.
+    ///
+    /// ```
+    /// use music21_rs::ToneRow;
+    ///
+    /// let row = ToneRow::new([0, 11, 7, 4, 2, 9, 3, 8, 10, 1, 5, 6]);
+    /// assert!(row.is_all_interval()?);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn is_all_interval(&self) -> Result<bool> {
         self.require_twelve_tone("An all-interval row")?;
         let intervals = self.intervals_as_string();
@@ -614,6 +657,14 @@ impl HistoricalRow {
 
 /// Looks a historical row up by music21's name for it. The pre-v6 names with a
 /// `Row` prefix are accepted too.
+///
+/// ```
+/// use music21_rs::historical_row_by_name;
+///
+/// let row = historical_row_by_name("WebernOp21")?.row();
+/// assert!(row.is_twelve_tone_row());
+/// # Ok::<(), music21_rs::Error>(())
+/// ```
 pub fn historical_row_by_name(name: &str) -> Result<&'static HistoricalRow> {
     let name = name.strip_prefix("Row").unwrap_or(name);
     HISTORICAL_ROWS

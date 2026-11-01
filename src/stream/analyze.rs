@@ -12,6 +12,7 @@ use crate::key::Key;
 /// What an analysis of a stream answers, which in music21 depends on the
 /// method asked for: a key, or the span of its pitches.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Analysis {
     /// The key the stream is most likely in, as the key-weighting
     /// analyses name it.

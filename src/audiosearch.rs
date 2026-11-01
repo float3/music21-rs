@@ -70,7 +70,7 @@ pub fn histogram(data: &[FloatType], bins: usize) -> Result<(Vec<usize>, Vec<Flo
         .iter()
         .copied()
         .reduce(FloatType::max)
-        .ok_or_else(|| audio_error("max() arg is an empty sequence"))?;
+        .ok_or_else(|| audio_error("no values to count"))?;
     let least = data.iter().copied().fold(most, FloatType::min);
     let width = (most - least) / bins as FloatType;
     let mut counts = vec![0; bins];
@@ -81,7 +81,7 @@ pub fn histogram(data: &[FloatType], bins: usize) -> Result<(Vec<usize>, Vec<Flo
         }
         *counts
             .get_mut(count - 1)
-            .ok_or_else(|| audio_error("list index out of range"))? += 1;
+            .ok_or_else(|| audio_error(format!("{value} falls past the last bin")))? += 1;
     }
     let edges = (0..=bins)
         .map(|index| least + index as FloatType * width)
@@ -226,7 +226,7 @@ pub fn normalize_input_frequency(
     };
     let scale_pitch = pitches
         .get(index)
-        .ok_or_else(|| audio_error("list index out of range"))?;
+        .ok_or_else(|| audio_error("the scale has no pitches"))?;
     let mut placed = scale_pitch.clone();
     placed.set_octave(Some(octave - shift));
     Ok((scale_pitch.frequency_hz(), placed))
@@ -389,7 +389,7 @@ pub fn joined_pitches(pitches: &[Pitch]) -> Result<Vec<JoinedNote>> {
     let mut read = pitches.to_vec();
     let first = read
         .first_mut()
-        .ok_or_else(|| audio_error("list index out of range"))?;
+        .ok_or_else(|| audio_error("no pitches to join"))?;
     *first = pitch_at_frequency(REST_FREQUENCY)?;
     let mut joined = Vec::new();
     let (mut good, mut bad) = (0, 0);
@@ -439,7 +439,7 @@ pub fn join_consecutive_identical_pitches(
 ) -> Result<(Vec<StreamElement>, Vec<usize>)> {
     let first = pitches
         .first_mut()
-        .ok_or_else(|| audio_error("list index out of range"))?;
+        .ok_or_else(|| audio_error("no pitches to join"))?;
     *first = pitch_at_frequency(REST_FREQUENCY)?;
     let mut notes: Vec<StreamElement> = Vec::new();
     let mut lengths = Vec::new();
@@ -540,7 +540,7 @@ pub fn transcribed_notes(
     for (index, length) in lengths.iter().enumerate() {
         let element = notes
             .get(index)
-            .ok_or_else(|| audio_error("list index out of range"))?;
+            .ok_or_else(|| audio_error("more lengths than notes"))?;
         let quarter_length = quantize_duration(*length as FloatType / estimate);
         let kept = !(skipping && matches!(element, StreamElement::Rest(_)));
         if kept {
@@ -579,7 +579,7 @@ pub fn notes_and_durations_to_stream(
         let mut element = notes
             .get(one.note)
             .cloned()
-            .ok_or_else(|| audio_error("list index out of range"))?;
+            .ok_or_else(|| audio_error("more lengths than notes"))?;
         let duration = Duration::new(one.quarter_length)?;
         match &mut element {
             StreamElement::Note(note) => note.set_duration(duration),
@@ -622,12 +622,12 @@ pub fn decision_process(
     let begins = |part: usize| -> Result<FloatType> {
         let id = parts
             .get(part)
-            .ok_or_else(|| audio_error("list index out of range"))?
+            .ok_or_else(|| audio_error(format!("no part {part}")))?
             .0;
         beginning_data
             .get(id)
             .copied()
-            .ok_or_else(|| audio_error("list index out of range"))
+            .ok_or_else(|| audio_error(format!("no beginning recorded for part {part}")))
     };
     let mut position = 0;
     let mut i = 0;
@@ -641,12 +641,9 @@ pub fn decision_process(
     let first = beginning_data
         .first()
         .copied()
-        .ok_or_else(|| audio_error("list index out of range"))?;
+        .ok_or_else(|| audio_error("no beginnings recorded"))?;
     let mut distance = (first - note_prediction).abs();
-    let best = parts
-        .first()
-        .ok_or_else(|| audio_error("list index out of range"))?
-        .1;
+    let best = parts.first().ok_or_else(|| audio_error("no parts"))?.1;
     for (index, (_, probability)) in parts.iter().enumerate() {
         let start = begins(index)?;
         if *probability >= 0.9 * best

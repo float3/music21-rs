@@ -434,6 +434,24 @@ seconds.
 lint and docs, not on every test job, so one stale fixture cannot keep the
 whole site unpublished. a *release* still waits on everything.
 
+**growing enums and every options struct are `#[non_exhaustive]`.**
+`StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,
+`TuningSystem`, `ScaleType`, `stream::Analysis` and every `*Options`
+struct. A new variant or field then stops being a breaking change.
+*debated 2026-11-01:* thirteen breaking-change sections in five weeks were
+mostly variants and fields added. *costs:* a caller's `match` needs a
+wildcard arm, and an options struct is built from `X::default()` and then
+set field by field, never as a literal. Closed sets that already list
+every music21 class (`ClefKind`, `ArticulationKind`, `OrnamentKind`,
+`DurationType`, `KeyProfile`) stay exhaustive.
+
+**the next work is chosen by debate on evidence.** on 2026-11-01 five
+directions were argued from the report and the code: coverage gaps,
+stream speed, committed seeded fuzzers, a targeted port
+(`MultiMeasureRest`) and Rust-user hygiene, in that order. Element-level
+`beat` was rejected again: the package keeps no sites, and
+`Stream.placed()` answers it.
+
 ## decisions made and then unmade
 
 **deciding an installed object's half once per class.** the install helper

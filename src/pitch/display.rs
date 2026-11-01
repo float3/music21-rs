@@ -266,6 +266,7 @@ impl Pitch {
 /// sounding at the same time, the key signature's altered pitches, and the
 /// cautionary-accidental switches, with music21's defaults.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct AccidentalDisplayOptions<'a> {
     /// Pitches preceding this one in the same measure.
     pub pitch_past: &'a [Pitch],

@@ -117,7 +117,9 @@ impl ReductiveParameters {
                 _ => continue,
             };
             if key.chars().any(char::is_uppercase) {
-                return Err(Error::Analysis(format!("KeyError: {key:?}")));
+                return Err(Error::Analysis(format!(
+                    "reduction parameter {key:?} must be lowercase"
+                )));
             }
             *slot = value;
         }
@@ -592,7 +594,12 @@ fn place(
             _ => None,
         })
         .nth(note.measure_index)
-        .ok_or_else(|| Error::Analysis("list index out of range".to_string()))?;
+        .ok_or_else(|| {
+            Error::Analysis(format!(
+                "the part has no measure {} to reduce into",
+                note.measure_index
+            ))
+        })?;
     if measure.voices().is_empty() {
         measure.retain_leaves(&mut |_, element| !matches!(element, StreamElement::Rest(_)));
         for id in voices {

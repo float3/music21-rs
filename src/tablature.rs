@@ -187,7 +187,13 @@ impl FretBoard {
             let index = usize::try_from(index)
                 .ok()
                 .filter(|index| *index < self.strings)
-                .ok_or_else(|| Error::Tablature("list index out of range".to_string()))?;
+                .ok_or_else(|| {
+                    Error::Tablature(format!(
+                        "string {} is not one of the {} strings",
+                        note.string.unwrap_or(0),
+                        self.strings
+                    ))
+                })?;
             let open = self.tuning[index].ps();
             let sounding = open + note.fret.unwrap_or(0) as FloatType;
             pitches[index] = Some(Pitch::from_number(sounding)?);

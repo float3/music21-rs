@@ -86,25 +86,25 @@ fn options_of(
             "segmentBreaks says where to break a segment by hand, which this package does not take",
         ));
     }
-    Ok(translate::BrailleOptions {
-        in_place: inPlace,
-        debug,
-        segment: SegmentOptions {
-            cancel_outgoing_key_sig: cancelOutgoingKeySig,
-            descending_chords: descendingChords,
-            dummy_rest_length: dummyRestLength,
-            max_line_length: maxLineLength,
-            show_clef_signs: showClefSigns,
-            show_first_measure_number: showFirstMeasureNumber,
-            show_hand: hand_of(showHand)?,
-            show_heading: showHeading,
-            show_long_slurs_and_ties_together: showLongSlursAndTiesTogether,
-            show_short_slurs_and_ties_together: showShortSlursAndTiesTogether,
-            slur_long_phrase_with_brackets: slurLongPhraseWithBrackets,
-            suppress_octave_marks: suppressOctaveMarks,
-            upper_first_in_note_fingering: upperFirstInNoteFingering,
-        },
-    })
+    let mut segment = SegmentOptions::default();
+    segment.cancel_outgoing_key_sig = cancelOutgoingKeySig;
+    segment.descending_chords = descendingChords;
+    segment.dummy_rest_length = dummyRestLength;
+    segment.max_line_length = maxLineLength;
+    segment.show_clef_signs = showClefSigns;
+    segment.show_first_measure_number = showFirstMeasureNumber;
+    segment.show_hand = hand_of(showHand)?;
+    segment.show_heading = showHeading;
+    segment.show_long_slurs_and_ties_together = showLongSlursAndTiesTogether;
+    segment.show_short_slurs_and_ties_together = showShortSlursAndTiesTogether;
+    segment.slur_long_phrase_with_brackets = slurLongPhraseWithBrackets;
+    segment.suppress_octave_marks = suppressOctaveMarks;
+    segment.upper_first_in_note_fingering = upperFirstInNoteFingering;
+    let mut options = translate::BrailleOptions::default();
+    options.in_place = inPlace;
+    options.debug = debug;
+    options.segment = segment;
+    Ok(options)
 }
 
 /// The stream as the crate reads one, with every element as the value it

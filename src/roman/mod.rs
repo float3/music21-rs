@@ -269,6 +269,21 @@ impl RomanNumeral {
     ///
     /// Supports ordinary figures such as `V7/V` and augmented-sixth figures
     /// such as `It+6`, `Fr+6`, `Ger+6`, and `Sw+6`.
+    ///
+    /// ```
+    /// use music21_rs::{Key, RomanNumeral};
+    ///
+    /// let dominant = RomanNumeral::new("V7", Key::from_tonic("C")?)?;
+    /// assert_eq!(dominant.degree(), 5);
+    /// let pitches: Vec<String> = dominant
+    ///     .to_chord()?
+    ///     .pitches()
+    ///     .iter()
+    ///     .map(|pitch| pitch.name_with_octave())
+    ///     .collect();
+    /// assert_eq!(pitches, ["G4", "B4", "D5", "F5"]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn new(figure: impl Into<String>, key: Key) -> Result<Self> {
         Self::with_minor_defaults(
             figure,
@@ -496,6 +511,15 @@ impl RomanNumeral {
     }
 
     /// The figure the numeral was written with, as given: music21's `figure`.
+    ///
+    /// ```
+    /// use music21_rs::{Key, RomanNumeral};
+    ///
+    /// let supertonic = RomanNumeral::new("ii6", Key::from_tonic("F")?)?;
+    /// assert_eq!(supertonic.figure(), "ii6");
+    /// assert_eq!(supertonic.inversion(), 1);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn figure(&self) -> &str {
         &self.figure
     }
@@ -525,11 +549,29 @@ impl RomanNumeral {
     }
 
     /// Returns the secondary/applied target figure, if any.
+    ///
+    /// ```
+    /// use music21_rs::{Key, RomanNumeral};
+    ///
+    /// let applied = RomanNumeral::new("V/V", Key::from_tonic("C")?)?;
+    /// assert_eq!(applied.secondary(), Some("V"));
+    /// assert_eq!(applied.to_chord()?.pitch_names(), ["D", "F#", "A"]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn secondary(&self) -> Option<&str> {
         self.secondary.as_deref()
     }
 
     /// Returns the key context.
+    ///
+    /// ```
+    /// use music21_rs::{Key, RomanNumeral};
+    ///
+    /// let tonic = RomanNumeral::new("i", Key::from_tonic("g")?)?;
+    /// assert_eq!(tonic.key().mode(), "minor");
+    /// assert_eq!(tonic.to_chord()?.root().map(|root| root.name()), Some("G".to_string()));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn key(&self) -> &Key {
         &self.key
     }
@@ -537,6 +579,14 @@ impl RomanNumeral {
     /// The numeral with its front alteration and nothing else: music21's
     /// `romanNumeral`, so `bII6` is `bII` and `V65/V` is `V`. An augmented
     /// sixth answers its nationality, `It`, `Fr`, `Ger` or `Sw`.
+    ///
+    /// ```
+    /// use music21_rs::{Key, RomanNumeral};
+    ///
+    /// let numeral = RomanNumeral::new("viio65", Key::from_tonic("C")?)?;
+    /// assert_eq!(numeral.roman_numeral(), "vii");
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn roman_numeral(&self) -> String {
         let numeral = self.roman_numeral_alone();
         if matches!(self.kind, RomanKind::AugmentedSixth(_)) {

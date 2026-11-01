@@ -12,6 +12,7 @@ use crate::pitch::Pitch;
 /// marks a break: music21's keyword arguments to `findConsecutiveNotes`.
 /// Every option is off by default.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ConsecutiveOptions {
     /// Whether a rest is passed over rather than breaking the line:
     /// `skipRests`.

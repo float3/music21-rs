@@ -89,6 +89,7 @@ use crate::{
 /// that a tag does not, and a tag is what the filters here need.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum StreamKind {
     /// A stream with no particular role: music21's `Stream`.
     #[default]
@@ -142,6 +143,7 @@ impl std::fmt::Display for StreamKind {
 /// A musical object that can live on a timeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum StreamElement {
     /// A single pitched note.
     Note(Note),
@@ -758,11 +760,30 @@ struct Labels {
 
 impl Stream {
     /// Creates an empty stream.
+    ///
+    /// ```
+    /// use music21_rs::{Note, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.push(Note::from_name("C4")?);
+    /// stream.push(Note::from_name("E4")?);
+    /// assert_eq!(stream.len(), 2);
+    /// assert_eq!(stream.end_offset(), 2.0);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Creates an empty stream standing for one of music21's subclasses.
+    ///
+    /// ```
+    /// use music21_rs::{Stream, StreamKind};
+    ///
+    /// let part = Stream::with_kind(StreamKind::Part);
+    /// assert_eq!(part.kind(), StreamKind::Part);
+    /// assert!(part.is_empty());
+    /// ```
     pub fn with_kind(kind: StreamKind) -> Self {
         Self {
             kind,
@@ -965,6 +986,17 @@ impl Stream {
 
     /// Adds a spanner, naming what it joins by position in this stream's
     /// [`Stream::leaves`].
+    ///
+    /// ```
+    /// use music21_rs::{Note, Spanner, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.push(Note::from_name("C4")?);
+    /// stream.push(Note::from_name("D4")?);
+    /// stream.add_spanner(Spanner::slur(vec![0, 1]));
+    /// assert_eq!(stream.spanners().len(), 1);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn add_spanner(&mut self, spanner: Spanner) {
         self.labels.spanners.push(spanner);
     }
@@ -1008,12 +1040,34 @@ impl Stream {
     }
 
     /// Inserts an element at a quarter-length offset.
+    ///
+    /// ```
+    /// use music21_rs::{Note, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.insert(2.0, Note::from_name("G4")?);
+    /// stream.insert(0.0, Note::from_name("C4")?);
+    /// let offsets: Vec<f64> = stream.events().iter().map(|event| event.offset()).collect();
+    /// assert_eq!(offsets, [0.0, 2.0]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn insert(&mut self, offset: FloatType, element: impl Into<StreamElement>) {
         self.events.push(StreamEvent::new(offset, element));
         self.sort_events();
     }
 
     /// Appends an element after the current end of the stream.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Rest, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.push(Note::from_name("C4")?.with_duration(Duration::half()));
+    /// stream.push(Rest::new(Duration::new(1.0)?));
+    /// stream.push(Note::from_name("D4")?);
+    /// assert_eq!(stream.events()[2].offset(), 3.0);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn push(&mut self, element: impl Into<StreamElement>) {
         let element = element.into();
         let offset = self.end_offset();
@@ -1026,6 +1080,25 @@ impl Stream {
     }
 
     /// The events in offset order.
+    ///
+    /// ```
+    /// use music21_rs::{Note, Rest, Stream, StreamElement};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.push(Note::from_name("C4")?);
+    /// stream.push(Rest::default());
+    /// stream.push(Note::from_name("G4")?);
+    /// let names: Vec<String> = stream
+    ///     .events()
+    ///     .iter()
+    ///     .filter_map(|event| match event.element() {
+    ///         StreamElement::Note(note) => Some(note.pitch().name_with_octave()),
+    ///         _ => None,
+    ///     })
+    ///     .collect();
+    /// assert_eq!(names, ["C4", "G4"]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn events(&self) -> &[StreamEvent] {
         &self.events
     }
@@ -1054,6 +1127,21 @@ impl Stream {
     /// before a key before a dynamic before a chord symbol before a note --
     /// with grace notes first among their class, and otherwise as the
     /// nesting held them, part by part.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// for name in ["C4", "D4"] {
+    ///     let mut measure = Stream::with_kind(StreamKind::Measure);
+    ///     measure.push(Note::from_name(name)?.with_duration(Duration::whole()));
+    ///     part.push(measure);
+    /// }
+    /// let flat = part.flatten();
+    /// assert_eq!(flat.len(), 2);
+    /// assert_eq!(flat.events()[1].offset(), 4.0);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn flatten(&self) -> Self {
         let mut flattened = Self::with_kind(self.kind);
         self.flatten_into(0.0, &mut flattened.events);
@@ -1089,6 +1177,21 @@ impl Stream {
 
     /// Every element at its offset from this stream's start, nested streams
     /// themselves included: music21's `recurse`.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// for name in ["C4", "D4"] {
+    ///     let mut measure = Stream::with_kind(StreamKind::Measure);
+    ///     measure.push(Note::from_name(name)?.with_duration(Duration::whole()));
+    ///     part.push(measure);
+    /// }
+    /// // Two measures and the note in each.
+    /// let offsets: Vec<f64> = part.recurse().iter().map(|(offset, _)| *offset).collect();
+    /// assert_eq!(offsets, [0.0, 0.0, 4.0, 4.0]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn recurse(&self) -> Vec<(FloatType, &StreamElement)> {
         let mut out = Vec::new();
         self.recurse_into(0.0, &mut out);
@@ -1476,6 +1579,20 @@ impl Stream {
     }
 
     /// The measures this stream holds.
+    ///
+    /// ```
+    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// for name in ["C4", "D4"] {
+    ///     let mut measure = Stream::with_kind(StreamKind::Measure);
+    ///     measure.push(Note::from_name(name)?.with_duration(Duration::whole()));
+    ///     part.push(measure);
+    /// }
+    /// assert_eq!(part.measures().len(), 2);
+    /// assert_eq!(part.measures()[1].len(), 1);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn measures(&self) -> Vec<&Stream> {
         self.streams_of_kind(StreamKind::Measure)
     }
@@ -1487,6 +1604,18 @@ impl Stream {
 
     /// Every note and chord on the flattened timeline: music21's
     /// `flatten().notes`, which leaves rests out.
+    ///
+    /// ```
+    /// use music21_rs::{Chord, Note, Rest, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.push(Note::from_name("C4")?);
+    /// stream.push(Rest::default());
+    /// stream.push(Chord::new("E4 G4")?);
+    /// let offsets: Vec<f64> = stream.notes().iter().map(|(offset, _)| *offset).collect();
+    /// assert_eq!(offsets, [0.0, 2.0]);
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn notes(&self) -> Vec<(FloatType, StreamElement)> {
         self.flatten()
             .events

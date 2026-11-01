@@ -501,7 +501,7 @@ fn replaced(
                 }
                 _ => None,
             })
-            .ok_or_else(|| variant_error("'NoneType' object has no attribute 'duration'"))?
+            .ok_or_else(|| variant_error("the variant has no hidden rest to space it"))?
     } else {
         0.0
     };
@@ -733,7 +733,7 @@ fn measures_stream(stream: &Stream, measures: &[usize]) -> Stream {
 }
 
 fn no_such_measure() -> Error {
-    variant_error("'NoneType' object has no attribute 'getOffsetBySite'")
+    variant_error("no measure there to place the variant at")
 }
 
 // ---------------------------------------------------------- add_variant
@@ -995,7 +995,7 @@ pub fn merge_variants_equal_duration(
     variant_names: &[&str],
 ) -> Result<Stream> {
     let Some((first, others)) = streams.split_first() else {
-        return Err(variant_error("list index out of range"));
+        return Err(variant_error("no streams to merge"));
     };
     let mut out = (*first).clone();
     let mut names: Vec<Option<String>> = vec![None];
@@ -1015,7 +1015,7 @@ fn equal_duration_into(
     others: &[(&Stream, Option<String>)],
 ) -> Result<Vec<Option<usize>>> {
     let mut moved = unmoved(out);
-    let out_of_range = || variant_error("list index out of range");
+    let out_of_range = || variant_error("a version has fewer parts or measures than the first");
     for (other, name) in others {
         if highest_time(out) != highest_time(other) {
             return Err(variant_error("cannot merge streams of different lengths"));
@@ -1205,7 +1205,7 @@ pub fn merge_part_as_ossia(
     recurse_in_measures: bool,
 ) -> Result<Stream> {
     let mut out = main.clone();
-    let no_measure = || variant_error("'NoneType' object has no attribute 'highestTime'");
+    let no_measure = || variant_error("no measure there to merge the ossia into");
     for event in ossia.events() {
         let StreamElement::Stream(measure) = event.element() else {
             continue;
@@ -1348,10 +1348,10 @@ fn best_list(
 /// rests and 0.4 for others, and a thousandth for each number apart.
 fn diff_score(x: &StreamElement, y: &StreamElement) -> Result<FloatType> {
     let (StreamElement::Stream(x), StreamElement::Stream(y)) = (x, y) else {
-        return Err(variant_error("object has no attribute 'notesAndRests'"));
+        return Err(variant_error("only streams can be compared"));
     };
     if x.kind() != StreamKind::Measure || y.kind() != StreamKind::Measure {
-        return Err(variant_error("'Stream' object has no attribute 'number'"));
+        return Err(variant_error("only measures can be compared"));
     }
     let base = if measure_hash(x) == measure_hash(y) {
         0.0
@@ -1455,7 +1455,7 @@ pub fn refine_variant(stream: &mut Stream, variant: usize) -> Result<()> {
         for (j, &index) in ours_matched.iter().enumerate() {
             let measure = theirs
                 .get(j)
-                .ok_or_else(|| variant_error("list index out of range"))?;
+                .ok_or_else(|| variant_error("fewer measures matched than to align"))?;
             // The measure is the stream's own: found by the place it came
             // from.
             let id = region[index].0;
@@ -1581,9 +1581,8 @@ fn fix_variants(stream: &mut Stream) -> Result<Vec<Option<usize>>> {
             target_length = copy.quarter_length();
             site.variant_mut(id)?.contents.push(copy);
         } else {
-            let target = previous_element(&site, id)?.ok_or_else(|| {
-                variant_error("'NoneType' object has no attribute 'getOffsetBySite'")
-            })?;
+            let target = previous_element(&site, id)?
+                .ok_or_else(|| variant_error("no element before the variant to place it after"))?;
             let held = site
                 .get(target)
                 .ok_or_else(|| variant_error("the element is not in the stream"))?
@@ -1710,7 +1709,7 @@ pub fn make_variant_blocks(stream: &mut Stream) -> Result<()> {
                 .ok_or_else(|| variant_error("Variant not found in stream"))?;
             site.reinsert(moving, start);
             failed = Some(variant_error(
-                "'StreamIterator' object has no attribute 'append'",
+                "variants that overlap at different offsets cannot be made real",
             ));
             break 'variants;
         }
@@ -1967,7 +1966,7 @@ fn fix_measure_numbers(site: &mut Site, mut all: Vec<Renumber>) -> Result<()> {
                     continue;
                 }
                 let prior = prior.ok_or_else(|| {
-                    variant_error("unsupported operand type(s) for +: 'NoneType' and 'int'")
+                    variant_error("measures inserted before any numbered measure")
                 })?;
                 cumulative += measures.len() as IntegerType;
                 let mut next = prior + 1;

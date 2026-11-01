@@ -626,6 +626,7 @@ pub fn prepare_beamed_notes(
 
 /// The options music21's translation takes, as a segment reads them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SegmentOptions {
     /// Whether a key signature cancels the one before it.
     pub cancel_outgoing_key_sig: bool,
@@ -2113,9 +2114,9 @@ impl SegmentWriter {
     fn extract_tempo_text_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
         let current = self.current.expect("a grouping being written");
         self.keys.push_front(current);
-        let previous = self.previous.ok_or_else(|| {
-            Error::Notation("'NoneType' object has no attribute 'affinity'".to_string())
-        })?;
+        let previous = self
+            .previous
+            .ok_or_else(|| Error::Notation("tempo text with no grouping before it".to_string()))?;
         if previous.affinity == Affinity::Signature {
             self.keys.push_front(previous);
         }

@@ -251,11 +251,9 @@ fn musicxml_of(obj: &Bound<'_, PyAny>, kind: Kind) -> PyResult<String> {
         .call_method0("today")?
         .call_method0("isoformat")?
         .extract()?;
-    let options = ExportOptions {
-        encoding_date: Some(today),
-        make_notation: true,
-        ..ExportOptions::default()
-    };
+    let mut options = ExportOptions::default();
+    options.encoding_date = Some(today);
+    options.make_notation = true;
     let measure = degree_measure(obj, kind)?;
     let stream = crate::stream::crate_stream(&measure)?;
     music21_rs_crate::musicxml::to_musicxml(&stream, &options)
@@ -321,11 +319,10 @@ fn midi_of(obj: &Bound<'_, PyAny>, keywords: Option<&Bound<'_, PyDict>>) -> PyRe
             None => Ok(default),
         }
     };
-    let options = music21_rs_crate::midi::ExportOptions {
-        add_start_delay: flag("addStartDelay", false)?,
-        add_end_delay: flag("addEndDelay", true)?,
-        acceptable_channels: None,
-    };
+    let mut options = music21_rs_crate::midi::ExportOptions::default();
+    options.add_start_delay = flag("addStartDelay", false)?;
+    options.add_end_delay = flag("addEndDelay", true)?;
+    options.acceptable_channels = None;
 
     // A copy, as music21 makes, so the object is put in no stream.
     let copied = py.import("copy")?.call_method1("deepcopy", (obj,))?;

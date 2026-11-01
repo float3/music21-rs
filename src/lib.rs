@@ -107,10 +107,9 @@ pub mod mei;
 pub mod metadata;
 /// Time signatures: bar length, beat count, beat length and beat division.
 pub mod meter;
-/// Minimal MIDI import/export helpers.
+/// MIDI files read into scores and scores written as MIDI: [`midi::from_midi`]
+/// and [`midi::to_midi`].
 pub mod midi;
-/// MuseScore's own `.mscx` files, and MuseScore run as a converter for the
-/// formats it opens.
 pub mod musedata;
 pub mod musescore;
 /// MusicXML import and export: music21's `musicxml.xmlToM21` and
@@ -176,8 +175,8 @@ mod xml;
 // pub(crate) mod macros;
 
 pub use abc::{
-    abc_chord, abc_duration, abc_note, abc_rest, pitch_name_from_abc_note,
-    pitch_names_from_abc_chord,
+    abc_chord, abc_duration, abc_note, abc_rest, from_abc, from_abc_number,
+    pitch_name_from_abc_note, pitch_names_from_abc_chord, to_abc,
 };
 pub use analysis::{
     KeyEstimate, KeyProfile, estimate_key_from_chords, estimate_key_from_chords_with,
@@ -215,10 +214,7 @@ pub use interval::{
 pub use key::{Key, KeySignature, convert_key_string_to_music21_key_string};
 pub use metadata::{Metadata, MetadataContent, MetadataValue};
 pub use meter::{BeamedNote, BeatDivision, MeterTerminal, OffsetAlign, TimeSignature};
-pub use midi::{
-    DEFAULT_TICKS_PER_QUARTER, MidiNote, midi_notes_from_stream, read_midi_bytes,
-    read_midi_bytes_with_tempo, stream_from_midi_notes, write_midi_bytes,
-};
+pub use midi::{DEFAULT_TICKS_PER_QUARTER, MidiNote, from_midi, to_midi};
 pub use notation::{
     Beam, BeamDirection, BeamType, Beams, Justification, Lyric, NoteSize, Notehead, Placement,
     StemDirection, Syllabic, Tie, TieStyle, TieType,
@@ -250,8 +246,8 @@ pub use serial::{
 };
 pub use sieve::Sieve;
 pub use spanner::{
-    Glissando, LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalObject, PedalObjectKind,
-    PedalType, SlideType, Spanner, SpannerKind,
+    Glissando, LineEnd, LineEnds, MultiRest, OctaveShift, Pedal, PedalForm, PedalObject,
+    PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
 };
 pub use stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{
@@ -269,3 +265,48 @@ pub use voiceleading::{
     verticality_at,
 };
 pub use volume::{DynamicContext, Volume, realize_volume};
+
+/// Reads note events from a Standard MIDI File, dropping everything else.
+#[deprecated(
+    since = "0.15.0",
+    note = "use `from_midi` for a score, or `midi::read_midi_bytes` for bare note events"
+)]
+pub fn read_midi_bytes(bytes: &[u8]) -> Result<Vec<MidiNote>> {
+    midi::read_midi_bytes(bytes)
+}
+
+/// Reads note events and the first tempo from a Standard MIDI File.
+#[deprecated(
+    since = "0.15.0",
+    note = "use `from_midi` for a score, or `midi::read_midi_bytes_with_tempo` for bare note events"
+)]
+pub fn read_midi_bytes_with_tempo(bytes: &[u8]) -> Result<(Vec<MidiNote>, Option<FloatType>)> {
+    midi::read_midi_bytes_with_tempo(bytes)
+}
+
+/// Writes note events as a minimal format-0 Standard MIDI File.
+#[deprecated(
+    since = "0.15.0",
+    note = "use `to_midi` for a score, or `midi::write_midi_bytes` for bare note events"
+)]
+pub fn write_midi_bytes(notes: &[MidiNote], tempo_bpm: FloatType) -> Result<Vec<u8>> {
+    midi::write_midi_bytes(notes, tempo_bpm)
+}
+
+/// A stream's notes and chords as MIDI note events, everything else dropped.
+#[deprecated(
+    since = "0.15.0",
+    note = "use `to_midi` for a score, or `midi::midi_notes_from_stream` for bare note events"
+)]
+pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
+    midi::midi_notes_from_stream(stream)
+}
+
+/// A stream of notes built from MIDI note events.
+#[deprecated(
+    since = "0.15.0",
+    note = "use `from_midi` for a score, or `midi::stream_from_midi_notes` for bare note events"
+)]
+pub fn stream_from_midi_notes(notes: &[MidiNote]) -> Result<Stream> {
+    midi::stream_from_midi_notes(notes)
+}

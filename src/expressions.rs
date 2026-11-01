@@ -1561,6 +1561,7 @@ impl RehearsalMark {
 /// of music21's `GeneralNote.expressions`.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Expression {
     /// An ornament: a mordent, a trill, a turn and the rest. Boxed, as an
     /// ornament is large and most expressions are not one.

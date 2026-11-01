@@ -1417,7 +1417,6 @@ RepeatBracket = "Ending"
 PendingAssignmentRef = "music21's note to itself that a spanner is waiting for its first element, which the readers keep as a queue"
 SpannerAnchor = "an element standing in a stream for a spanner to hang off where there is no note to; a spanner here names positions and needs none"
 SpannerBundle = "the collection music21 keeps a stream's spanners in; a crate stream holds its own"
-MultiMeasureRest = "several measures of rest drawn as one, which is a notation this crate does not write"
 
 [[class]]
 python = "spanner.py"
@@ -1474,6 +1473,13 @@ python = "spanner.py"
 name = "Glissando"
 facade = "Spanner"
 rust = ["src/spanner.rs"]
+
+[[class]]
+python = "spanner.py"
+name = "MultiMeasureRest"
+facade = "Spanner"
+rust = ["src/spanner.rs"]
+note = "Rests of several measures drawn as one; how it is drawn and counted is its `MultiRest`."
 
 [[class]]
 python = "repeat.py"

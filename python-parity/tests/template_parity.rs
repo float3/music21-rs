@@ -463,18 +463,15 @@ fn the_crate_makes_templates_as_music21_does() {
             compared += 1;
 
             let template = score.template(&TemplateOptions::default());
-            let without_rests = score.template(&TemplateOptions {
-                fill_with_rests: false,
-                ..TemplateOptions::default()
-            });
-            let without_voices = score.template(&TemplateOptions {
-                retain_voices: false,
-                ..TemplateOptions::default()
-            });
-            let emptied = score.template(&TemplateOptions {
-                remove_all: true,
-                ..TemplateOptions::default()
-            });
+            let mut options = TemplateOptions::default();
+            options.fill_with_rests = false;
+            let without_rests = score.template(&options);
+            let mut options = TemplateOptions::default();
+            options.retain_voices = false;
+            let without_voices = score.template(&options);
+            let mut options = TemplateOptions::default();
+            options.remove_all = true;
+            let emptied = score.template(&options);
             let differences = [
                 first_difference("template", &describe(&template), &theirs.0),
                 first_difference(

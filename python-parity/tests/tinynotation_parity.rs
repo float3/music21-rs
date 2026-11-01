@@ -119,11 +119,9 @@ fn the_crate_reads_tiny_notation_as_music21_does() {
                 }
             };
 
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
             // music21's exporter puts a part on its own into a score.
             let ours = from_tiny_notation(line).and_then(|part| {
                 let mut score = Stream::with_kind(StreamKind::Score);

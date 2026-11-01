@@ -62,11 +62,9 @@ fn to_musicxml(
     #[pyo3(from_py_with = crate::truthy)] make_notation: bool,
 ) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    let mut options = ExportOptions {
-        encoding_date,
-        make_notation,
-        ..ExportOptions::default()
-    };
+    let mut options = ExportOptions::default();
+    options.encoding_date = encoding_date;
+    options.make_notation = make_notation;
     if let Some(software) = software {
         options.software = software;
     }
@@ -91,10 +89,9 @@ fn to_abc(
     measures_per_line: usize,
 ) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    let options = music21_rs_crate::abc::ExportOptions {
-        unit_length,
-        measures_per_line,
-    };
+    let mut options = music21_rs_crate::abc::ExportOptions::default();
+    options.unit_length = unit_length;
+    options.measures_per_line = measures_per_line;
     music21_rs_crate::abc::to_abc(&stream, &options).map_err(format_error)
 }
 
@@ -116,11 +113,10 @@ fn to_midi<'py>(
     acceptable_channels: Option<Vec<u8>>,
 ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
     let stream = crate::stream::crate_stream(score)?;
-    let options = music21_rs_crate::midi::ExportOptions {
-        add_start_delay,
-        add_end_delay,
-        acceptable_channels,
-    };
+    let mut options = music21_rs_crate::midi::ExportOptions::default();
+    options.add_start_delay = add_start_delay;
+    options.add_end_delay = add_end_delay;
+    options.acceptable_channels = acceptable_channels;
     let bytes = music21_rs_crate::midi::to_midi(&stream, &options).map_err(format_error)?;
     Ok(pyo3::types::PyBytes::new(py, &bytes))
 }
@@ -325,7 +321,8 @@ fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
 #[pyo3(signature = (score, version = (2, 24)))]
 fn to_lilypond(score: &Bound<'_, PyAny>, version: (u32, u32)) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    let options = music21_rs_crate::lily::LilyOptions { version };
+    let mut options = music21_rs_crate::lily::LilyOptions::default();
+    options.version = version;
     music21_rs_crate::lily::to_lilypond(&stream, &options).map_err(format_error)
 }
 

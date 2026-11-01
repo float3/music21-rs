@@ -26,6 +26,7 @@ enum Origin {
 
 /// What [`Stream::template`] keeps: music21's `template` arguments.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct TemplateOptions {
     /// Whether what is taken away leaves rests in its place: music21's
     /// `fillWithRests`.

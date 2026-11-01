@@ -4,6 +4,28 @@
 
 ## breaking changes
 
+- **`#[non_exhaustive]` on the enums that keep growing and on every
+  `*Options` struct**, so later releases can add a variant or an option
+  without breaking callers again. The enums are `StreamElement`,
+  `StreamKind`, `SpannerKind`, `expressions::Expression`, `TuningSystem`,
+  `ScaleType` and `stream::Analysis`: a `match` over one outside the crate
+  needs a wildcard arm. The structs are `abc::ExportOptions`,
+  `midi::ExportOptions`, `musicxml::ExportOptions`, `LilyOptions`,
+  `BrailleOptions`, `SegmentOptions`, `ChordifyOptions`,
+  `ConsecutiveOptions`, `LyricsOptions`, `TemplateOptions`,
+  `ReductionOptions`, `ScaleRunOptions`, `QuartetOptions`, `PitchOptions`
+  and `AccidentalDisplayOptions`. Outside the crate none can be written as
+  a struct literal, even with `..Default::default()`; start from the
+  default and set the fields:
+
+  ```rust
+  let mut options = music21_rs::musicxml::ExportOptions::default();
+  options.make_notation = true;
+  ```
+
+- **`SpannerKind::MultiMeasureRest`** is a new variant, so a `match` over
+  every kind needs an arm for it.
+
 - **`ReductionOptions::remove_dissonances`** is new, so a
   `ReductionOptions` written out field by field needs it; music21's
   `removeDissonances` is off by default.
@@ -29,6 +51,21 @@
 
 ## added
 
+- **`from_midi`, `to_midi`, `from_abc`, `from_abc_number` and `to_abc`
+  at the crate root**, beside the token helpers the root already offered.
+
+- **Examples**: doctests on the common entry points of `Stream`,
+  `Interval`, `Spanner`, `RomanNumeral` and `ToneRow`, and three example
+  programs, `analyze_midi`, `abc_to_musicxml` (feature `musicxml`) and
+  `roman_analysis`.
+
+- **Multi-measure rests**: MusicXML's `<multiple-rest>` is read and
+  written as music21 reads and writes it, as a
+  `SpannerKind::MultiMeasureRest` carrying a `MultiRest` (whether it is
+  drawn with symbols, at most how many, an overriding count). The wheel
+  gains `spanner.MultiMeasureRest` (`numRests`, `useSymbols`,
+  `maxSymbols`).
+
 - **`FiguredBassLine::set_time_signature` and `set_key_signature`, and
   `VoiceLeadingQuartet::set_pitches`**, which the wheel's in-place edits
   reach the crate through.
@@ -49,6 +86,21 @@
 - **`Chord::inversion_name_of` and `Chord::inversion_text_of`**: the
   figured-bass number and the words for a chord standing in a given
   inversion.
+
+## changed
+
+- **The root's `read_midi_bytes`, `read_midi_bytes_with_tempo`,
+  `write_midi_bytes`, `midi_notes_from_stream` and
+  `stream_from_midi_notes` are deprecated**: they keep only note events
+  and a tempo. `from_midi` and `to_midi` read and write the score; the
+  bare-event helpers stay, undeprecated, in `midi`.
+
+- **Errors say what went wrong in the crate's words.** About fifty
+  messages still read as the Python error music21 meets at the same
+  place (`list index out of range`, `'NoneType' object has no attribute
+  'split'`, `KeyError: …`, `division by zero`); each now names what is
+  missing, such as `the score has no part 3` or `an instrument with no
+  name cannot be written in braille`. The kind of error is unchanged.
 
 ## fixed
 

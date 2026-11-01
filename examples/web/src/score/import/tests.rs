@@ -669,7 +669,7 @@ fn midi_file() -> Vec<u8> {
     for pitch in [55, 59] {
         notes.push(music21_rs::MidiNote::new(pitch, 5.0, 3.0, 90).expect("valid note"));
     }
-    music21_rs::write_midi_bytes(&notes, 100.0).expect("MIDI writes")
+    music21_rs::midi::write_midi_bytes(&notes, 100.0).expect("MIDI writes")
 }
 
 #[test]
@@ -739,7 +739,7 @@ fn a_midi_file_of_drums_alone_is_refused_with_the_reason() {
                 .expect("valid note")
         })
         .collect();
-    let bytes = music21_rs::write_midi_bytes(&strokes, 120.0).expect("MIDI writes");
+    let bytes = music21_rs::midi::write_midi_bytes(&strokes, 120.0).expect("MIDI writes");
     let imported = read_file("drums.midi", &bytes).expect("the file reads");
     let error = to_abc(&imported).unwrap_err();
     assert!(error.contains("unpitched percussion"), "{error}");

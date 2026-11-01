@@ -1,7 +1,7 @@
 [package]
 authors = ["hill <hill@hilll.dev>"]
 categories = ["multimedia::audio", "science"]
-description = "Rust helpers inspired by music21 for chord, pitch, polyrhythm, and tuning analysis"
+description = "A Rust port of music21: pitches, chords, keys, scores and streams, analysis, and file formats"
 edition = "2024"
 include = ["/src", "/examples", "/LICENSE"]
 keywords = ["music", "music21", "music-theory", "chords", "tuning"]
@@ -49,6 +49,10 @@ musescore = ["musicxml"]
 # never calls.
 musicxml = []
 serde = ["dep:serde"]
+
+[[example]]
+name = "abc_to_musicxml"
+required-features = ["musicxml"]
 
 [dependencies]
 fraction = "0.17.0"

@@ -279,11 +279,9 @@ fn the_crate_reads_humdrum_as_music21_does() {
                 outline_only += 1;
                 continue;
             };
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
             // music21 signs every score it makes.
             let ours = {
                 let mut score = ours;

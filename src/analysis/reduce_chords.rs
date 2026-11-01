@@ -25,6 +25,7 @@ use crate::tree::{Flatten, as_timespans};
 
 /// What a reduction is asked for: music21's arguments to `ChordReducer.run`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ReductionOptions {
     /// How many chords a measure may keep: music21's
     /// `maximumNumberOfChords`, three by default.

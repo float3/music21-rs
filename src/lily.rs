@@ -39,6 +39,7 @@ use crate::tempo::MetronomeMark;
 /// How a LilyPond file is written.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct LilyOptions {
     /// The LilyPond version the file says it is for, major and minor:
     /// music21 asks the LilyPond it finds installed.
@@ -578,7 +579,7 @@ impl<'a> Converter<'a> {
         let context = self.context;
         if matches!(self.tree.nodes[context].kind, Kind::Composite { .. }) {
             return Err(lily_error(
-                "AttributeError: property 'contents' of 'LyCompositeMusic' object has no setter",
+                "a tuplet opened and never closed, or closed and never opened, leaves nowhere to write the score",
             ));
         }
         for item in &contents {

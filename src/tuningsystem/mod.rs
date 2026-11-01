@@ -375,6 +375,7 @@ impl Display for Ratio {
 /// division repeats wherever its period is, so Bohlen-Pierce climbs by
 /// tritaves.
 #[must_use]
+#[non_exhaustive]
 pub enum TuningSystem {
     /// Equal steps of one period. `12edo` is ordinary equal temperament,
     /// `6edo` the whole-tone scale and `24edo` quarter tones, and the period

@@ -235,11 +235,9 @@ fn the_crate_reads_midi_as_music21_does() {
                 outline_only += 1;
                 continue;
             };
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
             match ours.and_then(|score| to_musicxml(&score, &options)) {
                 Ok(ours) => {
                     let ours = normalize_ids(&ours);

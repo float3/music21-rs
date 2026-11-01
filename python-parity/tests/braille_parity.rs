@@ -9,7 +9,6 @@
 //! `BRAILLE_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::braille::segment::SegmentOptions;
 use music21_rs::braille::translate::{BrailleOptions, measure_to_braille, stream_to_braille};
 use music21_rs::musicxml::from_musicxml;
 use music21_rs_python_parity::answers;
@@ -135,10 +134,8 @@ fn the_crate_writes_scores_in_braille_as_music21_does() {
             for debug in [false, true] {
                 let (theirs, their_error): (String, String) =
                     music21.getattr("report")?.call1((&text, debug))?.extract()?;
-                let options = BrailleOptions {
-                    debug,
-                    ..BrailleOptions::default()
-                };
+                let mut options = BrailleOptions::default();
+                options.debug = debug;
                 let label = if debug { "English" } else { "braille" };
                 match stream_to_braille(&score, &options) {
                     Ok(ours) => {
@@ -206,18 +203,11 @@ fn the_crate_writes_scores_in_braille_as_music21_does() {
                     };
                     // music21's `measureToBraille` writes no heading and no
                     // measure number: its own source says so.
-                    let ours = measure_to_braille(
-                        measure,
-                        &BrailleOptions {
-                            debug,
-                            segment: SegmentOptions {
-                                show_heading: false,
-                                show_first_measure_number: false,
-                                ..SegmentOptions::default()
-                            },
-                            ..BrailleOptions::default()
-                        },
-                    );
+                    let mut options = BrailleOptions::default();
+                    options.debug = debug;
+                    options.segment.show_heading = false;
+                    options.segment.show_first_measure_number = false;
+                    let ours = measure_to_braille(measure, &options);
                     match ours {
                         Ok(ours) => {
                             if !their_error.is_empty() {

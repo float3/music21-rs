@@ -2990,6 +2990,9 @@ impl Stream {
             Some(Analysis::Ambitus(span)) => Ok(Some(
                 Bound::new(py, crate::interval::Interval::wrap(span))?.into_any(),
             )),
+            Some(_) => Err(crate::discrete::DiscreteAnalysisException::new_err(
+                format!("this package cannot hand back the answer to {method:?}"),
+            )),
         }
     }
 
@@ -3102,11 +3105,10 @@ impl Stream {
             ));
         }
         let stream = crate_stream(slf.as_any())?;
-        let options = music21_rs_crate::stream::ChordifyOptions {
-            add_ties: addTies,
-            remove_redundant_pitches: removeRedundantPitches,
-            to_sounding_pitch: toSoundingPitch,
-        };
+        let mut options = music21_rs_crate::stream::ChordifyOptions::default();
+        options.add_ties = addTies;
+        options.remove_redundant_pitches = removeRedundantPitches;
+        options.to_sounding_pitch = toSoundingPitch;
         let made = stream
             .chordify_with(&options)
             .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
@@ -3129,15 +3131,14 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] noNone: bool,
         _keywords: Option<&Bound<'py, PyDict>>,
     ) -> PyResult<Bound<'py, PyList>> {
-        let options = music21_rs_crate::stream::ConsecutiveOptions {
-            skip_rests: skipRests,
-            skip_chords: skipChords,
-            skip_unisons: skipUnisons,
-            skip_octaves: skipOctaves,
-            skip_gaps: skipGaps,
-            get_overlaps: getOverlaps,
-            no_none: noNone,
-        };
+        let mut options = music21_rs_crate::stream::ConsecutiveOptions::default();
+        options.skip_rests = skipRests;
+        options.skip_chords = skipChords;
+        options.skip_unisons = skipUnisons;
+        options.skip_octaves = skipOctaves;
+        options.skip_gaps = skipGaps;
+        options.get_overlaps = getOverlaps;
+        options.no_none = noNone;
         let read = read_values(slf.as_any())?;
         let found = read
             .stream
@@ -3174,15 +3175,14 @@ impl Stream {
                 _ => Ok(false),
             }
         };
-        let options = music21_rs_crate::stream::ConsecutiveOptions {
-            skip_rests: flag("skipRests")?,
-            skip_chords: flag("skipChords")?,
-            skip_unisons: flag("skipUnisons")?,
-            skip_octaves: flag("skipOctaves")?,
-            skip_gaps: flag("skipGaps")?,
-            get_overlaps: flag("getOverlaps")?,
-            no_none: flag("noNone")?,
-        };
+        let mut options = music21_rs_crate::stream::ConsecutiveOptions::default();
+        options.skip_rests = flag("skipRests")?;
+        options.skip_chords = flag("skipChords")?;
+        options.skip_unisons = flag("skipUnisons")?;
+        options.skip_octaves = flag("skipOctaves")?;
+        options.skip_gaps = flag("skipGaps")?;
+        options.get_overlaps = flag("getOverlaps")?;
+        options.no_none = flag("noNone")?;
         let read = read_values(slf.as_any())?;
         let steps = read
             .stream
@@ -3928,12 +3928,10 @@ impl Stream {
                 "removeClasses and exemptFromRemove are not supported here: the classes taken out are music21's own default set, and removeAll=True takes out everything",
             ));
         }
-        let options = music21_rs_crate::stream::TemplateOptions {
-            fill_with_rests: fillWithRests,
-            retain_voices: retainVoices,
-            remove_all: removeAll,
-            ..music21_rs_crate::stream::TemplateOptions::default()
-        };
+        let mut options = music21_rs_crate::stream::TemplateOptions::default();
+        options.fill_with_rests = fillWithRests;
+        options.retain_voices = retainVoices;
+        options.remove_all = removeAll;
         let stream = crate_stream(slf.as_any())?;
         from_crate(slf.py(), &stream.template(&options))
     }
@@ -4324,11 +4322,10 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] recurse: bool,
         #[pyo3(from_py_with = crate::truthy)] skipTies: bool,
     ) -> PyResult<Bound<'py, PyDict>> {
-        let options = music21_rs_crate::stream::LyricsOptions {
-            ignore_barlines: ignoreBarlines,
-            recurse,
-            skip_ties: skipTies,
-        };
+        let mut options = music21_rs_crate::stream::LyricsOptions::default();
+        options.ignore_barlines = ignoreBarlines;
+        options.recurse = recurse;
+        options.skip_ties = skipTies;
         let py = slf.py();
         let read = read_values(slf.as_any())?;
         let out = PyDict::new(py);
@@ -4666,15 +4663,15 @@ pub(crate) fn consecutive_options(
             None => Ok(false),
         }
     };
-    Ok(music21_rs_crate::stream::ConsecutiveOptions {
-        skip_rests: flag("skipRests")?,
-        skip_chords: flag("skipChords")?,
-        skip_unisons: flag("skipUnisons")?,
-        skip_octaves: flag("skipOctaves")?,
-        skip_gaps: flag("skipGaps")?,
-        get_overlaps: flag("getOverlaps")?,
-        no_none: flag("noNone")?,
-    })
+    let mut options = music21_rs_crate::stream::ConsecutiveOptions::default();
+    options.skip_rests = flag("skipRests")?;
+    options.skip_chords = flag("skipChords")?;
+    options.skip_unisons = flag("skipUnisons")?;
+    options.skip_octaves = flag("skipOctaves")?;
+    options.skip_gaps = flag("skipGaps")?;
+    options.get_overlaps = flag("getOverlaps")?;
+    options.no_none = flag("noNone")?;
+    Ok(options)
 }
 
 /// A stream some module-level function of music21's changes, answered as
@@ -5270,6 +5267,8 @@ fn element_object_as<'py>(
         | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
         | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
+        // A kind added to the crate since has no class here yet either.
+        _ => return Ok(None),
     };
     carry_notation(py, element, &made)?;
     Ok(Some(made))
@@ -7381,6 +7380,35 @@ fn read_into_with(
     Ok(read)
 }
 
+/// How a music21 rest of several measures is drawn and counted. A count
+/// is kept only where it is not the number of rests joined, which is all
+/// music21's `numRests` says of it.
+fn multi_rest_of(
+    spanner: &Bound<'_, PyAny>,
+    joined: usize,
+) -> PyResult<music21_rs_crate::MultiRest> {
+    let defaults = music21_rs_crate::MultiRest::default();
+    let use_symbols = match spanner.getattr("useSymbols") {
+        Ok(said) => said.is_truthy()?,
+        Err(_) => defaults.use_symbols,
+    };
+    let max_symbols = spanner
+        .getattr("maxSymbols")
+        .ok()
+        .and_then(|said| said.extract::<u32>().ok())
+        .unwrap_or(defaults.max_symbols);
+    let count = spanner
+        .getattr("numRests")
+        .ok()
+        .and_then(|said| said.extract::<usize>().ok())
+        .filter(|count| *count != joined);
+    Ok(music21_rs_crate::MultiRest {
+        use_symbols,
+        max_symbols,
+        count,
+    })
+}
+
 /// Whether an element of a stream is a barline at all.
 fn is_barline(element: &Bound<'_, PyAny>) -> PyResult<bool> {
     is_of_class(
@@ -7435,6 +7463,8 @@ fn spanner_value(
         SpannerKind::TremoloSpanner
     } else if is("Neume")? {
         SpannerKind::Neume
+    } else if is("MultiMeasureRest")? {
+        SpannerKind::MultiMeasureRest
     } else {
         return Ok(None);
     };
@@ -7467,6 +7497,9 @@ fn spanner_value(
                 .map(|label| label.str().map(|text| text.to_string()))
                 .transpose()?,
         }));
+    }
+    if kind == SpannerKind::MultiMeasureRest {
+        value.set_multi_rest(Some(multi_rest_of(spanner, value.len())?));
     }
     if kind == SpannerKind::TremoloSpanner {
         let marks = spanner
@@ -7885,14 +7918,12 @@ fn iterateAllVoiceLeadingQuartets<'py>(
     #[pyo3(from_py_with = crate::truthy)] reverse: bool,
 ) -> PyResult<Bound<'py, PyList>> {
     let read = read(s)?;
-    let mut found = music21_rs_crate::voiceleading::voice_leading_quartet_positions(
-        &read.stream,
-        QuartetOptions {
-            include_rests: includeRests,
-            include_oblique: includeOblique,
-            include_no_motion: includeNoMotion,
-        },
-    );
+    let mut options = QuartetOptions::default();
+    options.include_rests = includeRests;
+    options.include_oblique = includeOblique;
+    options.include_no_motion = includeNoMotion;
+    let mut found =
+        music21_rs_crate::voiceleading::voice_leading_quartet_positions(&read.stream, options);
     if reverse {
         // Stable, so the quartets at one time keep their order, as music21
         // walks the times backwards and each one forwards.

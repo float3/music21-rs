@@ -566,7 +566,7 @@ fn translate_lines(
         };
         previous_length = Some(length);
         let pitch = first_pitch(found.element)
-            .ok_or_else(|| Error::Search("list index out of range".to_string()))?;
+            .ok_or_else(|| Error::Search("a chord to translate holds no pitches".to_string()))?;
         text.push(note(&pitch, change));
         measures.push(found.measure);
     }

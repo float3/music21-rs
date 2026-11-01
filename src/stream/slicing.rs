@@ -53,9 +53,11 @@ pub(crate) fn approximate_gcd(values: &[FloatType]) -> Result<FloatType> {
         .iter()
         .copied()
         .reduce(FloatType::min)
-        .ok_or_else(|| stream_error("min() arg is an empty sequence"))?;
+        .ok_or_else(|| stream_error("no values to find a common length for"))?;
     if lowest == 0.0 {
-        return Err(stream_error("float division by zero"));
+        return Err(stream_error(
+            "a value of nought has no common length with others",
+        ));
     }
     let whole = values.iter().all(|value| {
         let adjusted = value / lowest;

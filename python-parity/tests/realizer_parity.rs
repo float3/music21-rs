@@ -316,11 +316,9 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
         let exporter = py.import("music21.musicxml.m21ToXml")?;
         let today = musicxml_common::pin_encoding_date(py)?;
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
-        let options = ExportOptions {
-            encoding_date: Some(today),
-            software: format!("music21 v.{version}"),
-            ..ExportOptions::default()
-        };
+        let mut options = ExportOptions::default();
+        options.encoding_date = Some(today);
+        options.software = format!("music21 v.{version}");
         let written = |score: Bound<'_, PyAny>| -> PyResult<String> {
             let score = helpers.getattr("strip_layout")?.call1((score,))?;
             let general = exporter.getattr("GeneralObjectExporter")?.call1((&score,))?;

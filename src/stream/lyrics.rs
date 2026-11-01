@@ -47,6 +47,7 @@ pub enum SungAt {
 
 /// How a stream's lyrics are gathered: music21's `lyrics` keywords.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LyricsOptions {
     /// Whether the notes of a measure are read as though the measure were
     /// not there: `ignoreBarlines`, which music21 takes as true, so that

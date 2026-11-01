@@ -61,9 +61,7 @@ fn note_of(element: &StreamElement) -> Result<&Note> {
                 StreamElement::ChordSymbol(_) => "ChordSymbol",
                 _ => "Music21Object",
             };
-            Err(Error::Analysis(format!(
-                "'{class}' object has no attribute 'pitch'"
-            )))
+            Err(Error::Analysis(format!("a {class} has no single pitch")))
         }
     }
 }

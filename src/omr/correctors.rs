@@ -378,7 +378,7 @@ pub fn incorrect_measures(part: &Stream, run_fast: bool) -> Result<Vec<usize>> {
     for (i, &index) in measures.iter().enumerate() {
         if !run_fast {
             meter = meter_of(index).ok_or_else(|| {
-                Error::Omr("'NoneType' object has no attribute 'barDuration'".to_string())
+                Error::Omr(format!("no time signature in force in measure {index}"))
             })?;
         }
         if part.events()[index].element().quarter_length() != meter.bar_quarter_length() {
@@ -736,11 +736,11 @@ impl ScoreCorrector {
         let measures = self
             .single_parts
             .get(part)
-            .ok_or_else(|| Error::Omr("list index out of range".to_string()))?
+            .ok_or_else(|| Error::Omr(format!("no part {part}")))?
             .hashed_notes
             .len();
         if measures == 0 {
-            return Err(Error::Omr("division by zero".to_string()));
+            return Err(Error::Omr(format!("part {part} has no measures")));
         }
         let mut sums = vec![0.0; self.single_parts.len()];
         for measure in 0..measures {
@@ -770,7 +770,7 @@ impl ScoreCorrector {
             .single_parts
             .get(part)
             .and_then(|single| single.hashed_notes.get(measure))
-            .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+            .ok_or_else(|| Error::Omr(format!("no measure {measure} in part {part}")))?;
         let mut alike = Vec::with_capacity(self.single_parts.len());
         for (other, single) in self.single_parts.iter().enumerate() {
             if other == part {
@@ -780,7 +780,7 @@ impl ScoreCorrector {
             let their = single
                 .hashed_notes
                 .get(measure)
-                .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+                .ok_or_else(|| Error::Omr(format!("no measure {measure} in part {other}")))?;
             alike.push(if measure_difference(hash, their) == 1.0 {
                 1.0
             } else {
@@ -805,7 +805,7 @@ impl ScoreCorrector {
                 let stream = self.part(number);
                 let index = *Self::measure_events(stream)
                     .get(measure)
-                    .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+                    .ok_or_else(|| Error::Omr(format!("no measure {measure} in part {number}")))?;
                 let StreamElement::Stream(inner) = stream.events()[index].element() else {
                     unreachable!("a measure's event holds the measure");
                 };
@@ -983,7 +983,7 @@ impl ScoreCorrector {
     ) -> Result<PriorsIntegrationScore> {
         let mut score = PriorsIntegrationScore::default();
         for part in 0..self.single_parts.len() {
-            let out_of_range = || Error::Omr("list index out of range".to_string());
+            let out_of_range = || Error::Omr(format!("no relationships given for part {part}"));
             let across = horizontal.get(part).ok_or_else(out_of_range)?;
             for h in across {
                 for v in vertical.get(part).ok_or_else(out_of_range)? {

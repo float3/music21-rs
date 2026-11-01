@@ -397,7 +397,7 @@ pub fn dynamic_to_braille(dynamic: &Dynamic, precede_by_word_sign: bool) -> Tran
 /// An instrument with no name at all, which music21 cannot split.
 pub fn instrument_to_braille(instrument: &Instrument) -> Result<Transcription> {
     let name = instrument.best_name().ok_or_else(|| {
-        Error::Instrument("'NoneType' object has no attribute 'split'".to_string())
+        Error::Instrument("an instrument with no name cannot be written in braille".to_string())
     })?;
     let words: Result<Vec<String>> = name
         .split_whitespace()
@@ -1042,7 +1042,7 @@ pub fn transcribe_note_fingering(
             choice = fingering.split('|').collect();
             false
         }
-        _ => return Err(Error::Notation(format!("KeyError: {fingering}"))),
+        _ => return Err(refuse()),
     };
     if !upper_first_in_fingering {
         choice.reverse();
@@ -1083,7 +1083,7 @@ pub fn braille_unicode_to_braille_ascii(braille: &str) -> Result<String> {
             line.chars()
                 .map(|cell| {
                     lookup::ascii_char(cell)
-                        .ok_or_else(|| Error::Notation(format!("KeyError: {cell:?}")))
+                        .ok_or_else(|| Error::Notation(format!("{cell:?} is not a braille cell")))
                 })
                 .collect::<Result<String>>()
         })
@@ -1106,7 +1106,7 @@ pub fn braille_ascii_to_braille_unicode(ascii: &str) -> Result<String> {
                     (0..64u32)
                         .map(|bits| char::from_u32(0x2800 + bits).expect("a braille cell"))
                         .find(|cell| lookup::ascii_char(*cell) == Some(upper))
-                        .ok_or_else(|| Error::Notation(format!("KeyError: {upper:?}")))
+                        .ok_or_else(|| Error::Notation(format!("{upper:?} is not braille ASCII")))
                 })
                 .collect::<Result<String>>()
         })
@@ -1131,7 +1131,7 @@ pub fn braille_unicode_to_symbols(braille: &str, filled: &str, empty: &str) -> R
         let mut rows = [Vec::new(), Vec::new(), Vec::new()];
         for cell in line.chars() {
             let dots = lookup::binary_dots(cell)
-                .ok_or_else(|| Error::Notation(format!("KeyError: {cell:?}")))?;
+                .ok_or_else(|| Error::Notation(format!("{cell:?} is not a braille cell")))?;
             for (row, dots) in rows.iter_mut().zip(dots) {
                 row.push(draw(dots));
             }

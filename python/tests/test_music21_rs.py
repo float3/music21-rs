@@ -4580,6 +4580,7 @@ def test_a_spanner_joins_the_notes_a_stream_holds():
         m.ArpeggioMarkSpanner,
         m.PedalMark,
         m.Neume,
+        m.MultiMeasureRest,
     ):
         one = kind(notes[0], notes[1])
         assert len(one) == 2
@@ -4591,6 +4592,80 @@ def test_a_spanner_joins_the_notes_a_stream_holds():
         ]
     # A hairpin is a DynamicWedge to music21 before it is a Spanner.
     assert m.Crescendo().classes[:3] == ["Crescendo", "DynamicWedge", "Spanner"]
+
+
+def _rested_score(said):
+    """A score of a note's measure and three of whole rests, the rests
+    joined as one by a rest of several measures made with `said`."""
+    part = m.Part()
+    rests = []
+    for number in range(1, 5):
+        bar = m.Measure()
+        bar.number = number
+        if number == 1:
+            bar.insert(0.0, m.TimeSignature("4/4"))
+            bar.insert(0.0, m.Note("C4", quarterLength=4.0))
+        else:
+            rest = m.Rest(quarterLength=4.0)
+            rests.append(rest)
+            bar.insert(0.0, rest)
+        part.insert(float(number - 1) * 4.0, bar)
+    joined = m.MultiMeasureRest(*rests, **said)
+    part.insert(0.0, joined)
+    score = m.Score()
+    score.insert(0.0, part)
+    return score, joined
+
+
+def test_a_multi_measure_rest_counts_its_measures():
+    """music21's own `MultiMeasureRest` answers the same."""
+    rests = [m.Rest(quarterLength=4.0) for _ in range(6)]
+    joined = m.MultiMeasureRest(*rests)
+    assert repr(joined) == "<music21.spanner.MultiMeasureRest 6 measures>"
+    assert joined.numRests == 6
+    assert joined.useSymbols is True
+    assert joined.maxSymbols == 11
+    joined.numRests = 10
+    assert joined.numRests == 10
+    joined.numRests = None
+    assert joined.numRests == 6
+    assert repr(m.MultiMeasureRest(rests[0])) == (
+        "<music21.spanner.MultiMeasureRest 1 measure>"
+    )
+    assert not m.MultiMeasureRest(useSymbols=False).useSymbols
+    with pytest.raises(AttributeError):
+        m.Slur().numRests
+
+
+def test_a_multi_measure_rest_is_written_and_read_back():
+    """A `<multiple-rest>` in the measure its first rest stands in, as
+    music21 writes one, and read back as music21 reads it."""
+    score, joined = _rested_score({"useSymbols": False})
+    joined.numRests = 5
+    written = m.to_musicxml(score, encoding_date="2026-01-01")
+    assert written.count("<multiple-rest") == 1
+    assert '<multiple-rest use-symbols="no">5</multiple-rest>' in written
+    before = written.index("<multiple-rest")
+    assert written.rindex('number="2"', 0, before) > written.rindex('number="1"', 0, before)
+
+    read = m.from_musicxml(written)
+    found = list(read.spannerBundle.getByClass("MultiMeasureRest"))
+    # Said to be of five, it takes the three rests there are and counts
+    # those, as music21's reader and writer do.
+    assert [repr(one) for one in found] == ["<music21.spanner.MultiMeasureRest 3 measures>"]
+    assert found[0].useSymbols is False
+
+
+def test_a_multi_measure_rest_is_written_as_music21_writes_it():
+    pytest.importorskip("music21.stream")
+    from music21 import converter
+
+    score, _ = _rested_score({})
+    written = m.to_musicxml(score, encoding_date="2026-01-01")
+    theirs = converter.parse(written, format="musicxml")
+    found = list(theirs.recurse().getElementsByClass("MultiMeasureRest"))
+    assert [repr(one) for one in found] == ["<music21.spanner.MultiMeasureRest 3 measures>"]
+    assert found[0].useSymbols is True
 
 
 def test_a_slur_is_read_from_abc_as_music21_reads_it():

@@ -175,12 +175,11 @@ fn scale_runs_are_found_as_music21_finds_them() {
             for (class, kind, tonic) in SCALES {
                 let scale = Scale::new(kind, Pitch::from_name(tonic).expect("a tonic"));
                 for &(comparison, attribute, required, step, repeats) in &asked {
-                    let options = ScaleRunOptions {
-                        degrees_required: required,
-                        step_size: step,
-                        comparison,
-                        repeats_allowed: repeats,
-                    };
+                    let mut options = ScaleRunOptions::default();
+                    options.degrees_required = required;
+                    options.step_size = step;
+                    options.comparison = comparison;
+                    options.repeats_allowed = repeats;
                     let theirs: Vec<String> = ask
                         .call1((names.clone(), class, tonic, required, step, attribute, repeats))?
                         .extract()?;

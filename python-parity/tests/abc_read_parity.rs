@@ -99,11 +99,9 @@ fn the_crate_reads_abc_as_music21_does() {
                 }
             };
 
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
             let read = match number {
                 Some(number) => from_abc_number(&text, number),
                 None => from_abc(&text),

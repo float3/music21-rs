@@ -242,6 +242,13 @@ two rules, set 2026-09-12, that most of the open work now serves:
       access qLenPos 3.0`; makeNotation fuzzer seeds 491, 802, 894, 1061
       and 1962 hit it.
 
+12. **a multi-measure rest cut short is a spanner here and not in
+    music21's score.** When the part ends, or another one starts, before
+    it has taken all its rests, music21's score holds no spanner; only its
+    rests know it, which is how music21's writer still writes it. The
+    written files agree; `spannerBundle` does not. The reader also takes a
+    count written `3.0`, which music21 refuses.
+
 ## closed
 
 - **edits through a handed-out object now reach the crate** for an

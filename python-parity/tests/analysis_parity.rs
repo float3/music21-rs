@@ -143,62 +143,33 @@ def report(name):
     return '\n'.join(lines), npvi
 "#;
 
-const OPTIONS: [ConsecutiveOptions; 6] = [
-    ConsecutiveOptions {
-        skip_rests: false,
-        skip_chords: false,
-        skip_unisons: false,
-        skip_octaves: false,
-        skip_gaps: false,
-        get_overlaps: false,
-        no_none: false,
-    },
-    ConsecutiveOptions {
-        skip_rests: true,
-        skip_chords: false,
-        skip_unisons: false,
-        skip_octaves: false,
-        skip_gaps: false,
-        get_overlaps: false,
-        no_none: true,
-    },
-    ConsecutiveOptions {
-        skip_rests: false,
-        skip_chords: false,
-        skip_unisons: true,
-        skip_octaves: false,
-        skip_gaps: false,
-        get_overlaps: false,
-        no_none: false,
-    },
-    ConsecutiveOptions {
-        skip_rests: true,
-        skip_chords: false,
-        skip_unisons: false,
-        skip_octaves: true,
-        skip_gaps: false,
-        get_overlaps: false,
-        no_none: false,
-    },
-    ConsecutiveOptions {
-        skip_rests: false,
-        skip_chords: true,
-        skip_unisons: false,
-        skip_octaves: false,
-        skip_gaps: false,
-        get_overlaps: false,
-        no_none: false,
-    },
-    ConsecutiveOptions {
-        skip_rests: false,
-        skip_chords: false,
-        skip_unisons: false,
-        skip_octaves: false,
-        skip_gaps: true,
-        get_overlaps: true,
-        no_none: false,
-    },
+/// The options music21 is asked with, each row `skipRests`, `skipChords`,
+/// `skipUnisons`, `skipOctaves`, `skipGaps`, `getOverlaps` and `noNone`.
+const FLAGS: [[bool; 7]; 6] = [
+    [false, false, false, false, false, false, false],
+    [true, false, false, false, false, false, true],
+    [false, false, true, false, false, false, false],
+    [true, false, false, true, false, false, false],
+    [false, true, false, false, false, false, false],
+    [false, false, false, false, true, true, false],
 ];
+
+fn options() -> Vec<ConsecutiveOptions> {
+    FLAGS
+        .iter()
+        .map(|flags| {
+            let mut options = ConsecutiveOptions::default();
+            options.skip_rests = flags[0];
+            options.skip_chords = flags[1];
+            options.skip_unisons = flags[2];
+            options.skip_octaves = flags[3];
+            options.skip_gaps = flags[4];
+            options.get_overlaps = flags[5];
+            options.no_none = flags[6];
+            options
+        })
+        .collect()
+}
 
 fn kind(element: &StreamElement) -> &'static str {
     match element {
@@ -235,7 +206,8 @@ fn is_general_note(element: &StreamElement) -> bool {
 
 fn answer(stream: &Stream, label: &str, lines: &mut Vec<String>) {
     let leaves = stream.leaves();
-    for (k, options) in OPTIONS.iter().enumerate() {
+    let all = options();
+    for (k, options) in all.iter().enumerate() {
         let found = stream
             .find_consecutive_notes(options)
             .expect("the notes are found");
@@ -259,7 +231,7 @@ fn answer(stream: &Stream, label: &str, lines: &mut Vec<String>) {
         lines.push(format!("{label} intervals {k}: {}", names.join(" ")));
     }
     for k in [0, 3] {
-        let value = match patel::melodic_interval_variability(stream, &OPTIONS[k]) {
+        let value = match patel::melodic_interval_variability(stream, &all[k]) {
             Ok(value) => format!("{value:?}"),
             Err(_) => "error".to_string(),
         };

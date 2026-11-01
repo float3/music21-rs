@@ -42,8 +42,8 @@ use crate::pitch::{Accidental, Pitch};
 use crate::repeat::{RepeatExpression, RepeatExpressionKind};
 use crate::rest::Rest;
 use crate::spanner::{
-    Glissando, LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalObject, PedalObjectKind,
-    PedalType, SlideType, Spanner, SpannerKind,
+    Glissando, LineEnd, LineEnds, MultiRest, OctaveShift, Pedal, PedalForm, PedalObject,
+    PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
 };
 use crate::stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 use crate::style::{StyleValue, TextStyle};
@@ -308,6 +308,8 @@ struct Building {
     arpeggio: ArpeggioType,
     slide: SlideType,
     marks: u8,
+    /// Whether a rest of several measures is drawn with symbols.
+    use_symbols: bool,
     /// Whether it has been put into a part already.
     placed: bool,
 }
@@ -331,6 +333,7 @@ impl Building {
             arpeggio: ArpeggioType::Normal,
             slide: SlideType::Chromatic,
             marks: 3,
+            use_symbols: false,
             placed: false,
         }
     }
@@ -388,6 +391,12 @@ impl Building {
         if self.kind == SpannerKind::TremoloSpanner {
             // Read already within the range a tremolo allows.
             let _ = spanner.set_number_of_marks(Some(self.marks));
+        }
+        if self.kind == SpannerKind::MultiMeasureRest {
+            spanner.set_multi_rest(Some(MultiRest {
+                use_symbols: self.use_symbols,
+                ..MultiRest::default()
+            }));
         }
         spanner.set_arpeggio(self.arpeggio);
         spanner
@@ -770,6 +779,14 @@ struct PartParser<'a, 'x> {
     /// The arpeggios across chords, by their number and the offset in the
     /// part they stand at, each as where it stands among the spanners.
     arpeggios: Vec<((String, FloatType), usize)>,
+    /// The rest of several measures still taking rests, by where it stands
+    /// among the spanners, and how many more it takes: music21's
+    /// `activeMultiMeasureRestSpanner` and `multiMeasureRestsToCapture`.
+    multi_rest: Option<usize>,
+    multi_rests_left: i64,
+    /// The rests of several measures that have stopped taking rests, in
+    /// the order they stopped.
+    multi_rests: Vec<usize>,
 }
 
 impl<'a, 'x> PartParser<'a, 'x> {
@@ -806,7 +823,44 @@ impl<'a, 'x> PartParser<'a, 'x> {
             first_measure_parsed: false,
             at_sounding_pitch: true,
             arpeggios: Vec::new(),
+            multi_rest: None,
+            multi_rests_left: 0,
+            multi_rests: Vec::new(),
         }
+    }
+
+    /// music21's `applyMultiMeasureRest`: a rest read joins the rest of
+    /// several measures still taking rests, which goes into the part once
+    /// it has taken as many as it said.
+    fn take_multi_rest(&mut self, uid: usize) {
+        let Some(index) = self.multi_rest else {
+            return;
+        };
+        self.importer.spanners[index].add(uid);
+        self.multi_rests_left -= 1;
+        if self.multi_rests_left == 0 {
+            self.end_multi_rest();
+        }
+    }
+
+    /// Puts the rest of several measures still taking rests into the part,
+    /// whether or not it took all it said it would.
+    ///
+    /// music21 puts one in only once it has, but its rests know it either
+    /// way, and its writer finds it through them: so one cut short by the
+    /// part's end or by the next is written all the same, counting the
+    /// rests it took. Here it stands in the part, to be written.
+    fn end_multi_rest(&mut self) {
+        let Some(index) = self.multi_rest.take() else {
+            return;
+        };
+        let building = &mut self.importer.spanners[index];
+        if building.uids.is_empty() {
+            return;
+        }
+        building.complete = true;
+        building.placed = true;
+        self.multi_rests.push(index);
     }
 
     /// music21's `PartParser.parse`: the part, or one part for each of its
@@ -819,6 +873,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             last_forward = self.measure(measure)?;
         }
         self.remove_finale_ending_rest(last_forward);
+        self.end_multi_rest();
 
         // Endings, from the brackets over the measures.
         for bracket in &self.brackets {
@@ -834,8 +889,10 @@ impl<'a, 'x> PartParser<'a, 'x> {
             }
         }
 
-        // Spanners completed by now belong to this part, octave lines last.
-        let mut ours: Vec<usize> = Vec::new();
+        // Spanners completed by now belong to this part, octave lines last
+        // and rests of several measures first, music21 having put each of
+        // those in as it was completed.
+        let mut ours: Vec<usize> = std::mem::take(&mut self.multi_rests);
         for pass in [false, true] {
             for (index, building) in self.importer.spanners.iter_mut().enumerate() {
                 let ottava = building.kind == SpannerKind::Ottava;
@@ -1645,9 +1702,31 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
                 "transpose" => self.transposition = Some(transpose_interval(child)?),
                 "staff-details" => self.staff_details(child),
+                "measure-style" => self.measure_style(child)?,
                 _ => {}
             }
         }
+        Ok(())
+    }
+
+    /// music21's `handleMeasureStyle`: a rest of several measures, which
+    /// takes the next so many rests the part reads. Its font is the page's.
+    fn measure_style(&mut self, style: &'x Xml) -> Result<()> {
+        let Some(multiple) = style.find("multiple-rest") else {
+            return Ok(());
+        };
+        let count = parse_int(multiple.stripped()).ok_or_else(|| {
+            import_error(format!(
+                "invalid literal for int() with base 10: '{}'",
+                multiple.stripped()
+            ))
+        })?;
+        self.part.end_multi_rest();
+        let mut building = Building::new(SpannerKind::MultiMeasureRest, None);
+        building.use_symbols = multiple.get("use-symbols") == Some("yes");
+        self.part.importer.spanners.push(building);
+        self.part.multi_rest = Some(self.part.importer.spanners.len() - 1);
+        self.part.multi_rests_left = i64::from(count);
         Ok(())
     }
 
@@ -1801,6 +1880,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 None => self.free_pending(placed),
             }
             if is_rest {
+                self.part.take_multi_rest(placed);
                 self.rest_spanners(element, placed)?;
                 if std::mem::take(&mut self.marking_full) {
                     self.marked_full.push(placed);
@@ -4265,6 +4345,41 @@ mod tests {
         let written = written_back(&read);
         assert!(written.contains("<tremolo placement=\"above\" type=\"start\">2</tremolo>"));
         assert!(written.contains("<tremolo type=\"stop\">2</tremolo>"));
+    }
+
+    #[test]
+    fn a_multiple_rest_takes_the_rests_it_counts() {
+        let rest = "<note><rest/><duration>4</duration></note>";
+        let styled = |count: u32| {
+            format!(
+                "<attributes><measure-style><multiple-rest>{count}</multiple-rest>\
+                 </measure-style></attributes>{rest}"
+            )
+        };
+        let read = from_musicxml(&score(&format!(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>{}</measure>\
+             <measure number=\"2\">{rest}</measure>\
+             <measure number=\"3\">{}</measure>",
+            styled(2),
+            styled(3),
+        )))
+        .unwrap();
+        let spanners = read.spanners();
+        assert_eq!(spanners.len(), 2);
+        assert_eq!(spanners[0].kind(), SpannerKind::MultiMeasureRest);
+        assert_eq!(spanners[0].num_rests(), 2);
+        assert!(
+            spanners[0]
+                .multi_rest()
+                .is_some_and(|said| !said.use_symbols)
+        );
+        // The last took one rest of its three before the part ended, and
+        // music21's writer writes it as one.
+        assert_eq!(spanners[1].num_rests(), 1);
+        let written = written_back(&read);
+        assert_eq!(written.matches("<multiple-rest").count(), 2);
+        assert!(written.contains("<multiple-rest use-symbols=\"no\">2</multiple-rest>"));
+        assert!(written.contains("<multiple-rest use-symbols=\"no\">1</multiple-rest>"));
     }
 
     fn pedal(attributes: &str) -> String {

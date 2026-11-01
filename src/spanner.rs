@@ -14,6 +14,7 @@ use crate::notation::Placement;
 /// Which of music21's spanner classes a spanner is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum SpannerKind {
     /// A curve joining notes played in one breath or bow: music21's `Slur`.
     Slur,
@@ -42,6 +43,9 @@ pub enum SpannerKind {
     /// Notes sung to one syllable as one figure, as chant writes them:
     /// music21's volpiano `Neume`.
     Neume,
+    /// Rests of several measures drawn as one: music21's
+    /// `MultiMeasureRest`.
+    MultiMeasureRest,
 }
 
 impl SpannerKind {
@@ -59,6 +63,7 @@ impl SpannerKind {
             Self::Glissando => "Glissando",
             Self::TremoloSpanner => "TremoloSpanner",
             Self::Neume => "Neume",
+            Self::MultiMeasureRest => "MultiMeasureRest",
         }
     }
 
@@ -107,6 +112,34 @@ pub struct Spanner {
     marks: Option<u8>,
     #[cfg_attr(feature = "serde", serde(default))]
     offset: Drawn<FloatType>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    multi_rest: Option<MultiRest>,
+}
+
+/// How a rest of several measures is drawn and counted: music21's
+/// `MultiMeasureRest.useSymbols`, `maxSymbols` and `numRests`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MultiRest {
+    /// Whether it is drawn with rest symbols, a breve or a long, rather
+    /// than a bar with a number over it.
+    pub use_symbols: bool,
+    /// How many measures at most are drawn with symbols.
+    pub max_symbols: u32,
+    /// How many measures it is said to last where that is not how many
+    /// rests it joins.
+    pub count: Option<usize>,
+}
+
+impl Default for MultiRest {
+    /// music21's defaults: symbols, up to eleven of them.
+    fn default() -> Self {
+        Self {
+            use_symbols: true,
+            max_symbols: 11,
+            count: None,
+        }
+    }
 }
 
 /// How a glissando is played: music21's `Glissando.slideType`.
@@ -472,6 +505,14 @@ impl OctaveShift {
 
 impl Spanner {
     /// A spanner of a kind joining the elements at these positions.
+    ///
+    /// ```
+    /// use music21_rs::{Spanner, SpannerKind};
+    ///
+    /// let line = Spanner::new(SpannerKind::Line, vec![2, 5]);
+    /// assert_eq!(line.len(), 2);
+    /// assert_eq!(line.spanned(), [Some(2), Some(5)]);
+    /// ```
     pub fn new(kind: SpannerKind, spanned: Vec<usize>) -> Self {
         Self::with_unplaced(kind, spanned.into_iter().map(Some).collect())
     }
@@ -494,7 +535,34 @@ impl Spanner {
             glissando: None,
             marks: None,
             offset: Drawn(0.0),
+            multi_rest: None,
         }
+    }
+
+    /// One rest of several measures over the rests at these positions,
+    /// drawn with symbols as music21's starts out.
+    pub fn multi_measure_rest(spanned: Vec<usize>) -> Self {
+        let mut rest = Self::new(SpannerKind::MultiMeasureRest, spanned);
+        rest.multi_rest = Some(MultiRest::default());
+        rest
+    }
+
+    /// How a rest of several measures is drawn and counted.
+    pub fn multi_rest(&self) -> Option<MultiRest> {
+        self.multi_rest
+    }
+
+    /// Says how a rest of several measures is drawn and counted.
+    pub fn set_multi_rest(&mut self, multi_rest: Option<MultiRest>) {
+        self.multi_rest = multi_rest;
+    }
+
+    /// How many measures a rest of several lasts: the count it was given,
+    /// or else how many rests it joins. music21's `numRests`.
+    pub fn num_rests(&self) -> usize {
+        self.multi_rest
+            .and_then(|rest| rest.count)
+            .unwrap_or(self.spanned.len())
     }
 
     /// A glissando over the elements at these positions, drawn as a wavy
@@ -615,6 +683,16 @@ impl Spanner {
 
     /// An octave line over the elements at these positions, drawn above them
     /// as music21's starts out.
+    ///
+    /// ```
+    /// use music21_rs::{OctaveShift, Spanner};
+    ///
+    /// let ottava = Spanner::ottava(OctaveShift::from_name("8va", true)?, vec![0, 1]);
+    /// let shift = ottava.shift().expect("an ottava shifts");
+    /// assert_eq!(shift.name(), "8va");
+    /// assert!(shift.up());
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn ottava(shift: OctaveShift, spanned: Vec<usize>) -> Self {
         let mut ottava = Self::new(SpannerKind::Ottava, spanned);
         ottava.placement = Drawn(Some(Placement::Above));
@@ -633,12 +711,35 @@ impl Spanner {
     }
 
     /// A slur over the elements at these positions.
+    ///
+    /// ```
+    /// use music21_rs::{Note, Spanner, SpannerKind, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// for name in ["C4", "D4", "E4"] {
+    ///     stream.push(Note::from_name(name)?);
+    /// }
+    /// // The slur names its notes by their places in `Stream::leaves`.
+    /// stream.add_spanner(Spanner::slur(vec![0, 1, 2]));
+    /// let slur = &stream.spanners()[0];
+    /// assert_eq!(slur.kind(), SpannerKind::Slur);
+    /// assert!(slur.is_first(0) && slur.is_last(2));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn slur(spanned: Vec<usize>) -> Self {
         Self::new(SpannerKind::Slur, spanned)
     }
 
     /// A hairpin over the elements at these positions, drawn below them and
     /// opening fifteen tenths wide, as music21's starts out.
+    ///
+    /// ```
+    /// use music21_rs::{Spanner, SpannerKind};
+    ///
+    /// let hairpin = Spanner::wedge(SpannerKind::Crescendo, vec![0, 3]);
+    /// assert!(hairpin.kind().is_wedge());
+    /// assert_eq!(hairpin.kind().class_name(), "Crescendo");
+    /// ```
     pub fn wedge(kind: SpannerKind, spanned: Vec<usize>) -> Self {
         let mut wedge = Self::new(kind, spanned);
         wedge.placement = Drawn(Some(Placement::Below));
@@ -664,6 +765,13 @@ impl Spanner {
 
     /// The positions of the elements it joins, first to last, nothing for
     /// one that stands in no stream.
+    ///
+    /// ```
+    /// use music21_rs::Spanner;
+    ///
+    /// let slur = Spanner::slur(vec![4, 5, 6]);
+    /// assert_eq!(slur.spanned(), [Some(4), Some(5), Some(6)]);
+    /// ```
     pub fn spanned(&self) -> &[Option<usize>] {
         &self.spanned
     }
@@ -751,5 +859,18 @@ mod tests {
         assert!(slur.is_last(5));
         assert!(!slur.is_first(4) && !slur.is_last(4));
         assert_eq!(slur.kind().class_name(), "Slur");
+    }
+
+    #[test]
+    fn a_multi_measure_rest_counts_its_rests() {
+        let mut rest = Spanner::multi_measure_rest(vec![1, 2, 3]);
+        assert_eq!(rest.num_rests(), 3);
+        assert!(rest.multi_rest().is_some_and(|said| said.use_symbols));
+
+        rest.set_multi_rest(Some(MultiRest {
+            count: Some(10),
+            ..MultiRest::default()
+        }));
+        assert_eq!(rest.num_rests(), 10);
     }
 }
