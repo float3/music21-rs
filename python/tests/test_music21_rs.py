@@ -7717,3 +7717,60 @@ def test_a_chords_edits_in_place_survive_a_pickle():
     assert thawed.volume.velocity == 100
     assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
     assert thawed.notes[1].volume.velocity == 40
+
+
+def test_a_stored_instrument_edited_in_place_is_read():
+    # music21 answers ['Piccolo'] for both, on a note and on a chord.
+    for element in (m.Note("C4", quarterLength=1.0), m.Chord(["C4", "E4"], quarterLength=1.0)):
+        element.storedInstrument = m.Flute()
+        element.storedInstrument.instrumentName = "Piccolo"
+        part = m.Part()
+        part.insert(0.0, element)
+        unbundled = m.unbundleInstruments(part)
+        assert [e.instrumentName for e in unbundled if "Instrument" in e.classes] == [
+            "Piccolo"
+        ]
+        parted = m.partitionByInstrument(unbundled)
+        assert [p.getInstrument().instrumentName for p in parted.parts] == ["Piccolo"]
+
+
+def test_a_figured_bass_scale_reads_its_scale_as_it_stands():
+    # music21 reads realizerScale afresh on every call: D F# B both ways.
+    assigned = m.FiguredBassScale("C", "major")
+    assigned.realizerScale = m.MajorScale("D")
+    assert assigned.getPitchNames("D3", "6") == ["D", "F#", "B"]
+    edited = m.FiguredBassScale("C", "major")
+    edited.realizerScale.tonic.name = "D"
+    assert edited.getPitchNames("D3", "6") == ["D", "F#", "B"]
+    # A bass the scale lacks is spelled by keySig: B-flat in F, so B D G.
+    for spell in (
+        lambda fbs: setattr(fbs, "keySig", m.KeySignature(-1)),
+        lambda fbs: setattr(fbs.keySig, "sharps", -1),
+    ):
+        spelled = m.FiguredBassScale("C", "major")
+        spelled.realizerScale = m.MajorScale("F")
+        spell(spelled)
+        assert spelled.getPitchNames("B3", "6") == ["B", "D", "G"]
+
+
+def test_a_voice_leading_quartets_key_edited_in_place_is_read():
+    # music21 reads the tonic the key has now: False for both.
+    closing = m.VoiceLeadingQuartet("D4", "C4", "B3", "C4", m.Key("C"))
+    assert closing.clausulaVera()
+    closing.key.tonic.name = "D"
+    assert not closing.clausulaVera()
+    opening = m.VoiceLeadingQuartet("G4", "C5", "C4", "C4", m.Key("C"))
+    assert opening.modalOpening()
+    opening.key.tonic.name = "A"
+    assert not opening.modalOpening()
+
+
+def test_an_inversion_fixed_through_overrides_is_named():
+    # music21 answers 64 and 'Second Inversion', and refuses 300 by name.
+    chord = m.Chord("C4 E4 G4")
+    chord.inversion()
+    chord._overrides["inversion"] = 2
+    assert (chord.inversionName(), chord.inversionText()) == (64, "Second Inversion")
+    chord._overrides["inversion"] = 300
+    with pytest.raises(m.ChordException, match="Not a normal inversion for a triad: 300"):
+        chord.inversionName()

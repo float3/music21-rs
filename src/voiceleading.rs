@@ -159,7 +159,14 @@ impl VoiceLeadingQuartet {
         }
         let (lower_degree_before, lower_degree_after) = match &self.key {
             Some(key) => {
-                let scale = key.scale();
+                // music21 counts in `key.getScale(key.mode)`, the scale the
+                // key's signature implies, which a tonic moved by hand
+                // leaves behind; it has no such scale for a church mode, for
+                // which the crate counts in the mode itself.
+                let scale = match key.mode() {
+                    "major" | "minor" => key.key_signature().scale(key.mode())?,
+                    _ => key.scale(),
+                };
                 let mut before = scale.degree_of(&self.v2n1)?;
                 let after = scale.degree_of(&self.v2n2)?;
                 if key.mode() == "minor" && before.is_none() {
@@ -788,6 +795,30 @@ pub fn verticality_positions_at(stream: &Stream, offset: FloatType) -> Vec<(usiz
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_resolution_is_counted_in_the_scale_the_signature_implies() {
+        // music21 counts in `key.getScale(key.mode)`, which a tonic moved by
+        // hand leaves on the signature: under no sharps the lower voice's B
+        // is the leading note of C major whatever the tonic says, and the
+        // diminished fifth does not resolve. music21 answers False for both.
+        let quartet = VoiceLeadingQuartet::from_names("F4", "E4", "B3", "A3").unwrap();
+        for key in [
+            Key::from_tonic("C").unwrap(),
+            Key::from_tonic("F#").unwrap().with_sharps(0),
+        ] {
+            assert!(
+                !quartet
+                    .clone()
+                    .with_key(key)
+                    .is_proper_resolution()
+                    .unwrap()
+            );
+        }
+        // Written under its own signature, F# major's B is its fourth.
+        let fresh = quartet.with_key(Key::from_tonic("F#").unwrap());
+        assert!(fresh.is_proper_resolution().unwrap());
+    }
 
     #[test]
     fn a_quartet_hands_back_its_pitches_intervals_and_key() {

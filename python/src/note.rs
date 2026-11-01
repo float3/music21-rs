@@ -709,6 +709,12 @@ impl Note {
         if let Some(lyrics) = &self.lyrics {
             fold_lyric_objects(py, lyrics, note.lyrics_mut());
         }
+        if self.stored_instrument.is_some() {
+            note.set_stored_instrument(crate::instrument::stored_value(
+                py,
+                self.stored_instrument.as_ref(),
+            ));
+        }
         note
     }
 

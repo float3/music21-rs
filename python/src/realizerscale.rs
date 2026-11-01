@@ -58,6 +58,34 @@ impl FiguredBassScale {
         }
     }
 
+    /// The scale as it stands now. music21 reads `realizerScale` and
+    /// `keySig` afresh on every question, so a scale or signature assigned,
+    /// or one handed out and edited in place, is the one counted in.
+    fn current(&self, py: Python<'_>) -> PyResult<RsFiguredBassScale> {
+        let mut scale = self.inner.clone();
+        if let Some(object) = &self.realizer_scale {
+            let object = object.bind(py);
+            let Ok(ours) = object.extract::<PyRef<'_, crate::scale::ConcreteScale>>() else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "realizerScale must be a scale of this package's; got {}",
+                    object.get_type().repr()?
+                )));
+            };
+            scale = scale.with_scale(ours.current());
+        }
+        if let Some(object) = &self.key_sig {
+            let object = object.bind(py);
+            let Ok(ours) = object.extract::<PyRef<'_, crate::key::KeySignature>>() else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "keySig must be a key signature of this package's; got {}",
+                    object.get_type().repr()?
+                )));
+            };
+            scale = scale.with_key_signature(ours.signature.clone());
+        }
+        Ok(scale)
+    }
+
     /// Pitches as the objects music21 would hand back.
     fn objects<'py>(py: Python<'py>, pitches: Vec<RsPitch>) -> PyResult<Bound<'py, PyList>> {
         let list = PyList::empty(py);
@@ -135,11 +163,12 @@ impl FiguredBassScale {
     #[pyo3(signature = (bassPitch, notationString = ""))]
     fn getPitchNames(
         &self,
+        py: Python<'_>,
         bassPitch: &Bound<'_, PyAny>,
         notationString: &str,
     ) -> PyResult<Vec<String>> {
         let names = self
-            .inner
+            .current(py)?
             .pitch_names(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Ok(names.iter().map(|name| music21_name(name)).collect())
@@ -155,7 +184,7 @@ impl FiguredBassScale {
         notationString: &str,
     ) -> PyResult<Bound<'py, PyList>> {
         let pitches = self
-            .inner
+            .current(py)?
             .sample_pitches(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Self::objects(py, pitches)
@@ -176,7 +205,7 @@ impl FiguredBassScale {
             .map(pitch_from_any)
             .transpose()?;
         let pitches = self
-            .inner
+            .current(py)?
             .pitches(
                 &pitch_from_any(bassPitch)?,
                 &notation_from(notationString)?,

@@ -603,6 +603,17 @@ pub(crate) fn stored_instrument(
     Ok((Some(value.clone().unbind()), None))
 }
 
+/// The instrument a note or chord keeps, as it stands now: a caller holding
+/// the object may have renamed it or given it another program since it was
+/// set, and every reader of the value asks this.
+pub(crate) fn stored_value(py: Python<'_>, object: Option<&Py<PyAny>>) -> Option<RsInstrument> {
+    let object = object?.bind(py);
+    if let Ok(ours) = object.extract::<PyRef<'_, Instrument>>() {
+        return Some(ours.inner.clone());
+    }
+    crate::stream::instrument_value(object).ok()
+}
+
 /// music21's `instrumentFromMidiProgram`.
 #[pyfunction]
 fn instrumentFromMidiProgram(py: Python<'_>, number: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {

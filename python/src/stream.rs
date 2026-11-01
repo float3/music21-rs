@@ -6710,7 +6710,9 @@ fn music21_chord(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Chord>
 
 /// A music21 instrument, read off its attributes: this wheel's instruments
 /// are not installed, so a score holds music21's own.
-fn instrument_value(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Instrument> {
+pub(crate) fn instrument_value(
+    object: &Bound<'_, PyAny>,
+) -> PyResult<music21_rs_crate::Instrument> {
     use music21_rs_crate::Instrument as RsInstrument;
     let class: String = object.get_type().getattr("__name__")?.extract()?;
     let mut instrument = RsInstrument::of_kind(&class).unwrap_or_default();
