@@ -14,10 +14,10 @@
 //! `TimespanTree` and walk it while editing it, taking spans out and
 //! putting new ones in as they go. The crate reads a score as a list of
 //! spans of its own -- a reading, not a thing to edit -- and its reducer
-//! runs music21's steps over that list in music21's order, which is what
-//! `run` answers with. A member that hands the tree back half-edited has
-//! nothing here to be, so it says so. `run` itself does not call any of
-//! them.
+//! weighs the slices of that list measure by measure, which is what `run`
+//! answers with. A member that hands the tree back half-edited has nothing
+//! here to be, so it says so. `run` itself calls none of them but
+//! `removeVerticalDissonances`, and that only when asked.
 //!
 //! **A measure is reduced in place, by position.** music21's
 //! `reduceMeasureToNChords` removes the chords it does not keep from the
@@ -163,7 +163,8 @@ impl ChordReducer {
         allowableChords = None,
         closedPosition = false,
         forbiddenChords = None,
-        maximumNumberOfChords = 3
+        maximumNumberOfChords = 3,
+        removeDissonances = false
     ))]
     fn run<'py>(
         slf: &Bound<'py, Self>,
@@ -172,6 +173,7 @@ impl ChordReducer {
         #[pyo3(from_py_with = crate::truthy)] closedPosition: bool,
         forbiddenChords: Option<&Bound<'py, PyAny>>,
         maximumNumberOfChords: usize,
+        #[pyo3(from_py_with = crate::truthy)] removeDissonances: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if !crate::stream::answers_to_class(
@@ -206,6 +208,7 @@ impl ChordReducer {
             forbidden_chords: read(forbiddenChords)?,
             closed_position: closedPosition,
             maximum_number_of_chords: maximumNumberOfChords,
+            remove_dissonances: removeDissonances,
         };
         let score = crate::stream::crate_stream(inputScore)?;
         let made = reduce_chords(&score, &options).map_err(reducer_error)?;

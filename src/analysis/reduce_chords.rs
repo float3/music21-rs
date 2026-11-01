@@ -3,23 +3,18 @@
 //!
 //! [`reduce_chords`] is music21's `ChordReducer.run`. It reads the score's
 //! notes as spans of time -- a part, a stretch, and the notes sounding in
-//! it -- and then thins them out: a span of no length goes, the spans of
-//! each part are fused where they sound the same notes in one measure, they
-//! are cut at every offset the bass moves, the notes above the bass of a
-//! dissonant moment go, the gaps the thinning leaves are filled, and spans
-//! shorter than half a note and then shorter than a note go unless they
-//! fill their measure. What is left is chordified against the score, and
-//! each measure is reduced to the few chords weighing most in it.
-//!
-//! The weight of a chord is music21's `qlbsmpConsonance`: how long it
-//! sounds, times how strong its beat is, times a tenth if it is dissonant,
-//! with the last chord of a measure counted as if it stood on the
-//! downbeat.
+//! it -- drops the spans of no length and, if asked, the notes above the
+//! bass of a dissonant moment. Each measure of the first part is then cut
+//! into slices wherever a note starts or stops, and the slices sounding
+//! the same pitch classes are weighed together: how long each lasts, times
+//! how strong the beat it starts on is (the last sounding slice counting
+//! its length alone), times a tenth if it is dissonant. The few heaviest
+//! are kept, each lasting until the next kept slice of other classes.
 
 use std::borrow::Cow;
 
 use crate::chord::Chord;
-use crate::defaults::{FloatType, IntegerType};
+use crate::defaults::FloatType;
 use crate::duration::Duration;
 use crate::error::{Error, Result};
 use crate::makenotation::op_frac;
@@ -43,6 +38,10 @@ pub struct ReductionOptions {
     /// Chords whose interval classes count as dissonant however they
     /// sound: music21's `forbiddenChords`.
     pub forbidden_chords: Vec<Chord>,
+    /// Whether the notes above the bass of a dissonant moment go before
+    /// the measures are weighed: music21's `removeDissonances`, off by
+    /// default.
+    pub remove_dissonances: bool,
 }
 
 impl Default for ReductionOptions {
@@ -52,55 +51,74 @@ impl Default for ReductionOptions {
             closed_position: false,
             allowable_chords: Vec::new(),
             forbidden_chords: Vec::new(),
+            remove_dissonances: false,
         }
     }
 }
 
 /// A score reduced to its chords: music21's `ChordReducer.run`, which hands
-/// back a score of one part.
+/// back a score of one part, the first part's measures holding the chords.
 ///
 /// # Errors
 ///
-/// A stream that is not a score, a part with no instrument to order it by,
-/// or a length no duration can have.
+/// A stream that is not a score or has no part, a meter that cannot weigh
+/// a slice, or a length no duration can have.
 pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Stream> {
     if score.kind() != StreamKind::Score {
         return Err(Error::Analysis(
             "a reduction is of a score, as music21's is".to_string(),
         ));
     }
-    let mut reduction = Reduction::of(score)?;
+    let template = score
+        .parts()
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::Analysis("a score with no part to reduce".to_string()))?;
+    let mut reduction = Reduction::of(score);
     reduction.remove_zero_duration();
-    reduction.split_by_bass();
-    reduction.remove_vertical_dissonances(options);
-    reduction.fill_bass_gaps();
-    reduction.remove_short_spans(0.5);
-    reduction.fill_bass_gaps();
-    reduction.fill_measure_gaps();
-    reduction.remove_short_spans(1.0);
-    reduction.fill_bass_gaps();
-    reduction.fill_measure_gaps();
+    if options.remove_dissonances {
+        reduction.remove_vertical_dissonances(options);
+    }
+    let consonance = Consonance::of(options);
 
-    let chordified = reduction.chordified(score)?;
-    let mut part = Stream::with_kind(StreamKind::Part);
-    let mut at = 0.0;
-    for event in chordified.events() {
+    let mut part = crate::stream::chordify::template_of(template);
+    let points = reduction.time_points();
+    let mut meter = TimeSignature::default();
+    let mut index = 0;
+    for event in template.events() {
         let Some(measure) = event.element().as_stream() else {
             continue;
         };
         if measure.kind() != StreamKind::Measure {
             continue;
         }
-        let reduced = reduce_measure_to_n_chords(
-            measure,
-            options.maximum_number_of_chords,
-            0.25,
-            reduction.meter_at(event.offset()),
-            ChordWeight::Consonance,
-        )?;
-        let length = reduced.end_offset();
-        part.insert(at, reduced);
-        at = op_frac(at + length);
+        if let Some(stated) = stated_meter(measure) {
+            meter = stated.clone();
+        }
+        let start = event.offset();
+        let length = match measure.end_offset() {
+            0.0 => meter.bar_quarter_length(),
+            length => length,
+        };
+        let slices = reduction.measure_slices(start, op_frac(start + length), &points);
+        let weights = slice_weights(&slices, &meter, measure.padding_left(), &consonance)?;
+        let kept = keep_heaviest_slices(&slices, &weights, options.maximum_number_of_chords);
+        let mut made = Vec::new();
+        if kept.is_empty() {
+            made.push((
+                0.0,
+                StreamElement::Rest(crate::rest::Rest::new(Duration::new(length)?)),
+            ));
+        }
+        for slice in &kept {
+            made.push((slice.offset, reduction.element_at(slice)?));
+        }
+        if let Some(reduced) = nth_measure(&mut part, index) {
+            for (offset, element) in made {
+                reduced.insert(offset, element);
+            }
+        }
+        index += 1;
     }
     if options.closed_position {
         close_positions(&mut part);
@@ -110,28 +128,42 @@ pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Strea
     Ok(answer)
 }
 
+/// The meter a measure states at its start: music21's
+/// `Measure.timeSignature`.
+fn stated_meter(measure: &Stream) -> Option<&TimeSignature> {
+    measure
+        .events()
+        .iter()
+        .find_map(|event| match event.element() {
+            StreamElement::TimeSignature(meter) => Some((event.offset(), meter)),
+            _ => None,
+        })
+        .filter(|(offset, _)| *offset == 0.0)
+        .map(|(_, meter)| meter)
+}
+
+/// The measure of a part counted from nought.
+fn nth_measure(part: &mut Stream, index: usize) -> Option<&mut Stream> {
+    part.events_mut()
+        .iter_mut()
+        .filter_map(|event| match event.element_mut() {
+            StreamElement::Stream(inner) if inner.kind() == StreamKind::Measure => {
+                Some(inner.as_mut())
+            }
+            _ => None,
+        })
+        .nth(index)
+}
+
 /// One stretch of one part, and the notes sounding in it: music21's
 /// `PitchedTimespan` as the reducer keeps it.
 #[derive(Clone, Debug)]
 struct Span<'a> {
-    /// Which of the score's parts it came from, in the order the reduction
-    /// sorted them.
+    /// Which of the score's parts it came from, in the score's order.
     part: usize,
     offset: FloatType,
     end: FloatType,
-    /// Where the measure holding it stands, and where it ends: music21's
-    /// `parentOffset` and `parentEndTime`.
-    parent_offset: FloatType,
-    parent_end: FloatType,
-    measure: Option<IntegerType>,
     element: Cow<'a, StreamElement>,
-    /// The strength of the beat it starts on, which the gap filling writes
-    /// onto a span it moves: music21's `beatStrength` on a timespan.
-    beat_strength: Option<FloatType>,
-    /// When it was made. music21's steps take a span out and put a new one
-    /// back, which lands after the spans already standing where it does,
-    /// and the number says so without relying on how a sort breaks ties.
-    seq: u64,
 }
 
 impl Span<'_> {
@@ -144,27 +176,9 @@ impl Span<'_> {
         self.element.pitches()
     }
 
-    /// Whether two spans sound the same notes, written the same way, which
-    /// is what music21's `==` on a tuple of pitches asks.
-    fn sounds_as(&self, other: &Span<'_>) -> bool {
-        same_pitches(&self.pitches(), &other.pitches())
-    }
-
     fn lowest(&self) -> Option<Pitch> {
         lowest_of(&self.pitches())
     }
-}
-
-/// Whether two lists of notes are the same list, written the same way,
-/// which is what music21's `==` on a tuple of pitches asks: the crate's own
-/// `==` reads a written natural as the note without one, where music21
-/// does not.
-fn same_pitches(one: &[Pitch], other: &[Pitch]) -> bool {
-    one.len() == other.len()
-        && one
-            .iter()
-            .zip(other)
-            .all(|(left, right)| written_alike(left, right))
 }
 
 /// Whether two notes are the one note as it is written.
@@ -181,30 +195,75 @@ fn lowest_of(pitches: &[Pitch]) -> Option<Pitch> {
         .cloned()
 }
 
-/// What `remove_short_spans` groups a part's spans by: the measure, whether
-/// the span is short, and the bass note under it.
-type ShortKey = (Option<IntegerType>, bool, Option<usize>);
+/// What counts as consonant: the interval classes of music21's
+/// `allowableChords` and `forbiddenChords`, as `run` makes them.
+struct Consonance {
+    allowable: Vec<Vec<u8>>,
+    forbidden: Vec<Vec<u8>>,
+}
 
-/// The spans of a score, and the steps that thin them out.
+impl Consonance {
+    fn of(options: &ReductionOptions) -> Self {
+        let classes = |chords: &[Chord]| {
+            chords
+                .iter()
+                .map(|chord| interval_classes(&chord.pitches()))
+                .collect()
+        };
+        Self {
+            allowable: classes(&options.allowable_chords),
+            forbidden: classes(&options.forbidden_chords),
+        }
+    }
+
+    /// Whether notes sound consonant: music21's `isConsonant`. A forbidden
+    /// chord's interval classes are dissonant and an allowable chord's
+    /// consonant; anything else is as consonant as its chord.
+    fn holds(&self, pitches: &[Pitch]) -> bool {
+        let classes = interval_classes(pitches);
+        if self.forbidden.contains(&classes) {
+            return false;
+        }
+        if self.allowable.contains(&classes) {
+            return true;
+        }
+        Chord::new(pitches).is_ok_and(|chord| chord.is_consonant())
+    }
+}
+
+/// One stretch of a measure between two places where a note starts or
+/// stops: music21's `MeasureSlice`.
+#[derive(Clone, Debug)]
+struct Slice {
+    /// Where it stands in the measure.
+    offset: FloatType,
+    quarter_length: FloatType,
+    /// Where its verticality stands in the score, which is where it
+    /// started before a kept slice was stretched or moved.
+    at: FloatType,
+    /// The notes sounding at its start: the verticality's `pitchSet`.
+    pitches: Vec<Pitch>,
+}
+
+impl Slice {
+    /// Its sorted pitch classes, or none where nothing sounds.
+    fn key(&self) -> Option<Vec<u8>> {
+        if self.pitches.is_empty() {
+            return None;
+        }
+        Some(sorted_classes(&self.pitches))
+    }
+}
+
+/// The spans of a score, and the steps that read them.
 struct Reduction<'a> {
     spans: Vec<Span<'a>>,
-    /// The meter each measure of the score states or is in, by the
-    /// measure's offset.
-    meters: Vec<(FloatType, TimeSignature)>,
-    /// How many parts the score has, which says which is the bass.
-    parts: usize,
-    /// The number the next span made is given.
-    next_seq: u64,
 }
 
 impl<'a> Reduction<'a> {
     /// The score read as spans, its parts in the score's own order, which
-    /// is the order music21's `allParts` answers: a part of the tree's
-    /// source is placed by where it stands in that source, and only a part
-    /// from somewhere else is sorted by the id of its instrument. Every
-    /// part the reducer's tree holds is the score's, so the score's order
-    /// is the whole of it.
-    fn of(score: &'a Stream) -> Result<Self> {
+    /// is the order music21's `allParts` answers.
+    fn of(score: &'a Stream) -> Self {
         let parts: Vec<&Stream> = score.parts().into_iter().collect();
         let timespans = as_timespans(
             score,
@@ -227,160 +286,15 @@ impl<'a> Reduction<'a> {
                 part,
                 offset: span.offset(),
                 end: span.end_time(),
-                parent_offset: span.parent_offset(),
-                parent_end: span.parent_end_time(),
-                measure: span.measure_number(),
                 element: Cow::Borrowed(span.element()),
-                beat_strength: None,
-                seq: spans.len() as u64,
             });
         }
-        let next_seq = spans.len() as u64;
-        Ok(Self {
-            spans,
-            next_seq,
-            meters: meters_of(score),
-            parts: parts.len(),
-        })
-    }
-
-    /// The meter in force where a measure stands, which is what says how
-    /// strong each beat of it is: the last meter the score states at or
-    /// before it, as a chord's `beatStrength` reads it off its measure.
-    fn meter_at(&self, offset: FloatType) -> Option<TimeSignature> {
-        self.meters
-            .iter()
-            .rfind(|(at, _)| *at <= offset)
-            .map(|(_, meter)| meter.clone())
+        Self { spans }
     }
 
     /// Spans of no length go: music21's `removeZeroDurationTimespans`.
     fn remove_zero_duration(&mut self) {
         self.spans.retain(|span| span.quarter_length() != 0.0);
-    }
-
-    /// Every part's spans fused where they sound alike, and every span cut
-    /// where the bass moves: music21's `splitByBass`.
-    fn split_by_bass(&mut self) {
-        for part in 0..self.parts {
-            self.fuse_by_part(part);
-        }
-        // The bass is the last of the parts, as music21 takes
-        // `allParts()[-1]` -- and `allParts` lists only the parts its
-        // timespans belong to, so a trailing part holding no note is not
-        // the bass.
-        let bass = self
-            .spans
-            .iter()
-            .map(|span| span.part)
-            .max()
-            .unwrap_or_default();
-        let mut offsets: Vec<FloatType> = self
-            .spans
-            .iter()
-            .filter(|span| span.part == bass)
-            .map(|span| span.offset)
-            .collect();
-        offsets.sort_by(FloatType::total_cmp);
-        offsets.dedup();
-        self.split_at(&offsets);
-    }
-
-    /// One part's spans fused where a run of them sounds the same notes in
-    /// one measure: music21's `fuseTimespansByPart`, which takes the run
-    /// out and puts one span back in its place.
-    fn fuse_by_part(&mut self, part: usize) {
-        loop {
-            let places: Vec<usize> = self
-                .spans
-                .iter()
-                .enumerate()
-                .filter(|(_, span)| span.part == part)
-                .map(|(at, _)| at)
-                .collect();
-            // The first run of spans alike, if there is one.
-            let mut run: Vec<usize> = Vec::new();
-            for place in places {
-                match run.last() {
-                    None => run.push(place),
-                    Some(last) => {
-                        let (one, two) = (&self.spans[*last], &self.spans[place]);
-                        if one.measure == two.measure && one.sounds_as(two) {
-                            run.push(place);
-                        } else if run.len() > 1 {
-                            break;
-                        } else {
-                            run.clear();
-                            run.push(place);
-                        }
-                    }
-                }
-            }
-            if run.len() < 2 {
-                return;
-            }
-            let mut fused = self.spans[run[0]].clone();
-            fused.end = self.spans[run[run.len() - 1]].end;
-            let fused = self.made(fused);
-            let dropped: Vec<usize> = run;
-            self.drop_places(&dropped);
-            self.spans.push(fused);
-            self.sort();
-        }
-    }
-
-    /// Every span cut at each of these offsets: music21's `splitAt`, which
-    /// takes each span straddling an offset out and puts its two pieces
-    /// back -- so the pieces stand *after* the spans already there, among
-    /// those starting and ending alike.
-    fn split_at(&mut self, offsets: &[FloatType]) {
-        for offset in offsets {
-            let mut kept: Vec<Span<'a>> = Vec::new();
-            let mut pieces: Vec<Span<'a>> = Vec::new();
-            for span in self.spans.drain(..) {
-                if span.offset < *offset && *offset < span.end {
-                    let mut first = span.clone();
-                    let mut second = span;
-                    first.end = *offset;
-                    second.offset = *offset;
-                    first.seq = self.next_seq;
-                    second.seq = self.next_seq + 1;
-                    self.next_seq += 2;
-                    pieces.push(first);
-                    pieces.push(second);
-                } else {
-                    kept.push(span);
-                }
-            }
-            kept.extend(pieces);
-            self.spans = kept;
-            self.sort();
-        }
-    }
-
-    /// A span made by a step, numbered after every span before it, as
-    /// music21's insertion puts a new timespan after the ones already
-    /// standing where it does.
-    fn made(&mut self, mut span: Span<'a>) -> Span<'a> {
-        span.seq = self.next_seq;
-        self.next_seq += 1;
-        span
-    }
-
-    /// Where a span stands now, by its number.
-    fn place_of(&self, seq: u64) -> Option<usize> {
-        self.spans.iter().position(|span| span.seq == seq)
-    }
-
-    /// The spans kept in the order a tree walks them: by where each starts,
-    /// then by where it ends.
-    fn sort(&mut self) {
-        self.spans.sort_by(|left, right| {
-            left.offset
-                .total_cmp(&right.offset)
-                .then_with(|| left.end.total_cmp(&right.end))
-                .then_with(|| left.seq.cmp(&right.seq))
-        });
     }
 
     /// Every offset a span starts or stops at, in order: music21's
@@ -408,8 +322,7 @@ impl<'a> Reduction<'a> {
 
     /// The spans sounding at an offset, those starting there first and
     /// then those that began earlier: music21's
-    /// `startAndOverlapTimespans`, whose order decides which span is read
-    /// as the bass where two sound the same lowest note.
+    /// `startAndOverlapTimespans`.
     fn sounding_at(&self, offset: FloatType) -> Vec<usize> {
         let mut places = self.starting_at(offset);
         places.extend(
@@ -422,23 +335,6 @@ impl<'a> Reduction<'a> {
         places
     }
 
-    /// The span holding the lowest note sounding at an offset: music21's
-    /// `Verticality.bassTimespan`.
-    fn bass_at(&self, offset: FloatType) -> Option<usize> {
-        let mut lowest: Option<(Pitch, usize)> = None;
-        for place in self.sounding_at(offset) {
-            let Some(pitch) = self.spans[place].lowest() else {
-                continue;
-            };
-            match &lowest {
-                None => lowest = Some((pitch, place)),
-                Some((overall, _)) if pitch.ps() <= overall.ps() => lowest = Some((pitch, place)),
-                Some(_) => {}
-            }
-        }
-        lowest.map(|(_, place)| place)
-    }
-
     /// The notes above the bass of a dissonant moment go: music21's
     /// `removeVerticalDissonances`.
     ///
@@ -447,28 +343,13 @@ impl<'a> Reduction<'a> {
     /// sounds at a later offset is what the earlier removals left, and the
     /// walk steps to the next offset a span still starts at.
     fn remove_vertical_dissonances(&mut self, options: &ReductionOptions) {
-        let allowable: Vec<Vec<u8>> = options
-            .allowable_chords
-            .iter()
-            .map(|chord| interval_classes(&chord.pitches()))
-            .collect();
-        let forbidden: Vec<Vec<u8>> = options
-            .forbidden_chords
-            .iter()
-            .map(|chord| interval_classes(&chord.pitches()))
-            .collect();
+        let consonance = Consonance::of(options);
         let mut offset = self.lowest_offset();
         while let Some(at) = offset {
             let pitches = self.pitch_set(at);
-            let classes = interval_classes(&pitches);
-            let mut consonant = allowable.contains(&classes);
-            if Chord::new(&pitches[..]).is_ok_and(|chord| chord.is_consonant()) {
-                consonant = true;
-            }
-            if forbidden.contains(&classes) {
-                consonant = false;
-            }
-            if !consonant && let Some(lowest) = lowest_of(&pitches) {
+            if !consonance.holds(&pitches)
+                && let Some(lowest) = lowest_of(&pitches)
+            {
                 let dropped: Vec<usize> = self
                     .starting_at(at)
                     .into_iter()
@@ -516,289 +397,6 @@ impl<'a> Reduction<'a> {
         pitches
     }
 
-    /// The gaps the thinning left under each bass note filled: music21's
-    /// `fillBassGaps`.
-    ///
-    /// Part by part, over a snapshot of that part's spans grouped by the
-    /// bass note sounding under each: the first span of a group is moved
-    /// back to where the bass note starts, the last is stretched to where
-    /// it ends, and neighbours that sound alike or leave a gap are one
-    /// span. Each change takes a span out and puts a new one back, as
-    /// music21 does, so it stands after the spans it starts and ends with.
-    fn fill_bass_gaps(&mut self) {
-        for part in 0..self.parts {
-            // A snapshot, as music21 takes `list(subtree)` before it
-            // changes anything, with the bass note under each span.
-            let mut snapshot: Vec<(u64, Option<u64>)> = Vec::new();
-            for place in 0..self.spans.len() {
-                if self.spans[place].part != part {
-                    continue;
-                }
-                let seq = self.spans[place].seq;
-                let bass = self
-                    .bass_at(self.spans[place].offset)
-                    .map(|under| self.spans[under].seq);
-                snapshot.push((seq, bass));
-            }
-            let mut runs: Vec<(Option<u64>, Vec<u64>)> = Vec::new();
-            for (seq, bass) in snapshot {
-                match runs.last_mut() {
-                    Some((known, run)) if *known == bass => run.push(seq),
-                    _ => runs.push((bass, vec![seq])),
-                }
-            }
-            for (bass, mut group) in runs {
-                let Some(bass) = bass.and_then(|seq| self.place_of(seq)) else {
-                    continue;
-                };
-                let bass_offset = self.spans[bass].offset;
-                let bass_end = self.spans[bass].end;
-                let bass_strength = self.spans[bass].beat_strength;
-                if let Some(place) = self.place_of(group[0])
-                    && bass_offset < self.spans[place].offset
-                {
-                    let mut offset = bass_offset;
-                    if let Some(previous) = self.previous_in_part(place) {
-                        offset = offset.max(self.spans[previous].end);
-                    }
-                    let mut moved = self.spans[place].clone();
-                    moved.offset = offset;
-                    moved.beat_strength = bass_strength;
-                    let moved = self.made(moved);
-                    group[0] = moved.seq;
-                    self.spans.remove(place);
-                    self.spans.push(moved);
-                    self.sort();
-                }
-                let last = group.len() - 1;
-                if let Some(place) = self.place_of(group[last])
-                    && self.spans[place].end < bass_end
-                {
-                    let mut stretched = self.spans[place].clone();
-                    stretched.end = bass_end;
-                    let stretched = self.made(stretched);
-                    group[last] = stretched.seq;
-                    self.spans.remove(place);
-                    self.spans.push(stretched);
-                    self.sort();
-                }
-                self.fuse_neighbours(&mut group);
-            }
-        }
-    }
-
-    /// Neighbours of a group that sound alike, or that leave a gap between
-    /// them, made one span: the last pass of music21's `fillBassGaps` and
-    /// of its `fillMeasureGaps`, which writes the new span into both slots
-    /// so that the next pair starts from it.
-    fn fuse_neighbours(&mut self, group: &mut [u64]) {
-        if group.len() < 2 {
-            return;
-        }
-        for index in 0..group.len() - 1 {
-            let (Some(one), Some(two)) =
-                (self.place_of(group[index]), self.place_of(group[index + 1]))
-            else {
-                continue;
-            };
-            if one == two {
-                continue;
-            }
-            let alike = self.spans[one].sounds_as(&self.spans[two]);
-            let gap = self.spans[one].end != self.spans[two].offset;
-            if !(alike || gap) {
-                continue;
-            }
-            let mut fused = self.spans[one].clone();
-            fused.end = self.spans[two].end;
-            let fused = self.made(fused);
-            group[index] = fused.seq;
-            group[index + 1] = fused.seq;
-            let (first, second) = (one.min(two), one.max(two));
-            self.spans.remove(second);
-            self.spans.remove(first);
-            self.spans.push(fused);
-            self.sort();
-        }
-    }
-
-    /// The span of the same part standing before this one: music21's
-    /// `findPreviousPitchedTimespanInSameStreamByClass`, which steps back
-    /// verticality by verticality and takes the first span of the part
-    /// *starting* there -- so a span that started earlier and is still
-    /// sounding is the answer, however far past this one it reaches.
-    fn previous_in_part(&self, place: usize) -> Option<usize> {
-        let span = &self.spans[place];
-        let offset = self
-            .spans
-            .iter()
-            .filter(|other| other.part == span.part && other.offset < span.offset)
-            .map(|other| other.offset)
-            .max_by(FloatType::total_cmp)?;
-        self.spans
-            .iter()
-            .position(|other| other.part == span.part && other.offset == offset)
-    }
-
-    /// Spans shorter than a length go, unless a run of them fills its
-    /// measure or its bass note, where the notes sounding longest stay:
-    /// music21's `removeShortTimespans`.
-    fn remove_short_spans(&mut self, duration: FloatType) {
-        let mut dropped: Vec<usize> = Vec::new();
-        for part in 0..self.parts {
-            let places: Vec<usize> = self
-                .spans
-                .iter()
-                .enumerate()
-                .filter(|(_, span)| span.part == part)
-                .map(|(at, _)| at)
-                .collect();
-            let key = |place: usize| -> ShortKey {
-                let span = &self.spans[place];
-                let short = span.quarter_length() < duration;
-                let bass = self
-                    .bass_at(span.offset)
-                    .filter(|bass| self.spans[*bass].quarter_length() >= duration);
-                (span.measure, short, bass)
-            };
-            let mut runs: Vec<(ShortKey, Vec<usize>)> = Vec::new();
-            for place in places {
-                let said = key(place);
-                match runs.last_mut() {
-                    Some((known, run)) if *known == said => run.push(place),
-                    _ => runs.push((said, vec![place])),
-                }
-            }
-            for ((_, short, bass), run) in runs {
-                if !short {
-                    continue;
-                }
-                let first = &self.spans[run[0]];
-                let last = &self.spans[run[run.len() - 1]];
-                let mut whole_measure =
-                    first.offset == first.parent_offset && last.end == first.parent_end;
-                if let Some(bass) = bass
-                    && first.offset == self.spans[bass].offset
-                    && last.end == self.spans[bass].end
-                {
-                    whole_measure = true;
-                }
-                if !whole_measure {
-                    dropped.extend(run);
-                    continue;
-                }
-                // The notes the run sounds longest stay, as music21's
-                // counter picks the most common.
-                let mut counted: Vec<(Vec<Pitch>, FloatType)> = Vec::new();
-                for place in &run {
-                    let pitches = self.spans[*place].pitches();
-                    let length = self.spans[*place].quarter_length();
-                    match counted
-                        .iter_mut()
-                        .find(|(known, _)| same_pitches(known, &pitches))
-                    {
-                        Some((_, total)) => *total += length,
-                        None => counted.push((pitches, length)),
-                    }
-                }
-                // The notes sounding longest, and on a tie the ones the
-                // run sounded first, as Python's `Counter.most_common`
-                // keeps the order they were counted in.
-                let best =
-                    counted
-                        .iter()
-                        .fold(
-                            None,
-                            |best: Option<&(Vec<Pitch>, FloatType)>, next| match best {
-                                Some(known) if known.1 >= next.1 => Some(known),
-                                _ => Some(next),
-                            },
-                        );
-                let Some((best, _)) = best else {
-                    continue;
-                };
-                for place in &run {
-                    if !same_pitches(&self.spans[*place].pitches(), best) {
-                        dropped.push(*place);
-                    }
-                }
-            }
-        }
-        self.drop_places(&dropped);
-    }
-
-    /// The gaps left inside each measure filled: music21's
-    /// `fillMeasureGaps`.
-    ///
-    /// Part by part, over the spans grouped by the measure holding them:
-    /// neighbours that sound alike or leave a gap are one span, the first
-    /// span of a measure is moved back to the measure's start and given the
-    /// downbeat's strength, and the last is stretched to its end.
-    ///
-    /// music21 keeps what to put in and what to take out in two sets and
-    /// applies them only when the part is done, so the moving and the
-    /// stretching both read the *fused* span rather than each other's
-    /// answer -- a measure whose spans fuse into one comes out of this step
-    /// as two overlapping spans, one reaching back to the measure's start
-    /// and one on to its end, with the fused span itself taken out. That is
-    /// what the steps after it are given, so it is what this does.
-    fn fill_measure_gaps(&mut self) {
-        for part in 0..self.parts {
-            let mut runs: Vec<(Option<IntegerType>, Vec<Span<'a>>)> = Vec::new();
-            for span in &self.spans {
-                if span.part != part {
-                    continue;
-                }
-                match runs.last_mut() {
-                    Some((known, run)) if *known == span.measure => run.push(span.clone()),
-                    _ => runs.push((span.measure, vec![span.clone()])),
-                }
-            }
-            let mut to_remove: Vec<u64> = Vec::new();
-            let mut to_insert: Vec<Span<'a>> = Vec::new();
-            for (_, mut group) in runs {
-                for index in 0..group.len().saturating_sub(1) {
-                    let (one, two) = (group[index].clone(), group[index + 1].clone());
-                    if !(one.sounds_as(&two) || one.end != two.offset) {
-                        continue;
-                    }
-                    let mut fused = one.clone();
-                    fused.end = two.end;
-                    let fused = self.made(fused);
-                    group[index] = fused.clone();
-                    group[index + 1] = fused.clone();
-                    to_insert.push(fused);
-                    to_remove.push(one.seq);
-                    to_remove.push(two.seq);
-                }
-                if group[0].offset != group[0].parent_offset {
-                    let mut moved = group[0].clone();
-                    moved.offset = moved.parent_offset;
-                    moved.beat_strength = Some(1.0);
-                    let moved = self.made(moved);
-                    to_remove.push(group[0].seq);
-                    to_insert.push(moved.clone());
-                    group[0] = moved;
-                }
-                let last = group.len() - 1;
-                if group[last].end != group[last].parent_end {
-                    let mut stretched = group[last].clone();
-                    stretched.end = stretched.parent_end;
-                    let stretched = self.made(stretched);
-                    to_remove.push(group[last].seq);
-                    to_insert.push(stretched.clone());
-                    group[last] = stretched;
-                }
-            }
-            // What was put in and taken out again is simply gone, as
-            // music21's `difference_update` leaves it.
-            to_insert.retain(|span| !to_remove.contains(&span.seq));
-            self.spans.extend(to_insert);
-            self.spans.retain(|span| !to_remove.contains(&span.seq));
-            self.sort();
-        }
-    }
-
     /// Takes spans out by where they stand.
     fn drop_places(&mut self, dropped: &[usize]) {
         if dropped.is_empty() {
@@ -813,102 +411,150 @@ impl<'a> Reduction<'a> {
         });
     }
 
-    /// The spans as a part of chords, measure by measure, against the
-    /// score they came from: music21's `tree.toStream.chordified`.
-    ///
-    /// The part is the score's first part as a template -- everything but
-    /// its notes, chords, rests and voices -- the spans are cut at every
-    /// measure's start, and a chord is made for each stretch between two
-    /// time points and *appended* to the measure it falls in, as music21
-    /// appends it.
-    fn chordified(&mut self, score: &Stream) -> Result<Stream> {
-        let template = score
-            .parts()
-            .into_iter()
-            .next()
-            .ok_or_else(|| Error::Analysis("a score with no part to reduce".to_string()))?;
-        let mut measure_offsets: Vec<FloatType> = template
-            .events()
-            .iter()
-            .filter(|event| {
-                event
-                    .element()
-                    .as_stream()
-                    .is_some_and(|inner| inner.kind() == StreamKind::Measure)
+    /// A measure from `start` to `end` cut wherever a span starts or
+    /// stops: music21's `measureSlices`, given the score's time points.
+    fn measure_slices(&self, start: FloatType, end: FloatType, points: &[FloatType]) -> Vec<Slice> {
+        let mut cuts = vec![start];
+        cuts.extend(points.iter().copied().filter(|at| start < *at && *at < end));
+        cuts.push(end);
+        cuts.windows(2)
+            .map(|pair| Slice {
+                offset: op_frac(pair[0] - start),
+                quarter_length: op_frac(pair[1] - pair[0]),
+                at: pair[0],
+                pitches: self.pitch_set(pair[0]),
             })
-            .map(crate::stream::StreamEvent::offset)
-            .collect();
-        measure_offsets.push(score.end_offset());
-        self.split_at(&measure_offsets);
+            .collect()
+    }
 
-        // music21's `chordified` templates the part with no
-        // `removeClasses` of its own, so the dynamics and expressions go
-        // with the notes.
-        let mut out = crate::stream::chordify::template_removing(template, true);
-        let mut filled: Vec<FloatType> = vec![0.0; measure_offsets.len()];
-        let mut points = self.time_points();
-        points.extend(measure_offsets.iter().copied());
-        points.sort_by(FloatType::total_cmp);
-        points.dedup();
-        let mut index = 0;
-        for pair in points.windows(2) {
-            let (offset, end) = (pair[0], pair[1]);
-            while index + 1 < measure_offsets.len() && measure_offsets[index + 1] <= offset {
-                index += 1;
-            }
-            let sounding = self.sounding_at(offset);
-            if sounding.is_empty() {
-                continue;
-            }
-            let spans: Vec<crate::stream::chordify::Span<'_>> = sounding
-                .iter()
-                .map(|place| crate::stream::chordify::Span {
-                    start: self.spans[*place].offset,
-                    end: self.spans[*place].end,
-                    element: &self.spans[*place].element,
-                    part: self.spans[*place].part,
-                })
-                .collect();
-            let element = crate::stream::chordify::make_element(
-                &spans,
-                offset,
-                op_frac(end - offset),
-                &crate::stream::ChordifyOptions::default(),
-            )?;
-            let mut measure = 0;
-            for event in out.events_mut() {
-                if let StreamElement::Stream(inner) = event.element_mut()
-                    && inner.kind() == StreamKind::Measure
-                {
-                    if measure == index {
-                        // Each chord goes after the one before it, from the
-                        // measure's start, which is where music21's
-                        // `append` puts them: what else the template holds
-                        // -- a barline, a layout, a mark -- takes no time
-                        // and does not move them along.
-                        let at = filled[index];
-                        filled[index] = op_frac(at + element.quarter_length());
-                        inner.insert(at, element);
-                        break;
-                    }
-                    measure += 1;
-                }
-            }
-        }
-        Ok(out)
+    /// The chord a kept slice is written as: music21's
+    /// `Verticality.makeElement` with no ties added.
+    fn element_at(&self, slice: &Slice) -> Result<StreamElement> {
+        let spans: Vec<crate::stream::chordify::Span<'_>> = self
+            .sounding_at(slice.at)
+            .into_iter()
+            .map(|place| crate::stream::chordify::Span {
+                start: self.spans[place].offset,
+                end: self.spans[place].end,
+                element: &self.spans[place].element,
+                part: self.spans[place].part,
+            })
+            .collect();
+        let options = crate::stream::ChordifyOptions {
+            add_ties: false,
+            ..crate::stream::ChordifyOptions::default()
+        };
+        crate::stream::chordify::make_element(&spans, slice.at, slice.quarter_length, &options)
     }
 }
 
-/// Every meter the score states, by where it stands.
-fn meters_of(score: &Stream) -> Vec<(FloatType, TimeSignature)> {
-    let mut meters = Vec::new();
-    for (offset, element) in score.leaves() {
-        if let StreamElement::TimeSignature(meter) = element {
-            meters.push((offset, meter.clone()));
+/// What each set of sorted pitch classes sounding in a measure weighs, in
+/// the order they were met: music21's `sliceWeights`.
+///
+/// A slice weighs its length times the meter's accent where it starts,
+/// read past the measure's `padding` so that a pickup is accented as the
+/// end of a bar; the last sounding slice weighs its length alone, and a
+/// dissonant one a tenth of it.
+fn slice_weights(
+    slices: &[Slice],
+    meter: &TimeSignature,
+    padding: FloatType,
+    consonance: &Consonance,
+) -> Result<Vec<(Vec<u8>, FloatType)>> {
+    let sounding: Vec<usize> = (0..slices.len())
+        .filter(|at| !slices[*at].pitches.is_empty())
+        .collect();
+    let mut weights: Vec<(Vec<u8>, FloatType)> = Vec::new();
+    for at in &sounding {
+        let slice = &slices[*at];
+        let mut weight = if Some(at) == sounding.last() {
+            slice.quarter_length
+        } else {
+            let accent = meter.accent_weight_with(op_frac(slice.offset + padding), true, true)?;
+            slice.quarter_length * accent
+        };
+        if !consonance.holds(&slice.pitches) {
+            weight *= 0.1;
+        }
+        let classes = sorted_classes(&slice.pitches);
+        match weights.iter_mut().find(|(known, _)| *known == classes) {
+            Some((_, total)) => *total += weight,
+            None => weights.push((classes, weight)),
         }
     }
-    meters.sort_by(|left, right| left.0.total_cmp(&right.0));
-    meters
+    Ok(weights)
+}
+
+/// The slices a measure keeps, lengthened: music21's
+/// `keepHeaviestSlices` with its `trimBelow` of a quarter.
+///
+/// The `maximum` heaviest sets of classes are kept that weigh at least a
+/// quarter of the heaviest. A kept slice lasts until the next kept slice
+/// of other classes, the first starting the measure; one starting a
+/// sixteenth, thirty-second, sixty-fourth or triplet eighth past a beat
+/// is moved onto the beat.
+fn keep_heaviest_slices(
+    slices: &[Slice],
+    weights: &[(Vec<u8>, FloatType)],
+    maximum: usize,
+) -> Vec<Slice> {
+    let mut sorted: Vec<&(Vec<u8>, FloatType)> = weights.iter().collect();
+    sorted.sort_by(|left, right| right.1.total_cmp(&left.1));
+    sorted.truncate(maximum);
+    let Some(heaviest) = sorted.first().map(|(_, weight)| *weight) else {
+        return Vec::new();
+    };
+    let kept_keys: Vec<&Vec<u8>> = sorted
+        .iter()
+        .filter(|(_, weight)| *weight >= heaviest * 0.25)
+        .map(|(classes, _)| classes)
+        .collect();
+
+    let mut kept: Vec<Slice> = Vec::new();
+    let mut current: Option<Vec<u8>> = None;
+    for slice in slices {
+        let key = slice.key();
+        let end = op_frac(slice.offset + slice.quarter_length);
+        if let Some(classes) = &key
+            && kept_keys.contains(&classes)
+            && key != current
+        {
+            let offset = if kept.is_empty() { 0.0 } else { slice.offset };
+            kept.push(Slice {
+                offset,
+                quarter_length: op_frac(end - offset),
+                ..slice.clone()
+            });
+            current = key;
+        } else if let Some(last) = kept.last_mut() {
+            last.quarter_length = op_frac(end - last.offset);
+        }
+    }
+    for index in 1..kept.len() {
+        let past = op_frac(kept[index].offset - kept[index].offset.trunc());
+        let rounded = (past * 1000.0).round() / 1000.0;
+        if ![0.25, 0.125, 0.333, 0.063, 0.062].contains(&rounded) {
+            continue;
+        }
+        kept[index - 1].quarter_length = op_frac(kept[index - 1].quarter_length - past);
+        kept[index].offset = op_frac(kept[index].offset - past);
+        kept[index].quarter_length = op_frac(kept[index].quarter_length + past);
+    }
+    kept.retain(|slice| slice.quarter_length != 0.0);
+    kept
+}
+
+/// The distinct pitch classes of some notes, in order.
+fn sorted_classes(pitches: &[Pitch]) -> Vec<u8> {
+    let mut classes: Vec<u8> = pitches.iter().map(pitch_class).collect();
+    classes.sort_unstable();
+    classes.dedup();
+    classes
+}
+
+/// A note's pitch class: music21's `pitchClass`.
+fn pitch_class(pitch: &Pitch) -> u8 {
+    (pitch.ps().round_ties_even() as i64).rem_euclid(12) as u8
 }
 
 /// Every interval class a list of notes holds, 1 to 6: music21's
@@ -1025,9 +671,8 @@ pub struct WeighedChord<'a> {
 ///
 /// Two chords of the same classes weigh as one, which is what makes a chord
 /// struck again over a moving bass count towards the chord already sounding
-/// rather than as a chord of its own. The classes come in the order CPython
-/// reads them out of a set, which is what decides whether two voicings are
-/// the same chord at all.
+/// rather than as a chord of its own. The classes are sorted, so two
+/// voicings of them are the one chord.
 #[must_use]
 pub fn measure_chord_weights(
     chords: &[WeighedChord<'_>],
@@ -1208,53 +853,10 @@ pub fn reduce_measure_to_n_chords(
     Ok(answer)
 }
 
-/// The pitch classes a chord holds, as music21 keys its weights by them:
-/// a set, so two chords of the same classes in another order weigh as one
-/// -- which is what makes a chord struck again over a moving bass count
-/// towards the chord already sounding rather than as a chord of its own.
+/// The pitch classes a chord holds, sorted, as music21 keys its weights
+/// by them: two chords of the same classes in any order weigh as one.
 fn pitch_classes(chord: &Chord) -> Vec<u8> {
-    let classes: Vec<u8> = chord
-        .pitches()
-        .iter()
-        .map(|pitch| (pitch.ps().round_ties_even() as i64).rem_euclid(12) as u8)
-        .collect();
-    python_set_order(&classes)
-}
-
-/// Pitch classes in the order music21 reads them out of a set, which is
-/// CPython's own order for a set of small integers.
-///
-/// music21 keys a measure's weights by `tuple({p.pitchClass for p in ...})`,
-/// and that tuple's order is the order of the hash table the set was built
-/// in -- so two voicings of the same classes weigh as *one* chord where
-/// their tables came out alike and as *two* where they did not, which
-/// decides what a measure keeps. A set of up to four classes lives in a
-/// table of eight slots, each class in slot `class & 7` or, where that is
-/// taken, in the slot CPython's perturbation walks to next; the fifth class
-/// grows the table to thirty-two slots, where every class has a slot of its
-/// own and the order is ascending.
-fn python_set_order(classes: &[u8]) -> Vec<u8> {
-    let mut distinct: Vec<u8> = Vec::new();
-    for class in classes {
-        if !distinct.contains(class) {
-            distinct.push(*class);
-        }
-    }
-    if distinct.len() >= 5 {
-        distinct.sort_unstable();
-        return distinct;
-    }
-    let mut table: [Option<u8>; 8] = [None; 8];
-    for class in &distinct {
-        let mut index = usize::from(*class) & 7;
-        while table[index].is_some() {
-            // A class is its own hash and is smaller than 32, so CPython's
-            // perturbation adds nothing to the walk.
-            index = (index * 5 + 1) & 7;
-        }
-        table[index] = Some(*class);
-    }
-    table.into_iter().flatten().collect()
+    sorted_classes(&chord.pitches())
 }
 
 /// A chord's accidentals left undecided, as music21 leaves a kept chord's:
@@ -1313,5 +915,143 @@ fn close_positions(stream: &mut Stream) {
             StreamElement::Chord(chord) => *chord = chord.closed_position(Some(4), false),
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tinynotation::from_tiny_notation;
+
+    fn score_of(lines: &[&str]) -> Stream {
+        let mut score = Stream::with_kind(StreamKind::Score);
+        for line in lines {
+            score.insert(0.0, from_tiny_notation(line).unwrap());
+        }
+        score
+    }
+
+    /// Each measure of the reduction as its chords: offset, length and
+    /// the notes.
+    fn chords_of(reduction: &Stream) -> Vec<Vec<(FloatType, FloatType, Vec<String>)>> {
+        let part = reduction.parts().into_iter().next().unwrap();
+        part.measures()
+            .into_iter()
+            .map(|measure| {
+                measure
+                    .events()
+                    .iter()
+                    .filter_map(|event| match event.element() {
+                        StreamElement::Chord(chord) => Some((
+                            event.offset(),
+                            chord.duration().map_or(0.0, Duration::quarter_length),
+                            chord
+                                .pitches()
+                                .iter()
+                                .map(Pitch::name_with_octave)
+                                .collect(),
+                        )),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_passing_dissonance_is_dropped() {
+        let score = score_of(&["4/4 e2 f4 e4 g2 r2", "4/4 C1 C2 r2"]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            chords_of(&reduction),
+            [
+                vec![(0.0, 4.0, names(&["C3", "E4"]))],
+                vec![(0.0, 4.0, names(&["C3", "G4"]))],
+            ]
+        );
+    }
+
+    #[test]
+    fn a_bass_gap_is_filled_up_to_the_next_span() {
+        let score = score_of(&[
+            "3/4 r8 r16 d'16 e'16 r16 r8 r4",
+            "3/4 g8 G4 r8 r4",
+            "3/4 G8 r8 r4 r16 G16 r8",
+        ]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            chords_of(&reduction),
+            [vec![(0.0, 3.0, names(&["G3", "G4"]))]]
+        );
+    }
+
+    #[test]
+    fn chords_are_chosen_from_slices_of_the_score() {
+        let score = score_of(&["4/4 c4 d4 e4 f4 g1", "4/4 C2 G,2 C1"]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            chords_of(&reduction),
+            [
+                vec![
+                    (0.0, 2.0, names(&["C3", "C4"])),
+                    (2.0, 2.0, names(&["C3", "E4"])),
+                ],
+                vec![(0.0, 2.0, names(&["C3", "G4"])), (2.0, 2.0, names(&["G4"]))],
+            ]
+        );
+        let score = score_of(&["4/4 g4 a8 b8 c'2", "4/4 e4 f4 e2", "4/4 C1"]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        assert_eq!(
+            chords_of(&reduction),
+            [vec![
+                (0.0, 2.0, names(&["C3", "E4", "G4"])),
+                (2.0, 2.0, names(&["C3", "E4", "C5"])),
+            ]]
+        );
+    }
+
+    #[test]
+    fn the_first_parts_measures_are_reduced() {
+        let score = score_of(&["4/4 e1 f1", "2/4 C2 D2 C2 D2"]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let part = reduction.parts().into_iter().next().unwrap();
+        let offsets: Vec<FloatType> = part
+            .events()
+            .iter()
+            .filter(|event| {
+                event
+                    .element()
+                    .as_stream()
+                    .is_some_and(|inner| inner.kind() == StreamKind::Measure)
+            })
+            .map(crate::stream::StreamEvent::offset)
+            .collect();
+        assert_eq!(offsets, [0.0, 4.0]);
+    }
+
+    #[test]
+    fn pitch_classes_in_any_order_weigh_as_one() {
+        let half = || Duration::half();
+        let first = Chord::new("B3 D#4").unwrap().with_duration(half());
+        let second = Chord::new("D#3 B3").unwrap().with_duration(half());
+        let chords = [
+            WeighedChord {
+                offset: 0.0,
+                chord: &first,
+                beat_strength: 1.0,
+            },
+            WeighedChord {
+                offset: 2.0,
+                chord: &second,
+                beat_strength: 0.5,
+            },
+        ];
+        assert_eq!(
+            measure_chord_weights(&chords, ChordWeight::Length),
+            [(vec![3, 11], 4.0)]
+        );
     }
 }

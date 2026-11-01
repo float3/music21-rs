@@ -1,6 +1,12 @@
 # Unreleased
 
+`harte` 0.8.0 depends on this release.
+
 ## breaking changes
+
+- **`ReductionOptions::remove_dissonances`** is new, so a
+  `ReductionOptions` written out field by field needs it; music21's
+  `removeDissonances` is off by default.
 
 - **A key's mode is one music21 builds a scale for**: `Key::from_tonic_mode`,
   and the package's `Key(tonic, mode)` and `mode` setter, refuse any mode
@@ -35,6 +41,14 @@
   inversion.
 
 ## fixed
+
+- **music21's fixes followed**: the music21 submodule is at the fork's
+  master c815254cb, and the crate gives its answers. `reduce_chords`
+  chooses each measure's chords from slices of the score's notes, by
+  length, beat strength and consonance, on the first part's measures,
+  and removes dissonances only when asked; a measure's chord weights are
+  keyed by sorted pitch classes, so two voicings of one chord weigh as
+  one. The wheel's `ChordReducer.run` takes `removeDissonances`.
 
 - **Crafted input is an error and not a crash**: XML nested more than 256
   deep (MusicXML, MEI, Capella, MuseScore) and Clercq-Temperley rules that

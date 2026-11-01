@@ -2,13 +2,19 @@
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
 # --manifest-path python-parity/Cargo.toml --test doctest_reducechords`; the test
 # fails when one of these stops passing or one passes that is not listed.
-# `[not_passing]`, kept by the rewrite, names deliberate failures and why.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why;
+# `[optional]` names those that need a package the harness may lack.
 
 passing = [
     "music21.analysis.reduceChords.ChordReducer.computeMeasureChordWeights",
     "music21.analysis.reduceChords.ChordReducer.reduceMeasureToNChords",
+    "music21.analysis.reduceChords.ChordReducer.run",
     "music21.analysis.reduceChords.testMeasureStream1",
 ]
 
 [not_passing]
 "music21.analysis.reduceChords.ChordReducer.collapseArpeggios" = "refused by design: it walks music21's mutable timespan tree while editing it"
+"music21.analysis.reduceChords.ChordReducer.isConsonant" = "not ported: run weighs consonance inside the crate, and the facade has no member for it yet"
+"music21.analysis.reduceChords.ChordReducer.keepHeaviestSlices" = "refused by design: its slices hold music21's Verticality objects from the mutable timespan tree"
+"music21.analysis.reduceChords.ChordReducer.measureSlices" = "refused by design: it answers music21's Verticality objects from the mutable timespan tree"
+"music21.analysis.reduceChords.ChordReducer.sliceWeights" = "refused by design: its slices hold music21's Verticality objects from the mutable timespan tree"
