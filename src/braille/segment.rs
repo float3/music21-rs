@@ -12,9 +12,10 @@ use std::collections::{BTreeMap, VecDeque};
 
 use super::SegmentDivision;
 use super::basic::{
-    self, NoteContext, Transcription, barline_to_braille, chord_to_braille, clef_to_braille,
-    dynamic_to_braille, note_to_braille, number_to_braille, rest_to_braille,
-    text_expression_to_braille, transcribe_heading, transcribe_signatures, yield_dots,
+    self, NoteContext, Transcription, barline_to_braille, chord_symbol_to_braille,
+    chord_to_braille, clef_to_braille, dynamic_to_braille, note_to_braille, number_to_braille,
+    rest_to_braille, text_expression_to_braille, transcribe_heading, transcribe_signatures,
+    yield_dots,
 };
 use super::lookup::{self, symbol};
 use super::text::{BrailleKeyboard, BrailleText};
@@ -287,7 +288,7 @@ pub(crate) fn element_repr(element: &StreamElement) -> String {
 }
 
 /// A pitch's name as music21 spells it, a flat as `-`.
-fn music21_pitch_name(pitch: &Pitch) -> String {
+pub(crate) fn music21_pitch_name(pitch: &Pitch) -> String {
     let modifier = match pitch
         .written_accidental()
         .map(|accidental| accidental.name())
@@ -628,8 +629,10 @@ pub fn prepare_beamed_notes(
 pub struct SegmentOptions {
     /// Whether a key signature cancels the one before it.
     pub cancel_outgoing_key_sig: bool,
-    /// Whether chords are written from the top down; nothing reads as
-    /// upward until a clef says otherwise.
+    /// Whether chords start out written from the top down, as they do
+    /// when this is nothing. A bass or tenor clef then turns them upward
+    /// and a treble or alto clef downward, in its segment and those after
+    /// it.
     pub descending_chords: Option<bool>,
     /// How many dummy rests open each segment.
     pub dummy_rest_length: Option<usize>,
@@ -774,7 +777,7 @@ pub struct BrailleSegment {
     pub options: SegmentOptions,
     /// Whether chords are written from the top down, as the clefs met so
     /// far say.
-    pub descending_chords: Option<bool>,
+    pub descending_chords: bool,
     /// Whether the segment ends in the middle of a measure.
     pub end_hyphen: bool,
     /// Whether it begins in the middle of a measure.
@@ -788,7 +791,7 @@ impl BrailleSegment {
         Self {
             groupings: BTreeMap::new(),
             options,
-            descending_chords: options.descending_chords,
+            descending_chords: options.descending_chords.unwrap_or(true),
             end_hyphen: false,
             begins_mid_measure: false,
             contexts: contexts.to_vec(),
@@ -1038,10 +1041,10 @@ impl BrailleSegment {
                 {
                     match clef.kind().class_name() {
                         "TrebleClef" | "Treble8vbClef" | "Treble8vaClef" | "AltoClef" => {
-                            *descending = Some(true);
+                            *descending = true;
                         }
                         "BassClef" | "Bass8vbClef" | "Bass8vaClef" | "TenorClef" => {
-                            *descending = Some(false);
+                            *descending = false;
                         }
                         _ => {}
                     }
@@ -1057,7 +1060,7 @@ impl BrailleSegment {
             }
             grouping.key_signature = current_key;
             grouping.time_signature = current_meter.clone();
-            grouping.descending_chords = *descending;
+            grouping.descending_chords = Some(*descending);
             grouping.show_clef_signs = self.options.show_clef_signs;
             grouping.upper_first_in_note_fingering = self.options.upper_first_in_note_fingering;
             previous = Some(key);
@@ -1072,9 +1075,11 @@ impl BrailleSegment {
         }
     }
 
-    /// Runs of three or more notes with one articulation written with it
-    /// doubled on the first and once on the last, and a staccato or tenuto
-    /// over a tie written as a short slur: music21's `fixArticulations`.
+    /// Runs of four or more notes with one articulation written with it
+    /// doubled on the first, left off the notes between and once on the
+    /// last, and a staccato or tenuto over a tie between two of the
+    /// segment's notes written as a short slur: music21's
+    /// `fixArticulations`.
     pub fn fix_articulations(&mut self) {
         // music21's `consolidate`: each run of note groupings with nothing
         // else between, as one.
@@ -1098,18 +1103,12 @@ impl BrailleSegment {
         }
         for notes in runs {
             for start in 0..notes.len() {
-                let mut article = 0;
-                while let Some(articulation) = self
-                    .note(notes[start])
-                    .articulations()
-                    .get(article)
-                    .cloned()
-                {
-                    article += 1;
+                let articulations = self.note(notes[start]).articulations().to_vec();
+                for articulation in &articulations {
                     if articulation.is_a("TechnicalIndication") && !articulation.is_a("Bowing") {
                         continue;
                     }
-                    self.fix_one_articulation(&articulation, &notes, start);
+                    self.fix_one_articulation(articulation, &notes, start);
                 }
             }
         }
@@ -1140,21 +1139,23 @@ impl BrailleSegment {
         start: usize,
     ) {
         let name = articulation.name();
-        let count = notes.len() as i64;
-        let wrap = |index: i64| notes[(((index % count) + count) % count) as usize];
         if (articulation.is_a("Staccato") || articulation.is_a("Tenuto"))
             && let Some(tie) = self.note(notes[start]).tie().map(|tie| tie.tie_type())
         {
+            // A tie to a note outside these notes, such as one across a
+            // segment break, stays a tie.
             if tie == crate::notation::TieType::Stop {
-                let before = wrap(start as i64 - 1);
-                self.note_mut(before).set_tie(None);
-                self.element_mut(before).context.short_slur = true;
-            } else {
-                let after = wrap(start as i64 + 1);
-                self.note_mut(after).set_tie(None);
+                if start > 0 {
+                    let before = notes[start - 1];
+                    self.note_mut(before).set_tie(None);
+                    self.element_mut(before).context.short_slur = true;
+                    self.note_mut(notes[start]).set_tie(None);
+                }
+            } else if start + 1 < notes.len() {
+                self.note_mut(notes[start + 1]).set_tie(None);
                 self.element_mut(notes[start]).context.short_slur = true;
+                self.note_mut(notes[start]).set_tie(None);
             }
-            self.note_mut(notes[start]).set_tie(None);
         }
         let mut sequential = 0;
         for &place in &notes[start + 1..] {
@@ -1176,16 +1177,9 @@ impl BrailleSegment {
             .articulations_mut()
             .push(articulation.clone());
         for &place in &notes[start + 1..start + sequential] {
-            let articulations = self.note_mut(place).articulations_mut();
-            // music21 removes while iterating, which skips the element after
-            // each one removed.
-            let mut index = 0;
-            while index < articulations.len() {
-                if articulations[index].name() == name {
-                    drop(articulations.remove(index));
-                }
-                index += 1;
-            }
+            self.note_mut(place)
+                .articulations_mut()
+                .retain(|other| other.name() != name);
         }
     }
 }
@@ -1199,8 +1193,12 @@ pub fn find_segments(
 ) -> Vec<BrailleSegment> {
     let contexts = prepare_slurred_notes(part, &options);
     let mut segments = get_raw_segments(part, hand, &contexts, options);
+    // The direction a clef sets carries into the segments after it.
+    let mut descending = options.descending_chords.unwrap_or(true);
     for segment in &mut segments {
+        segment.descending_chords = descending;
         segment.add_grouping_attributes();
+        descending = segment.descending_chords;
         segment.fix_articulations();
     }
     segments
@@ -1231,22 +1229,17 @@ impl Default for NoteGroupingTranscriber {
 impl NoteGroupingTranscriber {
     /// A grouping in braille, its elements' English written onto them, and
     /// a music hyphen where it ends with one: music21's `transcribeGroup`.
-    ///
-    /// # Errors
-    ///
-    /// Empty text before something dotted after it, which music21 cannot
-    /// look at the end of.
-    pub fn transcribe_group(&mut self, grouping: &mut BrailleElementGrouping) -> Result<String> {
+    pub fn transcribe_group(&mut self, grouping: &mut BrailleElementGrouping) -> String {
         self.previous_note = None;
         self.previous_element = None;
         self.trans = Vec::new();
         for index in 0..grouping.elements.len() {
-            self.transcribe_one_element(grouping, index)?;
+            self.transcribe_one_element(grouping, index);
         }
         if grouping.with_hyphen {
             self.trans.push(symbol("music_hyphen"));
         }
-        Ok(self.trans.concat())
+        self.trans.concat()
     }
 
     fn octave_shown(&self, pitch: &Pitch) -> bool {
@@ -1271,23 +1264,11 @@ impl NoteGroupingTranscriber {
     /// written depends on what the grouping says -- the chords' direction,
     /// whether clefs are shown, which way a fingering is read -- and on
     /// the element before it.
-    ///
-    /// # Errors
-    ///
-    /// As [`Self::transcribe_group`].
-    pub fn transcribe_element(
-        &mut self,
-        grouping: &mut BrailleElementGrouping,
-        index: usize,
-    ) -> Result<()> {
-        self.transcribe_one_element(grouping, index)
+    pub fn transcribe_element(&mut self, grouping: &mut BrailleElementGrouping, index: usize) {
+        self.transcribe_one_element(grouping, index);
     }
 
-    fn transcribe_one_element(
-        &mut self,
-        grouping: &mut BrailleElementGrouping,
-        index: usize,
-    ) -> Result<()> {
+    fn transcribe_one_element(&mut self, grouping: &mut BrailleElementGrouping, index: usize) {
         let descending = grouping.descending_chords.unwrap_or(false);
         let show_clef_signs = grouping.show_clef_signs;
         let upper_first = grouping.upper_first_in_note_fingering;
@@ -1315,22 +1296,22 @@ impl NoteGroupingTranscriber {
                     written
                 })
             }
-            StreamElement::ChordSymbol(symbol) => symbol.pitches().ok().and_then(|pitches| {
-                let mut chord = crate::chord::Chord::new(pitches.as_slice()).ok()?;
-                chord.set_duration(symbol.duration().clone());
-                let mut sorted = pitches.clone();
+            StreamElement::ChordSymbol(chord_symbol) => {
+                let mut sorted = chord_symbol.pitches().unwrap_or_default();
                 sorted.sort_by(|left, right| left.ps().total_cmp(&right.ps()));
                 let chosen = if descending {
                     sorted.last()
                 } else {
                     sorted.first()
                 }
-                .cloned()?;
-                let shown = self.octave_shown(&chosen);
-                let written = chord_to_braille(&chord, descending, shown);
-                self.previous_note = Some(chosen);
-                Some(written)
-            }),
+                .cloned();
+                chosen.and_then(|pitch| {
+                    let shown = self.octave_shown(&pitch);
+                    let written = chord_symbol_to_braille(chord_symbol, descending, shown)?;
+                    self.previous_note = Some(pitch);
+                    Some(written)
+                })
+            }
             StreamElement::Dynamic(dynamic) => {
                 self.previous_note = None;
                 self.show_leading_octave = true;
@@ -1357,9 +1338,8 @@ impl NoteGroupingTranscriber {
             item.english = Some(written.english);
             self.trans.push(written.braille);
         }
-        self.optionally_add_dot_to_previous(grouping, index)?;
+        self.optionally_add_dot_to_previous(grouping, index);
         self.previous_element = Some(index);
-        Ok(())
     }
 
     /// A dot after a dynamic, a clef written out, or text not ending in a
@@ -1369,33 +1349,30 @@ impl NoteGroupingTranscriber {
         &mut self,
         grouping: &mut BrailleElementGrouping,
         index: usize,
-    ) -> Result<()> {
+    ) {
         let Some(previous) = self.previous_element else {
-            return Ok(());
+            return;
         };
         let Some(last) = self.trans.last() else {
-            return Ok(());
+            return;
         };
         if matches!(
             grouping.elements[index].element,
             StreamElement::Dynamic(_) | StreamElement::TextExpression(_)
         ) {
-            return Ok(());
+            return;
         }
         let dotted = match &grouping.elements[previous].element {
             StreamElement::Dynamic(_) => true,
             StreamElement::Clef(_) => grouping.show_clef_signs,
-            StreamElement::TextExpression(text) => match text.content().chars().last() {
-                Some(character) => character != '.',
-                None => return Err(Error::Notation("string index out of range".to_string())),
-            },
+            StreamElement::TextExpression(text) => !text.content().ends_with('.'),
             _ => false,
         };
         if !dotted {
-            return Ok(());
+            return;
         }
         let Some(first) = last.chars().next() else {
-            return Ok(());
+            return;
         };
         if let Some(dot) = yield_dots(first).into_iter().next() {
             let at = self.trans.len() - 1;
@@ -1405,20 +1382,15 @@ impl NoteGroupingTranscriber {
                 .get_or_insert_with(Vec::new)
                 .push(format!("Dot 3 {dot}"));
         }
-        Ok(())
     }
 }
 
 /// A grouping in braille from a fresh transcriber: music21's
 /// `transcribeNoteGrouping`.
-///
-/// # Errors
-///
-/// What [`NoteGroupingTranscriber::transcribe_group`] refuses.
 pub fn transcribe_note_grouping(
     grouping: &mut BrailleElementGrouping,
     show_leading_octave: bool,
-) -> Result<String> {
+) -> String {
     let mut transcriber = NoteGroupingTranscriber {
         show_leading_octave,
         ..NoteGroupingTranscriber::default()
@@ -1530,10 +1502,6 @@ fn split_with_sources(
     // its beamed notes marked again.
     let rebeam =
         |indices: &[usize], rest_at: FloatType, rest_length: FloatType| -> Result<Vec<Rebeamed>> {
-            // music21 makes the rest with `quarterLength=`, which it passes over
-            // when nought, leaving a quarter rest that may overfill the bar and
-            // keep it from being beamed again.
-            let rest_length = if rest_length == 0.0 { 1.0 } else { rest_length };
             let rest = Rest::new(Duration::new(rest_length.max(0.0))?);
             // The measure's events in the order a stream sorts them: by offset,
             // in the order they were put in.
@@ -1923,7 +1891,7 @@ impl SegmentWriter {
             } else {
                 String::new()
             };
-            braille.push_str(&transcribe_note_grouping(&mut inner, true)?);
+            braille.push_str(&transcribe_note_grouping(&mut inner, true));
             written.push((element.leaf, voice_english_of(voice, element.leaf, &inner)));
             self.text.add_inaccord(&braille)?;
             seen_voice = true;
@@ -2002,7 +1970,7 @@ impl SegmentWriter {
             show_leading_octave: show_leading,
             ..NoteGroupingTranscriber::default()
         };
-        let mut braille = transcriber.transcribe_group(&mut grouping)?;
+        let mut braille = transcriber.transcribe_group(&mut grouping);
         let add_space = self
             .text
             .optional_add_keyboard_symbols_and_dots(Some(&braille))?;
@@ -2021,7 +1989,7 @@ impl SegmentWriter {
             if !split {
                 if !show_leading && !suppress {
                     transcriber.show_leading_octave = true;
-                    braille = transcriber.transcribe_group(&mut grouping)?;
+                    braille = transcriber.transcribe_group(&mut grouping);
                 }
                 self.text.current_line().last_hyphen_to_space();
                 self.text.add_to_new_line(&braille)?;
@@ -2049,7 +2017,7 @@ impl SegmentWriter {
             };
             transcriber.show_leading_octave = show_leading_octave_on_first;
             first.with_hyphen = true;
-            first_braille = transcriber.transcribe_group(&mut first)?;
+            first_braille = transcriber.transcribe_group(&mut first);
             // The halves hold the grouping's own elements in music21, so what
             // writing the first half says of each stays on it.
             for (element, source) in first.elements.iter().zip(sources) {
@@ -2067,7 +2035,7 @@ impl SegmentWriter {
         }
         let (first, (mut second, second_sources)) = halves.expect("at least one split is tried");
         transcriber.show_leading_octave = !segment.options.suppress_octave_marks;
-        let second_braille = transcriber.transcribe_group(&mut second)?;
+        let second_braille = transcriber.transcribe_group(&mut second);
         for (element, source) in second.elements.iter().zip(second_sources) {
             grouping.elements[source].english = element.english.clone();
         }
@@ -2211,6 +2179,9 @@ impl BrailleGrandSegment {
                             stored_right = Some(key);
                         }
                     } else {
+                        if let Some(right) = stored_right {
+                            out.push((Some(right), None));
+                        }
                         stored_right = Some(key);
                     }
                 }
@@ -2226,6 +2197,9 @@ impl BrailleGrandSegment {
                             stored_left = Some(key);
                         }
                     } else {
+                        if let Some(left) = stored_left {
+                            out.push((None, Some(left)));
+                        }
                         stored_left = Some(key);
                     }
                 }
@@ -2262,13 +2236,10 @@ impl BrailleGrandSegment {
         let mut tempo: Option<crate::tempo::TempoText> = None;
         let mut mark: Option<crate::tempo::MetronomeMark> = None;
         let mut places: [Option<(SegmentKey, usize)>; 4] = [None; 4];
-        while let Some(&(right, _)) = pairs.front() {
-            // music21 looks the right hand's grouping up by a key that may be
-            // nothing, which finds nothing rather than failing, and then
-            // reads the missing key's affinity.
-            let use_key = right.ok_or_else(|| {
-                Error::Notation("'NoneType' object has no attribute 'affinity'".to_string())
-            })?;
+        while let Some(&(right, left)) = pairs.front() {
+            let Some(use_key) = right.or(left) else {
+                break;
+            };
             if use_key.affinity > Affinity::MetronomeMark {
                 break;
             }
@@ -2277,8 +2248,7 @@ impl BrailleGrandSegment {
             match use_key.affinity {
                 Affinity::Signature => {
                     // Each element read by what it is, the first key and
-                    // the first meter of the heading winning: music21
-                    // 36d9144c0, which reads a lone key signature as one.
+                    // the first meter of the heading winning.
                     for (index, held) in grouping.elements.iter().enumerate() {
                         if sharps.is_none()
                             && let Some(found) = sharps_of(&held.element)
@@ -2374,12 +2344,12 @@ impl BrailleGrandSegment {
                 inner.descending_chords = descending;
                 inner.show_clef_signs = clefs;
                 inner.upper_first_in_note_fingering = upper;
-                voices.push(transcribe_note_grouping(&mut inner, true)?);
+                voices.push(transcribe_note_grouping(&mut inner, true));
                 element.voice_english = voice_english_of(voice, element.leaf, &inner);
             }
             Ok(voices.join(&symbol("full_inaccord")))
         } else {
-            transcribe_note_grouping(grouping, true)
+            Ok(transcribe_note_grouping(grouping, true))
         }
     }
 

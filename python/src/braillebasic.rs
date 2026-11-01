@@ -204,6 +204,12 @@ fn chordToBraille(
             music21Chord,
             &basic::chord_to_braille(&chord, descending, showOctave),
         ),
+        StreamElement::ChordSymbol(chord_symbol) => {
+            match basic::chord_symbol_to_braille(&chord_symbol, descending, showOctave) {
+                Some(written) => transcribed(music21Chord, &written),
+                None => refuse(music21Chord, "chord"),
+            }
+        }
         _ => refuse(music21Chord, "chord"),
     }
 }

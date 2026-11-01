@@ -8,6 +8,7 @@ use super::lookup::{self, symbol};
 use crate::{
     bar::Barline,
     chord::Chord,
+    chordsymbol::ChordSymbol,
     clef::Clef,
     defaults::{FloatType, IntegerType},
     duration::Duration,
@@ -171,6 +172,66 @@ fn handle_pitch_with_accidental(pitch: &Pitch, braille: &mut String, english: &m
     }
 }
 
+/// A chord symbol written as the chord it spells, for its own length:
+/// music21's `chordToBraille` given a `ChordSymbol`. A symbol as written
+/// takes no time and so gives the exception sign, its English naming the
+/// symbol by its figure. Nothing for a symbol that spells no pitches.
+pub fn chord_symbol_to_braille(
+    chord_symbol: &ChordSymbol,
+    descending: bool,
+    show_octave: bool,
+) -> Option<Transcription> {
+    let mut chord = Chord::new(chord_symbol.pitches().ok()?.as_slice()).ok()?;
+    chord.set_duration(chord_symbol.duration().clone());
+    let mut written = chord_to_braille(&chord, descending, show_octave);
+    if written.braille == symbol("basic_exception") {
+        written.english = vec![format!(
+            "<music21.harmony.ChordSymbol {}> None",
+            music21_figure(chord_symbol)
+        )];
+    }
+    Some(written)
+}
+
+/// The figure music21's `repr` shows for a chord symbol. A symbol whose
+/// figure is its root, its kind's abbreviation and its bass, as one given
+/// by root and kind is, shows music21's `findFigure`: the root and bass
+/// spelled as music21 spells them, a flat as `-`, and each chord-step
+/// modification as ` add 2` before the bass. Any other shows its figure.
+fn music21_figure(chord_symbol: &ChordSymbol) -> String {
+    use super::segment::music21_pitch_name;
+    use crate::chordsymbol::{alter_to_chord_symbol_string, current_abbreviation_for_kind};
+    let root = chord_symbol.root();
+    let bass = chord_symbol
+        .bass()
+        .filter(|bass| bass.name() != root.name());
+    let Some(abbreviation) = chord_symbol.kind().and_then(current_abbreviation_for_kind) else {
+        return chord_symbol.figure().to_string();
+    };
+    let mut given = format!("{}{abbreviation}", root.name());
+    if let Some(bass) = bass {
+        given.push('/');
+        given.push_str(&bass.name());
+    }
+    if chord_symbol.figure() != given {
+        return chord_symbol.figure().to_string();
+    }
+    let mut figure = format!("{}{abbreviation}", music21_pitch_name(root));
+    for modification in chord_symbol.chord_step_modifications() {
+        figure.push_str(&format!(
+            " {} {}{}",
+            modification.modification_type().music21_name(),
+            alter_to_chord_symbol_string(modification.interval().semitones().round() as IntegerType),
+            modification.degree()
+        ));
+    }
+    if let Some(bass) = bass {
+        figure.push('/');
+        figure.push_str(&music21_pitch_name(bass));
+    }
+    figure
+}
+
 /// The distance in steps between two pitches, counting both: music21's
 /// undirected generic interval.
 fn generic_distance(from: &Pitch, to: &Pitch) -> i64 {
@@ -194,14 +255,9 @@ pub fn chord_to_braille(chord: &Chord, descending: bool, show_octave: bool) -> T
     let Some(base) = pitches.first().cloned() else {
         return Transcription::exception(vec![format!("{direction} Chord None")]);
     };
-    let length = chord.duration().map_or(1.0, Duration::quarter_length);
     let mut first = Note::from_pitch(base.clone());
-    // music21 makes the note with `quarterLength=` the chord's, which it
-    // passes over when nought, leaving a quarter.
-    if length != 0.0
-        && let Ok(duration) = Duration::new(length)
-    {
-        first.set_duration(duration);
+    if let Some(duration) = chord.duration() {
+        first.set_duration(duration.clone());
     }
     let written = note_to_braille(&first, show_octave, true, NoteContext::default());
     if written.braille == symbol("basic_exception") {
@@ -547,13 +603,19 @@ pub fn note_to_braille(
     let tuplets = duration.tuplets();
     if let Some(tuplet) = tuplets.first() {
         if context.beam_start {
-            // music21 marks a tuplet whose number is hidden, and writes it
-            // with the transcriber's sign, where its number is shown as
-            // `'none'`; its reader hides a number as `None`, so every
-            // tuplet is written as shown.
-            let last = if tuplet.full_name() == "Triplet" {
+            let hidden = tuplet.actual_show().is_none();
+            let last = if tuplet.full_name() == "Triplet" && !hidden {
                 symbol("triplet")
             } else {
+                if hidden {
+                    let sign = symbol("transcriber-added_sign");
+                    push(
+                        &mut braille,
+                        &mut english,
+                        sign.clone(),
+                        format!("transcriber-added {sign}"),
+                    );
+                }
                 let number = number_to_braille(&tuplet.actual().to_string(), false, true)
                     .unwrap_or_default();
                 format!("{}{number}{}", symbol("tuplet_prefix"), symbol("dot"))
@@ -1287,6 +1349,30 @@ mod tests {
         assert_eq!(written.english, ["Octave 4 ⠐", "C quarter ⠹", "Dot ⠄"]);
         let rest = Rest::new(Duration::new(2.0)?);
         assert_eq!(rest_to_braille(&rest).braille, "⠥");
+        Ok(())
+    }
+
+    /// A chord is written for its own length; a chord symbol as written
+    /// takes none and gives the exception sign, named by its figure.
+    #[test]
+    fn a_chord_is_written_for_its_own_length() -> Result<()> {
+        let eighth = Chord::new("C5 E5")?.with_duration(Duration::new(0.5)?);
+        assert_eq!(chord_to_braille(&eighth, true, true).braille, "⠨⠋⠬");
+        let written = chord_symbol_to_braille(&ChordSymbol::parse("C")?, true, true)
+            .expect("C spells pitches");
+        assert_eq!(written.braille, symbol("basic_exception"));
+        assert_eq!(written.english, ["<music21.harmony.ChordSymbol C> None"]);
+        let mut flat = ChordSymbol::from_kind(Pitch::from_name("B-")?, "major-sixth", None)?;
+        flat.add_chord_step_modification(crate::chordsymbol::ChordStepModification::new(
+            crate::chordsymbol::ChordStepModificationType::Add,
+            9,
+            -1,
+        )?);
+        let written = chord_symbol_to_braille(&flat, true, true).expect("B-6 spells pitches");
+        assert_eq!(
+            written.english,
+            ["<music21.harmony.ChordSymbol B-6 add b9> None"]
+        );
         Ok(())
     }
 }

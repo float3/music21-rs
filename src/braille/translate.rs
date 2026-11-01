@@ -410,4 +410,117 @@ mod tests {
         assert_eq!(divided(1, 1.0, SegmentDivision::Optional), whole);
         assert_eq!(divided(1, 0.0, SegmentDivision::Required), whole);
     }
+
+    /// One measure of a whole note, with a key of two sharps and four-four
+    /// where `signed`.
+    fn one_measure(name: &str, signed: bool) -> Stream {
+        let mut staff = Stream::with_kind(StreamKind::PartStaff);
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(1);
+        if signed {
+            measure.push(KeySignature::new(2));
+            measure.push(crate::TimeSignature::new(4, 4).unwrap());
+        }
+        measure.push(
+            Note::from_name(name)
+                .unwrap()
+                .with_duration(Duration::new(4.0).unwrap()),
+        );
+        staff.insert(0.0, measure);
+        staff
+    }
+
+    /// The signatures of either hand alone head the two hands.
+    #[test]
+    fn either_hands_signatures_head_the_keyboard() {
+        for left_signed in [false, true] {
+            let written = keyboard_parts_to_braille(
+                &one_measure("C5", !left_signed),
+                &one_measure("C3", left_signed),
+                &BrailleOptions::default(),
+            )
+            .unwrap();
+            let heading = written.lines().next().unwrap().trim_matches('\u{2800}');
+            assert_eq!(heading, "⠩⠩⠼⠙⠲");
+        }
+    }
+
+    /// Four eighths, each with `counts` staccatos, as one measure of a
+    /// part, cut into segments.
+    fn staccato_counts(counts: &[usize]) -> Vec<usize> {
+        use crate::articulations::{Articulation, ArticulationKind};
+        let mut part = Stream::with_kind(StreamKind::Part);
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(1);
+        for &count in counts {
+            let mut note = Note::from_name("C4")
+                .unwrap()
+                .with_duration(Duration::new(0.5).unwrap());
+            for _ in 0..count {
+                note.articulations_mut()
+                    .push(Articulation::of_kind(ArticulationKind::Staccato));
+            }
+            measure.push(note);
+        }
+        part.insert(0.0, measure);
+        let segments = find_segments(&part, None, SegmentOptions::default());
+        segments
+            .iter()
+            .flat_map(|segment| segment.groupings.values())
+            .flat_map(|grouping| &grouping.elements)
+            .filter_map(|element| match &element.element {
+                StreamElement::Note(note) => Some(note.articulations().len()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Four staccatos in a row: two on the first note, none on those
+    /// between and one on the last; three in a row are left as they are.
+    #[test]
+    fn four_staccatos_in_a_row_are_doubled_on_the_first() {
+        assert_eq!(staccato_counts(&[1, 1, 1, 1]), [2, 0, 0, 1]);
+        assert_eq!(staccato_counts(&[1, 2, 1, 1]), [2, 0, 0, 1]);
+        assert_eq!(staccato_counts(&[1, 1, 1]), [1, 1, 1]);
+    }
+
+    /// A chord's direction set by a clef carries into the next segment;
+    /// with no clef, chords are written from the top down.
+    #[test]
+    fn a_clefs_chord_direction_carries_into_the_next_segment() {
+        for (clef, expected) in [
+            (Some(crate::Clef::treble()), true),
+            (Some(crate::Clef::bass()), false),
+            (None, true),
+        ] {
+            let mut part = Stream::with_kind(StreamKind::Part);
+            for number in 1..=3 {
+                let mut measure = Stream::with_kind(StreamKind::Measure);
+                measure.set_number(number);
+                if number == 1
+                    && let Some(clef) = &clef
+                {
+                    measure.push(clef.clone());
+                }
+                if number == 3 {
+                    measure.push(SegmentDivision::Required);
+                }
+                measure.push(
+                    crate::Chord::new("C3 E3 G3")
+                        .unwrap()
+                        .with_duration(Duration::new(4.0).unwrap()),
+                );
+                part.insert(4.0 * f64::from(number - 1), measure);
+            }
+            let segments = find_segments(&part, None, SegmentOptions::default());
+            assert_eq!(segments.len(), 2);
+            for segment in &segments {
+                for (key, grouping) in &segment.groupings {
+                    if key.affinity == crate::braille::segment::Affinity::NoteGrouping {
+                        assert_eq!(grouping.descending_chords, Some(expected));
+                    }
+                }
+            }
+        }
+    }
 }

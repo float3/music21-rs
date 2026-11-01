@@ -178,9 +178,7 @@ impl NoteGroupingTranscriber {
         me.grouping.elements.push(element);
         let at = me.grouping.elements.len() - 1;
         let me = &mut *me;
-        me.transcriber
-            .transcribe_element(&mut me.grouping, at)
-            .map_err(|error| crate::stream::stream_error(&error))?;
+        me.transcriber.transcribe_element(&mut me.grouping, at);
         me.written.push(el.clone().unbind());
         let elements = me.grouping.elements.clone();
         let objects: Vec<Py<PyAny>> = me.written.iter().map(|one| one.clone_ref(py)).collect();
@@ -212,10 +210,7 @@ impl NoteGroupingTranscriber {
         if let Some(upper) = me.upper_first {
             read.upper_first_in_note_fingering = upper;
         }
-        let written = me
-            .transcriber
-            .transcribe_group(&mut read)
-            .map_err(|error| crate::stream::stream_error(&error))?;
+        let written = me.transcriber.transcribe_group(&mut read);
         me.grouping = read;
         me.written = objects.iter().map(|object| object.clone_ref(py)).collect();
         let elements = me.grouping.elements.clone();

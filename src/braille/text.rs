@@ -128,6 +128,7 @@ pub struct BrailleText {
     pub left_hand_symbol: bool,
     /// Where each heading's lines start and end.
     pub all_headings: Vec<(usize, usize)>,
+    show_hand: Option<&'static str>,
 }
 
 impl BrailleText {
@@ -144,26 +145,34 @@ impl BrailleText {
             right_hand_symbol: false,
             left_hand_symbol: false,
             all_headings: Vec::new(),
+            show_hand: None,
         };
         text.make_new_line();
         text.set_show_hand(show_hand)?;
         Ok(text)
     }
 
-    /// Which hand's sign the notes' lines start with: music21's `showHand`
-    /// setter. music21's getter never answers what was set.
+    /// Which hand's sign the notes' lines start with, `right`, `left` or
+    /// none: music21's `showHand` setter. Only that hand's sign is kept.
     ///
     /// # Errors
     ///
-    /// A hand music21 does not know.
+    /// A hand music21 does not know; the signs are then left as they were.
     pub fn set_show_hand(&mut self, hand: Option<&str>) -> Result<()> {
-        match hand {
-            Some("right") => self.right_hand_symbol = true,
-            Some("left") => self.left_hand_symbol = true,
-            None => {}
+        self.show_hand = match hand {
+            Some("right") => Some("right"),
+            Some("left") => Some("left"),
+            None => None,
             Some(_) => return Err(refuse("Illegal hand sign request.")),
-        }
+        };
+        self.right_hand_symbol = hand == Some("right");
+        self.left_hand_symbol = hand == Some("left");
         Ok(())
+    }
+
+    /// The hand last set with [`Self::set_show_hand`]: music21's `showHand`.
+    pub fn show_hand(&self) -> Option<&'static str> {
+        self.show_hand
     }
 
     /// The line being written.
