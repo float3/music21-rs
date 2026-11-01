@@ -164,7 +164,7 @@ const SCORES: &[Score] = &[
         name: "arpeggios",
         about: "arpeggios on chords",
         style_shows_name: false,
-        expect: Expect::MusicXmlDiffers(
+        expect: Expect::OutlineDiffers(
             "MuseScore's export numbers every arpeggio 1, and a numbered arpeggio is one \
              drawn across several chords, so the MusicXML reader, as music21 does, joins \
              every arpeggio of the score into one. The file has an arpeggio on each chord.",
@@ -184,6 +184,34 @@ const SCORES: &[Score] = &[
         ),
     },
 ];
+
+/// An outline with each note's articulations in one order, a difference
+/// allowed on purpose: the file lists them as they were added, and the
+/// MusicXML reader, as music21's does, reads every technical mark (a
+/// bowing, a fingering) before the articulations proper.
+fn marks_sorted(outline: &str) -> String {
+    outline
+        .lines()
+        .map(|line| {
+            let Some(start) = line.find(" [") else {
+                return line.to_string();
+            };
+            let Some(length) = line[start + 2..].find(']') else {
+                return line.to_string();
+            };
+            let inside = &line[start + 2..start + 2 + length];
+            let mut marks: Vec<&str> = inside.split(',').collect();
+            marks.sort_unstable();
+            format!(
+                "{} [{}{}",
+                &line[..start],
+                marks.join(","),
+                &line[start + 2 + length..]
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 fn data_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/mscx")
@@ -295,7 +323,10 @@ fn compare(directory: &Path, name: &str, style_shows_name: bool) -> Result<Outco
         .map_err(|error| format!("MuseScore's export could not be read: {error}"))?;
     strip_layouts(&mut export);
 
-    let (ours, theirs) = (outline(&file), outline(&export));
+    let (ours, theirs) = (
+        marks_sorted(&outline(&file)),
+        marks_sorted(&outline(&export)),
+    );
     if let Some(difference) = first_difference(&ours, &theirs) {
         return Ok(Outcome::OutlineDiffers(difference));
     }

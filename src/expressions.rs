@@ -1085,7 +1085,7 @@ impl Ornament {
         second.set_pitch(moved);
         Ok(Realization {
             before: vec![lasting(note, each)?, second],
-            main: Some(lasting(note, length - 2.0 * each)?),
+            main: Some(lasting(&self.taken_off(note), length - 2.0 * each)?),
             after: Vec::new(),
         })
     }
@@ -1146,8 +1146,9 @@ impl Ornament {
                 after: Vec::new(),
             });
         }
-        let mut first = lasting(note, each)?;
-        let mut second = lasting(note, each)?;
+        // music21 writes the closing notes with no expressions at all.
+        let mut first = lasting(&unmarked(note), each)?;
+        let mut second = lasting(&unmarked(note), each)?;
         second.set_pitch(second.pitch().transpose(&interval.reversed()?)?);
         if from_key {
             for played in [&mut first, &mut second] {
@@ -1196,12 +1197,14 @@ impl Ornament {
         };
         let first_interval = self.turn_size(note.pitch(), first_side, key)?;
         let third_interval = self.turn_size(note.pitch(), third_side, key)?;
-        let mut first = lasting(note, each)?;
+        // music21 writes a turn's notes with no expressions at all.
+        let plain = unmarked(note);
+        let mut first = lasting(&plain, each)?;
         first.set_pitch(first.pitch().transpose(&first_interval)?);
-        let second = lasting(note, each)?;
-        let mut third = lasting(note, each)?;
+        let second = lasting(&plain, each)?;
+        let mut third = lasting(&plain, each)?;
         third.set_pitch(third.pitch().transpose(&third_interval)?);
-        let fourth = lasting(note, last.unwrap_or(each))?;
+        let fourth = lasting(&plain, last.unwrap_or(each))?;
         let mut turned = vec![first, second, third, fourth];
         for index in [0, 2] {
             if turned[index].pitch().written_accidental().is_none() {
@@ -1219,7 +1222,7 @@ impl Ornament {
         }
         Ok(Realization {
             before: Vec::new(),
-            main: Some(lasting(note, remainder)?),
+            main: Some(lasting(&self.taken_off(note), remainder)?),
             after: turned,
         })
     }
@@ -1242,7 +1245,7 @@ impl Ornament {
         leaning.set_pitch(leaning.pitch().transpose(&interval)?);
         Ok(Realization {
             before: vec![leaning],
-            main: Some(lasting(note, half)?),
+            main: Some(lasting(&self.taken_off(note), half)?),
             after: Vec::new(),
         })
     }
@@ -1250,7 +1253,7 @@ impl Ornament {
     fn realize_tremolo(&self, note: &Note, length: FloatType) -> Result<Realization> {
         let each = (0.5 as FloatType).powi(IntegerType::from(self.number_of_marks));
         let mut repeated = Vec::new();
-        let mut remaining = note.clone();
+        let mut remaining = self.taken_off(note);
         let mut left = length;
         while left > each {
             let mut played = lasting(&remaining, each)?;
@@ -1266,6 +1269,28 @@ impl Ornament {
             after: Vec::new(),
         })
     }
+}
+
+impl Ornament {
+    /// `note` without this ornament among its expressions: what music21
+    /// leaves of the note an ornament has taken its notes out of.
+    fn taken_off(&self, note: &Note) -> Note {
+        let mut left = note.clone();
+        let expressions = left.expressions_mut();
+        if let Some(at) = expressions.iter().position(
+            |expression| matches!(expression, Expression::Ornament(ornament) if **ornament == *self),
+        ) {
+            expressions.remove(at);
+        }
+        left
+    }
+}
+
+/// `note` with no expressions at all.
+fn unmarked(note: &Note) -> Note {
+    let mut plain = note.clone();
+    plain.expressions_mut().clear();
+    plain
 }
 
 /// Ties the two halves of a note split in two, as music21's
