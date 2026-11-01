@@ -294,6 +294,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
   `key.tonic`, `scale.tonic`. tightening the first broke twenty-nine of
   music21's own docstrings: the note written into `_client` is not always one
   of ours (`41e1937`).
+- **an inversion fixed past every ordinal reads `Unknown Position`.**
+  music21's `inversionText` raises `IndexError` off its ordinals list for
+  `_overrides['inversion'] = 300`; `inversionName` refuses it by name on
+  both sides.
 - **the install helper forgives three exceptions on copy** — `AttributeError`,
   `TypeError` and `RecursionError`, narrowed from a bare `except Exception`
   (`7c8e4de`).

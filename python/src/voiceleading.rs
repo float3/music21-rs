@@ -501,7 +501,9 @@ impl VoiceLeadingQuartet {
 
     /// music21's `isProperResolution`.
     fn isProperResolution(&self, py: Python<'_>) -> PyResult<bool> {
-        self.keyed(py, true)?.is_proper_resolution().map_err(quartet_error)
+        self.keyed(py, true)?
+            .is_proper_resolution()
+            .map_err(quartet_error)
     }
 
     fn leapNotSetWithStep(&self) -> bool {
@@ -510,7 +512,9 @@ impl VoiceLeadingQuartet {
 
     /// music21's `modalOpening`.
     fn modalOpening(&self, py: Python<'_>) -> PyResult<bool> {
-        self.keyed(py, false)?.modal_opening().map_err(quartet_error)
+        self.keyed(py, false)?
+            .modal_opening()
+            .map_err(quartet_error)
     }
 
     /// music21's `opensIncorrectly`, the older name for the other answer.
@@ -520,7 +524,9 @@ impl VoiceLeadingQuartet {
 
     /// music21's `clausulaVera`.
     fn clausulaVera(&self, py: Python<'_>) -> PyResult<bool> {
-        self.keyed(py, false)?.clausula_vera().map_err(quartet_error)
+        self.keyed(py, false)?
+            .clausula_vera()
+            .map_err(quartet_error)
     }
 
     /// music21's `closesIncorrectly`, the older name for the other answer.

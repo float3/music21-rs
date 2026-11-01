@@ -807,7 +807,13 @@ mod tests {
             Key::from_tonic("C").unwrap(),
             Key::from_tonic("F#").unwrap().with_sharps(0),
         ] {
-            assert!(!quartet.clone().with_key(key).is_proper_resolution().unwrap());
+            assert!(
+                !quartet
+                    .clone()
+                    .with_key(key)
+                    .is_proper_resolution()
+                    .unwrap()
+            );
         }
         // Written under its own signature, F# major's B is its fourth.
         let fresh = quartet.with_key(Key::from_tonic("F#").unwrap());

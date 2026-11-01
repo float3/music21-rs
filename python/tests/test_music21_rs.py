@@ -7736,3 +7736,14 @@ def test_a_voice_leading_quartets_key_edited_in_place_is_read():
     assert opening.modalOpening()
     opening.key.tonic.name = "A"
     assert not opening.modalOpening()
+
+
+def test_an_inversion_fixed_through_overrides_is_named():
+    # music21 answers 64 and 'Second Inversion', and refuses 300 by name.
+    chord = m.Chord("C4 E4 G4")
+    chord.inversion()
+    chord._overrides["inversion"] = 2
+    assert (chord.inversionName(), chord.inversionText()) == (64, "Second Inversion")
+    chord._overrides["inversion"] = 300
+    with pytest.raises(m.ChordException, match="Not a normal inversion for a triad: 300"):
+        chord.inversionName()

@@ -489,9 +489,6 @@ impl Chord {
         Some([0, 3, 6, 2, 5, 1, 4][usize::from(bass_to_root - 1)])
     }
 
-    /// Returns a human-readable inversion label.
-    ///
-    /// Returns `None` whenever [`Self::inversion`] returns `None`.
     /// The figured-bass number music21's `inversionName` answers: `53`, `6`
     /// and `64` for a triad, `7`, `65`, `43` and `42` for a seventh. `None`
     /// when the chord has no inversion, and an error when it is neither a
@@ -508,26 +505,45 @@ impl Chord {
         else {
             return Ok(None);
         };
+        self.inversion_name_from(root, IntegerType::from(inversion))
+    }
 
-        let inversion = usize::from(inversion);
+    /// The figured-bass number for this chord standing in `inversion`,
+    /// whatever inversion it is in: what [`Self::inversion_name`] answers
+    /// once the inversion is known. An inversion of `-1` is music21's for
+    /// none, and answers `None`; one past what a triad or a seventh has is
+    /// an error, as music21 raises for an inversion fixed by hand.
+    pub fn inversion_name_of(&self, inversion: IntegerType) -> Result<Option<IntegerType>> {
+        let Some(root) = self.root() else {
+            return Ok(None);
+        };
+        if inversion == -1 {
+            return Ok(None);
+        }
+        self.inversion_name_from(root, inversion)
+    }
+
+    fn inversion_name_from(
+        &self,
+        root: &Pitch,
+        inversion: IntegerType,
+    ) -> Result<Option<IntegerType>> {
+        let at = |names: &[IntegerType]| {
+            usize::try_from(inversion)
+                .ok()
+                .and_then(|index| names.get(index))
+                .copied()
+        };
         // A seventh chord has a seventh, so having one is the whole test.
         if self.chord_step_from(7, root).is_some() {
-            return [7, 65, 43, 42]
-                .get(inversion)
-                .copied()
-                .map(Some)
-                .ok_or_else(|| {
-                    Error::Chord(format!("Not a normal inversion for a seventh: {inversion}"))
-                });
+            return at(&[7, 65, 43, 42]).map(Some).ok_or_else(|| {
+                Error::Chord(format!("Not a normal inversion for a seventh: {inversion}"))
+            });
         }
         if self.is_triad_from(root) {
-            return [53, 6, 64]
-                .get(inversion)
-                .copied()
-                .map(Some)
-                .ok_or_else(|| {
-                    Error::Chord(format!("Not a normal inversion for a triad: {inversion}"))
-                });
+            return at(&[53, 6, 64]).map(Some).ok_or_else(|| {
+                Error::Chord(format!("Not a normal inversion for a triad: {inversion}"))
+            });
         }
         Err(Error::Chord(
             "Not a triad or Seventh, cannot determine inversion.".to_string(),
@@ -1098,13 +1114,21 @@ impl Chord {
     /// Returns music21's `inversionText`: `Root Position`, `First Inversion`
     /// and so on, or `Unknown Position` for an empty chord.
     pub fn inversion_text(&self) -> String {
-        match self.inversion() {
-            Some(0) => "Root Position".to_string(),
-            // An inversion fixed by hand may be past any ordinal.
-            Some(inversion) => match ORDINALS.get(usize::from(inversion)) {
-                Some(ordinal) => format!("{ordinal} Inversion"),
-                None => "Unknown Position".to_string(),
-            },
+        Self::inversion_text_of(self.inversion().map_or(-1, IntegerType::from))
+    }
+
+    /// music21's `inversionText` for a chord standing in `inversion`: `-1`,
+    /// music21's for none, is `Unknown Position`, and so is an inversion
+    /// fixed by hand past any ordinal.
+    pub fn inversion_text_of(inversion: IntegerType) -> String {
+        if inversion == 0 {
+            return "Root Position".to_string();
+        }
+        match usize::try_from(inversion)
+            .ok()
+            .and_then(|index| ORDINALS.get(index))
+        {
+            Some(ordinal) => format!("{ordinal} Inversion"),
             None => "Unknown Position".to_string(),
         }
     }
