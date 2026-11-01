@@ -1,5 +1,7 @@
 # Unreleased
 
+`harte` 0.8.0 depends on this release.
+
 ## breaking changes
 
 - **`ReductionOptions::remove_dissonances`** is new, so a
