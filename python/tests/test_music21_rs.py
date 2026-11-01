@@ -6620,8 +6620,7 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
 
     The steps that take music21's own mutable timespan tree and walk it
     while editing it are refused with that reason: the crate reads a score
-    as a list of spans of its own and runs every step over that list in
-    music21's order, which is what `run` answers with."""
+    as a list of spans of its own, which is what `run` weighs."""
     cr = m.ChordReducer()
     assert cr.positionInMeasure == 0
     assert cr.numberOfElementsInMeasure == 0
@@ -6634,12 +6633,12 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     third = m.Chord("C4 E4 G4 C5")
     chords = [first, second, third]
     weights = cr.computeMeasureChordWeights(chords)
-    assert weights == {(0, 4, 7): 3.0, (0, 11, 4, 5): 1.0}
+    assert weights == {(0, 4, 7): 3.0, (0, 4, 5, 11): 1.0}
     # Consonance counts for a lot, and the last chord of the measure
     # counts as a full beat.
     scored = cr.computeMeasureChordWeights(chords, weightAlgorithm=cr.qlbsmpConsonance)
     assert scored[(0, 4, 7)] == 3.0
-    assert round(scored[(0, 11, 4, 5)], 1) == 0.1
+    assert round(scored[(0, 4, 5, 11)], 1) == 0.1
     # Each of music21's four algorithms weighs one chord on its own.
     assert cr.quarterLengthOnly(first) == 2.0
     assert cr.quarterLengthBeatStrength(first) == 2.0

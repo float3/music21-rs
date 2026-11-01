@@ -1,11 +1,25 @@
 # Unreleased
 
+## breaking changes
+
+- **`ReductionOptions::remove_dissonances`** is new, so a
+  `ReductionOptions` written out field by field needs it; music21's
+  `removeDissonances` is off by default.
+
 ## added
 
 - **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
   rest's colour, as music21 does.
 
 ## fixed
+
+- **music21's fixes followed**: the music21 submodule is at the fork's
+  master c815254cb, and the crate gives its answers. `reduce_chords`
+  chooses each measure's chords from slices of the score's notes, by
+  length, beat strength and consonance, on the first part's measures,
+  and removes dissonances only when asked; a measure's chord weights are
+  keyed by sorted pitch classes, so two voicings of one chord weigh as
+  one. The wheel's `ChordReducer.run` takes `removeDissonances`.
 
 - **More edits made in place take effect**: `p.accidental.style.color`,
   `sc.tonic.name = ...` and `mm._tempoText.text = ...` reach the crate, as
