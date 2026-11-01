@@ -22,7 +22,7 @@
 //! A subject is named by its kind and a name: `tiny:` and a TinyNotation
 //! line, `flat:` and one read as notes only, with no measures made, `loose:`
 //! and notes each written `name@offset+length`, which may overlap, after a
-//! meter if there is one -- or `name@offset+length!ornament!`, a note
+//! meter and a key written `key=sharps` if there are any -- or `name@offset+length!ornament!`, a note
 //! carrying that ornament, which is the only way a subject reaches the
 //! accidentals an ornament's own notes need, every accidental of a score
 //! read from a document having been decided by its reader -- `scored:` and
@@ -34,7 +34,9 @@
 //! music21 first writes as MIDI, `abc:` and a corpus file with `#n` for one
 //! tune of several, and `xml:` and a corpus score kept as MusicXML.
 //! `MAKE_NOTATION_SUBJECTS`, a `;`-separated list of such names or `@` and
-//! the path of a file of them, runs those instead of the ones below.
+//! the path of a file of them, runs those instead of the ones below. A
+//! second test makes up loose and scored subjects from seeds, each
+//! starting `#` and its seed, a word both readers skip.
 //!
 //! Beside the subjects listed here the test runs every corpus score the
 //! writer's own test lists that is kept as MusicXML, and every ABC tune of
@@ -545,9 +547,14 @@ def loose_part(text):
     score read from a document never does, every accidental of one having
     been decided by the reader.
     """
-    from music21 import expressions, meter
+    from music21 import expressions, key, meter
     part = stream.Part()
     for token in text.split():
+        if token.startswith('#'):
+            continue
+        if token.startswith('key='):
+            part.insert(0, key.KeySignature(int(token[4:])))
+            continue
         if '@' not in token:
             part.insert(0, meter.TimeSignature(token))
             continue
@@ -603,11 +610,105 @@ def source_text(name, musicxml=False):
 
 #[test]
 fn the_crate_makes_notation_as_music21_does() {
-    let root = repo_root();
-    std::env::set_current_dir(&root).expect("chdir to the repository root");
-    prepare().expect("prepare the music21 reference checkout");
+    let (failures, count) = notate(None);
+    assert!(
+        failures.is_empty(),
+        "{} of {} subjects are notated differently:\n\n{}",
+        failures.len(),
+        count,
+        failures.join("\n\n")
+    );
+}
 
-    let (failures, count) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
+/// How many subjects are made up from seeds: about ten seconds. Past it,
+/// seeds 491, 802, 894, 1061 and 1962 are loose parts music21's exporter
+/// raises a `MeterException` on, notes on a grid of twelfths overlapping in
+/// one line.
+const GENERATED: u64 = 400;
+
+/// Subjects made up from seeds 0 to [`GENERATED`], each named after its
+/// seed in a failure: loose or scored notes on a grid of twelfths, of
+/// lengths that are tuplets, dotted, tied or none of these, overlapping
+/// now and then, under a random meter and key or none.
+#[test]
+fn the_crate_makes_notation_of_generated_subjects() {
+    let subjects = (0..GENERATED).map(generated_subject).collect();
+    let (failures, count) = notate(Some(subjects));
+    assert!(
+        failures.is_empty(),
+        "{} of {} generated subjects are notated differently:\n\n{}",
+        failures.len(),
+        count,
+        failures.join("\n\n")
+    );
+}
+
+/// A subject made up from a seed by a small linear congruential
+/// generator, so every run writes the same ones. It starts `# seed`, which
+/// both readers skip.
+fn generated_subject(seed: u64) -> String {
+    let mut state = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+    let mut next = move |bound: u64| -> u64 {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (state >> 33) % bound
+    };
+    const METERS: &[&str] = &[
+        "4/4", "3/4", "2/4", "6/8", "3/8", "5/8", "2/2", "12/8", "7/8",
+    ];
+    const STEPS: &[&str] = &["C", "D", "E", "F", "G", "A", "B"];
+    const ALTERS: &[&str] = &["", "", "", "#", "-"];
+    // In twelfths of a quarter: thirds and sixths, sixteenths, dotted
+    // values, and a few no single note value writes.
+    const LENGTHS: &[u64] = &[3, 6, 9, 12, 12, 18, 24, 36, 48, 4, 8, 2, 16, 5, 7, 30];
+
+    let kind = if next(2) == 0 { "loose" } else { "scored" };
+    let mut text = format!("{kind}:#{seed}");
+    if next(5) > 0 {
+        text.push(' ');
+        text.push_str(METERS[next(METERS.len() as u64) as usize]);
+    }
+    if next(3) == 0 {
+        text.push_str(&format!(" key={}", next(9) as i64 - 4));
+    }
+    let mut at = 0;
+    for _ in 0..1 + next(14) {
+        // Mostly one after another, now and then a gap or an overlap.
+        let length = LENGTHS[next(LENGTHS.len() as u64) as usize];
+        let start = match next(8) {
+            0 => at + 3 * next(4),
+            1 => at.saturating_sub(3 * (1 + next(4))),
+            _ => at,
+        };
+        let name = format!(
+            "{}{}{}",
+            STEPS[next(7) as usize],
+            ALTERS[next(ALTERS.len() as u64) as usize],
+            3 + next(3)
+        );
+        text.push_str(&format!(
+            " {name}@{}+{}",
+            start as f64 / 12.0,
+            length as f64 / 12.0
+        ));
+        at = at.max(start + length);
+    }
+    text
+}
+
+/// Notates each subject both ways, or with nothing given, those
+/// `MAKE_NOTATION_SUBJECTS` names or the ones listed: the subjects that
+/// differ, each with its first difference, and how many were compared.
+fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
+    static READY: std::sync::Once = std::sync::Once::new();
+    let root = repo_root();
+    READY.call_once(|| {
+        std::env::set_current_dir(&root).expect("chdir to the repository root");
+        prepare().expect("prepare the music21 reference checkout");
+    });
+
+    Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
         let _ = py.import("music21")?;
@@ -628,28 +729,29 @@ fn the_crate_makes_notation_as_music21_does() {
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
         let software = format!("music21 v.{version}");
 
-        let chosen: Vec<String> = match std::env::var("MAKE_NOTATION_SUBJECTS") {
-            Ok(list) => list
-                .strip_prefix('@')
-                .map(|path| std::fs::read_to_string(path).expect("the list of subjects"))
-                .unwrap_or(list)
-                .split([';', '\n'])
-                .map(str::trim)
-                .filter(|name| !name.is_empty())
-                .map(str::to_string)
-                .collect(),
-            Err(_) => SUBJECTS
-                .iter()
-                .map(|(name, _)| name.to_string())
-                .chain(UNMEASURED_TUNES.iter().map(|tune| format!("abc:{tune}")))
-                .chain(
-                    SCORES
-                        .iter()
-                        .filter(|(name, _)| !name.starts_with("built:"))
-                        .map(|(name, _)| format!("xml:{name}")),
-                )
-                .collect(),
-        };
+        let chosen: Vec<String> =
+            given.unwrap_or_else(|| match std::env::var("MAKE_NOTATION_SUBJECTS") {
+                Ok(list) => list
+                    .strip_prefix('@')
+                    .map(|path| std::fs::read_to_string(path).expect("the list of subjects"))
+                    .unwrap_or(list)
+                    .split([';', '\n'])
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+                Err(_) => SUBJECTS
+                    .iter()
+                    .map(|(name, _)| name.to_string())
+                    .chain(UNMEASURED_TUNES.iter().map(|tune| format!("abc:{tune}")))
+                    .chain(
+                        SCORES
+                            .iter()
+                            .filter(|(name, _)| !name.starts_with("built:"))
+                            .map(|(name, _)| format!("xml:{name}")),
+                    )
+                    .collect(),
+            });
         // music21's converter, not its readers, signs what it reads.
         let signed = |mut score: Stream| {
             let mut metadata = score.metadata().cloned().unwrap_or_default();
@@ -854,15 +956,7 @@ fn the_crate_makes_notation_as_music21_does() {
         println!("{agreed} of {compared} agree");
         Ok((failures, compared))
     })
-    .unwrap_or_else(|error| panic!("running music21: {error}"));
-
-    assert!(
-        failures.is_empty(),
-        "{} of {} subjects are notated differently:\n\n{}",
-        failures.len(),
-        count,
-        failures.join("\n\n")
-    );
+    .unwrap_or_else(|error| panic!("running music21: {error}"))
 }
 
 /// A part of notes each standing where it is said to, for as long, as the
@@ -871,6 +965,14 @@ fn the_crate_makes_notation_as_music21_does() {
 fn loose_part(text: &str) -> music21_rs::Result<Stream> {
     let mut part = Stream::with_kind(StreamKind::Part);
     for token in text.split_whitespace() {
+        if token.starts_with('#') {
+            continue;
+        }
+        if let Some(sharps) = token.strip_prefix("key=") {
+            let sharps = sharps.parse().unwrap_or(0);
+            part.insert(0.0, music21_rs::KeySignature::new(sharps));
+            continue;
+        }
         let Some((name, placed)) = token.split_once('@') else {
             part.insert(0.0, music21_rs::TimeSignature::from_ratio_string(token)?);
             continue;
