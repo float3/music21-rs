@@ -1045,7 +1045,7 @@ pub(crate) fn pitch_from_any_with_keywords(
 /// Reads a pitch argument: a facade, a name, or a number.
 pub(crate) fn pitch_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
     if let Ok(facade) = value.extract::<PyRef<Pitch>>() {
-        return Ok(facade.inner.clone());
+        return Ok(facade.current(value.py()));
     }
     if let Ok(name) = value.extract::<String>() {
         return RsPitch::from_name(name).map_err(pitch_error);
@@ -1139,6 +1139,45 @@ impl Pitch {
         pitch.inner = rebuilt;
         pitch.inner.set_accidental(value);
         pitch.write_back()
+    }
+
+    /// The pitch as it stands: its value with the colour said on its
+    /// accidental's style read back. music21 keeps the colour on that
+    /// style, so `p.accidental.style.color = 'red'` is an edit to the pitch,
+    /// and nothing tells the pitch it was made.
+    pub(crate) fn current(&self, py: Python<'_>) -> RsPitch {
+        let mut pitch = self.inner.clone();
+        let Some(object) = &self.accidental else {
+            return pitch;
+        };
+        let object = object.borrow(py);
+        if object.style.is_none() {
+            return pitch;
+        }
+        let Some(mut accidental) = pitch.written_accidental().cloned() else {
+            return pitch;
+        };
+        accidental.set_color(crate::notation::style_colour(py, object.style.as_ref()));
+        pitch.set_written_accidental(Some(accidental));
+        pitch
+    }
+
+    /// Gives a deep copy a copy of this pitch's accidental object, so what
+    /// its style says comes across, as music21's deepcopy carries it: its
+    /// MusicXML writer works on a copy of the score.
+    fn copy_accidental(slf: &Bound<'_, Self>, made: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let Some(held) = slf.borrow().accidental.as_ref().map(|a| a.clone_ref(py)) else {
+            return Ok(());
+        };
+        let Ok(made) = made.cast::<Self>() else {
+            return Ok(());
+        };
+        let mut copied = held.borrow(py).clone();
+        copied.owner = Some(made.clone().unbind());
+        let object = crate::installed_new(py, "music21.pitch", "Accidental", copied)?;
+        made.borrow_mut().accidental = Some(object);
+        Ok(())
     }
 
     /// Writes this pitch's value back to the note that holds it, and through
@@ -2244,7 +2283,9 @@ impl Pitch {
         _memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().clone();
-        crate::copy_as_same_type(slf, copied)
+        let made = crate::copy_as_same_type(slf, copied)?;
+        Self::copy_accidental(slf, &made)?;
+        Ok(made)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {

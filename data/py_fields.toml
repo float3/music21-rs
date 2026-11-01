@@ -37,7 +37,7 @@
 
 [Accidental]
 owner = { kind = "identity", sync = "read live", why = "the pitch it belongs to, which write_back writes into" }
-style = { kind = "value", note = "folded into the pitch only by write_back, which runs on the accidental's own setters: `p.accidental.style.color = 'red'` alone never reaches the pitch or the MusicXML writer" }
+style = { kind = "identity", sync = "Pitch::current" }
 client = { kind = "identity", sync = "read live", why = "music21's _client, told by informClient; not part of the value" }
 
 [Articulation]

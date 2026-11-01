@@ -7522,6 +7522,42 @@ def test_a_chords_colour_set_on_its_style_is_written():
     assert 'color="#FF0000"' in written
 
 
+def test_a_pitchs_accidental_coloured_in_place_is_written():
+    # music21 writes each accidental in the colour said on its style.
+    note = m.Note("C#4")
+    note.pitch.accidental.style.color = "red"
+    chord = m.Chord(["C#4", "E4"])
+    chord.pitches[0].accidental.style.color = "blue"
+    pitch = m.Pitch("C#4")
+    pitch.accidental.style.color = "green"
+    given = m.Note(pitch)
+    written = m.to_musicxml(bar_of(note, chord, given, m.Rest(1.0)))
+    assert re.findall(r"<accidental color=\"(#\w+)\"", written) == [
+        "#FF0000",
+        "#0000FF",
+        "#008000",
+    ]
+
+
+def test_a_pitchs_accidental_coloured_in_place_is_written_once_installed():
+    pytest.importorskip("music21.stream")
+    # music21's writer works on a deep copy, which keeps the style.
+    code = """
+import re
+import music21_rs as m
+m.install_into_music21()
+from music21 import note, stream
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+n = note.Note('C#4')
+n.pitch.accidental.style.color = 'red'
+written = GeneralObjectExporter(stream.Stream([n])).parse().decode()
+print(re.findall(r'<accidental color="(#[0-9A-F]+)"', written))
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["['#FF0000']"]
+
+
 def test_a_rests_tie_reaches_the_value_and_back():
     # RomanText holds a rest over the barline with a tie, as music21 does.
     read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")
