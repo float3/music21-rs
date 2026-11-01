@@ -7585,6 +7585,32 @@ def test_a_scale_follows_its_tonic_edited_in_place():
     assert [p.name for p in minor.pitches] == ["E", "F#", "G", "A", "B", "C", "D#", "E"]
 
 
+def test_a_metronome_marks_words_edited_in_place_are_its_text():
+    # music21 reads `text` off `_tempoText`.
+    mark = m.MetronomeMark("Allegro", 120)
+    words = mark._tempoText
+    words.text = "Lento"
+    assert mark.text == "Lento" and mark._tempoText is words
+    written = m.to_musicxml(bar_of(mark, m.Rest(4.0)))
+    assert "Lento" in written and "Allegro" not in written
+
+
+def test_a_metronome_marks_words_edited_in_place_once_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import tempo
+mark = tempo.MetronomeMark('Allegro', 120)
+words = mark._tempoText
+words.text = 'Lento'
+print(mark.text, mark._tempoText is words)
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["Lento", "True"]
+
+
 def test_a_rests_tie_reaches_the_value_and_back():
     # RomanText holds a rest over the barline with a tie, as music21 does.
     read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")

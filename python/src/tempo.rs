@@ -144,13 +144,24 @@ impl MetronomeMark {
         }
     }
 
-    /// The mark as it stands: its value with the referent read back from
-    /// the object handed out, so `mark.referent.type = 'half'` is the mark's
-    /// as music21's is.
+    /// The mark as it stands: its value with the referent and the words
+    /// read back from the objects handed out, so `mark.referent.type =
+    /// 'half'` and `mark._tempoText.text = 'Lento'` are the mark's as
+    /// music21's are.
     pub(crate) fn current(&self, py: Python<'_>) -> RsMetronomeMark {
         let mut mark = self.inner.clone();
         if let Some(referent) = &self.referent {
             mark.set_referent(referent.bind(py).borrow().inner.clone());
+        }
+        let said = self
+            .tempo_text
+            .as_ref()
+            .and_then(|words| words.bind(py).getattr("text").ok())
+            .and_then(|text| text.extract::<String>().ok());
+        if let Some(said) = said
+            && mark.text() != Some(said.as_str())
+        {
+            mark.set_text(said);
         }
         mark
     }
@@ -310,8 +321,8 @@ impl MetronomeMark {
     }
 
     #[getter]
-    fn get_text(&self) -> Option<&str> {
-        self.inner.text()
+    fn get_text(&self, py: Python<'_>) -> Option<String> {
+        self.current(py).text().map(str::to_string)
     }
 
     #[setter]
@@ -343,10 +354,14 @@ impl MetronomeMark {
         if let Some(existing) = &slf.borrow().tempo_text {
             return Ok(existing.clone_ref(py));
         }
-        let object = py
-            .import("music21.tempo")?
-            .getattr("TempoText")?
-            .call1((text,))?;
+        let class = crate::installed_class(py, "music21.tempo", "TempoText")
+            .unwrap_or_else(|| py.get_type::<TempoText>().into_any());
+        let object = class.call1((text,))?;
+        slf.borrow_mut().tempo_text = Some(object.clone().unbind());
+        // Only a mark music21 has a half of has a style to share.
+        if !slf.hasattr("style")? {
+            return Ok(object.unbind());
+        }
         if slf
             .getattr("hasStyleInformation")
             .and_then(|said| said.extract::<bool>())
@@ -361,7 +376,6 @@ impl MetronomeMark {
         object
             .getattr("_textExpression")?
             .setattr("style", slf.getattr("style")?)?;
-        slf.borrow_mut().tempo_text = Some(object.clone().unbind());
         Ok(object.unbind())
     }
 
@@ -529,14 +543,14 @@ impl MetronomeMark {
         #[pyo3(from_py_with = crate::truthy)] returnImplicit: bool,
     ) -> PyResult<Py<PyAny>> {
         let (text, number_implicit) = {
-            let mark = slf.borrow();
-            let Some(text) = mark.inner.text() else {
+            let mark = slf.borrow().current(py);
+            let Some(text) = mark.text() else {
                 return Ok(py.None());
             };
-            if mark.inner.text_implicit() && !returnImplicit {
+            if mark.text_implicit() && !returnImplicit {
                 return Ok(py.None());
             }
-            (text.to_string(), mark.inner.number_implicit())
+            (text.to_string(), mark.number_implicit())
         };
         let expression = py
             .import("music21.expressions")?

@@ -124,7 +124,7 @@ level_list_cache = { kind = "cache", note = "music21's _levelListCache" }
 
 [MetronomeMark]
 referent = { kind = "identity", sync = "current" }
-tempo_text = { kind = "value", note = "built from inner's text on first asking; once installed, `mm._tempoText.text = 'Lento'` leaves `mm.text` as it was, where music21 reads the text off it" }
+tempo_text = { kind = "identity", sync = "current" }
 
 [Note]
 pitch = { kind = "identity", sync = "synced" }
