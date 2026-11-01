@@ -24,10 +24,9 @@ use std::collections::BTreeSet;
 /// line.
 pub(super) fn to_abc(imported: &Imported) -> Result<String, String> {
     let score = to_stream(imported)?;
-    let options = ExportOptions {
-        unit_length: Some((1, 8)),
-        measures_per_line: 4,
-    };
+    let mut options = ExportOptions::default();
+    options.unit_length = Some((1, 8));
+    options.measures_per_line = 4;
     write_abc(&score, &options).map_err(|err| err.to_string())
 }
 

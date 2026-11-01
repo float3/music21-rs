@@ -911,12 +911,10 @@ fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
                     continue;
                 }
             };
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                make_notation: true,
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
+            options.make_notation = true;
             match to_musicxml(&ours, &options) {
                 Ok(ours) => {
                     // The layout strip takes the weight off a tempo word on

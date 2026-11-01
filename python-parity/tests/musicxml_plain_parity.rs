@@ -113,13 +113,11 @@ fn the_crate_writes_a_music21_score_as_music21_does() {
                 }
             };
 
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                // What writes a score with no metadata of its own names
-                // itself, and the two writers have different names.
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            // What writes a score with no metadata of its own names
+            // itself, and the two writers have different names.
+            options.software = software.clone();
             match to_musicxml(&ours_stream, &options) {
                 Ok(ours) => {
                     let ours = normalize_ids(&ours);

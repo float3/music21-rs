@@ -1077,6 +1077,7 @@ fn drawn(
             Expression::Ornament(ornament) => ornament.kind().class_name(),
             Expression::Fermata(_) => "Fermata",
             Expression::Arpeggio(_) => "ArpeggioMark",
+            other => panic!("an expression this test does not name: {other:?}"),
         })
         .collect::<Vec<_>>()
         .join(",");

@@ -156,11 +156,9 @@ fn the_crate_reads_musicxml_as_music21_does() {
                 }
             };
 
-            let options = ExportOptions {
-                encoding_date: Some(today.clone()),
-                software: software.clone(),
-                ..ExportOptions::default()
-            };
+            let mut options = ExportOptions::default();
+            options.encoding_date = Some(today.clone());
+            options.software = software.clone();
             // music21's converter, not its reader, signs what it reads and
             // calls a score with no title after its file.
             let ours = from_musicxml(&text).and_then(|mut score| {

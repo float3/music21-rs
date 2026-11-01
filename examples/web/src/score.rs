@@ -1176,11 +1176,9 @@ fn notated(score: &Score) -> Result<Stream, music21_rs::Error> {
 fn musicxml(score: &Score) -> Result<String, music21_rs::Error> {
     // The editor's scores are nobody's but their writer's: no title or
     // composer is made up for one that names none.
-    let options = ExportOptions {
-        default_title: None,
-        default_author: None,
-        ..ExportOptions::default()
-    };
+    let mut options = ExportOptions::default();
+    options.default_title = None;
+    options.default_author = None;
     to_musicxml(&notated(score)?, &options)
 }
 

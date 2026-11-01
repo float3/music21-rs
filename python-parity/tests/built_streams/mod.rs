@@ -136,6 +136,7 @@ fn kind_name(kind: StreamKind) -> &'static str {
         StreamKind::PartStaff => "PartStaff",
         StreamKind::Score => "Score",
         StreamKind::Opus => "Opus",
+        other => panic!("a stream kind this test does not name: {other:?}"),
     }
 }
 
@@ -403,6 +404,7 @@ fn mark_name(expression: &Expression) -> String {
         Expression::Ornament(ornament) => ornament.kind().class_name().to_string(),
         Expression::Fermata(_) => "Fermata".to_string(),
         Expression::Arpeggio(_) => "ArpeggioMark".to_string(),
+        other => panic!("an expression this test does not name: {other:?}"),
     }
 }
 

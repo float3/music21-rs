@@ -203,13 +203,12 @@ impl ChordReducer {
             }
             Ok(found)
         };
-        let options = ReductionOptions {
-            allowable_chords: read(allowableChords)?,
-            forbidden_chords: read(forbiddenChords)?,
-            closed_position: closedPosition,
-            maximum_number_of_chords: maximumNumberOfChords,
-            remove_dissonances: removeDissonances,
-        };
+        let mut options = ReductionOptions::default();
+        options.allowable_chords = read(allowableChords)?;
+        options.forbidden_chords = read(forbiddenChords)?;
+        options.closed_position = closedPosition;
+        options.maximum_number_of_chords = maximumNumberOfChords;
+        options.remove_dissonances = removeDissonances;
         let score = crate::stream::crate_stream(inputScore)?;
         let made = reduce_chords(&score, &options).map_err(reducer_error)?;
         crate::stream::music21_from_crate(py, &made)

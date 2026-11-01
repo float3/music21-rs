@@ -209,11 +209,9 @@ fn the_crate_reads_noteworthy_as_music21_does() {
         let today = musicxml_common::pin_encoding_date(py)?;
         let version: String = py.import("music21")?.getattr("__version__")?.extract()?;
         let software = format!("music21 v.{version}");
-        let options = ExportOptions {
-            encoding_date: Some(today),
-            software: software.clone(),
-            ..ExportOptions::default()
-        };
+        let mut options = ExportOptions::default();
+        options.encoding_date = Some(today);
+        options.software = software.clone();
 
         let directory = root.join("music21").join("music21").join("noteworthy");
         let mut failures = Vec::new();

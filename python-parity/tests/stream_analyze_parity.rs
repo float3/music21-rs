@@ -171,6 +171,7 @@ fn answer(stream: &Stream, method: &str) -> String {
         Ok(Some(Analysis::Key(key))) => {
             format!("key {} {}", key.tonic_pitch_name_with_case(), key.mode())
         }
+        Ok(Some(other)) => panic!("an analysis this test does not spell: {other:?}"),
     }
 }
 

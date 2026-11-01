@@ -165,11 +165,10 @@ fn the_crate_gathers_lyrics_as_music21_does() {
                     format!("part {}", at - 1)
                 };
                 for flags in 0..8u8 {
-                    let options = LyricsOptions {
-                        ignore_barlines: flags & 1 != 0,
-                        recurse: flags & 2 != 0,
-                        skip_ties: flags & 4 != 0,
-                    };
+                    let mut options = LyricsOptions::default();
+                    options.ignore_barlines = flags & 1 != 0;
+                    options.recurse = flags & 2 != 0;
+                    options.skip_ties = flags & 4 != 0;
                     let theirs: Vec<String> = music21
                         .getattr("lyrics")?
                         .call1((

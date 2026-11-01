@@ -36,6 +36,7 @@ fn abc_error(message: impl Into<String>) -> Error {
 
 /// How [`to_abc`] writes a score.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExportOptions {
     /// The unit note length of the `L:` field as a fraction of a whole note,
     /// `(1, 8)` for an eighth. `None` takes the one the tune's lengths are

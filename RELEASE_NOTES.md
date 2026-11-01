@@ -4,6 +4,25 @@
 
 ## breaking changes
 
+- **`#[non_exhaustive]` on the enums that keep growing and on every
+  `*Options` struct**, so later releases can add a variant or an option
+  without breaking callers again. The enums are `StreamElement`,
+  `StreamKind`, `SpannerKind`, `expressions::Expression`, `TuningSystem`,
+  `ScaleType` and `stream::Analysis`: a `match` over one outside the crate
+  needs a wildcard arm. The structs are `abc::ExportOptions`,
+  `midi::ExportOptions`, `musicxml::ExportOptions`, `LilyOptions`,
+  `BrailleOptions`, `SegmentOptions`, `ChordifyOptions`,
+  `ConsecutiveOptions`, `LyricsOptions`, `TemplateOptions`,
+  `ReductionOptions`, `ScaleRunOptions`, `QuartetOptions`, `PitchOptions`
+  and `AccidentalDisplayOptions`. Outside the crate none can be written as
+  a struct literal, even with `..Default::default()`; start from the
+  default and set the fields:
+
+  ```rust
+  let mut options = music21_rs::musicxml::ExportOptions::default();
+  options.make_notation = true;
+  ```
+
 - **`SpannerKind::MultiMeasureRest`** is a new variant, so a `match` over
   every kind needs an arm for it.
 

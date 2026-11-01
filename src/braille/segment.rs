@@ -626,6 +626,7 @@ pub fn prepare_beamed_notes(
 
 /// The options music21's translation takes, as a segment reads them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct SegmentOptions {
     /// Whether a key signature cancels the one before it.
     pub cancel_outgoing_key_sig: bool,

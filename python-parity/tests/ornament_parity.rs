@@ -167,10 +167,8 @@ fn every_ornament_plays_what_music21_s_plays() {
                 .iter()
                 .map(|name| Pitch::from_name(name).expect("a pitch name"))
                 .collect();
-            let options = AccidentalDisplayOptions {
-                pitch_past: &past,
-                ..AccidentalDisplayOptions::default()
-            };
+            let mut options = AccidentalDisplayOptions::default();
+            options.pitch_past = &past;
             let mut pitches = ornament
                 .ornamental_pitches(note.pitch(), &key)
                 .expect("music21 resolved them");

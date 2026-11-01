@@ -12,6 +12,7 @@ use crate::{
 /// How music21's braille translation is asked to write: its keyword
 /// arguments.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct BrailleOptions {
     /// Whether the stream is written as it stands, or first given the
     /// notation it leaves unsaid as music21's `makeNotation` gives it.

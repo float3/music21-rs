@@ -2445,6 +2445,8 @@ fn is_diatonic_mode(kind: RsScaleType) -> bool {
         | RsScaleType::Octatonic
         | RsScaleType::RagAsawari
         | RsScaleType::RagMarwa => false,
+        // A pattern added to the crate later is not one of music21's modes.
+        _ => false,
     }
 }
 

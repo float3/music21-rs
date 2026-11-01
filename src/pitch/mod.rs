@@ -82,6 +82,7 @@ impl From<FloatType> for PitchName {
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Builder options for constructing a [`Pitch`].
+#[non_exhaustive]
 pub struct PitchOptions {
     /// Pitch name or pitch-space number.
     pub name: Option<PitchName>,

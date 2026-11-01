@@ -207,11 +207,9 @@ fn the_crate_reads_the_rock_corpus_as_music21_does() {
                     outline_only += 1;
                     continue;
                 };
-                let options = ExportOptions {
-                    encoding_date: Some(today.clone()),
-                    software: software.clone(),
-                    ..ExportOptions::default()
-                };
+                let mut options = ExportOptions::default();
+                options.encoding_date = Some(today.clone());
+                options.software = software.clone();
                 let ours = match to_musicxml(&ours, &options) {
                     Ok(text) => text,
                     Err(error) => {

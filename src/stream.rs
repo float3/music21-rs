@@ -89,6 +89,7 @@ use crate::{
 /// that a tag does not, and a tag is what the filters here need.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum StreamKind {
     /// A stream with no particular role: music21's `Stream`.
     #[default]
@@ -142,6 +143,7 @@ impl std::fmt::Display for StreamKind {
 /// A musical object that can live on a timeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum StreamElement {
     /// A single pitched note.
     Note(Note),

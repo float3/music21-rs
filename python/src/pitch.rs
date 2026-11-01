@@ -2092,18 +2092,17 @@ impl Pitch {
         let past_measure = pitch_list(pitchPastMeasure)?;
         let simultaneous = pitch_list(otherSimultaneousPitches)?;
         let altered = pitch_list(alteredPitches)?;
-        self.inner
-            .update_accidental_display(&AccidentalDisplayOptions {
-                pitch_past: &past,
-                pitch_past_measure: &past_measure,
-                other_simultaneous_pitches: &simultaneous,
-                altered_pitches: &altered,
-                cautionary_pitch_class: cautionaryPitchClass,
-                cautionary_all: cautionaryAll,
-                override_status: overrideStatus,
-                cautionary_not_immediate_repeat: cautionaryNotImmediateRepeat,
-                last_note_was_tied: lastNoteWasTied,
-            });
+        let mut options = AccidentalDisplayOptions::default();
+        options.pitch_past = &past;
+        options.pitch_past_measure = &past_measure;
+        options.other_simultaneous_pitches = &simultaneous;
+        options.altered_pitches = &altered;
+        options.cautionary_pitch_class = cautionaryPitchClass;
+        options.cautionary_all = cautionaryAll;
+        options.override_status = overrideStatus;
+        options.cautionary_not_immediate_repeat = cautionaryNotImmediateRepeat;
+        options.last_note_was_tied = lastNoteWasTied;
+        self.inner.update_accidental_display(&options);
         self.write_back()
     }
 

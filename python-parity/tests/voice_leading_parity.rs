@@ -110,11 +110,10 @@ fn the_quartets_of_a_score_are_the_ones_music21_finds() {
     for score in &expectations.score {
         let built = build(score);
         for run in &score.run {
-            let options = QuartetOptions {
-                include_rests: run.include_rests,
-                include_oblique: run.include_oblique,
-                include_no_motion: run.include_no_motion,
-            };
+            let mut options = QuartetOptions::default();
+            options.include_rests = run.include_rests;
+            options.include_oblique = run.include_oblique;
+            options.include_no_motion = run.include_no_motion;
             let mut ours: Vec<String> = iterate_all_voice_leading_quartets(&built, options)
                 .expect("quartets")
                 .iter()

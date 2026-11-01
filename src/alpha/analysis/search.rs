@@ -73,6 +73,7 @@ impl PitchAttribute {
 /// music21's keyword arguments to `findConsecutiveScale`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct ScaleRunOptions {
     /// How many different degrees a run must reach: `degreesRequired`.
     pub degrees_required: usize,

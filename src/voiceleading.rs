@@ -499,6 +499,7 @@ impl VoiceLeadingQuartet {
 /// keyword arguments of the same names, with its defaults.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct QuartetOptions {
     /// Whether a voice may come to its note out of a rest. Without it, the
     /// note before has to stop exactly where the next one starts.

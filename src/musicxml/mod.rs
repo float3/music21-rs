@@ -68,6 +68,7 @@ pub const MUSICXML_VERSION: &str = "4.0";
 /// one music21 writes; a caller making a document of its own will want its
 /// own title and author, or none.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExportOptions {
     /// The `<encoding-date>`, as `YYYY-MM-DD`. music21 writes the day it ran;
     /// the crate reads no clock, so the date is written only when given.
@@ -141,10 +142,8 @@ impl Default for ExportOptions {
 /// let mut part = Stream::with_kind(StreamKind::Part);
 /// part.insert(0.0, TimeSignature::new(3, 4)?);
 /// part.insert(0.0, Note::from_name("C4")?.with_duration(Duration::new(5.0)?));
-/// let options = ExportOptions {
-///     make_notation: true,
-///     ..ExportOptions::default()
-/// };
+/// let mut options = ExportOptions::default();
+/// options.make_notation = true;
 /// let xml = to_musicxml(&part, &options)?;
 /// // A dotted half tied to a half, in two measures.
 /// assert_eq!(xml.matches("<measure ").count(), 2);

@@ -17,6 +17,7 @@ use crate::rest::Rest;
 /// How [`Stream::chordify_with`] makes its chords: music21's keyword
 /// arguments to `chordify`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ChordifyOptions {
     /// Whether a note sounding on from one chord into the next is tied
     /// across: music21's `addTies`.

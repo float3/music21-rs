@@ -75,17 +75,17 @@ fn every_accidental_display_decision_matches_music21() {
         let altered = KeySignature::new(case.sharps)
             .altered_pitches()
             .expect("altered pitches");
-        pitch.update_accidental_display(&AccidentalDisplayOptions {
-            pitch_past: &past,
-            pitch_past_measure: &past_measure,
-            other_simultaneous_pitches: &simultaneous,
-            altered_pitches: &altered,
-            cautionary_pitch_class: case.cautionary_pitch_class,
-            cautionary_all: case.cautionary_all,
-            override_status: case.override_status,
-            cautionary_not_immediate_repeat: case.cautionary_not_immediate_repeat,
-            last_note_was_tied: case.last_note_was_tied,
-        });
+        let mut options = AccidentalDisplayOptions::default();
+        options.pitch_past = &past;
+        options.pitch_past_measure = &past_measure;
+        options.other_simultaneous_pitches = &simultaneous;
+        options.altered_pitches = &altered;
+        options.cautionary_pitch_class = case.cautionary_pitch_class;
+        options.cautionary_all = case.cautionary_all;
+        options.override_status = case.override_status;
+        options.cautionary_not_immediate_repeat = case.cautionary_not_immediate_repeat;
+        options.last_note_was_tied = case.last_note_was_tied;
+        pitch.update_accidental_display(&options);
         let got = match pitch.written_accidental() {
             Some(accidental) => (accidental.name().to_string(), accidental.display_status()),
             None => ("none".to_string(), None),

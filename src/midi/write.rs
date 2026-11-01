@@ -28,6 +28,7 @@ const KEY_SIGNATURE: u8 = 0x59;
 
 /// How [`to_midi`] writes a score: music21's `streamToMidiFile` keywords.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ExportOptions {
     /// Whether the notes start a quarter late, leaving a beat of silence
     /// before the first: music21's `addStartDelay`, off by default.

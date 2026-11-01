@@ -39,6 +39,7 @@ use crate::tempo::MetronomeMark;
 /// How a LilyPond file is written.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct LilyOptions {
     /// The LilyPond version the file says it is for, major and minor:
     /// music21 asks the LilyPond it finds installed.

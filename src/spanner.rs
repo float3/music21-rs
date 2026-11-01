@@ -14,6 +14,7 @@ use crate::notation::Placement;
 /// Which of music21's spanner classes a spanner is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum SpannerKind {
     /// A curve joining notes played in one breath or bow: music21's `Slur`.
     Slur,
