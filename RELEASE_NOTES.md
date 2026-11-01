@@ -29,10 +29,34 @@
 
 ## added
 
+- **`FiguredBassLine::set_time_signature` and `set_key_signature`,
+  `FiguredBassScale::set_scale` and `set_key_signature`, and
+  `VoiceLeadingQuartet::set_pitches`**, which the wheel's in-place edits
+  reach the crate through.
+
+- **music21's `style` doctests run against the wheel**, all 16 passing.
+
+- **The parity outline compares more**: barlines, text and tempo
+  expressions, articulations, expressions, duration types and dots, and
+  every chord note's lyric; runs music21 cannot write are capped per test.
+
 - **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
   rest's colour, as music21 does.
 
 ## fixed
+
+- **Every edit through a handed-out object reaches the crate**: a note's
+  or chord's `storedInstrument`, an articulation's `bendAlter`, a
+  contributor's dates, a figured-bass line's key and meter, a
+  figured-bass scale, an ornament's size and a voice-leading quartet's
+  notes and key, as music21's own objects take them.
+
+- **A realized ornament no longer keeps itself** on the notes it makes:
+  the note it leaves and a turn's or trill's notes carry no expressions,
+  as in music21.
+
+- **`metadata_parity` no longer deadlocks** importing music21's metadata
+  from several test threads at once.
 
 - **music21's fixes followed**: the music21 submodule is at the fork's
   master c815254cb, and the crate gives its answers. `reduce_chords`
