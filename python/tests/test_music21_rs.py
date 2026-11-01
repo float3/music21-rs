@@ -7977,3 +7977,66 @@ def test_a_chords_edits_in_place_survive_a_pickle():
     assert thawed.volume.velocity == 100
     assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
     assert thawed.notes[1].volume.velocity == 40
+
+
+def test_a_meter_rewritten_forgets_how_it_was_drawn_but_load_does_not():
+    """music21's `numerator`, `denominator`, `ratioString` and `resetValues`
+    all reset the meter, clearing its symbol, its note-value denominator and
+    any bar length written over it; `load` alone keeps all three."""
+    for rewrite in (
+        lambda ts: setattr(ts, "numerator", 3),
+        lambda ts: setattr(ts, "denominator", 8),
+        lambda ts: setattr(ts, "ratioString", "3/4"),
+        lambda ts: ts.resetValues("3/4"),
+    ):
+        ts = m.TimeSignature("4/4")
+        ts.symbol = "common"
+        ts.symbolizeDenominator = True
+        ts.barDuration = m.Duration(3.0)
+        rewrite(ts)
+        assert (ts.symbol, ts.symbolizeDenominator) == ("", False)
+        assert ts.barDuration.quarterLength == ts.numerator * 4 / ts.denominator
+
+    ts = m.TimeSignature("cut")
+    ts.symbolizeDenominator = True
+    ts.barDuration = m.Duration(3.0)
+    ts.load("4/4")
+    assert (ts.ratioString, ts.symbol, ts.symbolizeDenominator) == ("4/4", "cut", True)
+    assert ts.barDuration.quarterLength == 3.0
+
+
+def test_a_pitch_moved_keeps_how_its_accidental_is_shown():
+    """music21's `octave`, `step` and `microtone` setters leave the
+    accidental object alone, so what was said of its display stands."""
+    for move in (
+        lambda p: setattr(p, "octave", 4),
+        lambda p: setattr(p, "step", "A"),
+        lambda p: setattr(p, "microtone", 20),
+    ):
+        n = m.Note("E-5")
+        n.pitch.accidental.displayStatus = False
+        n.pitch.accidental.displayType = "always"
+        move(n.pitch)
+        assert n.pitch.accidental.displayStatus is False
+        assert n.pitch.accidental.displayType == "always"
+
+
+def test_a_chord_added_to_sorts_by_staff_position():
+    """music21's `add` sorts by `diatonicNoteNum` before `ps`, so of two
+    enharmonic notes the lower letter comes first and F#3 sorts below G--3."""
+    c = m.Chord(["B--3", "D4"])
+    c.add("A3")
+    assert [p.nameWithOctave for p in c.pitches] == ["A3", "B--3", "D4"]
+    c = m.Chord(["G--3"])
+    c.add("F#3")
+    assert [p.nameWithOctave for p in c.pitches] == ["F#3", "G--3"]
+
+
+def test_a_pickled_tuplet_keeps_its_written_value():
+    """A dotted half in a triplet sounds a half; pickled and read back it is
+    still written as the dotted half, as music21's is."""
+    n = m.Note("F4", quarterLength=3.0)
+    n.duration.appendTuplet(m.Tuplet(3, 2))
+    for kept in (pickle.loads(pickle.dumps(n)), pickle.loads(pickle.dumps(n.duration))):
+        written = kept.duration if isinstance(kept, m.Note) else kept
+        assert (written.type, written.dots, written.quarterLength) == ("half", 1, 2.0)

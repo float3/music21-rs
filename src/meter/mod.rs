@@ -727,6 +727,12 @@ impl TimeSignature {
         self.overridden_bar_duration = written;
     }
 
+    /// The bar length written over the meter's own with
+    /// [`TimeSignature::set_bar_duration`], if any.
+    pub fn written_bar_duration(&self) -> Option<&Duration> {
+        self.overridden_bar_duration.as_ref()
+    }
+
     /// Where an element falls in the bar this meter measures: music21's
     /// `getMeasureOffsetOrMeterModulusOffset`, given the two offsets music21
     /// reads off the stream.

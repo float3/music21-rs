@@ -620,12 +620,20 @@ impl Chord {
     /// note — so the objects come through rather than being made again.
     fn take_notes(slf: &Bound<'_, Self>, mut notes: Vec<Py<Note>>, run_sort: bool) -> PyResult<()> {
         let py = slf.py();
+        // music21's `sortDiatonicAscending`: by staff position, then by
+        // `ps`, so F#3 sorts below G--3.
         if run_sort {
             notes.sort_by(|left, right| {
-                let left = left.borrow(py).inner.pitch().ps();
-                let right = right.borrow(py).inner.pitch().ps();
-                left.partial_cmp(&right)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+                let place = |note: &Py<Note>| {
+                    let pitch = note.borrow(py).inner.pitch().clone();
+                    (pitch.diatonic_note_number(), pitch.ps())
+                };
+                let (left, right) = (place(left), place(right));
+                left.0.cmp(&right.0).then(
+                    left.1
+                        .partial_cmp(&right.1)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                )
             });
         }
         let inners: Vec<RsNote> = notes

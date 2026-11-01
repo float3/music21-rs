@@ -73,13 +73,6 @@ fn read_meter(value: &str) -> PyResult<RsTimeSignature> {
     Ok(meter)
 }
 
-/// A meter rebuilt from a new ratio, keeping how it was drawn.
-fn keeping_symbol(from: &RsTimeSignature, mut rebuilt: RsTimeSignature) -> RsTimeSignature {
-    rebuilt.set_symbol(from.symbol().map(str::to_string));
-    rebuilt.set_symbolize_denominator(from.symbolize_denominator());
-    rebuilt
-}
-
 /// music21's second argument partitions the bar into that many parts.
 ///
 /// A partition is exactly what this crate does not model — but asking for as
@@ -195,7 +188,7 @@ impl TimeSignature {
     fn set_numerator(&mut self, numerator: UnsignedIntegerType) -> PyResult<()> {
         let rebuilt =
             RsTimeSignature::new(numerator, self.inner.denominator()).map_err(meter_error)?;
-        self.inner = keeping_symbol(&self.inner, rebuilt);
+        self.inner = rebuilt;
         Ok(())
     }
 
@@ -208,7 +201,7 @@ impl TimeSignature {
     fn set_denominator(&mut self, denominator: UnsignedIntegerType) -> PyResult<()> {
         let rebuilt =
             RsTimeSignature::new(self.inner.numerator(), denominator).map_err(meter_error)?;
-        self.inner = keeping_symbol(&self.inner, rebuilt);
+        self.inner = rebuilt;
         Ok(())
     }
 
@@ -231,26 +224,35 @@ impl TimeSignature {
 
     #[setter]
     fn set_ratioString(&mut self, value: &str) -> PyResult<()> {
-        let symbolize = self.inner.symbolize_denominator();
-        self.inner = read_meter(value)?;
-        self.inner.set_symbolize_denominator(symbolize);
-        Ok(())
+        self.resetValues(value.to_string(), None)
     }
 
-    /// music21's `load`, which is the ratio-string setter under another name.
+    /// music21's `load`: the meter read from a ratio, keeping how it was
+    /// drawn and any bar length written over it, unless the ratio is `c`
+    /// or `cut`, which names its symbol.
     #[pyo3(signature = (value, divisions = None))]
     fn load(&mut self, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let mut inner = read_meter(value)?;
         checked_divisions(&mut inner, divisions)?;
+        if inner.symbol().is_none() {
+            inner.set_symbol(self.inner.symbol().map(str::to_string));
+        }
         inner.set_symbolize_denominator(self.inner.symbolize_denominator());
+        inner.set_bar_duration(self.inner.written_bar_duration().cloned());
         self.inner = inner;
         Ok(())
     }
 
-    /// music21's `resetValues`, which reloads the meter from a ratio.
+    /// music21's `resetValues`: the meter read afresh from a ratio, its
+    /// symbol, note-value denominator and written bar length cleared. The
+    /// `numerator`, `denominator` and `ratioString` setters all go through
+    /// it.
     #[pyo3(signature = (value = "4/4".to_string(), divisions = None))]
     fn resetValues(&mut self, value: String, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        self.load(&value, divisions)
+        let mut inner = read_meter(&value)?;
+        checked_divisions(&mut inner, divisions)?;
+        self.inner = inner;
+        Ok(())
     }
 
     /// music21's `getMeasureOffsetOrMeterModulusOffset`: where an element
