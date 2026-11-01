@@ -7690,3 +7690,18 @@ def test_a_chords_edits_in_place_survive_a_pickle():
     assert thawed.volume.velocity == 100
     assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
     assert thawed.notes[1].volume.velocity == 40
+
+
+def test_a_stored_instrument_edited_in_place_is_read():
+    # music21 answers ['Piccolo'] for both, on a note and on a chord.
+    for element in (m.Note("C4", quarterLength=1.0), m.Chord(["C4", "E4"], quarterLength=1.0)):
+        element.storedInstrument = m.Flute()
+        element.storedInstrument.instrumentName = "Piccolo"
+        part = m.Part()
+        part.insert(0.0, element)
+        unbundled = m.unbundleInstruments(part)
+        assert [e.instrumentName for e in unbundled if "Instrument" in e.classes] == [
+            "Piccolo"
+        ]
+        parted = m.partitionByInstrument(unbundled)
+        assert [p.getInstrument().instrumentName for p in parted.parts] == ["Piccolo"]

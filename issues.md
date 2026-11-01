@@ -217,10 +217,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
    Checked against music21 on 2026-11-01; each is a bug being fixed:
 
-   - a note's or chord's `storedInstrument` edited in place
-     (`n.storedInstrument.instrumentName = 'Piccolo'`) is lost:
-     `unbundleInstruments` and `partitionByInstrument` answer the
-     instrument as it was set, `Flute` where music21 answers `Piccolo`.
    - `FiguredBassScale.realizerScale`, assigned or edited in place
      (`fbs.realizerScale = MajorScale('D')`), is not read:
      `getPitchNames('D3', '6')` answers `D F B` on the old C major where
@@ -239,6 +235,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
 - **edits through a handed-out object now reach the crate** for an
   accidental's style colour, a scale's tonic, a metronome mark's
   `_tempoText`, and a rest's colour, which the crate's `Rest` now carries.
+  A note's or chord's `storedInstrument` edited in place is read too, so
+  `unbundleInstruments` and `partitionByInstrument` answer the instrument
+  as it now stands.
   A deep copy of a pitch keeps its accidental's style, which music21's own
   writer relies on once installed.
 
