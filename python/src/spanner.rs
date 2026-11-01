@@ -2,8 +2,8 @@
 //! join one note to another rather than standing at a point.
 //!
 //! A slur, a hairpin, an octave line, a glissando, a trill's wavy line, a
-//! tremolo between two notes, a bracket, a pedal mark and an arpeggio
-//! across staves. music21 keeps each as an element of the stream whose
+//! tremolo between two notes, a bracket, a pedal mark, an arpeggio
+//! across staves and a rest of several measures. music21 keeps each as an element of the stream whose
 //! notes it joins -- at offset nought, whatever the notes' offsets -- and
 //! holds the notes themselves; this package keeps them the same way, so a
 //! spanner handed back names the stream's own notes.
@@ -82,6 +82,9 @@ impl Spanner {
             }
             SpannerKind::Line => inner.set_line_type(Some("solid".to_string())),
             SpannerKind::Glissando => inner.set_line_type(Some("wavy".to_string())),
+            SpannerKind::MultiMeasureRest => {
+                inner.set_multi_rest(Some(music21_rs_crate::spanner::MultiRest::default()))
+            }
             _ => {}
         }
         Self {
@@ -980,6 +983,77 @@ impl Spanner {
         Ok(me.inner.shift().is_some_and(|shift| shift.transposing()))
     }
 
+    /// How many measures a rest of several lasts: music21's `numRests`,
+    /// the number it was given or else how many rests it joins.
+    #[getter]
+    fn numRests(slf: &Bound<'_, Self>) -> PyResult<usize> {
+        only(slf, SpannerKind::MultiMeasureRest, "numRests")?;
+        let me = slf.borrow();
+        let count = me.inner.multi_rest().and_then(|said| said.count);
+        Ok(count.unwrap_or(me.spanned.len()))
+    }
+
+    /// Says how many measures it lasts, whatever it joins; `None` counts
+    /// the rests again.
+    #[setter]
+    fn set_numRests(slf: &Bound<'_, Self>, value: Option<usize>) -> PyResult<()> {
+        only(slf, SpannerKind::MultiMeasureRest, "numRests")?;
+        let mut me = slf.borrow_mut();
+        let mut said = me.inner.multi_rest().unwrap_or_default();
+        said.count = value;
+        me.inner.set_multi_rest(Some(said));
+        Ok(())
+    }
+
+    /// Whether a rest of several measures is drawn with rest symbols, a
+    /// breve or a long: music21's `useSymbols`.
+    #[getter]
+    fn useSymbols(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        only(slf, SpannerKind::MultiMeasureRest, "useSymbols")?;
+        Ok(slf
+            .borrow()
+            .inner
+            .multi_rest()
+            .unwrap_or_default()
+            .use_symbols)
+    }
+
+    #[setter]
+    fn set_useSymbols(
+        slf: &Bound<'_, Self>,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
+        only(slf, SpannerKind::MultiMeasureRest, "useSymbols")?;
+        let mut me = slf.borrow_mut();
+        let mut said = me.inner.multi_rest().unwrap_or_default();
+        said.use_symbols = value;
+        me.inner.set_multi_rest(Some(said));
+        Ok(())
+    }
+
+    /// How many measures at most are drawn with symbols: music21's
+    /// `maxSymbols`.
+    #[getter]
+    fn maxSymbols(slf: &Bound<'_, Self>) -> PyResult<u32> {
+        only(slf, SpannerKind::MultiMeasureRest, "maxSymbols")?;
+        Ok(slf
+            .borrow()
+            .inner
+            .multi_rest()
+            .unwrap_or_default()
+            .max_symbols)
+    }
+
+    #[setter]
+    fn set_maxSymbols(slf: &Bound<'_, Self>, value: u32) -> PyResult<()> {
+        only(slf, SpannerKind::MultiMeasureRest, "maxSymbols")?;
+        let mut me = slf.borrow_mut();
+        let mut said = me.inner.multi_rest().unwrap_or_default();
+        said.max_symbols = value;
+        me.inner.set_multi_rest(Some(said));
+        Ok(())
+    }
+
     /// How a bracket's line is drawn: music21's `lineType`, `solid`,
     /// `dashed`, `dotted` or `wavy`.
     #[getter]
@@ -1041,6 +1115,13 @@ impl Spanner {
             .collect();
         let kind = slf.borrow().inner.kind();
         let module = module_of(kind);
+        // music21's `MultiMeasureRest._reprInternal` counts the measures
+        // and names none of the rests.
+        if kind == SpannerKind::MultiMeasureRest {
+            let count = Self::numRests(slf)?;
+            let plural = if count == 1 { "" } else { "s" };
+            return Ok(format!("<{module}.{name} {count} measure{plural}>"));
+        }
         // music21's `Ottava._reprInternal` says the shift and whether the
         // notes under it are written where they sound.
         let said = if kind == SpannerKind::Ottava {
@@ -1749,5 +1830,12 @@ spanner_kinds!(
         "music21.volpiano",
         SpannerKind::Neume,
         "music21's `volpiano.Neume`: the notes sung to one syllable as one figure."
+    ),
+    (
+        MultiMeasureRest,
+        "MultiMeasureRest",
+        "music21.spanner",
+        SpannerKind::MultiMeasureRest,
+        "music21's `MultiMeasureRest`: rests of several measures drawn as one."
     ),
 );

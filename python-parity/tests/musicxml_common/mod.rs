@@ -143,6 +143,22 @@ pub const SCORES: &[(&str, &str)] = &[
         "a piano's staves, the upper missing a measure the lower has",
     ),
     (
+        "built:multi-measure-rests",
+        "rests of several measures drawn as one, which no corpus score has",
+    ),
+    (
+        "built:multi-measure-rests-meters",
+        "the same across changes of meter",
+    ),
+    (
+        "built:multi-measure-rests-of-one",
+        "rests of one measure each, over measures of notes",
+    ),
+    (
+        "built:multi-measure-rest-symbols",
+        "one drawn with rest symbols, one counting more measures than it holds",
+    ),
+    (
         "trecento/PMFC_12_19-Sanctus Barbitonsoris.xml",
         "rehearsal marks in a file",
     ),
@@ -526,6 +542,44 @@ def ottavas():
         part.insert(0, ottava)
     return one_part(part)
 
+def suite_file(name):
+    """A file of the MusicXML test suite music21 keeps, as music21 reads it."""
+    from music21 import common, converter
+    path = common.getSourceFilePath() / 'musicxml' / 'lilypondTestSuite' / name
+    return converter.parse(path, forceSource=True)
+
+def multi_measure_rests():
+    return suite_file('02c-Rests-MultiMeasureRests.xml')
+
+def multi_measure_rests_meters():
+    return suite_file('02d-Rests-Multimeasure-TimeSignatures.xml')
+
+def multi_measure_rests_of_one():
+    return suite_file('03d-Rhythm-DottedDurations-Factors.xml')
+
+def multi_measure_rest_symbols():
+    """A rest of three measures drawn with symbols, as music21's starts
+    out, and one of two measures said to be of five."""
+    from music21 import clef, meter, note, spanner, stream
+    part = stream.Part()
+    measures = []
+    for number in range(1, 7):
+        measure = stream.Measure(number=number)
+        if number == 1:
+            measure.insert(0, clef.TrebleClef())
+            measure.insert(0, meter.TimeSignature('4/4'))
+            measure.append(note.Note('C4', type='whole'))
+        else:
+            measure.append(note.Rest(type='whole'))
+        measures.append(measure)
+    part.append(measures)
+    rests = [measure.notesAndRests[0] for measure in measures]
+    part.insert(0, spanner.MultiMeasureRest(rests[1], rests[2], rests[3]))
+    counted = spanner.MultiMeasureRest(rests[4], rests[5], useSymbols=False)
+    counted.numRests = 5
+    part.insert(0, counted)
+    return one_part(part)
+
 def partstaff_gap():
     """A piano's two staves, the upper lacking the measure numbered 3, which
     music21's exporter joins measure by measure all the same."""
@@ -540,6 +594,10 @@ def partstaff_gap():
 
 BUILT = {
     'built:partstaff-gap': partstaff_gap,
+    'built:multi-measure-rests': multi_measure_rests,
+    'built:multi-measure-rests-meters': multi_measure_rests_meters,
+    'built:multi-measure-rests-of-one': multi_measure_rests_of_one,
+    'built:multi-measure-rest-symbols': multi_measure_rest_symbols,
     'built:ottavas': ottavas,
     'built:rehearsal-marks': rehearsal_marks,
     'built:glissandi': glissandi,

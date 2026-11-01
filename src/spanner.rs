@@ -42,6 +42,9 @@ pub enum SpannerKind {
     /// Notes sung to one syllable as one figure, as chant writes them:
     /// music21's volpiano `Neume`.
     Neume,
+    /// Rests of several measures drawn as one: music21's
+    /// `MultiMeasureRest`.
+    MultiMeasureRest,
 }
 
 impl SpannerKind {
@@ -59,6 +62,7 @@ impl SpannerKind {
             Self::Glissando => "Glissando",
             Self::TremoloSpanner => "TremoloSpanner",
             Self::Neume => "Neume",
+            Self::MultiMeasureRest => "MultiMeasureRest",
         }
     }
 
@@ -107,6 +111,34 @@ pub struct Spanner {
     marks: Option<u8>,
     #[cfg_attr(feature = "serde", serde(default))]
     offset: Drawn<FloatType>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    multi_rest: Option<MultiRest>,
+}
+
+/// How a rest of several measures is drawn and counted: music21's
+/// `MultiMeasureRest.useSymbols`, `maxSymbols` and `numRests`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MultiRest {
+    /// Whether it is drawn with rest symbols, a breve or a long, rather
+    /// than a bar with a number over it.
+    pub use_symbols: bool,
+    /// How many measures at most are drawn with symbols.
+    pub max_symbols: u32,
+    /// How many measures it is said to last where that is not how many
+    /// rests it joins.
+    pub count: Option<usize>,
+}
+
+impl Default for MultiRest {
+    /// music21's defaults: symbols, up to eleven of them.
+    fn default() -> Self {
+        Self {
+            use_symbols: true,
+            max_symbols: 11,
+            count: None,
+        }
+    }
 }
 
 /// How a glissando is played: music21's `Glissando.slideType`.
@@ -494,7 +526,34 @@ impl Spanner {
             glissando: None,
             marks: None,
             offset: Drawn(0.0),
+            multi_rest: None,
         }
+    }
+
+    /// One rest of several measures over the rests at these positions,
+    /// drawn with symbols as music21's starts out.
+    pub fn multi_measure_rest(spanned: Vec<usize>) -> Self {
+        let mut rest = Self::new(SpannerKind::MultiMeasureRest, spanned);
+        rest.multi_rest = Some(MultiRest::default());
+        rest
+    }
+
+    /// How a rest of several measures is drawn and counted.
+    pub fn multi_rest(&self) -> Option<MultiRest> {
+        self.multi_rest
+    }
+
+    /// Says how a rest of several measures is drawn and counted.
+    pub fn set_multi_rest(&mut self, multi_rest: Option<MultiRest>) {
+        self.multi_rest = multi_rest;
+    }
+
+    /// How many measures a rest of several lasts: the count it was given,
+    /// or else how many rests it joins. music21's `numRests`.
+    pub fn num_rests(&self) -> usize {
+        self.multi_rest
+            .and_then(|rest| rest.count)
+            .unwrap_or(self.spanned.len())
     }
 
     /// A glissando over the elements at these positions, drawn as a wavy
@@ -751,5 +810,18 @@ mod tests {
         assert!(slur.is_last(5));
         assert!(!slur.is_first(4) && !slur.is_last(4));
         assert_eq!(slur.kind().class_name(), "Slur");
+    }
+
+    #[test]
+    fn a_multi_measure_rest_counts_its_rests() {
+        let mut rest = Spanner::multi_measure_rest(vec![1, 2, 3]);
+        assert_eq!(rest.num_rests(), 3);
+        assert!(rest.multi_rest().is_some_and(|said| said.use_symbols));
+
+        rest.set_multi_rest(Some(MultiRest {
+            count: Some(10),
+            ..MultiRest::default()
+        }));
+        assert_eq!(rest.num_rests(), 10);
     }
 }

@@ -250,8 +250,8 @@ pub use serial::{
 };
 pub use sieve::Sieve;
 pub use spanner::{
-    Glissando, LineEnd, LineEnds, OctaveShift, Pedal, PedalForm, PedalObject, PedalObjectKind,
-    PedalType, SlideType, Spanner, SpannerKind,
+    Glissando, LineEnd, LineEnds, MultiRest, OctaveShift, Pedal, PedalForm, PedalObject,
+    PedalObjectKind, PedalType, SlideType, Spanner, SpannerKind,
 };
 pub use stream::{BarTogether, StaffGroup, Stream, StreamElement, StreamEvent, StreamKind};
 pub use tempo::{

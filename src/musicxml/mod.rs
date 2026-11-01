@@ -1704,10 +1704,43 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
         if let Some(interval) = transposition {
             attributes.push(transpose_element(interval));
         }
+        if let Some(style) = self.measure_style() {
+            attributes.push(style);
+        }
         if attributes.len() > 0 || attributes.has_attributes() {
             self.root.push(attributes);
         }
         Ok(())
+    }
+
+    /// music21's `measureStyle`: a rest of several measures, written in
+    /// the measure whose first rest starts one. Rests inside voices do not
+    /// count.
+    fn measure_style(&self) -> Option<Element> {
+        let rest = self
+            .stream
+            .events()
+            .iter()
+            .find_map(|event| match event.element() {
+                element @ StreamElement::Rest(_) => Some(element as *const StreamElement),
+                _ => None,
+            })?;
+        let numbered = self.context.spanners.iter().find(|numbered| {
+            numbered.spanner.kind() == SpannerKind::MultiMeasureRest && numbered.holds(rest)
+        })?;
+        if !numbered.is_first(rest) {
+            return None;
+        }
+        let use_symbols = numbered
+            .spanner
+            .multi_rest()
+            .is_none_or(|said| said.use_symbols);
+        let mut multiple = Element::new("multiple-rest");
+        multiple.set("use-symbols", if use_symbols { "yes" } else { "no" });
+        multiple.set_text(numbered.spanner.num_rests().to_string());
+        let mut style = Element::new("measure-style");
+        style.push(multiple);
+        Some(style)
     }
 
     /// music21's `mainElementsParse`.

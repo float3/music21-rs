@@ -7381,6 +7381,35 @@ fn read_into_with(
     Ok(read)
 }
 
+/// How a music21 rest of several measures is drawn and counted. A count
+/// is kept only where it is not the number of rests joined, which is all
+/// music21's `numRests` says of it.
+fn multi_rest_of(
+    spanner: &Bound<'_, PyAny>,
+    joined: usize,
+) -> PyResult<music21_rs_crate::MultiRest> {
+    let defaults = music21_rs_crate::MultiRest::default();
+    let use_symbols = match spanner.getattr("useSymbols") {
+        Ok(said) => said.is_truthy()?,
+        Err(_) => defaults.use_symbols,
+    };
+    let max_symbols = spanner
+        .getattr("maxSymbols")
+        .ok()
+        .and_then(|said| said.extract::<u32>().ok())
+        .unwrap_or(defaults.max_symbols);
+    let count = spanner
+        .getattr("numRests")
+        .ok()
+        .and_then(|said| said.extract::<usize>().ok())
+        .filter(|count| *count != joined);
+    Ok(music21_rs_crate::MultiRest {
+        use_symbols,
+        max_symbols,
+        count,
+    })
+}
+
 /// Whether an element of a stream is a barline at all.
 fn is_barline(element: &Bound<'_, PyAny>) -> PyResult<bool> {
     is_of_class(
@@ -7435,6 +7464,8 @@ fn spanner_value(
         SpannerKind::TremoloSpanner
     } else if is("Neume")? {
         SpannerKind::Neume
+    } else if is("MultiMeasureRest")? {
+        SpannerKind::MultiMeasureRest
     } else {
         return Ok(None);
     };
@@ -7467,6 +7498,9 @@ fn spanner_value(
                 .map(|label| label.str().map(|text| text.to_string()))
                 .transpose()?,
         }));
+    }
+    if kind == SpannerKind::MultiMeasureRest {
+        value.set_multi_rest(Some(multi_rest_of(spanner, value.len())?));
     }
     if kind == SpannerKind::TremoloSpanner {
         let marks = spanner
