@@ -99,8 +99,8 @@ key = { kind = "identity", sync = "FiguredBassLine::current", why = "its sharps 
 time = { kind = "identity", sync = "FiguredBassLine::current" }
 
 [FiguredBassScale]
-realizer_scale = { kind = "identity", sync = "FiguredBassScale::current", why = "a scale of music21's own is not read" }
-key_sig = { kind = "identity", sync = "FiguredBassScale::current" }
+realizer_scale = { kind = "identity", sync = "current" }
+key_sig = { kind = "identity", sync = "current" }
 
 [GenericInterval]
 complemented = { kind = "cache", note = "the complement, made on first asking" }
@@ -207,7 +207,7 @@ source = { kind = "identity", sync = "read live", why = "the row the matrix was 
 
 [VoiceLeadingQuartet]
 notes = { kind = "identity", sync = "VoiceLeadingQuartet::current", why = "the intervals stay as worked out when a note was set, as music21's do" }
-key_object = { kind = "identity", sync = "VoiceLeadingQuartet::current" }
+key_object = { kind = "identity", sync = "keyed" }
 
 [Volume]
 client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }

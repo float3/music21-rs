@@ -58,27 +58,32 @@ impl FiguredBassScale {
         }
     }
 
-    /// The scale as it stands: music21 counts in `realizerScale` and spells
-    /// in `keySig` as they are now, so assigning either, or editing the
-    /// object handed out, changes the answers. A scale or key signature of
-    /// music21's own is not read.
-    fn current(&self, py: Python<'_>) -> RsFiguredBassScale {
-        let mut inner = self.inner.clone();
-        if let Some(scale) = &self.realizer_scale
-            && let Ok(ours) = scale
-                .bind(py)
-                .extract::<PyRef<'_, crate::scale::ConcreteScale>>()
-        {
-            inner.set_scale(ours.current());
+    /// The scale as it stands now. music21 reads `realizerScale` and
+    /// `keySig` afresh on every question, so a scale or signature assigned,
+    /// or one handed out and edited in place, is the one counted in.
+    fn current(&self, py: Python<'_>) -> PyResult<RsFiguredBassScale> {
+        let mut scale = self.inner.clone();
+        if let Some(object) = &self.realizer_scale {
+            let object = object.bind(py);
+            let Ok(ours) = object.extract::<PyRef<'_, crate::scale::ConcreteScale>>() else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "realizerScale must be a scale of this package's; got {}",
+                    object.get_type().repr()?
+                )));
+            };
+            scale = scale.with_scale(ours.current());
         }
-        if let Some(signature) = &self.key_sig
-            && let Ok(ours) = signature
-                .bind(py)
-                .extract::<PyRef<'_, crate::key::KeySignature>>()
-        {
-            inner.set_key_signature(ours.signature.clone());
+        if let Some(object) = &self.key_sig {
+            let object = object.bind(py);
+            let Ok(ours) = object.extract::<PyRef<'_, crate::key::KeySignature>>() else {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "keySig must be a key signature of this package's; got {}",
+                    object.get_type().repr()?
+                )));
+            };
+            scale = scale.with_key_signature(ours.signature.clone());
         }
-        inner
+        Ok(scale)
     }
 
     /// Pitches as the objects music21 would hand back.
@@ -158,11 +163,12 @@ impl FiguredBassScale {
     #[pyo3(signature = (bassPitch, notationString = ""))]
     fn getPitchNames(
         &self,
+        py: Python<'_>,
         bassPitch: &Bound<'_, PyAny>,
         notationString: &str,
     ) -> PyResult<Vec<String>> {
         let names = self
-            .current(bassPitch.py())
+            .current(py)?
             .pitch_names(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Ok(names.iter().map(|name| music21_name(name)).collect())
@@ -178,7 +184,7 @@ impl FiguredBassScale {
         notationString: &str,
     ) -> PyResult<Bound<'py, PyList>> {
         let pitches = self
-            .current(bassPitch.py())
+            .current(py)?
             .sample_pitches(&pitch_from_any(bassPitch)?, &notation_from(notationString)?)
             .map_err(scale_error)?;
         Self::objects(py, pitches)
@@ -199,7 +205,7 @@ impl FiguredBassScale {
             .map(pitch_from_any)
             .transpose()?;
         let pitches = self
-            .current(bassPitch.py())
+            .current(py)?
             .pitches(
                 &pitch_from_any(bassPitch)?,
                 &notation_from(notationString)?,

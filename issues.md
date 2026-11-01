@@ -215,10 +215,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
 9. **edits through a handed-out object that may still miss the crate.**
    `data/py_fields.toml` lists them as *value*.
 
-   Suspected, not yet shown: a note's or chord's `storedInstrument` against
-   the crate's MIDI and instrument readers, `FiguredBassScale`'s scale and
-   key, `VoiceLeadingQuartet.key`. A chord's inversion fixed past 255 stays
-   in the facade only; the crate keeps a `u8`.
+   The four suspected on 2026-11-01 were checked against music21 and
+   fixed (below, under closed), and the other rows listed as *value* were
+   made to read the object as it stands; none is left.
 
 10. **appending to a wheel stream still reads every held note's length.**
     2,000 appends take 47.8ms where music21 takes 28ms: a note's duration
@@ -248,6 +247,18 @@ two rules, set 2026-09-12, that most of the open work now serves:
 - **edits through a handed-out object now reach the crate** for an
   accidental's style colour, a scale's tonic, a metronome mark's
   `_tempoText`, and a rest's colour, which the crate's `Rest` now carries.
+  A note's or chord's `storedInstrument` edited in place is read too, so
+  `unbundleInstruments` and `partitionByInstrument` answer the instrument
+  as it now stands. A `FiguredBassScale` counts in its `realizerScale` and
+  spells a chromatic bass by its `keySig` as they stand, assigned or edited
+  in place, since music21 reads both afresh on every call. A
+  `VoiceLeadingQuartet` hears its key as the key stands, the two ways
+  music21's edited key reads: `modalOpening` and `clausulaVera` by the
+  tonic it has now, `isProperResolution` in the scale its signature
+  implies. 3,000 random quartets agree with music21, half with the tonic
+  edited. `Chord.inversionName` and `inversionText` name the inversion
+  `inversion()` answers, so one fixed through `_overrides` is named
+  (`_overrides['inversion'] = 2` on a triad is `64`, `Second Inversion`).
   A deep copy of a pitch keeps its accidental's style, which music21's own
   writer relies on once installed.
 
@@ -305,6 +316,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
   `key.tonic`, `scale.tonic`. tightening the first broke twenty-nine of
   music21's own docstrings: the note written into `_client` is not always one
   of ours (`41e1937`).
+- **an inversion fixed past every ordinal reads `Unknown Position`.**
+  music21's `inversionText` raises `IndexError` off its ordinals list for
+  `_overrides['inversion'] = 300`; `inversionName` refuses it by name on
+  both sides.
 - **the install helper forgives three exceptions on copy** — `AttributeError`,
   `TypeError` and `RecursionError`, narrowed from a bare `except Exception`
   (`7c8e4de`).

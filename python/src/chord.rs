@@ -959,10 +959,11 @@ impl Chord {
                 .and_then(|fixed| fixed.extract::<u8>().ok());
             chord.set_inversion_override(fixed);
         }
-        if let Some(stored) = &self.stored_instrument
-            && let Ok((_, value)) = crate::instrument::stored_instrument(Some(stored.bind(py)))
-        {
-            chord.set_stored_instrument(value);
+        if self.stored_instrument.is_some() {
+            chord.set_stored_instrument(crate::instrument::stored_value(
+                py,
+                self.stored_instrument.as_ref(),
+            ));
         }
         chord
     }
@@ -2493,12 +2494,21 @@ impl Chord {
         self.inner.is_sorted_diatonic_ascending()
     }
 
-    fn inversionName(&self) -> PyResult<Option<i32>> {
-        self.inner.inversion_name().map_err(chord_error)
+    fn inversionName(slf: &Bound<'_, Self>) -> PyResult<Option<i32>> {
+        // music21 names what `self.inversion()` answers, so an inversion a
+        // caller fixed through `_overrides` is the one named.
+        let Some(inversion) = Self::inversion(slf, None, true, None, true)? else {
+            return Ok(None);
+        };
+        slf.borrow()
+            .inner
+            .inversion_name_of(inversion)
+            .map_err(chord_error)
     }
 
-    fn inversionText(&self) -> String {
-        self.inner.inversion_text()
+    fn inversionText(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let inversion = Self::inversion(slf, None, true, None, true)?.unwrap_or(-1);
+        Ok(RsChord::inversion_text_of(inversion))
     }
 
     // ---- set theory ------------------------------------------------------

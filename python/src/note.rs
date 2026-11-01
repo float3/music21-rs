@@ -725,12 +725,11 @@ impl Note {
         if let Some(lyrics) = &self.lyrics {
             fold_lyric_objects(py, lyrics, note.lyrics_mut());
         }
-        // music21 reads the instrument object the note holds, so an edit
-        // through `n.storedInstrument` is an edit to the note.
-        if let Some(stored) = &self.stored_instrument
-            && let Ok((_, value)) = crate::instrument::stored_instrument(Some(stored.bind(py)))
-        {
-            note.set_stored_instrument(value);
+        if self.stored_instrument.is_some() {
+            note.set_stored_instrument(crate::instrument::stored_value(
+                py,
+                self.stored_instrument.as_ref(),
+            ));
         }
         note
     }

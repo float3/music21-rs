@@ -81,6 +81,28 @@ pub struct VoiceLeadingQuartet {
 }
 
 impl VoiceLeadingQuartet {
+    /// The quartet in its key as the key stands now: music21 reads
+    /// `self.key` on every question, so a key handed out and edited in place
+    /// (`q.key.tonic.name = 'D'`) is the one heard.
+    ///
+    /// Such a key reads two ways in music21. Its degrees follow the tonic it
+    /// has now, in its mode, which `modalOpening` and `clausulaVera` read;
+    /// `getScale`, which `isProperResolution` counts in, follows the
+    /// signature the key is still written under. `written` asks for the
+    /// second.
+    fn keyed(&self, py: Python<'_>, written: bool) -> PyResult<RsQuartet> {
+        let mut quartet = self.current(py);
+        if let Some(key) = &self.key_object {
+            let key = key.bind(py);
+            let read = match key.cast::<crate::key::Key>() {
+                Ok(ours) if written => crate::key::Key::written(ours),
+                _ => analytic_key(key)?,
+            };
+            quartet.set_key(Some(read));
+        }
+        Ok(quartet)
+    }
+
     /// Builds one from four note objects and an optional key.
     fn assemble(
         py: Python<'_>,
@@ -143,16 +165,14 @@ impl VoiceLeadingQuartet {
         Self::assemble(py, notes, key.as_ref())
     }
 
-    /// The quartet as it stands: music21 reads its notes and its key as
+    /// The quartet with its notes as they stand: music21 reads its notes as
     /// they are now, but its intervals as they were when the notes were set.
-    fn current(&self, py: Python<'_>) -> PyResult<RsQuartet> {
+    /// Its key is read by `keyed`.
+    fn current(&self, py: Python<'_>) -> RsQuartet {
         let mut quartet = self.inner.clone();
         let pitch = |index: usize| self.notes[index].borrow(py).synced(py).pitch().clone();
         quartet.set_pitches(pitch(0), pitch(1), pitch(2), pitch(3));
-        if let Some(key) = &self.key_object {
-            quartet.set_key(Some(analytic_key(key.bind(py))?));
-        }
-        Ok(quartet)
+        quartet
     }
 
     /// Reads the four notes again, after one of them has been replaced.
@@ -481,17 +501,17 @@ impl VoiceLeadingQuartet {
         self.inner.hidden_octave()
     }
 
-    fn voiceOverlap(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.current(py)?.voice_overlap())
+    fn voiceOverlap(&self, py: Python<'_>) -> bool {
+        self.current(py).voice_overlap()
     }
 
-    fn voiceCrossing(&self, py: Python<'_>) -> PyResult<bool> {
-        Ok(self.current(py)?.voice_crossing())
+    fn voiceCrossing(&self, py: Python<'_>) -> bool {
+        self.current(py).voice_crossing()
     }
 
     /// music21's `isProperResolution`.
     fn isProperResolution(&self, py: Python<'_>) -> PyResult<bool> {
-        self.current(py)?
+        self.keyed(py, true)?
             .is_proper_resolution()
             .map_err(quartet_error)
     }
@@ -502,7 +522,9 @@ impl VoiceLeadingQuartet {
 
     /// music21's `modalOpening`.
     fn modalOpening(&self, py: Python<'_>) -> PyResult<bool> {
-        self.current(py)?.modal_opening().map_err(quartet_error)
+        self.keyed(py, false)?
+            .modal_opening()
+            .map_err(quartet_error)
     }
 
     /// music21's `opensIncorrectly`, the older name for the other answer.
@@ -512,7 +534,9 @@ impl VoiceLeadingQuartet {
 
     /// music21's `clausulaVera`.
     fn clausulaVera(&self, py: Python<'_>) -> PyResult<bool> {
-        self.current(py)?.clausula_vera().map_err(quartet_error)
+        self.keyed(py, false)?
+            .clausula_vera()
+            .map_err(quartet_error)
     }
 
     /// music21's `closesIncorrectly`, the older name for the other answer.

@@ -29,8 +29,7 @@
 
 ## added
 
-- **`FiguredBassLine::set_time_signature` and `set_key_signature`,
-  `FiguredBassScale::set_scale` and `set_key_signature`, and
+- **`FiguredBassLine::set_time_signature` and `set_key_signature`, and
   `VoiceLeadingQuartet::set_pitches`**, which the wheel's in-place edits
   reach the crate through.
 
@@ -42,6 +41,14 @@
 
 - **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
   rest's colour, as music21 does.
+
+- **`FiguredBassScale::with_scale` and `with_key_signature`**: a figured
+  bass counted in another scale, or spelled by another signature, as
+  music21's `realizerScale` and `keySig` assigned.
+
+- **`Chord::inversion_name_of` and `Chord::inversion_text_of`**: the
+  figured-bass number and the words for a chord standing in a given
+  inversion.
 
 ## fixed
 
@@ -67,11 +74,10 @@
   to 0.5ms; appending is about twice as fast. `xtask bench` now times
   streams and reading and writing corpus files against music21.
 
-- **Every edit through a handed-out object reaches the crate**: a note's
-  or chord's `storedInstrument`, an articulation's `bendAlter`, a
-  contributor's dates, a figured-bass line's key and meter, a
-  figured-bass scale, an ornament's size and a voice-leading quartet's
-  notes and key, as music21's own objects take them.
+- **Every edit through a handed-out object reaches the crate**: an
+  articulation's `bendAlter`, a contributor's dates, a figured-bass
+  line's key and meter, an ornament's size and a voice-leading quartet's
+  notes, as music21's own objects take them.
 
 - **A realized ornament no longer keeps itself** on the notes it makes:
   the note it leaves and a turn's or trill's notes carry no expressions,
@@ -102,6 +108,18 @@
 - **More edits made in place take effect**: `p.accidental.style.color`,
   `sc.tonic.name = ...` and `mm._tempoText.text = ...` reach the crate, as
   in music21, and a pitch's deep copy keeps its accidental's style.
+
+- **The last suspected lost edits take effect too**: a note's or chord's
+  `storedInstrument` edited in place, a `FiguredBassScale`'s
+  `realizerScale` and `keySig` assigned or edited, and a
+  `VoiceLeadingQuartet`'s key edited in place are all read as they stand.
+  `Chord.inversionName` and `inversionText` name an inversion fixed
+  through `_overrides`, which they ignored.
+
+- **`VoiceLeadingQuartet::is_proper_resolution` counts in the scale the
+  key's signature implies**, music21's `key.getScale(key.mode)`, for a
+  major or minor key. This is the same scale for any key whose tonic and
+  signature agree.
 
 - **The braille music21 could not write is compared**: with music21's
   `makeTies` fixed on the fork, `demos/incorrect_time_signature_pv.mxl`
