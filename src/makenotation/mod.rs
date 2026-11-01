@@ -717,6 +717,10 @@ fn placed(offset: FloatType, voice: Option<usize>, element: &StreamElement) -> P
 ///
 /// Spanners are not carried across, as the places they name move.
 ///
+/// A stream that would take more than [`MAX_MEASURES`] measures is refused
+/// with an error. A few bytes of a file can say a note lasts hundreds of
+/// millions of quarters, and that many measures do not fit in memory.
+///
 /// ```
 /// use music21_rs::makenotation::make_measures;
 /// use music21_rs::{Duration, Note, Stream, TimeSignature};
@@ -735,6 +739,10 @@ fn placed(offset: FloatType, voice: Option<usize>, element: &StreamElement) -> P
 pub fn make_measures(stream: &Stream) -> Result<Stream> {
     make_measures_by(stream, &[])
 }
+
+/// The most measures [`make_measures`] cuts a stream into. Hours of music
+/// in the shortest meters fit in it.
+pub const MAX_MEASURES: usize = 100_000;
 
 /// [`make_measures`] by meters given rather than found: music21's
 /// `makeMeasures` with a `meterStream`. Each meter is given with the offset
@@ -870,6 +878,11 @@ pub fn make_measures_by(stream: &Stream, given: &[(FloatType, TimeSignature)]) -
             return Err(crate::error::Error::Meter(format!(
                 "time signature {} has no duration",
                 meters[here].1.ratio_string()
+            )));
+        }
+        if bars.len() == MAX_MEASURES {
+            return Err(crate::error::Error::Stream(format!(
+                "the stream would take more than {MAX_MEASURES} measures"
             )));
         }
         let next = op_frac(offset + length);
