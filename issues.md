@@ -215,10 +215,24 @@ two rules, set 2026-09-12, that most of the open work now serves:
 9. **edits through a handed-out object that may still miss the crate.**
    `data/py_fields.toml` lists them as *value*.
 
-   Suspected, not yet shown: a note's or chord's `storedInstrument` against
-   the crate's MIDI and instrument readers, `FiguredBassScale`'s scale and
-   key, `VoiceLeadingQuartet.key`. A chord's inversion fixed past 255 stays
-   in the facade only; the crate keeps a `u8`.
+   Checked against music21 on 2026-11-01; each is a bug being fixed:
+
+   - a note's or chord's `storedInstrument` edited in place
+     (`n.storedInstrument.instrumentName = 'Piccolo'`) is lost:
+     `unbundleInstruments` and `partitionByInstrument` answer the
+     instrument as it was set, `Flute` where music21 answers `Piccolo`.
+   - `FiguredBassScale.realizerScale`, assigned or edited in place
+     (`fbs.realizerScale = MajorScale('D')`), is not read:
+     `getPitchNames('D3', '6')` answers `D F B` on the old C major where
+     music21 answers `D F# B`. music21 reads `realizerScale` and `keySig`
+     afresh on every call.
+   - `VoiceLeadingQuartet.key` edited in place (`q.key.tonic.name = 'D'`)
+     is not read: `clausulaVera` and `modalOpening` answer for the old
+     key, where music21 reads the tonic it now has.
+   - `Chord.inversionName` and `inversionText` ignore an inversion fixed
+     through `_overrides`, any inversion and not only one past 255:
+     `_overrides['inversion'] = 2` on a C major triad answers `53` and
+     `Root Position` where music21 answers `64` and `Second Inversion`.
 
 ## closed
 
