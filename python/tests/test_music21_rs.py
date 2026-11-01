@@ -7611,6 +7611,19 @@ print(mark.text, mark._tempoText is words)
     assert done.stdout.split() == ["Lento", "True"]
 
 
+def test_a_rests_colour_set_on_its_style_is_written():
+    # music21 writes `<note color="#FF0000">` around the rest.
+    rest = m.Rest(1.0)
+    rest.style.color = "red"
+    written = m.to_musicxml(bar_of(rest, m.Rest(3.0)))
+    assert re.findall(r"<note( color=\"#\w+\")?>\s*<rest", written) == [
+        ' color="#FF0000"',
+        "",
+    ]
+    (read,) = list(m.from_musicxml(written).recurse().getElementsByClass("Rest"))[:1]
+    assert read.style.color == "#FF0000"
+
+
 def test_a_rests_tie_reaches_the_value_and_back():
     # RomanText holds a rest over the barline with a tie, as music21 does.
     read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")

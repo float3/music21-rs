@@ -144,6 +144,11 @@ impl Rest {
         if let Some(lyrics) = &self.lyrics {
             fold_lyric_objects(py, lyrics, rest.lyrics_mut());
         }
+        // music21 keeps the colour on the style, so an edit through
+        // `r.style.color` is an edit to the rest.
+        if self.style.is_some() {
+            rest.set_color(crate::notation::style_colour(py, self.style.as_ref()));
+        }
         rest
     }
 
@@ -505,7 +510,8 @@ impl Rest {
 
     #[getter]
     fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        crate::notation::style_of(slf, |me| &mut me.style, None)
+        let colour = slf.borrow().inner.color().map(str::to_string);
+        crate::notation::style_of(slf, |me| &mut me.style, colour)
     }
 
     #[setter]

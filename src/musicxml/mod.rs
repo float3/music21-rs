@@ -2273,6 +2273,9 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
         position: Option<*const StreamElement>,
     ) -> Result<Element> {
         let mut mxnote = Element::new("note");
+        if let Some(color) = rest.color() {
+            mxnote.set("color", normalize_color(color)?);
+        }
         if rest.hidden() {
             mxnote.set("print-object", "no");
             mxnote.set("print-spacing", "yes");
@@ -4646,6 +4649,19 @@ mod tests {
         assert_eq!(
             exporter.rest_element(&rest, 0.0, None).unwrap().dump(),
             "<note>\n  <rest measure=\"yes\" />\n  <duration>20160</duration>\n</note>"
+        );
+    }
+
+    #[test]
+    fn a_rests_colour_is_written_on_its_note() {
+        // As music21 writes it: the colour before what hides it.
+        let mut rest = Rest::new(Duration::quarter());
+        rest.set_color(Some("red".to_string()));
+        rest.set_hidden(true);
+        let xml = with_measure(|exporter| exporter.rest_element(&rest, 0.0, None).unwrap()).dump();
+        assert!(
+            xml.starts_with("<note color=\"#FF0000\" print-object=\"no\" print-spacing=\"yes\">"),
+            "{xml}"
         );
     }
 

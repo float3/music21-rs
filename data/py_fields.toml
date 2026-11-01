@@ -168,7 +168,7 @@ tie = { kind = "identity", sync = "synced" }
 expressions = { kind = "identity", sync = "read live", why = "the crate's rest holds no expressions; readers walk the list" }
 articulations = { kind = "identity", sync = "read live", why = "the crate's rest holds no articulations; readers walk the list" }
 editorial = { kind = "identity", sync = "read live", why = "the crate does not model editorials" }
-style = { kind = "identity", sync = "read live", why = "the MusicXML writer reads hideObjectOnPrint off it; the crate's rest has no colour, so `r.style.color` is not written (music21 writes it)" }
+style = { kind = "identity", sync = "synced" }
 
 [RomanNumeral]
 key_object = { kind = "identity", sync = "read live", why = "handed back as given; the chord is worked out when the key is set, as music21 caches its pitches" }
