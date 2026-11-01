@@ -461,15 +461,11 @@ const ASCII: [char; 64] = [
 ];
 
 /// Each row of a cell's dots, left and right, as `0` and `1`: music21's
-/// `binary_dots`. music21 writes dots one, two, three, five and six as
-/// `01 11 11`, the first row backwards, and so does this.
+/// `binary_dots`.
 pub fn binary_dots(braille: char) -> Option<[&'static str; 3]> {
     let bits = (braille as u32)
         .checked_sub(0x2800)
         .filter(|bits| *bits < 64)?;
-    if bits == 0b110111 {
-        return Some(["01", "11", "11"]);
-    }
     let row = |left: u32, right: u32| match (bits >> left & 1, bits >> right & 1) {
         (0, 0) => "00",
         (0, _) => "01",
@@ -493,7 +489,7 @@ mod tests {
         assert_eq!(pitch_name_to_note('C', "eighth").as_deref(), Some("⠙"));
         assert_eq!(pitch_name_to_note('C', "whole").as_deref(), Some("⠽"));
         assert_eq!(ascii_char(cell(1246)), Some('$'));
-        assert_eq!(binary_dots(cell(12356)), Some(["01", "11", "11"]));
+        assert_eq!(binary_dots(cell(12356)), Some(["10", "11", "11"]));
         assert_eq!(binary_dots(cell(1456)), Some(["11", "01", "01"]));
     }
 }

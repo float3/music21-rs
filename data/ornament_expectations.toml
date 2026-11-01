@@ -3,10 +3,10 @@
 # The classes are transcribed into src/expressions.rs; what they play is
 # checked behaviourally.
 #
-# music21 11.0.0b14 at df3fbc6c7a3df133005d24ad489b0cf12240cc20
+# music21 11.0.0b15 at 7f74f4acd8ad058aeeae4a9394b09a27bfc52da8
 
-music21_version = "11.0.0b14"
-music21_commit = "df3fbc6c7a3df133005d24ad489b0cf12240cc20"
+music21_version = "11.0.0b15"
+music21_commit = "7f74f4acd8ad058aeeae4a9394b09a27bfc52da8"
 
 [[ornament]]
 class = "Ornament"

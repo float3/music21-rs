@@ -1423,9 +1423,11 @@ fn flatten_unnecessary_voices(measure: &mut Stream) {
 ///
 /// A stream holding parts has each of them done. The stream must already be
 /// in measures. A piece cut from a voice goes to the voice of the same name
-/// in the next measure, or to the measure itself where there is none; one
-/// cut from a measure with no voices goes to the next measure's first voice
-/// where it has any.
+/// in the next measure, or to the measure itself where there is none; when
+/// the next measure has no voices, its notes are gathered into a voice and
+/// the piece goes to a voice of its own name, made there. One cut from a
+/// measure with no voices goes to the next measure's first voice where it
+/// has any.
 pub fn make_ties(stream: &mut Stream) -> Result<()> {
     make_ties_of(stream, is_general_note)
 }
@@ -1551,16 +1553,28 @@ fn make_ties_of(stream: &mut Stream, wanted: fn(&StreamElement) -> bool) -> Resu
                 }
             } else if has_voices {
                 // The notes of the next measure are gathered into a voice of
-                // their own, and the piece joins its first voice.
-                let (moved, kept): (Vec<StreamEvent>, Vec<StreamEvent>) = events
-                    .into_iter()
-                    .partition(|event| is_general_note(event.element()));
-                events = kept;
-                let mut voice = Stream::new().with_events(moved);
-                voice.set_kind(StreamKind::Voice);
-                events.push(StreamEvent::new(0.0, voice));
-                events = sorted_events(events);
-                voice_at(&events, None)
+                // their own once, and the piece joins the voice of its own
+                // name, made where there is none.
+                if voice_at(&events, None).is_none() {
+                    let (moved, kept): (Vec<StreamEvent>, Vec<StreamEvent>) = events
+                        .into_iter()
+                        .partition(|event| is_general_note(event.element()));
+                    events = kept;
+                    let mut voice = Stream::new().with_events(moved);
+                    voice.set_kind(StreamKind::Voice);
+                    events.push(StreamEvent::new(0.0, voice));
+                    events = sorted_events(events);
+                }
+                let named = id.as_deref().and_then(|id| voice_at(&events, Some(id)));
+                if named.is_none() {
+                    let mut voice = Stream::new().with_events(vec![StreamEvent::new(0.0, remain)]);
+                    voice.set_kind(StreamKind::Voice);
+                    voice.set_id(id.clone());
+                    events.push(StreamEvent::new(0.0, voice));
+                    *next = next.with_events(sorted_events(events));
+                    continue;
+                }
+                named
             } else {
                 None
             };
@@ -2047,6 +2061,68 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
 mod tests {
     use super::*;
     use crate::{Duration, Note};
+
+    /// Notes in two voices tied into a measure with none continue there in
+    /// voices of the same names, beside the notes the measure already held.
+    #[test]
+    fn ties_into_a_measure_without_voices_keep_their_voices() -> Result<()> {
+        let tied_into = |held: &[&str]| -> Result<Vec<(Option<String>, Vec<String>)>> {
+            let mut first = Stream::with_kind(StreamKind::Measure);
+            first.set_number(1);
+            first.insert(0.0, TimeSignature::new(2, 4)?);
+            for (id, name) in [("1", "C5"), ("2", "C4")] {
+                let mut voice = Stream::with_kind(StreamKind::Voice);
+                voice.set_id(Some(id.to_string()));
+                voice.insert(
+                    0.0,
+                    Note::from_name(name)?.with_duration(Duration::new(4.0)?),
+                );
+                first.insert(0.0, voice);
+            }
+            let mut second = Stream::with_kind(StreamKind::Measure);
+            second.set_number(2);
+            for name in held {
+                second.insert(
+                    0.0,
+                    Note::from_name(name)?.with_duration(Duration::new(2.0)?),
+                );
+            }
+            let mut part = Stream::with_kind(StreamKind::Part);
+            part.insert(0.0, first);
+            part.insert(2.0, second);
+            make_ties(&mut part)?;
+            let measures = part.measures();
+            Ok(measures[1]
+                .voices()
+                .iter()
+                .map(|voice| {
+                    let names = voice
+                        .notes()
+                        .iter()
+                        .filter_map(|(_, element)| match element {
+                            StreamElement::Note(note) => Some(note.pitch().name_with_octave()),
+                            _ => None,
+                        })
+                        .collect();
+                    (voice.id().map(str::to_string), names)
+                })
+                .collect())
+        };
+        let voices = tied_into(&[])?;
+        assert_eq!(
+            voices,
+            [
+                (Some("1".to_string()), vec!["C5".to_string()]),
+                (Some("2".to_string()), vec!["C4".to_string()]),
+            ]
+        );
+        let voices = tied_into(&["G4"])?;
+        assert_eq!(voices.len(), 3);
+        assert!(voices.contains(&(Some("1".to_string()), vec!["C5".to_string()])));
+        assert!(voices.contains(&(Some("2".to_string()), vec!["C4".to_string()])));
+        assert!(voices.iter().any(|(_, names)| names == &["G4".to_string()]));
+        Ok(())
+    }
 
     /// A barline standing loose in what is cut into measures stands
     /// nowhere: music21's `offsetMap` passes over barlines, so

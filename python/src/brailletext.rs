@@ -350,11 +350,10 @@ impl BrailleText {
         Ok(out)
     }
 
-    /// Which hand's sign the notes' lines start with. music21's getter
-    /// never answers what was set, and this does not either.
+    /// Which hand's sign the notes' lines start with: the hand last set.
     #[getter]
-    fn showHand(&self, py: Python<'_>) -> Py<PyAny> {
-        py.None()
+    fn showHand(&self) -> Option<&'static str> {
+        self.inner.show_hand()
     }
 
     #[setter]

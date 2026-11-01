@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b14 at df3fbc6c7a3df133005d24ad489b0cf12240cc20
+# music21 11.0.0b15 at 7f74f4acd8ad058aeeae4a9394b09a27bfc52da8
 
-music21_version = "11.0.0b14"
-music21_commit = "df3fbc6c7a3df133005d24ad489b0cf12240cc20"
+music21_version = "11.0.0b15"
+music21_commit = "7f74f4acd8ad058aeeae4a9394b09a27bfc52da8"
 
 [[module]]
 module = "music21.alpha.analysis.aligner"
@@ -110,7 +110,7 @@ tests = 0
 module = "music21.analysis.reduceChords"
 docstrings = 4
 examples = 28
-tests = 4
+tests = 5
 
 [[module]]
 module = "music21.analysis.reduction"
@@ -164,31 +164,31 @@ tests = 2
 module = "music21.braille.basic"
 docstrings = 25
 examples = 199
-tests = 0
+tests = 2
 
 [[module]]
 module = "music21.braille.lookup"
 docstrings = 2
 examples = 6
-tests = 0
+tests = 1
 
 [[module]]
 module = "music21.braille.noteGrouping"
 docstrings = 3
 examples = 23
-tests = 0
+tests = 1
 
 [[module]]
 module = "music21.braille.segment"
 docstrings = 19
 examples = 219
-tests = 1
+tests = 8
 
 [[module]]
 module = "music21.braille.text"
 docstrings = 14
 examples = 135
-tests = 0
+tests = 3
 
 [[module]]
 module = "music21.braille.translate"
@@ -500,7 +500,7 @@ tests = 272
 module = "music21.stream.makeNotation"
 docstrings = 11
 examples = 255
-tests = 284
+tests = 286
 
 [[module]]
 module = "music21.style"

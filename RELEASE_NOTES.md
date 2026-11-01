@@ -4,7 +4,18 @@ Five design questions were debated and their verdicts recorded in
 DECISIONS.md; these are the changes they called for, and the bugs the
 debates found.
 
+## breaking changes
+
+- **`BrailleSegment::descending_chords`** is a `bool`, and
+  `NoteGroupingTranscriber::transcribe_group`, `transcribe_note_grouping`
+  and `transcribe_element` no longer return a `Result`: none of them can
+  fail now that an empty text expression is transcribed.
+
 ## added
+
+- **`BrailleText::show_hand`** answers the hand last set, and
+  **`basic::chord_symbol_to_braille`** writes a chord symbol as music21's
+  `chordToBraille` does; the package's `chordToBraille` takes one too.
 
 - **`Stream.placed()`** answers, for every element a wheel stream holds,
   its offset, measure number and the four beat members, from the crate's
@@ -38,6 +49,17 @@ debates found.
   and what to ask instead.
 
 ## fixed
+
+- **music21's fixes followed**: the music21 submodule is at the fork's
+  master 7f74f4acd, and the crate gives its answers. Braille: dots
+  1-2-3-5-6, `showHand`, the transcriber's sign on a tuplet whose number
+  is hidden, a chord's own length (a chord symbol is the exception sign),
+  a split measure's padding rest, every doubled articulation removed, a
+  tie across a segment break kept, chords spelled downward unless a clef
+  says otherwise and from segment to segment, a keyboard heading from
+  either hand, and a key and time signature in one hand only. `make_ties`
+  keeps each voice tied into a measure without voices in a voice of its
+  own name.
 
 - **Edits made in place reach the writers**: a chord's duration, volume,
   beams and style colour, a rest's tie and an ornament's accidental now
