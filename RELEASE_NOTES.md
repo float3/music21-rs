@@ -54,6 +54,11 @@
 - **`from_midi`, `to_midi`, `from_abc`, `from_abc_number` and `to_abc`
   at the crate root**, beside the token helpers the root already offered.
 
+- **Examples**: doctests on the common entry points of `Stream`,
+  `Interval`, `Spanner`, `RomanNumeral` and `ToneRow`, and three example
+  programs, `analyze_midi`, `abc_to_musicxml` (feature `musicxml`) and
+  `roman_analysis`.
+
 - **Multi-measure rests**: MusicXML's `<multiple-rest>` is read and
   written as music21 reads and writes it, as a
   `SpannerKind::MultiMeasureRest` carrying a `MultiRest` (whether it is

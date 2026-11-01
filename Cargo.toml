@@ -50,6 +50,10 @@ musescore = ["musicxml"]
 musicxml = []
 serde = ["dep:serde"]
 
+[[example]]
+name = "abc_to_musicxml"
+required-features = ["musicxml"]
+
 [dependencies]
 fraction = "0.17.0"
 itertools = "0.15.0"
