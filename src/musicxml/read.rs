@@ -2092,6 +2092,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             true,
         )?;
         rest.set_hidden(general.hidden);
+        rest.set_color(general.color);
         rest.set_size(general.size);
         if let Some(duration) = general.duration {
             rest.set_duration(duration);
@@ -4416,6 +4417,24 @@ mod tests {
             ))
             .is_err()
         );
+    }
+
+    #[test]
+    fn a_rests_colour_is_read_and_written_back() {
+        let read = from_musicxml(&score(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>             <note color=\"#FF0000\"><rest/><duration>1</duration><type>quarter</type></note>             </measure>",
+        ))
+        .unwrap();
+        let leaves = read.leaves();
+        let rest = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::Rest(rest) => Some(rest),
+                _ => None,
+            })
+            .expect("the measure holds a rest");
+        assert_eq!(rest.color(), Some("#FF0000"));
+        assert!(written_back(&read).contains("<note color=\"#FF0000\">"));
     }
 
     #[test]

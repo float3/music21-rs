@@ -73,12 +73,7 @@ def report_measure(text, debug):
 
 /// Scores music21 cannot write in braille in one mode, for a bug of its own,
 /// which the crate writes: the score, the mode, what music21 raises and why.
-const MUSIC21_CANNOT_WRITE: &[(&str, &str, &str, &str)] = &[(
-    "demos/incorrect_time_signature_pv.mxl",
-    "English",
-    "StreamException",
-    "makeNotation on the lower staff alone has makeTies insert a measure the      staff already holds; the braille, which writes the metadata first, stops      earlier on a character braille has no sign for, as the crate does",
-)];
+const MUSIC21_CANNOT_WRITE: &[(&str, &str, &str, &str)] = &[];
 
 /// The first line two texts differ on, and what each has there.
 fn first_difference(ours: &str, theirs: &str) -> String {

@@ -7522,6 +7522,108 @@ def test_a_chords_colour_set_on_its_style_is_written():
     assert 'color="#FF0000"' in written
 
 
+def test_a_pitchs_accidental_coloured_in_place_is_written():
+    # music21 writes each accidental in the colour said on its style.
+    note = m.Note("C#4")
+    note.pitch.accidental.style.color = "red"
+    chord = m.Chord(["C#4", "E4"])
+    chord.pitches[0].accidental.style.color = "blue"
+    pitch = m.Pitch("C#4")
+    pitch.accidental.style.color = "green"
+    given = m.Note(pitch)
+    written = m.to_musicxml(bar_of(note, chord, given, m.Rest(1.0)))
+    assert re.findall(r"<accidental color=\"(#\w+)\"", written) == [
+        "#FF0000",
+        "#0000FF",
+        "#008000",
+    ]
+
+
+def test_a_pitchs_accidental_coloured_in_place_is_written_once_installed():
+    pytest.importorskip("music21.stream")
+    # music21's writer works on a deep copy, which keeps the style.
+    code = """
+import re
+import music21_rs as m
+m.install_into_music21()
+from music21 import note, stream
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+n = note.Note('C#4')
+n.pitch.accidental.style.color = 'red'
+written = GeneralObjectExporter(stream.Stream([n])).parse().decode()
+print(re.findall(r'<accidental color="(#[0-9A-F]+)"', written))
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["['#FF0000']"]
+
+
+def test_a_scale_follows_its_tonic_edited_in_place():
+    # Each answer read off music21, whose tonic is a plain attribute.
+    scale = m.MajorScale("C4")
+    held = scale.tonic
+    held.name = "D"
+    assert scale.tonic is held
+    assert scale.name == "D major"
+    assert [p.nameWithOctave for p in scale.pitches] == [
+        "D4", "E4", "F#4", "G4", "A4", "B4", "C#5", "D5"
+    ]
+    assert scale.pitchFromDegree(3).nameWithOctave == "F#4"
+    assert scale.getScaleDegreeFromPitch("F#") == 3
+    assert scale.getDominant().nameWithOctave == "A4"
+    assert scale.getRelativeMinor().name == "B minor"
+    assert scale == m.MajorScale("D4")
+
+    scale.transpose("P5", inPlace=True)
+    assert scale.tonic is held and held.nameWithOctave == "A4"
+    assert scale.name == "A major"
+
+    given = m.Pitch("A")
+    minor = m.HarmonicMinorScale(given)
+    given.name = "E"
+    assert minor.name == "E harmonic minor"
+    assert [p.name for p in minor.pitches] == ["E", "F#", "G", "A", "B", "C", "D#", "E"]
+
+
+def test_a_metronome_marks_words_edited_in_place_are_its_text():
+    # music21 reads `text` off `_tempoText`.
+    mark = m.MetronomeMark("Allegro", 120)
+    words = mark._tempoText
+    words.text = "Lento"
+    assert mark.text == "Lento" and mark._tempoText is words
+    written = m.to_musicxml(bar_of(mark, m.Rest(4.0)))
+    assert "Lento" in written and "Allegro" not in written
+
+
+def test_a_metronome_marks_words_edited_in_place_once_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import tempo
+mark = tempo.MetronomeMark('Allegro', 120)
+words = mark._tempoText
+words.text = 'Lento'
+print(mark.text, mark._tempoText is words)
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["Lento", "True"]
+
+
+def test_a_rests_colour_set_on_its_style_is_written():
+    # music21 writes `<note color="#FF0000">` around the rest.
+    rest = m.Rest(1.0)
+    rest.style.color = "red"
+    written = m.to_musicxml(bar_of(rest, m.Rest(3.0)))
+    assert re.findall(r"<note( color=\"#\w+\")?>\s*<rest", written) == [
+        ' color="#FF0000"',
+        "",
+    ]
+    (read,) = list(m.from_musicxml(written).recurse().getElementsByClass("Rest"))[:1]
+    assert read.style.color == "#FF0000"
+
+
 def test_a_rests_tie_reaches_the_value_and_back():
     # RomanText holds a rest over the barline with a tie, as music21 does.
     read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")

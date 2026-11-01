@@ -918,6 +918,13 @@ impl Chord {
                 *held = object.borrow(py).synced(py);
             }
         }
+        // A pitch handed out before its note was built writes its value in
+        // as it changes, but not what its accidental's style says.
+        for (held, object) in chord.notes_mut().iter_mut().zip(&self.loose_pitches) {
+            if let Some(object) = object {
+                held.set_pitch(object.borrow(py).current(py));
+            }
+        }
         // The chord's own objects, as a note's: an edit through
         // `c.duration`, `c.volume`, `c.beams` or `c.style` is an edit to the
         // chord.

@@ -90,6 +90,8 @@ pub struct Rest {
     tie: Option<crate::notation::Tie>,
     #[cfg_attr(feature = "serde", serde(default))]
     full_measure: FullMeasure,
+    #[cfg_attr(feature = "serde", serde(default))]
+    color: Option<String>,
 }
 
 impl PartialEq for Rest {
@@ -111,6 +113,7 @@ impl Rest {
             size: None,
             tie: None,
             full_measure: FullMeasure::Auto,
+            color: None,
         }
     }
 
@@ -142,6 +145,26 @@ impl Rest {
     /// Writes a tie on the rest, or takes it off.
     pub fn set_tie(&mut self, tie: Option<crate::notation::Tie>) {
         self.tie = tie;
+    }
+
+    /// The colour the rest is written in, if one was said: music21 keeps
+    /// this on the rest's style.
+    ///
+    /// ```
+    /// use music21_rs::Rest;
+    ///
+    /// let mut rest = Rest::default();
+    /// assert_eq!(rest.color(), None);
+    /// rest.set_color(Some("red".to_string()));
+    /// assert_eq!(rest.color(), Some("red"));
+    /// ```
+    pub fn color(&self) -> Option<&str> {
+        self.color.as_deref()
+    }
+
+    /// Sets the colour the rest is written in.
+    pub fn set_color(&mut self, color: Option<String>) {
+        self.color = color;
     }
 
     /// How large the rest is drawn, where a score says, as a cue part's

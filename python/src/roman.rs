@@ -383,7 +383,7 @@ fn collection(value: Option<&Bound<'_, PyAny>>) -> Option<RsScale> {
     let scale = value?
         .extract::<PyRef<'_, crate::scale::ConcreteScale>>()
         .ok()?;
-    Some(scale.inner.clone())
+    Some(scale.current())
 }
 
 /// The key a numeral is written in, and the octave its scale stood in.

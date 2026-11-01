@@ -669,7 +669,7 @@ impl Note {
         // was built from, and raising one of those raises the note it came
         // off. Reading the object rather than only writing to it is what
         // makes that hold.
-        note.set_pitch(self.pitch.borrow(py).inner.clone());
+        note.set_pitch(self.pitch.borrow(py).current(py));
         // music21's own readers write beams into the object `n.beams` gave
         // them, so the object is where the score's beaming is.
         if let Some(beams) = &self.beams {

@@ -6637,6 +6637,7 @@ fn music21_rest(object: &Bound<'_, PyAny>) -> PyResult<music21_rs_crate::Rest> {
     read_written(object, &mut carrier)?;
     let mut rest = music21_rs_crate::Rest::new(carrier.duration().cloned().unwrap_or_default());
     rest.set_hidden(carrier.hidden());
+    rest.set_color(carrier.color().map(str::to_string));
     *rest.expressions_mut() = carrier.expressions().to_vec();
     *rest.articulations_mut() = carrier.articulations().to_vec();
     if let Some(tie) = carrier.tie() {

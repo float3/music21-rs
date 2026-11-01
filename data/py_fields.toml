@@ -37,7 +37,7 @@
 
 [Accidental]
 owner = { kind = "identity", sync = "read live", why = "the pitch it belongs to, which write_back writes into" }
-style = { kind = "value", note = "folded into the pitch only by write_back, which runs on the accidental's own setters: `p.accidental.style.color = 'red'` alone never reaches the pitch or the MusicXML writer" }
+style = { kind = "identity", sync = "Pitch::current" }
 client = { kind = "identity", sync = "read live", why = "music21's _client, told by informClient; not part of the value" }
 
 [Articulation]
@@ -80,7 +80,7 @@ roman = { kind = "cache", note = "the numeral worked out on first asking, as mus
 placement = { kind = "identity", sync = "read live", why = "the page, which the crate does not model" }
 
 [ConcreteScale]
-tonic_object = { kind = "value", note = "handed back only while it equals inner's tonic: `sc.tonic.name = 'D'` leaves the scale on C, where music21 moves it to D" }
+tonic_object = { kind = "identity", sync = "current" }
 abstract_scale = { kind = "identity", sync = "read live", why = "a network the crate has no counterpart for, asked directly" }
 
 [Contributor]
@@ -124,7 +124,7 @@ level_list_cache = { kind = "cache", note = "music21's _levelListCache" }
 
 [MetronomeMark]
 referent = { kind = "identity", sync = "current" }
-tempo_text = { kind = "value", note = "built from inner's text on first asking; once installed, `mm._tempoText.text = 'Lento'` leaves `mm.text` as it was, where music21 reads the text off it" }
+tempo_text = { kind = "identity", sync = "current" }
 
 [Note]
 pitch = { kind = "identity", sync = "synced" }
@@ -168,7 +168,7 @@ tie = { kind = "identity", sync = "synced" }
 expressions = { kind = "identity", sync = "read live", why = "the crate's rest holds no expressions; readers walk the list" }
 articulations = { kind = "identity", sync = "read live", why = "the crate's rest holds no articulations; readers walk the list" }
 editorial = { kind = "identity", sync = "read live", why = "the crate does not model editorials" }
-style = { kind = "identity", sync = "read live", why = "the MusicXML writer reads hideObjectOnPrint off it; the crate's rest has no colour, so `r.style.color` is not written (music21 writes it)" }
+style = { kind = "identity", sync = "synced" }
 
 [RomanNumeral]
 key_object = { kind = "identity", sync = "read live", why = "handed back as given; the chord is worked out when the key is set, as music21 caches its pitches" }
