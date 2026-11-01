@@ -533,7 +533,7 @@ contributed upstream, mostly fixes found while porting:
   ABC import losing the overflow of a measure no time signature fits.
 - [cuthbertLab/music21#2126](https://github.com/cuthbertLab/music21/pull/2126):
   MusicXML export writing a chord in the order it holds its notes, with
-  `non-arpeggiate` on the wrong ends (open).
+  `non-arpeggiate` on the wrong ends.
 - [cuthbertLab/music21#2127](https://github.com/cuthbertLab/music21/pull/2127):
   a `ReductiveNote` on a chord looking for a C when it names no pitch.
 - [cuthbertLab/music21#2128](https://github.com/cuthbertLab/music21/pull/2128):
@@ -560,11 +560,79 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2139](https://github.com/cuthbertLab/music21/pull/2139):
   Read NWC Dur2/Pos2 chord notes and rest chords at the same offset (open).
 - [cuthbertLab/music21#2140](https://github.com/cuthbertLab/music21/pull/2140):
-  Build harmonic minor from its own intervals (open).
+  Build harmonic minor from its own intervals.
 - [cuthbertLab/music21#2141](https://github.com/cuthbertLab/music21/pull/2141):
-  Put volpiano breaks and neumes in the measure being read (open).
+  Put volpiano breaks and neumes in the measure being read.
+- [cuthbertLab/music21#2142](https://github.com/cuthbertLab/music21/pull/2142):
+  makeTies: add the measure it makes once.
+- [cuthbertLab/music21#2144](https://github.com/cuthbertLab/music21/pull/2144):
+  makeTies: keep voices tied into a measure without voices.
+- [cuthbertLab/music21#2145](https://github.com/cuthbertLab/music21/pull/2145):
+  Check the platform with sys.platform where os.getuid is called.
+- [cuthbertLab/music21#2147](https://github.com/cuthbertLab/music21/pull/2147):
+  Fix the binary_dots entry for braille dots 1-2-3-5-6.
+- [cuthbertLab/music21#2148](https://github.com/cuthbertLab/music21/pull/2148):
+  Make BrailleText.showHand store the hand and set only its symbol.
+- [cuthbertLab/music21#2149](https://github.com/cuthbertLab/music21/pull/2149):
+  Detect hidden tuplet numbers in braille noteToBraille.
+- [cuthbertLab/music21#2150](https://github.com/cuthbertLab/music21/pull/2150):
+  Transcribe a note after an empty TextExpression in braille.
+- [cuthbertLab/music21#2151](https://github.com/cuthbertLab/music21/pull/2151):
+  Read the left-hand key in a keyboard segment heading.
+- [cuthbertLab/music21#2152](https://github.com/cuthbertLab/music21/pull/2152):
+  Convert forbiddenChords in ChordReducer.run.
+- [cuthbertLab/music21#2153](https://github.com/cuthbertLab/music21/pull/2153):
+  lily: quote note colours with quoteString.
+- [cuthbertLab/music21#2154](https://github.com/cuthbertLab/music21/pull/2154):
+  Allow adjacentAverage windowed analysis with windows above size one.
+- [cuthbertLab/music21#2155](https://github.com/cuthbertLab/music21/pull/2155):
+  Find nextPitch neighbors on cycles wider than an octave.
+- [cuthbertLab/music21#2156](https://github.com/cuthbertLab/music21/pull/2156):
+  Join PartStaffs after a measure missing from the first staff (open).
+- [cuthbertLab/music21#2158](https://github.com/cuthbertLab/music21/pull/2158):
+  Deduplicate instruments offset by offset.
+- [cuthbertLab/music21#2159](https://github.com/cuthbertLab/music21/pull/2159):
+  Analyze modal keys in QualityFeature.
+- [cuthbertLab/music21#2160](https://github.com/cuthbertLab/music21/pull/2160):
+  Fix findConsecutiveNotes(skipUnisons=True) on repeated notes and chords.
+- [cuthbertLab/music21#2161](https://github.com/cuthbertLab/music21/pull/2161):
+  Keep an explicit zero quarterLength in GeneralNote (open).
+- [cuthbertLab/music21#2162](https://github.com/cuthbertLab/music21/pull/2162):
+  Realize figured-bass lines holding tuplets.
+- [cuthbertLab/music21#2163](https://github.com/cuthbertLab/music21/pull/2163):
+  Keep the stretch before a span's first dynamic in PartReduction.
+- [cuthbertLab/music21#2165](https://github.com/cuthbertLab/music21/pull/2165):
+  Count ChordBassMotionFeature motion upward.
+- [cuthbertLab/music21#2166](https://github.com/cuthbertLab/music21/pull/2166):
+  Place melodicIntervals at offsets in the stream analysed.
+- [cuthbertLab/music21#2168](https://github.com/cuthbertLab/music21/pull/2168):
+  Smooth floating key analysis with each neighbour's own interpretations.
+- [cuthbertLab/music21#2169](https://github.com/cuthbertLab/music21/pull/2169):
+  Make ElementTimespan hashable (open).
+- [cuthbertLab/music21#2170](https://github.com/cuthbertLab/music21/pull/2170):
+  Yield every key of one hand in
+  BrailleGrandSegment.yieldCombinedGroupingKeys (open).
+- [cuthbertLab/music21#2171](https://github.com/cuthbertLab/music21/pull/2171):
+  Start each PartReduction span at the last dynamic before it (open).
+- [cuthbertLab/music21#2172](https://github.com/cuthbertLab/music21/pull/2172):
+  Change a collected object's priority in Stream.measures only when needed.
+- [cuthbertLab/music21#2173](https://github.com/cuthbertLab/music21/pull/2173):
+  Insert each part's timespans at once in toPartwiseTimespanTrees.
+- [cuthbertLab/music21#2174](https://github.com/cuthbertLab/music21/pull/2174):
+  Key ChordReducer weights by sorted pitch classes.
+- [cuthbertLab/music21#2177](https://github.com/cuthbertLab/music21/pull/2177):
+  Keep each measure's length in reduceChordsOld (open).
+- [cuthbertLab/music21#2178](https://github.com/cuthbertLab/music21/pull/2178):
+  Reject roman numerals past VII.
+- [cuthbertLab/music21#2179](https://github.com/cuthbertLab/music21/pull/2179):
+  Give a split measure's second half the clef, key and meter in force where
+  it is split (open).
+- [cuthbertLab/music21#2180](https://github.com/cuthbertLab/music21/pull/2180):
+  Make volpiano breaks at the end of the text follow breaksToLayout (open).
+- [cuthbertLab/music21#2181](https://github.com/cuthbertLab/music21/pull/2181):
+  Slice by the greatest divisor past grace notes and empty measures (open).
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
-  `chordToXml` sorting a copy of the chord and discarding it (open).
+  `chordToXml` sorting a copy of the chord and discarding it.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
   Scala headers in five Hexatone scale files (open).
 - corrections to the Xenharmonic Wiki's temperament pages, found while
