@@ -680,6 +680,18 @@ fn tonic_pitch(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
     pitch_from_any(value)
 }
 
+/// The `Pitch` object music21 keeps as a scale's tonic when given one: the
+/// pitch itself, or a note's own pitch for a note.
+fn held_tonic(value: &Bound<'_, PyAny>) -> Option<Py<Pitch>> {
+    if let Ok(pitch) = value.extract::<Py<Pitch>>() {
+        return Some(pitch);
+    }
+    if value.extract::<PyRef<'_, crate::note::Note>>().is_err() {
+        return None;
+    }
+    value.getattr("pitch").ok()?.extract::<Py<Pitch>>().ok()
+}
+
 /// music21's `scale.ConcreteScale`: a pattern of steps standing on a tonic.
 ///
 /// The named scales (`MajorScale`, `DorianScale`, `OctatonicScale`, ...) are
@@ -753,7 +765,7 @@ impl ConcreteScale {
         Ok(if is_descending(direction) {
             scale.descending()
         } else {
-            scale.clone()
+            scale
         })
     }
 
@@ -806,7 +818,7 @@ impl ConcreteScale {
             return Ok(None);
         };
         let pattern = pattern.bind(py);
-        let tonic = Bound::new(py, Pitch::wrap(self.inner.tonic().clone(), false))?;
+        let tonic = Bound::new(py, Pitch::wrap(self.current().tonic().clone(), false))?;
         let degree = pattern.getattr("tonicDegree")?;
         // As pitch objects, which is what music21 hands its own network:
         // a range written as text is read into one first.
@@ -832,15 +844,34 @@ impl ConcreteScale {
         Ok(Some(pitches))
     }
 
+    /// The scale as it stands: its value on the tonic object as that is
+    /// now. music21's tonic is a plain attribute holding the `Pitch` it was
+    /// given, so `sc.tonic.name = 'D'` moves every answer to D.
+    ///
+    /// `Python::attach` rather than a threaded-through token so that
+    /// music21's methods keep their shapes; this is only ever reached from
+    /// Python, so the interpreter is already there.
+    pub(crate) fn current(&self) -> RsScale {
+        let mut scale = self.inner.clone();
+        let Some(object) = &self.tonic_object else {
+            return scale;
+        };
+        let tonic = Python::attach(|py| object.borrow(py).inner.clone());
+        if tonic != *scale.tonic() {
+            scale.set_tonic(tonic);
+        }
+        scale
+    }
+
     /// The scale as something that can actually be realized, or music21's
     /// complaint that it has no note to stand on.
-    fn realized(&self) -> PyResult<&RsScale> {
+    fn realized(&self) -> PyResult<RsScale> {
         if !self.has_tonic {
             return Err(IntervalNetworkException::new_err(
                 "pitchReference cannot be None",
             ));
         }
-        Ok(&self.inner)
+        Ok(self.current())
     }
 
     /// The same, but a scale nobody gave a tonic to sounds from middle C.
@@ -848,8 +879,8 @@ impl ConcreteScale {
     /// music21 asks a scale with no tonic for its notes and gets them, since
     /// the pattern is a pattern whatever it stands on; only the questions
     /// that name a degree refuse.
-    fn realized_anywhere(&self) -> &RsScale {
-        &self.inner
+    fn realized_anywhere(&self) -> RsScale {
+        self.current()
     }
 
     /// A Python object of the class music21 names this scale type, when one
@@ -933,7 +964,7 @@ impl ConcreteScale {
     fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
         let me = slf.borrow();
         let written = (
-            me.inner.clone(),
+            me.current(),
             me.family.clone(),
             me.named_pattern,
             me.has_tonic,
@@ -1028,11 +1059,13 @@ impl ConcreteScale {
             Some(keywords) => keywords.get_item("mode")?.filter(|mode| !mode.is_none()),
             None => None,
         };
+        let held = given.and_then(held_tonic);
         let mut me = slf.borrow_mut();
         me.inner = RsScale::new(scale_type, tonic.clone());
         me.family = family.clone();
         me.named_pattern = named;
         me.has_tonic = given.is_some();
+        me.tonic_object = held;
         let Some(mode) = mode else {
             return Ok(());
         };
@@ -1082,7 +1115,7 @@ impl ConcreteScale {
             steps.push(interval_from_any(&step?)?);
         }
         let mut me = slf.borrow_mut();
-        let tonic = me.inner.tonic().clone();
+        let tonic = me.current().tonic().clone();
         let stepped = if closes {
             RsStepScale::octave_repeating_of(tonic, steps).map_err(scale_error)?
         } else {
@@ -1109,7 +1142,7 @@ impl ConcreteScale {
     /// semitones: what music21's `SieveScale` builds out of a `PitchSieve`.
     fn _standOnSieve(slf: &Bound<'_, Self>, sieveString: &str, eld: f64) -> PyResult<()> {
         let mut me = slf.borrow_mut();
-        let tonic = me.inner.tonic().clone();
+        let tonic = me.current().tonic().clone();
         me.inner = RsStepScale::sieve_by(tonic, sieveString, eld)
             .and_then(|stepped| stepped.scale())
             .map_err(scale_error)?;
@@ -1154,7 +1187,7 @@ impl ConcreteScale {
         }
         format!(
             "{} {}",
-            music21_name(&self.inner.tonic().name()),
+            music21_name(&self.current().tonic().name()),
             self.r#type()
         )
     }
@@ -1166,12 +1199,10 @@ impl ConcreteScale {
         if !slf.borrow().has_tonic {
             return Ok(None);
         }
-        let wanted = slf.borrow().inner.tonic().clone();
-        if let Some(object) = &slf.borrow().tonic_object
-            && object.borrow(py).inner == wanted
-        {
+        if let Some(object) = &slf.borrow().tonic_object {
             return Ok(Some(object.clone_ref(py)));
         }
+        let wanted = slf.borrow().inner.tonic().clone();
         let object =
             crate::installed_new(py, "music21.pitch", "Pitch", Pitch::wrap(wanted, false))?;
         slf.borrow_mut().tonic_object = Some(object.clone_ref(py));
@@ -1485,7 +1516,7 @@ impl ConcreteScale {
             self.abstract_scale = Some(value.clone().unbind());
             return Ok(());
         };
-        self.inner = RsScale::new(scale_type, self.inner.tonic().clone());
+        self.inner = RsScale::new(scale_type, self.current().tonic().clone());
         self.named_pattern = true;
         self.abstract_scale = None;
         Ok(())
@@ -1520,7 +1551,7 @@ impl ConcreteScale {
         }
         let ranked = slf
             .borrow()
-            .inner
+            .current()
             .derive_ranked_by(&pitches, resultsReturned, comparison)
             .map_err(scale_error)?;
         ranked
@@ -1542,7 +1573,7 @@ impl ConcreteScale {
         let pitches = pitch_list(other)?;
         let mut ranked = slf
             .borrow()
-            .inner
+            .current()
             .derive_ranked_by(&pitches, Some(1), comparison_of(comparisonAttribute))
             .map_err(scale_error)?;
         let derived = ranked
@@ -1566,7 +1597,7 @@ impl ConcreteScale {
         let wanted = pitches.len();
         let ranked = slf
             .borrow()
-            .inner
+            .current()
             .derive_ranked_by(&pitches, None, comparison_of(comparisonAttribute))
             .map_err(scale_error)?;
         ranked
@@ -1587,7 +1618,7 @@ impl ConcreteScale {
     ) -> PyResult<String> {
         let pitch = match pitchTarget.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
-            None => self.inner.tonic().clone(),
+            None => self.current().tonic().clone(),
         };
         let variant = match variant {
             "humdrum" => RsSolfegVariant::Humdrum,
@@ -1703,7 +1734,7 @@ impl ConcreteScale {
     ) -> PyResult<Option<Pitch>> {
         if let Some(pattern) = &self.abstract_scale {
             let pattern = pattern.bind(py);
-            let tonic = Bound::new(py, Pitch::wrap(self.inner.tonic().clone(), false))?;
+            let tonic = Bound::new(py, Pitch::wrap(self.current().tonic().clone(), false))?;
             let keywords = PyDict::new(py);
             keywords.set_item("pitchReference", tonic)?;
             keywords.set_item("nodeName", pattern.getattr("tonicDegree")?)?;
@@ -1885,7 +1916,7 @@ impl ConcreteScale {
     ) -> PyResult<Pitch> {
         let origin = match pitchOrigin.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
-            None => self.inner.tonic().clone(),
+            None => self.current().tonic().clone(),
         };
         // Coming down, a scale that falls differently is read in its falling
         // form: the note below G in A melodic minor is F, not F sharp.
@@ -1939,7 +1970,7 @@ impl ConcreteScale {
         let standing = {
             let me = slf.borrow();
             if me.has_tonic {
-                me.inner.clone()
+                me.current()
             } else {
                 RsScale::new(
                     me.inner.scale_type(),
@@ -1949,6 +1980,19 @@ impl ConcreteScale {
         };
         let moved = standing.transpose(&interval).map_err(scale_error)?;
         if inPlace {
+            // music21 transposes the tonic object itself, so a caller
+            // holding it sees it move.
+            let held = slf
+                .borrow()
+                .tonic_object
+                .as_ref()
+                .map(|t| t.clone_ref(slf.py()));
+            if let Some(held) = held {
+                let keywords = PyDict::new(slf.py());
+                keywords.set_item("inPlace", true)?;
+                held.bind(slf.py())
+                    .call_method("transpose", (value,), Some(&keywords))?;
+            }
             let mut me = slf.borrow_mut();
             me.inner = moved;
             me.has_tonic = true;
@@ -1967,7 +2011,7 @@ impl ConcreteScale {
         let pitch = pitch_from_any(pitchRef)?;
         let derived = slf
             .borrow()
-            .inner
+            .current()
             .derive_by_degree(degree, &pitch)
             .map_err(scale_error)?;
         Self::object(slf.py(), derived)
@@ -2005,7 +2049,7 @@ impl ConcreteScale {
     ) -> PyResult<Vec<Pitch>> {
         let pitches = pitch_list(other)?;
         Ok(wrap_pitches(
-            self.inner.find_missing(&pitches).map_err(scale_error)?,
+            self.current().find_missing(&pitches).map_err(scale_error)?,
         ))
     }
 
@@ -2046,7 +2090,7 @@ impl ConcreteScale {
             if !other.has_tonic || !self.has_tonic {
                 return true;
             }
-            other.inner.tonic().name_with_octave() == self.inner.tonic().name_with_octave()
+            other.current().tonic().name_with_octave() == self.current().tonic().name_with_octave()
         })
     }
 
@@ -2116,13 +2160,13 @@ impl DiatonicScale {
 
     /// music21's `getParallelMajor`: the major scale on the same tonic.
     fn getParallelMajor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let parallel = slf.as_super().borrow().inner.parallel_major();
+        let parallel = slf.as_super().borrow().current().parallel_major();
         ConcreteScale::object(slf.py(), parallel)
     }
 
     /// music21's `getParallelMinor`.
     fn getParallelMinor(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
-        let parallel = slf.as_super().borrow().inner.parallel_minor();
+        let parallel = slf.as_super().borrow().current().parallel_minor();
         ConcreteScale::object(slf.py(), parallel)
     }
 }
@@ -2158,7 +2202,7 @@ fn without_duplicates(pitches: Vec<RsPitch>, comparison: RsDegreeComparison) -> 
 /// scale at all.
 pub(crate) fn crate_scale(object: &Bound<'_, PyAny>) -> PyResult<RsScale> {
     if let Ok(facade) = object.extract::<PyRef<ConcreteScale>>() {
-        return Ok(facade.inner.clone());
+        return Ok(facade.current());
     }
     let mut pitches = Vec::new();
     for pitch in object.call_method0("getPitches")?.walk()? {

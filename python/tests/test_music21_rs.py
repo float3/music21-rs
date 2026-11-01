@@ -7558,6 +7558,33 @@ print(re.findall(r'<accidental color="(#[0-9A-F]+)"', written))
     assert done.stdout.split() == ["['#FF0000']"]
 
 
+def test_a_scale_follows_its_tonic_edited_in_place():
+    # Each answer read off music21, whose tonic is a plain attribute.
+    scale = m.MajorScale("C4")
+    held = scale.tonic
+    held.name = "D"
+    assert scale.tonic is held
+    assert scale.name == "D major"
+    assert [p.nameWithOctave for p in scale.pitches] == [
+        "D4", "E4", "F#4", "G4", "A4", "B4", "C#5", "D5"
+    ]
+    assert scale.pitchFromDegree(3).nameWithOctave == "F#4"
+    assert scale.getScaleDegreeFromPitch("F#") == 3
+    assert scale.getDominant().nameWithOctave == "A4"
+    assert scale.getRelativeMinor().name == "B minor"
+    assert scale == m.MajorScale("D4")
+
+    scale.transpose("P5", inPlace=True)
+    assert scale.tonic is held and held.nameWithOctave == "A4"
+    assert scale.name == "A major"
+
+    given = m.Pitch("A")
+    minor = m.HarmonicMinorScale(given)
+    given.name = "E"
+    assert minor.name == "E harmonic minor"
+    assert [p.name for p in minor.pitches] == ["E", "F#", "G", "A", "B", "C", "D#", "E"]
+
+
 def test_a_rests_tie_reaches_the_value_and_back():
     # RomanText holds a rest over the barline with a tie, as music21 does.
     read = m.from_roman_text("Time Signature: 4/4\nm1 C: I b3 NC\nm2 b3 V\n")
