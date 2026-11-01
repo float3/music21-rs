@@ -8,6 +8,25 @@
   `ReductionOptions` written out field by field needs it; music21's
   `removeDissonances` is off by default.
 
+- **A key's mode is one music21 builds a scale for**: `Key::from_tonic_mode`,
+  and the package's `Key(tonic, mode)` and `mode` setter, refuse any mode
+  but the fifteen in `key::MODES`, as music21's `Key` does. MEI's
+  `key.mode` is read through it.
+
+- **A time signature counts at most 1024 beats** (`meter::MAX_NUMERATOR`).
+  A meter is built with a part for each beat, so `99999999/1` in a
+  MusicXML, ABC or TinyNotation file took minutes; it is now an error.
+
+- **`make_measures` makes at most 100,000 measures**
+  (`makenotation::MAX_MEASURES`) and is an error past that. A MIDI file of
+  40 bytes could say a note hundreds of millions of quarters long and stop
+  the process allocating 44 GB.
+
+- **The package's `CTSong` reads every string as the song** and opens no
+  file; anything but a `str` or `None` is a `TypeError`. music21's opens a
+  string without `|` or `S:` as a file, and `CTSong(3)` read file
+  descriptor 3.
+
 ## added
 
 - **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
@@ -22,6 +41,17 @@
   and removes dissonances only when asked; a measure's chord weights are
   keyed by sorted pitch classes, so two voicings of one chord weigh as
   one. The wheel's `ChordReducer.run` takes `removeDissonances`.
+
+- **Crafted input is an error and not a crash**: XML nested more than 256
+  deep (MusicXML, MEI, Capella, MuseScore) and Clercq-Temperley rules that
+  expand themselves or nest more than 64 deep are errors, where they
+  overflowed the stack. An MEI `key.sig` that is empty or starts with a
+  character of more than one byte is an error, where it panicked.
+
+- **LilyPond writes only a mode it knows**: a key's mode is written as a
+  LilyPond command, and one not in `key::MODES` could run Scheme when the
+  file was engraved. Such a key is written as the major key of its
+  signature.
 
 - **More edits made in place take effect**: `p.accidental.style.color`,
   `sc.tonic.name = ...` and `mm._tempoText.text = ...` reach the crate, as

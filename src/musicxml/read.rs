@@ -3967,6 +3967,23 @@ mod tests {
     const NOTE: &str = "<note><pitch><step>C</step><octave>4</octave></pitch>                        <duration>1</duration><type>quarter</type></note>";
 
     #[test]
+    fn a_document_nested_too_deep_is_refused() {
+        // The score and its part are two levels of their own.
+        for depth in [crate::xml::MAX_DEPTH - 2, 100_000] {
+            let document = score(&format!(
+                "<measure number=\"1\">{NOTE}</measure>{}{}",
+                "<a>".repeat(depth),
+                "</a>".repeat(depth)
+            ));
+            assert_eq!(
+                from_musicxml(&document).is_err(),
+                depth > crate::xml::MAX_DEPTH - 2,
+                "{depth}"
+            );
+        }
+    }
+
+    #[test]
     fn offsets_are_snapped_as_music21_snaps_them() {
         // music21's `opFrac`: a third is a third, not the float nearest it.
         assert_eq!(op_frac(0.333_333_333_333_3), 1.0 / 3.0);

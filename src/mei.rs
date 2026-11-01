@@ -354,7 +354,9 @@ fn key_of(element: &Xml) -> Result<Key> {
     }
     let signature = element.get("key.sig").unwrap_or("0");
     let count = || -> Result<IntegerType> {
-        signature[..1]
+        signature
+            .get(..1)
+            .unwrap_or_default()
             .parse()
             .map_err(|_| mei_error(format!("the key signature {signature:?} has no number")))
     };
@@ -1729,5 +1731,38 @@ mod tests {
     fn what_is_no_mei_is_refused() {
         assert!(from_mei("<score-partwise/>").is_err());
         assert!(from_mei("not xml at all").is_err());
+    }
+
+    fn with_key(attributes: &str) -> String {
+        format!(
+            r#"<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>
+            <scoreDef meter.count="4" meter.unit="4"><staffGrp>
+            <staffDef n="1" clef.shape="G" clef.line="2" {attributes}/>
+            </staffGrp></scoreDef><section><measure n="1"><staff n="1"><layer n="1">
+            <note pname="c" oct="4" dur="1"/></layer></staff></measure></section>
+            </score></music></mei>"#
+        )
+    }
+
+    #[test]
+    fn a_key_in_a_mode_music21_has_no_scale_for_is_refused() {
+        assert!(from_mei(&with_key(r#"key.pname="c" key.mode="dorian""#)).is_ok());
+        assert!(
+            from_mei(&with_key(
+                r#"key.pname="c" key.mode='major #(system "touch x") %'"#
+            ))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn a_key_signature_with_no_count_is_refused() {
+        assert!(from_mei(&with_key(r#"key.sig="2s""#)).is_ok());
+        for signature in ["", "és", "x"] {
+            assert!(
+                from_mei(&with_key(&format!(r#"key.sig="{signature}""#))).is_err(),
+                "{signature:?}"
+            );
+        }
     }
 }
