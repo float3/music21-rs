@@ -91,7 +91,7 @@ impl VoiceLeadingQuartet {
     /// signature the key is still written under. `written` asks for the
     /// second.
     fn keyed(&self, py: Python<'_>, written: bool) -> PyResult<RsQuartet> {
-        let mut quartet = self.inner.clone();
+        let mut quartet = self.current(py);
         if let Some(key) = &self.key_object {
             let key = key.bind(py);
             let read = match key.cast::<crate::key::Key>() {
@@ -163,6 +163,16 @@ impl VoiceLeadingQuartet {
             voice_note(py, v2n2)?,
         ];
         Self::assemble(py, notes, key.as_ref())
+    }
+
+    /// The quartet with its notes as they stand: music21 reads its notes as
+    /// they are now, but its intervals as they were when the notes were set.
+    /// Its key is read by `keyed`.
+    fn current(&self, py: Python<'_>) -> RsQuartet {
+        let mut quartet = self.inner.clone();
+        let pitch = |index: usize| self.notes[index].borrow(py).synced(py).pitch().clone();
+        quartet.set_pitches(pitch(0), pitch(1), pitch(2), pitch(3));
+        quartet
     }
 
     /// Reads the four notes again, after one of them has been replaced.
@@ -491,12 +501,12 @@ impl VoiceLeadingQuartet {
         self.inner.hidden_octave()
     }
 
-    fn voiceOverlap(&self) -> bool {
-        self.inner.voice_overlap()
+    fn voiceOverlap(&self, py: Python<'_>) -> bool {
+        self.current(py).voice_overlap()
     }
 
-    fn voiceCrossing(&self) -> bool {
-        self.inner.voice_crossing()
+    fn voiceCrossing(&self, py: Python<'_>) -> bool {
+        self.current(py).voice_crossing()
     }
 
     /// music21's `isProperResolution`.

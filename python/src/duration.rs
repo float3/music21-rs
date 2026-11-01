@@ -1371,6 +1371,16 @@ impl Duration {
             // score frozen to a file and read back is written the same way:
             // without them a nested tuplet came back as a plain note.
             extra.set_item("tuplets", duration.tuplets.as_ref())?;
+            // The written values too: inside a tuplet they are not what the
+            // length alone works out to, a dotted half in a triplet
+            // sounding a half.
+            let written = duration.components.as_ref().map(|components| {
+                components
+                    .iter()
+                    .map(|each| (each.kind.clone(), each.dots))
+                    .collect::<Vec<_>>()
+            });
+            extra.set_item("components", written)?;
         }
         crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
     }
@@ -1399,6 +1409,18 @@ impl Duration {
             }
             if let Ok(tuplets) = extra.get_item("tuplets")?.extract::<Vec<Py<PyAny>>>() {
                 duration.tuplets = Some(tuplets);
+            }
+            // A pickle written before these were kept has no such key.
+            if let Ok(written) = extra
+                .get_item("components")
+                .and_then(|written| written.extract::<Vec<(String, u32)>>())
+            {
+                duration.components = Some(
+                    written
+                        .iter()
+                        .map(|(kind, dots)| DurationTuple::from_type_dots(kind, *dots))
+                        .collect(),
+                );
             }
         }
         Ok(())

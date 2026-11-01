@@ -147,6 +147,17 @@ impl VoiceLeadingQuartet {
         self.key = key;
     }
 
+    /// Moves or respells the four pitches and keeps the intervals as they
+    /// were: music21 works its intervals out when a note is set and reads
+    /// the notes as they stand everywhere else, so a note edited in place
+    /// crosses voices without changing the motion.
+    pub fn set_pitches(&mut self, v1n1: Pitch, v1n2: Pitch, v2n1: Pitch, v2n2: Pitch) {
+        self.v1n1 = v1n1;
+        self.v1n2 = v1n2;
+        self.v2n1 = v2n1;
+        self.v2n2 = v2n2;
+    }
+
     /// Whether a dissonant first interval resolves the way voice-leading
     /// rules expect: music21's `isProperResolution`. A fourth wants the upper
     /// voice to fall or stay; a tritone or a minor seventh wants the

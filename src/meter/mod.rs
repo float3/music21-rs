@@ -727,6 +727,12 @@ impl TimeSignature {
         self.overridden_bar_duration = written;
     }
 
+    /// The bar length written over the meter's own with
+    /// [`TimeSignature::set_bar_duration`], if any.
+    pub fn written_bar_duration(&self) -> Option<&Duration> {
+        self.overridden_bar_duration.as_ref()
+    }
+
     /// Where an element falls in the bar this meter measures: music21's
     /// `getMeasureOffsetOrMeterModulusOffset`, given the two offsets music21
     /// reads off the stream.
@@ -747,10 +753,13 @@ impl TimeSignature {
 
         // music21 adds to test and subtracts to wrap; the two differ where
         // the meter does not start the bar.
-        if element_offset + meter_offset < bar {
+        // music21 counts in fractions, so a meter at a third of a beat
+        // still wraps on whole bars.
+        let op_frac = crate::makenotation::op_frac;
+        if op_frac(element_offset + meter_offset) < bar {
             return element_offset;
         }
-        (element_offset - meter_offset).rem_euclid(bar)
+        op_frac(op_frac(element_offset - meter_offset).rem_euclid(bar))
     }
 
     /// Returns how many beats one bar carries.

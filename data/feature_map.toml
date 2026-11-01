@@ -1383,11 +1383,11 @@ note = "The parts a brace or a bracket joins, and whether their barlines are dra
 python = "style.py"
 members = "classes"
 rust = ["src/style.rs", "src/expressions.rs"]
-note = "How something is drawn. The crate models what a reader must read back to write the same document again -- a text's font and where it sits, a line's ticks, a colour -- and the page itself it does not model. Inside music21 the wheel hands back music21's own style objects, whose subclasses carry more than one class here would."
+note = "How something is drawn. The crate models what a reader must read back to write the same document again -- a text's font and where it sits, a line's ticks, a colour -- and the page itself it does not model. Inside music21 the wheel hands back music21's own style objects, whose subclasses carry more than one class here would; without music21 it has its own `Style` and `NoteStyle`, which the wheel column counts."
 
 [class.excluded]
-Style = "the base class every style hangs off; the crate keeps the few drawing values it reads and writes beside the thing drawn"
-NoteStyle = "how a note is drawn beyond its colour and its size"
+Style = "the base class every style hangs off; the crate keeps the few drawing values it reads and writes beside the thing drawn. The wheel has one, for use without music21"
+NoteStyle = "how a note is drawn beyond its colour and its size, which the crate does not model. The wheel has one, for use without music21"
 TextStylePlacement = "a text style that also says which side of the staff it is on, which is `display::Drawn` here"
 BezierStyle = "the curve of a slur"
 LineStyle = "the dashes of a line"

@@ -1509,6 +1509,136 @@ def test_every_python_object_a_facade_holds_is_accounted_for():
     assert problems == [], "\n".join(problems)
 
 
+# What each `kind = "value"` row of `data/py_fields.toml` costs: an object
+# handed out, edited in place, then read through the crate. The answers are
+# music21's.
+
+
+def test_a_stored_instrument_edited_in_place_is_unbundled():
+    # music21 puts the very instrument the note holds into the stream.
+    note = m.Note("C4")
+    note.storedInstrument = m.Violin()
+    note.storedInstrument.instrumentName = "Fiddle"
+    note.storedInstrument.midiProgram = 41
+    chord = m.Chord("E4 G4")
+    chord.storedInstrument = m.Flute()
+    chord.storedInstrument.instrumentName = "Fife"
+    line = m.Stream()
+    line.insert(0.0, note)
+    line.insert(1.0, chord)
+    unbundled = m.unbundleInstruments(line)
+    assert [
+        (e.instrumentName, e.midiProgram)
+        for e in unbundled
+        if isinstance(e, m.Instrument)
+    ] == [("Fiddle", 41), ("Fife", 73)]
+
+
+def test_a_bend_edited_in_place_is_written():
+    bend = m.FretBend(bendAlter=m.ChromaticInterval(2))
+    bend.bendAlter.semitones = 3
+    note = m.Note("C4", quarterLength=4.0)
+    note.articulations.append(bend)
+    measure = m.Measure()
+    measure.append(note)
+    written = m.to_musicxml(measure, make_notation=True)
+    assert re.findall(r"<bend-alter>.*?</bend-alter>", written) == [
+        "<bend-alter>3</bend-alter>"
+    ]
+
+
+def test_a_contributors_date_edited_in_place_is_kept():
+    # music21 copies, pickles and compares the date objects themselves.
+    contributor = m.Contributor(name="X", birth=1800, death=1850)
+    contributor.birth.relevance = "approximate"
+    assert copy.deepcopy(contributor).birth.relevance == "approximate"
+    assert pickle.loads(pickle.dumps(contributor)).birth.relevance == "approximate"
+    assert contributor != m.Contributor(name="X", birth=1800, death=1850)
+    contributor.death.relevance = "uncertain"
+    assert copy.deepcopy(contributor).death.relevance == "uncertain"
+
+
+def _figured_line():
+    line = m.FiguredBassLine(m.Key("C"), m.TimeSignature("4/4"))
+    for name in ("C3", "F3", "G3", "C3"):
+        line.addElement(m.Note(name, quarterLength=2.0), "")
+    return line
+
+
+def test_a_figured_bass_lines_meter_edited_in_place_is_written():
+    line = _figured_line()
+    line.inTime.ratioString = "2/4"
+    written = line.generateBassLine()
+    assert len(written.getElementsByClass("Measure")) == 4
+    assert [
+        ts.ratioString for ts in written.recurse().getElementsByClass("TimeSignature")
+    ] == ["2/4"]
+
+
+def test_a_figured_bass_lines_key_edited_in_place_is_written():
+    # music21 writes `inKey.sharps` as it stands, but counts the figures in
+    # the scale it built from the key when the line was made.
+    line = _figured_line()
+    line.inKey.sharps = 1
+    written = line.generateBassLine()
+    assert [k.sharps for k in written.recurse().getElementsByClass("KeySignature")] == [1]
+    realization = line.realize()
+    assert realization.getNumSolutions() == 105
+    progression = realization.getAllPossibilityProgressions()[0]
+    score = realization.generateRealizationFromPossibilityProgression(progression)
+    signatures = score.recurse().getElementsByClass("KeySignature")
+    assert {k.sharps for k in signatures} == {1}
+
+
+def test_a_figured_bass_scale_edited_in_place_is_counted_in():
+    scale = m.FiguredBassScale("C", "major")
+    scale.realizerScale.tonic = m.Pitch("D")
+    assert scale.getPitchNames("E3", "6") == ["E", "G", "C#"]
+    # C is on no degree of D major until the key signature sharpens it.
+    scale.keySig.sharps = 2
+    assert scale.getPitchNames("C3", "4") == ["C", "F#"]
+    assigned = m.FiguredBassScale("C", "major")
+    assigned.realizerScale = m.MajorScale("D")
+    assert assigned.getPitchNames("E3", "6") == ["E", "G", "C#"]
+
+
+def test_an_appoggiaturas_size_edited_in_place_is_realized():
+    appoggiatura = m.Appoggiatura()
+    appoggiatura.size = m.ChromaticInterval(1)
+    appoggiatura.size.semitones = 3
+    before, _, _ = appoggiatura.realize(m.Note("C4", quarterLength=1.0))
+    assert [n.nameWithOctave for n in before] == ["E-4"]
+
+
+def test_a_voice_leading_quartets_notes_edited_in_place():
+    # music21 works the intervals out when a note is set, and reads the
+    # notes themselves everywhere else.
+    quartet = m.VoiceLeadingQuartet(m.Note("C5"), m.Note("D5"), m.Note("A4"), m.Note("B4"))
+    quartet.v1n1.pitch.nameWithOctave = "G4"
+    assert repr(quartet) == (
+        "<music21.voiceLeading.VoiceLeadingQuartet v1n1=G4, v1n2=D5, v2n1=A4, v2n2=B4>"
+    )
+    assert [i.name for i in quartet.vIntervals] == ["m3", "m3"]
+    assert quartet.parallelMotion()
+    assert quartet.voiceCrossing()
+    assert quartet.voiceOverlap()
+
+    closing = m.VoiceLeadingQuartet(
+        m.Note("D5"), m.Note("C5"), m.Note("B4"), m.Note("C5"), key=m.Key("C")
+    )
+    closing.v2n2.pitch.name = "D"
+    assert not closing.clausulaVera()
+
+
+def test_a_voice_leading_quartets_key_edited_in_place():
+    quartet = m.VoiceLeadingQuartet(
+        m.Note("D5"), m.Note("C5"), m.Note("B4"), m.Note("C5"), key=m.Key("C")
+    )
+    assert quartet.clausulaVera()
+    quartet.key.tonic = m.Pitch("G")
+    assert not quartet.clausulaVera()
+
+
 def test_what_a_facade_hands_out_is_built_without_an_import(monkeypatch):
     """Each object a facade builds is made as the class music21 has installed
     under its name, where there is one. Nothing is installed here, and asking
@@ -3311,6 +3441,137 @@ def test_what_stands_at_one_offset_is_listed_in_music21s_order():
     # other stream sorts before them.
     assert m.Voice().classSortOrder == 5
     assert m.Part().classSortOrder == -20
+
+
+def _edited_stream_log(stream_class, note_class, measure_class, barline_class):
+    """What a stream answers through a run of edits to it and to what it
+    holds, for comparing with music21's own answers."""
+    log = []
+    names = lambda s: [each.name for each in s]
+    s = stream_class()
+    a = note_class("C4")
+    s.append(a)
+    # A note lengthened after it went in: the next goes after its new end.
+    a.duration.quarterLength = 3
+    b = note_class("D4")
+    s.append(b)
+    log.append(("lengthened", float(s.elementOffset(b)), float(s.highestTime)))
+    a.quarterLength = 0.5
+    c = note_class("E4")
+    s.append(c)
+    log.append(("shortened", float(s.elementOffset(c)), float(s.highestTime)))
+
+    s.setElementOffset(c, 0.0)
+    log.append(("moved", names(s), s.index(c), s[1].name, s[-1].name))
+    s.remove(a)
+    log.append(("removed", names(s), s.index(b), a in s, len(s)))
+    # Equal offsets keep the order they were put in.
+    f, g = note_class("F4"), note_class("G4")
+    s.insert(1.0, f)
+    s.insert(1.0, g)
+    log.append(("equal", names(s), s.index(g), [x.name for x in s[1:3]]))
+    s.shiftElements(2.0, startOffset=1.0)
+    log.append(("shifted", names(s), [float(s.elementOffset(x)) for x in s]))
+    h = note_class("A4")
+    s.insertAndShift(3.0, h)
+    log.append(("inserted", names(s), s.index(h), float(s.elementOffset(b))))
+
+    bar = measure_class()
+    held = note_class("B4", quarterLength=2)
+    bar.append(held)
+    right = barline_class("final")
+    bar.rightBarline = right
+    log.append(("barline", bar.index(right), float(bar.elementOffset(right))))
+    held.quarterLength = 3
+    log.append(("barline after", bar.index(right), float(bar.elementOffset(right)),
+                right in bar, [type(x).__name__ for x in bar.flatten()]))
+    return log
+
+
+EDITED_STREAM_LOG = [
+    ("lengthened", 3.0, 4.0),
+    ("shortened", 4.0, 5.0),
+    ("moved", ["C", "E", "D"], 1, "E", "D"),
+    ("removed", ["E", "D"], 1, False, 2),
+    ("equal", ["E", "F", "G", "D"], 2, ["F", "G"]),
+    ("shifted", ["E", "F", "G", "D"], [0.0, 3.0, 3.0, 5.0]),
+    ("inserted", ["E", "A", "F", "G", "D"], 1, 6.0),
+    ("barline", 1, 2.0),
+    ("barline after", 1, 3.0, True, ["Note", "Barline"]),
+]
+
+
+def test_a_stream_answers_after_edits_to_it_and_what_it_holds():
+    """Lookups, indexing and appends follow every edit: to the stream, and
+    to the lengths of notes it already holds, which it is not told of."""
+    log = _edited_stream_log(m.Stream, m.Note, m.Measure, m.Barline)
+    assert log == EDITED_STREAM_LOG
+
+
+def test_a_streams_answers_after_edits_are_music21s():
+    """The same run of edits on music21's own stream answers the same."""
+    pytest.importorskip("music21.stream")
+    from music21 import bar, note, stream
+
+    log = _edited_stream_log(stream.Stream, note.Note, stream.Measure, bar.Barline)
+    assert log == EDITED_STREAM_LOG
+
+
+def test_an_object_held_twice_is_found_where_it_was_put_first():
+    """An object held at two offsets answers `elementOffset` and `remove`
+    for the one put in first, and `index` for the one listed first."""
+    s = m.Stream()
+    twice, other = m.Note("C4"), m.Note("D4")
+    s.insert(2.0, twice)
+    s.insert(0.0, other)
+    s.insert(0.0, twice)
+    assert float(s.elementOffset(twice)) == 2.0
+    assert s.index(twice) == 1
+    assert [each.name for each in s] == ["D", "C", "C"]
+
+    s.remove(twice)
+    assert float(s.elementOffset(twice)) == 0.0
+    assert s.index(twice) == 1
+
+    replacement = m.Note("E4")
+    s.replace(other, replacement)
+    assert s[0] is replacement and other not in s
+    assert s.index(replacement) == 0
+
+    first = m.Metadata()
+    s.metadata = first
+    assert s[0] is first and s.index(first) == 0
+    s.metadata = m.Metadata()
+    assert len(s) == 3 and first not in s
+
+
+def test_many_lookups_still_follow_edits():
+    """Asked often enough, a stream finds its objects by a map it keeps;
+    every edit lets the map go, so what it answers after one is fresh."""
+    s = m.Stream()
+    notes = [m.Note("C4") for _ in range(20)]
+    s.append(notes)
+    twice = notes[5]
+    s.insert(0.5, twice)
+    for _ in range(3):
+        assert [s.index(each) for each in notes][:7] == [0, 2, 3, 4, 5, 1, 7]
+        assert [float(s.elementOffset(each)) for each in notes][:6] == [
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0,
+        ]
+
+    s.remove(twice)
+    assert float(s.elementOffset(twice)) == 0.5
+    for each in notes:
+        s.index(each)
+    s.setElementOffset(notes[0], 30.0)
+    assert s.index(notes[0]) == 19 and s[-1] is notes[0]
+    s.remove(notes[1])
+    assert notes[1] not in s and s.index(notes[2]) == 1
+    with pytest.raises(m.StreamException):
+        s.index(notes[1])
+    replacement = m.Note("D4")
+    s.replace(notes[2], replacement)
+    assert s.index(replacement) == 1 and notes[2] not in s
 
 
 def test_elements_are_taken_out_by_class_and_by_index():
@@ -7716,6 +7977,69 @@ def test_a_chords_edits_in_place_survive_a_pickle():
     assert thawed.volume.velocity == 100
     assert [p.nameWithOctave for p in thawed.pitches] == ["D4", "E4", "G4"]
     assert thawed.notes[1].volume.velocity == 40
+
+
+def test_a_meter_rewritten_forgets_how_it_was_drawn_but_load_does_not():
+    """music21's `numerator`, `denominator`, `ratioString` and `resetValues`
+    all reset the meter, clearing its symbol, its note-value denominator and
+    any bar length written over it; `load` alone keeps all three."""
+    for rewrite in (
+        lambda ts: setattr(ts, "numerator", 3),
+        lambda ts: setattr(ts, "denominator", 8),
+        lambda ts: setattr(ts, "ratioString", "3/4"),
+        lambda ts: ts.resetValues("3/4"),
+    ):
+        ts = m.TimeSignature("4/4")
+        ts.symbol = "common"
+        ts.symbolizeDenominator = True
+        ts.barDuration = m.Duration(3.0)
+        rewrite(ts)
+        assert (ts.symbol, ts.symbolizeDenominator) == ("", False)
+        assert ts.barDuration.quarterLength == ts.numerator * 4 / ts.denominator
+
+    ts = m.TimeSignature("cut")
+    ts.symbolizeDenominator = True
+    ts.barDuration = m.Duration(3.0)
+    ts.load("4/4")
+    assert (ts.ratioString, ts.symbol, ts.symbolizeDenominator) == ("4/4", "cut", True)
+    assert ts.barDuration.quarterLength == 3.0
+
+
+def test_a_pitch_moved_keeps_how_its_accidental_is_shown():
+    """music21's `octave`, `step` and `microtone` setters leave the
+    accidental object alone, so what was said of its display stands."""
+    for move in (
+        lambda p: setattr(p, "octave", 4),
+        lambda p: setattr(p, "step", "A"),
+        lambda p: setattr(p, "microtone", 20),
+    ):
+        n = m.Note("E-5")
+        n.pitch.accidental.displayStatus = False
+        n.pitch.accidental.displayType = "always"
+        move(n.pitch)
+        assert n.pitch.accidental.displayStatus is False
+        assert n.pitch.accidental.displayType == "always"
+
+
+def test_a_chord_added_to_sorts_by_staff_position():
+    """music21's `add` sorts by `diatonicNoteNum` before `ps`, so of two
+    enharmonic notes the lower letter comes first and F#3 sorts below G--3."""
+    c = m.Chord(["B--3", "D4"])
+    c.add("A3")
+    assert [p.nameWithOctave for p in c.pitches] == ["A3", "B--3", "D4"]
+    c = m.Chord(["G--3"])
+    c.add("F#3")
+    assert [p.nameWithOctave for p in c.pitches] == ["F#3", "G--3"]
+
+
+def test_a_pickled_tuplet_keeps_its_written_value():
+    """A dotted half in a triplet sounds a half; pickled and read back it is
+    still written as the dotted half, as music21's is."""
+    n = m.Note("F4", quarterLength=3.0)
+    n.duration.appendTuplet(m.Tuplet(3, 2))
+    for kept in (pickle.loads(pickle.dumps(n)), pickle.loads(pickle.dumps(n.duration))):
+        written = kept.duration if isinstance(kept, m.Note) else kept
+        assert (written.type, written.dots, written.quarterLength) == ("half", 1, 2.0)
 
 
 def test_a_stored_instrument_edited_in_place_is_read():

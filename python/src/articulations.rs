@@ -102,21 +102,19 @@ impl Articulation {
     }
 
     fn set_bend(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let semitones = value
-            .getattr("semitones")
-            .and_then(|semitones| semitones.extract::<f64>())
-            .or_else(|_| {
-                value
-                    .getattr("chromatic")
-                    .and_then(|chromatic| chromatic.getattr("semitones"))
-                    .and_then(|semitones| semitones.extract::<f64>())
-            })
-            .ok();
-        self.inner.set_bend_alter(
-            semitones.and_then(|semitones| RsChromaticInterval::new(semitones).ok()),
-        );
+        self.inner.set_bend_alter(bend_semitones(value));
         self.bend_alter = Some(value.clone().unbind());
         Ok(())
+    }
+
+    /// The articulation as it stands: music21's writer reads `bendAlter`
+    /// off the interval object, so an edit to that object is an edit here.
+    pub(crate) fn current(&self, py: Python<'_>) -> RsArticulation {
+        let mut inner = self.inner.clone();
+        if let Some(bend) = &self.bend_alter {
+            inner.set_bend_alter(bend_semitones(bend.bind(py)));
+        }
+        inner
     }
 
     /// Refuses a field music21's class for this kind has not got, as a
@@ -130,6 +128,22 @@ impl Articulation {
             slf.get_type().name()?
         )))
     }
+}
+
+/// A bend's interval as the crate keeps it: its semitones, read off the
+/// interval or off its chromatic half.
+fn bend_semitones(value: &Bound<'_, PyAny>) -> Option<RsChromaticInterval> {
+    let semitones = value
+        .getattr("semitones")
+        .and_then(|semitones| semitones.extract::<f64>())
+        .or_else(|_| {
+            value
+                .getattr("chromatic")
+                .and_then(|chromatic| chromatic.getattr("semitones"))
+                .and_then(|semitones| semitones.extract::<f64>())
+        })
+        .ok()?;
+    RsChromaticInterval::new(semitones).ok()
 }
 
 #[pymethods]

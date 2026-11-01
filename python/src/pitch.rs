@@ -1238,8 +1238,10 @@ impl Pitch {
             options = options.microtone(cents);
         }
         let mut rebuilt = options.build().map_err(pitch_error)?;
-        if self.inner.written_accidental().is_none() && accidental == "natural" {
-            rebuilt.set_written_accidental(None);
+        // The same accidental is music21's same object, so a written one
+        // keeps how it is shown, and none stays none.
+        if accidental == self.accidental_name() {
+            rebuilt.set_written_accidental(self.inner.written_accidental().cloned());
         }
         Ok(rebuilt)
     }

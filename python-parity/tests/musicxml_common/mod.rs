@@ -829,17 +829,22 @@ def describe(e):
         return 'PercussionChord ' + ' '.join(
             struck(n.storedInstrument) for n in e.notes)
     if 'Note' in classes:
-        return f'Note {e.nameWithOctave} {e.tie.type if e.tie else None} {sung(e)}'
+        return (f'Note {e.nameWithOctave} {e.tie.type if e.tie else None} {sung(e)}'
+                f' {drawn(e)}')
     if 'NoChord' in classes:
         return 'NoChord'
     if 'ChordSymbol' in classes:
         return f'ChordSymbol {e.figure}'
     if 'Chord' in classes:
+        # The crate keeps the chord's own lyrics on its first note, so
+        # each note's own is said from the second on.
         return 'Chord ' + ' '.join(
-            f'{n.nameWithOctave}/{n.tie.type if n.tie else None}' for n in e.notes
-        ) + f' {sung(e)}'
+            f'{n.nameWithOctave}/{n.tie.type if n.tie else None}'
+            + ('' if i == 0 else f'/{sung(n)}')
+            for i, n in enumerate(e.notes)
+        ) + f' {sung(e)} {drawn(e)}'
     if 'Rest' in classes:
-        return f'Rest {sung(e)}'
+        return f'Rest {sung(e)} {drawn(e)}'
     if 'Clef' in classes:
         return f'Clef {e.sign}{e.line}'
     if 'Dynamic' in classes:
@@ -851,13 +856,52 @@ def describe(e):
     if 'TimeSignature' in classes:
         return f'TimeSignature {e.ratioString}'
     if 'MetronomeMark' in classes:
-        return f'MetronomeMark {number(e.number)} {e.numberImplicit}'
+        return f'MetronomeMark {number(e.number)} {e.numberImplicit} {said(e.text)}'
+    if 'TempoText' in classes:
+        return f'TempoText {said(e.text)}'
+    if 'TextExpression' in classes:
+        return f'TextExpression {said(e.content)}'
+    if 'Barline' in classes:
+        return f'Barline {e.type} {getattr(e, "direction", None)}'
     if 'Instrument' in classes:
         return f'Instrument {classes[0]} {e.partName} {e.instrumentName} {e.midiProgram}'
     return None
 
 def sung(e):
     return None if e.lyric is None else e.lyric.replace('\n', '|')
+
+def said(text):
+    return None if text is None else text.replace('\n', '|')
+
+def drawn(e):
+    """How a note, chord or rest is written: its value and dots, and the
+    class of each articulation and expression it carries."""
+    kind = e.duration.type
+    # The crate does not tell a length no value writes from a tied one.
+    if kind == 'inexpressible':
+        kind = 'complex'
+    dots = 0 if kind in ('complex', 'zero') else e.duration.dots
+    marks = ','.join(a.classes[0] for a in e.articulations)
+    signs = ','.join(x.classes[0] for x in e.expressions)
+    return f'{kind}/{dots} [{marks}] [{signs}]'
+
+def barline(b):
+    """A measure's own barline, where it is not an ordinary one."""
+    if b is None:
+        return None
+    direction = getattr(b, 'direction', None)
+    if b.type == 'regular' and direction is None:
+        return None
+    return f'{b.type}/{direction}'
+
+def barlines(measure):
+    left, right = barline(measure.leftBarline), barline(measure.rightBarline)
+    if left is None and right is None:
+        return None
+    return f'   Barlines {left} {right}'
+
+def own_barline(e, measure):
+    return e is measure.leftBarline or e is measure.rightBarline
 
 def line(e, offset):
     said = describe(e)
@@ -871,8 +915,9 @@ def outline(score):
         out.append('Part')
         for measure in part.getElementsByClass('Measure'):
             out.append(f'  Measure {measure.number} {number(measure.offset)}')
+            out.append(barlines(measure))
             for e in measure:
-                if 'Barline' in e.classes:
+                if 'Barline' in e.classes and own_barline(e, measure):
                     continue
                 if 'Voice' in e.classes:
                     out.append('   Voice')
@@ -890,6 +935,11 @@ def flat_outline(score):
         for e in part.recurse():
             if 'Measure' in e.classes:
                 out.append(f'  Measure {e.number} {number(e.getOffsetInHierarchy(part))}')
+                out.append(barlines(e))
+            elif ('Barline' in e.classes and e.activeSite is not None
+                    and 'Measure' in e.activeSite.classes
+                    and own_barline(e, e.activeSite)):
+                continue
             elif not e.isStream:
                 out.append(line(e, e.getOffsetInHierarchy(part)))
     return '\n'.join(said for said in out if said is not None)
@@ -933,6 +983,79 @@ fn struck(drum: Option<&music21_rs::Instrument>) -> String {
 }
 
 #[allow(dead_code)]
+fn said(text: Option<&str>) -> String {
+    option(text.map(|text| text.replace('\n', "|")))
+}
+
+#[allow(dead_code)]
+/// How a note, chord or rest is written: its value and dots, and the class
+/// of each articulation and expression it carries.
+fn drawn(
+    duration: Option<&music21_rs::Duration>,
+    articulations: &[music21_rs::articulations::Articulation],
+    expressions: &[music21_rs::expressions::Expression],
+) -> String {
+    use music21_rs::expressions::Expression;
+    let written = match duration
+        .map(music21_rs::Duration::written_values)
+        .as_deref()
+    {
+        None => "quarter/0".to_string(),
+        Some([]) => "zero/0".to_string(),
+        Some([one]) => match one.duration_type() {
+            Some(kind) => format!("{}/{}", kind.music21_name(), one.dots()),
+            None => "complex/0".to_string(),
+        },
+        Some(_) => "complex/0".to_string(),
+    };
+    let marks = articulations
+        .iter()
+        .map(|articulation| articulation.kind().class_name())
+        .collect::<Vec<_>>()
+        .join(",");
+    let signs = expressions
+        .iter()
+        .map(|expression| match expression {
+            Expression::Ornament(ornament) => ornament.kind().class_name(),
+            Expression::Fermata(_) => "Fermata",
+            Expression::Arpeggio(_) => "ArpeggioMark",
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{written} [{marks}] [{signs}]")
+}
+
+#[allow(dead_code)]
+/// A measure's own barline, where it is not an ordinary one.
+fn barline(barline: Option<&music21_rs::Barline>) -> Option<String> {
+    let barline = barline?;
+    let direction = barline
+        .repeat_direction()
+        .map(|direction| direction.as_str());
+    if barline.bar_type() == music21_rs::BarlineType::Regular && direction.is_none() {
+        return None;
+    }
+    Some(format!(
+        "{}/{}",
+        barline.bar_type().as_str(),
+        option(direction)
+    ))
+}
+
+#[allow(dead_code)]
+/// A measure's own barlines, where either is not an ordinary one.
+fn barlines(measure: &Stream) -> Option<String> {
+    let (left, right) = (
+        barline(measure.left_barline()),
+        barline(measure.right_barline()),
+    );
+    if left.is_none() && right.is_none() {
+        return None;
+    }
+    Some(format!("   Barlines {} {}", option(left), option(right)))
+}
+
+#[allow(dead_code)]
 fn describe(element: &StreamElement) -> String {
     let tie = |note: &music21_rs::Note| option(note.tie().map(|tie| tie.tie_type().as_str()));
     match element {
@@ -950,28 +1073,46 @@ fn describe(element: &StreamElement) -> String {
                 .join(" ")
         ),
         StreamElement::Note(note) => format!(
-            "Note {} {} {}",
+            "Note {} {} {} {}",
             music21_name(&note.pitch().name_with_octave()),
             tie(note),
-            sung(note.lyric())
+            sung(note.lyric()),
+            drawn(note.duration(), note.articulations(), note.expressions())
         ),
         StreamElement::ChordSymbol(symbol) if symbol.figure() == "N.C." => "NoChord".to_string(),
         StreamElement::ChordSymbol(symbol) => format!("ChordSymbol {}", symbol.figure()),
+        // The chord's own lyrics are its first note's, so each note's own
+        // is said from the second on.
         StreamElement::Chord(chord) => format!(
-            "Chord {} {}",
+            "Chord {} {} {}",
             chord
                 .notes()
                 .iter()
-                .map(|note| format!(
-                    "{}/{}",
+                .enumerate()
+                .map(|(index, note)| format!(
+                    "{}/{}{}",
                     music21_name(&note.pitch().name_with_octave()),
-                    tie(note)
+                    tie(note),
+                    if index == 0 {
+                        String::new()
+                    } else {
+                        format!("/{}", sung(note.lyric()))
+                    }
                 ))
                 .collect::<Vec<_>>()
                 .join(" "),
-            sung(chord.notes().first().and_then(music21_rs::Note::lyric))
+            sung(chord.notes().first().and_then(music21_rs::Note::lyric)),
+            drawn(chord.duration(), chord.articulations(), chord.expressions())
         ),
-        StreamElement::Rest(rest) => format!("Rest {}", sung(rest.lyric())),
+        StreamElement::Rest(rest) => format!(
+            "Rest {} {}",
+            sung(rest.lyric()),
+            drawn(
+                Some(rest.duration()),
+                rest.articulations(),
+                rest.expressions()
+            )
+        ),
         StreamElement::Dynamic(dynamic) => format!("Dynamic {}", dynamic.value()),
         StreamElement::KeySignature(signature) => {
             format!("KeySignature {}", signature.sharps())
@@ -986,9 +1127,23 @@ fn describe(element: &StreamElement) -> String {
             format!("TimeSignature {}", meter.ratio_string())
         }
         StreamElement::MetronomeMark(mark) => format!(
-            "MetronomeMark {} {}",
+            "MetronomeMark {} {} {}",
             number(mark.number().unwrap_or(0.0)),
-            python_bool(mark.number_implicit())
+            python_bool(mark.number_implicit()),
+            said(mark.text())
+        ),
+        StreamElement::TempoText(text) => format!("TempoText {}", said(Some(text.text()))),
+        StreamElement::TextExpression(text) => {
+            format!("TextExpression {}", said(Some(text.content())))
+        }
+        StreamElement::Barline(barline) => format!(
+            "Barline {} {}",
+            barline.bar_type().as_str(),
+            option(
+                barline
+                    .repeat_direction()
+                    .map(|direction| direction.as_str())
+            )
         ),
         StreamElement::Instrument(instrument) => format!(
             "Instrument {} {} {} {}",
@@ -1028,6 +1183,7 @@ pub fn outline(score: &Stream) -> String {
                 measure.number(),
                 number(event.offset())
             ));
+            out.extend(barlines(measure));
             // A humdrum instruction is compared on its own, and music21's
             // outline says nothing for it.
             let said = |event: &&music21_rs::StreamEvent| {
@@ -1059,6 +1215,7 @@ pub fn flat_outline(score: &Stream) -> String {
                 Some(inner) => {
                     if inner.kind() == StreamKind::Measure {
                         out.push(format!("  Measure {} {}", inner.number(), number(offset)));
+                        out.extend(barlines(inner));
                     }
                     walk(inner, offset, out);
                 }

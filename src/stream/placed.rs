@@ -337,13 +337,18 @@ impl Stream {
 }
 
 /// The last mark of one sort at or before a leaf that the leaf's scope
-/// reaches; of two at one offset, the later-listed. The mark's own leaf
-/// comes with it, for where it stands.
+/// reaches; of two at one offset, the later-listed. A mark of the sort is
+/// in force where it stands itself, as music21's `getContextByClass`
+/// answers. The mark's own leaf comes with it, for where it stands.
 fn in_force<'l, 'a, T>(
     leaves: &'l [Leaf<'a>],
-    leaf: &Leaf<'a>,
+    leaf: &'l Leaf<'a>,
     read: impl Fn(&'a StreamElement) -> Option<&'a T>,
 ) -> Option<(&'l Leaf<'a>, &'a T)> {
+    if let Some(value) = read(leaf.element) {
+        return Some((leaf, value));
+    }
+
     let mut found: Option<(&'l Leaf<'a>, &'a T)> = None;
     for mark in leaves {
         if mark.offset > leaf.offset || !mark.scope.reaches(leaf.scope) {
@@ -523,6 +528,41 @@ mod tests {
         let notes = notes_of(&pickup);
         assert_eq!(notes[0].bar_offset(), Some(3.0));
         assert_eq!(notes[0].beat().unwrap(), Some(4.0));
+    }
+
+    /// A meter is in force where it stands itself, even beside another at
+    /// the same offset: music21's `getContextByClass` answers an element
+    /// of the class asked with itself.
+    #[test]
+    fn a_meter_reads_itself() {
+        let mut empty = Stream::with_kind(StreamKind::Measure);
+        empty.set_number(1);
+        empty.insert(0.0, TimeSignature::from_ratio_string("7/8").unwrap());
+        let mut next = repeated(StreamKind::Measure, "5/4", 1.0, 1);
+        next.set_number(2);
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, empty);
+        part.insert(0.0, next);
+
+        let lengths: Vec<_> = part
+            .placed()
+            .iter()
+            .map(|placed| placed.beat_duration().unwrap().unwrap().quarter_length())
+            .collect();
+        assert_eq!(lengths, [0.5, 1.0, 1.0]);
+    }
+
+    /// A meter standing at a third of a beat still counts whole bars from
+    /// there: 26/3 is two bars of 2/2 after 2/3.
+    #[test]
+    fn thirds_count_whole_bars() {
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(2.0 / 3.0, TimeSignature::from_ratio_string("2/2").unwrap());
+        part.insert(26.0 / 3.0, Note::from_name("C4").unwrap());
+
+        let notes = notes_of(&part);
+        assert_eq!(notes[0].beat().unwrap(), Some(1.0));
+        assert_eq!(notes[0].beat_string().unwrap().as_deref(), Some("1"));
     }
 
     /// With no meter in force there is no beat to tell.

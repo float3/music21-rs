@@ -42,6 +42,12 @@ const FILES: &[(&str, &str)] = &[
     ),
 ];
 
+/// How many files are compared by their outline alone, music21 being
+/// unable to write them, today. One more fails the test: a file music21
+/// stops writing, or the crate stops reading as music21 does, is noticed
+/// rather than quietly compared by less.
+const OUTLINE_ONLY_CEILING: usize = 0;
+
 #[test]
 fn the_crate_reads_mei_as_music21_does() {
     let root = repo_root();
@@ -189,6 +195,12 @@ fn the_crate_reads_mei_as_music21_does() {
             "{} compared, {outline_only} of them by outline alone",
             chosen.len()
         );
+        if outline_only > OUTLINE_ONLY_CEILING {
+            failures.push(format!(
+                "{outline_only} files compared by outline alone, more than the \
+                 {OUTLINE_ONLY_CEILING} there were"
+            ));
+        }
         Ok((failures, chosen.len()))
     })
     .unwrap_or_else(|error| panic!("running music21: {error}"));

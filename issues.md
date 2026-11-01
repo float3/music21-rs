@@ -216,8 +216,31 @@ two rules, set 2026-09-12, that most of the open work now serves:
    `data/py_fields.toml` lists them as *value*.
 
    The four suspected on 2026-11-01 were checked against music21 and
-   fixed (below, under closed). No row still listed as *value* has been
-   shown to cost anything yet.
+   fixed (below, under closed), and the other rows listed as *value* were
+   made to read the object as it stands; none is left.
+
+10. **appending to a wheel stream still reads every held note's length.**
+    2,000 appends take 47.8ms where music21 takes 28ms: a note's duration
+    can be edited from Python without the stream hearing of it, and the
+    package keeps no sites to tell it, so the stream's end is worked out
+    afresh each time. An edit counter shared by `Note` and `Duration`
+    would let it keep its end. Two smaller differences found on the way:
+    `replace` keeps the old element's insertion order where music21 puts
+    the replacement after what else stands at its offset, and the wheel
+    lets one object be inserted twice, which music21 refuses.
+
+11. **music21 bugs the seeded fuzzers step around**, not yet fixed on the
+    fork:
+    - `k = key.Key('G'); k.mode = 'minor'` leaves `k.pitches` listing F#.
+    - `n = note.Note(quarterLength=0.25)`, then
+      `n.duration.appendTuplet(duration.Tuplet(5, 4))` and
+      `n.quarterLength = 1.5` keeps the tuplet, so the note is written as
+      1.2.
+    - a 3/4 part with `Note('C4', quarterLength=1/3)` at 0 and
+      `Note('D4', quarterLength=0.25)` at 1/12 makes
+      `GeneralObjectExporter(p).parse()` raise `MeterException: cannot
+      access qLenPos 3.0`; makeNotation fuzzer seeds 491, 802, 894, 1061
+      and 1962 hit it.
 
 ## closed
 

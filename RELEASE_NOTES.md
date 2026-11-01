@@ -29,6 +29,16 @@
 
 ## added
 
+- **`FiguredBassLine::set_time_signature` and `set_key_signature`, and
+  `VoiceLeadingQuartet::set_pitches`**, which the wheel's in-place edits
+  reach the crate through.
+
+- **music21's `style` doctests run against the wheel**, all 16 passing.
+
+- **The parity outline compares more**: barlines, text and tempo
+  expressions, articulations, expressions, duration types and dots, and
+  every chord note's lyric; runs music21 cannot write are capped per test.
+
 - **`Rest::color` and `Rest::set_color`**: MusicXML writes and reads a
   rest's colour, as music21 does.
 
@@ -41,6 +51,40 @@
   inversion.
 
 ## fixed
+
+- **Bugs the seeded fuzzers found**: a placed beat reads the meter that
+  stands where it is and counts bars in fractions, so a meter starting at
+  2/3 still wraps on whole bars; `make_measures`, ties and rest filling
+  cut at a meter's written bar length; in the wheel, setting a
+  `TimeSignature`'s numerator, denominator, `ratioString` or
+  `resetValues` clears its symbol and written bar length while `load`
+  keeps them, moving a pitch keeps how its accidental is shown,
+  `Chord.add` sorts by staff position before `ps`, and a pickled tuplet
+  duration keeps its written value, all as in music21. New:
+  `TimeSignature::written_bar_duration`.
+
+- **Seeded fuzzers stay in the suite**: facade edits, placed beats,
+  `makeNotation` and the MIDI round trip are compared with music21 over
+  fixed seeds on every run.
+
+- **Indexing and looking things up in a wheel stream no longer slow down
+  as it grows**: `s[i]`, `index`, `elementOffset`, `remove` and `in` keep
+  the stream's order and a map of its objects until it changes. A loop of
+  `s[i]` over 4,000 notes went from 118ms to 0.3ms and `index` from 175ms
+  to 0.5ms; appending is about twice as fast. `xtask bench` now times
+  streams and reading and writing corpus files against music21.
+
+- **Every edit through a handed-out object reaches the crate**: an
+  articulation's `bendAlter`, a contributor's dates, a figured-bass
+  line's key and meter, an ornament's size and a voice-leading quartet's
+  notes, as music21's own objects take them.
+
+- **A realized ornament no longer keeps itself** on the notes it makes:
+  the note it leaves and a turn's or trill's notes carry no expressions,
+  as in music21.
+
+- **`metadata_parity` no longer deadlocks** importing music21's metadata
+  from several test threads at once.
 
 - **music21's fixes followed**: the music21 submodule is at the fork's
   master c815254cb, and the crate gives its answers. `reduce_chords`

@@ -441,6 +441,12 @@ fn music21_side(py: Python<'_>) -> PyResult<Side> {
         ("Chord", "music21.chord"),
         ("pcToToneRow", "music21.serial"),
         ("Segment", "music21.figuredBass.segment"),
+        ("Stream", "music21.stream"),
+        ("Part", "music21.stream"),
+        ("Score", "music21.stream"),
+        ("Measure", "music21.stream"),
+        ("parse", "music21.converter"),
+        ("GeneralObjectExporter", "music21.musicxml.m21ToXml"),
     ] {
         classes.insert(name, py.import(module)?.getattr(name)?.unbind());
     }
@@ -457,6 +463,12 @@ fn our_side(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<Side> {
         "Chord",
         "pcToToneRow",
         "Segment",
+        "Stream",
+        "Part",
+        "Score",
+        "Measure",
+        "from_musicxml",
+        "to_musicxml",
     ] {
         classes.insert(name, module.getattr(name)?.unbind());
     }
@@ -802,6 +814,168 @@ fn cases() -> Vec<Case> {
         .natively(|| figured_count("C3", "", Some(("D3", "4,3")))),
     );
 
+    // ---- streams -------------------------------------------------------------
+    for count in [100, 2000] {
+        out.push(
+            Case::new(
+                format!("Stream: append {count} notes"),
+                "stream",
+                Box::new(move |py, side| {
+                    let stream = side.get(py, "Stream")?.unbind();
+                    let note = side.get(py, "Note")?.unbind();
+                    let pitch = interned(py, "C4");
+                    let append = interned(py, "append");
+                    let highest = interned(py, "highestTime");
+                    Ok(Box::new(move |py| {
+                        let built = stream.bind(py).call0()?;
+                        for _ in 0..count {
+                            let one = note.bind(py).call1((pitch.bind(py),))?;
+                            built.call_method1(append.bind(py), (one,))?;
+                        }
+                        Ok(built.getattr(highest.bind(py))?.unbind())
+                    }))
+                }),
+            )
+            .noting("each note built and appended"),
+        );
+    }
+    out.push(
+        Case::new(
+            "Stream: s[i] over 2000 notes",
+            "stream",
+            Box::new(|py, side| {
+                let built = side.get(py, "Stream")?.call0()?;
+                let note = side.get(py, "Note")?;
+                for _ in 0..2000 {
+                    built.call_method1("append", (note.call1(("D4",))?,))?;
+                }
+                let built = built.unbind();
+                let name = interned(py, "nameWithOctave");
+                Ok(Box::new(move |py| {
+                    let built = built.bind(py);
+                    let mut last = built.get_item(0)?;
+                    for at in 1..2000 {
+                        last = built.get_item(at)?;
+                    }
+                    Ok(last.getattr(name.bind(py))?.unbind())
+                }))
+            }),
+        )
+        .noting("one stream, every index"),
+    );
+    out.push(
+        Case::new(
+            "Score.recurse().notes",
+            "stream",
+            Box::new(|py, side| {
+                let score = nested_score(py, side)?.unbind();
+                let recurse = interned(py, "recurse");
+                let notes = interned(py, "notes");
+                let list = side.list.clone_ref(py);
+                Ok(Box::new(move |py| {
+                    let found = score
+                        .bind(py)
+                        .call_method0(recurse.bind(py))?
+                        .getattr(notes.bind(py))?;
+                    Ok(list
+                        .bind(py)
+                        .call1((found,))?
+                        .len()?
+                        .into_pyobject(py)?
+                        .into_any()
+                        .unbind())
+                }))
+            }),
+        )
+        .noting("2 parts of 100 measures of 4 notes"),
+    );
+    out.push(
+        Case::new(
+            "Score.flatten()",
+            "stream",
+            Box::new(|py, side| {
+                let score = nested_score(py, side)?.unbind();
+                let marker = side.get(py, "Note")?.call1(("A4",))?.unbind();
+                let flatten = interned(py, "flatten");
+                let insert = interned(py, "insert");
+                let remove = interned(py, "remove");
+                Ok(Box::new(move |py| {
+                    // An edit first, undone, as music21 keeps what it last
+                    // flattened until the stream changes.
+                    let score = score.bind(py);
+                    score.call_method1(insert.bind(py), (0.0, marker.bind(py)))?;
+                    score.call_method1(remove.bind(py), (marker.bind(py),))?;
+                    let flat = score.call_method0(flatten.bind(py))?;
+                    Ok(flat.len()?.into_pyobject(py)?.into_any().unbind())
+                }))
+            }),
+        )
+        .noting("2 parts of 100 measures of 4 notes, after an edit"),
+    );
+    out.push(
+        Case::new(
+            "Part.makeMeasures()",
+            "stream",
+            Box::new(|py, side| {
+                let part = side.get(py, "Part")?.call0()?;
+                let note = side.get(py, "Note")?;
+                let keywords = pyo3::types::PyDict::new(py);
+                keywords.set_item("quarterLength", 1.5)?;
+                for _ in 0..200 {
+                    part.call_method1("append", (note.call(("E4",), Some(&keywords))?,))?;
+                }
+                let part = part.unbind();
+                let make = interned(py, "makeMeasures");
+                let by_class = interned(py, "getElementsByClass");
+                let measure = interned(py, "Measure");
+                Ok(Box::new(move |py| {
+                    let made = part.bind(py).call_method0(make.bind(py))?;
+                    let measures = made.call_method1(by_class.bind(py), (measure.bind(py),))?;
+                    Ok(measures.len()?.into_pyobject(py)?.into_any().unbind())
+                }))
+            }),
+        )
+        .noting("200 dotted quarters, a copy cut into measures"),
+    );
+    for file in ["bach/bwv69.6.xml", "schubert/Lindenbaum.xml"] {
+        out.push(
+            Case::new(
+                format!("read {file}"),
+                "stream",
+                Box::new(move |py, side| {
+                    let path = corpus_file(py, file)?.unbind();
+                    let read = side_reader(py, side)?;
+                    let recurse = interned(py, "recurse");
+                    let notes = interned(py, "notes");
+                    Ok(Box::new(move |py| {
+                        let score = read(py, path.bind(py))?;
+                        let found = score
+                            .call_method0(recurse.bind(py))?
+                            .getattr(notes.bind(py))?;
+                        Ok(found.len()?.into_pyobject(py)?.into_any().unbind())
+                    }))
+                }),
+            )
+            .noting("music21's parse cache off; counting the notes read"),
+        );
+    }
+    out.push(
+        Case::new(
+            "write bach/bwv69.6.xml",
+            "stream",
+            Box::new(|py, side| {
+                let path = corpus_file(py, "bach/bwv69.6.xml")?;
+                let score = side_reader(py, side)?(py, &path)?.unbind();
+                let write = side_writer(py, side)?;
+                Ok(Box::new(move |py| {
+                    let text = write(py, score.bind(py))?;
+                    Ok(text.call_method1("count", ("</note>",))?.unbind())
+                }))
+            }),
+        )
+        .noting("as read by each side, written without makeNotation"),
+    );
+
     // ---- the same questions on an object that has already answered them ---
     for attribute in ["commonName", "forteClass"] {
         out.push(
@@ -825,6 +999,78 @@ fn cases() -> Vec<Case> {
     }
 
     out
+}
+
+/// A score of two parts of 100 measures of four quarter notes each, built
+/// with the side's own classes.
+fn nested_score<'py>(py: Python<'py>, side: &Side) -> PyResult<Bound<'py, PyAny>> {
+    let score = side.get(py, "Score")?.call0()?;
+    let note = side.get(py, "Note")?;
+    for pitch in ["C4", "G3"] {
+        let part = side.get(py, "Part")?.call0()?;
+        for _ in 0..100 {
+            let measure = side.get(py, "Measure")?.call0()?;
+            for _ in 0..4 {
+                measure.call_method1("append", (note.call1((pitch,))?,))?;
+            }
+            part.call_method1("append", (measure,))?;
+        }
+        score.call_method1("insert", (0.0, part))?;
+    }
+    Ok(score)
+}
+
+/// A file of music21's corpus, as a `pathlib.Path`: both sides read the
+/// same one, wherever the music21 being timed keeps it.
+fn corpus_file<'py>(py: Python<'py>, file: &str) -> PyResult<Bound<'py, PyAny>> {
+    py.import("music21.common")?
+        .call_method0("getCorpusFilePath")?
+        .call_method1("joinpath", (file,))
+}
+
+/// Reads a score from a MusicXML file, prepared once.
+type Reader = Box<dyn for<'py> Fn(Python<'py>, &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>>;
+
+/// How a caller of each side reads a MusicXML file into a score: music21's
+/// `converter.parse` with its parse cache off, so the file is parsed every
+/// time, and the wheel's `from_musicxml` of the file's text. The two take
+/// different arguments, so this is the one place a case asks which side it
+/// is on.
+fn side_reader(py: Python<'_>, side: &Side) -> PyResult<Reader> {
+    let read_text = interned(py, "read_text");
+    if side.label == "music21" {
+        let parse = side.get(py, "parse")?.unbind();
+        let keywords = pyo3::types::PyDict::new(py);
+        keywords.set_item("forceSource", true)?;
+        let keywords = keywords.unbind();
+        return Ok(Box::new(move |py, path| {
+            parse.bind(py).call((path,), Some(keywords.bind(py)))
+        }));
+    }
+    let read = side.get(py, "from_musicxml")?.unbind();
+    Ok(Box::new(move |py, path| {
+        let text = path.call_method1(read_text.bind(py), ("utf-8",))?;
+        read.bind(py).call1((text,))
+    }))
+}
+
+/// How a caller of each side writes a score as MusicXML text: music21's
+/// exporter, told not to make notation as the wheel's `to_musicxml` does
+/// not by default, and the wheel's.
+fn side_writer(py: Python<'_>, side: &Side) -> PyResult<Reader> {
+    if side.label == "music21" {
+        let exporter = side.get(py, "GeneralObjectExporter")?.unbind();
+        let parse = interned(py, "parse");
+        let decode = interned(py, "decode");
+        return Ok(Box::new(move |py, score| {
+            let made = exporter.bind(py).call1((score,))?;
+            made.setattr("makeNotation", false)?;
+            made.call_method0(parse.bind(py))?
+                .call_method0(decode.bind(py))
+        }));
+    }
+    let write = side.get(py, "to_musicxml")?.unbind();
+    Ok(Box::new(move |py, score| write.bind(py).call1((score,))))
 }
 
 /// How many voicings a segment of `bass` under `figures` has, or, given the
@@ -1073,7 +1319,7 @@ mod tests {
     #[test]
     fn every_case_is_named_once() {
         let cases = cases();
-        assert_eq!(cases.len(), 24, "the report quotes a case count");
+        assert_eq!(cases.len(), 33, "the report quotes a case count");
         let mut names: Vec<&str> = cases.iter().map(|case| case.name.as_str()).collect();
         names.sort_unstable();
         let count = names.len();

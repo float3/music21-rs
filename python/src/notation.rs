@@ -24,6 +24,11 @@ pub const VOLUME_NAMES: &[&str] = &["Volume", "VolumeException"];
 /// The names the `notation` facade replaces in `music21.beam`.
 pub const BEAM_NAMES: &[&str] = &["Beam", "Beams", "BeamException"];
 
+/// The names the `notation` facade has of `music21.style`. Nothing installs
+/// them over music21's, whose own style objects a note keeps there; the
+/// doctests swap them in to try the wheel's on its own.
+pub const STYLE_NAMES: &[&str] = &["Style", "NoteStyle"];
+
 pyo3::create_exception!(music21_rs_facade, TieException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, LyricException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, VolumeException, crate::Music21Exception);
