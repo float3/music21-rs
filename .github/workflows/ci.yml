@@ -1151,7 +1151,9 @@ jobs:
 
       # A version is released when it has no tag yet, rather than only by the
       # push that changed it, so a run cancelled by the next push does not
-      # lose the release: the next green run on master makes it.
+      # lose the release: the next green run on master makes it. A tagged
+      # version crates.io lacks is unreleased too: a run that tagged it and
+      # then skipped publishing must not leave it unpublished for good.
       - name: Detect an unreleased package version
         id: version
         shell: bash
@@ -1169,7 +1171,9 @@ jobs:
 
           git fetch --tags --force
           changed=true
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+          url="https://crates.io/api/v1/crates/music21-rs/$current_version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null \
+            && curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
             changed=false
           fi
 
@@ -1211,7 +1215,10 @@ jobs:
     name: Wheels (linux ${{ matrix.target }})
     runs-on: ubuntu-latest
     needs: release
-    if: needs.release.outputs.changed == 'true'
+    # `release` runs past gates a merged pull request already proved, which
+    # are skipped; without a status check of its own this job would be
+    # skipped with them.
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.release.outputs.changed == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1243,7 +1250,10 @@ jobs:
     name: Wheels (${{ matrix.os }} py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     needs: release
-    if: needs.release.outputs.changed == 'true'
+    # `release` runs past gates a merged pull request already proved, which
+    # are skipped; without a status check of its own this job would be
+    # skipped with them.
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.release.outputs.changed == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1287,7 +1297,10 @@ jobs:
     name: Source distribution
     runs-on: ubuntu-latest
     needs: release
-    if: needs.release.outputs.changed == 'true'
+    # `release` runs past gates a merged pull request already proved, which
+    # are skipped; without a status check of its own this job would be
+    # skipped with them.
+    if: ${{ !cancelled() && needs.release.result == 'success' && needs.release.outputs.changed == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1314,7 +1327,15 @@ jobs:
       - wheels-linux
       - wheels-native
       - sdist
-    if: needs.release.outputs.changed == 'true'
+    if: >-
+      ${{
+        !cancelled()
+        && needs.release.result == 'success'
+        && needs.release.outputs.changed == 'true'
+        && needs.wheels-linux.result == 'success'
+        && needs.wheels-native.result == 'success'
+        && needs.sdist.result == 'success'
+      }}
     environment:
       name: pypi
       url: https://pypi.org/p/music21-rs
@@ -1345,7 +1366,15 @@ jobs:
       - wheels-linux
       - wheels-native
       - sdist
-    if: needs.release.outputs.changed == 'true'
+    if: >-
+      ${{
+        !cancelled()
+        && needs.release.result == 'success'
+        && needs.release.outputs.changed == 'true'
+        && needs.wheels-linux.result == 'success'
+        && needs.wheels-native.result == 'success'
+        && needs.sdist.result == 'success'
+      }}
     environment: crates-io
     steps:
       - name: Checkout

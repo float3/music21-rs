@@ -23,7 +23,9 @@
 //! exactly what passes. `UPDATE_DOCTEST_EXPECTATIONS=1` rewrites the list from
 //! the current run. An optional `[not_passing]` table maps a docstring to the
 //! reason it fails on purpose; the rewrite keeps it, and a failure needs no
-//! entry there. The full doctest report of every failing docstring is
+//! entry there. An optional `[optional]` table names docstrings that need
+//! a package the harness may not have, such as matplotlib: they may pass or
+//! fail, and neither is a mismatch. The full doctest report of every failing docstring is
 //! written to `target/doctest_<name>.log`.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -121,6 +123,10 @@ struct Expectations {
     /// deliberate ones are here; any other failure is simply unlisted.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     not_passing: BTreeMap<String, String>,
+    /// Docstrings that need a package the harness may or may not have, each
+    /// with what it needs: they may pass or fail, and neither is a mismatch.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    optional: BTreeMap<String, String>,
 }
 
 /// Where one run and the listed expectations disagree.
@@ -183,6 +189,7 @@ fn compare(expected: &Expectations, passing: &BTreeSet<&str>) -> Mismatch {
     let unlisted = passing
         .iter()
         .filter(|name| !expected.passing.iter().any(|known| known == *name))
+        .filter(|name| !expected.optional.contains_key(**name))
         .map(|name| name.to_string())
         .collect();
     Mismatch {
@@ -200,8 +207,13 @@ fn rewritten(old: Expectations, passing: &BTreeSet<&str>) -> Expectations {
         .filter(|(name, _)| !passing.contains(name.as_str()))
         .collect();
     Expectations {
-        passing: passing.iter().map(|name| name.to_string()).collect(),
+        passing: passing
+            .iter()
+            .filter(|name| !old.optional.contains_key(**name))
+            .map(|name| name.to_string())
+            .collect(),
         not_passing,
+        optional: old.optional,
     }
 }
 
@@ -539,7 +551,7 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     if std::env::var("UPDATE_DOCTEST_EXPECTATIONS").is_ok_and(|v| v == "1") {
         let expectations = rewritten(expected, &passing);
         let text = format!(
-            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test doctest_{name}`; the test\n# fails when one of these stops passing or one passes that is not listed.\n# `[not_passing]`, kept by the rewrite, names deliberate failures and why.\n\n{}",
+            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test doctest_{name}`; the test\n# fails when one of these stops passing or one passes that is not listed.\n# `[not_passing]`, kept by the rewrite, names deliberate failures and why;\n# `[optional]` names those that need a package the harness may lack.\n\n{}",
             toml::to_string_pretty(&expectations).expect("serialize expectations")
         );
         if let Some(parent) = path.parent() {
@@ -569,7 +581,28 @@ mod tests {
                 .iter()
                 .map(|(name, reason)| (name.to_string(), reason.to_string()))
                 .collect(),
+            optional: BTreeMap::new(),
         }
+    }
+
+    /// A docstring that needs an optional package passes where the package
+    /// is installed and fails where it is not; the gate takes either, and a
+    /// rewrite keeps it out of `passing`.
+    #[test]
+    fn an_optional_docstring_may_pass_or_fail() {
+        let mut expected = listed(&["m.a"], &[]);
+        expected
+            .optional
+            .insert("m.plot".to_string(), "needs matplotlib".to_string());
+
+        let with = BTreeSet::from(["m.a", "m.plot"]);
+        let without = BTreeSet::from(["m.a"]);
+        assert!(compare(&expected, &with).is_empty());
+        assert!(compare(&expected, &without).is_empty());
+
+        let new = rewritten(expected, &with);
+        assert_eq!(new.passing, ["m.a"]);
+        assert!(new.optional.contains_key("m.plot"));
     }
 
     #[test]
