@@ -13,7 +13,9 @@
 //! A subject is named by its kind and a name: `xml:` and a corpus score kept
 //! as MusicXML, `tiny:` and a TinyNotation line, and `built:` and a stream
 //! each side builds itself, for what no corpus score holds. `MIDI_WRITE_SUBJECTS`,
-//! a `;`-separated list, runs those instead of the ones below.
+//! a `;`-separated list, runs those instead of the ones below. A second
+//! test makes up TinyNotation lines from seeds, and has each side read
+//! back the file it wrote and write it again.
 
 use music21_rs::midi::{ExportOptions, to_midi};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
@@ -134,6 +136,10 @@ def built(name):
 def written(score):
     return midi.translate.streamToMidiFile(score).writestr()
 
+def rewritten(data):
+    """A file read back by music21's own reader and written again."""
+    return written(converter.parseData(data, format='midi'))
+
 def events(data):
     mf = midi.MidiFile()
     mf.readstr(data)
@@ -147,11 +153,106 @@ def events(data):
 
 #[test]
 fn the_crate_writes_midi_as_music21_does() {
-    let root = repo_root();
-    std::env::set_current_dir(&root).expect("chdir to the repository root");
-    prepare().expect("prepare the music21 reference checkout");
+    let (failures, count) = compare(None, false);
+    assert!(
+        failures.is_empty(),
+        "{} of {count} subjects are written differently:\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
 
-    let (failures, count) = Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
+/// How many TinyNotation lines are made up from seeds: about ten seconds.
+const GENERATED: u64 = 300;
+
+/// TinyNotation lines made up from seeds 0 to [`GENERATED`]: notes and
+/// rests of plain and dotted values, accidentals, three octaves, ties,
+/// triplets and lyrics, some not ASCII, under a random meter. Each is written by both sides, and
+/// what each wrote is read back by its own reader and written again,
+/// which must also come out the same.
+#[test]
+fn the_crate_writes_and_rereads_generated_lines_as_music21_does() {
+    let subjects = (0..GENERATED).map(generated_line).collect();
+    let (failures, count) = compare(Some(subjects), true);
+    assert!(
+        failures.is_empty(),
+        "{} of {count} generated lines are written differently:\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
+
+/// A TinyNotation subject made up from a seed by a small linear
+/// congruential generator, so every run writes the same ones.
+fn generated_line(seed: u64) -> String {
+    let mut state = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+    let mut next = move |bound: u64| -> u64 {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (state >> 33) % bound
+    };
+    const METERS: &[&str] = &["4/4", "3/4", "2/4", "6/8", "3/8"];
+    const STEPS: &[&str] = &["c", "d", "e", "f", "g", "a", "b"];
+    const OCTAVES: &[&str] = &["", "", "'", "CAPS"];
+    const ALTERS: &[&str] = &["", "", "", "#", "-", "n"];
+    const LENGTHS: &[&str] = &["1", "2", "4", "4", "8", "8", "16", "2.", "4.", "8."];
+    let pitch = |next: &mut dyn FnMut(u64) -> u64| {
+        let step = STEPS[next(7) as usize];
+        let step = match OCTAVES[next(OCTAVES.len() as u64) as usize] {
+            "CAPS" => step.to_uppercase(),
+            octave => format!("{step}{octave}"),
+        };
+        format!("{step}{}", ALTERS[next(ALTERS.len() as u64) as usize])
+    };
+
+    let mut tokens = vec![METERS[next(METERS.len() as u64) as usize].to_string()];
+    for _ in 0..4 + next(12) {
+        let token = match next(12) {
+            0 => format!("r{}", LENGTHS[next(LENGTHS.len() as u64) as usize]),
+            1 => format!(
+                "trip{{{}8 {} {}}}",
+                pitch(&mut next),
+                pitch(&mut next),
+                pitch(&mut next)
+            ),
+            2 => {
+                // A tie joins two of the same note.
+                let held = pitch(&mut next);
+                let length = LENGTHS[next(LENGTHS.len() as u64) as usize];
+                format!("{held}{length}~ {held}{length}")
+            }
+            3 => format!(
+                "{}{}_{}",
+                pitch(&mut next),
+                LENGTHS[next(LENGTHS.len() as u64) as usize],
+                ["la", "doe", "ß", "été"][next(4) as usize]
+            ),
+            _ => format!(
+                "{}{}",
+                pitch(&mut next),
+                LENGTHS[next(LENGTHS.len() as u64) as usize]
+            ),
+        };
+        tokens.push(token);
+    }
+    format!("tiny:{}", tokens.join(" "))
+}
+
+/// Writes each subject both ways, or with nothing given, those
+/// `MIDI_WRITE_SUBJECTS` names or the ones listed; with `round_trip`, each
+/// side also reads back what it wrote and writes it again. The subjects
+/// that differ, each with its first difference, and how many were
+/// compared.
+fn compare(given: Option<Vec<String>>, round_trip: bool) -> (Vec<String>, usize) {
+    static READY: std::sync::Once = std::sync::Once::new();
+    let root = repo_root();
+    READY.call_once(|| {
+        std::env::set_current_dir(&root).expect("chdir to the repository root");
+        prepare().expect("prepare the music21 reference checkout");
+    });
+
+    Python::attach(|py| -> PyResult<(Vec<String>, usize)> {
         init_py(py)?;
         add_dependency_venv(py, &root)?;
         let _ = py.import("music21")?;
@@ -162,15 +263,16 @@ fn the_crate_writes_midi_as_music21_does() {
             c"midi_write_parity_helpers",
         )?;
 
-        let chosen: Vec<String> = match std::env::var("MIDI_WRITE_SUBJECTS") {
-            Ok(list) => list
-                .split(';')
-                .map(str::trim)
-                .filter(|name| !name.is_empty())
-                .map(str::to_string)
-                .collect(),
-            Err(_) => SUBJECTS.iter().map(|(name, _)| name.to_string()).collect(),
-        };
+        let chosen: Vec<String> =
+            given.unwrap_or_else(|| match std::env::var("MIDI_WRITE_SUBJECTS") {
+                Ok(list) => list
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+                Err(_) => SUBJECTS.iter().map(|(name, _)| name.to_string()).collect(),
+            });
         let mut failures = Vec::new();
         for subject in &chosen {
             let Some((kind, name)) = subject.split_once(':') else {
@@ -208,9 +310,40 @@ fn the_crate_writes_midi_as_music21_does() {
                     continue;
                 }
             };
-            if ours == theirs {
-                continue;
-            }
+            let (subject, theirs, ours) = match (ours == theirs, round_trip) {
+                (true, false) => continue,
+                (true, true) => {
+                    let theirs: Vec<u8> = match helpers
+                        .getattr("rewritten")?
+                        .call1((pyo3::types::PyBytes::new(py, &theirs),))
+                        .and_then(|bytes| bytes.extract())
+                    {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            failures.push(format!(
+                                "{subject}: music21 could not read back its own file: {error}"
+                            ));
+                            continue;
+                        }
+                    };
+                    let ours = match music21_rs::midi::from_midi(&ours)
+                        .and_then(|score| to_midi(&score, &ExportOptions::default()))
+                    {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            failures.push(format!(
+                                "{subject}: the crate could not read back its own file: {error}"
+                            ));
+                            continue;
+                        }
+                    };
+                    if ours == theirs {
+                        continue;
+                    }
+                    (format!("{subject} (read back)"), theirs, ours)
+                }
+                (false, _) => (subject.clone(), theirs, ours),
+            };
             let decode = |bytes: &[u8]| -> PyResult<Vec<String>> {
                 helpers
                     .getattr("events")?
@@ -252,14 +385,7 @@ fn the_crate_writes_midi_as_music21_does() {
         }
         Ok((failures, chosen.len()))
     })
-    .expect("the Python side of the comparison");
-
-    assert!(
-        failures.is_empty(),
-        "{} of {count} subjects are written differently:\n\n{}",
-        failures.len(),
-        failures.join("\n\n")
-    );
+    .expect("the Python side of the comparison")
 }
 
 /// The streams the helper's `built` makes, made the same way here.
