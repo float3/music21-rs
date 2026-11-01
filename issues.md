@@ -215,12 +215,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
 9. **edits through a handed-out object that may still miss the crate.**
    `data/py_fields.toml` lists them as *value*.
 
-   Checked against music21 on 2026-11-01; each is a bug being fixed:
-
-   - `Chord.inversionName` and `inversionText` ignore an inversion fixed
-     through `_overrides`, any inversion and not only one past 255:
-     `_overrides['inversion'] = 2` on a C major triad answers `53` and
-     `Root Position` where music21 answers `64` and `Second Inversion`.
+   The four suspected on 2026-11-01 were checked against music21 and
+   fixed (below, under closed). No row still listed as *value* has been
+   shown to cost anything yet.
 
 ## closed
 
@@ -236,7 +233,9 @@ two rules, set 2026-09-12, that most of the open work now serves:
   music21's edited key reads: `modalOpening` and `clausulaVera` by the
   tonic it has now, `isProperResolution` in the scale its signature
   implies. 3,000 random quartets agree with music21, half with the tonic
-  edited.
+  edited. `Chord.inversionName` and `inversionText` name the inversion
+  `inversion()` answers, so one fixed through `_overrides` is named
+  (`_overrides['inversion'] = 2` on a triad is `64`, `Second Inversion`).
   A deep copy of a pitch keeps its accidental's style, which music21's own
   writer relies on once installed.
 
