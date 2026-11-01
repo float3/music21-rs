@@ -873,7 +873,7 @@ pub fn make_measures_by(stream: &Stream, given: &[(FloatType, TimeSignature)]) -
                 own.push(StreamEvent::new(0.0, key.clone()));
             }
         }
-        let length = meters[here].1.bar_quarter_length();
+        let length = meters[here].1.bar_duration().quarter_length();
         if length == 0.0 {
             return Err(crate::error::Error::Meter(format!(
                 "time signature {} has no duration",
@@ -1493,7 +1493,7 @@ fn make_ties_of(stream: &mut Stream, wanted: fn(&StreamElement) -> bool) -> Resu
             .iter()
             .rfind(|(at, _)| *at <= start)
             .map_or(&meters[0].1, |(_, meter)| meter);
-        let bar = meter.bar_quarter_length();
+        let bar = meter.bar_duration().quarter_length();
         let has_voices = measures[index]
             .1
             .events()
@@ -1764,9 +1764,9 @@ pub(crate) fn fill_rests(
         // the part before it, and failing that is as long as the meter that
         // fits what it holds: music21's `barDuration`.
         let bar = match &meter {
-            Some(meter) => meter.bar_quarter_length(),
+            Some(meter) => meter.bar_duration().quarter_length(),
             None => match loose.iter().rev().find(|(at, _)| *at < offset) {
-                Some((_, meter)) => meter.bar_quarter_length(),
+                Some((_, meter)) => meter.bar_duration().quarter_length(),
                 None => crate::meter::best_time_signature(measure)
                     .map_or_else(|_| measure.end_offset(), |meter| meter.bar_quarter_length()),
             },
@@ -2219,6 +2219,21 @@ mod tests {
                 (Some(BeamType::Stop), StemDirection::Up),
             ]
         );
+    }
+
+    /// A bar length written over the meter's own is the length music21's
+    /// `makeMeasures` and `makeTies` cut at.
+    #[test]
+    fn a_written_bar_length_is_the_measure() {
+        let mut meter = TimeSignature::new(2, 16).unwrap();
+        meter.set_bar_duration(Some(Duration::new(3.0).unwrap()));
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, meter);
+        part.insert(0.0, Note::from_name("C4").unwrap());
+
+        let mut measured = make_measures(&part).unwrap();
+        make_ties(&mut measured).unwrap();
+        assert_eq!(measured.measures().len(), 1);
     }
 
     #[test]
