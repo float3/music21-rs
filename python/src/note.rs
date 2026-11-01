@@ -590,6 +590,22 @@ impl Note {
         }
     }
 
+    /// How long the note lasts, read without making its `Duration` object:
+    /// `None` when the one it holds is not the package's own.
+    pub(crate) fn held_quarter_length(&self, py: Python<'_>) -> Option<f64> {
+        let Some(object) = &self.duration else {
+            // A note given no duration is a quarter, as `duration_object`
+            // would make it.
+            return Some(
+                self.inner
+                    .duration()
+                    .map_or(1.0, RsDuration::quarter_length),
+            );
+        };
+        let ours = object.bind(py).cast::<Duration>().ok()?.try_borrow().ok()?;
+        Some(ours.inner.quarter_length())
+    }
+
     /// The `Duration` object for this note, made on first asking as music21
     /// makes one on first asking.
     pub(crate) fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {

@@ -37,6 +37,10 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
+use std::collections::HashMap;
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
 use pyo3::prelude::*;
 
@@ -71,6 +75,34 @@ struct Held {
     object: Py<PyAny>,
 }
 
+/// What a stream works out from what it holds and nothing else, kept until
+/// what it holds next changes: music21's order, the `elements` tuple, and
+/// where each object first stands. An element's own state is never kept
+/// here -- its length above all, which a caller can change without the
+/// stream hearing of it -- and is read afresh each time.
+#[derive(Default)]
+struct Derived {
+    /// Positions in `held`, in music21's order.
+    order: OnceLock<Vec<usize>>,
+    /// `elements`, built once for every read of it and of `s[i]`.
+    elements: OnceLock<Py<PyTuple>>,
+    /// Each object's first position in `held` and in `order`, by
+    /// identity. Built only once a few lookups have scanned instead, since
+    /// a scan costs less than the map for a stream about to change again.
+    places: OnceLock<HashMap<usize, Place>>,
+    scans: AtomicUsize,
+}
+
+/// Where an object first stands: in `held`, and in music21's order.
+#[derive(Clone, Copy)]
+struct Place {
+    held: usize,
+    sorted: usize,
+}
+
+/// How many lookups scan before [`Derived::places`] is built.
+const SCANS_BEFORE_MAP: usize = 8;
+
 /// music21's `stream.Stream`: objects at quarter-length offsets, kept in
 /// order of offset, then of `classSortOrder`, then of when each was put in.
 ///
@@ -81,7 +113,11 @@ struct Held {
 #[pyclass(name = "Stream", module = "music21.stream", subclass, dict)]
 pub struct Stream {
     kind: StreamKind,
-    held: Vec<Held>,
+    /// What the stream holds, in the order it was put in: read through
+    /// `held` and written only through `held_mut`, which lets go of
+    /// `derived`.
+    contents: Vec<Held>,
+    derived: Derived,
     next: u64,
     /// music21's `id`, where a caller gave one.
     id: Option<Py<PyAny>>,
@@ -117,7 +153,7 @@ pub struct Stream {
 /// among things at one offset: 20 for one that says nothing.
 fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
     object
-        .getattr("classSortOrder")
+        .getattr(pyo3::intern!(object.py(), "classSortOrder"))
         .and_then(|order| order.extract::<i64>())
         .unwrap_or(20)
 }
@@ -195,15 +231,10 @@ fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
     // A note of this package hands its duration over without going through
     // Python's attribute lookup, which is most of what an append costs.
     if let Ok(note) = object.cast::<crate::note::Note>()
-        && let Ok(mut note) = note.try_borrow_mut()
+        && let Ok(note) = note.try_borrow()
+        && let Some(length) = note.held_quarter_length(object.py())
     {
-        let held = note.duration_object(object.py())?;
-        drop(note);
-        if let Ok(ours) = held.bind(object.py()).cast::<crate::duration::Duration>()
-            && let Ok(ours) = ours.try_borrow()
-        {
-            return Ok(ours.inner.quarter_length());
-        }
+        return Ok(length);
     }
 
     let Ok(duration) = object.getattr("duration") else {
@@ -413,7 +444,8 @@ impl Stream {
     fn empty(kind: StreamKind) -> Self {
         Self {
             kind,
-            held: Vec::new(),
+            contents: Vec::new(),
+            derived: Derived::default(),
             next: 0,
             id: None,
             sounding: None,
@@ -526,25 +558,104 @@ impl Stream {
     /// offset: `measures` gives what it collects the priority music21
     /// gives it, so the clef it found is listed before the measure.
     fn put_with_priority(&mut self, offset: f64, object: &Bound<'_, PyAny>, priority: i64) {
-        self.held.push(Held {
+        let index = self.next;
+        self.held_mut().push(Held {
             offset,
             priority,
             order: sort_order(object),
-            index: self.next,
+            index,
             object: object.clone().unbind(),
         });
         self.next += 1;
     }
 
+    /// What the stream holds, in the order it was put in.
+    fn held(&self) -> &[Held] {
+        &self.contents
+    }
+
+    /// What the stream holds, to change: the one way to write it, so what
+    /// was worked out from it is let go of whatever the change.
+    fn held_mut(&mut self) -> &mut Vec<Held> {
+        self.derived = Derived::default();
+        &mut self.contents
+    }
+
+    /// Positions in `held`, in music21's order: by offset, then
+    /// `priority`, then `classSortOrder`, then when each was put in.
+    fn order(&self) -> &[usize] {
+        self.derived.order.get_or_init(|| {
+            let held = self.held();
+            let mut order: Vec<usize> = (0..held.len()).collect();
+            order.sort_by(|&left, &right| {
+                let (left, right) = (&held[left], &held[right]);
+                left.offset
+                    .total_cmp(&right.offset)
+                    .then(left.priority.cmp(&right.priority))
+                    .then(left.order.cmp(&right.order))
+                    .then(left.index.cmp(&right.index))
+            });
+            order
+        })
+    }
+
+    /// Where each object first stands, once enough lookups have scanned
+    /// since the last change for the map to pay; `None` until then.
+    fn places(&self) -> Option<&HashMap<usize, Place>> {
+        if let Some(places) = self.derived.places.get() {
+            return Some(places);
+        }
+        if self.derived.scans.fetch_add(1, Ordering::Relaxed) < SCANS_BEFORE_MAP {
+            return None;
+        }
+
+        let mut places: HashMap<usize, Place> = HashMap::with_capacity(self.held().len());
+        for (sorted, &at) in self.order().iter().enumerate() {
+            let key = self.held()[at].object.as_ptr() as usize;
+            places.entry(key).or_insert(Place { held: at, sorted });
+        }
+        // An object held twice is found in `held` where it was put first,
+        // which need not be where it is listed first.
+        for (at, held) in self.held().iter().enumerate() {
+            if let Some(place) = places.get_mut(&(held.object.as_ptr() as usize))
+                && at < place.held
+            {
+                place.held = at;
+            }
+        }
+        Some(self.derived.places.get_or_init(|| places))
+    }
+
+    /// The position in `held` where an object was first put, by identity.
+    fn held_position(&self, object: &Bound<'_, PyAny>) -> Option<usize> {
+        if let Some(places) = self.places() {
+            return places
+                .get(&(object.as_ptr() as usize))
+                .map(|place| place.held);
+        }
+        self.held()
+            .iter()
+            .position(|held| held.object.as_ptr() == object.as_ptr())
+    }
+
+    /// The position in music21's order where an object is first listed,
+    /// by identity.
+    fn sorted_position(&self, object: &Bound<'_, PyAny>) -> Option<usize> {
+        if let Some(places) = self.places() {
+            return places
+                .get(&(object.as_ptr() as usize))
+                .map(|place| place.sorted);
+        }
+        self.order()
+            .iter()
+            .position(|&at| self.held()[at].object.as_ptr() == object.as_ptr())
+    }
+
     /// Where an object stands in this stream, as a number.
     fn offset_of(&self, element: &Bound<'_, PyAny>) -> PyResult<f64> {
         let py = element.py();
-        if let Some(held) = self
-            .held
-            .iter()
-            .find(|held| held.object.bind(py).is(element))
-        {
-            return Ok(held.offset);
+        if let Some(at) = self.held_position(element) {
+            return Ok(self.held()[at].offset);
         }
 
         // A measure's own barlines, at nought and at its end.
@@ -575,21 +686,13 @@ impl Stream {
 
     /// What this stream holds, in music21's order.
     fn sorted(&self) -> Vec<&Held> {
-        let mut sorted: Vec<&Held> = self.held.iter().collect();
-        sorted.sort_by(|left, right| {
-            left.offset
-                .total_cmp(&right.offset)
-                .then(left.priority.cmp(&right.priority))
-                .then(left.order.cmp(&right.order))
-                .then(left.index.cmp(&right.index))
-        });
-        sorted
+        self.order().iter().map(|&at| &self.held()[at]).collect()
     }
 
     /// The offset just past the last thing held.
     fn end(&self, py: Python<'_>) -> PyResult<f64> {
         let mut end: f64 = 0.0;
-        for held in &self.held {
+        for held in self.held() {
             end = end.max(held.offset + length_of(held.object.bind(py))?);
         }
         Ok(end)
@@ -761,7 +864,7 @@ impl Stream {
         let py = slf.py();
         let objects: Vec<Py<PyAny>> = slf
             .borrow()
-            .held
+            .held()
             .iter()
             .map(|held| held.object.clone_ref(py))
             .collect();
@@ -929,14 +1032,17 @@ impl Stream {
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
-        for held in &self.held {
+        for held in self.held() {
             visit.call(&held.object)?;
+        }
+        if let Some(elements) = self.derived.elements.get() {
+            visit.call(elements)?;
         }
         visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
-        self.held.clear();
+        self.held_mut().clear();
         self.id = None;
     }
 
@@ -1203,13 +1309,9 @@ impl Stream {
             return Ok(());
         }
 
-        match self
-            .held
-            .iter()
-            .position(|held| held.object.bind(target.py()).is(target))
-        {
+        match self.held_position(target) {
             Some(at) => {
-                self.held.remove(at);
+                self.held_mut().remove(at);
                 Ok(())
             }
             None => Err(StreamException::new_err(format!(
@@ -1222,13 +1324,24 @@ impl Stream {
     /// Where an object stands among `elements`, found by identity:
     /// music21's `index`.
     fn index(&self, el: &Bound<'_, PyAny>) -> PyResult<usize> {
-        self.placed_listed(el.py())?
-            .iter()
-            .position(|(_, object)| object.bind(el.py()).is(el))
-            .ok_or_else(|| {
-                let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
-                StreamException::new_err(format!("cannot find object ({shown}) in Stream"))
-            })
+        // Where `listed` puts it: the left barline first, the right last.
+        let py = el.py();
+        let is = |bar: &Option<Py<PyAny>>| bar.as_ref().is_some_and(|bar| bar.bind(py).is(el));
+        let left = usize::from(self.left_barline.is_some());
+        if is(&self.left_barline) {
+            return Ok(0);
+        }
+        if let Some(at) = self.sorted_position(el) {
+            return Ok(left + at);
+        }
+        if is(&self.right_barline) {
+            return Ok(left + self.held().len());
+        }
+
+        let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
+        Err(StreamException::new_err(format!(
+            "cannot find object ({shown}) in Stream"
+        )))
     }
 
     /// Puts `replacement` where `target` stands: music21's `replace`. A
@@ -1246,21 +1359,14 @@ impl Stream {
     ) -> PyResult<()> {
         let _ = allDerived;
         let py = target.py();
-        if self
-            .held
-            .iter()
-            .any(|held| held.object.bind(py).is(replacement))
-        {
+        if self.held_position(replacement).is_some() {
             let shown = replacement.str()?.to_string();
             return Err(StreamException::new_err(format!(
                 "{shown} already in this stream"
             )));
         }
-        if let Some(held) = self
-            .held
-            .iter_mut()
-            .find(|held| held.object.bind(py).is(target))
-        {
+        if let Some(at) = self.held_position(target) {
+            let held = &mut self.held_mut()[at];
             held.object = replacement.clone().unbind();
             held.order = sort_order(replacement);
             return Ok(());
@@ -1269,7 +1375,7 @@ impl Stream {
             return Ok(());
         }
         let nested: Vec<Py<PyAny>> = self
-            .held
+            .held()
             .iter()
             .map(|held| held.object.clone_ref(py))
             .collect();
@@ -1482,7 +1588,7 @@ impl Stream {
     /// music21's `clear`. A measure's barlines go too, being among
     /// music21's elements.
     fn clear(&mut self) {
-        self.held.clear();
+        self.held_mut().clear();
         self.left_barline = None;
         self.right_barline = None;
     }
@@ -1764,7 +1870,7 @@ impl Stream {
             let others = Self::picked(&read, Some(StreamKind::Stream), |object| {
                 is_of_class(object, &voice).map(|found| !found)
             })?;
-            if !others.borrow().held.is_empty() {
+            if !others.borrow().held().is_empty() {
                 groups.push((others, None));
             }
             for (index, object) in voices.into_iter().enumerate() {
@@ -2017,7 +2123,7 @@ impl Stream {
         let end = offset + length_of(&item)?;
         let nearest = slf
             .borrow()
-            .held
+            .held()
             .iter()
             .map(|held| held.offset)
             .filter(|at| *at >= offset)
@@ -2027,7 +2133,7 @@ impl Stream {
         if let Some(nearest) = nearest {
             let shift = end - nearest;
             if shift > 0.0 {
-                for one in &mut slf.borrow_mut().held {
+                for one in slf.borrow_mut().held_mut() {
                     if one.offset >= offset {
                         one.offset += shift;
                     }
@@ -2255,7 +2361,7 @@ impl Stream {
         if Self::opening(slf, "Measure")?.is_none()
             && !slf
                 .borrow()
-                .held
+                .held()
                 .iter()
                 .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false))
         {
@@ -2272,7 +2378,7 @@ impl Stream {
                 };
                 let holds = cell
                     .borrow()
-                    .held
+                    .held()
                     .iter()
                     .any(|one| is_of_class(one.object.bind(py), &measure).unwrap_or(false));
                 if holds {
@@ -2471,7 +2577,7 @@ impl Stream {
         let found = Self::picked(&read, Some(StreamKind::Stream), |object| {
             is_of_class(object, &named)
         })?;
-        if returnDefault && found.borrow().held.is_empty() {
+        if returnDefault && found.borrow().held().is_empty() {
             let made = py
                 .get_type::<crate::meter::TimeSignature>()
                 .call1(("4/4",))?;
@@ -2505,7 +2611,7 @@ impl Stream {
         let found = Self::picked(&read, Some(StreamKind::Stream), |object| {
             is_of_class(object, &named)
         })?;
-        if returnDefault && found.borrow().held.is_empty() {
+        if returnDefault && found.borrow().held().is_empty() {
             let made = py.get_type::<crate::instrument::Instrument>().call0()?;
             // music21 gives the one it makes up the default part name,
             // which is the empty string.
@@ -2768,7 +2874,16 @@ impl Stream {
     /// Everything held, in order.
     #[getter]
     fn elements<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        PyTuple::new(py, self.sorted().iter().map(|held| held.object.bind(py)))
+        if let Some(elements) = self.derived.elements.get() {
+            return Ok(elements.bind(py).clone());
+        }
+        let made = PyTuple::new(py, self.sorted().iter().map(|held| held.object.bind(py)))?;
+        Ok(self
+            .derived
+            .elements
+            .get_or_init(|| made.unbind())
+            .bind(py)
+            .clone())
     }
 
     /// Where an object stands in this stream.
@@ -2834,12 +2949,10 @@ impl Stream {
 
     /// Moves an object this stream holds to another offset.
     fn setElementOffset(&mut self, element: &Bound<'_, PyAny>, offset: f64) -> PyResult<()> {
-        let held = self
-            .held
-            .iter_mut()
-            .find(|held| held.object.bind(element.py()).is(element))
+        let at = self
+            .held_position(element)
             .ok_or_else(|| StreamException::new_err("this object is not stored in this stream"))?;
-        held.offset = offset;
+        self.held_mut()[at].offset = offset;
         Ok(())
     }
 
@@ -2885,7 +2998,7 @@ impl Stream {
     fn scores<'py>(slf: &Bound<'py, Self>) -> PyResult<Vec<Bound<'py, PyAny>>> {
         let py = slf.py();
         let mut found = Vec::new();
-        for held in &slf.borrow().held {
+        for held in slf.borrow().held() {
             let object = held.object.bind(py);
             if kind_of(object).is_ok_and(|kind| kind == StreamKind::Score) {
                 found.push(object.clone());
@@ -2939,7 +3052,7 @@ impl Stream {
     /// rather than beside them.
     #[getter]
     fn get_metadata(&self, py: Python<'_>) -> Option<Py<PyAny>> {
-        self.held
+        self.held()
             .iter()
             .map(|held| held.object.bind(py))
             .find(|object| object.is_instance_of::<crate::metadata::Metadata>())
@@ -2950,7 +3063,7 @@ impl Stream {
     /// and takes the place of any the stream already held.
     #[setter]
     fn set_metadata(&mut self, py: Python<'_>, value: Option<&Bound<'_, PyAny>>) {
-        self.held.retain(|held| {
+        self.held_mut().retain(|held| {
             !held
                 .object
                 .bind(py)
@@ -3367,7 +3480,7 @@ impl Stream {
     }
 
     fn __len__(&self) -> usize {
-        self.held.len()
+        self.held().len()
     }
 
     fn __iter__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -3376,10 +3489,10 @@ impl Stream {
 
     fn __contains__(&self, element: &Bound<'_, PyAny>) -> PyResult<bool> {
         let py = element.py();
-        Ok(self
-            .placed_listed(py)?
-            .iter()
-            .any(|(_, object)| object.bind(py).is(element)))
+        let is = |bar: &Option<Py<PyAny>>| bar.as_ref().is_some_and(|bar| bar.bind(py).is(element));
+        Ok(is(&self.left_barline)
+            || is(&self.right_barline)
+            || self.held_position(element).is_some())
     }
 
     fn __getitem__<'py>(
@@ -3517,7 +3630,7 @@ impl Stream {
         )?;
         let objects: Vec<Py<PyAny>> = slf
             .borrow()
-            .held
+            .held()
             .iter()
             .map(|held| held.object.clone_ref(py))
             .collect();
@@ -3631,7 +3744,7 @@ impl Stream {
         let placed: Vec<(f64, Py<PyAny>)> = match other.cast::<Stream>() {
             Ok(stream) => stream
                 .borrow()
-                .held
+                .held()
                 .iter()
                 .map(|held| (held.offset, held.object.clone_ref(py)))
                 .collect(),
@@ -3914,7 +4027,7 @@ impl Stream {
             false,
         )?;
         let mut held = slf.borrow_mut();
-        for one in &mut held.held {
+        for one in held.held_mut() {
             let moved = startOffset.is_none_or(|start| one.offset >= start)
                 && endOffset.is_none_or(|end| one.offset < end);
             if moved {

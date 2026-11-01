@@ -3545,6 +3545,35 @@ def test_an_object_held_twice_is_found_where_it_was_put_first():
     assert len(s) == 3 and first not in s
 
 
+def test_many_lookups_still_follow_edits():
+    """Asked often enough, a stream finds its objects by a map it keeps;
+    every edit lets the map go, so what it answers after one is fresh."""
+    s = m.Stream()
+    notes = [m.Note("C4") for _ in range(20)]
+    s.append(notes)
+    twice = notes[5]
+    s.insert(0.5, twice)
+    for _ in range(3):
+        assert [s.index(each) for each in notes][:7] == [0, 2, 3, 4, 5, 1, 7]
+        assert [float(s.elementOffset(each)) for each in notes][:6] == [
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0,
+        ]
+
+    s.remove(twice)
+    assert float(s.elementOffset(twice)) == 0.5
+    for each in notes:
+        s.index(each)
+    s.setElementOffset(notes[0], 30.0)
+    assert s.index(notes[0]) == 19 and s[-1] is notes[0]
+    s.remove(notes[1])
+    assert notes[1] not in s and s.index(notes[2]) == 1
+    with pytest.raises(m.StreamException):
+        s.index(notes[1])
+    replacement = m.Note("D4")
+    s.replace(notes[2], replacement)
+    assert s.index(replacement) == 1 and notes[2] not in s
+
+
 def test_elements_are_taken_out_by_class_and_by_index():
     """Every answer is music21's own for the same stream."""
     line = m.Stream()
