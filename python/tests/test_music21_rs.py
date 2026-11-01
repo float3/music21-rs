@@ -6294,6 +6294,33 @@ def test_the_notation_a_score_leaves_unsaid_is_worked_out():
     assert tuplets[2] and tuplets[2][0].type == "stop"
 
 
+def test_a_rock_corpus_song_is_read_from_its_text_and_never_from_a_file():
+    """Where music21's `CTSong` opens a string with no `|` and no `S:` as
+    a file, this one reads every string as the song, and takes nothing
+    else."""
+    here = os.path.abspath(__file__)
+    for text in (here, here + ".missing", "Vr: I | IV |"):
+        song = m.CTSong(text)
+        assert song.text == text
+        assert song.lines == [text]
+    assert m.CTSong().text == ""
+    assert m.CTSong(None).text == ""
+    for given in (3, pathlib.Path(here), b"S: [C] I |"):
+        with pytest.raises(TypeError):
+            m.CTSong(given)
+
+
+def test_keys_take_only_the_modes_music21_builds():
+    assert m.Key("c", "Dorian").mode == "dorian"
+    assert m.Key("c", "hypolydian").mode == "hypolydian"
+    with pytest.raises(Exception, match="Cannot create a scale"):
+        m.Key("c", 'major #(system "touch x") %')
+    key = m.Key("c")
+    with pytest.raises(Exception, match="Cannot create a scale"):
+        key.mode = "blues-like"
+    assert key.mode == "minor"
+
+
 def test_a_rock_corpus_analysis_is_read_into_a_part():
     """A de Clercq-Temperley analysis read as its text says it, and played
     through to a part, as music21's `romanText.clercqTemperley` reads

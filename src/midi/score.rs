@@ -734,4 +734,23 @@ mod tests {
     fn what_is_no_midi_file_is_refused() {
         assert!(from_midi(b"RIFF").is_err());
     }
+
+    /// One note, or two notes far apart, at a tick a quarter: a few bytes
+    /// saying hundreds of millions of quarters.
+    #[test]
+    fn a_file_lasting_too_many_measures_is_refused() {
+        let long = [0x90, 60, 100, 0xFF, 0xFF, 0xFF, 0x7F, 0x80, 60, 0];
+        let apart = [
+            0x90, 60, 100, 0, 0x80, 60, 0, 0xFF, 0xFF, 0xFF, 0x7F, 0x90, 62, 100, 0, 0x80, 62, 0,
+        ];
+        for events in [&long[..], &apart[..]] {
+            let mut track = vec![0];
+            track.extend(events);
+            track.extend([0, 0xFF, 0x2F, 0]);
+            let mut bytes = b"MThd\0\0\0\x06\0\0\0\x01\0\x01MTrk".to_vec();
+            bytes.extend((track.len() as u32).to_be_bytes());
+            bytes.extend(track);
+            assert!(from_midi(&bytes).is_err());
+        }
+    }
 }
