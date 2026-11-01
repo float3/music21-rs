@@ -217,9 +217,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
    Checked against music21 on 2026-11-01; each is a bug being fixed:
 
-   - `VoiceLeadingQuartet.key` edited in place (`q.key.tonic.name = 'D'`)
-     is not read: `clausulaVera` and `modalOpening` answer for the old
-     key, where music21 reads the tonic it now has.
    - `Chord.inversionName` and `inversionText` ignore an inversion fixed
      through `_overrides`, any inversion and not only one past 255:
      `_overrides['inversion'] = 2` on a C major triad answers `53` and
@@ -234,7 +231,12 @@ two rules, set 2026-09-12, that most of the open work now serves:
   `unbundleInstruments` and `partitionByInstrument` answer the instrument
   as it now stands. A `FiguredBassScale` counts in its `realizerScale` and
   spells a chromatic bass by its `keySig` as they stand, assigned or edited
-  in place, since music21 reads both afresh on every call.
+  in place, since music21 reads both afresh on every call. A
+  `VoiceLeadingQuartet` hears its key as the key stands, the two ways
+  music21's edited key reads: `modalOpening` and `clausulaVera` by the
+  tonic it has now, `isProperResolution` in the scale its signature
+  implies. 3,000 random quartets agree with music21, half with the tonic
+  edited.
   A deep copy of a pitch keeps its accidental's style, which music21's own
   writer relies on once installed.
 

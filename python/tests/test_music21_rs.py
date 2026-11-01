@@ -7724,3 +7724,15 @@ def test_a_figured_bass_scale_reads_its_scale_as_it_stands():
         spelled.realizerScale = m.MajorScale("F")
         spell(spelled)
         assert spelled.getPitchNames("B3", "6") == ["B", "D", "G"]
+
+
+def test_a_voice_leading_quartets_key_edited_in_place_is_read():
+    # music21 reads the tonic the key has now: False for both.
+    closing = m.VoiceLeadingQuartet("D4", "C4", "B3", "C4", m.Key("C"))
+    assert closing.clausulaVera()
+    closing.key.tonic.name = "D"
+    assert not closing.clausulaVera()
+    opening = m.VoiceLeadingQuartet("G4", "C5", "C4", "C4", m.Key("C"))
+    assert opening.modalOpening()
+    opening.key.tonic.name = "A"
+    assert not opening.modalOpening()
