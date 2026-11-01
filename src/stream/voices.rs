@@ -268,7 +268,9 @@ impl Stream {
 
         let (count, ids) = self.max_voice_count(separate_by_id);
         if separate_by_id && ids.len() < count {
-            return Err(stream_error("list index out of range"));
+            return Err(stream_error(
+                "fewer voice ids than voices to separate by them",
+            ));
         }
         let mut parts: Vec<Stream> = (0..count)
             .map(|index| {
@@ -414,7 +416,7 @@ impl Stream {
         let bundle: Vec<Vec<&Stream>> = match allocation {
             VoiceAllocation::Each(each) => {
                 if *each == 0 {
-                    return Err(stream_error("integer division or modulo by zero"));
+                    return Err(stream_error("cannot group parts in groups of nought"));
                 }
                 parts.chunks(*each).map(<[&Stream]>::to_vec).collect()
             }
@@ -427,7 +429,7 @@ impl Stream {
                             parts
                                 .get(*index)
                                 .copied()
-                                .ok_or_else(|| stream_error("list index out of range"))
+                                .ok_or_else(|| stream_error(format!("no part {index} to group")))
                         })
                         .collect::<Result<Vec<_>>>()
                 })

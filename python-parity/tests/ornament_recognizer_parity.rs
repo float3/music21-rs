@@ -132,13 +132,23 @@ fn ours(busy_specs: &[Spec], simple_specs: &[Spec]) -> Vec<String> {
         };
         out.push(match found {
             Ok(found) => said(found, &busy, &simple),
-            Err(error) => format!(
-                "error: {}",
-                error.to_string().trim_start_matches("Analysis error: ")
-            ),
+            Err(error) => format!("error: {}", music21_wording(&error.to_string())),
         });
     }
     out
+}
+
+/// The crate's refusal in music21's words: an element with no pitch, asked
+/// for one, is an `AttributeError` there.
+fn music21_wording(message: &str) -> String {
+    let message = message.trim_start_matches("Analysis error: ");
+    match message
+        .strip_prefix("a ")
+        .and_then(|rest| rest.strip_suffix(" has no single pitch"))
+    {
+        Some(class) => format!("'{class}' object has no attribute 'pitch'"),
+        None => message.to_string(),
+    }
 }
 
 const POOL: [&str; 14] = [

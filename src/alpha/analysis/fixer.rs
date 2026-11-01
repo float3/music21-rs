@@ -138,7 +138,7 @@ fn references(change: &Change) -> Result<(HashReference, HashReference)> {
     match (change.target, change.source) {
         (Some(midi), Some(omr)) => Ok((midi, omr)),
         _ => Err(Error::Analysis(
-            "'NoteHash' object has no attribute 'reference'".to_string(),
+            "a hash made with no reference has nothing to fix".to_string(),
         )),
     }
 }
@@ -333,9 +333,7 @@ pub fn delete_measures(changes: &[Change], midi: &Stream, omr: &mut Stream) -> R
             }
             Some(None) => {}
             None => {
-                result = Err(Error::Analysis(
-                    "None is not a Music21Object; got <class 'NoneType'>".to_string(),
-                ));
+                result = Err(Error::Analysis("a change refers to no element".to_string()));
                 break;
             }
         }

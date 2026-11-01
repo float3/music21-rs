@@ -380,7 +380,7 @@ impl Hasher {
                         // music21 hands its octave hash nothing for a chord
                         // hashed as one, and asks nothing for its octave.
                         return Err(crate::error::Error::Analysis(
-                            "'NoneType' object has no attribute 'octave'".to_string(),
+                            "a chord hashed whole has no octave to hash".to_string(),
                         ));
                     }
                     if is_rest {

@@ -71,6 +71,13 @@
   and a tempo. `from_midi` and `to_midi` read and write the score; the
   bare-event helpers stay, undeprecated, in `midi`.
 
+- **Errors say what went wrong in the crate's words.** About fifty
+  messages still read as the Python error music21 meets at the same
+  place (`list index out of range`, `'NoneType' object has no attribute
+  'split'`, `KeyError: …`, `division by zero`); each now names what is
+  missing, such as `the score has no part 3` or `an instrument with no
+  name cannot be written in braille`. The kind of error is unchanged.
+
 ## fixed
 
 - **Bugs the seeded fuzzers found**: a placed beat reads the meter that

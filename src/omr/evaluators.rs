@@ -79,7 +79,7 @@ impl OmrGroundTruthPair {
         for (part, ours) in self.omr.all_hashes().into_iter().enumerate() {
             let truth = theirs
                 .get(part)
-                .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+                .ok_or_else(|| Error::Omr(format!("the ground truth has no part {part}")))?;
             total += min_edit_distance(ours, truth);
         }
         Ok(total)
@@ -176,9 +176,9 @@ pub fn auto_correlation_best_measure(score: Stream) -> Result<(usize, usize)> {
                     if other_part == part {
                         continue;
                     }
-                    let other = theirs
-                        .get(i)
-                        .ok_or_else(|| Error::Omr("list index out of range".to_string()))?;
+                    let other = theirs.get(i).ok_or_else(|| {
+                        Error::Omr(format!("no measure {i} in part {other_part}"))
+                    })?;
                     if other == hash {
                         found = true;
                         break;

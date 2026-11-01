@@ -1188,7 +1188,7 @@ fn note_density(data: &DataInstance, vector: &mut [Value]) -> Result<()> {
             Some(most.map_or(end, |most| most.max(end)))
         });
     vector[0] = match last {
-        Some(0.0) => return Err(Error::Feature("float division by zero".to_string())),
+        Some(0.0) => return Err(Error::Feature("the piece lasts no time".to_string())),
         Some(last) => (seconds.len() as FloatType / last).into(),
         None => Value::Float(0.0),
     };
@@ -1265,7 +1265,7 @@ fn average_time_between_attacks(data: &DataInstance, vector: &mut [Value]) -> Re
     }
     let gaps = time_between(&onsets);
     if gaps.is_empty() {
-        return Err(Error::Feature("division by zero".to_string()));
+        return Err(Error::Feature("fewer than two attacks".to_string()));
     }
     vector[0] = (crate::statistics::python_sum(&gaps) / gaps.len() as FloatType).into();
     Ok(())
@@ -1478,9 +1478,7 @@ fn program_of(found: PartInstrument) -> Result<usize> {
     match found {
         Some((Some(program), _)) => Ok(usize::from(program)),
         Some((None, named)) => Err(Error::Feature(format!("{named} lacks a midiProgram"))),
-        None => Err(Error::Feature(
-            "'NoneType' object has no attribute 'midiProgram'".to_string(),
-        )),
+        None => Err(Error::Feature("a part with no instrument".to_string())),
     }
 }
 
@@ -1518,7 +1516,7 @@ fn note_prevalence_of_pitched_instruments(data: &DataInstance, vector: &mut [Val
         if notes > 0 {
             let program = program_of(program)?;
             if total == 0 {
-                return Err(Error::Feature("division by zero".to_string()));
+                return Err(Error::Feature("no pitched notes".to_string()));
             }
             vector[program] = (notes as FloatType / total as FloatType).into();
         }
@@ -1541,7 +1539,7 @@ fn variability_of_note_prevalence_of_pitched_instruments(
         .map(|(_, notes)| *notes as FloatType / total as FloatType)
         .collect();
     if shares.is_empty() {
-        return Err(Error::Feature("division by zero".to_string()));
+        return Err(Error::Feature("no part holds notes".to_string()));
     }
     let mean = crate::statistics::python_sum(&shares) / shares.len() as FloatType;
     let squares: Vec<FloatType> = shares.iter().map(|share| (share - mean).powi(2)).collect();

@@ -752,7 +752,7 @@ impl<'t, 'a> Verticality<'t, 'a> {
                         let part = parts
                             .get(index)
                             .copied()
-                            .ok_or_else(|| Error::Tree("list index out of range".to_string()))?;
+                            .ok_or_else(|| Error::Tree(format!("the score has no part {index}")))?;
                         Ok(same_stream(Some(part), top) || same_stream(Some(part), bottom))
                     };
                     let mut appropriate = false;

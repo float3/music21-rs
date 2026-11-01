@@ -111,7 +111,7 @@ pub fn cut_translation_into_segments(
             .measures
             .get(index)
             .copied()
-            .ok_or_else(|| Error::Search("list index out of range".to_string()))
+            .ok_or_else(|| Error::Search(format!("no measure is recorded for note {index}")))
     };
     let mut segments = Segments {
         segments: Vec::with_capacity(count),

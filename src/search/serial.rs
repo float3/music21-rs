@@ -266,8 +266,8 @@ fn count(note: &SegmentNote<'_>) -> usize {
     pitches_of(note.element).len()
 }
 
-fn index_error() -> Error {
-    Error::Search("list index out of range".to_string())
+fn no_pitches() -> Error {
+    Error::Search("a chord at the end of the segment holds no pitches".to_string())
 }
 
 impl ContiguousSegmentSearcher {
@@ -437,8 +437,8 @@ fn ignore_all_include<'a>(walk: &mut Walk<'a>, note: SegmentNote<'a>, trim: bool
             if active.len() < 2 {
                 check.clear();
             }
-            check.push(pitch_class(first.last().ok_or_else(index_error)?));
-            check.push(pitch_class(last.first().ok_or_else(index_error)?));
+            check.push(pitch_class(first.last().ok_or_else(no_pitches)?));
+            check.push(pitch_class(last.first().ok_or_else(no_pitches)?));
             check.sort_unstable();
             check.dedup();
             if check.len() > walk.length {
@@ -942,7 +942,8 @@ impl SegmentMatcher {
         } in found
         {
             let target = match part {
-                Some(part) => part_mut(&mut labelled, part).ok_or_else(index_error)?,
+                Some(part) => part_mut(&mut labelled, part)
+                    .ok_or_else(|| Error::Search(format!("the stream has no part {part}")))?,
                 None => &mut labelled,
             };
             let spanned = if first == last {

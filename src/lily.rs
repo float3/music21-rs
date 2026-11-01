@@ -578,7 +578,7 @@ impl<'a> Converter<'a> {
         let context = self.context;
         if matches!(self.tree.nodes[context].kind, Kind::Composite { .. }) {
             return Err(lily_error(
-                "AttributeError: property 'contents' of 'LyCompositeMusic' object has no setter",
+                "a tuplet opened and never closed, or closed and never opened, leaves nowhere to write the score",
             ));
         }
         for item in &contents {

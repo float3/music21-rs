@@ -2113,9 +2113,9 @@ impl SegmentWriter {
     fn extract_tempo_text_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
         let current = self.current.expect("a grouping being written");
         self.keys.push_front(current);
-        let previous = self.previous.ok_or_else(|| {
-            Error::Notation("'NoneType' object has no attribute 'affinity'".to_string())
-        })?;
+        let previous = self
+            .previous
+            .ok_or_else(|| Error::Notation("tempo text with no grouping before it".to_string()))?;
         if previous.affinity == Affinity::Signature {
             self.keys.push_front(previous);
         }
