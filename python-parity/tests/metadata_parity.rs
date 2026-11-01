@@ -10,7 +10,31 @@ use music21_rs::metadata::primitives::{Date, DatePart, DatePrimitive, Relevance}
 use music21_rs::metadata::{STANDARD_PROPERTIES, ValueKind, value_kind_of};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 use utils::{init_py, prepare};
+
+/// Whether music21's `metadata` package has been imported.
+static IMPORTED: PyOnceLock<()> = PyOnceLock::new();
+
+/// One of music21's `metadata` modules, the package imported first by one
+/// thread alone.
+///
+/// The tests here run on threads of one interpreter. The package imports
+/// `primitives` and `properties`, and `properties` imports `primitives`, so
+/// two threads importing two of them for the first time at once can each
+/// hold the lock on a module the other is waiting for, and Python raises
+/// `_DeadlockError` in one. Once the package is in `sys.modules` an import
+/// takes no lock at all.
+fn metadata_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    let root = repo_root();
+    IMPORTED.get_or_try_init(py, || -> PyResult<()> {
+        init_py(py)?;
+        add_dependency_venv(py, &root)?;
+        py.import("music21.metadata")?;
+        Ok(())
+    })?;
+    py.import(name)
+}
 
 #[test]
 fn the_metadata_vocabulary_is_music21s() {
@@ -18,9 +42,7 @@ fn the_metadata_vocabulary_is_music21s() {
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
     let theirs = Python::attach(|py| -> PyResult<Vec<(String, String, bool)>> {
-        init_py(py)?;
-        add_dependency_venv(py, &root)?;
-        let properties = py.import("music21.metadata.properties")?;
+        let properties = metadata_module(py, "music21.metadata.properties")?;
         let mut rows = Vec::new();
         for description in properties
             .getattr("STANDARD_PROPERTY_DESCRIPTIONS")?
@@ -59,9 +81,7 @@ fn the_value_kinds_are_music21s() {
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
     let theirs = Python::attach(|py| -> PyResult<Vec<(String, String)>> {
-        init_py(py)?;
-        add_dependency_venv(py, &root)?;
-        let properties = py.import("music21.metadata.properties")?;
+        let properties = metadata_module(py, "music21.metadata.properties")?;
         let mut rows = Vec::new();
         let table = properties.getattr("UNIQUE_NAME_TO_VALUE_TYPE")?;
         for name in table.call_method0("keys")?.try_iter()? {
@@ -124,9 +144,7 @@ fn a_dates_reading_is_music21s() {
 
     type Read = Option<(String, Vec<Option<i32>>, Vec<Option<String>>)>;
     let theirs = Python::attach(|py| -> PyResult<Vec<Read>> {
-        init_py(py)?;
-        add_dependency_venv(py, &root)?;
-        let primitives = py.import("music21.metadata.primitives")?;
+        let primitives = metadata_module(py, "music21.metadata.primitives")?;
         let mut rows: Vec<Read> = Vec::new();
         for one in &written {
             let date = primitives.getattr("Date")?.call0()?;
@@ -190,9 +208,7 @@ fn the_date_classes_are_written_as_music21_writes_them() {
     let selections = ["or", "and"];
 
     let theirs = Python::attach(|py| -> PyResult<Vec<String>> {
-        init_py(py)?;
-        add_dependency_venv(py, &root)?;
-        let primitives = py.import("music21.metadata.primitives")?;
+        let primitives = metadata_module(py, "music21.metadata.primitives")?;
         let mut written = Vec::new();
         for relevance in singles {
             written.push(
