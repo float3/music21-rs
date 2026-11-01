@@ -505,6 +505,14 @@ impl OctaveShift {
 
 impl Spanner {
     /// A spanner of a kind joining the elements at these positions.
+    ///
+    /// ```
+    /// use music21_rs::{Spanner, SpannerKind};
+    ///
+    /// let line = Spanner::new(SpannerKind::Line, vec![2, 5]);
+    /// assert_eq!(line.len(), 2);
+    /// assert_eq!(line.spanned(), [Some(2), Some(5)]);
+    /// ```
     pub fn new(kind: SpannerKind, spanned: Vec<usize>) -> Self {
         Self::with_unplaced(kind, spanned.into_iter().map(Some).collect())
     }
@@ -675,6 +683,16 @@ impl Spanner {
 
     /// An octave line over the elements at these positions, drawn above them
     /// as music21's starts out.
+    ///
+    /// ```
+    /// use music21_rs::{OctaveShift, Spanner};
+    ///
+    /// let ottava = Spanner::ottava(OctaveShift::from_name("8va", true)?, vec![0, 1]);
+    /// let shift = ottava.shift().expect("an ottava shifts");
+    /// assert_eq!(shift.name(), "8va");
+    /// assert!(shift.up());
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn ottava(shift: OctaveShift, spanned: Vec<usize>) -> Self {
         let mut ottava = Self::new(SpannerKind::Ottava, spanned);
         ottava.placement = Drawn(Some(Placement::Above));
@@ -693,12 +711,35 @@ impl Spanner {
     }
 
     /// A slur over the elements at these positions.
+    ///
+    /// ```
+    /// use music21_rs::{Note, Spanner, SpannerKind, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// for name in ["C4", "D4", "E4"] {
+    ///     stream.push(Note::from_name(name)?);
+    /// }
+    /// // The slur names its notes by their places in `Stream::leaves`.
+    /// stream.add_spanner(Spanner::slur(vec![0, 1, 2]));
+    /// let slur = &stream.spanners()[0];
+    /// assert_eq!(slur.kind(), SpannerKind::Slur);
+    /// assert!(slur.is_first(0) && slur.is_last(2));
+    /// # Ok::<(), music21_rs::Error>(())
+    /// ```
     pub fn slur(spanned: Vec<usize>) -> Self {
         Self::new(SpannerKind::Slur, spanned)
     }
 
     /// A hairpin over the elements at these positions, drawn below them and
     /// opening fifteen tenths wide, as music21's starts out.
+    ///
+    /// ```
+    /// use music21_rs::{Spanner, SpannerKind};
+    ///
+    /// let hairpin = Spanner::wedge(SpannerKind::Crescendo, vec![0, 3]);
+    /// assert!(hairpin.kind().is_wedge());
+    /// assert_eq!(hairpin.kind().class_name(), "Crescendo");
+    /// ```
     pub fn wedge(kind: SpannerKind, spanned: Vec<usize>) -> Self {
         let mut wedge = Self::new(kind, spanned);
         wedge.placement = Drawn(Some(Placement::Below));
@@ -724,6 +765,13 @@ impl Spanner {
 
     /// The positions of the elements it joins, first to last, nothing for
     /// one that stands in no stream.
+    ///
+    /// ```
+    /// use music21_rs::Spanner;
+    ///
+    /// let slur = Spanner::slur(vec![4, 5, 6]);
+    /// assert_eq!(slur.spanned(), [Some(4), Some(5), Some(6)]);
+    /// ```
     pub fn spanned(&self) -> &[Option<usize>] {
         &self.spanned
     }
