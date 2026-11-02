@@ -1087,13 +1087,14 @@ jobs:
     steps:
       # The report builds every suite instrumented for coverage, and twice
       # the runner vanished mid-build with no log, as one does when its disk
-      # or memory runs out. The toolchains below are ones this job never
-      # uses, and the swap keeps a peak in the link from killing the runner.
+      # or memory runs out. The swap keeps a peak in the link from killing
+      # the runner. Disk was not short: 88 GB were free before anything was
+      # removed, and removing the toolchains this job never uses took a
+      # minute and a half, so they stay; the sizes printed here say whether
+      # that still holds.
       - name: Make room
         run: |
           df -h / && free -h
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
           sudo swapoff -a || true
           sudo fallocate -l 8G /mnt/report.swap
           sudo chmod 600 /mnt/report.swap
