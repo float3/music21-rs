@@ -1287,6 +1287,13 @@ class Plain:
     }
 
     #[test]
+    fn nextest_counts_read_a_coloured_summary() {
+        // CI sets CARGO_TERM_COLOR=always, so nextest colours its summary.
+        let text = "\u{1b}[32;1m     Summary\u{1b}[0m [ 256.870s] \u{1b}[1m50\u{1b}[0m tests run: \u{1b}[1m50\u{1b}[0m \u{1b}[32;1mpassed\u{1b}[0m (\u{1b}[1m1\u{1b}[0m \u{1b}[33;1mslow\u{1b}[0m), \u{1b}[1m2\u{1b}[0m \u{1b}[31;1mfailed\u{1b}[0m, \u{1b}[1m191\u{1b}[0m \u{1b}[33;1mskipped\u{1b}[0m\n";
+        assert_eq!(nextest_counts(text), (50, 2));
+    }
+
+    #[test]
     fn pytest_counts_read_the_summary_line() {
         assert_eq!(pytest_counts("...\n19 passed in 0.07s\n"), (19, 0));
         assert_eq!(

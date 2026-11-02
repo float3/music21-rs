@@ -656,6 +656,7 @@ pub(super) fn cargo_test_counts(text: &str) -> (usize, usize) {
 /// Reads nextest's summary line, `241 tests run: 239 passed, 2 failed, 0
 /// skipped`. A test that timed out counts as failed.
 pub(super) fn nextest_counts(text: &str) -> (usize, usize) {
+    let text = uncoloured(text);
     let Some((_, rest)) = text
         .lines()
         .rev()
@@ -680,6 +681,26 @@ pub(super) fn nextest_counts(text: &str) -> (usize, usize) {
         }
     }
     (passed, failed)
+}
+
+/// The text without terminal colour codes (`ESC[1m50ESC[0m` is `50`): CI
+/// sets `CARGO_TERM_COLOR=always`, and nextest obeys it even into a pipe.
+fn uncoloured(text: &str) -> String {
+    let mut plain = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            plain.push(c);
+            continue;
+        }
+        // Skip `[`, the parameters and the final letter.
+        for code in chars.by_ref() {
+            if code.is_ascii_alphabetic() {
+                break;
+            }
+        }
+    }
+    plain
 }
 
 /// Reads pytest's one-line summary, `19 passed in 0.07s` or
