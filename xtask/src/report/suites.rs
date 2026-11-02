@@ -226,14 +226,8 @@ pub(super) fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec
         cargo_suite(
             workspace_root,
             "Python parity and music21's doctests",
-            &[
-                "test",
-                "--manifest-path",
-                "python-parity/Cargo.toml",
-                "--",
-                "--test-threads=1",
-            ],
-            (!submodule.exists()).then_some("the music21 submodule is not checked out"),
+            PARITY_ARGS,
+            parity_skip(workspace_root, &submodule, env),
             env,
         )
         // music21's docstrings are run over the wheel's classes, which answer
@@ -476,6 +470,48 @@ pub(super) fn humanise(nanoseconds: f64) -> String {
     }
 }
 
+/// How the parity suite is run.
+///
+/// Its tests are one binary, and libtest would run them all in one process,
+/// sharing one interpreter: the second suite to swap its module into
+/// music21 would find the first's, or an interpreter already running. nextest
+/// runs every test in a process of its own, with a temp directory of its own
+/// (`utils::init_py`), so they run side by side, as the parity CI job runs
+/// them.
+const PARITY_ARGS: &[&str] = &[
+    "nextest",
+    "run",
+    "--manifest-path",
+    "python-parity/Cargo.toml",
+    "--no-fail-fast",
+];
+
+/// Why the parity suite cannot run here, if it cannot.
+fn parity_skip(
+    workspace_root: &Path,
+    submodule: &Path,
+    env: &[(String, String)],
+) -> Option<&'static str> {
+    if !submodule.exists() {
+        return Some("the music21 submodule is not checked out");
+    }
+    if !has_nextest(workspace_root, env) {
+        return Some("cargo-nextest is not installed; the suite needs a process per test");
+    }
+    None
+}
+
+/// Whether `cargo nextest` runs here, under the environment the suites
+/// will run in.
+fn has_nextest(workspace_root: &Path, env: &[(String, String)]) -> bool {
+    Command::new("cargo")
+        .args(["nextest", "--version"])
+        .envs(env.iter().map(|(key, value)| (key, value)))
+        .current_dir(workspace_root)
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
 pub(super) fn cargo_suite(
     workspace_root: &Path,
     name: &str,
@@ -504,7 +540,12 @@ pub(super) fn cargo_suite(
             };
         }
     };
-    let (passed, failed) = cargo_test_counts(&String::from_utf8_lossy(&output.stdout));
+    // nextest writes its summary to stderr, libtest its results to stdout.
+    let (passed, failed) = if args.first() == Some(&"nextest") {
+        nextest_counts(&merged(&output))
+    } else {
+        cargo_test_counts(&String::from_utf8_lossy(&output.stdout))
+    };
     Suite {
         passed,
         failed,
@@ -607,6 +648,35 @@ pub(super) fn cargo_test_counts(text: &str) -> (usize, usize) {
                 (Ok(count), "failed") => failed += count,
                 _ => {}
             }
+        }
+    }
+    (passed, failed)
+}
+
+/// Reads nextest's summary line, `241 tests run: 239 passed, 2 failed, 0
+/// skipped`. A test that timed out counts as failed.
+pub(super) fn nextest_counts(text: &str) -> (usize, usize) {
+    let Some((_, rest)) = text
+        .lines()
+        .rev()
+        .find_map(|line| line.split_once(" run: "))
+    else {
+        return (0, 0);
+    };
+    let mut passed = 0;
+    let mut failed = 0;
+    for part in rest.split(',') {
+        let mut words = part.split_whitespace();
+        let Some(Ok(count)) = words.next().map(str::parse::<usize>) else {
+            continue;
+        };
+        // `241 passed (6 slow)`: what is in brackets says more of the same.
+        let kind = words.collect::<Vec<_>>().join(" ");
+        let kind = kind.split(" (").next().unwrap_or_default();
+        match kind {
+            "passed" => passed += count,
+            "failed" | "timed out" => failed += count,
+            _ => {}
         }
     }
     (passed, failed)

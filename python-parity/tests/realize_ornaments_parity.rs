@@ -29,7 +29,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyModule;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{OUTLINE, first_difference, outline};
 
 /// The subjects both sides realize alike, and what each exercises.

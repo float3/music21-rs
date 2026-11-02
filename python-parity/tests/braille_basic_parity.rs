@@ -30,7 +30,7 @@ use pyo3::prelude::*;
 use std::collections::BTreeMap;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::SCORES;
 
 const MUSIC21: &str = r#"

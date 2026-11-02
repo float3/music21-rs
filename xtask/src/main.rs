@@ -151,6 +151,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 flag_value(rest, "--only"),
                 flag_value(rest, "--out").map(PathBuf::from),
                 one,
+                rest.iter().any(|arg| arg == "--parallel"),
             )?;
             std::process::exit(code);
         }
@@ -203,7 +204,7 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask --features python -- bench");
     eprintln!("  cargo run --release -p xtask -- downstream");
     eprintln!("  cargo run --release -p xtask -- contributed-back [--check]");
-    eprintln!("  cargo run --release -p xtask --features python -- music21-suite");
+    eprintln!("  cargo run --release -p xtask --features python -- music21-suite [--parallel]");
     eprintln!("  cargo run --release -p xtask -- emit-report-script");
     eprintln!("  cargo run --release -p xtask -- verify-report-script");
     eprintln!("  cargo run --release -p xtask -- emit-temperaments");

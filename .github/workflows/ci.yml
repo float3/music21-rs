@@ -176,27 +176,27 @@ jobs:
           # `--all-targets` excludes doctests, so they need their own run.
           cargo test --workspace --doc $FLAGS
 
-  # Each test runs in a process of its own under nextest, four at a time on
-  # each of three runners, which share the tests out by a hash of their
-  # names, so a test stays on the same runner from run to run.
-  python-parity:
-    name: Python Parity (${{ matrix.shard }}/3)
+  # The parity suite is built once, here, and run on five runners below.
+  # Compiling it was six of every shard's ten to thirteen minutes, on a full
+  # cache hit too: cargo rebuilds the crates it is testing, and links the
+  # test binary. nextest's archive carries the binary to the shards; the
+  # suite is one binary rather than 188 so that the archive stays small.
+  python-parity-build:
+    name: Python Parity (build)
     runs-on: ubuntu-latest
     needs: proven
     if: needs.proven.outputs.skip != 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
+      # No submodules: nothing the suite compiles reads them; the shards,
+      # which run it, check them out.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # The shards embed the interpreter this one names, so it is the same
+      # Python as theirs.
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
@@ -208,6 +208,61 @@ jobs:
         with:
           shared-key: python-parity
           workspaces: python-parity -> target
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Build and archive the parity tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          cargo nextest archive --manifest-path python-parity/Cargo.toml \
+            --archive-file python-parity.tar.zst
+
+      # Already compressed, and read once by each shard and then by nobody.
+      - name: Upload the archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-parity-archive
+          path: python-parity.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  # Each test runs in a process of its own under nextest, four at a time on
+  # each of five runners, which share the tests out by a hash of their
+  # names, so a test stays on the same runner from run to run. Five, not
+  # three, since a shard no longer compiles anything: what is left is the
+  # tests, and the slowest of them alone runs nearly four minutes.
+  python-parity:
+    name: Python Parity (${{ matrix.shard }}/5)
+    runs-on: ubuntu-latest
+    needs:
+      - proven
+      - python-parity-build
+    if: needs.proven.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # Nothing is built here; nextest is run through cargo.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
 
       # The doctest harness imports the whole of music21, which needs its
       # own dependencies; the table bridge stubs them out and does not.
@@ -221,6 +276,11 @@ jobs:
         with:
           tool: cargo-nextest
 
+      - name: Download the parity tests
+        uses: actions/download-artifact@v8
+        with:
+          name: python-parity-archive
+
       - name: Find the music21 commit
         id: music21
         shell: bash
@@ -229,14 +289,19 @@ jobs:
       # music21's answers to the tests' questions, kept by music21 commit
       # (`python-parity/src/answers.rs`). Each run saves what it has under a
       # new key and the next run restores the newest for its commit and
-      # shard.
+      # shard, or failing that the newest for its commit -- the report's,
+      # which master keeps where every pull request can read it.
       - name: Restore music21's answers
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/music21-answers
           key: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-${{ github.run_id }}
-          restore-keys: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
+          restore-keys: |
+            music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
+            music21-answers-${{ steps.music21.outputs.commit }}-
 
+      # The binaries find the checkout where they were built, at the same
+      # path on every runner; `--workspace-remap` says where it is anyway.
       - name: Run Python parity tests
         shell: bash
         env:
@@ -244,20 +309,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
-          cargo nextest run --manifest-path python-parity/Cargo.toml \
-            --no-fail-fast --partition hash:${{ matrix.shard }}/3
+          cargo nextest run --archive-file python-parity.tar.zst \
+            --workspace-remap python-parity \
+            --no-fail-fast --partition hash:${{ matrix.shard }}/5
 
+  # The wheel is built and tested on Linux here, and on Windows and macOS
+  # in `wheel-platforms`. Linux's is a job of its own because
+  # `music21-suite` waits on it, and a job waits on every leg of a matrix.
   wheel:
-    name: Python Wheel
-    runs-on: ${{ matrix.os }}
+    name: Python Wheel (ubuntu-latest)
+    runs-on: ubuntu-latest
     needs: proven
     if: needs.proven.outputs.skip != 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -302,9 +365,8 @@ jobs:
       #
       # The submodule's music21 and not PyPI's, as everywhere else here:
       # the pin is a commit, and `fixture_freshness` holds every generated
-      # file to it. Ubuntu alone -- none of what this covers is platform's.
+      # file to it. Linux alone -- none of what this covers is platform's.
       - name: Install and test it beside music21
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           set -euo pipefail
@@ -314,32 +376,108 @@ jobs:
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
           PYTHONPATH="$PWD/music21" python -m pytest python/tests -q
 
-      # The wheel crate's own Rust tests. `maturin build` does not run them
-      # and the workspace does not hold the crate, so nothing else does.
-      - name: Test the wheel crate
-        if: matrix.os == 'ubuntu-latest'
+      - name: Upload the wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-ubuntu-latest
+          path: target/wheels/*.whl
+
+  wheel-platforms:
+    name: Python Wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+
+      - name: Build the wheel
+        run: |
+          python -m pip install "maturin>=1.7,<2" pytest
+          maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+
+      - name: Install and test it
         shell: bash
         run: |
           set -euo pipefail
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo test --manifest-path python/Cargo.toml
-
-      # Somebody else's music21 library, run twice: once on music21 and once
-      # on ours. The two sets of failures have to match.
-      - name: Test a downstream music21 library against it
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          python -m pip install music21 lark numpy
-          # The interpreter's full path, its version in it, so a cached pyo3
-          # build looks for the runner's Python again when that changes.
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo run --release -p xtask -- downstream
+          python -m pip install --no-index --find-links target/wheels music21-rs
+          python -m pytest python/tests -q
 
       - name: Upload the wheel
         uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.os }}
           path: target/wheels/*.whl
+
+  # What else is tested of the wheel, off `music21-suite`'s path: it used to
+  # run in `wheel` after the wheel was built, and `music21-suite` waited on
+  # it for nothing.
+  wheel-crate:
+    name: Wheel Crate and Downstream
+    runs-on: ubuntu-latest
+    needs:
+      - proven
+      - wheel
+    if: needs.proven.outputs.skip != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+
+      # The wheel crate's own Rust tests. `maturin build` does not run them
+      # and the workspace does not hold the crate, so nothing else does.
+      - name: Test the wheel crate
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo test --manifest-path python/Cargo.toml
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel-ubuntu-latest
+          path: target/wheels
+
+      # Somebody else's music21 library, run twice: once on music21 and once
+      # on ours. The two sets of failures have to match.
+      - name: Test a downstream music21 library against it
+        run: |
+          python -m pip install --no-index --find-links target/wheels music21-rs
+          python -m pip install music21 lark numpy pytest
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask -- downstream
 
   # music21's own test suite, run twice and diffed: once on music21, once
   # with `music21_rs.install_into_music21()` in front of it. music21's suite
@@ -403,13 +541,16 @@ jobs:
 
       # The suite driver embeds an interpreter through pyo3, so it needs
       # xtask's `python` feature; the wheel it measures is the downloaded one,
-      # imported by name from the interpreter this points at.
+      # imported by name from the interpreter this points at. `--parallel`
+      # runs the three sides at once, two minutes each rather than six in
+      # all; the report runs them one after another, since it compares their
+      # times.
       - name: Run music21's suite on music21 and on music21_rs
         run: |
           # The interpreter's full path, its version in it, so a cached pyo3
           # build looks for the runner's Python again when that changes.
           export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo run --release -p xtask --features python -- music21-suite
+          cargo run --release -p xtask --features python -- music21-suite --parallel
 
   lint:
     name: Lint (fmt + clippy + check)
@@ -642,7 +783,7 @@ jobs:
   # different times to build. `site` is the documentation and the demos --
   # a few minutes -- and `pages` publishes it at once, carrying the last full
   # report there was. `report` measures coverage and runs every suite, which
-  # takes a quarter of an hour, and `pages-report` then publishes the same
+  # takes far longer, and `pages-report` then publishes the same
   # site again with that report in it. A small fix to a demo therefore goes
   # live without waiting for the report, and the report follows on its own.
   site:
@@ -901,7 +1042,7 @@ jobs:
     # every job meant one stale fixture kept the whole site -- Rust docs,
     # Python docs, reports and demos -- from being republished at all. What
     # must not ship from a red build is a release, and `release` still waits
-    # for every job.
+    # for every check.
     needs:
       - lint
       - site
@@ -947,13 +1088,14 @@ jobs:
     steps:
       # The report builds every suite instrumented for coverage, and twice
       # the runner vanished mid-build with no log, as one does when its disk
-      # or memory runs out. The toolchains below are ones this job never
-      # uses, and the swap keeps a peak in the link from killing the runner.
+      # or memory runs out. The swap keeps a peak in the link from killing
+      # the runner. Disk was not short: 88 GB were free before anything was
+      # removed, and removing the toolchains this job never uses took a
+      # minute and a half, so they stay; the sizes printed here say whether
+      # that still holds.
       - name: Make room
         run: |
           df -h / && free -h
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
           sudo swapoff -a || true
           sudo fallocate -l 8G /mnt/report.swap
           sudo chmod 600 /mnt/report.swap
@@ -985,10 +1127,14 @@ jobs:
         with:
           shared-key: xtask-report
 
-      - name: Install cargo-llvm-cov
+      # nextest runs each parity test in a process of its own, so the parity
+      # suite runs four at a time here rather than one at a time under
+      # libtest, whose tests share their binary's one interpreter. It was
+      # most of the report's two hours.
+      - name: Install cargo-llvm-cov and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov
+          tool: cargo-llvm-cov,cargo-nextest
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -1018,11 +1164,31 @@ jobs:
           maturin build --release --manifest-path python/Cargo.toml --out target/wheels
           python -m pip install --no-index --find-links target/wheels music21-rs
 
+      - name: Find the music21 commit
+        id: music21
+        shell: bash
+        run: echo "commit=$(git -C music21 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # music21's answers to the parity tests' questions, as `python-parity`
+      # keeps them. A pull request's caches are out of reach of a push to
+      # master, so the report keeps a set of its own, which a parity shard
+      # falls back on when it has none.
+      - name: Restore music21's answers
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/music21-answers
+          key: music21-answers-${{ steps.music21.outputs.commit }}-report-${{ github.run_id }}
+          restore-keys: |
+            music21-answers-${{ steps.music21.outputs.commit }}-report-
+            music21-answers-${{ steps.music21.outputs.commit }}-
+
       # Coverage, every test suite, and the ported feature set. The benchmark
       # and music21's suite are subcommands of this same program, and the
       # report drives them by running itself, so the binary it builds has to
       # be the one with pyo3 in it.
       - name: Build reports
+        env:
+          MUSIC21_PARITY_ANSWERS: ${{ runner.temp }}/music21-answers
         run: |
           # The interpreter's full path, its version in it, so a cached pyo3
           # build looks for the runner's Python again when that changes.
@@ -1136,23 +1302,56 @@ jobs:
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
-    # Everything the repository gates on. A release is the one thing that
-    # cannot be taken back, so it waits for all of it — the wheel job
-    # included, which builds and tests the very artifact PyPI then receives.
+    # Every check the repository gates on, and nothing else. A release is
+    # the one thing that cannot be taken back, so it waits for all of them --
+    # the wheel job included, which builds and tests the very artifact PyPI
+    # then receives. On a push a pull request already proved, the checks are
+    # skipped, and `proven` saying so stands in for them; otherwise each has
+    # to have passed, named one by one, so a check skipped for any other
+    # reason holds the release back.
+    #
+    # Not the report, nor the site's deploy. The report runs every suite
+    # again under coverage, which says nothing the checks have not, and
+    # took two hours; waiting on it held releases back, and a runner dying
+    # under it lost 0.14.0 and 0.15.0. It still runs on every push and
+    # publishes the reports page.
     needs:
+      - proven
       - nix
       - feature-matrix
       - python-parity
       - wheel
+      - wheel-platforms
+      - wheel-crate
       - music21-suite
       - lint
       - msrv
       - semver
       - test
       - site
-      - report
-      - pages
-    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
+    if: >-
+      ${{
+        !cancelled()
+        && github.event_name == 'push'
+        && needs.proven.result == 'success'
+        && (
+          needs.proven.outputs.skip == 'true'
+          || (
+            needs.nix.result == 'success'
+            && needs.feature-matrix.result == 'success'
+            && needs.python-parity.result == 'success'
+            && needs.wheel.result == 'success'
+            && needs.wheel-platforms.result == 'success'
+            && needs.wheel-crate.result == 'success'
+            && needs.music21-suite.result == 'success'
+            && needs.lint.result == 'success'
+            && needs.msrv.result == 'success'
+            && needs.semver.result == 'success'
+            && needs.test.result == 'success'
+          )
+        )
+        && needs.site.result == 'success'
+      }}
     permissions:
       contents: write
     outputs:
@@ -1220,8 +1419,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Publishing. Everything below hangs off `release`, so it can only run for a
-  # commit where every other job passed and the version actually changed: one
-  # bump, one tag, one crates.io release and one PyPI release, together.
+  # commit where every check passed (or a pull request had already passed
+  # them) and the version actually changed: one bump, one tag, one crates.io
+  # release and one PyPI release, together.
   #
   # Nothing here holds a token but crates.io's. PyPI uses Trusted Publishing,
   # which authenticates the workflow itself over OIDC.
@@ -1429,7 +1629,7 @@ jobs:
     needs:
       - release
       - publish-crates
-    # `release` waits on every gate, so this does too. `publish-crates` is
+    # `release` waits on every check, so this does too. `publish-crates` is
     # skipped in a run that releases nothing, which must not skip this.
     if: >-
       ${{

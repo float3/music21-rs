@@ -295,10 +295,11 @@ for flags in "--no-default-features" "--no-default-features --features serde" "-
 done
 
 # the parity suite: fixtures, the Scala archive, and music21's doctests,
-# each test in a process of its own, as many at once as there are cores
+# each test in a process of its own, as many at once as there are cores;
+# it needs nextest, since its suites cannot share one interpreter
 cargo nextest run --manifest-path python-parity/Cargo.toml --no-fail-fast
-# or one at a time, without nextest
-cargo test --manifest-path python-parity/Cargo.toml -- --test-threads=1
+# or one suite, without nextest
+cargo test --manifest-path python-parity/Cargo.toml --test parity doctest_key::
 # the slowest tests keep music21's answers in python-parity/target/music21-answers,
 # by music21 commit; MUSIC21_PARITY_ANSWERS=off asks music21 every time
 
