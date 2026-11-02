@@ -38,7 +38,7 @@ use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{
     ABC_SOURCE_TEXT, ABC_TUNES, OUTLINE, STRIP_LAYOUT, first_difference, flat_outline,
     normalize_ids,

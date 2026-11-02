@@ -178,8 +178,9 @@ jobs:
 
   # The parity suite is built once, here, and run on five runners below.
   # Compiling it was six of every shard's ten to thirteen minutes, on a full
-  # cache hit too: cargo rebuilds the crates it is testing, and links 189
-  # test binaries. nextest's archive carries the binaries to the shards.
+  # cache hit too: cargo rebuilds the crates it is testing, and links the
+  # test binary. nextest's archive carries the binary to the shards; the
+  # suite is one binary rather than 188 so that the archive stays small.
   python-parity-build:
     name: Python Parity (build)
     runs-on: ubuntu-latest

@@ -18,7 +18,7 @@ use music21_rs_python_parity::music21_rs_facade;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{SCORES, STRIP_LAYOUT, first_difference, normalize_ids};
 
 /// Scores of the shared list the reader does not read as music21 does yet,

@@ -3,6 +3,13 @@ edition = "2024"
 name = "music21-rs-python-parity"
 publish = false
 version = "0.0.0"
+# One test binary, `tests/main.rs`, rather than one per file: the archive
+# CI carries to its shards is a fraction of the size, and links once.
+autotests = false
+
+[[test]]
+name = "parity"
+path = "tests/main.rs"
 
 [dependencies]
 music21-rs = { path = "..", default-features = false, features = [
@@ -33,7 +40,7 @@ all = { level = "deny", priority = -1 }
 
 # The tests compare whole corpus scores, and the crate unoptimized is most of
 # the time on the largest ones. Line tables are all the debug information a
-# failing test's backtrace reads; the rest only made 189 test binaries larger
+# failing test's backtrace reads; the rest only made the test binary larger
 # and slower to link, and to carry from the build to the shards in CI.
 [profile.dev]
 opt-level = 2

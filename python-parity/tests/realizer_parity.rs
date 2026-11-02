@@ -29,7 +29,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{STRIP_LAYOUT, first_difference, normalize_ids};
 
 /// A line: its key, its meter, its bass notes with their lengths and

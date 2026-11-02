@@ -31,7 +31,7 @@ use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{SCORES, STRIP_LAYOUT, first_difference, normalize_ids};
 
 /// Strings written for the test, beside music21's own examples.

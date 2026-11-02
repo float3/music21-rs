@@ -25,7 +25,7 @@ use music21_rs_python_parity::{answers, music21_name};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::SCORES;
 
 const MUSIC21: &str = r#"

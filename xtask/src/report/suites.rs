@@ -226,8 +226,8 @@ pub(super) fn run_suites(workspace_root: &Path, env: &[(String, String)]) -> Vec
         cargo_suite(
             workspace_root,
             "Python parity and music21's doctests",
-            parity_args(has_nextest(workspace_root, env)),
-            (!submodule.exists()).then_some("the music21 submodule is not checked out"),
+            PARITY_ARGS,
+            parity_skip(workspace_root, &submodule, env),
             env,
         )
         // music21's docstrings are run over the wheel's classes, which answer
@@ -472,30 +472,33 @@ pub(super) fn humanise(nanoseconds: f64) -> String {
 
 /// How the parity suite is run.
 ///
-/// Each parity test binary embeds one interpreter, and libtest runs a
-/// binary's tests on threads of that one process, where they would share it
-/// and music21's temp directory of parsed-score pickles; so under `cargo
-/// test` they run one at a time. nextest runs every test in a process of its
-/// own, with a temp directory of its own (`utils::init_py`), so they run side
-/// by side, as the parity CI job runs them.
-pub(super) fn parity_args(nextest: bool) -> &'static [&'static str] {
-    if nextest {
-        &[
-            "nextest",
-            "run",
-            "--manifest-path",
-            "python-parity/Cargo.toml",
-            "--no-fail-fast",
-        ]
-    } else {
-        &[
-            "test",
-            "--manifest-path",
-            "python-parity/Cargo.toml",
-            "--",
-            "--test-threads=1",
-        ]
+/// Its tests are one binary, and libtest would run them all in one process,
+/// sharing one interpreter: the second suite to swap its module into
+/// music21 would find the first's, or an interpreter already running. nextest
+/// runs every test in a process of its own, with a temp directory of its own
+/// (`utils::init_py`), so they run side by side, as the parity CI job runs
+/// them.
+const PARITY_ARGS: &[&str] = &[
+    "nextest",
+    "run",
+    "--manifest-path",
+    "python-parity/Cargo.toml",
+    "--no-fail-fast",
+];
+
+/// Why the parity suite cannot run here, if it cannot.
+fn parity_skip(
+    workspace_root: &Path,
+    submodule: &Path,
+    env: &[(String, String)],
+) -> Option<&'static str> {
+    if !submodule.exists() {
+        return Some("the music21 submodule is not checked out");
     }
+    if !has_nextest(workspace_root, env) {
+        return Some("cargo-nextest is not installed; the suite needs a process per test");
+    }
+    None
 }
 
 /// Whether `cargo nextest` runs here, under the environment the suites

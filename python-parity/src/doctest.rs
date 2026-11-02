@@ -551,7 +551,7 @@ pub fn run(module: &str, name: &str, swaps: &[(&str, &[&str])]) {
     if std::env::var("UPDATE_DOCTEST_EXPECTATIONS").is_ok_and(|v| v == "1") {
         let expectations = rewritten(expected, &passing);
         let text = format!(
-            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test doctest_{name}`; the test\n# fails when one of these stops passing or one passes that is not listed.\n# `[not_passing]`, kept by the rewrite, names deliberate failures and why;\n# `[optional]` names those that need a package the harness may lack.\n\n{}",
+            "# Docstrings of {module} whose every example passes against the\n# music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test\n# --manifest-path python-parity/Cargo.toml --test parity doctest_{name}::`; the test\n# fails when one of these stops passing or one passes that is not listed.\n# `[not_passing]`, kept by the rewrite, names deliberate failures and why;\n# `[optional]` names those that need a package the harness may lack.\n\n{}",
             toml::to_string_pretty(&expectations).expect("serialize expectations")
         );
         if let Some(parent) = path.parent() {

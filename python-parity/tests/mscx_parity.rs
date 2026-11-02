@@ -70,7 +70,7 @@ use music21_rs::notation::StemDirection;
 use music21_rs::{Stream, StreamElement};
 use std::path::{Path, PathBuf};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{first_difference, normalize_ids, outline};
 
 /// What is expected of a score.

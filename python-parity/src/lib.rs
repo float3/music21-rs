@@ -69,8 +69,9 @@ pub fn music21_names(names: &str) -> String {
 /// One test that runs a music21 module's doctests against the crate: the
 /// module's dotted name, the name its expectation file and log carry, and
 /// the music21 modules to swap for the run, each with the names replaced.
-/// Every `tests/doctest_*.rs` is one of these; each is its own binary, since
-/// a swap lasts for the life of the interpreter.
+/// Every `tests/doctest_*.rs` is one of these; each needs a process of its
+/// own, which nextest gives it, since a swap lasts for the life of the
+/// interpreter.
 #[macro_export]
 macro_rules! doctest_suite {
     ($test:ident, $module:literal, $name:literal, [$(($python:literal, $names:expr)),* $(,)?]) => {

@@ -18,7 +18,7 @@ use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod built_streams;
+use crate::built_streams;
 use built_streams::{
     BUILD, Spec, build, build_stream, literal, marked, measure, note, outline, stream,
 };

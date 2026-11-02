@@ -34,7 +34,7 @@ use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::first_difference;
 
 /// The scores both reducers reduce alike, and what each exercises.

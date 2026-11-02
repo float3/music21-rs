@@ -1,6 +1,6 @@
 # Docstrings of music21.analysis.segmentByRests whose every example passes against the
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
-# --manifest-path python-parity/Cargo.toml --test doctest_segmentbyrests`; the test
+# --manifest-path python-parity/Cargo.toml --test parity doctest_segmentbyrests::`; the test
 # fails when one of these stops passing.
 
 passing = [

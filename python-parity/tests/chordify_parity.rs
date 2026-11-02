@@ -17,7 +17,7 @@ use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
 
-mod musicxml_common;
+use crate::musicxml_common;
 use musicxml_common::{OUTLINE, SCORES, STRIP_LAYOUT, first_difference, normalize_ids, outline};
 
 const MUSIC21: &str = r#"
