@@ -901,7 +901,7 @@ jobs:
     # every job meant one stale fixture kept the whole site -- Rust docs,
     # Python docs, reports and demos -- from being republished at all. What
     # must not ship from a red build is a release, and `release` still waits
-    # for every job.
+    # for every check.
     needs:
       - lint
       - site
@@ -1136,10 +1136,21 @@ jobs:
   release:
     name: GitHub Release
     runs-on: ubuntu-latest
-    # Everything the repository gates on. A release is the one thing that
-    # cannot be taken back, so it waits for all of it — the wheel job
-    # included, which builds and tests the very artifact PyPI then receives.
+    # Every check the repository gates on, and nothing else. A release is
+    # the one thing that cannot be taken back, so it waits for all of them --
+    # the wheel job included, which builds and tests the very artifact PyPI
+    # then receives. On a push a pull request already proved, the checks are
+    # skipped, and `proven` saying so stands in for them; otherwise each has
+    # to have passed, named one by one, so a check skipped for any other
+    # reason holds the release back.
+    #
+    # Not the report, nor the site's deploy. The report runs every suite
+    # again under coverage, which says nothing the checks have not, and
+    # took two hours; waiting on it held releases back, and a runner dying
+    # under it lost 0.14.0 and 0.15.0. It still runs on every push and
+    # publishes the reports page.
     needs:
+      - proven
       - nix
       - feature-matrix
       - python-parity
@@ -1150,9 +1161,27 @@ jobs:
       - semver
       - test
       - site
-      - report
-      - pages
-    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
+    if: >-
+      ${{
+        !cancelled()
+        && github.event_name == 'push'
+        && needs.proven.result == 'success'
+        && (
+          needs.proven.outputs.skip == 'true'
+          || (
+            needs.nix.result == 'success'
+            && needs.feature-matrix.result == 'success'
+            && needs.python-parity.result == 'success'
+            && needs.wheel.result == 'success'
+            && needs.music21-suite.result == 'success'
+            && needs.lint.result == 'success'
+            && needs.msrv.result == 'success'
+            && needs.semver.result == 'success'
+            && needs.test.result == 'success'
+          )
+        )
+        && needs.site.result == 'success'
+      }}
     permissions:
       contents: write
     outputs:
@@ -1220,8 +1249,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Publishing. Everything below hangs off `release`, so it can only run for a
-  # commit where every other job passed and the version actually changed: one
-  # bump, one tag, one crates.io release and one PyPI release, together.
+  # commit where every check passed (or a pull request had already passed
+  # them) and the version actually changed: one bump, one tag, one crates.io
+  # release and one PyPI release, together.
   #
   # Nothing here holds a token but crates.io's. PyPI uses Trusted Publishing,
   # which authenticates the workflow itself over OIDC.
@@ -1429,7 +1459,7 @@ jobs:
     needs:
       - release
       - publish-crates
-    # `release` waits on every gate, so this does too. `publish-crates` is
+    # `release` waits on every check, so this does too. `publish-crates` is
     # skipped in a run that releases nothing, which must not skip this.
     if: >-
       ${{

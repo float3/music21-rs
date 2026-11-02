@@ -432,7 +432,16 @@ seconds.
 
 **documentation that builds should reach the reader.** `pages` waits only on
 lint and docs, not on every test job, so one stale fixture cannot keep the
-whole site unpublished. a *release* still waits on everything.
+whole site unpublished.
+
+**a release waits on the checks, not the report.** `release` needs every
+check job to have passed, or `proven` to say a pull request already passed
+them on the same tree; nothing else. *debated 2026-11-02:* the report reruns,
+under coverage, the suites the pull request proved, so it adds no evidence a
+release needs; it took about two hours and blocked every release behind it,
+and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
+no longer stops a release. it still runs on every push to master and
+publishes the reports page.
 
 **growing enums and every options struct are `#[non_exhaustive]`.**
 `StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,
