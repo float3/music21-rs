@@ -443,6 +443,13 @@ and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
 no longer stops a release. it still runs on every push to master and
 publishes the reports page.
 
+**the wheel is built per Python version, not abi3.** *debated 2026-11-02:*
+one `abi3-py310` wheel per platform would cut the release matrix, but the
+limited API made stream and object paths 9–11% slower (`Note('C#4')`,
+`flatten`, `recurse().notes`, writing MusicXML) against a 5% bar.
+`abi3-py39` cannot build at all: the wheel extracts `&str` about 360 times.
+*costs:* one wheel per Python version and platform.
+
 **growing enums and every options struct are `#[non_exhaustive]`.**
 `StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,
 `TuningSystem`, `ScaleType`, `stream::Analysis` and every `*Options`
