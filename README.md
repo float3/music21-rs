@@ -537,7 +537,7 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2155](https://github.com/cuthbertLab/music21/pull/2155):
   Find nextPitch neighbors on cycles wider than an octave.
 - [cuthbertLab/music21#2156](https://github.com/cuthbertLab/music21/pull/2156):
-  Join PartStaffs after a measure missing from the first staff (open).
+  Join PartStaffs after a measure missing from the first staff.
 - [cuthbertLab/music21#2158](https://github.com/cuthbertLab/music21/pull/2158):
   Deduplicate instruments offset by offset.
 - [cuthbertLab/music21#2159](https://github.com/cuthbertLab/music21/pull/2159):
@@ -545,7 +545,7 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2160](https://github.com/cuthbertLab/music21/pull/2160):
   Fix findConsecutiveNotes(skipUnisons=True) on repeated notes and chords.
 - [cuthbertLab/music21#2161](https://github.com/cuthbertLab/music21/pull/2161):
-  Keep an explicit zero quarterLength in GeneralNote (open).
+  Keep an explicit zero quarterLength in GeneralNote.
 - [cuthbertLab/music21#2162](https://github.com/cuthbertLab/music21/pull/2162):
   Realize figured-bass lines holding tuplets.
 - [cuthbertLab/music21#2163](https://github.com/cuthbertLab/music21/pull/2163):
@@ -580,6 +580,25 @@ contributed upstream, mostly fixes found while porting:
   Make volpiano breaks at the end of the text follow breaksToLayout (open).
 - [cuthbertLab/music21#2181](https://github.com/cuthbertLab/music21/pull/2181):
   Slice by the greatest divisor past grace notes and empty measures (open).
+- [cuthbertLab/music21#2182](https://github.com/cuthbertLab/music21/pull/2182):
+  Limit the uncompressed size of compressed input (open).
+- [cuthbertLab/music21#2183](https://github.com/cuthbertLab/music21/pull/2183):
+  Stop making more than 100,000 measures from malformed input.
+- [cuthbertLab/music21#2184](https://github.com/cuthbertLab/music21/pull/2184):
+  Make TimeSignature construction linear in the numerator (open).
+- [cuthbertLab/music21#2198](https://github.com/cuthbertLab/music21/pull/2198):
+  Remove alteredDegrees from IntervalNetwork and AbstractScale (open).
+- [cuthbertLab/music21#2200](https://github.com/cuthbertLab/music21/pull/2200):
+  meter: remove O(n^2) setIndex loops and inspect.stack from first
+  TimeSignature build (open).
+- [cuthbertLab/music21#2201](https://github.com/cuthbertLab/music21/pull/2201):
+  meter: name the replacement when item assignment or load() is used (open).
+- [cuthbertLab/music21#2202](https://github.com/cuthbertLab/music21/pull/2202):
+  meter: bound the meter caches and keep frozen hashes (open).
+- [cuthbertLab/music21#2203](https://github.com/cuthbertLab/music21/pull/2203):
+  meter: fix inaccurate docs from #1972 (open).
+- [cuthbertLab/music21#2204](https://github.com/cuthbertLab/music21/pull/2204):
+  meter: rename in-place methods so old calls raise (open).
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
