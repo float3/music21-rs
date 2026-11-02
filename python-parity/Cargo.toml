@@ -32,6 +32,9 @@ utils = { path = "../utils", features = ["python"] }
 all = { level = "deny", priority = -1 }
 
 # The tests compare whole corpus scores, and the crate unoptimized is most of
-# the time on the largest ones.
+# the time on the largest ones. Line tables are all the debug information a
+# failing test's backtrace reads; the rest only made 189 test binaries larger
+# and slower to link, and to carry from the build to the shards in CI.
 [profile.dev]
 opt-level = 2
+debug = "line-tables-only"

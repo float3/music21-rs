@@ -176,27 +176,26 @@ jobs:
           # `--all-targets` excludes doctests, so they need their own run.
           cargo test --workspace --doc $FLAGS
 
-  # Each test runs in a process of its own under nextest, four at a time on
-  # each of three runners, which share the tests out by a hash of their
-  # names, so a test stays on the same runner from run to run.
-  python-parity:
-    name: Python Parity (${{ matrix.shard }}/3)
+  # The parity suite is built once, here, and run on five runners below.
+  # Compiling it was six of every shard's ten to thirteen minutes, on a full
+  # cache hit too: cargo rebuilds the crates it is testing, and links 189
+  # test binaries. nextest's archive carries the binaries to the shards.
+  python-parity-build:
+    name: Python Parity (build)
     runs-on: ubuntu-latest
     needs: proven
     if: needs.proven.outputs.skip != 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
+      # No submodules: nothing the suite compiles reads them; the shards,
+      # which run it, check them out.
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # The shards embed the interpreter this one names, so it is the same
+      # Python as theirs.
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
@@ -209,6 +208,61 @@ jobs:
           shared-key: python-parity
           workspaces: python-parity -> target
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Build and archive the parity tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
+          cargo nextest archive --manifest-path python-parity/Cargo.toml \
+            --archive-file python-parity.tar.zst
+
+      # Already compressed, and read once by each shard and then by nobody.
+      - name: Upload the archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-parity-archive
+          path: python-parity.tar.zst
+          compression-level: 0
+          retention-days: 1
+
+  # Each test runs in a process of its own under nextest, four at a time on
+  # each of five runners, which share the tests out by a hash of their
+  # names, so a test stays on the same runner from run to run. Five, not
+  # three, since a shard no longer compiles anything: what is left is the
+  # tests, and the slowest of them alone runs nearly four minutes.
+  python-parity:
+    name: Python Parity (${{ matrix.shard }}/5)
+    runs-on: ubuntu-latest
+    needs:
+      - proven
+      - python-parity-build
+    if: needs.proven.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # Nothing is built here; nextest is run through cargo.
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
       # The doctest harness imports the whole of music21, which needs its
       # own dependencies; the table bridge stubs them out and does not.
       # audioSearch finds frequencies with scipy's FFT convolution where
@@ -220,6 +274,11 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
+
+      - name: Download the parity tests
+        uses: actions/download-artifact@v8
+        with:
+          name: python-parity-archive
 
       - name: Find the music21 commit
         id: music21
@@ -240,6 +299,8 @@ jobs:
             music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
             music21-answers-${{ steps.music21.outputs.commit }}-
 
+      # The binaries find the checkout where they were built, at the same
+      # path on every runner; `--workspace-remap` says where it is anyway.
       - name: Run Python parity tests
         shell: bash
         env:
@@ -247,10 +308,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          echo "Using PYO3_PYTHON=$PYO3_PYTHON"
-          cargo nextest run --manifest-path python-parity/Cargo.toml \
-            --no-fail-fast --partition hash:${{ matrix.shard }}/3
+          cargo nextest run --archive-file python-parity.tar.zst \
+            --workspace-remap python-parity \
+            --no-fail-fast --partition hash:${{ matrix.shard }}/5
 
   wheel:
     name: Python Wheel
