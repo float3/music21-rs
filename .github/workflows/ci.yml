@@ -312,15 +312,14 @@ jobs:
             --workspace-remap python-parity \
             --no-fail-fast --partition hash:${{ matrix.shard }}/5
 
+  # The wheel is built and tested on Linux here, and on Windows and macOS
+  # in `wheel-platforms`. Linux's is a job of its own because
+  # `music21-suite` waits on it, and a job waits on every leg of a matrix.
   wheel:
-    name: Python Wheel
-    runs-on: ${{ matrix.os }}
+    name: Python Wheel (ubuntu-latest)
+    runs-on: ubuntu-latest
     needs: proven
     if: needs.proven.outputs.skip != 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -365,9 +364,8 @@ jobs:
       #
       # The submodule's music21 and not PyPI's, as everywhere else here:
       # the pin is a commit, and `fixture_freshness` holds every generated
-      # file to it. Ubuntu alone -- none of what this covers is platform's.
+      # file to it. Linux alone -- none of what this covers is platform's.
       - name: Install and test it beside music21
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           set -euo pipefail
@@ -377,32 +375,108 @@ jobs:
           python -m pip install chardet joblib jsonpickle more_itertools numpy requests webcolors
           PYTHONPATH="$PWD/music21" python -m pytest python/tests -q
 
-      # The wheel crate's own Rust tests. `maturin build` does not run them
-      # and the workspace does not hold the crate, so nothing else does.
-      - name: Test the wheel crate
-        if: matrix.os == 'ubuntu-latest'
+      - name: Upload the wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheel-ubuntu-latest
+          path: target/wheels/*.whl
+
+  wheel-platforms:
+    name: Python Wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: proven
+    if: needs.proven.outputs.skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+
+      - name: Build the wheel
+        run: |
+          python -m pip install "maturin>=1.7,<2" pytest
+          maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+
+      - name: Install and test it
         shell: bash
         run: |
           set -euo pipefail
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo test --manifest-path python/Cargo.toml
-
-      # Somebody else's music21 library, run twice: once on music21 and once
-      # on ours. The two sets of failures have to match.
-      - name: Test a downstream music21 library against it
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          python -m pip install music21 lark numpy
-          # The interpreter's full path, its version in it, so a cached pyo3
-          # build looks for the runner's Python again when that changes.
-          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo run --release -p xtask -- downstream
+          python -m pip install --no-index --find-links target/wheels music21-rs
+          python -m pytest python/tests -q
 
       - name: Upload the wheel
         uses: actions/upload-artifact@v7
         with:
           name: wheel-${{ matrix.os }}
           path: target/wheels/*.whl
+
+  # What else is tested of the wheel, off `music21-suite`'s path: it used to
+  # run in `wheel` after the wheel was built, and `music21-suite` waited on
+  # it for nothing.
+  wheel-crate:
+    name: Wheel Crate and Downstream
+    runs-on: ubuntu-latest
+    needs:
+      - proven
+      - wheel
+    if: needs.proven.outputs.skip != 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+
+      # The wheel crate's own Rust tests. `maturin build` does not run them
+      # and the workspace does not hold the crate, so nothing else does.
+      - name: Test the wheel crate
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo test --manifest-path python/Cargo.toml
+
+      - name: Download the wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheel-ubuntu-latest
+          path: target/wheels
+
+      # Somebody else's music21 library, run twice: once on music21 and once
+      # on ours. The two sets of failures have to match.
+      - name: Test a downstream music21 library against it
+        run: |
+          python -m pip install --no-index --find-links target/wheels music21-rs
+          python -m pip install music21 lark numpy pytest
+          # The interpreter's full path, its version in it, so a cached pyo3
+          # build looks for the runner's Python again when that changes.
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask -- downstream
 
   # music21's own test suite, run twice and diffed: once on music21, once
   # with `music21_rs.install_into_music21()` in front of it. music21's suite
@@ -466,13 +540,16 @@ jobs:
 
       # The suite driver embeds an interpreter through pyo3, so it needs
       # xtask's `python` feature; the wheel it measures is the downloaded one,
-      # imported by name from the interpreter this points at.
+      # imported by name from the interpreter this points at. `--parallel`
+      # runs the three sides at once, two minutes each rather than six in
+      # all; the report runs them one after another, since it compares their
+      # times.
       - name: Run music21's suite on music21 and on music21_rs
         run: |
           # The interpreter's full path, its version in it, so a cached pyo3
           # build looks for the runner's Python again when that changes.
           export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
-          cargo run --release -p xtask --features python -- music21-suite
+          cargo run --release -p xtask --features python -- music21-suite --parallel
 
   lint:
     name: Lint (fmt + clippy + check)
@@ -1242,6 +1319,8 @@ jobs:
       - feature-matrix
       - python-parity
       - wheel
+      - wheel-platforms
+      - wheel-crate
       - music21-suite
       - lint
       - msrv
@@ -1260,6 +1339,8 @@ jobs:
             && needs.feature-matrix.result == 'success'
             && needs.python-parity.result == 'success'
             && needs.wheel.result == 'success'
+            && needs.wheel-platforms.result == 'success'
+            && needs.wheel-crate.result == 'success'
             && needs.music21-suite.result == 'success'
             && needs.lint.result == 'success'
             && needs.msrv.result == 'success'

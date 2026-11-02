@@ -20,7 +20,7 @@
 //! under `music21_rs` is a gap in the crate.
 //!
 //! ```text
-//! cargo run --release -p xtask --features python -- music21-suite
+//! cargo run --release -p xtask --features python -- music21-suite [--parallel]
 //! ```
 //!
 //! The runs are separate processes, because installing over music21
@@ -218,12 +218,17 @@ impl Report {
     }
 }
 
-/// Runs both halves and compares them, answering the process exit code.
+/// Runs every side and compares them, answering the process exit code.
+///
+/// `parallel` runs the sides at once rather than one after another (see
+/// [`run_sides_at_once`]); they then share the machine, so their times are
+/// not compared.
 pub fn run(
     workspace_root: &Path,
     only: Option<String>,
     out: Option<PathBuf>,
     one: Option<Which>,
+    parallel: bool,
 ) -> Result<i32, Box<dyn Error>> {
     let out = out.unwrap_or_else(|| workspace_root.join("target/music21-suite"));
     fs::create_dir_all(&out)?;
@@ -243,22 +248,19 @@ pub fn run(
         return Ok(1);
     }
 
-    let exe = std::env::current_exe()?;
-    let mut ran: Vec<Which> = Vec::new();
-    for which in SIDES {
-        println!("$ running music21's suite on {}", which.name());
-        let mut command = Command::new(&exe);
-        command
-            .arg("music21-suite")
-            .arg("--run")
-            .arg(which.name())
-            .arg("--out")
-            .arg(&out)
-            .current_dir(workspace_root);
-        if let Some(only) = &only {
-            command.arg("--only").arg(only);
+    let statuses = if parallel {
+        run_sides_at_once(workspace_root, &out, only.as_deref())?
+    } else {
+        let mut statuses = Vec::new();
+        for which in SIDES {
+            println!("$ running music21's suite on {}", which.name());
+            let status = side_command(workspace_root, &out, which, only.as_deref())?.status()?;
+            statuses.push((which, status));
         }
-        let status = command.status()?;
+        statuses
+    };
+    let mut ran: Vec<Which> = Vec::new();
+    for (which, status) in statuses {
         match status.code() {
             Some(0) => ran.push(which),
             // The wheel is the one side that may simply not be there. The
@@ -280,7 +282,11 @@ pub fn run(
         sides.push((which, read(&out.join(which.file()))?));
     }
 
-    if let Some(timings) = compare_timings(&plain, &sides) {
+    if parallel {
+        // A stale file would be read back as this run's.
+        let _ = fs::remove_file(out.join("timings.json"));
+        println!("the sides ran at once, so their times are not compared");
+    } else if let Some(timings) = compare_timings(&plain, &sides) {
         report_timings(&timings);
         let path = out.join("timings.json");
         fs::write(&path, serde_json::to_string_pretty(&timings)?)?;
@@ -305,6 +311,69 @@ pub fn run(
         return Ok(1);
     }
     Ok(code)
+}
+
+/// This program again, asked to run one side and write its result to `out`.
+fn side_command(
+    workspace_root: &Path,
+    out: &Path,
+    which: Which,
+    only: Option<&str>,
+) -> Result<Command, Box<dyn Error>> {
+    let mut command = Command::new(std::env::current_exe()?);
+    command
+        .arg("music21-suite")
+        .arg("--run")
+        .arg(which.name())
+        .arg("--out")
+        .arg(out)
+        .current_dir(workspace_root);
+    if let Some(only) = only {
+        command.arg("--only").arg(only);
+    }
+    Ok(command)
+}
+
+/// Runs every side at once, each in a process of its own as one after
+/// another would, and answers how each one exited.
+///
+/// Each side gets an empty temp directory of its own, so music21 keeps its
+/// parsed-score pickles there and no side reads or clears what another
+/// wrote with other classes installed (see [`clear_corpus_cache`]). Each
+/// side's output goes to `<side>.log` beside its result, and is printed
+/// whole once every side is done, so the three do not interleave.
+fn run_sides_at_once(
+    workspace_root: &Path,
+    out: &Path,
+    only: Option<&str>,
+) -> Result<Vec<(Which, std::process::ExitStatus)>, Box<dyn Error>> {
+    let mut running = Vec::new();
+    for which in SIDES {
+        println!("$ running music21's suite on {}", which.name());
+        let temp = out.join(format!("tmp-{}", which.name()));
+        let _ = fs::remove_dir_all(&temp);
+        fs::create_dir_all(&temp)?;
+        let log_path = out.join(format!("{}.log", which.name()));
+        let log = fs::File::create(&log_path)?;
+        let child = side_command(workspace_root, out, which, only)?
+            .env("TMPDIR", &temp)
+            .env("TEMP", &temp)
+            .env("TMP", &temp)
+            .stdout(log.try_clone()?)
+            .stderr(log)
+            .spawn()?;
+        running.push((which, child, log_path));
+    }
+
+    let mut statuses = Vec::new();
+    for (which, mut child, log_path) in running {
+        let status = child.wait()?;
+        println!();
+        println!("== music21's suite on {} ==", which.name());
+        print!("{}", fs::read_to_string(&log_path).unwrap_or_default());
+        statuses.push((which, status));
+    }
+    Ok(statuses)
 }
 
 fn read(path: &Path) -> Result<Report, Box<dyn Error>> {
