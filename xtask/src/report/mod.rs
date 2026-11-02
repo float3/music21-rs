@@ -1275,6 +1275,18 @@ class Plain:
     }
 
     #[test]
+    fn nextest_counts_read_the_summary_line() {
+        let text = "        PASS [   1.234s] parity::a one\n     Summary [ 360.123s] 241 tests run: 241 passed, 0 skipped\n";
+        assert_eq!(nextest_counts(text), (241, 0));
+        let text =
+            "     Summary [  12.345s] 9 tests run: 6 passed, 2 failed, 1 timed out, 0 skipped\n";
+        assert_eq!(nextest_counts(text), (6, 3));
+        let text = "     Summary [ 583.506s] 241 tests run: 241 passed (6 slow), 0 skipped\n";
+        assert_eq!(nextest_counts(text), (241, 0));
+        assert_eq!(nextest_counts("nothing to see"), (0, 0));
+    }
+
+    #[test]
     fn pytest_counts_read_the_summary_line() {
         assert_eq!(pytest_counts("...\n19 passed in 0.07s\n"), (19, 0));
         assert_eq!(

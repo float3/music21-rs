@@ -229,13 +229,16 @@ jobs:
       # music21's answers to the tests' questions, kept by music21 commit
       # (`python-parity/src/answers.rs`). Each run saves what it has under a
       # new key and the next run restores the newest for its commit and
-      # shard.
+      # shard, or failing that the newest for its commit -- the report's,
+      # which master keeps where every pull request can read it.
       - name: Restore music21's answers
         uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/music21-answers
           key: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-${{ github.run_id }}
-          restore-keys: music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
+          restore-keys: |
+            music21-answers-${{ steps.music21.outputs.commit }}-${{ matrix.shard }}-
+            music21-answers-${{ steps.music21.outputs.commit }}-
 
       - name: Run Python parity tests
         shell: bash
@@ -642,7 +645,7 @@ jobs:
   # different times to build. `site` is the documentation and the demos --
   # a few minutes -- and `pages` publishes it at once, carrying the last full
   # report there was. `report` measures coverage and runs every suite, which
-  # takes a quarter of an hour, and `pages-report` then publishes the same
+  # takes far longer, and `pages-report` then publishes the same
   # site again with that report in it. A small fix to a demo therefore goes
   # live without waiting for the report, and the report follows on its own.
   site:
@@ -985,10 +988,14 @@ jobs:
         with:
           shared-key: xtask-report
 
-      - name: Install cargo-llvm-cov
+      # nextest runs each parity test in a process of its own, so the parity
+      # suite runs four at a time here rather than one at a time under
+      # libtest, whose tests share their binary's one interpreter. It was
+      # most of the report's two hours.
+      - name: Install cargo-llvm-cov and cargo-nextest
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov
+          tool: cargo-llvm-cov,cargo-nextest
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -1018,11 +1025,31 @@ jobs:
           maturin build --release --manifest-path python/Cargo.toml --out target/wheels
           python -m pip install --no-index --find-links target/wheels music21-rs
 
+      - name: Find the music21 commit
+        id: music21
+        shell: bash
+        run: echo "commit=$(git -C music21 rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # music21's answers to the parity tests' questions, as `python-parity`
+      # keeps them. A pull request's caches are out of reach of a push to
+      # master, so the report keeps a set of its own, which a parity shard
+      # falls back on when it has none.
+      - name: Restore music21's answers
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/music21-answers
+          key: music21-answers-${{ steps.music21.outputs.commit }}-report-${{ github.run_id }}
+          restore-keys: |
+            music21-answers-${{ steps.music21.outputs.commit }}-report-
+            music21-answers-${{ steps.music21.outputs.commit }}-
+
       # Coverage, every test suite, and the ported feature set. The benchmark
       # and music21's suite are subcommands of this same program, and the
       # report drives them by running itself, so the binary it builds has to
       # be the one with pyo3 in it.
       - name: Build reports
+        env:
+          MUSIC21_PARITY_ANSWERS: ${{ runner.temp }}/music21-answers
         run: |
           # The interpreter's full path, its version in it, so a cached pyo3
           # build looks for the runner's Python again when that changes.
