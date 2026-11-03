@@ -608,12 +608,12 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2168](https://github.com/cuthbertLab/music21/pull/2168):
   Smooth floating key analysis with each neighbour's own interpretations.
 - [cuthbertLab/music21#2169](https://github.com/cuthbertLab/music21/pull/2169):
-  Make ElementTimespan hashable (open).
+  Make ElementTimespan hashable.
 - [cuthbertLab/music21#2170](https://github.com/cuthbertLab/music21/pull/2170):
   Yield every key of one hand in
-  BrailleGrandSegment.yieldCombinedGroupingKeys (open).
+  BrailleGrandSegment.yieldCombinedGroupingKeys.
 - [cuthbertLab/music21#2171](https://github.com/cuthbertLab/music21/pull/2171):
-  Start each PartReduction span at the last dynamic before it (open).
+  Start each PartReduction span at the last dynamic before it.
 - [cuthbertLab/music21#2172](https://github.com/cuthbertLab/music21/pull/2172):
   Change a collected object's priority in Stream.measures only when needed.
 - [cuthbertLab/music21#2173](https://github.com/cuthbertLab/music21/pull/2173):
@@ -621,35 +621,35 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2174](https://github.com/cuthbertLab/music21/pull/2174):
   Key ChordReducer weights by sorted pitch classes.
 - [cuthbertLab/music21#2177](https://github.com/cuthbertLab/music21/pull/2177):
-  Keep each measure's length in reduceChordsOld (open).
+  Keep each measure's length in reduceChordsOld.
 - [cuthbertLab/music21#2178](https://github.com/cuthbertLab/music21/pull/2178):
   Reject roman numerals past VII.
 - [cuthbertLab/music21#2179](https://github.com/cuthbertLab/music21/pull/2179):
   Give a split measure's second half the clef, key and meter in force where
-  it is split (open).
+  it is split.
 - [cuthbertLab/music21#2180](https://github.com/cuthbertLab/music21/pull/2180):
-  Make volpiano breaks at the end of the text follow breaksToLayout (open).
+  Make volpiano breaks at the end of the text follow breaksToLayout.
 - [cuthbertLab/music21#2181](https://github.com/cuthbertLab/music21/pull/2181):
-  Slice by the greatest divisor past grace notes and empty measures (open).
+  Slice by the greatest divisor past grace notes and empty measures.
 - [cuthbertLab/music21#2182](https://github.com/cuthbertLab/music21/pull/2182):
-  Limit the uncompressed size of compressed input (open).
+  Limit the uncompressed size of compressed input.
 - [cuthbertLab/music21#2183](https://github.com/cuthbertLab/music21/pull/2183):
   Stop making more than 100,000 measures from malformed input.
 - [cuthbertLab/music21#2184](https://github.com/cuthbertLab/music21/pull/2184):
   Make TimeSignature construction linear in the numerator (open).
 - [cuthbertLab/music21#2198](https://github.com/cuthbertLab/music21/pull/2198):
-  Remove alteredDegrees from IntervalNetwork and AbstractScale (open).
+  Remove alteredDegrees from IntervalNetwork and AbstractScale.
 - [cuthbertLab/music21#2200](https://github.com/cuthbertLab/music21/pull/2200):
   meter: remove O(n^2) setIndex loops and inspect.stack from first
   TimeSignature build (open).
 - [cuthbertLab/music21#2201](https://github.com/cuthbertLab/music21/pull/2201):
-  meter: name the replacement when item assignment or load() is used (open).
+  meter: name the replacement when item assignment or load() is used.
 - [cuthbertLab/music21#2202](https://github.com/cuthbertLab/music21/pull/2202):
   meter: bound the meter caches and keep frozen hashes (open).
 - [cuthbertLab/music21#2203](https://github.com/cuthbertLab/music21/pull/2203):
-  meter: fix inaccurate docs from #1972 (open).
+  meter: fix inaccurate docs from #1972.
 - [cuthbertLab/music21#2204](https://github.com/cuthbertLab/music21/pull/2204):
-  meter: rename in-place methods so old calls raise (open).
+  meter: rename in-place methods so old calls raise.
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
