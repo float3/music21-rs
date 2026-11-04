@@ -35,9 +35,31 @@
   but the fifteen in `key::MODES`, as music21's `Key` does. MEI's
   `key.mode` is read through it.
 
-- **A time signature counts at most 1024 beats** (`meter::MAX_NUMERATOR`).
-  A meter is built with a part for each beat, so `99999999/1` in a
-  MusicXML, ABC or TinyNotation file took minutes; it is now an error.
+- **A time signature counts at most 10,000 beats** (`meter::MAX_NUMERATOR`),
+  as music21's does. A meter is built with a part for each beat, so
+  `99999999/1` in a MusicXML, ABC or TinyNotation file took minutes; it is
+  now an error.
+
+- **Meter sequences are values, as music21's are since v11.** A
+  `MeterTerminal` or meter sequence is no longer changed in place: its
+  methods return a new one, named after music21's new names
+  (`partitioned_by_count`, `partitioned_by_list`, `partitioned_by_parts`,
+  `partitioned_by_other`, `subdivided_partitions_equal`,
+  `subdivided_nested_hierarchy`, `with_level_weight`, `with_weight`,
+  `with_summed_numerator`; `MeterTerminal::sequence` is `makeSequence`).
+  `parts_mut`, `set_weight`, `subdivide` and `subdivide_by_other` are gone,
+  `TimeSignature`'s `*_sequence_mut` accessors are now
+  `set_{beat,beam,accent,display}_sequence`, and `subdivide_by_count`
+  errors on a count it cannot divide into. `beat_quarter_length` and
+  `beat_duration` give the first beat's length and cannot fail. In the
+  wheel, `MeterTerminal` and `MeterSequence` are immutable; the old
+  in-place names raise the errors music21's raise, and `barDuration`,
+  `beatDuration` and `beatDivisionDurations` are music21's
+  `FrozenDuration` when music21 is loaded.
+
+- **Cyclical scales that close within an octave repeat at the octave**:
+  `ScaleType::is_cycle` is gone, since no named scale is a cycle, and
+  `StepScale::cyclical_of` returns a `Result`.
 
 - **`make_measures` makes at most 100,000 measures**
   (`makenotation::MAX_MEASURES`) and is an error past that. A MIDI file of
@@ -98,6 +120,28 @@
   new.
 
 ## changed
+
+- **The music21 submodule follows the fork's master 19ada90a8**
+  (upstream as of 3 November plus the fork's fixes), and the crate with
+  it:
+  - Treble8vaClef, Bass8vbClef and Bass8vaClef have the lowest lines
+    their octave change implies (38, 12 and 26), so stems and rest
+    positions under them change; Treble8vaClef and Treble8vbClef are no
+    longer TrebleClefs, and LilyPond names them `treble^8`, `bass_8` and
+    `bass^8`.
+  - Octave-repeating scales close on the tonic's spelling: the whole-tone
+    scale on C ends on C5, not B#4, and the chromatic scale on D-4 on D-5.
+  - Volpiano writes the octave clefs as plain treble and bass clefs.
+  - A MuseData pickup measure is numbered 0, and stage-2 slur marks are
+    read as slurs.
+  - A Finale `<forward>` of no length makes no hidden rest, and a
+    multi-measure rest cut short is kept only when it took a rest.
+  - Braille shows the octave after the exception sign.
+  - A `Duration` compares equal to music21's `FrozenDuration` of the same
+    length, and `None` given for a note's `type`, `quarterLength`,
+    `duration` or `dots` counts as not given.
+  - The wheel's scale `getScaleDegreeFromPitch` and `nextPitch` take
+    `randomGenerator`; without one the lowest degree is chosen.
 
 - **The root's `read_midi_bytes`, `read_midi_bytes_with_tempo`,
   `write_midi_bytes`, `midi_notes_from_stream` and

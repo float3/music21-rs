@@ -26,7 +26,7 @@ use crate::note::Note;
 use crate::pitch::Pitch;
 use crate::pitch::accidental::Accidental;
 use crate::rest::Rest;
-use crate::spanner::{Spanner, SpannerKind};
+use crate::spanner::Spanner;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::TempoText;
 

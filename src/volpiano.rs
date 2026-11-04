@@ -373,9 +373,15 @@ impl Writer {
         match element {
             StreamElement::Clef(clef) => {
                 self.lowest_line = clef.lowest_line();
-                if clef.is_a("TrebleClef") {
+                if ["TrebleClef", "Treble8vbClef", "Treble8vaClef"]
+                    .iter()
+                    .any(|class| clef.is_a(class))
+                {
                     self.tokens.push_str("1---");
-                } else if clef.is_a("BassClef") {
+                } else if ["BassClef", "Bass8vbClef", "Bass8vaClef"]
+                    .iter()
+                    .any(|class| clef.is_a(class))
+                {
                     self.tokens.push_str("2---");
                 }
             }

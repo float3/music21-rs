@@ -1654,12 +1654,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             return Ok(());
         };
         let change = op_frac(ticks / self.divisions);
-        if self.part.importer.finale {
-            // Finale writes a hidden rest as a `<forward>`. One of no
-            // length is a quarter rest: music21 takes a length of nought
-            // for no length given.
-            let length = if change == 0.0 { 1.0 } else { change };
-            let mut rest = Rest::new(Duration::new(length)?);
+        if self.part.importer.finale && change != 0.0 {
+            // Finale writes a hidden rest as a `<forward>`.
+            let mut rest = Rest::new(Duration::new(change)?);
             rest.set_hidden(true);
             let seq = self.seq;
             self.insert_note(element, staff_number(element), rest.into());
