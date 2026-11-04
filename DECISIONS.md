@@ -443,12 +443,17 @@ and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
 no longer stops a release. it still runs on every push to master and
 publishes the reports page.
 
-**the wheel is built per Python version, not abi3.** *debated 2026-11-02:*
-one `abi3-py310` wheel per platform would cut the release matrix, but the
-limited API made stream and object paths 9–11% slower (`Note('C#4')`,
-`flatten`, `recurse().notes`, writing MusicXML) against a 5% bar.
-`abi3-py39` cannot build at all: the wheel extracts `&str` about 360 times.
-*costs:* one wheel per Python version and platform.
+**the wheel is built per Python version, not abi3.** *debated 2026-11-02,
+again 2026-11-05:* one abi3 wheel per platform would cut the release matrix,
+but the limited API made stream and object paths 9–11% slower (`Note('C#4')`,
+`flatten`, `recurse().notes`, writing MusicXML) against a 5% bar. Measured
+again with `abi3-py39`, which builds once `PyString::to_str` becomes
+`to_cow`: 12.6% slower over the 33 `xtask bench` cases, chord analysis 18%
+and stream building up to 28%. The release instead builds every version in
+one job per runner, so it waits on three macOS and Windows runners rather
+than seventeen; macOS runners went unassigned for most of an hour three
+times during 0.16.0. *costs:* one wheel per Python version and platform,
+and each runner's job takes as long as all its versions do.
 
 **growing enums and every options struct are `#[non_exhaustive]`.**
 `StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,

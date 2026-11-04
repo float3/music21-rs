@@ -1465,7 +1465,7 @@ def test_every_python_object_a_facade_holds_is_accounted_for():
     the value and never the object. `data/py_fields.toml` says, for every
     Python object a class carrying a crate value holds, how an edit to it
     reaches the value, and why a class with no value has none to reach."""
-    import tomllib
+    tomllib = pytest.importorskip("tomllib")
 
     root = pathlib.Path(__file__).resolve().parents[2]
     table = tomllib.loads((root / "data" / "py_fields.toml").read_text())

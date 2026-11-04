@@ -1,3 +1,12 @@
+# Unreleased
+
+## fixed
+
+- **The wheel imports on Python 3.9 and 3.10**, which it is published for:
+  `HarmonicFunction` was built on `enum.StrEnum`, which Python has only from
+  3.11, so `import music21_rs` raised there. CI now tests the wheel on 3.9
+  and 3.14 too.
+
 # music21-rs 0.16.0
 
 `harte` 0.9.0 depends on this release.

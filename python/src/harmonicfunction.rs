@@ -24,11 +24,19 @@ pub const NAMES: &[&str] = &["HarmonicFunction", "functionToRoman", "romanToFunc
 
 /// music21's `common.enums.StrEnum`, whose repr leaves the value out, built
 /// on the standard library's so the wheel needs no music21 to make it.
+/// Python 3.9 and 3.10 have no `enum.StrEnum`; there it is a `str` enum whose
+/// `str()` is its value, as `enum.StrEnum`'s is.
 const ENUM_BUILDER: &str = r#"
 import enum
 
+if hasattr(enum, 'StrEnum'):
+    StrEnum = enum.StrEnum
+else:
+    class StrEnum(str, enum.Enum):
+        __str__ = str.__str__
+
 def build(members, module):
-    class HarmonicFunction(enum.StrEnum):
+    class HarmonicFunction(StrEnum):
         def __repr__(self):
             return f'<{self.__class__.__name__}.{self.name}>'
 
