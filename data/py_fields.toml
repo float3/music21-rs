@@ -120,7 +120,6 @@ style = { kind = "identity", sync = "synced" }
 
 [MeterSequence]
 parts = { kind = "identity", sync = "read live", why = "each part is a view whose reads and writes go to the meter" }
-level_list_cache = { kind = "cache", note = "music21's _levelListCache" }
 
 [MetronomeMark]
 referent = { kind = "identity", sync = "current" }

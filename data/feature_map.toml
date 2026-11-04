@@ -675,6 +675,12 @@ name = "MeterTerminal"
 rust = ["src/meter/sequence.rs"]
 note = "A span of a bar written as a ratio, which is what a meter's partitions are made of."
 
+[[class]]
+python = "meter/core.py"
+name = "MeterNode"
+rust = ["src/meter/sequence.rs"]
+note = "What a span and a divided span have in common: their length, comparing ratios, and dividing."
+
 [class.renames]
 duration = "quarter_length"
 
