@@ -7022,6 +7022,34 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     with pytest.raises(Exception, match="stream.Score"):
         cr.run(m.from_tiny_notation("4/4 c4 d e2"))
 
+    # A slice weighs its length times its accent, its length alone if it is
+    # the last, and a tenth of that if it is dissonant.
+    assert cr.sliceWeight(2.0, 0.5, False, True) == 1.0
+    assert round(cr.sliceWeight(2.0, 0.5, True, False), 6) == 0.2
+
+    # A weight algorithm of the caller's own is called for each slice, and
+    # what it raises is raised.
+    score = m.Score([m.from_tiny_notation("tinyNotation: 4/4 e1"),
+                     m.from_tiny_notation("tinyNotation: 4/4 C1")])
+    weighed = []
+
+    def byLength(quarterLength, accent, isLast, isConsonant):
+        weighed.append((quarterLength, isLast, isConsonant))
+        return quarterLength
+
+    reduction = cr.run(score, closedPosition=True, forceOctave=None,
+                       weightAlgorithm=byLength)
+    assert weighed == [(4.0, True, True)]
+    assert [p.nameWithOctave for c in reduction.recurse().notes for p in c.pitches] == [
+        "C3", "E3",
+    ]
+
+    def refuses(quarterLength, accent, isLast, isConsonant):
+        raise ValueError("no weight")
+
+    with pytest.raises(ValueError, match="no weight"):
+        cr.run(score, weightAlgorithm=refuses)
+
 
 def _live_notes():
     return sum(isinstance(held, m.Note) for held in gc.get_objects())

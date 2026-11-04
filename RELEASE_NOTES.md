@@ -87,6 +87,16 @@
   figured-bass number and the words for a chord standing in a given
   inversion.
 
+- **`reduce_chords` ties and clefs its reduction, as music21's fork
+  master 42b4e8b47 does**: a chord that is the same as the first chord of
+  the next measure is tied to it, and the reduction's clef is the one that
+  best fits its chords. `ReductionOptions::force_octave` (music21's
+  `forceOctave`) and `ReductionOptions::weight_algorithm` (music21's
+  `weightAlgorithm`, a `SliceWeigher`) are new, and `slice_weight` is
+  music21's `sliceWeight`. The wheel's `ChordReducer.run` takes
+  `forceOctave` and `weightAlgorithm`, and `ChordReducer.sliceWeight` is
+  new.
+
 ## changed
 
 - **The root's `read_midi_bytes`, `read_midi_bytes_with_tempo`,

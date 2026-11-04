@@ -9,6 +9,7 @@ passing = [
     "music21.analysis.reduceChords.ChordReducer.computeMeasureChordWeights",
     "music21.analysis.reduceChords.ChordReducer.reduceMeasureToNChords",
     "music21.analysis.reduceChords.ChordReducer.run",
+    "music21.analysis.reduceChords.ChordReducer.sliceWeight",
     "music21.analysis.reduceChords.testMeasureStream1",
 ]
 
