@@ -34,9 +34,10 @@ pub fn beat_depths(part: &Stream) -> Result<Vec<(usize, u8)>> {
             continue;
         }
         let mut meter = measure_meter(part, measure, event.offset())?;
-        meter
-            .beat_sequence_mut()
-            .subdivide_nested_hierarchy(3, None, true)?;
+        let nested = meter
+            .beat_sequence()
+            .subdivided_nested_hierarchy(3, None, true)?;
+        meter.set_beat_sequence(nested);
         let mut inside = position;
         for own in measure.events() {
             match own.element() {

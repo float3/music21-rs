@@ -319,7 +319,7 @@ impl Score {
     /// the way music21 does.
     fn position(&self, offset: f64) -> (i32, f64) {
         let bar = self.bar();
-        let beat = self.meter.beat_quarter_length().unwrap_or(1.0);
+        let beat = self.meter.beat_quarter_length();
         let pickup = self.anacrusis();
         if offset < pickup - EPSILON {
             return (0, 1.0 + (bar - pickup + offset) / beat);

@@ -93,7 +93,7 @@ impl BeatDivision {
 ///
 /// let six_eight = TimeSignature::from_ratio_string("6/8")?;
 /// assert_eq!(six_eight.beat_count(), 2);
-/// assert_eq!(six_eight.beat_quarter_length()?, 1.5);
+/// assert_eq!(six_eight.beat_quarter_length(), 1.5);
 /// assert_eq!(six_eight.classification(), "Compound Duple");
 /// # Ok::<(), music21_rs::Error>(())
 /// ```
@@ -138,7 +138,7 @@ impl Default for TimeSignature {
 /// The largest numerator a [`TimeSignature`] takes. A meter is built with
 /// a part for each beat it counts, so the limit bounds the work one
 /// signature costs; meters in use count far fewer.
-pub const MAX_NUMERATOR: UnsignedIntegerType = 1024;
+pub const MAX_NUMERATOR: UnsignedIntegerType = 10_000;
 
 impl TimeSignature {
     /// Creates a time signature from a numerator and denominator.
@@ -283,25 +283,28 @@ impl TimeSignature {
         self.favor_compound
     }
 
-    /// The beats, to partition: music21 divides a meter by reaching into the
-    /// sequence it carries, as `ts.beatSequence.partition(2)`.
-    pub fn beat_sequence_mut(&mut self) -> &mut MeterTerminal {
-        &mut self.beat_sequence
+    /// Counts the bar the way a sequence says: music21's `beatSequence`
+    /// assigned, as `ts.beatSequence = ts.beatSequence.partitioned(2)`.
+    pub fn set_beat_sequence(&mut self, sequence: MeterTerminal) {
+        self.beat_sequence = sequence;
     }
 
-    /// The beams, to partition.
-    pub fn beam_sequence_mut(&mut self) -> &mut MeterTerminal {
-        &mut self.beam_sequence
+    /// Beams the bar the way a sequence says: music21's `beamSequence`
+    /// assigned.
+    pub fn set_beam_sequence(&mut self, sequence: MeterTerminal) {
+        self.beam_sequence = sequence;
     }
 
-    /// The accent partitions, to partition or to weigh.
-    pub fn accent_sequence_mut(&mut self) -> &mut MeterTerminal {
-        &mut self.accent_sequence
+    /// Weighs the bar the way a sequence says: music21's `accentSequence`
+    /// assigned.
+    pub fn set_accent_sequence(&mut self, sequence: MeterTerminal) {
+        self.accent_sequence = sequence;
     }
 
-    /// How the bar is written, to partition.
-    pub fn display_sequence_mut(&mut self) -> &mut MeterTerminal {
-        &mut self.display_sequence
+    /// Writes the bar the way a sequence says: music21's `displaySequence`
+    /// assigned.
+    pub fn set_display_sequence(&mut self, sequence: MeterTerminal) {
+        self.display_sequence = sequence;
     }
 
     /// Writes the bar a different way without changing what it counts:
@@ -323,7 +326,7 @@ impl TimeSignature {
             .fold(0, |sum: UnsignedIntegerType, (count, part)| {
                 sum.saturating_add(count.saturating_mul(denominator / part))
             });
-        let mut display = whole_bar(numerator, denominator)?;
+        let display = whole_bar(numerator, denominator)?;
         if (display.quarter_length() - self.bar_quarter_length()).abs() > OFFSET_TOLERANCE {
             return Err(Error::Meter(format!(
                 "cannot write a {} bar as {value:?}: that is {} quarter lengths, not {}",
@@ -338,7 +341,8 @@ impl TimeSignature {
                 .map(|(count, part)| format!("{count}/{part}"))
                 .collect();
             let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
-            display.partition_by_parts(&borrowed)?;
+            self.display_sequence = display.partitioned_by_parts(&borrowed)?;
+            return Ok(());
         }
         self.display_sequence = display;
         Ok(())
@@ -356,8 +360,8 @@ impl TimeSignature {
                 "a bar cannot be divided into no parts".to_string(),
             ));
         }
-        let mut divided = whole_bar(self.numerator, self.denominator)?;
-        divided.partition_by_count(count as usize, false)?;
+        let divided = whole_bar(self.numerator, self.denominator)?
+            .partitioned_by_count(count as usize, false)?;
         // music21 divides the beats, the accents and the beams alike here,
         // and leaves the display saying what the bar was written as.
         self.beat_sequence = divided.clone();
@@ -378,10 +382,10 @@ impl TimeSignature {
                 "a bar cannot be counted in no beats".to_string(),
             ));
         }
-        let mut beats = MeterTerminal::new(self.numerator, self.denominator)?;
-        beats.partition_by_count(count as usize, false)?;
+        let mut beats = MeterTerminal::new(self.numerator, self.denominator)?
+            .partitioned_by_count(count as usize, false)?;
         if beats.len() > 1 {
-            let _ = beats.subdivide_partitions_equal(None);
+            beats = beats.subdivided_partitions_equal(None)?;
         }
         self.beat_sequence = beats;
         Ok(())
@@ -417,31 +421,35 @@ impl TimeSignature {
         {
             return Ok(());
         }
-        match numerator {
+        let beams = &self.beam_sequence;
+        self.beam_sequence = match numerator {
             2..=4 => {
-                self.beam_sequence
-                    .partition_by_count(numerator as usize, true)?;
+                let mut beams = beams.partitioned_by_count(numerator as usize, false)?;
                 if denominator == 4 {
-                    for part in self.beam_sequence.parts_mut() {
-                        part.subdivide(2)?;
+                    for index in 0..beams.len() {
+                        let divided = beams.parts()[index].subdivide_by_count(2)?;
+                        beams = beams.set_index(index, divided)?;
                     }
                 }
+                beams
             }
             5 => {
-                self.beam_sequence.partition_by_list(&[2, 3])?;
+                let mut beams = beams.partitioned_by_list(&[2, 3])?;
                 if denominator == 4 {
-                    for (part, count) in self.beam_sequence.parts_mut().iter_mut().zip([2, 3]) {
-                        part.subdivide(count)?;
+                    for (index, count) in [2, 3].into_iter().enumerate() {
+                        let divided = beams.parts()[index].subdivide_by_count(count)?;
+                        beams = beams.set_index(index, divided)?;
                     }
                 }
+                beams
             }
-            7 => self.beam_sequence.partition_by_count(3, true)?,
-            6 | 9 | 12 | 15 | 18 | 21 => {
-                let threes = vec![3; (numerator / 3) as usize];
-                self.beam_sequence.partition_by_list(&threes)?;
+            7 => beams.partitioned_by_count(3, false)?,
+            // Every compound numerator is beamed in threes.
+            other if other >= 6 && other.is_multiple_of(3) => {
+                beams.partitioned_by_list(&vec![3; (other / 3) as usize])?
             }
-            _ => {}
-        }
+            _ => return Ok(()),
+        };
         Ok(())
     }
 
@@ -454,22 +462,20 @@ impl TimeSignature {
     fn set_default_beat_partitions(&mut self) -> Result<()> {
         let numerator = self.numerator;
         let compound = self.favor_compound;
-        if self.display_sequence.len() == 1 {
+        let beats = &self.beat_sequence;
+        self.beat_sequence = if self.display_sequence.len() == 1 {
             match numerator {
-                2 => self.beat_sequence.partition_by_count(2, true)?,
-                6 if compound => self.beat_sequence.partition_by_count(2, true)?,
-                3 if compound => self.beat_sequence.partition_by_count(1, true)?,
-                3 => self.beat_sequence.partition_by_list(&[1, 1, 1])?,
-                9 if compound => self.beat_sequence.partition_by_list(&[3, 3, 3])?,
-                4 => self.beat_sequence.partition_by_count(4, true)?,
-                12 if compound => self.beat_sequence.partition_by_count(4, true)?,
+                2 => beats.partitioned_by_count(2, false)?,
+                6 if compound => beats.partitioned_by_count(2, false)?,
+                3 if compound => beats.partitioned_by_count(1, false)?,
+                3 => beats.partitioned_by_list(&[1, 1, 1])?,
+                9 if compound => beats.partitioned_by_list(&[3, 3, 3])?,
+                4 => beats.partitioned_by_count(4, false)?,
+                12 if compound => beats.partitioned_by_count(4, false)?,
                 other if other >= 15 && other.is_multiple_of(3) && compound => {
-                    let threes = vec![3; (other / 3) as usize];
-                    self.beat_sequence.partition_by_list(&threes)?;
+                    beats.partitioned_by_list(&vec![3; (other / 3) as usize])?
                 }
-                other => self
-                    .beat_sequence
-                    .partition_by_count(other as usize, true)?,
+                other => beats.partitioned_by_count(other as usize, false)?,
             }
         } else {
             let written: Vec<String> = self
@@ -479,13 +485,13 @@ impl TimeSignature {
                 .map(|part| format!("{}/{}", part.numerator(), part.denominator()))
                 .collect();
             let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
-            self.beat_sequence.partition_by_parts(&borrowed)?;
-        }
+            beats.partitioned_by_parts(&borrowed)?
+        };
         if self.beat_sequence.len() > 1 {
             // music21 forgives a bar written in notes shorter than a 128th
             // for being too short to divide again, and nothing else.
-            match self.beat_sequence.subdivide_partitions_equal(None) {
-                Ok(()) => {}
+            match self.beat_sequence.subdivided_partitions_equal(None) {
+                Ok(divided) => self.beat_sequence = divided,
                 Err(error) if self.denominator >= 128 => {
                     let _ = error;
                 }
@@ -501,11 +507,19 @@ impl TimeSignature {
     fn set_default_accent_weights(&mut self) {
         let weights = self.default_accent_weights();
         let ones = vec![1; weights.len()];
-        if self.accent_sequence.partition_by_list(&ones).is_err() {
+        let Ok(partitioned) = self.accent_sequence.partitioned_by_list(&ones) else {
             return;
-        }
-        for (part, weight) in self.accent_sequence.parts_mut().iter_mut().zip(weights) {
-            part.set_weight(weight);
+        };
+        let weighed: Vec<MeterTerminal> = partitioned
+            .parts()
+            .iter()
+            .zip(weights)
+            .map(|(part, weight)| part.with_weight(weight))
+            .collect();
+        if let Ok(sequence) =
+            MeterTerminal::sequence(partitioned.numerator(), partitioned.denominator(), weighed)
+        {
+            self.accent_sequence = sequence.with_summed_numerator(partitioned.summed_numerator());
         }
     }
 
@@ -587,7 +601,7 @@ impl TimeSignature {
             &mut self.beam_sequence,
             &mut self.accent_sequence,
         ] {
-            sequence.set_summed_numerator(summed);
+            *sequence = sequence.with_summed_numerator(summed);
         }
         self.set_default_partitions()
     }
@@ -603,7 +617,7 @@ impl TimeSignature {
     /// Says whether the numerators are written summed, which changes how the
     /// meter is printed and nothing about how it is counted.
     pub fn set_summed_numerator(&mut self, summed: bool) {
-        self.display_sequence.set_summed_numerator(summed);
+        self.display_sequence = self.display_sequence.with_summed_numerator(summed);
     }
 
     /// The `(numerator, denominator)` pairs a meter string is written in,
@@ -778,28 +792,18 @@ impl TimeSignature {
         partition_name(self.beat_count() as usize)
     }
 
-    /// Returns the length of one beat in quarter lengths.
-    ///
-    /// Every meter this type can express has a uniform beat, so unlike
-    /// music21's `beatDuration` this never fails. music21 only reports a
-    /// non-uniform beat for a hand-partitioned `MeterSequence`, which has no
-    /// counterpart here.
-    pub fn beat_quarter_length(&self) -> Result<FloatType> {
-        let spans = self.beat_spans();
-        let first = spans[0].1 - spans[0].0;
-        if spans
-            .iter()
-            .any(|(start, end)| ((end - start) - first).abs() > OFFSET_TOLERANCE)
-        {
-            let lengths: Vec<FloatType> = spans.iter().map(|(s, e)| e - s).collect();
-            return Err(Error::Meter(format!("non-uniform beat unit: {lengths:?}")));
-        }
-        Ok(first)
+    /// Returns the length of the first beat in quarter lengths: music21's
+    /// `beatDuration`. Where the beats differ in length, as in `3/16+1/4`,
+    /// this is the first of them; [`Self::beat_duration_at`] reads any beat.
+    pub fn beat_quarter_length(&self) -> FloatType {
+        let (start, end) = self.beat_spans()[0];
+        end - start
     }
 
-    /// Returns the length of one beat as a [`Duration`].
-    pub fn beat_duration(&self) -> Result<Duration> {
-        Duration::new(self.beat_quarter_length()?)
+    /// Returns the length of the first beat as a [`Duration`].
+    pub fn beat_duration(&self) -> Duration {
+        Duration::new(self.beat_quarter_length())
+            .expect("a beat of a meter is a positive finite length")
     }
 
     /// Returns how the beat subdivides.
@@ -1186,19 +1190,38 @@ impl TimeSignature {
     /// `None` where the bar cannot be nested that far, which music21 also
     /// gives up on; the rule for a uniform bar answers then.
     fn accent_weights_from_the_beats(&self) -> Option<Vec<FloatType>> {
-        let mut nested = MeterTerminal::new(self.numerator, self.denominator).ok()?;
-        nested
-            .subdivide_nested_hierarchy_by(3, &self.beat_sequence, true)
+        let nested = MeterTerminal::new(self.numerator, self.denominator)
+            .ok()?
+            .subdivided_nested_hierarchy_by(3, &self.beat_sequence, true)
             .ok()?;
-        let count = nested.flattened().len();
-        let step = self.bar_quarter_length() / FloatType::from(u32::try_from(count).ok()?);
-        let depths: Vec<usize> = (0..count)
-            .map(|index| {
-                let offset = step * FloatType::from(index as u32);
-                nested.offset_to_depth(offset, sequence::OffsetAlign::Quantize)
+        let levels = nested.depth();
+        if levels == 0 {
+            return None;
+        }
+        let starts: Vec<Vec<FloatType>> = (0..levels)
+            .map(|level| {
+                nested
+                    .level_span(level)
+                    .into_iter()
+                    .map(|(start, _)| start)
+                    .collect()
             })
-            .collect::<Result<_>>()
-            .ok()?;
+            .collect();
+        // A partition of the finest level weighs by how many levels have a
+        // part beginning where it begins.
+        let depths: Vec<usize> = starts[levels - 1]
+            .iter()
+            .map(|start| {
+                starts
+                    .iter()
+                    .filter(|level| {
+                        level
+                            .iter()
+                            .any(|other| (other - start).abs() < OFFSET_TOLERANCE)
+                    })
+                    .count()
+            })
+            .collect();
         let deepest = depths.iter().copied().max()?;
         Some(
             depths
@@ -1215,11 +1238,18 @@ impl TimeSignature {
     /// music21's `getAccent`, which is false for any offset off the grid,
     /// beyond the bar included.
     pub fn accent(&self, offset: FloatType) -> bool {
-        let partition = self.accent_partition_quarter_length();
-        let index = (offset / partition).round();
-        index >= 0.0
-            && index < FloatType::from(self.accent_weights().len() as u32)
-            && (offset - index * partition).abs() < OFFSET_TOLERANCE
+        let parts = match self.accent_sequence.parts() {
+            [] => std::slice::from_ref(&self.accent_sequence),
+            parts => parts,
+        };
+        let mut position = 0.0;
+        for part in parts {
+            if (position - offset).abs() < OFFSET_TOLERANCE {
+                return true;
+            }
+            position += part.quarter_length();
+        }
+        false
     }
 
     /// The accent weight at an offset in quarter lengths: music21's
@@ -1268,7 +1298,8 @@ impl TimeSignature {
     /// Weighs the accent partitions of a level, looping the weights given
     /// over them: music21's `setAccentWeight`.
     pub fn set_accent_weight(&mut self, weights: &[FloatType], level: usize) -> Result<()> {
-        self.accent_sequence.set_level_weight(level, weights)
+        self.accent_sequence = self.accent_sequence.with_level_weight(level, weights)?;
+        Ok(())
     }
 
     /// [`Self::accent_weight`] with music21's two options. With
@@ -1580,10 +1611,8 @@ fn whole_bar(
     numerator: UnsignedIntegerType,
     denominator: UnsignedIntegerType,
 ) -> Result<MeterTerminal> {
-    let mut bar = MeterTerminal::new(numerator, denominator)?;
     let whole = format!("{numerator}/{denominator}");
-    bar.partition_by_parts(&[whole.as_str()])?;
-    Ok(bar)
+    MeterTerminal::new(numerator, denominator)?.partitioned_by_parts(&[whole.as_str()])
 }
 
 /// The word music21 allows beside a ratio, saying how the bar is counted:
@@ -1858,7 +1887,7 @@ mod tests {
         assert!(TimeSignature::new(MAX_NUMERATOR, 4).is_ok());
         assert!(TimeSignature::new(MAX_NUMERATOR + 1, 4).is_err());
         assert!(TimeSignature::from_ratio_string("99999999/1").is_err());
-        assert!(TimeSignature::from_ratio_string("1000/4+1000/4").is_err());
+        assert!(TimeSignature::from_ratio_string("6000/4+6000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+4000000000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+1/8").is_err());
     }
@@ -2402,9 +2431,9 @@ mod tests {
         assert_eq!(ts("4/4").bar_quarter_length(), 4.0);
         assert_eq!(ts("5/16").bar_quarter_length(), 1.25);
         assert_eq!(ts("3/8").bar_quarter_length(), 1.5);
-        assert_eq!(ts("6/8").beat_quarter_length().unwrap(), 1.5);
-        assert_eq!(ts("4/4").beat_quarter_length().unwrap(), 1.0);
-        assert_eq!(ts("2/2").beat_duration().unwrap().quarter_length(), 2.0);
+        assert_eq!(ts("6/8").beat_quarter_length(), 1.5);
+        assert_eq!(ts("4/4").beat_quarter_length(), 1.0);
+        assert_eq!(ts("2/2").beat_duration().quarter_length(), 2.0);
     }
 
     #[test]
@@ -2479,31 +2508,30 @@ mod tests {
     }
 
     #[test]
-    fn a_bar_whose_beats_differ_has_no_one_beat_length() {
+    fn a_bar_whose_beats_differ_answers_its_first_beat_length() {
         use crate::meter::TimeSignature;
 
-        // music21 11.0.0b9 raises on beatDuration here and reports the
+        // music21 answers the first beat's length here and reports the
         // division as Other, counting one.
         let mixed = TimeSignature::from_ratio_string("2/4+3/8").unwrap();
-        assert!(mixed.beat_quarter_length().is_err());
-        assert!(mixed.beat_duration().is_err());
+        assert_eq!(mixed.beat_quarter_length(), 2.0);
+        assert_eq!(mixed.beat_duration().quarter_length(), 2.0);
         assert!(mixed.beat_division_durations().is_err());
         assert_eq!(mixed.beat_division_count(), 1);
         assert_eq!(mixed.beat_division_count_name(), "Other");
         assert_eq!(mixed.classification(), "Other Duple");
 
         let other = TimeSignature::from_ratio_string("3/8+2/8").unwrap();
-        assert!(other.beat_quarter_length().is_err());
+        assert_eq!(other.beat_quarter_length(), 1.5);
         assert_eq!(other.beat_division_count(), 1);
         assert_eq!(other.classification(), "Other Duple");
 
         // An evenly divided bar still answers, and answers as it did.
-        assert_eq!(TimeSignature::common().beat_quarter_length().unwrap(), 1.0);
+        assert_eq!(TimeSignature::common().beat_quarter_length(), 1.0);
         assert_eq!(
             TimeSignature::from_ratio_string("6/8")
                 .unwrap()
-                .beat_quarter_length()
-                .unwrap(),
+                .beat_quarter_length(),
             1.5
         );
     }
@@ -2588,10 +2616,12 @@ mod tests {
 
         // The sequences can be partitioned through.
         let mut common = TimeSignature::common();
-        common
-            .beat_sequence_mut()
-            .partition_by_count(2, true)
-            .unwrap();
+        common.set_beat_sequence(
+            common
+                .beat_sequence()
+                .partitioned_by_count(2, true)
+                .unwrap(),
+        );
         assert_eq!(common.beat_count(), 2);
     }
 

@@ -685,13 +685,13 @@ rust = ["src/meter/sequence.rs"]
 note = "A span divided into parts, each of them a span in turn, which is the tree every meter question is read off."
 
 [class.renames]
-partitionByOtherMeterSequence = "partition_by_other"
+partitionedByOtherMeterSequence = "partitioned_by_other"
 partitionStr = "partition_string"
 flatWeight = "flat_weights"
 
 [class.excluded]
-partition = "one setter dispatching on the type of what it is handed; the three partitions it dispatches to are each ported"
-load = "rebuilding a sequence in place; a new one is built instead"
+partitioned = "one method dispatching on the type of what it is handed; the three partitions it dispatches to are each ported"
+load = "raises in music21, since a sequence cannot change; a new one is built instead"
 
 [[class]]
 python = "voiceLeading.py"

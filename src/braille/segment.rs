@@ -1452,12 +1452,11 @@ fn split_with_sources(
             offset = op_frac(offset + op_frac(duration.quarter_length()));
         }
     }
-    let mut beats = meter.beat_sequence().clone();
-    let (start_zero, mut end_zero) = match beats.partition_by_count(2, false) {
-        Ok(()) => beats.level_span(0)[0],
+    let beats = meter.beat_sequence();
+    let (start_zero, mut end_zero) = match beats.partitioned_by_count(2, false) {
+        Ok(halves) => halves.level_span(0)[0],
         Err(_) => {
-            beats.partition_by_count(3, false)?;
-            let spans = beats.level_span(0);
+            let spans = beats.partitioned_by_count(3, false)?.level_span(0);
             (spans[0].0, spans[spans.len() - 2].1)
         }
     };
