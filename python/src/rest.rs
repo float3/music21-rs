@@ -270,7 +270,7 @@ impl Rest {
         }
         let mut rest = Self::wrap(py, RsRest::default());
         if Duration::keywords_say_duration(Some(&keywords))? {
-            let duration = match keywords.get_item("duration")? {
+            let duration = match crate::duration::given_keyword(&keywords, "duration")? {
                 Some(value) => value,
                 None => crate::installed_new(
                     py,

@@ -1003,7 +1003,11 @@ impl Note {
         // music21 hands the same keywords on to `Duration`, so `type='eighth',
         // dots=2` is an eighth with two dots and not a quarter.
         if Duration::keywords_say_duration(keywords)? {
-            let duration = match keywords.and_then(|keywords| keywords.get_item("duration").ok()?) {
+            let duration = match keywords
+                .map(|keywords| crate::duration::given_keyword(keywords, "duration"))
+                .transpose()?
+                .flatten()
+            {
                 Some(value) => value,
                 None => crate::installed_new(
                     py,

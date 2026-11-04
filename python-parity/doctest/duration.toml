@@ -1,7 +1,9 @@
 # Docstrings of music21.duration whose every example passes against the
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
 # --manifest-path python-parity/Cargo.toml --test parity doctest_duration::`; the test
-# fails when one of these stops passing.
+# fails when one of these stops passing or one passes that is not listed.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why;
+# `[optional]` names those that need a package the harness may lack.
 
 passing = [
     "music21.duration",
@@ -32,6 +34,9 @@ passing = [
     "music21.duration.DurationTuple",
     "music21.duration.DurationTuple.ordinal",
     "music21.duration.FrozenDuration",
+    "music21.duration.FrozenDuration.augmentOrDiminish",
+    "music21.duration.FrozenDuration.splitDotGroups",
+    "music21.duration.FrozenDuration.unfreeze",
     "music21.duration.GraceDuration",
     "music21.duration.Tuplet",
     "music21.duration.Tuplet.__eq__",
