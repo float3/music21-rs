@@ -338,18 +338,8 @@ clef_kinds!(
     (SubBassClef, "SubBassClef", FClef, [PitchClef, FClef]),
     (TenorClef, "TenorClef", CClef, [PitchClef, CClef]),
     (TrebleClef, "TrebleClef", GClef, [PitchClef, GClef]),
-    (
-        Treble8vaClef,
-        "Treble8vaClef",
-        TrebleClef,
-        [PitchClef, GClef, TrebleClef]
-    ),
-    (
-        Treble8vbClef,
-        "Treble8vbClef",
-        TrebleClef,
-        [PitchClef, GClef, TrebleClef]
-    ),
+    (Treble8vaClef, "Treble8vaClef", GClef, [PitchClef, GClef]),
+    (Treble8vbClef, "Treble8vbClef", GClef, [PitchClef, GClef]),
 );
 
 /// music21's `clefFromString`: the clef a string like `'G2'` names.
