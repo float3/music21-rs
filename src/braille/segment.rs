@@ -2434,12 +2434,14 @@ mod tests {
         ] {
             for (show_leading_octave, expected) in [(true, "⠐⠹⠜⠦⠐⠹"), (false, "⠹⠜⠦⠐⠹")]
             {
-                let mut grouping = BrailleElementGrouping::default();
-                grouping.elements = vec![
-                    element(StreamElement::Note(Note::from_name("C4")?)),
-                    element(unbrailled.clone()),
-                    element(StreamElement::Note(Note::from_name("C4")?)),
-                ];
+                let mut grouping = BrailleElementGrouping {
+                    elements: vec![
+                        element(StreamElement::Note(Note::from_name("C4")?)),
+                        element(unbrailled.clone()),
+                        element(StreamElement::Note(Note::from_name("C4")?)),
+                    ],
+                    ..BrailleElementGrouping::default()
+                };
                 let mut transcriber = NoteGroupingTranscriber {
                     show_leading_octave,
                     ..NoteGroupingTranscriber::default()
