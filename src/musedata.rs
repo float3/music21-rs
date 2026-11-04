@@ -26,6 +26,7 @@ use crate::note::Note;
 use crate::pitch::Pitch;
 use crate::pitch::accidental::Accidental;
 use crate::rest::Rest;
+use crate::spanner::{Spanner, SpannerKind};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::TempoText;
 
@@ -46,10 +47,11 @@ fn error(message: impl Into<String>) -> Error {
 /// `back` record starts another voice. A part written for a transposing
 /// instrument (`X:`) is turned to the pitch it sounds, and its accidentals
 /// are worked out again; a stage-1 part is given its best clef, its beams
-/// and its accidentals. The work's title, number and movement are kept.
+/// and its accidentals. Stage-2 slur marks become slurs. The work's title,
+/// number and movement are kept.
 ///
 /// music21's own habits are kept: every measure starts with a barline, the
-/// first measure is numbered one, a measure's number is every digit of its
+/// first measure is numbered one (a pickup before it zero), a measure's number is every digit of its
 /// record (so `mheavy2 12` is measure 212), and a pitch of double sharps
 /// reads as a single sharp, of double flats as a single flat. Cue and grace
 /// notes are passed over, as is an attribute record after the first.
@@ -94,10 +96,65 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
     }
     let mut score = Stream::with_kind(StreamKind::Score);
     score.set_metadata(Some(metadata));
+    let mut slurs = Vec::new();
     for part in &parts {
-        score.insert(0.0, part.to_part()?);
+        let (made, joined) = part.to_part()?;
+        score.insert(0.0, made);
+        slurs.push(joined);
+    }
+    // Each part's notes and chords in the order they were read, as places
+    // among the score's leaves.
+    let mut places: Vec<Vec<usize>> = vec![Vec::new(); slurs.len()];
+    for (position, (top, _, element)) in score.leaves_under_top().into_iter().enumerate() {
+        if matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
+            && let Some(read) = places.get_mut(top)
+        {
+            read.push(position);
+        }
+    }
+    for (joined, read) in slurs.iter().zip(&places) {
+        for (start, stop) in joined {
+            if let (Some(first), Some(last)) = (read.get(*start), read.get(*stop)) {
+                score.add_spanner(Spanner::slur(vec![*first, *last]));
+            }
+        }
     }
     Ok(score)
+}
+
+/// The slurs of one part, as music21's `_SlurCollector` builds them: the
+/// marks ( ) [ ] { } and z x start and stop slurs 1 to 4, a stop closing the
+/// open slur of its number. Notes and chords are counted in the order they
+/// are read.
+#[derive(Default)]
+struct Slurs {
+    open: [Option<usize>; 4],
+    joined: Vec<(usize, usize)>,
+    read: usize,
+}
+
+impl Slurs {
+    const STARTS: [char; 4] = ['(', '[', '{', 'z'];
+    const STOPS: [char; 4] = [')', ']', '}', 'x'];
+
+    /// Stops, then starts, the slurs the marks name on the next note or
+    /// chord, so one note can end a slur and begin the next of its number.
+    fn add(&mut self, marks: &str) {
+        let at = self.read;
+        self.read += 1;
+        for mark in marks.chars() {
+            if let Some(number) = Self::STOPS.iter().position(|stop| *stop == mark)
+                && let Some(start) = self.open[number].take()
+            {
+                self.joined.push((start, at));
+            }
+        }
+        for mark in marks.chars() {
+            if let Some(number) = Self::STARTS.iter().position(|start| *start == mark) {
+                self.open[number] = Some(at);
+            }
+        }
+    }
 }
 
 /// music21's `MuseDataFile.readstr`: the parts of one file, comments and
@@ -425,7 +482,7 @@ impl Part {
     }
 
     /// music21's `musedataPartToStreamPart`.
-    fn to_part(&self) -> Result<Stream> {
+    fn to_part(&self) -> Result<(Stream, Vec<(usize, usize)>)> {
         let mut part = Stream::with_kind(StreamKind::Part);
         let name = self.part_name();
         part.set_id(name.clone());
@@ -437,6 +494,7 @@ impl Part {
             .map(|(start, end)| self.lines.get(*start..*end).unwrap_or(&[]))
             .collect();
         let mut previous: Option<Option<TieType>> = None;
+        let mut slurs = Slurs::default();
         let mut bars = 0;
         for (index, lines) in measures.iter().enumerate() {
             if !has_notes(lines) {
@@ -473,7 +531,7 @@ impl Part {
                     }
                 }
             }
-            self.fill(&mut measure, lines, divisions, &mut previous)?;
+            self.fill(&mut measure, lines, divisions, &mut previous, &mut slurs)?;
             if bars == 0 {
                 let bar = self.time_signature()?.bar_duration().quarter_length();
                 let length = measure.end_offset();
@@ -524,7 +582,7 @@ impl Part {
             let _ = make_beams(&mut part);
             make_accidentals(&mut part);
         }
-        Ok(part)
+        Ok((part, slurs.joined))
     }
 
     /// The notes, chords and rests of one measure's records, in voices where
@@ -535,6 +593,7 @@ impl Part {
         lines: &[String],
         divisions: FloatType,
         previous: &mut Option<Option<TieType>>,
+        slurs: &mut Slurs,
     ) -> Result<()> {
         let voices = lines.iter().any(|line| line.starts_with("back"));
         let mut voice = voices.then(|| Stream::with_kind(StreamKind::Voice));
@@ -545,13 +604,27 @@ impl Part {
                 stage: self.stage,
             };
             if record.is_back() {
-                self.flush(&mut pending, measure, voice.as_mut(), divisions, previous)?;
+                self.flush(
+                    &mut pending,
+                    measure,
+                    voice.as_mut(),
+                    divisions,
+                    previous,
+                    slurs,
+                )?;
                 if let Some(done) = voice.replace(Stream::with_kind(StreamKind::Voice)) {
                     append_at(measure, 0.0, StreamElement::Stream(Box::new(done)));
                 }
             }
             if record.is_rest() {
-                self.flush(&mut pending, measure, voice.as_mut(), divisions, previous)?;
+                self.flush(
+                    &mut pending,
+                    measure,
+                    voice.as_mut(),
+                    divisions,
+                    previous,
+                    slurs,
+                )?;
                 let rest = Rest::new(Duration::new(record.quarter_length(divisions)?)?);
                 let target = voice.as_mut().unwrap_or(&mut *measure);
                 append(target, StreamElement::Rest(rest));
@@ -559,11 +632,25 @@ impl Part {
             } else if record.is_chord() {
                 pending.push(record);
             } else if record.is_note() {
-                self.flush(&mut pending, measure, voice.as_mut(), divisions, previous)?;
+                self.flush(
+                    &mut pending,
+                    measure,
+                    voice.as_mut(),
+                    divisions,
+                    previous,
+                    slurs,
+                )?;
                 pending.push(record);
             }
         }
-        self.flush(&mut pending, measure, voice.as_mut(), divisions, previous)?;
+        self.flush(
+            &mut pending,
+            measure,
+            voice.as_mut(),
+            divisions,
+            previous,
+            slurs,
+        )?;
         if let Some(voice) = voice
             && !voice.is_empty()
         {
@@ -581,11 +668,13 @@ impl Part {
         voice: Option<&mut Stream>,
         divisions: FloatType,
         previous: &mut Option<Option<TieType>>,
+        slurs: &mut Slurs,
     ) -> Result<()> {
         if pending.is_empty() {
             return Ok(());
         }
         let records = std::mem::take(pending);
+        slurs.add(&records[0].slur_marks());
         let (element, dynamics, tie) = note_or_chord(&records, divisions, *previous)?;
         *previous = Some(tie);
         let target = voice.unwrap_or(measure);
@@ -676,10 +765,16 @@ fn bar_object(lines: &[String]) -> Result<Barline> {
 fn measure_object(lines: &[String]) -> Result<Stream> {
     let line = measure_line(lines)?;
     let rest: String = line.chars().skip(8).collect();
+    // Notes before the first measure record form a pickup, numbered 0.
+    let opens_with_record = lines
+        .first()
+        .is_some_and(|first| first.trim().starts_with('m'));
     let number = if line.chars().count() >= 9 && !rest.trim().is_empty() {
         digits(&line)
-    } else {
+    } else if opens_with_record {
         "1".to_string()
+    } else {
+        "0".to_string()
     };
     let mut measure = Stream::with_kind(StreamKind::Measure);
     measure.set_left_barline(Some(bar_object(lines)?));
@@ -842,6 +937,19 @@ impl Record<'_> {
         }
         let data = self.columns(25, 31);
         (!data.is_empty()).then(|| data.trim_end().to_string())
+    }
+
+    /// `getSlurSymbols`: the slur marks among the notations, in the order
+    /// they are written; a stage-1 record has none.
+    fn slur_marks(&self) -> String {
+        if self.stage == 1 {
+            return String::new();
+        }
+        self.notations()
+            .unwrap_or_default()
+            .chars()
+            .filter(|mark| "()[]{}zx".contains(*mark))
+            .collect()
     }
 
     /// `_getAdditionalNotations`: columns 32 to 43.
@@ -1051,11 +1159,13 @@ mod tests {
     }
 
     #[test]
-    fn a_measure_number_is_every_digit_of_its_record() {
+    fn a_measure_number_is_every_digit_of_its_record_and_a_pickup_is_0() {
         let lines = ["mheavy2 12".to_string(), "C4 1 q".to_string()];
         assert_eq!(measure_object(&lines).unwrap().number(), 212);
-        let lines = ["C4 1 q".to_string()];
+        let lines = ["measure".to_string(), "C4 1 q".to_string()];
         assert_eq!(measure_object(&lines).unwrap().number(), 1);
+        let lines = ["C4 1 q".to_string()];
+        assert_eq!(measure_object(&lines).unwrap().number(), 0);
     }
 
     #[test]
