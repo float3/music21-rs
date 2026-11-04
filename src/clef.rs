@@ -77,10 +77,7 @@ struct KindRow {
     lowest_line: Option<IntegerType>,
 }
 
-// music21's defaults, class by class. Three of its octave clefs set their
-// lowest line to a value that ignores their octave change: Treble8vaClef has
-// 24 where TrebleClef has 31, and Bass8vaClef and Bass8vbClef keep
-// BassClef's 19. They are music21's values and are kept as they are.
+// music21's defaults, class by class.
 const KINDS: [KindRow; 24] = [
     KindRow {
         kind: ClefKind::Clef,
@@ -179,7 +176,7 @@ const KINDS: [KindRow; 24] = [
         sign: Some("F"),
         line: Some(4),
         octave_change: 1,
-        lowest_line: Some(19),
+        lowest_line: Some(26),
     },
     KindRow {
         kind: ClefKind::Bass8vbClef,
@@ -188,7 +185,7 @@ const KINDS: [KindRow; 24] = [
         sign: Some("F"),
         line: Some(4),
         octave_change: -1,
-        lowest_line: Some(19),
+        lowest_line: Some(12),
     },
     KindRow {
         kind: ClefKind::BassClef,
@@ -283,16 +280,16 @@ const KINDS: [KindRow; 24] = [
     KindRow {
         kind: ClefKind::Treble8vaClef,
         class: "Treble8vaClef",
-        parents: &["TrebleClef", "GClef", "PitchClef", "Clef"],
+        parents: &["GClef", "PitchClef", "Clef"],
         sign: Some("G"),
         line: Some(2),
         octave_change: 1,
-        lowest_line: Some(24),
+        lowest_line: Some(38),
     },
     KindRow {
         kind: ClefKind::Treble8vbClef,
         class: "Treble8vbClef",
-        parents: &["TrebleClef", "GClef", "PitchClef", "Clef"],
+        parents: &["GClef", "PitchClef", "Clef"],
         sign: Some("G"),
         line: Some(2),
         octave_change: -1,

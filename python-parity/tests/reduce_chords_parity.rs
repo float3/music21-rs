@@ -6,9 +6,9 @@
 //! to each other -- so the two reducers are given the same score. Each
 //! reduces it, and the two reductions are compared: every measure, and in
 //! it every chord and rest with its offset, its length and its pitches,
-//! and everything else the reduction carries -- the clef, key, meter,
-//! marks and layout music21's template copies from the score's first part
-//! -- by its class and where it stands.
+//! and everything else the reduction carries -- the clef chosen for its
+//! notes, and the key, meter, marks and layout music21's template copies
+//! from the score's first part -- by its class and where it stands.
 //!
 //! The template is listed by class and offset alone rather than by what
 //! each element says, since what a clef or a mark *says* is the readers'

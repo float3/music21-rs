@@ -1104,7 +1104,7 @@ def test_the_stream_walks_answer_with_the_objects_held():
 
 
 def test_scales_stand_on_steps_a_caller_gives():
-    # Each answer read off music21 11.0.0b9.
+    # Each answer read off music21 11.0.0b19.
     triad = m.OctaveRepeatingScale("c4", ["m3", "M3"])
     assert [str(p) for p in triad.pitches] == ["C4", "E-4", "G4", "C5"]
     assert triad.getScaleDegreeFromPitch("e-") == 2
@@ -1115,12 +1115,12 @@ def test_scales_stand_on_steps_a_caller_gives():
         "B-2", "F3", "C4", "G4", "D5", "A5", "E6"
     ]
     seconds = m.CyclicalScale("c4", ["m2", "m2"])
-    assert seconds.abstract.getDegreeMaxUnique() == 2
-    assert str(seconds.pitchFromDegree(1, "c2", "c3")) == "B#1"
+    assert seconds.abstract.getDegreeMaxUnique() == 12
+    assert str(seconds.pitchFromDegree(1, "c2", "c3")) == "C2"
 
     whole = m.SieveScale("d4", "1@0", eld=2)
     assert [str(p) for p in whole.getPitches("c2", "c3")] == [
-        "C2", "D2", "F-2", "G-2", "A-2", "B-2", "C3"
+        "C2", "D2", "E2", "F#2", "G#2", "B-2", "C3"
     ]
 
 
@@ -7022,6 +7022,34 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     with pytest.raises(Exception, match="stream.Score"):
         cr.run(m.from_tiny_notation("4/4 c4 d e2"))
 
+    # A slice weighs its length times its accent, its length alone if it is
+    # the last, and a tenth of that if it is dissonant.
+    assert cr.sliceWeight(2.0, 0.5, False, True) == 1.0
+    assert round(cr.sliceWeight(2.0, 0.5, True, False), 6) == 0.2
+
+    # A weight algorithm of the caller's own is called for each slice, and
+    # what it raises is raised.
+    score = m.Score([m.from_tiny_notation("tinyNotation: 4/4 e1"),
+                     m.from_tiny_notation("tinyNotation: 4/4 C1")])
+    weighed = []
+
+    def byLength(quarterLength, accent, isLast, isConsonant):
+        weighed.append((quarterLength, isLast, isConsonant))
+        return quarterLength
+
+    reduction = cr.run(score, closedPosition=True, forceOctave=None,
+                       weightAlgorithm=byLength)
+    assert weighed == [(4.0, True, True)]
+    assert [p.nameWithOctave for c in reduction.recurse().notes for p in c.pitches] == [
+        "C3", "E3",
+    ]
+
+    def refuses(quarterLength, accent, isLast, isConsonant):
+        raise ValueError("no weight")
+
+    with pytest.raises(ValueError, match="no weight"):
+        cr.run(score, weightAlgorithm=refuses)
+
 
 def _live_notes():
     return sum(isinstance(held, m.Note) for held in gc.get_objects())
@@ -7396,20 +7424,19 @@ def test_an_abstract_scale_says_its_mode_as_music21_does():
 
 
 @pytest.mark.parametrize(
-    "tonic, pitches, ninth",
+    "tonic, pitches, ranged, ninth",
     [
-        ("C", "C4 D-4 E-4 F-4 G-4 G4 A4 B-4 C5", "C4"),
-        ("F#", "F#4 G4 A4 B-4 C5 D-5 E-5 F-5 G-5", "F#4"),
-        ("E-", "E-4 F-4 G-4 G4 A4 B-4 C5 D-5 E-5", "E-4"),
+        ("C", "C4 D-4 E-4 F-4 G-4 G4 A4 B-4 C5", "C2 D-2 E-2 F-2 G-2 G2 A2 B-2 C3", "C4"),
+        ("F#", "F#4 G4 A4 B-4 C5 D-5 E-5 F-5 F#5", "C2 D-2 E-2 F-2 F#2 G2 A2 B-2 C3", "F#4"),
+        ("E-", "E-4 F-4 G-4 G4 A4 B-4 C5 D-5 E-5", "C2 D-2 E-2 F-2 G-2 G2 A2 B-2 C3", "E-4"),
     ],
 )
-def test_the_first_octatonic_mode_closes_on_its_octave(tonic, pitches, ninth):
+def test_the_first_octatonic_mode_closes_on_its_octave(tonic, pitches, ranged, ninth):
     """music21's mode 1 starts with the half step and stacks its steps to
     the octave; its ranged realization starts on C whatever the tonic."""
     scale = m.OctatonicScale(tonic, mode=1)
     assert " ".join(str(p) for p in scale.pitches) == pitches
-    ranged = " ".join(str(p) for p in scale.getPitches("C2", "C3"))
-    assert ranged == "C2 D-2 E-2 F-2 G-2 G2 A2 B-2 C3"
+    assert " ".join(str(p) for p in scale.getPitches("C2", "C3")) == ranged
     assert str(scale.pitchFromDegree(9)) == ninth
 
 

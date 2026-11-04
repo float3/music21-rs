@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b15 at c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071
+# music21 11.0.0b19 at 19ada90a8f5e7ffb572c69075184b0c5708adf3b
 
-music21_version = "11.0.0b15"
-music21_commit = "c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071"
+music21_version = "11.0.0b19"
+music21_commit = "19ada90a8f5e7ffb572c69075184b0c5708adf3b"
 
 [[module]]
 module = "music21.alpha.analysis.aligner"
@@ -108,9 +108,9 @@ tests = 0
 
 [[module]]
 module = "music21.analysis.reduceChords"
-docstrings = 9
-examples = 51
-tests = 9
+docstrings = 11
+examples = 62
+tests = 12
 
 [[module]]
 module = "music21.analysis.reduction"
@@ -134,7 +134,7 @@ tests = 7
 module = "music21.analysis.windowed"
 docstrings = 3
 examples = 35
-tests = 5
+tests = 6
 
 [[module]]
 module = "music21.articulations"
@@ -164,7 +164,7 @@ tests = 2
 module = "music21.braille.basic"
 docstrings = 25
 examples = 199
-tests = 2
+tests = 3
 
 [[module]]
 module = "music21.braille.lookup"
@@ -176,13 +176,13 @@ tests = 1
 module = "music21.braille.noteGrouping"
 docstrings = 3
 examples = 23
-tests = 1
+tests = 2
 
 [[module]]
 module = "music21.braille.segment"
 docstrings = 19
 examples = 219
-tests = 8
+tests = 11
 
 [[module]]
 module = "music21.braille.text"
@@ -198,8 +198,8 @@ tests = 3
 
 [[module]]
 module = "music21.chord"
-docstrings = 107
-examples = 986
+docstrings = 108
+examples = 990
 tests = 30
 
 [[module]]
@@ -212,13 +212,13 @@ tests = 33
 module = "music21.clef"
 docstrings = 29
 examples = 151
-tests = 4
+tests = 7
 
 [[module]]
 module = "music21.duration"
-docstrings = 53
-examples = 588
-tests = 16
+docstrings = 56
+examples = 607
+tests = 17
 
 [[module]]
 module = "music21.dynamics"
@@ -332,7 +332,7 @@ tests = 13
 module = "music21.interval"
 docstrings = 107
 examples = 771
-tests = 14
+tests = 15
 
 [[module]]
 module = "music21.key"
@@ -367,26 +367,26 @@ tests = 18
 [[module]]
 module = "music21.meter.base"
 docstrings = 34
-examples = 387
-tests = 22
+examples = 395
+tests = 38
 
 [[module]]
 module = "music21.meter.core"
-docstrings = 39
-examples = 386
-tests = 21
+docstrings = 56
+examples = 411
+tests = 37
 
 [[module]]
 module = "music21.midi.percussion"
 docstrings = 3
 examples = 31
-tests = 68
+tests = 69
 
 [[module]]
 module = "music21.note"
 docstrings = 33
-examples = 341
-tests = 13
+examples = 343
+tests = 14
 
 [[module]]
 module = "music21.omr.correctors"
@@ -410,7 +410,7 @@ tests = 0
 module = "music21.pitch"
 docstrings = 84
 examples = 934
-tests = 38
+tests = 39
 
 [[module]]
 module = "music21.repeat"
@@ -434,19 +434,19 @@ tests = 1
 module = "music21.romanText.tsvConverter"
 docstrings = 13
 examples = 75
-tests = 7
+tests = 8
 
 [[module]]
 module = "music21.scale"
-docstrings = 62
-examples = 344
-tests = 58
+docstrings = 69
+examples = 378
+tests = 68
 
 [[module]]
 module = "music21.scale.scala"
 docstrings = 7
 examples = 55
-tests = 63
+tests = 73
 
 [[module]]
 module = "music21.search.base"
@@ -494,13 +494,13 @@ tests = 30
 module = "music21.stream.base"
 docstrings = 144
 examples = 2278
-tests = 273
+tests = 274
 
 [[module]]
 module = "music21.stream.makeNotation"
 docstrings = 11
 examples = 255
-tests = 287
+tests = 290
 
 [[module]]
 module = "music21.style"

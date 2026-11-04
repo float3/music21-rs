@@ -917,9 +917,25 @@ pub(crate) fn adopt_duration(
         ours.client = Some(holder.clone().unbind());
         return Ok(());
     }
+    // A `FrozenDuration` never changes, so it has nothing to tell a client
+    // and keeps none: music21's `duration` setter leaves it alone.
+    if is_frozen(duration) {
+        return Ok(());
+    }
     // One of music21's own durations keeps the same slot, and writing it is
     // what its `GeneralNote.duration` setter does.
     duration.setattr("client", holder)
+}
+
+/// Whether a duration is music21's `FrozenDuration`, which cannot change.
+pub(crate) fn is_frozen(duration: &Bound<'_, PyAny>) -> bool {
+    let py = duration.py();
+    py.import("sys")
+        .and_then(|sys| sys.getattr("modules"))
+        .and_then(|modules| modules.get_item("music21.duration"))
+        .and_then(|module| module.getattr("FrozenDuration"))
+        .and_then(|frozen| duration.is_instance(&frozen))
+        .unwrap_or(false)
 }
 
 impl Clone for Duration {
@@ -1210,16 +1226,74 @@ impl Duration {
         duration
     }
 
+    /// Takes the value of one of music21's own durations from its slots, as
+    /// its `__getstate__` hands them out. `FrozenDuration.unfreeze` builds a
+    /// `Duration` this way.
+    fn take_music21_slots(&mut self, slots: &Bound<'_, PyDict>) -> PyResult<()> {
+        let slot = |name: &str| slots.get_item(name);
+        let length = match slot("_qtrLength")? {
+            Some(length) => quarter_length_from_any(&length)?,
+            None => 0.0,
+        };
+        self.inner = RsDuration::new(length).map_err(note_error)?;
+        let stale =
+            slot("_componentsNeedUpdating")?.is_some_and(|stale| stale.is_truthy().unwrap_or(true));
+        self.components = match slot("_components")? {
+            Some(written) if !stale => Some(
+                written
+                    .try_iter()?
+                    .map(|each| {
+                        let each = each?;
+                        let kind = each.getattr("type")?.extract::<String>()?;
+                        let dots = each.getattr("dots")?.extract::<u32>()?;
+                        Ok(DurationTuple::from_type_dots(&kind, dots))
+                    })
+                    .collect::<PyResult<Vec<_>>>()?,
+            ),
+            _ => None,
+        };
+        self.tuplets = match slot("_tuplets")? {
+            _ if stale => None,
+            Some(tuplets) if !tuplets.is_none() => Some(
+                tuplets
+                    .try_iter()?
+                    .map(|each| each.map(Bound::unbind))
+                    .collect::<PyResult<Vec<_>>>()?,
+            ),
+            _ => Some(Vec::new()),
+        };
+        if let Some(groups) = slot("_dotGroups")?
+            && let Ok(groups) = groups.extract::<Vec<u32>>()
+        {
+            self.dot_groups = groups;
+        }
+        if let Some(linked) = slot("_linked")? {
+            self.linked = linked.is_truthy()?;
+        }
+        self.unlinked_type = match slot("_unlinkedType")? {
+            Some(written) if !written.is_none() => Some(written.extract::<String>()?),
+            _ => None,
+        };
+        if let Some(inferred) = slot("expressionIsInferred")? {
+            self.expression_is_inferred = inferred.is_truthy()?;
+        }
+        self.client = match slot("client")? {
+            Some(client) if !client.is_none() => Some(client.unbind()),
+            _ => None,
+        };
+        Ok(())
+    }
+
     pub(crate) fn from_keywords(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let Some(keywords) = keywords else {
             return Ok(Self::empty());
         };
-        if let Some(value) = keywords.get_item("quarterLength")? {
+        if let Some(value) = given_keyword(keywords, "quarterLength")? {
             return Ok(Self::wrap(
                 RsDuration::new(value.extract::<f64>()?).map_err(note_error)?,
             ));
         }
-        if let Some(value) = keywords.get_item("type")? {
+        if let Some(value) = given_keyword(keywords, "type")? {
             let name = value.extract::<String>()?;
             let kind = RsDurationType::from_music21_name(&name)
                 .ok_or_else(|| NoteException::new_err(format!("no such duration type: {name}")))?;
@@ -1233,20 +1307,30 @@ impl Duration {
         Ok(Self::empty())
     }
 
-    /// Whether any of the keywords say something about the duration, which
-    /// is how music21 decides between the quarter it gives every note and a
-    /// duration built from what it was told.
+    /// Whether the keywords say what the duration is, which is how music21's
+    /// `GeneralNote` decides between the quarter it gives every note and a
+    /// duration built from what it was told: a `duration`, a `quarterLength`
+    /// or a `type` that is not `None`. `dots` alone leaves a quarter.
     pub(crate) fn keywords_say_duration(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<bool> {
         let Some(keywords) = keywords else {
             return Ok(false);
         };
-        for name in ["quarterLength", "type", "dots", "duration"] {
-            if keywords.contains(name)? {
+        for name in ["quarterLength", "type", "duration"] {
+            if given_keyword(keywords, name)?.is_some() {
                 return Ok(true);
             }
         }
         Ok(false)
     }
+}
+
+/// The keyword `name`, unless it is missing or `None`: music21 passes
+/// `type=None` and `quarterLength=None` on to `Duration` for "not given".
+pub(crate) fn given_keyword<'py>(
+    keywords: &Bound<'py, PyDict>,
+    name: &str,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    Ok(keywords.get_item(name)?.filter(|value| !value.is_none()))
 }
 
 /// A copy of a duration object, keeping whatever kind of duration it is.
@@ -1387,6 +1471,16 @@ impl Duration {
 
     fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
+        if let Ok(slots) = state.cast::<PyDict>()
+            && slots.contains("_qtrLength")?
+        {
+            return Self::take_music21_slots(&mut slf.borrow_mut(), slots);
+        }
+        if let Ok(slots) = state.cast::<PyDict>()
+            && slots.contains("_qtrLength")?
+        {
+            return Self::take_music21_slots(&mut slf.borrow_mut(), slots);
+        }
         let (inner, extra) = crate::unpickled_extra::<_, RsDuration>(slf, state)?;
         let Some(inner) = inner else {
             return Ok(());
@@ -1478,7 +1572,7 @@ impl Duration {
             None => Self::from_keywords(keywords)?,
         };
         if let Some(keywords) = keywords
-            && let Some(dots) = keywords.get_item("dots")?
+            && let Some(dots) = given_keyword(keywords, "dots")?
         {
             Python::attach(|py| duration.set_dots(py, &dots))?;
         }
@@ -1592,6 +1686,32 @@ impl Duration {
     #[getter]
     fn _components<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
         self.currentComponents(py)
+    }
+
+    /// music21's `_tuplets`, which is `tuplets` with no working-out.
+    #[getter(_tuplets)]
+    fn get_private_tuplets<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
+        PyTuple::new(
+            py,
+            self.tuplets
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .map(|each| each.clone_ref(py)),
+        )
+    }
+
+    /// Setting `_tuplets` replaces the tuplets as they are, with nothing
+    /// worked out again: `FrozenDuration.unfreeze` puts copies there.
+    #[setter(_tuplets)]
+    fn set_private_tuplets(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.tuplets = Some(
+            value
+                .try_iter()?
+                .map(|each| each.map(Bound::unbind))
+                .collect::<PyResult<Vec<_>>>()?,
+        );
+        Ok(())
     }
 
     /// music21's `_componentsNeedUpdating`: whether the note values this
@@ -1914,36 +2034,41 @@ impl Duration {
     }
 
     /// music21's `augmentOrDiminish`: the same length scaled, as a new
-    /// duration. A scalar of zero or less is refused, as music21 refuses it.
+    /// duration of this one's class. A scalar of zero or less is refused, as
+    /// music21 refuses it.
     #[pyo3(signature = (amountToScale, retainComponents = false))]
-    fn augmentOrDiminish(
-        &mut self,
-        py: Python<'_>,
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
         amountToScale: f64,
         #[pyo3(from_py_with = crate::truthy)] retainComponents: bool,
-    ) -> PyResult<Self> {
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
         if amountToScale <= 0.0 || amountToScale.is_nan() {
             return Err(PyValueError::new_err(
                 "amountToScale must be greater than zero",
             ));
         }
-        if !retainComponents {
+        let mut this = slf.borrow_mut();
+        let scaled = if retainComponents {
+            this.materialize(py)?;
+            let mut scaled = this.clone();
+            let components: Vec<DurationTuple> = this
+                .component_list()
+                .into_iter()
+                .map(|component| component.augmentOrDiminish(amountToScale))
+                .collect();
+            scaled.set_component_list(py, components)?;
+            scaled
+        } else {
             let mut scaled = Self::wrap(
-                RsDuration::new(self.inner.quarter_length() * amountToScale)
+                RsDuration::new(this.inner.quarter_length() * amountToScale)
                     .map_err(duration_error)?,
             );
-            scaled.linked = self.linked;
-            return Ok(scaled);
-        }
-        self.materialize(py)?;
-        let mut scaled = self.clone();
-        let components: Vec<DurationTuple> = self
-            .component_list()
-            .into_iter()
-            .map(|component| component.augmentOrDiminish(amountToScale))
-            .collect();
-        scaled.set_component_list(py, components)?;
-        Ok(scaled)
+            scaled.linked = this.linked;
+            scaled
+        };
+        drop(this);
+        crate::copy_as_same_type(slf, scaled)
     }
 
     /// music21's `getGraceDuration`: the same written values, sounding
@@ -2127,12 +2252,18 @@ impl Duration {
         false
     }
 
+    /// music21's `Duration.__eq__`. Any kind of duration compares, music21's
+    /// own `FrozenDuration` among them, but a grace duration only equals
+    /// another grace duration.
     fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
-        if !slf.get_type().is(other.get_type()) {
+        let py = slf.py();
+        let Ok(other) = other.cast::<Self>() else {
+            return equal_to_music21_duration(slf.as_any(), other);
+        };
+        let me = slf.as_any();
+        if !me.getattr("isGrace")?.eq(other.getattr("isGrace")?)? {
             return Ok(false);
         }
-        let py = slf.py();
-        let other = other.cast::<Self>()?;
         if slf.borrow().linked != other.borrow().linked {
             return Ok(false);
         }
@@ -2215,6 +2346,52 @@ impl Duration {
         let copied = slf.borrow().clone();
         crate::copy_as_same_type(slf, copied)
     }
+}
+
+/// Whether `object` is one of music21's own durations: an instance of a
+/// class named `Duration` in `music21.duration`, which its `FrozenDuration`
+/// is built on.
+fn is_music21_duration(object: &Bound<'_, PyAny>) -> PyResult<bool> {
+    for class in object.get_type().mro().iter() {
+        let module = class.getattr("__module__")?;
+        if class.getattr("__name__")?.eq("Duration")? && module.eq("music21.duration")? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// music21's `Duration.__eq__` between one of ours and `other`, which is
+/// not, read through the attributes music21 compares.
+fn equal_to_music21_duration(me: &Bound<'_, PyAny>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if !is_music21_duration(other)? {
+        return Ok(false);
+    }
+    let differ = |name: &str| -> PyResult<bool> { me.getattr(name)?.ne(other.getattr(name)?) };
+    if differ("isGrace")? || differ("linked")? {
+        return Ok(false);
+    }
+    if me.getattr("expressionIsInferred")?.is_truthy()?
+        && other.getattr("expressionIsInferred")?.is_truthy()?
+    {
+        return Ok(!differ("quarterLength")?);
+    }
+    if differ("isComplex")? {
+        return Ok(false);
+    }
+    let components = me.getattr("components")?.len()?;
+    if components != other.getattr("components")?.len()? {
+        return Ok(false);
+    }
+    if components == 0 {
+        return Ok(true);
+    }
+    for name in ["type", "dots", "tuplets", "quarterLength"] {
+        if differ(name)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// Which of music21's grace duration classes to build.

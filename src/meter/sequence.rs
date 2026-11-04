@@ -37,7 +37,11 @@ pub enum OffsetAlign {
 }
 
 /// One span of a bar: a ratio, and how strongly it is felt.
-#[derive(Clone, Debug, PartialEq)]
+///
+/// A span is a value: every method that divides or weighs it hands back a
+/// new span and leaves this one as it was, as music21's immutable
+/// `MeterTerminal` and `MeterSequence` do.
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MeterTerminal {
     numerator: UnsignedIntegerType,
@@ -54,13 +58,10 @@ pub struct MeterTerminal {
 }
 
 impl MeterTerminal {
-    /// A span of `numerator/denominator`, undivided, weighing one.
+    /// A span of `numerator/denominator`, undivided, weighing one. A
+    /// numerator of nought is a span of no length, which is what music21's
+    /// `MeterTerminal()` given nothing is.
     pub fn new(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Result<Self> {
-        if numerator == 0 {
-            return Err(Error::Meter(
-                "a meter terminal numerator must be non-zero".to_string(),
-            ));
-        }
         if denominator == 0 {
             return Err(Error::Meter(
                 "a meter terminal denominator must be non-zero".to_string(),
@@ -129,9 +130,33 @@ impl MeterTerminal {
         self.summed_numerator
     }
 
-    /// Says whether the numerators are written summed.
-    pub fn set_summed_numerator(&mut self, summed: bool) {
-        self.summed_numerator = summed;
+    /// The same span, saying whether its numerators are written summed:
+    /// music21's `modify(summedNumerator=...)`.
+    pub fn with_summed_numerator(&self, summed: bool) -> Self {
+        let mut out = self.clone();
+        out.summed_numerator = summed;
+        out
+    }
+
+    /// A span of `numerator/denominator` divided into `parts`, taken as
+    /// given: music21's `makeSequence`, which does not check that the parts
+    /// come to the ratio. No parts at all is an undivided span.
+    pub fn sequence(
+        numerator: UnsignedIntegerType,
+        denominator: UnsignedIntegerType,
+        parts: Vec<Self>,
+    ) -> Result<Self> {
+        let mut span = Self::new(numerator, denominator)?;
+        span.parts = parts;
+        Ok(span)
+    }
+
+    /// The same span with a different weight: music21's
+    /// `MeterTerminal.modify(weight=...)` and `MeterSequence.withWeight`.
+    pub fn with_weight(&self, weight: FloatType) -> Self {
+        let mut out = self.clone();
+        out.set_weight(weight);
+        out
     }
 
     /// A span made of the parts given, which is what they come to: music21's
@@ -165,9 +190,7 @@ impl MeterTerminal {
             .iter()
             .map(|part| part.numerator() * (shared / part.denominator()))
             .sum();
-        let mut span = Self::new(total, shared)?;
-        *span.parts_mut() = parts;
-        Ok(span)
+        Self::sequence(total, shared, parts)
     }
 
     /// The numerator this span is written with.
@@ -222,13 +245,11 @@ impl MeterTerminal {
         }
     }
 
-    /// Sets how strongly this span is felt.
-    ///
     /// A span with parts shares the weight out among them in proportion to
     /// how long each is, as music21 does: the four quarters of a bar weighing
     /// one take a quarter each, where `{3/4+1/4}` takes three quarters and a
     /// quarter.
-    pub fn set_weight(&mut self, weight: FloatType) {
+    fn set_weight(&mut self, weight: FloatType) {
         self.weight = weight;
         let whole = self.quarter_length();
         if self.parts.is_empty() || whole == 0.0 {
@@ -246,9 +267,21 @@ impl MeterTerminal {
         &self.parts
     }
 
-    /// The same, to be changed.
-    pub fn parts_mut(&mut self) -> &mut Vec<MeterTerminal> {
-        &mut self.parts
+    /// The same span with the part at `index` replaced by `value`, which has
+    /// to be written over the same ratio: music21's `setIndex`.
+    pub fn set_index(&self, index: usize, value: Self) -> Result<Self> {
+        let current = self
+            .parts
+            .get(index)
+            .ok_or_else(|| Error::Meter(format!("MeterSequence does not have entry {index}.")))?;
+        if !value.ratio_equal(current) {
+            return Err(Error::Meter(format!(
+                "cannot insert {value} into space of {current}"
+            )));
+        }
+        let mut out = self.clone();
+        out.parts[index] = value;
+        Ok(out)
     }
 
     /// How many parts this span has at its top level, music21's `len`.
@@ -309,11 +342,12 @@ impl MeterTerminal {
         self.numerator == other.numerator && self.denominator == other.denominator
     }
 
-    /// Divides this span into the parts named, as `["2/8", "3/8"]`.
+    /// This span divided into the parts named, as `["2/8", "3/8"]`: music21's
+    /// `partitionedByList` given ratios.
     ///
     /// The parts must come to what this span already is; a partition that
     /// lengthened or shortened the bar would not be one.
-    pub fn partition_by_parts(&mut self, parts: &[&str]) -> Result<()> {
+    pub fn partitioned_by_parts(&self, parts: &[&str]) -> Result<Self> {
         let mut built = Vec::with_capacity(parts.len());
         for part in parts {
             built.push(MeterTerminal::from_ratio_string(part)?);
@@ -325,18 +359,19 @@ impl MeterTerminal {
                 python_list(parts)
             )));
         }
-        let held = self.weight();
-        self.parts = built;
-        self.set_weight(held);
-        Ok(())
+        let mut out = self.clone();
+        out.parts = built;
+        out.set_weight(self.weight());
+        Ok(out)
     }
 
-    /// Divides this span into `count` parts, the way music21 divides it.
+    /// This span divided into `count` parts, the way music21 divides it:
+    /// music21's `partitionedByCount`.
     ///
     /// The first of [`Self::partition_options`] with that many parts wins. A
     /// count nothing divides into leaves the first option standing, which is
     /// music21's `loadDefault`.
-    pub fn partition_by_count(&mut self, count: usize, load_default: bool) -> Result<()> {
+    pub fn partitioned_by_count(&self, count: usize, load_default: bool) -> Result<Self> {
         let options = self.partition_options();
         let chosen = options.iter().find(|option| option.len() == count);
         let chosen = match chosen {
@@ -352,10 +387,11 @@ impl MeterTerminal {
             }
         };
         let borrowed: Vec<&str> = chosen.iter().map(String::as_str).collect();
-        self.partition_by_parts(&borrowed)
+        self.partitioned_by_parts(&borrowed)
     }
 
-    /// Divides this span by a list of numerators, as `[3, 1]` for `{3/4+1/4}`.
+    /// This span divided by a list of numerators, as `[3, 1]` for
+    /// `{3/4+1/4}`: music21's `partitionedByList`.
     ///
     /// music21 reads the list against this span's own denominator where the
     /// numerators come to its numerator, and against a finer one where they
@@ -365,7 +401,7 @@ impl MeterTerminal {
     /// Failing both, it looks for a division of its own whose numerators are
     /// the ones asked for, which is how `[1, 1]` of a `4/4` bar comes out as
     /// two halves and `[1]` as a whole.
-    pub fn partition_by_list(&mut self, numerators: &[UnsignedIntegerType]) -> Result<()> {
+    pub fn partitioned_by_list(&self, numerators: &[UnsignedIntegerType]) -> Result<Self> {
         if numerators.is_empty() {
             return Err(Error::Meter(
                 "cannot partition a meter into nothing".to_string(),
@@ -382,7 +418,7 @@ impl MeterTerminal {
                 .map(|numerator| format!("{numerator}/{denominator}"))
                 .collect();
             let borrowed: Vec<&str> = parts.iter().map(String::as_str).collect();
-            return self.partition_by_parts(&borrowed);
+            return self.partitioned_by_parts(&borrowed);
         }
         let asked: Vec<UnsignedIntegerType> = numerators.to_vec();
         let matching = self.partition_options().into_iter().find(|option| {
@@ -398,7 +434,7 @@ impl MeterTerminal {
         });
         if let Some(option) = matching {
             let borrowed: Vec<&str> = option.iter().map(String::as_str).collect();
-            return self.partition_by_parts(&borrowed);
+            return self.partitioned_by_parts(&borrowed);
         }
         Err(Error::Meter(format!(
             "Cannot set partition by {} ({}/{})",
@@ -408,14 +444,8 @@ impl MeterTerminal {
         )))
     }
 
-    /// Divides this span into `count` parts and leaves those parts divided
-    /// as they were: music21's `MeterTerminal.subdivide`.
-    pub fn subdivide(&mut self, count: usize) -> Result<()> {
-        self.partition_by_count(count, false)
-    }
-
-    /// Divides every part of this span again, the way music21 divides it
-    /// when nobody has said how: music21's `subdividePartitionsEqual`.
+    /// This span with every part divided again, the way music21 divides it
+    /// when nobody has said how: music21's `subdividedPartitionsEqual`.
     ///
     /// `divisions` says how many parts each part becomes; `None` asks for
     /// the division each part conventionally takes — two for a part written
@@ -423,8 +453,9 @@ impl MeterTerminal {
     /// the compound numerators. A part nothing divides into is an error,
     /// which is what music21 raises and what a meter written in notes
     /// shorter than a 128th is forgiven.
-    pub fn subdivide_partitions_equal(&mut self, divisions: Option<usize>) -> Result<()> {
-        for part in &mut self.parts {
+    pub fn subdivided_partitions_equal(&self, divisions: Option<usize>) -> Result<Self> {
+        let mut out = self.clone();
+        for part in &mut out.parts {
             let count = match divisions {
                 Some(count) => count,
                 None => match part.numerator {
@@ -434,9 +465,9 @@ impl MeterTerminal {
                     other => other as usize,
                 },
             };
-            part.partition_by_count(count, false)?;
+            *part = part.partitioned_by_count(count, false)?;
         }
-        Ok(())
+        Ok(out)
     }
 
     /// The part a path of indices names, and the parts it holds.
@@ -451,7 +482,7 @@ impl MeterTerminal {
 
     /// Divides the parts of every span named, and answers where those parts
     /// now are: music21's `_subdivideNested`, which is one level of
-    /// [`Self::subdivide_nested_hierarchy`].
+    /// [`Self::subdivided_nested_hierarchy`].
     fn subdivide_parts_of(
         &mut self,
         spans: &[Vec<usize>],
@@ -460,7 +491,7 @@ impl MeterTerminal {
         let mut deeper = Vec::new();
         for path in spans {
             let span = self.part_at_mut(path);
-            span.subdivide_partitions_equal(divisions)?;
+            *span = span.subdivided_partitions_equal(divisions)?;
             for index in 0..span.len() {
                 let mut child = path.clone();
                 child.push(index);
@@ -470,7 +501,8 @@ impl MeterTerminal {
         Ok(deeper)
     }
 
-    /// Nests this span down to a depth: music21's `subdivideNestedHierarchy`.
+    /// This span nested down to a depth: music21's
+    /// `subdividedNestedHierarchy`.
     ///
     /// The whole span becomes one part, that part is divided by two, by three
     /// or by its own numerator, and every division after that is by two or
@@ -484,20 +516,19 @@ impl MeterTerminal {
     /// ```
     /// use music21_rs::meter::MeterTerminal;
     ///
-    /// let mut bar = MeterTerminal::new(4, 4)?;
-    /// bar.subdivide_nested_hierarchy(2, None, true)?;
+    /// let bar = MeterTerminal::new(4, 4)?.subdivided_nested_hierarchy(2, None, true)?;
     /// assert_eq!(bar.to_string(), "{{{1/4+1/4}+{1/4+1/4}}}");
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
-    pub fn subdivide_nested_hierarchy(
-        &mut self,
+    pub fn subdivided_nested_hierarchy(
+        &self,
         depth: usize,
         first_partition_form: Option<UnsignedIntegerType>,
         normalize_denominators: bool,
-    ) -> Result<()> {
-        self.partition_by_count(1, false)?;
+    ) -> Result<Self> {
+        let mut out = self.partitioned_by_count(1, false)?;
         if depth == 0 {
-            return Ok(());
+            return Ok(out);
         }
         let form = first_partition_form.unwrap_or(self.numerator);
         let first = match form {
@@ -505,8 +536,9 @@ impl MeterTerminal {
             3 => 3,
             other => other as usize,
         };
-        self.subdivide_partitions_equal(Some(first))?;
-        self.subdivide_nested_below_the_first(depth, normalize_denominators)
+        out = out.subdivided_partitions_equal(Some(first))?;
+        out.subdivide_nested_below_the_first(depth, normalize_denominators)?;
+        Ok(out)
     }
 
     /// The same, with the first division taken from another sequence rather
@@ -521,20 +553,19 @@ impl MeterTerminal {
     /// use music21_rs::meter::MeterTerminal;
     ///
     /// let beats = MeterTerminal::from_partition_string("3/8+2/8")?;
-    /// let mut bar = MeterTerminal::new(5, 8)?;
-    /// bar.subdivide_nested_hierarchy_by(2, &beats, true)?;
+    /// let bar = MeterTerminal::new(5, 8)?.subdivided_nested_hierarchy_by(2, &beats, true)?;
     /// assert_eq!(bar.to_string(), "{{{1/8+1/8+1/8}+{1/8+1/8}}}");
     /// # Ok::<(), music21_rs::Error>(())
     /// ```
-    pub fn subdivide_nested_hierarchy_by(
-        &mut self,
+    pub fn subdivided_nested_hierarchy_by(
+        &self,
         depth: usize,
         first_partition_form: &Self,
         normalize_denominators: bool,
-    ) -> Result<()> {
-        self.partition_by_count(1, false)?;
+    ) -> Result<Self> {
+        let mut out = self.partitioned_by_count(1, false)?;
         if depth == 0 {
-            return Ok(());
+            return Ok(out);
         }
         let ratio = |span: &Self| format!("{}/{}", span.numerator, span.denominator);
         let written: Vec<String> = if first_partition_form.parts.is_empty() {
@@ -543,8 +574,9 @@ impl MeterTerminal {
             first_partition_form.parts.iter().map(ratio).collect()
         };
         let borrowed: Vec<&str> = written.iter().map(String::as_str).collect();
-        self.parts[0].partition_by_parts(&borrowed)?;
-        self.subdivide_nested_below_the_first(depth, normalize_denominators)
+        out.parts[0] = out.parts[0].partitioned_by_parts(&borrowed)?;
+        out.subdivide_nested_below_the_first(depth, normalize_denominators)?;
+        Ok(out)
     }
 
     /// Every level of a nested hierarchy below the first division, which is
@@ -623,6 +655,7 @@ impl MeterTerminal {
                 out.extend(part.level_list(level - 1, flat));
             } else if flat {
                 let mut flattened = part.clone();
+                flattened.weight = part.weight();
                 flattened.parts.clear();
                 out.push(flattened);
             } else {
@@ -696,32 +729,37 @@ impl MeterTerminal {
         Ok(score)
     }
 
-    /// Weighs the terminals of a level, looping the weights given over them:
-    /// the write half of music21's `setAccentWeight`.
+    /// This span with the terminals of a level weighed, looping the weights
+    /// given over them: music21's `withLevelWeight`.
     ///
     /// A level with no terminals, or no weights to give it, is an error
     /// rather than a silent nothing.
-    pub fn set_level_weight(&mut self, level: usize, weights: &[FloatType]) -> Result<()> {
+    pub fn with_level_weight(&self, level: usize, weights: &[FloatType]) -> Result<Self> {
         if weights.is_empty() {
             return Err(Error::Meter(
                 "a weight has to be given to weigh a level with".to_string(),
             ));
         }
+        let mut out = self.clone();
         let mut index = 0;
-        Self::weigh(&mut self.parts, level, weights, &mut index);
+        Self::weigh(&mut out.parts, level, weights, &mut index);
         if index == 0 {
             return Err(Error::Meter(format!(
                 "this meter has no level {level} to weigh"
             )));
         }
-        Ok(())
+        Ok(out)
     }
 
-    /// Walks the terminals of a level in order, weighing each in turn.
+    /// Walks the terminals of a level in order, weighing each in turn. A part
+    /// with parts of its own at the level asked for is read as one terminal,
+    /// so it uses up a weight but has nowhere to keep it, as music21's does.
     fn weigh(parts: &mut [MeterTerminal], level: usize, weights: &[FloatType], index: &mut usize) {
         for part in parts.iter_mut() {
-            if part.parts.is_empty() || level == 0 {
+            if part.parts.is_empty() {
                 part.weight = weights[*index % weights.len()];
+                *index += 1;
+            } else if level == 0 {
                 *index += 1;
             } else {
                 Self::weigh(&mut part.parts, level - 1, weights, index);
@@ -757,40 +795,27 @@ impl MeterTerminal {
     }
 
     /// This span divided into `count` parts, as a new sequence: music21's
-    /// `subdivideByCount`. The weight of this span goes with it.
+    /// `subdivideByCount`. The weight of this span goes with it, and a count
+    /// it cannot be divided into is an error.
     pub fn subdivide_by_count(&self, count: usize) -> Result<Self> {
         let mut out = Self::new(self.numerator, self.denominator)?;
-        out.weight = self.weight;
-        out.partition_by_count(count, true)?;
-        Ok(out)
+        out.weight = self.weight();
+        out.partitioned_by_count(count, false)
     }
 
-    /// This span divided into the one span another sequence is: music21's
-    /// `subdivideByOther`. The other becomes the only part of the answer, so
-    /// what the other was divided into is a level further down; a span of
-    /// another length is an error, since a division cannot relength the bar.
-    pub fn subdivide_by_other(&self, other: &Self) -> Result<Self> {
-        if (other.quarter_length() - self.quarter_length()).abs() > OFFSET_TOLERANCE {
-            return Err(Error::Meter(format!("cannot subdivide by other: {other}")));
-        }
-        let mut out = Self::new(other.numerator, other.denominator)?;
-        out.parts_mut().push(other.clone());
-        Ok(out)
-    }
-
-    /// Divides this span the way another sequence is divided: music21's
-    /// `partitionByOtherMeterSequence`. The two have to be written over the
-    /// same ratio, and this span keeps the weight it had.
-    pub fn partition_by_other(&mut self, other: &Self) -> Result<()> {
+    /// This span divided the way another sequence is divided: music21's
+    /// `partitionedByOtherMeterSequence`. The two have to be written over
+    /// the same ratio, and the answer keeps the weight this span had.
+    pub fn partitioned_by_other(&self, other: &Self) -> Result<Self> {
         if !self.ratio_equal(other) {
             return Err(Error::Meter(
                 "Cannot set partition for unequal MeterSequences".to_string(),
             ));
         }
-        let weight = self.weight();
-        self.parts = other.parts.clone();
-        self.set_weight(weight);
-        Ok(())
+        let mut out = self.clone();
+        out.parts = other.parts.clone();
+        out.set_weight(self.weight());
+        Ok(out)
     }
 
     /// What each terminal of a level weighs: music21's `getLevelWeight`.
@@ -806,9 +831,8 @@ impl MeterTerminal {
     /// music21's `subdivideByList`.
     pub fn subdivide_by_list(&self, numerators: &[UnsignedIntegerType]) -> Result<Self> {
         let mut out = Self::new(self.numerator, self.denominator)?;
-        out.weight = self.weight;
-        out.partition_by_list(numerators)?;
-        Ok(out)
+        out.weight = self.weight();
+        out.partitioned_by_list(numerators)
     }
 
     /// Which part an offset in quarter notes falls in: music21's
@@ -873,6 +897,34 @@ impl MeterTerminal {
             .map(MeterTerminal::partition_string)
             .collect();
         format!("{{{}}}", inner.join("+"))
+    }
+}
+
+/// Two spans are equal when they are written over the same ratio, written
+/// the same way and divided into equal parts; a span nothing divides weighs
+/// the same as well. A span with parts weighs what they weigh, so its own
+/// weight is not compared twice.
+impl PartialEq for MeterTerminal {
+    fn eq(&self, other: &Self) -> bool {
+        self.numerator == other.numerator
+            && self.denominator == other.denominator
+            && self.summed_numerator == other.summed_numerator
+            && self.parts == other.parts
+            && (!self.parts.is_empty() || self.weight == other.weight)
+    }
+}
+
+impl std::hash::Hash for MeterTerminal {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.numerator.hash(state);
+        self.denominator.hash(state);
+        self.summed_numerator.hash(state);
+        if self.parts.is_empty() {
+            // Nought and minus nought are equal, so they hash alike.
+            let weight = if self.weight == 0.0 { 0.0 } else { self.weight };
+            weight.to_bits().hash(state);
+        }
+        self.parts.hash(state);
     }
 }
 
@@ -1139,10 +1191,14 @@ mod tests {
     #[test]
     fn levels_are_read_as_music21_reads_them() {
         // Read off music21 11.0.0b9: TimeSignature("4/4").beatSequence.
-        let mut bar = MeterTerminal::new(4, 4).unwrap();
-        bar.partition_by_parts(&["4/4"]).unwrap();
-        bar.partition_by_count(4, true).unwrap();
-        bar.subdivide_partitions_equal(None).unwrap();
+        let bar = MeterTerminal::new(4, 4)
+            .unwrap()
+            .partitioned_by_parts(&["4/4"])
+            .unwrap()
+            .partitioned_by_count(4, true)
+            .unwrap()
+            .subdivided_partitions_equal(None)
+            .unwrap();
         assert_eq!(bar.to_string(), "{{1/8+1/8}+{1/8+1/8}+{1/8+1/8}+{1/8+1/8}}");
 
         // getLevelList(0, True) is four quarters; (1, True) is eight eighths.
@@ -1175,8 +1231,10 @@ mod tests {
 
     #[test]
     fn a_bar_written_in_unequal_parts_is_not_uniform() {
-        let mut bar = MeterTerminal::new(5, 8).unwrap();
-        bar.partition_by_parts(&["2/8", "3/8"]).unwrap();
+        let bar = MeterTerminal::new(5, 8)
+            .unwrap()
+            .partitioned_by_parts(&["2/8", "3/8"])
+            .unwrap();
         assert!(!bar.is_uniform_partition(0));
         assert_eq!(bar.partition_display(), "2/8+3/8");
         assert_eq!(bar.depth(), 1);
@@ -1184,8 +1242,7 @@ mod tests {
 
     #[test]
     fn subdividing_leaves_the_span_alone_and_returns_a_new_one() {
-        let mut beat = MeterTerminal::new(1, 4).unwrap();
-        beat.set_weight(0.5);
+        let beat = MeterTerminal::new(1, 4).unwrap().with_weight(0.5);
         let divided = beat.subdivide_by_count(2).unwrap();
         assert_eq!(divided.to_string(), "{1/8+1/8}");
         // music21's subdivide does not happen in place, and carries the
@@ -1232,57 +1289,63 @@ mod tests {
     /// music21's own examples, which is what this has to reproduce.
     #[test]
     fn a_bar_divides_the_way_music21_divides_it() {
-        let mut four_four = MeterTerminal::from_ratio_string("4/4").unwrap();
-        four_four.partition_by_count(2, true).unwrap();
+        let four_four = MeterTerminal::from_ratio_string("4/4").unwrap();
+        let four_four = four_four.partitioned_by_count(2, true).unwrap();
         assert_eq!(four_four.partition_string(), "{1/2+1/2}");
-        four_four.partition_by_count(4, true).unwrap();
+        let four_four = four_four.partitioned_by_count(4, true).unwrap();
         assert_eq!(four_four.partition_string(), "{1/4+1/4+1/4+1/4}");
 
         // Irregular meters take the grouping music21 keeps for them.
-        let mut five_eight = MeterTerminal::from_ratio_string("5/8").unwrap();
-        five_eight.partition_by_count(2, true).unwrap();
+        let five_eight = MeterTerminal::from_ratio_string("5/8").unwrap();
+        let five_eight = five_eight.partitioned_by_count(2, true).unwrap();
         assert_eq!(five_eight.partition_string(), "{2/8+3/8}");
-        five_eight.partition_by_count(3, true).unwrap();
+        let five_eight = five_eight.partitioned_by_count(3, true).unwrap();
         assert_eq!(five_eight.partition_string(), "{2/8+2/8+1/8}");
 
         // A count nothing divides into falls back to the first option.
-        let mut also_five = MeterTerminal::from_ratio_string("5/8").unwrap();
-        also_five.partition_by_count(11, true).unwrap();
+        let also_five = MeterTerminal::from_ratio_string("5/8")
+            .unwrap()
+            .partitioned_by_count(11, true)
+            .unwrap();
         assert_eq!(also_five.partition_string(), "{2/8+3/8}");
         assert!(
             MeterTerminal::from_ratio_string("5/8")
                 .unwrap()
-                .partition_by_count(11, false)
+                .partitioned_by_count(11, false)
                 .is_err()
         );
 
         // Compound meters divide into threes first.
-        let mut six_eight = MeterTerminal::from_ratio_string("6/8").unwrap();
-        six_eight.partition_by_count(2, true).unwrap();
+        let six_eight = MeterTerminal::from_ratio_string("6/8")
+            .unwrap()
+            .partitioned_by_count(2, true)
+            .unwrap();
         assert_eq!(six_eight.partition_string(), "{3/8+3/8}");
     }
 
     #[test]
     fn a_partition_must_come_to_what_the_bar_is() {
-        let mut bar = MeterTerminal::from_ratio_string("4/4").unwrap();
-        bar.partition_by_parts(&["3/4", "1/8", "1/8"]).unwrap();
+        let bar = MeterTerminal::from_ratio_string("4/4").unwrap();
+        let bar = bar.partitioned_by_parts(&["3/4", "1/8", "1/8"]).unwrap();
         assert_eq!(bar.partition_string(), "{3/4+1/8+1/8}");
-        assert!(bar.partition_by_parts(&["3/4", "1/8", "5/8"]).is_err());
+        assert!(bar.partitioned_by_parts(&["3/4", "1/8", "5/8"]).is_err());
 
         // A list of numerators is read against a finer note value where it
         // comes to a multiple of the meter's own.
-        let mut halves = MeterTerminal::from_ratio_string("2/4").unwrap();
-        halves.partition_by_list(&[1, 1]).unwrap();
+        let halves = MeterTerminal::from_ratio_string("2/4").unwrap();
+        let halves = halves.partitioned_by_list(&[1, 1]).unwrap();
         assert_eq!(halves.partition_string(), "{1/4+1/4}");
-        halves.partition_by_list(&[1, 1, 1, 1]).unwrap();
+        let halves = halves.partitioned_by_list(&[1, 1, 1, 1]).unwrap();
         assert_eq!(halves.partition_string(), "{1/8+1/8+1/8+1/8}");
-        assert!(halves.partition_by_list(&[1, 1, 1]).is_err());
+        assert!(halves.partitioned_by_list(&[1, 1, 1]).is_err());
     }
 
     #[test]
     fn an_offset_finds_the_part_it_falls_in() {
-        let mut bar = MeterTerminal::from_ratio_string("4/4").unwrap();
-        bar.partition_by_count(4, true).unwrap();
+        let bar = MeterTerminal::from_ratio_string("4/4")
+            .unwrap()
+            .partitioned_by_count(4, true)
+            .unwrap();
         assert_eq!(bar.offset_to_index(0.0).unwrap(), 0);
         assert_eq!(bar.offset_to_index(1.5).unwrap(), 1);
         assert_eq!(bar.offset_to_index(3.99).unwrap(), 3);
@@ -1295,11 +1358,12 @@ mod tests {
 
     #[test]
     fn a_span_says_how_deep_and_how_flat_it_is() {
-        let mut bar = MeterTerminal::from_ratio_string("4/4").unwrap();
+        let bar = MeterTerminal::from_ratio_string("4/4").unwrap();
         assert_eq!(bar.depth(), 0);
-        bar.partition_by_count(2, true).unwrap();
+        let bar = bar.partitioned_by_count(2, true).unwrap();
         assert_eq!(bar.depth(), 1);
-        bar.parts_mut()[0].partition_by_count(2, true).unwrap();
+        let first = bar.parts()[0].partitioned_by_count(2, true).unwrap();
+        let bar = bar.set_index(0, first).unwrap();
         assert_eq!(bar.depth(), 2);
         assert_eq!(bar.partition_string(), "{{1/4+1/4}+1/2}");
         assert_eq!(bar.flattened().len(), 3);
@@ -1338,9 +1402,12 @@ mod tests {
     /// divided into sixteenths.
     #[test]
     fn an_address_says_every_index_down_to_the_terminal() {
-        let mut bar = MeterTerminal::new(4, 4).unwrap();
-        bar.partition_by_count(4, true).unwrap();
-        bar.parts_mut()[1].partition_by_count(4, true).unwrap();
+        let bar = MeterTerminal::new(4, 4)
+            .unwrap()
+            .partitioned_by_count(4, true)
+            .unwrap();
+        let second = bar.parts()[1].partitioned_by_count(4, true).unwrap();
+        let bar = bar.set_index(1, second).unwrap();
         assert_eq!(bar.to_string(), "{1/4+{1/16+1/16+1/16+1/16}+1/4+1/4}");
 
         assert_eq!(bar.offset_to_address(0.0).unwrap(), [0]);
@@ -1355,9 +1422,12 @@ mod tests {
     /// Every expectation here was read off music21.
     #[test]
     fn a_span_flattens_to_what_its_leaves_come_to() {
-        let mut bar = MeterTerminal::new(4, 4).unwrap();
-        bar.partition_by_count(4, true).unwrap();
-        bar.subdivide_partitions_equal(Some(2)).unwrap();
+        let bar = MeterTerminal::new(4, 4)
+            .unwrap()
+            .partitioned_by_count(4, true)
+            .unwrap()
+            .subdivided_partitions_equal(Some(2))
+            .unwrap();
 
         let flat = bar.flatten().unwrap();
         assert_eq!(flat.to_string(), "{1/8+1/8+1/8+1/8+1/8+1/8+1/8+1/8}");
@@ -1371,28 +1441,26 @@ mod tests {
     /// Every expectation here was read off music21.
     #[test]
     fn a_span_takes_the_division_and_the_shape_of_another() {
-        let mut quarters = MeterTerminal::new(4, 4).unwrap();
-        quarters.partition_by_count(4, true).unwrap();
-        let mut halves = MeterTerminal::new(4, 4).unwrap();
-        halves.partition_by_count(2, true).unwrap();
+        let quarters = MeterTerminal::new(4, 4)
+            .unwrap()
+            .partitioned_by_count(4, true)
+            .unwrap();
+        let halves = MeterTerminal::new(4, 4)
+            .unwrap()
+            .partitioned_by_count(2, true)
+            .unwrap();
 
-        quarters.partition_by_other(&halves).unwrap();
+        let quarters = quarters.partitioned_by_other(&halves).unwrap();
         assert_eq!(quarters.to_string(), "{1/2+1/2}");
         // The weight it had, which its new parts share out between them.
         assert_eq!(quarters.weight(), 1.0);
 
         // A division cannot relength the bar, whichever way it is asked for.
         let three = MeterTerminal::new(3, 4).unwrap();
-        assert!(quarters.partition_by_other(&three).is_err());
-        assert!(quarters.subdivide_by_other(&three).is_err());
+        assert!(quarters.partitioned_by_other(&three).is_err());
 
         let thirds = MeterTerminal::from_partition_string("1/4+1/4+1/4").unwrap();
         let sixths = MeterTerminal::from_partition_string("3/8+3/8").unwrap();
-        let divided = thirds.subdivide_by_other(&sixths).unwrap();
-        // The other span becomes the one part, so its own parts lie a level
-        // further down.
-        assert_eq!(divided.to_string(), "{{3/8+3/8}}");
-        assert_eq!(divided.weight(), 2.0);
 
         assert!(thirds.ratio_equal(&MeterTerminal::new(3, 4).unwrap()));
         assert!(!thirds.ratio_equal(&sixths));

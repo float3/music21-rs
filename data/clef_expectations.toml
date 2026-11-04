@@ -3,10 +3,10 @@
 # The classes are transcribed into src/clef.rs; the rest is checked
 # behaviourally.
 #
-# music21 11.0.0b15 at c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071
+# music21 11.0.0b19 at 19ada90a8f5e7ffb572c69075184b0c5708adf3b
 
-music21_version = "11.0.0b15"
-music21_commit = "c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071"
+music21_version = "11.0.0b19"
+music21_commit = "19ada90a8f5e7ffb572c69075184b0c5708adf3b"
 
 [[clef]]
 class = "Clef"
@@ -90,7 +90,7 @@ class = "Bass8vaClef"
 sign = "F"
 line = 4
 octave_change = 1
-lowest_line = 19
+lowest_line = 26
 name = "bass8va"
 parents = ["FClef", "PitchClef", "Clef"]
 
@@ -99,7 +99,7 @@ class = "Bass8vbClef"
 sign = "F"
 line = 4
 octave_change = -1
-lowest_line = 19
+lowest_line = 12
 name = "bass8vb"
 parents = ["FClef", "PitchClef", "Clef"]
 
@@ -185,22 +185,13 @@ name = "tenor"
 parents = ["CClef", "PitchClef", "Clef"]
 
 [[clef]]
-class = "TrebleClef"
-sign = "G"
-line = 2
-octave_change = 0
-lowest_line = 31
-name = "treble"
-parents = ["GClef", "PitchClef", "Clef"]
-
-[[clef]]
 class = "Treble8vaClef"
 sign = "G"
 line = 2
 octave_change = 1
-lowest_line = 24
+lowest_line = 38
 name = "treble8va"
-parents = ["TrebleClef", "GClef", "PitchClef", "Clef"]
+parents = ["GClef", "PitchClef", "Clef"]
 
 [[clef]]
 class = "Treble8vbClef"
@@ -209,7 +200,16 @@ line = 2
 octave_change = -1
 lowest_line = 24
 name = "treble8vb"
-parents = ["TrebleClef", "GClef", "PitchClef", "Clef"]
+parents = ["GClef", "PitchClef", "Clef"]
+
+[[clef]]
+class = "TrebleClef"
+sign = "G"
+line = 2
+octave_change = 0
+lowest_line = 31
+name = "treble"
+parents = ["GClef", "PitchClef", "Clef"]
 
 [[from_string]]
 text = "tab"
@@ -324,7 +324,7 @@ clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowe
 [[from_string]]
 text = "G"
 octave_shift = 1
-clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 38, name = "treble8va" }
 
 [[from_string]]
 text = "G"
@@ -339,12 +339,12 @@ clef = { class = "BassClef", sign = "F", line = 4, octave_change = 0, lowest_lin
 [[from_string]]
 text = "F"
 octave_shift = -1
-clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 19, name = "bass8vb" }
+clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 12, name = "bass8vb" }
 
 [[from_string]]
 text = "F"
 octave_shift = 1
-clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 19, name = "bass8va" }
+clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 26, name = "bass8va" }
 
 [[from_string]]
 text = "F"
@@ -424,7 +424,7 @@ clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowe
 [[from_string]]
 text = " G2 "
 octave_shift = 1
-clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 38, name = "treble8va" }
 
 [[from_string]]
 text = " G2 "
@@ -604,7 +604,7 @@ clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowe
 [[from_string]]
 text = "G2"
 octave_shift = 1
-clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 38, name = "treble8va" }
 
 [[from_string]]
 text = "G2"
@@ -739,12 +739,12 @@ clef = { class = "BassClef", sign = "F", line = 4, octave_change = 0, lowest_lin
 [[from_string]]
 text = "F4"
 octave_shift = -1
-clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 19, name = "bass8vb" }
+clef = { class = "Bass8vbClef", sign = "F", line = 4, octave_change = -1, lowest_line = 12, name = "bass8vb" }
 
 [[from_string]]
 text = "F4"
 octave_shift = 1
-clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 19, name = "bass8va" }
+clef = { class = "Bass8vaClef", sign = "F", line = 4, octave_change = 1, lowest_line = 26, name = "bass8va" }
 
 [[from_string]]
 text = "F4"
@@ -904,7 +904,7 @@ clef = { class = "Treble8vbClef", sign = "G", line = 2, octave_change = -1, lowe
 [[from_string]]
 text = "g2"
 octave_shift = 1
-clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 24, name = "treble8va" }
+clef = { class = "Treble8vaClef", sign = "G", line = 2, octave_change = 1, lowest_line = 38, name = "treble8va" }
 
 [[from_string]]
 text = "g2"
@@ -2763,14 +2763,14 @@ class = "Bass8vaClef"
 pitches = ["C3", "B3", "C3"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["C3", "B3", "C3"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
@@ -2840,42 +2840,42 @@ class = "Bass8vaClef"
 pitches = ["G2", "C4", "E3", "D5"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["G2", "C4", "E3", "D5"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["G2", "C4", "E3", "D5"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
@@ -2903,28 +2903,28 @@ class = "Bass8vaClef"
 pitches = ["B3"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["B3"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vaClef"
 pitches = ["B3"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Bass8vbClef"
 pitches = ["C3", "B3", "C3"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "up"
+direction = "down"
 
 [[stem]]
 class = "Bass8vbClef"
@@ -4600,174 +4600,6 @@ extreme_pitch_only = true
 direction = "down"
 
 [[stem]]
-class = "TrebleClef"
-pitches = ["C3", "B3", "C3"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C3", "B3", "C3"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C3", "B3", "C3"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C5"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C5"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C5"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B4"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B4"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B4"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["A4", "C5"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["A4", "C5"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["A4", "C5"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "down"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["G2", "C4", "E3", "D5"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["G2", "C4", "E3", "D5"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["G2", "C4", "E3", "D5"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C6", "C2"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C6", "C2"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["C6", "C2"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["F#4", "E-5", "D4"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["F#4", "E-5", "D4"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["F#4", "E-5", "D4"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B3"]
-first_last_only = true
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B3"]
-first_last_only = false
-extreme_pitch_only = false
-direction = "up"
-
-[[stem]]
-class = "TrebleClef"
-pitches = ["B3"]
-first_last_only = true
-extreme_pitch_only = true
-direction = "up"
-
-[[stem]]
 class = "Treble8vaClef"
 pitches = ["C3", "B3", "C3"]
 first_last_only = true
@@ -4793,70 +4625,70 @@ class = "Treble8vaClef"
 pitches = ["C5"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["C5"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["C5"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B4"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B4"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B4"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["A4", "C5"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["A4", "C5"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["A4", "C5"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["G2", "C4", "E3", "D5"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
@@ -4870,70 +4702,70 @@ class = "Treble8vaClef"
 pitches = ["G2", "C4", "E3", "D5"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["C6", "C2"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["F#4", "E-5", "D4"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["F#4", "E-5", "D4"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["F#4", "E-5", "D4"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B3"]
 first_last_only = true
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B3"]
 first_last_only = false
 extreme_pitch_only = false
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vaClef"
 pitches = ["B3"]
 first_last_only = true
 extreme_pitch_only = true
-direction = "down"
+direction = "up"
 
 [[stem]]
 class = "Treble8vbClef"
@@ -5102,6 +4934,174 @@ pitches = ["B3"]
 first_last_only = true
 extreme_pitch_only = true
 direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C3", "B3", "C3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["A4", "C5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "down"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["G2", "C4", "E3", "D5"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["C6", "C2"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["F#4", "E-5", "D4"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = false
+extreme_pitch_only = false
+direction = "up"
+
+[[stem]]
+class = "TrebleClef"
+pitches = ["B3"]
+first_last_only = true
+extreme_pitch_only = true
+direction = "up"
 
 [[best]]
 pitches = []

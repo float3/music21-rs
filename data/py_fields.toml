@@ -119,8 +119,7 @@ components = { kind = "identity", sync = "synced" }
 style = { kind = "identity", sync = "synced" }
 
 [MeterSequence]
-parts = { kind = "identity", sync = "read live", why = "each part is a view whose reads and writes go to the meter" }
-level_list_cache = { kind = "cache", note = "music21's _levelListCache" }
+parts = { kind = "identity", sync = "read live", why = "a sequence cannot change, so its parts are the objects it was made of, standing for the spans it holds" }
 
 [MetronomeMark]
 referent = { kind = "identity", sync = "current" }
@@ -197,6 +196,10 @@ text_expression = { kind = "identity", sync = "read live", why = "the text is re
 
 [Tie]
 identifier = { kind = "identity", sync = "read live", why = "music21's id; the crate keeps none" }
+
+[TimeSignature]
+sequences = { kind = "identity", sync = "read live", why = "a sequence cannot change; each is handed back only while it still equals the one the meter carries, and assigning one writes its value into the meter" }
+bar_duration = { kind = "identity", sync = "read live", why = "handed back as given only while the meter still carries the length written with it" }
 
 [TimespanTree]
 source = { kind = "identity", sync = "read live", why = "the stream read, handed back and asked for its parts" }

@@ -18,7 +18,7 @@ use music21_rs_crate::{
     StemDirection as RsStemDirection, Volume as RsVolume,
 };
 
-use crate::duration::{Duration, duration_from_any, duration_object_for};
+use crate::duration::{Duration, duration_from_any, duration_object_for, given_keyword};
 use crate::interval::interval_from_any;
 use crate::notation::{Beams, Tie, Volume, volume_from_any};
 use crate::note::{Note, augment_or_diminish_note, grace_note, instrument_for_note, note_from_any};
@@ -128,17 +128,17 @@ pub(crate) fn duration_from_keywords(
     let Some(keywords) = keywords else {
         return Ok(None);
     };
-    if let Some(value) = keywords.get_item("duration")? {
+    if let Some(value) = given_keyword(keywords, "duration")? {
         if value.hasattr("quarterLength")? {
             return Ok(Some(value.clone().unbind()));
         }
         return Ok(Some(Duration::object(py, duration_from_any(&value)?)?));
     }
-    if let Some(value) = keywords.get_item("quarterLength")? {
+    if let Some(value) = given_keyword(keywords, "quarterLength")? {
         let length = RsDuration::new(value.extract::<f64>()?).map_err(chord_error)?;
         return Ok(Some(Duration::object(py, length)?));
     }
-    if keywords.contains("type")? || keywords.contains("dots")? {
+    if given_keyword(keywords, "type")?.is_some() {
         return Ok(Some(
             crate::installed_new(
                 py,
@@ -148,6 +148,16 @@ pub(crate) fn duration_from_keywords(
             )?
             .into_any(),
         ));
+    }
+    // Named but `None`: music21's `GeneralNote` gives such a chord its
+    // quarter, and the chord keeps it rather than its notes' length.
+    for name in ["duration", "quarterLength", "type"] {
+        if keywords.contains(name)? {
+            return Ok(Some(Duration::object(
+                py,
+                RsDuration::new(1.0).map_err(chord_error)?,
+            )?));
+        }
     }
     Ok(None)
 }
@@ -2096,16 +2106,18 @@ impl Chord {
     #[setter]
     fn set_quarterLength(&mut self, py: Python<'_>, value: f64) -> PyResult<()> {
         let inner = RsDuration::new(value).map_err(chord_error)?;
-        self.inner.set_duration(inner.clone());
         match &self.duration {
             // Through the duration's own setter, so the written values it
             // stands for are worked out again: a whole note lengthened to
             // four and three quarters is written as two notes tied.
             Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
-                self.duration = Some(Duration::object(py, inner)?);
+                self.duration = Some(Duration::object(py, inner.clone())?);
             }
         }
+        // After the duration object, which refuses a new length where it is
+        // a FrozenDuration, so the note keeps the length it has.
+        self.inner.set_duration(inner);
         Ok(())
     }
 

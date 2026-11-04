@@ -1119,7 +1119,7 @@ impl ConcreteScale {
         let stepped = if closes {
             RsStepScale::octave_repeating_of(tonic, steps).map_err(scale_error)?
         } else {
-            RsStepScale::cyclical_of(tonic, steps)
+            RsStepScale::cyclical_of(tonic, steps).map_err(scale_error)?
         };
         let mut scale = stepped.scale().map_err(scale_error)?;
         if let Some(named) = pitchSimplification {
@@ -1700,7 +1700,14 @@ impl ConcreteScale {
         let Ok(value) = pitch_from_any(other) else {
             return Ok(false);
         };
-        let next = self.nextPitch(Some(pitchOrigin), direction, stepSize, getNeighbor, None)?;
+        let next = self.nextPitch(
+            Some(pitchOrigin),
+            direction,
+            stepSize,
+            getNeighbor,
+            None,
+            None,
+        )?;
         // Compared on whatever music21 was told to compare on: two pitches
         // may share a name and stand an octave apart, and a search for a
         // run of scale steps says so.
@@ -1833,13 +1840,23 @@ impl ConcreteScale {
     /// music21's `getScaleDegreeFromPitch`: which degree a pitch is, or
     /// nothing when it is not in the scale. A pitch the scale stands on
     /// more than one degree is the lowest of them: Rag Marwa's A is its
-    /// fifth degree and its seventh, and is answered as the fifth.
-    #[pyo3(signature = (pitchTarget, direction = None, comparisonAttribute = "name", **_keywords))]
+    /// fifth degree and its seventh, and is answered as the fifth. A
+    /// `randomGenerator` (a function returning a number from 0 to 1) picks
+    /// among them instead, each degree weighted equally.
+    #[pyo3(signature = (
+        pitchTarget,
+        direction = None,
+        comparisonAttribute = "name",
+        *,
+        randomGenerator = None,
+        **_keywords
+    ))]
     fn getScaleDegreeFromPitch(
         &self,
         pitchTarget: &Bound<'_, PyAny>,
         direction: Option<&Bound<'_, PyAny>>,
         comparisonAttribute: &str,
+        randomGenerator: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
         let pitch = pitch_from_any(pitchTarget)?;
@@ -1860,11 +1877,14 @@ impl ConcreteScale {
                 .degree_of_by(&pitch, comparison)
                 .map_err(scale_error);
         }
-        let degrees = self
+        let mut degrees = self
             .heard(direction)?
             .degrees_of_by(&pitch, comparison)
             .map_err(scale_error)?;
-        Ok(degrees.into_iter().min())
+        degrees.sort_unstable();
+        degrees.dedup();
+        let chosen = chosen_index(randomGenerator, degrees.len())?;
+        Ok(degrees.get(chosen).copied())
     }
 
     /// music21's `getScaleDegreeAndAccidentalFromPitch`: the degree and how
@@ -1898,12 +1918,15 @@ impl ConcreteScale {
     /// music21's `nextPitch`: the pitch so many steps along the scale. A
     /// pitch the scale stands on more than one degree is read as the lowest
     /// of them: coming down from Rag Marwa's `D-`, its second degree, the
-    /// next note is `C`.
+    /// next note is `C`. A `randomGenerator` (a function returning a number
+    /// from 0 to 1) picks among them instead, each weighted equally.
     #[pyo3(signature = (
         pitchOrigin = None,
         direction = None,
         stepSize = 1,
         getNeighbor = None,
+        *,
+        randomGenerator = None,
         **_keywords
     ))]
     fn nextPitch(
@@ -1912,6 +1935,7 @@ impl ConcreteScale {
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
         getNeighbor: Option<&Bound<'_, PyAny>>,
+        randomGenerator: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Pitch> {
         let origin = match pitchOrigin.filter(|value| !value.is_none()) {
@@ -1941,13 +1965,15 @@ impl ConcreteScale {
             // A scale may stand this note on more than one of its places —
             // Rag Marwa's `D-` is both its second degree and the seventh it
             // passes through coming down from the octave — and where the
-            // next note is depends on which was meant. The crate reads it as
-            // the lowest degree, as `getScaleDegreeFromPitch` answers.
+            // next note is depends on which was meant. The places are
+            // numbered from the lowest degree.
             None => {
+                let places = scale.places_of(&origin).map_err(scale_error)?;
+                let place = chosen_index(randomGenerator, places)?;
                 if is_descending(direction) {
-                    scale.next_pitch_below(&origin, stepSize)
+                    scale.next_pitch_below_from(&origin, stepSize, place)
                 } else {
-                    scale.next_pitch_above(&origin, stepSize)
+                    scale.next_pitch_above_from(&origin, stepSize, place)
                 }
             }
         };
@@ -2169,6 +2195,21 @@ impl DiatonicScale {
         let parallel = slf.as_super().borrow().current().parallel_minor();
         ConcreteScale::object(slf.py(), parallel)
     }
+}
+
+/// Which of `count` equally weighted choices `randomGenerator` makes, as
+/// music21's `common.weightedSelection` makes it from the number the
+/// generator returns. With no generator, or nothing to choose between, the
+/// first.
+fn chosen_index(random_generator: Option<&Bound<'_, PyAny>>, count: usize) -> PyResult<usize> {
+    let Some(generator) = random_generator.filter(|value| !value.is_none()) else {
+        return Ok(0);
+    };
+    if count < 2 {
+        return Ok(0);
+    }
+    let drawn: f64 = generator.call0()?.extract()?;
+    Ok(((drawn * count as f64).floor().max(0.0) as usize).min(count - 1))
 }
 
 /// The pitches with duplicates removed, judged on whichever attribute is

@@ -1,4 +1,75 @@
-# Unreleased
+# music21-rs 0.16.0
+
+`harte` 0.9.0 depends on this release.
+
+## breaking changes
+
+- **A time signature counts at most 10,000 beats** (`meter::MAX_NUMERATOR`,
+  1024 before), as music21's does.
+
+- **Meter sequences are values, as music21's are since v11.** A
+  `MeterTerminal` or meter sequence is no longer changed in place: its
+  methods return a new one, named after music21's new names
+  (`partitioned_by_count`, `partitioned_by_list`, `partitioned_by_parts`,
+  `partitioned_by_other`, `subdivided_partitions_equal`,
+  `subdivided_nested_hierarchy`, `with_level_weight`, `with_weight`,
+  `with_summed_numerator`; `MeterTerminal::sequence` is `makeSequence`).
+  `parts_mut`, `set_weight`, `subdivide` and `subdivide_by_other` are gone,
+  `TimeSignature`'s `*_sequence_mut` accessors are now
+  `set_{beat,beam,accent,display}_sequence`, and `subdivide_by_count`
+  errors on a count it cannot divide into. `beat_quarter_length` and
+  `beat_duration` give the first beat's length and cannot fail. In the
+  wheel, `MeterTerminal` and `MeterSequence` are immutable; the old
+  in-place names raise the errors music21's raise, and `barDuration`,
+  `beatDuration` and `beatDivisionDurations` are music21's
+  `FrozenDuration` when music21 is loaded.
+
+- **Cyclical scales that close within an octave repeat at the octave**:
+  `ScaleType::is_cycle` is gone, since no named scale is a cycle, and
+  `StepScale::cyclical_of` returns a `Result`.
+
+- **`ReductionOptions` is no longer `UnwindSafe` or `RefUnwindSafe`**: its
+  `weight_algorithm` holds any `Fn + Send + Sync`.
+
+## added
+
+- **`reduce_chords` ties and clefs its reduction, as music21's fork
+  master 42b4e8b47 does**: a chord that is the same as the first chord of
+  the next measure is tied to it, and the reduction's clef is the one that
+  best fits its chords. `ReductionOptions::force_octave` (music21's
+  `forceOctave`) and `ReductionOptions::weight_algorithm` (music21's
+  `weightAlgorithm`, a `SliceWeigher`) are new, and `slice_weight` is
+  music21's `sliceWeight`. The wheel's `ChordReducer.run` takes
+  `forceOctave` and `weightAlgorithm`, and `ChordReducer.sliceWeight` is
+  new.
+
+## changed
+
+## changed
+
+- **The music21 submodule follows the fork's master 19ada90a8**
+  (upstream as of 3 November plus the fork's fixes), and the crate with
+  it:
+  - Treble8vaClef, Bass8vbClef and Bass8vaClef have the lowest lines
+    their octave change implies (38, 12 and 26), so stems and rest
+    positions under them change; Treble8vaClef and Treble8vbClef are no
+    longer TrebleClefs, and LilyPond names them `treble^8`, `bass_8` and
+    `bass^8`.
+  - Octave-repeating scales close on the tonic's spelling: the whole-tone
+    scale on C ends on C5, not B#4, and the chromatic scale on D-4 on D-5.
+  - Volpiano writes the octave clefs as plain treble and bass clefs.
+  - A MuseData pickup measure is numbered 0, and stage-2 slur marks are
+    read as slurs.
+  - A Finale `<forward>` of no length makes no hidden rest, and a
+    multi-measure rest cut short is kept only when it took a rest.
+  - Braille shows the octave after the exception sign.
+  - A `Duration` compares equal to music21's `FrozenDuration` of the same
+    length, and `None` given for a note's `type`, `quarterLength`,
+    `duration` or `dots` counts as not given.
+  - The wheel's scale `getScaleDegreeFromPitch` and `nextPitch` take
+    `randomGenerator`; without one the lowest degree is chosen.
+
+# music21-rs 0.15.0
 
 `harte` 0.8.0 depends on this release.
 

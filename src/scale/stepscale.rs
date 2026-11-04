@@ -9,6 +9,8 @@
 //!
 //! - [`StepScale::cyclical`] walks the intervals once and stops, so the scale
 //!   need not span or repeat at an octave — `["P5"]` from C is just `C G`.
+//!   A cycle that comes back to its tonic within an octave fills the octave
+//!   instead: `["M3"]` from C is `C E G# C`.
 //! - [`StepScale::octave_repeating`] appends whatever interval is needed to
 //!   reach the octave above the tonic, so `["m3", "M3"]` from C becomes
 //!   `C E- G C`.
@@ -18,6 +20,7 @@ use crate::error::Result;
 use crate::interval::{ChromaticInterval, Interval};
 use crate::pitch::Pitch;
 use crate::scale::Scale;
+use crate::scale::scaletype::{close_on_tonic, cycle_within_octave};
 use crate::sieve::Sieve;
 
 use std::sync::LazyLock;
@@ -56,19 +59,32 @@ pub struct StepScale {
 impl StepScale {
     /// Builds music21's `CyclicalScale`: the intervals walked once, no closing.
     ///
+    /// A cycle of whole semitones adding up to 1, 2, 3, 4, 6 or 12 semitones
+    /// comes back to its tonic within an octave, and is repeated to fill the
+    /// octave with its last step spelled to land on the tonic, so it repeats
+    /// there: `["M3"]` is `M3 M3 d4`, and `["m2"]` is twelve steps.
+    ///
     /// An empty list defaults to a single `m2`, as music21 does.
     pub fn cyclical(tonic: Pitch, steps: &[&str]) -> Result<Self> {
-        Ok(Self::cyclical_of(tonic, parse_steps(steps)?))
+        Self::cyclical_of(tonic, parse_steps(steps)?)
     }
 
     /// The same from intervals already in hand, which is the only way to
     /// give a step that has no name: one measured in cents.
-    pub fn cyclical_of(tonic: Pitch, steps: Vec<Interval>) -> Self {
-        Self {
-            tonic,
-            steps: or_default(steps),
-            closed: false,
-        }
+    pub fn cyclical_of(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
+        let steps = or_default(steps);
+        Ok(match cycle_within_octave(&steps)? {
+            Some(filled) => Self {
+                tonic,
+                steps: filled,
+                closed: true,
+            },
+            None => Self {
+                tonic,
+                steps,
+                closed: false,
+            },
+        })
     }
 
     /// Builds music21's `OctaveRepeatingScale`: the intervals plus a closing
@@ -77,19 +93,18 @@ impl StepScale {
     ///
     /// An empty list defaults to a single `m2`, as music21 does.
     ///
-    /// The closing interval is the *complement of the interval sum*, which is
-    /// how music21 derives it — not the interval between the last realized
-    /// pitch and the octave. The two differ in spelling whenever realization
-    /// respells a degree: three `m2` steps from C sum to `dd4`, whose
-    /// complement is `AA5`, so the scale closes on `B#` rather than `C`. Taking
-    /// it from the realized pitches would read the answer off already-simplified
-    /// output and lose that.
+    /// Steps that come to twelve semitones close on the tonic: the last one
+    /// is respelled to land on its octave, so `M3 M3 M3` is `M3 M3 d4`.
+    /// Otherwise the closing interval is the *complement of the interval
+    /// sum*, which is how music21 derives it — not the interval between the
+    /// last realized pitch and the octave. The two differ in spelling
+    /// whenever realization respells a degree: three `m2` steps from C sum to
+    /// `dd4`, whose complement is `AA5`, not the major sixth from the `E-`
+    /// the walk reaches. A note the walk reaches on the tonic's place is
+    /// spelled as the tonic, so that scale still ends on `C`.
     ///
-    /// music21's own behaviour for a cycle wider than an octave is erratic —
-    /// `["P5", "P5"]` returns pitches an octave above the tonic it was given,
-    /// and it mutates the caller's interval list in place. Neither is
-    /// reproduced here: the cycle is closed at the octave above the last pitch
-    /// and the input is left alone.
+    /// A cycle wider than an octave is closed at the octave above its last
+    /// pitch: `["P5", "P5"]` is `C4 G4 D5 C6`.
     pub fn octave_repeating(tonic: Pitch, steps: &[&str]) -> Result<Self> {
         Self::octave_repeating_of(tonic, parse_steps(steps)?)
     }
@@ -99,17 +114,12 @@ impl StepScale {
         let mut steps = or_default(steps);
         // Steps a whole octave wide spelled as something else -- three major
         // thirds come to `B#` -- have their last step respelled to land on
-        // the tonic, so `M3 M3 M3` is `M3 M3 d4`.
-        if let Ok(sum) = interval_sum(&tonic, &steps)
-            && sum.semitones() == 12.0
-            && sum.short_name() != "P8"
-        {
-            let last = steps.len() - 1;
-            let start = interval_sum(&tonic, &steps[..last])?
-                .transpose_pitch_with_options(&tonic, false, None)?;
-            let octave =
-                Interval::from_name("P8")?.transpose_pitch_with_options(&tonic, false, None)?;
-            steps[last] = Interval::between_pitches(&start, &octave)?;
+        // the tonic.
+        let risen: FloatType = steps.iter().map(Interval::semitones).sum();
+        if risen == 12.0 {
+            if !interval_sum(&tonic, &steps).is_ok_and(|sum| sum.short_name() == "P8") {
+                steps = close_on_tonic(&steps)?;
+            }
             return Ok(Self {
                 tonic,
                 steps,
@@ -141,7 +151,7 @@ impl StepScale {
     /// Builds music21's `SieveScale` from a Xenakis sieve expression.
     ///
     /// The sieve's interval widths become the cycle, which music21 then treats
-    /// as a `CyclicalScale` — so `"3@0"` from C is `C E-`, and the major-scale
+    /// as a `CyclicalScale` — so `"3@0"` from C is `C E- F# A C`, and the major-scale
     /// sieve gives a major scale.
     ///
     /// The widths are counted in semitones; [`Self::sieve_by`] counts them in
@@ -162,10 +172,17 @@ impl StepScale {
                 Interval::from_chromatic(ChromaticInterval::new(FloatType::from(width) * eld)?)
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(Self {
-            tonic,
-            steps,
-            closed: false,
+        Ok(match cycle_within_octave(&steps)? {
+            Some(filled) => Self {
+                tonic,
+                steps: filled,
+                closed: true,
+            },
+            None => Self {
+                tonic,
+                steps,
+                closed: false,
+            },
         })
     }
 
@@ -195,18 +212,17 @@ impl StepScale {
         }
     }
 
-    /// Returns the pitches of one pass through the cycle, starting at the tonic.
+    /// Returns the pitches of one pass through the cycle, starting at the
+    /// tonic. Each step is spelled with at most one accidental, as music21's
+    /// interval network spells it, and a scale that repeats at the octave
+    /// ends on its tonic's name. A tonic with no octave gives pitches with
+    /// none.
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
-        let mut pitches = Vec::with_capacity(self.steps.len() + 1);
-        pitches.push(self.tonic.clone());
-
-        let mut current = self.tonic.clone();
-        for step in &self.steps {
-            // music21's IntervalNetwork defaults to pitchSimplification
-            // 'maxAccidental' with a cap of one, which is what respells the
-            // third step of an m2 cycle from E-double-flat to D.
-            current = step.transpose_pitch_with_options(&current, false, Some(1))?;
-            pitches.push(current.clone());
+        let mut pitches = self.scale()?.pitches()?;
+        if self.tonic.octave().is_none() {
+            for pitch in &mut pitches {
+                pitch.octave_setter(None);
+            }
         }
         Ok(pitches)
     }
@@ -248,10 +264,33 @@ mod tests {
     #[test]
     fn a_step_scale_reports_its_tonic_and_steps() {
         let tonic = Pitch::from_name("C4").unwrap();
-        let scale = StepScale::cyclical(tonic.clone(), &["M2", "M2"]).unwrap();
+        let scale = StepScale::cyclical(tonic.clone(), &["P5", "M2"]).unwrap();
         assert_eq!(scale.tonic(), &tonic);
         assert_eq!(scale.steps().len(), 2);
         assert_eq!(scale.degree_count(), 2);
+    }
+
+    #[test]
+    fn a_cycle_that_comes_back_within_an_octave_fills_it() {
+        // music21: CyclicalScale('c4', ['M2', 'M2']) has six degrees, and
+        // CyclicalScale('c4', ['M3']) is [C4, E4, G#4, C5].
+        let scale = StepScale::cyclical(tonic("C4"), &["M2", "M2"]).unwrap();
+        assert_eq!(scale.degree_count(), 6);
+        let scale = StepScale::cyclical(tonic("C4"), &["M3"]).unwrap();
+        assert_eq!(names(&scale), ["C", "E", "G#", "C"]);
+        assert_eq!(scale.steps()[2].short_name(), "d4");
+    }
+
+    #[test]
+    fn octave_repeating_steps_close_on_the_tonic() {
+        // music21: OctaveRepeatingScale('c4', ['m3'] * 4) is
+        // [C4, E-4, G-4, A4, C5], and on F# three major thirds come back to
+        // F#5.
+        let scale = StepScale::octave_repeating(tonic("C4"), &["m3", "m3", "m3", "m3"]).unwrap();
+        assert_eq!(names(&scale), ["C", "Eb", "Gb", "A", "C"]);
+        let scale = StepScale::octave_repeating(tonic("F#4"), &["M3", "M3", "M3"]).unwrap();
+        let pitches = scale.pitches().unwrap();
+        assert_eq!(pitches.last().unwrap().name_with_octave(), "F#5");
     }
 
     #[test]
@@ -404,7 +443,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             spelled(whole.pitches_between(&tonic("C2"), &tonic("C3")).unwrap()),
-            ["C2", "D2", "Fb2", "Gb2", "Ab2", "Bb2", "C3"]
+            ["C2", "D2", "E2", "F#2", "G#2", "Bb2", "C3"]
         );
         let quarter = StepScale::sieve_by(tonic("D4"), "1@0", 0.5)
             .unwrap()
@@ -445,11 +484,13 @@ mod tests {
 
     #[test]
     fn an_empty_interval_list_defaults_to_a_minor_second() {
-        // music21: CyclicalScale() is [C4, D-4]; OctaveRepeatingScale() is
-        // [C4, D-4, C5].
+        // music21: CyclicalScale() fills the octave with twelve minor
+        // seconds; OctaveRepeatingScale() is [C4, D-4, C5].
         assert_eq!(
             names(&StepScale::cyclical(tonic("C4"), &[]).unwrap()),
-            ["C", "Db"]
+            [
+                "C", "Db", "D", "Eb", "Fb", "F", "Gb", "G", "Ab", "A", "Bb", "Cb", "C"
+            ]
         );
         assert_eq!(
             names(&StepScale::octave_repeating(tonic("C4"), &[]).unwrap()),
@@ -462,9 +503,11 @@ mod tests {
         // Three m2 steps sum to dd4, whose complement is AA5. Realization
         // respells the third degree from E-double-flat to D, so reading the
         // closing interval off the pitches would give a major sixth to C
-        // instead. music21 closes on B#, and so does this.
+        // instead. The AA5 walks to B#, which is spelled as the tonic it
+        // comes back to.
         let scale = StepScale::octave_repeating(tonic("C4"), &["m2", "m2", "m2"]).unwrap();
-        assert_eq!(names(&scale), ["C", "Db", "D", "Eb", "B#"]);
+        assert_eq!(scale.steps()[3].short_name(), "AA5");
+        assert_eq!(names(&scale), ["C", "Db", "D", "Eb", "C"]);
 
         // Where realization changes nothing, the two agree: M2+M2+m2 is P4 and
         // its complement P5 closes on the octave.
@@ -477,8 +520,7 @@ mod tests {
     #[test]
     fn a_cycle_wider_than_an_octave_closes_above_it() {
         // Two fifths sum to M9, whose complement is m7, so the cycle closes an
-        // octave higher rather than folding back. music21 agrees on the
-        // intervals here but reports the pitches an octave off its own tonic.
+        // octave higher rather than folding back, as music21 closes it.
         let scale = StepScale::octave_repeating(tonic("C4"), &["P5", "P5"]).unwrap();
         assert_eq!(names(&scale), ["C", "G", "D", "C"]);
         let pitches = scale.pitches().unwrap();
@@ -489,9 +531,9 @@ mod tests {
     #[test]
     fn sieve_scales_match_music21() {
         let cases: [(&str, &str, &[&str]); 6] = [
-            ("C4", "3@0", &["C", "Eb"]),
-            ("D4", "3@0", &["D", "F"]),
-            ("E-4", "2@0", &["Eb", "F"]),
+            ("C4", "3@0", &["C", "Eb", "F#", "A", "C"]),
+            ("D4", "3@0", &["D", "F", "G#", "B", "D"]),
+            ("E-4", "2@0", &["Eb", "F", "G", "A", "B", "C#", "Eb"]),
             (
                 "C2",
                 "(-3@2 & 4) | (-3@1 & 4@1) | (3@2 & 4@2) | (-3 & 4@3)",

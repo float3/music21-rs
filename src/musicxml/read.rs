@@ -846,10 +846,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
     /// Puts the rest of several measures still taking rests into the part,
     /// whether or not it took all it said it would.
     ///
-    /// music21 puts one in only once it has, but its rests know it either
-    /// way, and its writer finds it through them: so one cut short by the
-    /// part's end or by the next is written all the same, counting the
-    /// rests it took. Here it stands in the part, to be written.
+    /// One cut short by the part's end or by the next stands in the part as
+    /// music21's does, counting the rests it took; one that took none is
+    /// left out.
     fn end_multi_rest(&mut self) {
         let Some(index) = self.multi_rest.take() else {
             return;
@@ -1655,12 +1654,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             return Ok(());
         };
         let change = op_frac(ticks / self.divisions);
-        if self.part.importer.finale {
-            // Finale writes a hidden rest as a `<forward>`. One of no
-            // length is a quarter rest: music21 takes a length of nought
-            // for no length given.
-            let length = if change == 0.0 { 1.0 } else { change };
-            let mut rest = Rest::new(Duration::new(length)?);
+        if self.part.importer.finale && change != 0.0 {
+            // Finale writes a hidden rest as a `<forward>`.
+            let mut rest = Rest::new(Duration::new(change)?);
             rest.set_hidden(true);
             let seq = self.seq;
             self.insert_note(element, staff_number(element), rest.into());

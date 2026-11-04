@@ -71,6 +71,55 @@ pub(super) fn step_interval(name: &str) -> Result<Interval> {
     }
 }
 
+/// Steps spanning twelve semitones with the last one spelled so that they
+/// add up to a perfect octave: music21's `_closeOnTonic`.
+///
+/// The steps before the last are walked from C4 spelling with at most one
+/// accidental, and the last step is the interval from there to C5. Steps
+/// that already land on C5 are returned unchanged.
+pub(super) fn close_on_tonic(steps: &[Interval]) -> Result<Vec<Interval>> {
+    let Some((last, leading)) = steps.split_last() else {
+        return Ok(Vec::new());
+    };
+    let octave = Pitch::from_name("C5")?;
+    let mut before_last = Pitch::from_name("C4")?;
+    for step in leading {
+        before_last = step.transpose_pitch_with_options(&before_last, false, Some(1))?;
+    }
+    let landed = last.transpose_pitch_with_options(&before_last, false, Some(4))?;
+    if landed.name_with_octave() == octave.name_with_octave() {
+        return Ok(steps.to_vec());
+    }
+    let mut closed = leading.to_vec();
+    closed.push(Interval::between_pitches(&before_last, &octave)?);
+    Ok(closed)
+}
+
+/// The steps of a cycle that comes back to its tonic within an octave,
+/// repeated to fill the octave and closed on the tonic, or `None` for a
+/// cycle that does not: music21's `AbstractCyclicalScale`, which makes such
+/// a cycle octave-duplicating.
+///
+/// A cycle comes back within an octave when every step is a whole number of
+/// semitones and together they come to 1, 2, 3, 4, 6 or 12.
+pub(super) fn cycle_within_octave(steps: &[Interval]) -> Result<Option<Vec<Interval>>> {
+    if steps.is_empty() || steps.iter().any(|step| step.semitones().fract() != 0.0) {
+        return Ok(None);
+    }
+    let span: crate::defaults::FloatType = steps.iter().map(Interval::semitones).sum();
+    if ![1.0, 2.0, 3.0, 4.0, 6.0, 12.0].contains(&span) {
+        return Ok(None);
+    }
+    let repeats = (12.0 / span) as usize;
+    let filled: Vec<Interval> = steps
+        .iter()
+        .cycle()
+        .take(steps.len() * repeats)
+        .cloned()
+        .collect();
+    close_on_tonic(&filled).map(Some)
+}
+
 /// Which set of solfège syllables [`Scale::solfeg`] uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -391,23 +440,19 @@ impl ScaleType {
             Self::Hypolocrian => &["m2", "M2", "M2", "m2", "M2", "M2", "M2"],
             Self::HarmonicMinor => &["M2", "m2", "M2", "M2", "m2", "a2", "m2"],
             Self::MelodicMinor => &["M2", "m2", "M2", "M2", "M2", "M2", "m2"],
-            Self::Chromatic => &["m2"; 12],
-            Self::WholeTone => &["M2"; 6],
+            // The last step lands on the tonic's octave by name, as music21's
+            // `_closeOnTonic` spells it: eleven minor seconds spelled with one
+            // accidental reach C- from C, and C- to C is an augmented unison.
+            Self::Chromatic => &[
+                "m2", "m2", "m2", "m2", "m2", "m2", "m2", "m2", "m2", "m2", "m2", "a1",
+            ],
+            Self::WholeTone => &["M2", "M2", "M2", "M2", "M2", "d3"],
             Self::Octatonic => &["M2", "m2", "M2", "m2", "M2", "m2", "M2", "m2"],
             Self::RagAsawari => &["M2", "m3", "M2", "m2", "M3"],
             // The sixth step is music21's `M-2` edge: a descending major
             // second inside an otherwise ascending network.
             Self::RagMarwa => &["m2", "a2", "M2", "m3", "M2", "-M2", "m3"],
         }
-    }
-
-    /// Whether this scale is a cycle walked from its tonic both ways rather
-    /// than a pattern repeated at the octave, as music21 builds its whole-tone
-    /// and chromatic scales. The two spell differently wherever the steps
-    /// respell as they go: the whole-tone scale on B- comes down through `A-`,
-    /// `G-` and `F-`, not up to them through `G#`.
-    pub fn is_cycle(self) -> bool {
-        matches!(self, Self::WholeTone | Self::Chromatic)
     }
 
     /// Returns how this scale respells pitches, matching music21's network.
@@ -750,17 +795,17 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             )
         };
 
-        // A whole-tone scale is a cycle, walked down to the range from its
-        // tonic above it.
+        // A whole-tone scale repeats at the octave, walked up from the octave
+        // of its tonic below the range (music21 11.0.0b19).
         assert_eq!(
             between(ScaleType::WholeTone, "Bb4", "C#4", "G#4"),
-            ["D4", "Fb4", "Gb4", "Ab4"]
+            ["D4", "E4", "F#4", "G#4"]
         );
         // An octave-repeating scale starts from the octave of its tonic just
         // below the range, however far below the range the tonic is.
         assert_eq!(
             between(ScaleType::Octatonic, "G#2", "C#4", "G#4"),
-            ["C#4", "D4", "E4", "F4", "G4", "Ab4"]
+            ["C#4", "D4", "E4", "F4", "G4", "G#4"]
         );
         // And stops at the first note at or past the top, so Rag Marwa's
         // turn back down to G4 is not counted twice.
@@ -785,7 +830,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         use crate::Pitch;
         // music21 realizes each candidate between the lowest and highest
         // pitch it is given, so a spelling the scale only has elsewhere does
-        // not count. Read off music21 11.0.0b9.
+        // not count. Read off music21 11.0.0b19.
         let pitches: Vec<Pitch> = ["F#", "A", "C#", "E#"]
             .iter()
             .map(|name| Pitch::from_name(*name).unwrap())
@@ -796,7 +841,7 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
             .into_iter()
             .map(|(matched, scale)| (matched, scale.tonic().name()))
             .collect();
-        assert_eq!(ranked, [(3, "D#".to_string()), (3, "C#".to_string())]);
+        assert_eq!(ranked, [(3, "B".to_string()), (3, "A".to_string())]);
     }
 
     #[test]
@@ -1594,10 +1639,10 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
 
     #[test]
     fn whole_tone_spells_upward_until_accidentals_run_out() {
-        // From C the scale can stay on sharps and closes on B#, not C.
+        // From C the scale stays on sharps and closes on its tonic.
         assert_eq!(
             names(ScaleType::WholeTone, "C4"),
-            ["C", "D", "E", "F#", "G#", "A#", "B#"]
+            ["C", "D", "E", "F#", "G#", "A#", "C"]
         );
         // From B a literal spelling would need G##, so music21 respells.
         assert_eq!(
@@ -1615,6 +1660,12 @@ Observed Javanese Slendro scale, Helmholtz/Ellis p. 518, nr.94
         assert_eq!(
             names(ScaleType::Octatonic, "G4"),
             ["G", "A", "Bb", "C", "Db", "Eb", "Fb", "Gb", "G"]
+        );
+        // The walk from E reaches F- on the tonic's place, which is spelled
+        // as the tonic (music21 11.0.0b19).
+        assert_eq!(
+            names(ScaleType::Octatonic, "E4"),
+            ["E", "F#", "G", "A", "Bb", "C", "Db", "Eb", "E"]
         );
     }
 

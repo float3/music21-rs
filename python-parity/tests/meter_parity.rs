@@ -117,14 +117,11 @@ fn every_time_signature_matches_music21() {
                 actual.bar_quarter_length()
             ));
         }
-        if !close(
-            actual.beat_quarter_length().unwrap(),
-            expected.beat_quarter_length,
-        ) {
+        if !close(actual.beat_quarter_length(), expected.beat_quarter_length) {
             mismatches.push(format!(
                 "{ratio} beat_quarter_length: music21 {}, crate {}",
                 expected.beat_quarter_length,
-                actual.beat_quarter_length().unwrap()
+                actual.beat_quarter_length()
             ));
         }
 

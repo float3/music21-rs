@@ -1335,7 +1335,10 @@ fn clef_scheme(clef: &Clef) -> String {
         .collect();
     let name = [
         ("Treble8vbClef", "treble_8"),
+        ("Treble8vaClef", "treble^8"),
         ("TrebleClef", "treble"),
+        ("Bass8vbClef", "bass_8"),
+        ("Bass8vaClef", "bass^8"),
         ("BassClef", "bass"),
         ("AltoClef", "alto"),
         ("TenorClef", "tenor"),

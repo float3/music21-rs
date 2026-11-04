@@ -6,10 +6,10 @@
 # sort key stand in spelling order, as the library breaks that tie
 # by set order.
 #
-# music21 11.0.0b15 at c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071
+# music21 11.0.0b19 at 19ada90a8f5e7ffb572c69075184b0c5708adf3b
 
-music21_version = "11.0.0b15"
-music21_commit = "c815254cbfd3e0dbbfafc6d6d2eeb2970ad63071"
+music21_version = "11.0.0b19"
+music21_commit = "19ada90a8f5e7ffb572c69075184b0c5708adf3b"
 
 harte_commit = "dd8cfd728572ed728195e05c8f2062a58b3e9036"
 

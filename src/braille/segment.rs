@@ -742,8 +742,8 @@ pub fn prepare_slurred_notes(part: &Stream, options: &SegmentOptions) -> Vec<Not
         ) else {
             continue;
         };
-        let (mut begin, mut end) = (begin as i64, end as i64);
-        let delta = (end - begin).unsigned_abs() as usize + 1;
+        let (mut begin, mut end) = (begin.min(end) as i64, begin.max(end) as i64);
+        let delta = (end - begin) as usize + 1;
         let short = delta <= MAX_NOTES_FOR_SHORT_SLUR;
         if (short && !options.show_short_slurs_and_ties_together) || (!short && !show_long) {
             if tie_of(at(begin)) == Some(crate::notation::TieType::Start) {
@@ -1269,6 +1269,18 @@ impl NoteGroupingTranscriber {
         self.transcribe_one_element(grouping, index);
     }
 
+    /// Remembers the pitch just written, so the next note shows its octave
+    /// only where needed. A note or chord written as the exception sign
+    /// leaves no pitch, and the next note shows its octave.
+    fn follow_written_note(&mut self, written: &Transcription, pitch: Pitch) {
+        if written.braille == symbol("basic_exception") {
+            self.previous_note = None;
+            self.show_leading_octave = true;
+        } else {
+            self.previous_note = Some(pitch);
+        }
+    }
+
     fn transcribe_one_element(&mut self, grouping: &mut BrailleElementGrouping, index: usize) {
         let descending = grouping.descending_chords.unwrap_or(false);
         let show_clef_signs = grouping.show_clef_signs;
@@ -1278,7 +1290,7 @@ impl NoteGroupingTranscriber {
             StreamElement::Note(note) => {
                 let shown = self.octave_shown(note.pitch());
                 let written = note_to_braille(note, shown, upper_first, item.context);
-                self.previous_note = Some(note.pitch().clone());
+                self.follow_written_note(&written, note.pitch().clone());
                 Some(written)
             }
             StreamElement::Rest(rest) => Some(rest_to_braille(rest)),
@@ -1293,7 +1305,7 @@ impl NoteGroupingTranscriber {
                 chosen.map(|pitch| {
                     let shown = self.octave_shown(&pitch);
                     let written = chord_to_braille(chord, descending, shown);
-                    self.previous_note = Some(pitch);
+                    self.follow_written_note(&written, pitch);
                     written
                 })
             }
@@ -1309,7 +1321,7 @@ impl NoteGroupingTranscriber {
                 chosen.and_then(|pitch| {
                     let shown = self.octave_shown(&pitch);
                     let written = chord_symbol_to_braille(chord_symbol, descending, shown)?;
-                    self.previous_note = Some(pitch);
+                    self.follow_written_note(&written, pitch);
                     Some(written)
                 })
             }
@@ -1440,12 +1452,11 @@ fn split_with_sources(
             offset = op_frac(offset + op_frac(duration.quarter_length()));
         }
     }
-    let mut beats = meter.beat_sequence().clone();
-    let (start_zero, mut end_zero) = match beats.partition_by_count(2, false) {
-        Ok(()) => beats.level_span(0)[0],
+    let beats = meter.beat_sequence();
+    let (start_zero, mut end_zero) = match beats.partitioned_by_count(2, false) {
+        Ok(halves) => halves.level_span(0)[0],
         Err(_) => {
-            beats.partition_by_count(3, false)?;
-            let spans = beats.level_span(0);
+            let spans = beats.partitioned_by_count(3, false)?.level_span(0);
             (spans[0].0, spans[spans.len() - 2].1)
         }
     };
@@ -2386,5 +2397,57 @@ impl BrailleGrandSegment {
             "---end grand segment---".to_string(),
         ]
         .join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chord::Chord;
+
+    fn element(element: StreamElement) -> BrailleElement {
+        BrailleElement {
+            element,
+            offset: 0.0,
+            affinity: Affinity::NoteGrouping,
+            sort_order: 0,
+            english: None,
+            context: NoteContext::default(),
+            outgoing_key: None,
+            leaf: 0,
+            voice_english: Vec::new(),
+        }
+    }
+
+    /// A note after a note or chord written as the exception sign shows
+    /// its octave.
+    #[test]
+    fn octave_after_exception_sign() -> Result<()> {
+        let short = Duration::new(1.0 / 64.0)?;
+        let mut short_note = Note::from_name("E4")?;
+        short_note.set_duration(short.clone());
+        let short_chord = Chord::new("E4 G4")?.with_duration(short);
+        for unbrailled in [
+            StreamElement::Note(short_note),
+            StreamElement::Chord(short_chord),
+        ] {
+            for (show_leading_octave, expected) in [(true, "⠐⠹⠜⠦⠐⠹"), (false, "⠹⠜⠦⠐⠹")]
+            {
+                let mut grouping = BrailleElementGrouping {
+                    elements: vec![
+                        element(StreamElement::Note(Note::from_name("C4")?)),
+                        element(unbrailled.clone()),
+                        element(StreamElement::Note(Note::from_name("C4")?)),
+                    ],
+                    ..BrailleElementGrouping::default()
+                };
+                let mut transcriber = NoteGroupingTranscriber {
+                    show_leading_octave,
+                    ..NoteGroupingTranscriber::default()
+                };
+                assert_eq!(transcriber.transcribe_group(&mut grouping), expected);
+            }
+        }
+        Ok(())
     }
 }

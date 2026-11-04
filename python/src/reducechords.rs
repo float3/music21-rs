@@ -34,8 +34,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use music21_rs_crate::analysis::reduce_chords::{
-    ChordWeight, ReductionOptions, WeighedChord, measure_chord_weights, reduce_chords,
-    reduced_measure_places,
+    ChordWeight, ReductionOptions, SliceWeigher, WeighedChord, measure_chord_weights,
+    reduce_chords, reduced_measure_places, slice_weight,
 };
 use music21_rs_crate::chord::Chord as RsChord;
 use music21_rs_crate::duration::Duration as RsDuration;
@@ -164,8 +164,11 @@ impl ChordReducer {
         closedPosition = false,
         forbiddenChords = None,
         maximumNumberOfChords = 3,
-        removeDissonances = false
+        removeDissonances = false,
+        forceOctave = Some(4),
+        weightAlgorithm = None
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn run<'py>(
         slf: &Bound<'py, Self>,
         inputScore: &Bound<'py, PyAny>,
@@ -174,6 +177,8 @@ impl ChordReducer {
         forbiddenChords: Option<&Bound<'py, PyAny>>,
         maximumNumberOfChords: usize,
         #[pyo3(from_py_with = crate::truthy)] removeDissonances: bool,
+        forceOctave: Option<i32>,
+        weightAlgorithm: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if !crate::stream::answers_to_class(
@@ -209,9 +214,40 @@ impl ChordReducer {
         options.closed_position = closedPosition;
         options.maximum_number_of_chords = maximumNumberOfChords;
         options.remove_dissonances = removeDissonances;
+        options.force_octave = forceOctave;
+        // A caller's own algorithm is called back for every slice; the
+        // first error it raises is raised once the reduction is done.
+        let raised = std::sync::Arc::new(std::sync::Mutex::new(None::<PyErr>));
+        if let Some(algorithm) = weightAlgorithm.filter(|given| !given.is_none()) {
+            let algorithm = algorithm.clone().unbind();
+            let failed = std::sync::Arc::clone(&raised);
+            options.weight_algorithm =
+                SliceWeigher::new(move |quarterLength, accent, isLast, isConsonant| {
+                    Python::attach(|py| {
+                        algorithm
+                            .call1(py, (quarterLength, accent, isLast, isConsonant))
+                            .and_then(|weight| weight.extract::<f64>(py))
+                            .unwrap_or_else(|error| {
+                                if let Ok(mut first) = failed.lock() {
+                                    first.get_or_insert(error);
+                                }
+                                0.0
+                            })
+                    })
+                });
+        }
         let score = crate::stream::crate_stream(inputScore)?;
         let made = reduce_chords(&score, &options).map_err(reducer_error)?;
+        if let Some(error) = raised.lock().ok().and_then(|mut first| first.take()) {
+            return Err(error);
+        }
         crate::stream::music21_from_crate(py, &made)
+    }
+
+    /// What a slice weighs by default: music21's `sliceWeight`.
+    #[staticmethod]
+    fn sliceWeight(quarterLength: f64, accent: f64, isLast: bool, isConsonant: bool) -> f64 {
+        slice_weight(quarterLength, accent, isLast, isConsonant)
     }
 
     /// How much each chord of a measure weighs: music21's

@@ -9,16 +9,21 @@
 //! the same pitch classes are weighed together: how long each lasts, times
 //! how strong the beat it starts on is (the last sounding slice counting
 //! its length alone), times a tenth if it is dissonant. The few heaviest
-//! are kept, each lasting until the next kept slice of other classes.
+//! are kept, each lasting until the next kept slice of other classes. A
+//! chord that is the same as the first chord of the next measure is tied
+//! to it, and the reduction gets the clef that best fits its notes.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::chord::Chord;
-use crate::defaults::FloatType;
+use crate::clef::Clef;
+use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::{Error, Result};
 use crate::makenotation::op_frac;
 use crate::meter::TimeSignature;
+use crate::notation::{Tie, TieType};
 use crate::pitch::Pitch;
 use crate::stream::{Stream, StreamElement, StreamKind};
 use crate::tree::{Flatten, as_timespans};
@@ -30,9 +35,12 @@ pub struct ReductionOptions {
     /// How many chords a measure may keep: music21's
     /// `maximumNumberOfChords`, three by default.
     pub maximum_number_of_chords: usize,
-    /// Whether every chord is written in closed position in the fourth
-    /// octave afterwards: music21's `closedPosition`.
+    /// Whether every chord is written in closed position afterwards:
+    /// music21's `closedPosition`.
     pub closed_position: bool,
+    /// The octave a chord in closed position has its lowest note in, or
+    /// its own octave with `None`: music21's `forceOctave`, 4 by default.
+    pub force_octave: Option<IntegerType>,
     /// Chords whose interval classes count as consonant however they
     /// sound: music21's `allowableChords`.
     pub allowable_chords: Vec<Chord>,
@@ -43,6 +51,9 @@ pub struct ReductionOptions {
     /// the measures are weighed: music21's `removeDissonances`, off by
     /// default.
     pub remove_dissonances: bool,
+    /// What each slice of a measure weighs: music21's `weightAlgorithm`,
+    /// [`slice_weight`] by default.
+    pub weight_algorithm: SliceWeigher,
 }
 
 impl Default for ReductionOptions {
@@ -53,8 +64,84 @@ impl Default for ReductionOptions {
             allowable_chords: Vec::new(),
             forbidden_chords: Vec::new(),
             remove_dissonances: false,
+            force_octave: Some(4),
+            weight_algorithm: SliceWeigher::default(),
         }
     }
+}
+
+/// What a slice of a measure weighs, given its quarter length, the meter's
+/// accent where it starts, whether it is the last sounding slice of the
+/// measure and whether it is consonant: music21's `weightAlgorithm`.
+///
+/// ```
+/// use music21_rs::analysis::reduce_chords::{ReductionOptions, SliceWeigher};
+///
+/// let mut options = ReductionOptions::default();
+/// options.weight_algorithm = SliceWeigher::new(|quarter_length, _, _, _| quarter_length);
+/// assert_eq!(options.weight_algorithm.weigh(2.0, 0.5, false, true), 2.0);
+/// ```
+#[derive(Clone)]
+pub struct SliceWeigher(Arc<SliceWeight>);
+
+/// The function a [`SliceWeigher`] holds.
+type SliceWeight = dyn Fn(FloatType, FloatType, bool, bool) -> FloatType + Send + Sync;
+
+impl SliceWeigher {
+    /// A weigher that calls `weigh` with a slice's quarter length, accent,
+    /// whether it is last and whether it is consonant.
+    pub fn new(
+        weigh: impl Fn(FloatType, FloatType, bool, bool) -> FloatType + Send + Sync + 'static,
+    ) -> Self {
+        Self(Arc::new(weigh))
+    }
+
+    /// What a slice weighs.
+    pub fn weigh(
+        &self,
+        quarter_length: FloatType,
+        accent: FloatType,
+        is_last: bool,
+        is_consonant: bool,
+    ) -> FloatType {
+        (self.0)(quarter_length, accent, is_last, is_consonant)
+    }
+}
+
+impl Default for SliceWeigher {
+    fn default() -> Self {
+        Self::new(slice_weight)
+    }
+}
+
+impl std::fmt::Debug for SliceWeigher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SliceWeigher")
+    }
+}
+
+/// What a slice weighs by default: music21's `sliceWeight`. Its quarter
+/// length times its accent, or its quarter length alone if it is the last
+/// sounding slice, times a tenth unless it is consonant.
+///
+/// ```
+/// use music21_rs::analysis::reduce_chords::slice_weight;
+///
+/// assert_eq!(slice_weight(2.0, 0.5, false, true), 1.0);
+/// assert!((slice_weight(2.0, 0.5, true, false) - 0.2).abs() < 1e-12);
+/// ```
+pub fn slice_weight(
+    quarter_length: FloatType,
+    accent: FloatType,
+    is_last: bool,
+    is_consonant: bool,
+) -> FloatType {
+    let weight = if is_last {
+        quarter_length
+    } else {
+        quarter_length * accent
+    };
+    if is_consonant { weight } else { weight * 0.1 }
 }
 
 /// A score reduced to its chords: music21's `ChordReducer.run`, which hands
@@ -102,7 +189,13 @@ pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Strea
             length => length,
         };
         let slices = reduction.measure_slices(start, op_frac(start + length), &points);
-        let weights = slice_weights(&slices, &meter, measure.padding_left(), &consonance)?;
+        let weights = slice_weights(
+            &slices,
+            &meter,
+            measure.padding_left(),
+            &consonance,
+            &options.weight_algorithm,
+        )?;
         let kept = keep_heaviest_slices(&slices, &weights, options.maximum_number_of_chords);
         let mut made = Vec::new();
         if kept.is_empty() {
@@ -122,7 +215,16 @@ pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Strea
         index += 1;
     }
     if options.closed_position {
-        close_positions(&mut part);
+        close_positions(&mut part, options.force_octave);
+    }
+    tie_across_barlines(&mut part);
+    let pitches = part.pitches();
+    part.retain_leaves(&mut |_, element| !matches!(element, StreamElement::Clef(_)));
+    if let Some(first) = nth_measure(&mut part, 0) {
+        first.insert_sorted(vec![crate::stream::StreamEvent::new(
+            0.0,
+            Clef::best_for(&pitches, true),
+        )]);
     }
     let mut answer = Stream::with_kind(StreamKind::Score);
     answer.insert(0.0, part);
@@ -452,15 +554,15 @@ impl<'a> Reduction<'a> {
 /// What each set of sorted pitch classes sounding in a measure weighs, in
 /// the order they were met: music21's `sliceWeights`.
 ///
-/// A slice weighs its length times the meter's accent where it starts,
-/// read past the measure's `padding` so that a pickup is accented as the
-/// end of a bar; the last sounding slice weighs its length alone, and a
-/// dissonant one a tenth of it.
+/// Each slice is weighed by `weigher`, given the meter's accent where it
+/// starts, read past the measure's `padding` so that a pickup is accented
+/// as the end of a bar.
 fn slice_weights(
     slices: &[Slice],
     meter: &TimeSignature,
     padding: FloatType,
     consonance: &Consonance,
+    weigher: &SliceWeigher,
 ) -> Result<Vec<(Vec<u8>, FloatType)>> {
     let sounding: Vec<usize> = (0..slices.len())
         .filter(|at| !slices[*at].pitches.is_empty())
@@ -468,15 +570,13 @@ fn slice_weights(
     let mut weights: Vec<(Vec<u8>, FloatType)> = Vec::new();
     for at in &sounding {
         let slice = &slices[*at];
-        let mut weight = if Some(at) == sounding.last() {
-            slice.quarter_length
-        } else {
-            let accent = meter.accent_weight_with(op_frac(slice.offset + padding), true, true)?;
-            slice.quarter_length * accent
-        };
-        if !consonance.holds(&slice.pitches) {
-            weight *= 0.1;
-        }
+        let accent = meter.accent_weight_with(op_frac(slice.offset + padding), true, true)?;
+        let weight = weigher.weigh(
+            slice.quarter_length,
+            accent,
+            Some(at) == sounding.last(),
+            consonance.holds(&slice.pitches),
+        );
         let classes = sorted_classes(&slice.pitches);
         match weights.iter_mut().find(|(known, _)| *known == classes) {
             Some((_, total)) => *total += weight,
@@ -906,16 +1006,88 @@ fn even_out_syncopations(written: &mut [KeptChord], others: &[FloatType]) {
     }
 }
 
-/// Every chord of the part written in closed position in the fourth
-/// octave: music21's `closedPosition(forceOctave=4, inPlace=True)` over
-/// every chord of the reduction.
-fn close_positions(stream: &mut Stream) {
+/// Every chord of the part written in closed position with its lowest
+/// note in `force_octave`: music21's `closedPosition(forceOctave=...,
+/// inPlace=True)` over every chord of the reduction.
+fn close_positions(stream: &mut Stream, force_octave: Option<IntegerType>) {
     for event in stream.events_mut() {
         match event.element_mut() {
-            StreamElement::Stream(inner) => close_positions(inner),
-            StreamElement::Chord(chord) => *chord = chord.closed_position(Some(4), false),
+            StreamElement::Stream(inner) => close_positions(inner, force_octave),
+            StreamElement::Chord(chord) => *chord = chord.closed_position(force_octave, false),
             _ => {}
         }
+    }
+}
+
+/// The last note or chord of each measure tied to the first of the next
+/// when they sound the same pitches, a measure with nothing in it passed
+/// over.
+fn tie_across_barlines(part: &mut Stream) {
+    let mut previous: Option<(usize, usize)> = None;
+    for at in 0..part.events().len() {
+        let Some(measure) = part.events()[at].element().as_stream() else {
+            continue;
+        };
+        if measure.kind() != StreamKind::Measure {
+            continue;
+        }
+        let played: Vec<usize> = (0..measure.events().len())
+            .filter(|place| {
+                matches!(
+                    measure.events()[*place].element(),
+                    StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_)
+                )
+            })
+            .collect();
+        let (Some(&first), Some(&last)) = (played.first(), played.last()) else {
+            continue;
+        };
+        if let Some((before, place)) = previous {
+            let pitches_before = sounded(part, before, place);
+            if pitches_before.is_some() && pitches_before == sounded(part, at, first) {
+                add_tie(element_of(part, before, place), TieType::Start);
+                add_tie(element_of(part, at, first), TieType::Stop);
+            }
+        }
+        previous = Some((at, last));
+    }
+}
+
+/// The pitches of a note or chord in a measure of the part, or none for a
+/// rest.
+fn sounded(part: &Stream, measure: usize, place: usize) -> Option<Vec<Pitch>> {
+    let element = part.events()[measure].element().as_stream()?.events()[place].element();
+    match element {
+        StreamElement::Note(_) | StreamElement::Chord(_) => Some(element.pitches()),
+        _ => None,
+    }
+}
+
+/// An element of a measure of the part, to be changed.
+fn element_of(part: &mut Stream, measure: usize, place: usize) -> &mut StreamElement {
+    match part.events_mut()[measure].element_mut() {
+        StreamElement::Stream(inner) => inner.events_mut()[place].element_mut(),
+        element => element,
+    }
+}
+
+/// A tie of `tie_type` put on a note or chord, which becomes a continuing
+/// tie where it is already tied the other way: music21's `_addTie`.
+fn add_tie(element: &mut StreamElement, tie_type: TieType) {
+    let existing = match element {
+        StreamElement::Note(note) => note.tie().map(Tie::tie_type),
+        StreamElement::Chord(chord) => chord.tie().map(Tie::tie_type),
+        _ => return,
+    };
+    let tie_type = match existing {
+        Some(known) if known != tie_type => TieType::Continue,
+        _ => tie_type,
+    };
+    let tie = Some(Tie::new(tie_type));
+    match element {
+        StreamElement::Note(note) => note.set_tie(tie),
+        StreamElement::Chord(chord) => chord.set_tie(tie),
+        _ => {}
     }
 }
 
@@ -1011,6 +1183,91 @@ mod tests {
                 (0.0, 2.0, names(&["C3", "E4", "G4"])),
                 (2.0, 2.0, names(&["C3", "E4", "C5"])),
             ]]
+        );
+    }
+
+    #[test]
+    fn chords_are_tied_across_barlines_under_a_fitting_clef() {
+        let score = score_of(&["4/4 e1 e1 e1 f1", "4/4 C1 C1 C1 C1"]);
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let part = reduction.parts().into_iter().next().unwrap();
+        let ties: Vec<Vec<Option<TieType>>> = part
+            .measures()
+            .into_iter()
+            .map(|measure| {
+                measure
+                    .events()
+                    .iter()
+                    .filter_map(|event| match event.element() {
+                        StreamElement::Chord(chord) => Some(chord.tie().map(Tie::tie_type)),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            ties,
+            [
+                vec![Some(TieType::Start)],
+                vec![Some(TieType::Continue)],
+                vec![Some(TieType::Stop)],
+                vec![None],
+            ]
+        );
+        let clefs: Vec<crate::clef::ClefKind> = part
+            .measures()
+            .into_iter()
+            .flat_map(|measure| {
+                measure
+                    .events()
+                    .iter()
+                    .filter_map(|event| match event.element() {
+                        StreamElement::Clef(clef) => Some(clef.kind()),
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        assert_eq!(clefs, [crate::clef::ClefKind::BassClef]);
+    }
+
+    #[test]
+    fn grace_notes_are_left_out() {
+        let mut score = score_of(&["4/4 e1", "4/4 C1"]);
+        let grace = crate::note::Note::from_name("F#4")
+            .unwrap()
+            .with_duration(Duration::default().grace_duration());
+        if let StreamElement::Stream(part) = score.events_mut()[0].element_mut()
+            && let Some(measure) = nth_measure(part, 0)
+        {
+            measure.insert(0.0, grace);
+        }
+        let reduction = reduce_chords(&score, &ReductionOptions::default()).unwrap();
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            chords_of(&reduction),
+            [vec![(0.0, 4.0, names(&["C3", "E4"]))]]
+        );
+    }
+
+    #[test]
+    fn closed_position_puts_the_lowest_note_in_the_octave_asked_for() {
+        let score = score_of(&["4/4 e1", "4/4 C1"]);
+        let mut options = ReductionOptions {
+            closed_position: true,
+            ..ReductionOptions::default()
+        };
+        let names = |names: &[&str]| names.iter().map(ToString::to_string).collect();
+        let reduction = reduce_chords(&score, &options).unwrap();
+        assert_eq!(
+            chords_of(&reduction),
+            [vec![(0.0, 4.0, names(&["C4", "E4"]))]]
+        );
+        options.force_octave = None;
+        let reduction = reduce_chords(&score, &options).unwrap();
+        assert_eq!(
+            chords_of(&reduction),
+            [vec![(0.0, 4.0, names(&["C3", "E3"]))]]
         );
     }
 
