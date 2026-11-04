@@ -1630,12 +1630,17 @@ jobs:
       - release
       - publish-crates
     # `release` waits on every check, so this does too. `publish-crates` is
-    # skipped in a run that releases nothing, which must not skip this.
+    # skipped in a run that releases nothing, which must not skip this; in a
+    # run that releases music21-rs it is also skipped when a wheel fails, and
+    # then harte waits for the re-run, since crates.io lacks what it needs.
     if: >-
       ${{
         !cancelled()
         && needs.release.result == 'success'
-        && (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped')
+        && (
+          needs.publish-crates.result == 'success'
+          || (needs.publish-crates.result == 'skipped' && needs.release.outputs.changed != 'true')
+        )
       }}
     environment: crates-io
     steps:
