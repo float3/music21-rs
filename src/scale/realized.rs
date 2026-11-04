@@ -49,8 +49,9 @@ pub struct Scale {
     custom_simplification: Option<Simplification>,
     /// Whether the scale is a cycle, realized by walking out from its tonic
     /// both ways rather than once and moved by octaves: music21's
-    /// `AbstractCyclicalScale`, whose network does not duplicate at the
-    /// octave even where its steps happen to add up to one.
+    /// `AbstractCyclicalScale` on a cycle that does not come back to its
+    /// tonic within an octave, whose network does not duplicate at the
+    /// octave.
     #[cfg_attr(feature = "serde", serde(default))]
     cyclic: bool,
 }
@@ -154,7 +155,7 @@ impl Scale {
             tonic,
             custom_steps: None,
             custom_simplification: None,
-            cyclic: scale_type.is_cycle(),
+            cyclic: false,
         }
     }
 
@@ -240,12 +241,20 @@ impl Scale {
     /// `CyclicalScale`, `SieveScale` and `ScalaScale`, all of which stand on
     /// an `AbstractCyclicalScale`.
     ///
-    /// It sounds the same notes [`Self::from_steps`] would where the steps
-    /// add up to an octave, but it reaches each one by walking to it from
-    /// the tonic, so a note below the tonic is spelled for the step it was
-    /// reached by coming down. With microtones that is a different spelling
-    /// -- slendro on C has `Bb3(-40c)` below its tonic and `A~4(+10c)` above.
+    /// A cycle of whole semitones that comes back to its tonic within an
+    /// octave (1, 2, 3, 4, 6 or 12 semitones in all) repeats at the octave:
+    /// its steps are repeated to fill the octave, the last one spelled to
+    /// land on the tonic, and each note of the octave is a degree of its own.
+    /// A cycle of major thirds on C is `C E G# C`, with three degrees.
+    ///
+    /// Any other cycle is walked from the tonic, so a note below the tonic
+    /// is spelled for the step it was reached by coming down. With microtones
+    /// that is a different spelling -- slendro on C has `Bb3(-40c)` below its
+    /// tonic and `A~4(+10c)` above.
     pub fn from_cycle(tonic: Pitch, steps: Vec<Interval>) -> Result<Self> {
+        if let Some(filled) = super::scaletype::cycle_within_octave(&steps)? {
+            return Self::from_steps(tonic, filled);
+        }
         let mut scale = Self::from_steps(tonic, steps)?;
         scale.cyclic = true;
         Ok(scale)
@@ -356,6 +365,7 @@ impl Scale {
         let simplification = self.simplification();
         let steps = self.walk()?;
         let period = self.period_in_octaves(&steps);
+        let terminus = self.terminus_name();
         let mut current = self.realization_start()?;
         shift_by_periods(&mut current, period, highest, false);
         let mut pitches = Vec::new();
@@ -368,10 +378,29 @@ impl Scale {
             if sounding < lowest + SLACK {
                 break;
             }
-            let step = &steps[steps.len() - 1 - index % steps.len()];
-            current = advance(&current, &step.reversed()?, simplification)?;
+            let place = steps.len() - 1 - index % steps.len();
+            current = advance(&current, &steps[place].reversed()?, simplification)?;
+            if place == 0 {
+                current = spell_terminus(current, terminus.as_deref())?;
+            }
         }
         Ok(pitches)
+    }
+
+    /// The name a note of this scale takes wherever the walk comes back to
+    /// the tonic's place, or `None` where it keeps the spelling the walk
+    /// gives it.
+    ///
+    /// Spelling with few accidentals can change a letter as the walk goes
+    /// (C## becomes D), so a scale walked a whole octave can come back to
+    /// its tonic under another name: the octatonic scale on E reaches `F-`.
+    /// music21 spells it as the tonic is spelled in a scale that repeats at
+    /// the octave and is realized from its tonic, which is every scale here
+    /// but the plagal modes, realized from below their final.
+    fn terminus_name(&self) -> Option<String> {
+        let from_tonic = self.custom_steps.is_some() || self.scale_type.tonic_degree() == 1;
+        (from_tonic && !self.cyclic && self.repeats_at_the_octave() && self.octave_duplicating())
+            .then(|| self.realized_tonic().name())
     }
 
     /// The steps of a scale with no name, in the order they are walked: a
@@ -470,9 +499,14 @@ impl Scale {
         let mut pitches = Vec::with_capacity(self.scale_type.degree_count() + 1);
         pitches.push(start.clone());
 
+        let terminus = self.terminus_name();
+        let steps = self.walk()?;
         let mut current = start;
-        for step in self.walk()? {
-            current = advance(&current, &step, simplification)?;
+        for (index, step) in steps.iter().enumerate() {
+            current = advance(&current, step, simplification)?;
+            if (index + 1) % steps.len() == 0 {
+                current = spell_terminus(current, terminus.as_deref())?;
+            }
             pitches.push(current.clone());
         }
         if self.custom_steps.is_none()
@@ -695,6 +729,7 @@ impl Scale {
         // take two to come back to where it began, and dropping by one would
         // start the pattern halfway through itself.
         let period = self.period_in_octaves(&steps);
+        let terminus = self.terminus_name();
         let mut current = self.realization_start()?;
         shift_by_periods(&mut current, period, lowest, true);
         let mut pitches = Vec::new();
@@ -710,6 +745,9 @@ impl Scale {
                 break;
             }
             current = advance(&current, &steps[index % steps.len()], simplification)?;
+            if (index + 1) % steps.len() == 0 {
+                current = spell_terminus(current, terminus.as_deref())?;
+            }
         }
         Ok(pitches)
     }
@@ -1397,6 +1435,29 @@ impl Scale {
 /// octave a hair past where the range ends, and still closes on it.
 fn within(sounding: FloatType, lowest: FloatType, highest: FloatType) -> bool {
     sounding > lowest - SLACK && sounding < highest + SLACK
+}
+
+/// A note a walk reaches on the tonic's place, spelled as `name` where the
+/// two are a whole number of octaves apart: music21's `_spellTerminus`. With
+/// no name, or a note that is not an octave of it, the note is unchanged.
+fn spell_terminus(pitch: Pitch, name: Option<&str>) -> Result<Pitch> {
+    let Some(name) = name else {
+        return Ok(pitch);
+    };
+    if pitch.name() == name {
+        return Ok(pitch);
+    }
+    let octave = pitch
+        .octave()
+        .unwrap_or(crate::defaults::PITCH_OCTAVE as IntegerType);
+    let mut respelled = Pitch::from_name(name)?;
+    respelled.octave_setter(Some(octave));
+    let octaves = (pitch.ps() - respelled.ps()) / 12.0;
+    if octaves != octaves.round() {
+        return Ok(pitch);
+    }
+    respelled.octave_setter(Some(octave + octaves.round() as IntegerType));
+    Ok(respelled)
 }
 
 /// The slack [`within`] allows at either end of a range, in semitones.

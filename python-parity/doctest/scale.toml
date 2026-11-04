@@ -1,13 +1,19 @@
 # Docstrings of music21.scale whose every example passes against the
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
 # --manifest-path python-parity/Cargo.toml --test parity doctest_scale::`; the test
-# fails when one of these stops passing.
+# fails when one of these stops passing or one passes that is not listed.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why;
+# `[optional]` names those that need a package the harness may lack.
 
 passing = [
     "music21.scale",
+    "music21.scale.AbstractCyclicalScale",
+    "music21.scale.AbstractCyclicalScale.buildNetwork",
     "music21.scale.AbstractDiatonicScale",
     "music21.scale.AbstractDiatonicScale.buildNetwork",
     "music21.scale.AbstractOctatonicScale.buildNetwork",
+    "music21.scale.AbstractOctaveRepeatingScale",
+    "music21.scale.AbstractOctaveRepeatingScale.buildNetwork",
     "music21.scale.AbstractScale",
     "music21.scale.AbstractScale.buildNetworkFromPitches",
     "music21.scale.AbstractScale.fixDefaultOctaveForPitchList",
@@ -66,4 +72,7 @@ passing = [
     "music21.scale.Scale.extractPitchList",
     "music21.scale.SieveScale",
     "music21.scale.WholeToneScale",
+    "music21.scale._closeOnTonic",
+    "music21.scale._intervalListOrMode",
+    "music21.scale._toIntervals",
 ]
