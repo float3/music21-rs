@@ -917,9 +917,25 @@ pub(crate) fn adopt_duration(
         ours.client = Some(holder.clone().unbind());
         return Ok(());
     }
+    // A `FrozenDuration` never changes, so it has nothing to tell a client
+    // and keeps none: music21's `duration` setter leaves it alone.
+    if is_frozen(duration) {
+        return Ok(());
+    }
     // One of music21's own durations keeps the same slot, and writing it is
     // what its `GeneralNote.duration` setter does.
     duration.setattr("client", holder)
+}
+
+/// Whether a duration is music21's `FrozenDuration`, which cannot change.
+pub(crate) fn is_frozen(duration: &Bound<'_, PyAny>) -> bool {
+    let py = duration.py();
+    py.import("sys")
+        .and_then(|sys| sys.getattr("modules"))
+        .and_then(|modules| modules.get_item("music21.duration"))
+        .and_then(|module| module.getattr("FrozenDuration"))
+        .and_then(|frozen| duration.is_instance(&frozen))
+        .unwrap_or(false)
 }
 
 impl Clone for Duration {

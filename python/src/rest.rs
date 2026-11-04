@@ -388,13 +388,15 @@ impl Rest {
     #[setter]
     fn set_quarterLength(&mut self, py: Python<'_>, value: f64) -> PyResult<()> {
         let inner = RsDuration::new(value).map_err(note_error)?;
-        self.inner.set_duration(inner.clone());
         match &self.duration {
             Some(duration) => duration.bind(py).setattr("quarterLength", value)?,
             None => {
-                self.duration = Some(Duration::object(py, inner)?);
+                self.duration = Some(Duration::object(py, inner.clone())?);
             }
         }
+        // After the duration object, which refuses a new length where it is
+        // a FrozenDuration, so the note keeps the length it has.
+        self.inner.set_duration(inner);
         Ok(())
     }
 

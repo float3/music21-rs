@@ -1006,6 +1006,8 @@ def slots_of(cls):
     names = set()
     for ancestor in lineage(cls)[2]:
         names.update(getattr(ancestor, '__slots__', ()))
+    # Where a frozen object keeps its hash, which music21 leaves out too.
+    names.discard('_frozenHash')
     return names
 
 

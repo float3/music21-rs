@@ -56,14 +56,55 @@ pyo3::create_exception!(
 error_into!(meter_error, MeterException);
 error_into!(time_signature_error, TimeSignatureException);
 
+/// The ratio music21 reads a value as: `common` and `c` are `4/4`, `cut`
+/// and capella's `allabreve` are `2/2`, whatever case they are written in.
+/// This is also the value music21 caches a meter's sequences under.
+fn named_ratio(value: &str) -> &str {
+    match value.to_ascii_lowercase().as_str() {
+        "common" | "c" => "4/4",
+        "cut" | "allabreve" => "2/2",
+        _ => value,
+    }
+}
+
+/// Refuses a meter counting more than music21's `maxMeterNumerator`, as
+/// music21 does, before anything is built for it.
+fn checked_numerator(value: &str) -> PyResult<()> {
+    let Ok(parts) = RsTimeSignature::parts(value) else {
+        return Ok(());
+    };
+    let denominator = parts
+        .iter()
+        .map(|(_, denominator)| u128::from(*denominator))
+        .fold(1u128, |left, right| {
+            let (mut a, mut b) = (left, right);
+            while b != 0 {
+                (a, b) = (b, a % b);
+            }
+            left / a.max(1) * right
+        });
+    let numerator: u128 = parts
+        .iter()
+        .map(|(numerator, part)| u128::from(*numerator) * (denominator / u128::from(*part).max(1)))
+        .sum();
+    if numerator > u128::from(music21_rs_crate::meter::MAX_NUMERATOR) {
+        return Err(TimeSignatureException::new_err(format!(
+            "cannot make a TimeSignature with a numerator above {}: {value}",
+            music21_rs_crate::meter::MAX_NUMERATOR
+        )));
+    }
+    Ok(())
+}
+
 /// music21 writes `common` and `cut` for the two meters that have names, and
 /// takes a bare ratio otherwise. The name is the meter's `symbol`.
 fn read_meter(value: &str) -> PyResult<RsTimeSignature> {
+    checked_numerator(value)?;
     // music21 reads the two names whatever case they are written in.
     let value = value.trim();
     let (mut meter, symbol) = match value.to_ascii_lowercase().as_str() {
         "common" | "c" => (RsTimeSignature::common(), Some("common")),
-        "cut" => (RsTimeSignature::cut(), Some("cut")),
+        "cut" | "allabreve" => (RsTimeSignature::cut(), Some("cut")),
         _ => (
             RsTimeSignature::from_ratio_string(value).map_err(meter_error)?,
             None,
@@ -99,9 +140,151 @@ fn checked_divisions(
     subclass,
     skip_from_py_object
 )]
-#[derive(Clone)]
 pub struct TimeSignature {
     pub(crate) inner: RsTimeSignature,
+    /// The display, beam, beat and accent sequences as the objects handed
+    /// out, in music21's order, each standing for the one `inner` carries:
+    /// music21 shares one set between every meter read from the same value.
+    sequences: [Option<Py<PyAny>>; 4],
+    /// The duration a caller wrote over the bar's own, which is handed back
+    /// as given.
+    bar_duration: Option<Py<PyAny>>,
+}
+
+/// The order music21 keeps a meter's sequences in, in its
+/// `_defaultSequenceCache`.
+const DISPLAY: usize = 0;
+const BEAM: usize = 1;
+const BEAT: usize = 2;
+const ACCENT: usize = 3;
+
+impl TimeSignature {
+    pub(crate) fn wrap(inner: RsTimeSignature) -> Self {
+        Self {
+            inner,
+            sequences: Default::default(),
+            bar_duration: None,
+        }
+    }
+
+    /// The same meter, sharing its sequences, as music21's copy shares them.
+    fn duplicate(&self, py: Python<'_>) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            sequences: std::array::from_fn(|index| {
+                self.sequences[index]
+                    .as_ref()
+                    .map(|sequence| sequence.clone_ref(py))
+            }),
+            bar_duration: None,
+        }
+    }
+
+    /// One of the four sequences as the crate carries it.
+    fn sequence_span(&self, index: usize) -> &RsMeterTerminal {
+        match index {
+            DISPLAY => self.inner.display_sequence(),
+            BEAM => self.inner.beam_sequence(),
+            BEAT => self.inner.beat_sequence(),
+            _ => self.inner.accent_sequence(),
+        }
+    }
+
+    /// Writes one of the four sequences into the crate's meter.
+    fn set_sequence_span(&mut self, index: usize, span: RsMeterTerminal) {
+        match index {
+            DISPLAY => self.inner.set_display_sequence(span),
+            BEAM => self.inner.set_beam_sequence(span),
+            BEAT => self.inner.set_beat_sequence(span),
+            _ => self.inner.set_accent_sequence(span),
+        }
+    }
+
+    /// One of the four sequences as an object: the one held where it still
+    /// stands for what the meter carries, and otherwise the object music21's
+    /// `makeSequence` would make for it, which is then held.
+    fn sequence_object(&mut self, py: Python<'_>, index: usize) -> PyResult<Py<PyAny>> {
+        let span = as_sequence(self.sequence_span(index).clone())?;
+        if let Some(held) = &self.sequences[index]
+            && held
+                .bind(py)
+                .extract::<PyRef<'_, MeterSequence>>()
+                .is_ok_and(|held| held.inner == span)
+        {
+            return Ok(held.clone_ref(py));
+        }
+        let made = sequence_from_span(py, span, false)?;
+        self.sequences[index] = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    /// Assigns one of the four sequences, keeping the object given.
+    fn assign_sequence(&mut self, index: usize, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.set_sequence_span(index, as_sequence(span_of(value)?)?);
+        self.sequences[index] = value
+            .extract::<PyRef<'_, MeterSequence>>()
+            .is_ok()
+            .then(|| value.clone().unbind());
+        Ok(())
+    }
+
+    /// music21's `load` without what it keeps of the meter before: the meter
+    /// read from a value, with its sequences taken from music21's
+    /// `_defaultSequenceCache` where the same value was read before, and put
+    /// there where it was not.
+    fn read(py: Python<'_>, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let mut inner = read_meter(value)?;
+        checked_divisions(&mut inner, divisions)?;
+        let mut meter = Self::wrap(inner);
+        let Some(base) = installed_core(py).and_then(|_| {
+            py.import("sys")
+                .ok()?
+                .getattr("modules")
+                .ok()?
+                .get_item("music21.meter.base")
+                .ok()
+        }) else {
+            return Ok(meter);
+        };
+        let Ok(cache) = base.getattr("_defaultSequenceCache") else {
+            return Ok(meter);
+        };
+        // A list of divisions is a tuple in the key, as music21 makes it.
+        let divisions = match divisions {
+            Some(divisions) if divisions.is_instance_of::<PyList>() => {
+                PyTuple::new(py, divisions.try_iter()?.collect::<PyResult<Vec<_>>>()?)?.into_any()
+            }
+            Some(divisions) => divisions.clone(),
+            None => py.None().into_bound(py),
+        };
+        let key = PyTuple::new(
+            py,
+            [named_ratio(value).into_pyobject(py)?.into_any(), divisions],
+        )?;
+        // A key that cannot be hashed is not cached, as music21 skips it.
+        let Ok(cached) = cache.call_method1("get", (&key,)) else {
+            return Ok(meter);
+        };
+        if !cached.is_none() {
+            cache.call_method1("move_to_end", (&key,))?;
+            for index in [DISPLAY, BEAM, BEAT, ACCENT] {
+                meter.assign_sequence(index, &cached.get_item(index)?)?;
+            }
+            return Ok(meter);
+        }
+        let made = [DISPLAY, BEAM, BEAT, ACCENT]
+            .into_iter()
+            .map(|index| meter.sequence_object(py, index))
+            .collect::<PyResult<Vec<_>>>()?;
+        cache.set_item(&key, PyTuple::new(py, made)?)?;
+        let size: usize = base.getattr("_DEFAULT_SEQUENCE_CACHE_SIZE")?.extract()?;
+        while cache.len()? > size {
+            let kwargs = PyDict::new(py);
+            kwargs.set_item("last", false)?;
+            cache.call_method("popitem", (), Some(&kwargs))?;
+        }
+        Ok(meter)
+    }
 }
 
 #[pymethods]
@@ -126,30 +309,32 @@ impl TimeSignature {
         4
     }
 
+    /// A value of `None` is `4/4`, as music21 reads it.
     #[new]
-    #[pyo3(signature = (value = "4/4".to_string(), divisions = None, **keywords))]
+    #[pyo3(signature = (value = None, divisions = None, **keywords))]
     fn new(
-        value: String,
+        py: Python<'_>,
+        value: Option<String>,
         divisions: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let _ = keywords;
-        let mut inner = read_meter(&value)?;
-        checked_divisions(&mut inner, divisions)?;
-        Ok(Self { inner })
+        let divisions = divisions.filter(|divisions| !divisions.is_none());
+        Self::read(py, value.as_deref().unwrap_or("4/4"), divisions)
     }
 
     /// music21 builds in `__init__`, and a Python subclass of this one hands
     /// `__new__` its own arguments before calling up with music21's.
-    #[pyo3(signature = (value = "4/4".to_string(), divisions = None, **keywords))]
+    #[pyo3(signature = (value = None, divisions = None, **keywords))]
     fn __init__(
         mut slf: PyRefMut<'_, Self>,
-        value: String,
+        value: Option<String>,
         divisions: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let built = Self::new(value, divisions, keywords)?;
-        slf.inner = built.inner;
+        let py = slf.py();
+        let built = Self::new(py, value, divisions, keywords)?;
+        *slf = built;
         Ok(())
     }
 
@@ -184,12 +369,12 @@ impl TimeSignature {
         self.inner.numerator()
     }
 
+    /// music21's `numerator` setter, which reads the meter afresh over the
+    /// same denominator.
     #[setter]
-    fn set_numerator(&mut self, numerator: UnsignedIntegerType) -> PyResult<()> {
-        let rebuilt =
-            RsTimeSignature::new(numerator, self.inner.denominator()).map_err(meter_error)?;
-        self.inner = rebuilt;
-        Ok(())
+    fn set_numerator(&mut self, py: Python<'_>, numerator: u64) -> PyResult<()> {
+        let ratio = format!("{numerator}/{}", self.inner.denominator());
+        self.resetValues(py, Some(ratio), None)
     }
 
     #[getter]
@@ -197,12 +382,12 @@ impl TimeSignature {
         self.inner.denominator()
     }
 
+    /// music21's `denominator` setter, which reads the meter afresh over the
+    /// same numerator.
     #[setter]
-    fn set_denominator(&mut self, denominator: UnsignedIntegerType) -> PyResult<()> {
-        let rebuilt =
-            RsTimeSignature::new(self.inner.numerator(), denominator).map_err(meter_error)?;
-        self.inner = rebuilt;
-        Ok(())
+    fn set_denominator(&mut self, py: Python<'_>, denominator: u64) -> PyResult<()> {
+        let ratio = format!("{}/{denominator}", self.inner.numerator());
+        self.resetValues(py, Some(ratio), None)
     }
 
     /// How music21 writes a meter: `<music21.meter.TimeSignature 3/4>`.
@@ -223,23 +408,32 @@ impl TimeSignature {
     }
 
     #[setter]
-    fn set_ratioString(&mut self, value: &str) -> PyResult<()> {
-        self.resetValues(value.to_string(), None)
+    fn set_ratioString(&mut self, py: Python<'_>, value: &str) -> PyResult<()> {
+        self.resetValues(py, Some(value.to_string()), None)
     }
 
     /// music21's `load`: the meter read from a ratio, keeping how it was
     /// drawn and any bar length written over it, unless the ratio is `c`
     /// or `cut`, which names its symbol.
     #[pyo3(signature = (value, divisions = None))]
-    fn load(&mut self, value: &str, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let mut inner = read_meter(value)?;
-        checked_divisions(&mut inner, divisions)?;
-        if inner.symbol().is_none() {
-            inner.set_symbol(self.inner.symbol().map(str::to_string));
+    fn load(
+        &mut self,
+        py: Python<'_>,
+        value: &str,
+        divisions: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let divisions = divisions.filter(|divisions| !divisions.is_none());
+        let mut read = Self::read(py, value, divisions)?;
+        if read.inner.symbol().is_none() {
+            read.inner
+                .set_symbol(self.inner.symbol().map(str::to_string));
         }
-        inner.set_symbolize_denominator(self.inner.symbolize_denominator());
-        inner.set_bar_duration(self.inner.written_bar_duration().cloned());
-        self.inner = inner;
+        read.inner
+            .set_symbolize_denominator(self.inner.symbolize_denominator());
+        read.inner
+            .set_bar_duration(self.inner.written_bar_duration().cloned());
+        read.bar_duration = self.bar_duration.take();
+        *self = read;
         Ok(())
     }
 
@@ -247,11 +441,15 @@ impl TimeSignature {
     /// symbol, note-value denominator and written bar length cleared. The
     /// `numerator`, `denominator` and `ratioString` setters all go through
     /// it.
-    #[pyo3(signature = (value = "4/4".to_string(), divisions = None))]
-    fn resetValues(&mut self, value: String, divisions: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
-        let mut inner = read_meter(&value)?;
-        checked_divisions(&mut inner, divisions)?;
-        self.inner = inner;
+    #[pyo3(signature = (value = None, divisions = None))]
+    fn resetValues(
+        &mut self,
+        py: Python<'_>,
+        value: Option<String>,
+        divisions: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let divisions = divisions.filter(|divisions| !divisions.is_none());
+        *self = Self::read(py, value.as_deref().unwrap_or("4/4"), divisions)?;
         Ok(())
     }
 
@@ -279,26 +477,26 @@ impl TimeSignature {
 
     /// music21's `displaySequence`: how the bar is written.
     #[getter]
-    fn displaySequence(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        sequence_of(py, self.inner.display_sequence())
+    fn displaySequence(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.sequence_object(py, DISPLAY)
     }
 
     /// music21's `beatSequence`: how the bar is counted.
     #[getter]
-    fn beatSequence(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        sequence_of(py, self.inner.beat_sequence())
+    fn beatSequence(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.sequence_object(py, BEAT)
     }
 
     /// music21's `beamSequence`: how the bar is beamed.
     #[getter]
-    fn beamSequence(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        sequence_of(py, self.inner.beam_sequence())
+    fn beamSequence(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.sequence_object(py, BEAM)
     }
 
     /// music21's `accentSequence`: how the bar is weighted.
     #[getter]
-    fn accentSequence(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        sequence_of(py, self.inner.accent_sequence())
+    fn accentSequence(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.sequence_object(py, ACCENT)
     }
 
     /// Each of the four is a plain attribute of music21's, and a sequence
@@ -308,21 +506,17 @@ impl TimeSignature {
     /// installed.
     #[setter]
     fn set_accentSequence(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner
-            .set_accent_sequence(as_sequence(span_of(value)?)?);
-        Ok(())
+        self.assign_sequence(ACCENT, value)
     }
 
     #[setter]
     fn set_beatSequence(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner.set_beat_sequence(as_sequence(span_of(value)?)?);
-        Ok(())
+        self.assign_sequence(BEAT, value)
     }
 
     #[setter]
     fn set_beamSequence(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner.set_beam_sequence(as_sequence(span_of(value)?)?);
-        Ok(())
+        self.assign_sequence(BEAM, value)
     }
 
     /// music21's `summedNumerator`, which it reads off how the bar is
@@ -339,9 +533,7 @@ impl TimeSignature {
 
     #[setter]
     fn set_displaySequence(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        self.inner
-            .set_display_sequence(as_sequence(span_of(value)?)?);
-        Ok(())
+        self.assign_sequence(DISPLAY, value)
     }
 
     /// music21's `setDisplay`: write the bar a different way without
@@ -363,23 +555,30 @@ impl TimeSignature {
         self.inner.set_display(&written).map_err(meter_error)
     }
 
-    // music21 lets a caller write this over the meter's own; `None`
-    // clears it. The crate keeps it, so a copy and a pickle carry it.
+    // music21 lets a caller write this over the meter's own and hands that
+    // very duration back; `None` clears it. The crate keeps its value, so a
+    // copy and a pickle carry it.
     #[setter]
     fn set_barDuration(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
         let written = match value.is_none() {
             true => None,
             false => Some(duration_from_any(value)?),
         };
+        self.bar_duration = written.as_ref().map(|_| value.clone().unbind());
         self.inner.set_bar_duration(written);
         Ok(())
     }
 
     /// The length of one bar, as music21's shared `FrozenDuration`, or the
-    /// `Duration` written over it.
+    /// duration written over it.
     #[getter]
     fn barDuration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         match self.inner.written_bar_duration() {
+            Some(_) if self.bar_duration.is_some() => Ok(self
+                .bar_duration
+                .as_ref()
+                .map(|written| written.clone_ref(py))
+                .unwrap_or_else(|| py.None())),
             // The class installed over music21's where there is one, since a
             // duration is compared by its class as well as its length.
             Some(written) => Duration::object(py, written.clone()),
@@ -701,16 +900,32 @@ impl TimeSignature {
             .is_ok_and(|other| self.inner.ratio_equal(&other.inner))
     }
 
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for sequence in &self.sequences {
+            visit.call(sequence)?;
+        }
+        visit.call(&self.bar_duration)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.sequences = Default::default();
+        self.bar_duration = None;
+    }
+
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         _memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().clone();
+        let copied = slf.borrow().duplicate(slf.py());
         crate::copy_as_same_type(slf, copied)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let copied = slf.borrow().clone();
+        let copied = slf.borrow().duplicate(slf.py());
         crate::copy_as_same_type(slf, copied)
     }
 
@@ -800,15 +1015,33 @@ pub(crate) fn frozen_duration(py: Python<'_>, quarter_length: FloatType) -> PyRe
     Ok(made)
 }
 
-/// The terminals handed out so far, one per ratio and weight: music21's
-/// `getMeterTerminal`, which hands every plain `1/4` back as one object.
+/// music21's `meter.core`, where this package's classes are installed over
+/// its own: its `getMeterTerminal` and `makeSequence` caches are then the
+/// ones that decide which object a span is.
+fn installed_core(py: Python<'_>) -> Option<Bound<'_, PyAny>> {
+    crate::installed_class(py, "music21.meter.core", "MeterSequence")?;
+    let modules = py.import("sys").ok()?.getattr("modules").ok()?;
+    modules.get_item("music21.meter.core").ok()
+}
+
+/// The terminals handed out so far, one per ratio and weight, where music21
+/// is not installed over: music21's `getMeterTerminal` keeps the same.
 static TERMINALS: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
 
 /// How many terminals are kept, as music21 keeps its 1024 most recent.
 const TERMINALS_KEPT: usize = 1024;
 
-/// A terminal as the one object music21 would hand back for it.
+/// A terminal as the one object music21 would hand back for it: what its
+/// `getMeterTerminal` answers, where it is installed over.
 fn terminal_object(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>> {
+    if let Some(core) = installed_core(py) {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("weight", span.weight())?;
+        return Ok(core
+            .getattr("getMeterTerminal")?
+            .call((span.numerator(), span.denominator()), Some(&kwargs))?
+            .unbind());
+    }
     let cache = TERMINALS.get_or_init(py, || PyDict::new(py).unbind());
     let cache = cache.bind(py);
     let key = (
@@ -826,7 +1059,7 @@ fn terminal_object(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>>
         py,
         "music21.meter.core",
         "MeterTerminal",
-        MeterTerminal { inner: span },
+        MeterTerminal::wrap(span),
     )?
     .into_any();
     cache.set_item(key, &made)?;
@@ -839,8 +1072,54 @@ fn node_object(py: Python<'_>, span: RsMeterTerminal) -> PyResult<Py<PyAny>> {
     if span.is_empty() {
         terminal_object(py, span)
     } else {
-        sequence_object(py, MeterSequence::holding(span, false))
+        sequence_from_span(py, span, false)
     }
+}
+
+/// A sequence of the parts given, as music21's `makeSequence` makes one:
+/// the same object for the same parts, where music21 is installed over.
+fn make_sequence(
+    py: Python<'_>,
+    inner: RsMeterTerminal,
+    parts: Vec<Py<PyAny>>,
+    parenthesis: bool,
+) -> PyResult<Py<PyAny>> {
+    if let Some(core) = installed_core(py)
+        && !inner.is_empty()
+    {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("parenthesis", parenthesis)?;
+        kwargs.set_item("summedNumerator", inner.summed_numerator())?;
+        return Ok(core
+            .getattr("makeSequence")?
+            .call(
+                (
+                    inner.numerator(),
+                    inner.denominator(),
+                    PyTuple::new(py, parts)?,
+                ),
+                Some(&kwargs),
+            )?
+            .unbind());
+    }
+    let mut sequence = MeterSequence::holding(inner, parenthesis);
+    sequence.parts = Some(parts);
+    sequence_object(py, sequence)
+}
+
+/// A span as a sequence object, its parts as the objects music21 would hand
+/// back for them.
+fn sequence_from_span(
+    py: Python<'_>,
+    span: RsMeterTerminal,
+    parenthesis: bool,
+) -> PyResult<Py<PyAny>> {
+    let parts = span
+        .parts()
+        .iter()
+        .map(|part| node_object(py, part.clone()))
+        .collect::<PyResult<Vec<_>>>()?;
+    make_sequence(py, span, parts, parenthesis)
 }
 
 /// A sequence as the class standing in for music21's.
@@ -939,6 +1218,17 @@ fn unexpected_keywords(
 )]
 pub struct MeterTerminal {
     inner: RsMeterTerminal,
+    /// music21's `_frozenHash`: nothing until the hash is first asked for.
+    frozen_hash: std::sync::OnceLock<isize>,
+}
+
+impl MeterTerminal {
+    fn wrap(inner: RsMeterTerminal) -> Self {
+        Self {
+            inner,
+            frozen_hash: std::sync::OnceLock::new(),
+        }
+    }
 }
 
 /// music21's `MeterSequence`: a span of a bar made of other spans. It
@@ -958,6 +1248,12 @@ pub struct MeterSequence {
     /// made of where it was handed objects, built the first time one is asked
     /// for otherwise, and the same objects after that.
     parts: Option<Vec<Py<PyAny>>>,
+    /// music21's `_frozenHash`: nothing until the hash is first asked for.
+    frozen_hash: std::sync::OnceLock<isize>,
+    /// Whether the slots can still be written. music21's `makeSequence`
+    /// writes them into a blank sequence one at a time, `summedNumerator`
+    /// last; after that, and for any sequence made whole, they cannot.
+    sealed: bool,
 }
 
 impl MeterSequence {
@@ -966,7 +1262,17 @@ impl MeterSequence {
             inner,
             parenthesis,
             parts: None,
+            frozen_hash: std::sync::OnceLock::new(),
+            sealed: true,
         }
+    }
+
+    /// Refuses writing a slot of a sequence already made.
+    fn writable(&self) -> PyResult<()> {
+        if self.sealed {
+            return Err(immutable("MeterSequence"));
+        }
+        Ok(())
     }
 
     /// The part objects, built once.
@@ -996,14 +1302,10 @@ impl MeterSequence {
         inner: RsMeterTerminal,
         parts: Option<Vec<Py<PyAny>>>,
     ) -> PyResult<Py<PyAny>> {
-        sequence_object(
-            py,
-            Self {
-                inner,
-                parenthesis: self.parenthesis,
-                parts,
-            },
-        )
+        match parts {
+            Some(parts) => make_sequence(py, inner, parts, self.parenthesis),
+            None => sequence_from_span(py, inner, self.parenthesis),
+        }
     }
 
     /// A new sequence like this one with a different span.
@@ -1152,9 +1454,13 @@ impl MeterTerminal {
             Some(written) => RsMeterTerminal::from_ratio_string(written).map_err(meter_error)?,
             None => RsMeterTerminal::new(numerator, denominator).map_err(meter_error)?,
         };
-        Ok(Self {
-            inner: inner.with_weight(weight),
-        })
+        Ok(Self::wrap(inner.with_weight(weight)))
+    }
+
+    /// music21's `_frozenHash`: `None` until the terminal is hashed.
+    #[getter]
+    fn _frozenHash(&self) -> Option<isize> {
+        self.frozen_hash.get().copied()
     }
 
     /// music21's `_durationFromNumeratorDenominator`: 3/8 is a dotted
@@ -1208,7 +1514,9 @@ impl MeterTerminal {
     }
 
     fn __hash__(&self) -> isize {
-        value_hash(&self.inner, false)
+        *self
+            .frozen_hash
+            .get_or_init(|| value_hash(&self.inner, false))
     }
 
     /// music21's `modify`: a terminal like this one with a different
@@ -1332,18 +1640,12 @@ impl MeterTerminal {
         numeratorList: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         let items = numeratorList.walk()?.collect::<PyResult<Vec<_>>>()?;
-        sequence_object(
-            py,
-            MeterSequence::holding(subdivided_by_list(&self.inner, &items)?, false),
-        )
+        sequence_from_span(py, subdivided_by_list(&self.inner, &items)?, false)
     }
 
     /// music21's `subdivide`, which hands back a new sequence.
     fn subdivide(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        sequence_object(
-            py,
-            MeterSequence::holding(subdivided(&self.inner, value)?, false),
-        )
+        sequence_from_span(py, subdivided(&self.inner, value)?, false)
     }
 }
 
@@ -1386,7 +1688,7 @@ fn subdivide_by_count(
         Some(count) => partitioned(&whole, count, false)?,
         None => as_sequence(whole)?,
     };
-    sequence_object(py, MeterSequence::holding(divided, false))
+    sequence_from_span(py, divided, false)
 }
 
 #[pymethods]
@@ -1404,10 +1706,11 @@ impl MeterSequence {
     ) -> PyResult<Self> {
         let _ = py;
         let Some(value) = value.filter(|value| !value.is_none()) else {
-            return Ok(Self::holding(
-                RsMeterTerminal::new(1, 1).map_err(meter_error)?,
-                false,
-            ));
+            // A blank sequence, which music21's `makeSequence` writes the
+            // slots of.
+            let mut blank = Self::holding(RsMeterTerminal::new(1, 1).map_err(meter_error)?, false);
+            blank.sealed = partitionRequest.is_some_and(|request| !request.is_none());
+            return Ok(blank);
         };
         let (whole, objects) = if let Ok(written) = value.extract::<String>() {
             let read = RsMeterTerminal::from_partition_string(&written).map_err(meter_error)?;
@@ -1446,12 +1749,18 @@ impl MeterSequence {
         };
         match partitionRequest.filter(|request| !request.is_none()) {
             Some(request) => Ok(Self::holding(partitioned(&whole, request, false)?, false)),
-            None => Ok(Self {
-                inner: whole,
-                parenthesis: false,
-                parts: objects,
-            }),
+            None => {
+                let mut sequence = Self::holding(whole, false);
+                sequence.parts = objects;
+                Ok(sequence)
+            }
         }
+    }
+
+    /// music21's `_frozenHash`: `None` until the sequence is hashed.
+    #[getter]
+    fn _frozenHash(&self) -> Option<isize> {
+        self.frozen_hash.get().copied()
     }
 
     /// A sequence cannot change, so a copy of one is itself.
@@ -1499,7 +1808,9 @@ impl MeterSequence {
     }
 
     fn __hash__(&self) -> isize {
-        value_hash(&self.inner, self.parenthesis)
+        *self
+            .frozen_hash
+            .get_or_init(|| value_hash(&self.inner, self.parenthesis))
     }
 
     fn __len__(&self) -> usize {
@@ -1652,14 +1963,11 @@ impl MeterSequence {
             ),
         };
         drop(me);
-        sequence_object(
-            py,
-            Self {
-                inner: inner.with_summed_numerator(summed),
-                parenthesis,
-                parts,
-            },
-        )
+        let inner = inner.with_summed_numerator(summed);
+        match parts {
+            Some(parts) => make_sequence(py, inner, parts, parenthesis),
+            None => sequence_from_span(py, inner, parenthesis),
+        }
     }
 
     #[pyo3(signature = (**keywords))]
@@ -1701,6 +2009,7 @@ impl MeterSequence {
 
     #[setter]
     fn set__numerator(&mut self, numerator: UnsignedIntegerType) -> PyResult<()> {
+        self.writable()?;
         self.inner = RsMeterTerminal::sequence(
             numerator,
             self.inner.denominator(),
@@ -1718,6 +2027,7 @@ impl MeterSequence {
 
     #[setter]
     fn set__denominator(&mut self, denominator: UnsignedIntegerType) -> PyResult<()> {
+        self.writable()?;
         // The empty sequence is written over nought, which a span here is
         // never written over; it stays the empty sequence it already is.
         if denominator == 0 {
@@ -1740,6 +2050,7 @@ impl MeterSequence {
 
     #[setter]
     fn set__partition(&mut self, partition: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.writable()?;
         let items = partition.walk()?.collect::<PyResult<Vec<_>>>()?;
         let spans = items.iter().map(span_of).collect::<PyResult<Vec<_>>>()?;
         self.inner =
@@ -1756,8 +2067,13 @@ impl MeterSequence {
     }
 
     #[setter]
-    fn set_parenthesis(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
+    fn set_parenthesis(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
+        self.writable()?;
         self.parenthesis = value;
+        Ok(())
     }
 
     /// music21's `summedNumerator`: whether this was written `3+2/8` rather
@@ -1767,9 +2083,17 @@ impl MeterSequence {
         self.inner.summed_numerator()
     }
 
+    /// The last slot music21's `makeSequence` writes, after which the
+    /// sequence is made.
     #[setter]
-    fn set_summedNumerator(&mut self, #[pyo3(from_py_with = crate::truthy)] value: bool) {
+    fn set_summedNumerator(
+        &mut self,
+        #[pyo3(from_py_with = crate::truthy)] value: bool,
+    ) -> PyResult<()> {
+        self.writable()?;
         self.inner = self.inner.with_summed_numerator(value);
+        self.sealed = true;
+        Ok(())
     }
 
     /// music21's `weight`: what the parts weigh together.
@@ -1833,17 +2157,11 @@ impl MeterSequence {
         numeratorList: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         let items = numeratorList.walk()?.collect::<PyResult<Vec<_>>>()?;
-        sequence_object(
-            py,
-            MeterSequence::holding(subdivided_by_list(&self.inner, &items)?, false),
-        )
+        sequence_from_span(py, subdivided_by_list(&self.inner, &items)?, false)
     }
 
     fn subdivide(&self, py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        sequence_object(
-            py,
-            MeterSequence::holding(subdivided(&self.inner, value)?, false),
-        )
+        sequence_from_span(py, subdivided(&self.inner, value)?, false)
     }
 
     /// music21's `partitionDisplay`: the parts written without the braces.
@@ -2223,14 +2541,6 @@ impl MeterSequence {
     }
 }
 
-/// One of a meter's four sequences, as music21's `MeterSequence`.
-fn sequence_of(py: Python<'_>, span: &RsMeterTerminal) -> PyResult<Py<PyAny>> {
-    sequence_object(
-        py,
-        MeterSequence::holding(as_sequence(span.clone())?, false),
-    )
-}
-
 /// Reads a span built by music21's own class rather than this one, through
 /// the Python API: the ratio, the weight of each leaf, and the parts under it.
 fn read_span(value: &Bound<'_, PyAny>) -> PyResult<RsMeterTerminal> {
@@ -2304,7 +2614,7 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
         meas.py(),
         "music21.meter.base",
         "TimeSignature",
-        TimeSignature { inner },
+        TimeSignature::wrap(inner),
     )
 }
 
