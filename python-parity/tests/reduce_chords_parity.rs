@@ -67,7 +67,7 @@ const SCORES: &[(&str, &str)] = &[
 ];
 
 const MUSIC21: &str = r#"
-from music21 import clef, converter, corpus, stream
+from music21 import converter, corpus, stream
 from music21.analysis import reduceChords
 from music21.musicxml import m21ToXml
 
@@ -82,13 +82,6 @@ def written(name):
 def reduced(text):
     score = converter.parseData(text, format='musicxml', forceSource=True)
     reduction = reduceChords.ChordReducer().run(score, maximumNumberOfChords=3)
-    # music21's run asks bestClef for the reduced part without recurse, so
-    # it counts none of the chords in the measures and always answers
-    # Treble8vbClef; the crate counts them.
-    part = reduction.parts.first()
-    first = part.getElementsByClass(stream.Measure).first()
-    first.remove(first.clef)
-    first.insert(0.0, clef.bestClef(part, allowTreble8vb=True, recurse=True))
     lines = []
     for part in reduction.parts:
         lines.append('Part')

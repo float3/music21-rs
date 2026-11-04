@@ -846,10 +846,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
     /// Puts the rest of several measures still taking rests into the part,
     /// whether or not it took all it said it would.
     ///
-    /// music21 puts one in only once it has, but its rests know it either
-    /// way, and its writer finds it through them: so one cut short by the
-    /// part's end or by the next is written all the same, counting the
-    /// rests it took. Here it stands in the part, to be written.
+    /// One cut short by the part's end or by the next stands in the part as
+    /// music21's does, counting the rests it took; one that took none is
+    /// left out.
     fn end_multi_rest(&mut self) {
         let Some(index) = self.multi_rest.take() else {
             return;
