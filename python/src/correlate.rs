@@ -19,8 +19,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
-use music21_rs_crate::FloatType;
-use music21_rs_crate::analysis::correlate::pitch_to_dynamic;
+use music21::FloatType;
+use music21::analysis::correlate::pitch_to_dynamic;
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["ActivityMatch"];

@@ -137,7 +137,7 @@ impl ToneRow {
     /// way music21's `pcToToneRow` does, so `[-6, 19, 128]` is `[6, 7, 8]`.
     ///
     /// ```
-    /// use music21_rs::ToneRow;
+    /// use music21::ToneRow;
     ///
     /// let row = ToneRow::new([0, 11, 7, 8, 3, 1, 2, 10, 6, 5, 4, 9]);
     /// assert!(row.is_twelve_tone_row());
@@ -186,7 +186,7 @@ impl ToneRow {
     /// The note names of the row, music21's `noteNames`.
     ///
     /// ```
-    /// use music21_rs::ToneRow;
+    /// use music21::ToneRow;
     ///
     /// assert_eq!(ToneRow::new([0, 4, 7]).note_names(), ["C", "E", "G"]);
     /// ```
@@ -237,7 +237,7 @@ impl ToneRow {
     /// `I(n)` start on pitch class `n` and `R(n)` and `RI(n)` end on it.
     ///
     /// ```
-    /// use music21_rs::{ToneRow, Transformation};
+    /// use music21::{ToneRow, Transformation};
     ///
     /// let row = ToneRow::new([0, 4, 7]);
     /// let inverted = row.zero_centered_transformation(Transformation::Inversion, 2);
@@ -388,7 +388,7 @@ impl ToneRow {
     /// leading diagonal is zero and each column reads the inversion.
     ///
     /// ```
-    /// use music21_rs::ToneRow;
+    /// use music21::ToneRow;
     ///
     /// let row = ToneRow::new([0, 11, 7, 8, 3, 1, 2, 10, 6, 5, 4, 9]);
     /// let matrix = row.matrix();
@@ -452,11 +452,11 @@ impl ToneRow {
     /// Errors unless the row is a twelve-tone row.
     ///
     /// ```
-    /// use music21_rs::ToneRow;
+    /// use music21::ToneRow;
     ///
     /// let row = ToneRow::new([0, 11, 7, 4, 2, 9, 3, 8, 10, 1, 5, 6]);
     /// assert!(row.is_all_interval()?);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn is_all_interval(&self) -> Result<bool> {
         self.require_twelve_tone("An all-interval row")?;
@@ -659,11 +659,11 @@ impl HistoricalRow {
 /// `Row` prefix are accepted too.
 ///
 /// ```
-/// use music21_rs::historical_row_by_name;
+/// use music21::historical_row_by_name;
 ///
 /// let row = historical_row_by_name("WebernOp21")?.row();
 /// assert!(row.is_twelve_tone_row());
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn historical_row_by_name(name: &str) -> Result<&'static HistoricalRow> {
     let name = name.strip_prefix("Row").unwrap_or(name);

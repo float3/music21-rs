@@ -2503,7 +2503,7 @@ struct BuiltPart {
 /// notes, and a chord symbol whose name is none the crate knows.
 ///
 /// ```
-/// use music21_rs::musescore::from_mscx;
+/// use music21::musescore::from_mscx;
 ///
 /// let score = from_mscx(
 ///     r#"<museScore version="4.20"><Score>
@@ -2523,7 +2523,7 @@ struct BuiltPart {
 ///     .map(|pitch| pitch.name_with_octave())
 ///     .collect();
 /// assert_eq!(names, ["C4", "Eb4"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_mscx(document: &str) -> Result<Stream> {
     let root = Xml::parse(document)?;

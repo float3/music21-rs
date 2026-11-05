@@ -3,7 +3,7 @@
 //!
 //! Each subject is read twice, by music21 and by the crate's own reader for
 //! its format, and each side writes it with its notation made: music21's
-//! `GeneralObjectExporter`, and `music21_rs::musicxml::to_musicxml` with
+//! `GeneralObjectExporter`, and `music21::musicxml::to_musicxml` with
 //! `ExportOptions::make_notation`. The two documents must be the same text.
 //! The readers are held to music21's by their own tests, so what this
 //! compares is what each side works out before it writes: measures, rests,
@@ -42,9 +42,9 @@
 //! writer's own test lists that is kept as MusicXML, and every ABC tune of
 //! the corpus that music21 reads into no measures.
 
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, from_musicxml, to_musicxml};
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, from_musicxml, to_musicxml};
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -772,11 +772,11 @@ fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
             let (theirs, ours) = match kind {
                 "tiny" => (
                     converter.call_method1("parse", (format!("tinyNotation: {name}"),)),
-                    music21_rs::tinynotation::from_tiny_notation(name),
+                    music21::tinynotation::from_tiny_notation(name),
                 ),
                 "flat" => (
                     helpers.getattr("flat_part")?.call1((name,)),
-                    music21_rs::tinynotation::from_tiny_notation(name).map(|part| flattened(&part)),
+                    music21::tinynotation::from_tiny_notation(name).map(|part| flattened(&part)),
                 ),
                 "loose" => (
                     helpers.getattr("loose_part")?.call1((name,)),
@@ -823,7 +823,7 @@ fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
                             (pyo3::types::PyBytes::new(py, &bytes),),
                             Some(&kwargs),
                         ),
-                        music21_rs::midi::from_midi(&bytes),
+                        music21::midi::from_midi(&bytes),
                     )
                 }
                 "abc" => {
@@ -839,8 +839,8 @@ fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
                         kwargs.set_item("number", number)?;
                     }
                     let read = match number {
-                        Some(number) => music21_rs::abc::from_abc_number(&text, number),
-                        None => music21_rs::abc::from_abc(&text),
+                        Some(number) => music21::abc::from_abc_number(&text, number),
+                        None => music21::abc::from_abc(&text),
                     };
                     (
                         corpus.call_method("parse", (file,), Some(&kwargs)),
@@ -960,7 +960,7 @@ fn notate(given: Option<Vec<String>>) -> (Vec<String>, usize) {
 /// A part of notes each standing where it is said to, for as long, as the
 /// helper builds music21's. A note written
 /// `name@offset+length!ornament!` carries that ornament.
-fn loose_part(text: &str) -> music21_rs::Result<Stream> {
+fn loose_part(text: &str) -> music21::Result<Stream> {
     let mut part = Stream::with_kind(StreamKind::Part);
     for token in text.split_whitespace() {
         if token.starts_with('#') {
@@ -968,11 +968,11 @@ fn loose_part(text: &str) -> music21_rs::Result<Stream> {
         }
         if let Some(sharps) = token.strip_prefix("key=") {
             let sharps = sharps.parse().unwrap_or(0);
-            part.insert(0.0, music21_rs::KeySignature::new(sharps));
+            part.insert(0.0, music21::KeySignature::new(sharps));
             continue;
         }
         let Some((name, placed)) = token.split_once('@') else {
-            part.insert(0.0, music21_rs::TimeSignature::from_ratio_string(token)?);
+            part.insert(0.0, music21::TimeSignature::from_ratio_string(token)?);
             continue;
         };
         let (placed, ornament) = match placed.strip_suffix('!') {
@@ -984,11 +984,11 @@ fn loose_part(text: &str) -> music21_rs::Result<Stream> {
         };
         let (offset, length) = placed.split_once('+').unwrap_or((placed, "1"));
         let number = |text: &str| text.parse::<f64>().unwrap_or(0.0);
-        let mut note = music21_rs::Note::from_name(name)?
-            .with_duration(music21_rs::Duration::new(number(length))?);
+        let mut note =
+            music21::Note::from_name(name)?.with_duration(music21::Duration::new(number(length))?);
         if let Some(ornament) = ornament {
             note.expressions_mut()
-                .push(music21_rs::expressions::Ornament::of_kind(kind_of(ornament)?).into());
+                .push(music21::expressions::Ornament::of_kind(kind_of(ornament)?).into());
         }
         part.insert(number(offset), note);
     }
@@ -997,15 +997,15 @@ fn loose_part(text: &str) -> music21_rs::Result<Stream> {
 
 /// The ornament a subject names, as the helper's `ORNAMENTS` names
 /// music21's.
-fn kind_of(named: &str) -> music21_rs::Result<music21_rs::expressions::OrnamentKind> {
-    use music21_rs::expressions::OrnamentKind;
+fn kind_of(named: &str) -> music21::Result<music21::expressions::OrnamentKind> {
+    use music21::expressions::OrnamentKind;
     match named {
         "trill" => Ok(OrnamentKind::Trill),
         "mordent" => Ok(OrnamentKind::Mordent),
         "invertedMordent" => Ok(OrnamentKind::InvertedMordent),
         "turn" => Ok(OrnamentKind::Turn),
         "invertedTurn" => Ok(OrnamentKind::InvertedTurn),
-        other => Err(music21_rs::Error::Expression(format!(
+        other => Err(music21::Error::Expression(format!(
             "no subject writes the ornament {other}"
         ))),
     }

@@ -13,8 +13,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::articulations::{Articulation as RsArticulation, ArticulationKind, Finger};
-use music21_rs_crate::interval::ChromaticInterval as RsChromaticInterval;
+use music21::articulations::{Articulation as RsArticulation, ArticulationKind, Finger};
+use music21::interval::ChromaticInterval as RsChromaticInterval;
 
 /// music21's `articulations.Articulation`.
 #[pyclass(

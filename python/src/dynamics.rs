@@ -15,8 +15,8 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::FloatType;
-use music21_rs_crate::dynamics::{
+use music21::FloatType;
+use music21::dynamics::{
     Dynamic as RsDynamic, dynamic_str_from_decimal as rs_dynamic_str_from_decimal,
 };
 

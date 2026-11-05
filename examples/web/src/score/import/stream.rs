@@ -6,7 +6,7 @@
 //! it is left out, and so is a part of unpitched percussion.
 
 use super::{Beat, Imported, KeySig, Measure, Note, Part, TICKS, written_ticks};
-use music21_rs::{
+use music21::{
     ChordSymbol, Clef, Duration, DurationType, Instrument, Lyric, NoteSize, Stream, StreamElement,
     StreamKind, TieType,
 };
@@ -93,7 +93,7 @@ fn ticks(quarters: f64) -> i64 {
 /// lyric as its figure where `figures` asks for it.
 fn beat_of(element: &StreamElement, transpose: i32, figures: bool) -> Option<Beat> {
     let duration: Duration = element.duration().cloned()?;
-    let tied = |tie: Option<&music21_rs::Tie>| {
+    let tied = |tie: Option<&music21::Tie>| {
         tie.is_some_and(|tie| {
             matches!(
                 tie.tie_type(),
@@ -101,7 +101,7 @@ fn beat_of(element: &StreamElement, transpose: i32, figures: bool) -> Option<Bea
             )
         })
     };
-    let sounded = |note: &music21_rs::Note| {
+    let sounded = |note: &music21::Note| {
         // A cue note shows another part's line and is not played.
         (note.size() != Some(NoteSize::Cue)).then(|| Note {
             midi: note.pitch().midi() + transpose,
@@ -246,12 +246,12 @@ fn read_staff(
                 .collect();
         }
         if let Some(barline) = measure.left_barline()
-            && barline.repeat_direction() == Some(music21_rs::RepeatDirection::Start)
+            && barline.repeat_direction() == Some(music21::RepeatDirection::Start)
         {
             frame.repeat_start = true;
         }
         if let Some(barline) = measure.right_barline()
-            && barline.repeat_direction() == Some(music21_rs::RepeatDirection::End)
+            && barline.repeat_direction() == Some(music21::RepeatDirection::End)
         {
             frame.repeat_end = barline.repeat_times().unwrap_or(2).max(2);
         }

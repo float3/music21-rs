@@ -16,9 +16,9 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::braille::segment::{Hand, SegmentOptions};
-use music21_rs_crate::braille::translate;
-use music21_rs_crate::stream::Stream as RsStream;
+use music21::braille::segment::{Hand, SegmentOptions};
+use music21::braille::translate;
+use music21::stream::Stream as RsStream;
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &[
@@ -40,7 +40,7 @@ pyo3::create_exception!(
 
 /// music21's error for music it cannot write in braille, out of the
 /// crate's.
-fn translate_error(error: &music21_rs_crate::Error) -> PyErr {
+fn translate_error(error: &music21::Error) -> PyErr {
     BrailleTranslateException::new_err(crate::pitch::message(error))
 }
 
@@ -179,7 +179,7 @@ macro_rules! translations {
                     upperFirstInNoteFingering,
                 )?;
                 let run: fn(&RsStream, &translate::BrailleOptions)
-                    -> music21_rs_crate::error::Result<String> = $run;
+                    -> music21::error::Result<String> = $run;
                 let stream = stream_of(music21Stream)?;
                 run(&stream, &options).map_err(|error| translate_error(&error))
             }

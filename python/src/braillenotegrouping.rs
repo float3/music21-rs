@@ -19,7 +19,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use music21_rs_crate::braille::segment::{
+use music21::braille::segment::{
     BrailleElementGrouping as RsGrouping, NoteGroupingTranscriber as RsTranscriber,
 };
 

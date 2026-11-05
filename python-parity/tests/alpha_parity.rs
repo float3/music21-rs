@@ -20,10 +20,10 @@
 //! `ALPHA_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::alpha::analysis::aligner::{ChangeOp, StreamAligner};
-use music21_rs::alpha::analysis::hasher::{HashReference, HashValue, Hasher, NoteHash};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::{Stream, StreamElement};
+use music21::alpha::analysis::aligner::{ChangeOp, StreamAligner};
+use music21::alpha::analysis::hasher::{HashReference, HashValue, Hasher, NoteHash};
+use music21::musicxml::from_musicxml;
+use music21::stream::{Stream, StreamElement};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;

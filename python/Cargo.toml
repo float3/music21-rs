@@ -7,7 +7,7 @@ name = "music21-rs-python"
 publish = false
 repository = "https://github.com/float3/music21-rs"
 # Kept in step with the root crate by `wheel_version_matches_the_crate`.
-version = "0.16.0"
+version = "0.17.0"
 
 # `cdylib` is the wheel maturin builds; `rlib` is what `python-parity` links
 # against so music21's own doctests run against these very classes.
@@ -16,10 +16,7 @@ crate-type = ["cdylib", "rlib"]
 name = "music21_rs"
 
 [dependencies]
-# Under a name of its own: this crate's own library is also called
-# `music21_rs`, and rustdoc will not build a doctest against two externs of
-# one name — which is why `cargo test` here could never run them.
-music21_rs_crate = { package = "music21-rs", path = "..", default-features = false, features = [
+music21 = { path = "..", default-features = false, features = [
   "musicxml",
   "serde",
 ] }
@@ -41,7 +38,7 @@ extension-module = ["pyo3/extension-module"]
 # scale by name -- can be answered; the wheel leaves it off, so what a caller
 # installs carries no scale data and no licence question, and asking for a
 # scale by name there says so.
-scala-archive = ["music21_rs_crate/scala-archive"]
+scala-archive = ["music21/scala-archive"]
 
 # The workspace denies these for every crate in it; this crate is outside the
 # workspace, so it says so itself rather than going unlinted.

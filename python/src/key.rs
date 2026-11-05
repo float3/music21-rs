@@ -10,14 +10,14 @@ use crate::Walkable;
 use crate::spelling::{music21_description, music21_name};
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::scale::{
+use music21::scale::{
     Scale as RsScale, ScaleType as RsScaleType, SolfegVariant as RsSolfegVariant,
 };
 
 use crate::scale::ConcreteScale;
 use crate::scalewrite::{Kind, show_scale, write_scale};
 
-use music21_rs_crate::{
+use music21::{
     Key as RsKey, KeySignature as RsKeySignature, Pitch as RsPitch,
     convert_key_string_to_music21_key_string,
     key::{pitch_to_sharps, sharps_to_pitch},
@@ -708,7 +708,7 @@ impl Key {
                 scores.push(score);
             }
         }
-        Ok(music21_rs_crate::tonal_certainty_from_scores(&scores))
+        Ok(music21::tonal_certainty_from_scores(&scores))
     }
 
     #[new]

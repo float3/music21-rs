@@ -1,13 +1,13 @@
 //! The metadata vocabulary against music21's own.
 //!
-//! `music21_rs::metadata::STANDARD_PROPERTIES` is music21's
+//! `music21::metadata::STANDARD_PROPERTIES` is music21's
 //! `metadata.properties.STANDARD_PROPERTY_DESCRIPTIONS` -- each property's
 //! unique name, its namespaced name and whether it names a contributor --
 //! and a MusicXML writer names every `<miscellaneous-field>` out of it. This
 //! reads music21's table and asks for the same rows in the same order.
 
-use music21_rs::metadata::primitives::{Date, DatePart, DatePrimitive, Relevance};
-use music21_rs::metadata::{STANDARD_PROPERTIES, ValueKind, value_kind_of};
+use music21::metadata::primitives::{Date, DatePart, DatePrimitive, Relevance};
+use music21::metadata::{STANDARD_PROPERTIES, ValueKind, value_kind_of};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;

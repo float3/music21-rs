@@ -113,7 +113,7 @@ impl RepeatExpressionKind {
 /// `RepeatExpression`.
 ///
 /// ```
-/// use music21_rs::repeat::{RepeatExpression, RepeatExpressionKind};
+/// use music21::repeat::{RepeatExpression, RepeatExpressionKind};
 ///
 /// let fine = RepeatExpression::new(RepeatExpressionKind::Fine);
 /// assert_eq!(fine.text(), "fine");

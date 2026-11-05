@@ -24,7 +24,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::text as rs;
+use music21::text as rs;
 
 pyo3::create_exception!(music21_rs_facade, TextException, crate::Music21Exception);
 
@@ -92,7 +92,7 @@ fn postpendArticle(src: &str, language: Option<&str>) -> PyResult<String> {
 }
 
 /// What a refusal of the crate's says.
-fn said(error: &music21_rs_crate::Error) -> String {
+fn said(error: &music21::Error) -> String {
     crate::pitch::message(error)
 }
 

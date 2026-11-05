@@ -16,15 +16,15 @@
 //! corpus names, runs those instead of the writer test's scores, which is
 //! how the corpus is swept.
 
-use music21_rs::IntegerType;
-use music21_rs::braille::basic::{
+use music21::IntegerType;
+use music21::braille::basic::{
     self, NoteContext, Transcription, barline_to_braille, chord_to_braille, clef_to_braille,
     dynamic_to_braille, instrument_to_braille, key_sig_to_braille, metronome_mark_to_braille,
     note_to_braille, rest_to_braille, tempo_to_braille, text_expression_to_braille,
     time_sig_to_braille,
 };
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::{Stream, StreamElement};
+use music21::musicxml::from_musicxml;
+use music21::stream::{Stream, StreamElement};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
@@ -148,7 +148,7 @@ fn answer(transcription: Transcription) -> Answer {
     (transcription.braille, transcription.english, String::new())
 }
 
-fn plain(result: music21_rs::Result<String>) -> (String, String) {
+fn plain(result: music21::Result<String>) -> (String, String) {
     match result {
         Ok(text) => (text, String::new()),
         Err(error) => (String::new(), error.to_string()),
@@ -200,7 +200,7 @@ fn add(out: &mut BTreeMap<String, Vec<Answer>>, kind: &str, value: Answer) {
 
 fn ours(score: &Stream) -> BTreeMap<String, Vec<Answer>> {
     let mut out: BTreeMap<String, Vec<Answer>> = BTreeMap::new();
-    let mut previous: Option<music21_rs::pitch::Pitch> = None;
+    let mut previous: Option<music21::pitch::Pitch> = None;
     let mut outgoing: Option<Option<IntegerType>> = None;
     for element in &walk(score) {
         match element {
@@ -312,7 +312,7 @@ fn ours(score: &Stream) -> BTreeMap<String, Vec<Answer>> {
             ),
             _ => {}
         }
-        let lyrics: Vec<music21_rs::notation::Lyric> = match element {
+        let lyrics: Vec<music21::notation::Lyric> = match element {
             StreamElement::Note(note) => note.lyrics().to_vec(),
             StreamElement::Chord(chord) => chord.lyrics().to_vec(),
             _ => Vec::new(),
@@ -369,7 +369,7 @@ fn ours(score: &Stream) -> BTreeMap<String, Vec<Answer>> {
     let ascii = basic::braille_unicode_to_braille_ascii(&notes);
     let back = ascii
         .as_ref()
-        .map_err(|error| music21_rs::Error::Notation(error.to_string()))
+        .map_err(|error| music21::Error::Notation(error.to_string()))
         .and_then(|ascii| basic::braille_ascii_to_braille_unicode(ascii));
     let first: String = notes.chars().take(20).collect();
     for (kind, result) in [

@@ -60,9 +60,9 @@ pub fn beat_depths(part: &Stream) -> Result<Vec<(usize, u8)>> {
 /// `labelBeatDepth`. The depths are [`beat_depths`]'.
 ///
 /// ```
-/// use music21_rs::analysis::metrical::label_beat_depth;
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::metrical::label_beat_depth;
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let mut part = from_tiny_notation("4/4 c8 c c c c c c c")?;
 /// label_beat_depth(&mut part)?;
@@ -77,7 +77,7 @@ pub fn beat_depths(part: &Stream) -> Result<Vec<(usize, u8)>> {
 ///     })
 ///     .collect();
 /// assert_eq!(stars, ["****", "*", "**", "*", "***", "*", "**", "*"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -177,10 +177,10 @@ fn ends_tie(element: &StreamElement) -> bool {
 /// in order.
 ///
 /// ```
-/// use music21_rs::Stream;
-/// use music21_rs::analysis::metrical::thomassen_melodic_accent;
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::Stream;
+/// use music21::analysis::metrical::thomassen_melodic_accent;
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("7/4 c4 c c d e d d")?.flatten();
 /// let notes = Stream::from_events(
@@ -191,7 +191,7 @@ fn ends_tie(element: &StreamElement) -> bool {
 /// );
 /// let accents = thomassen_melodic_accent(&notes)?;
 /// assert_eq!(accents, [1.0, 0.0, 0.0, 0.33, 0.67 * 0.83, 0.17, 0.0]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

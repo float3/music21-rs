@@ -17,7 +17,7 @@ const matrix = $("#matrix");
 const formsTitle = $("#forms-title");
 const forms = $("#forms");
 
-$("#docs-link").href = "../docs/music21_rs/index.html";
+$("#docs-link").href = "../docs/music21/index.html";
 
 let wasm = null;
 let current = null;

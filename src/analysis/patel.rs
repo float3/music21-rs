@@ -18,17 +18,17 @@ use crate::{
 /// alone is usually what is meant.
 ///
 /// ```
-/// use music21_rs::Stream;
-/// use music21_rs::analysis::patel::n_pvi;
-/// use music21_rs::stream::{StreamElement, StreamEvent};
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::Stream;
+/// use music21::analysis::patel::n_pvi;
+/// use music21::stream::{StreamElement, StreamEvent};
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 C4 D8 C4 D8 C4")?.flatten();
 /// let notes = Stream::from_events(line.events().iter().cloned().filter(|event| {
 ///     matches!(event.element(), StreamElement::Note(_) | StreamElement::Rest(_))
 /// }));
 /// assert!((n_pvi(&notes)? - 66.666_666_666_666_67).abs() < 1e-9);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -62,14 +62,14 @@ pub fn n_pvi(stream: &Stream) -> Result<FloatType> {
 /// exactly and rounded once, as Python's `statistics` module does.
 ///
 /// ```
-/// use music21_rs::analysis::patel::melodic_interval_variability;
-/// use music21_rs::stream::ConsecutiveOptions;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::patel::melodic_interval_variability;
+/// use music21::stream::ConsecutiveOptions;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 C4 D E F G C")?;
 /// let miv = melodic_interval_variability(&line, &ConsecutiveOptions::default())?;
 /// assert!((miv - 85.266_688).abs() < 1e-6);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

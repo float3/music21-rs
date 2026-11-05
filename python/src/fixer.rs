@@ -41,10 +41,10 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::IntegerType;
-use music21_rs_crate::alpha::analysis::aligner::ChangeOp;
-use music21_rs_crate::alpha::analysis::fixer::{EnharmonicFix, enharmonic_fix, interval_too_big};
-use music21_rs_crate::pitch::{Accidental, Pitch as RsPitch};
+use music21::IntegerType;
+use music21::alpha::analysis::aligner::ChangeOp;
+use music21::alpha::analysis::fixer::{EnharmonicFix, enharmonic_fix, interval_too_big};
+use music21::pitch::{Accidental, Pitch as RsPitch};
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["EnharmonicFixer"];

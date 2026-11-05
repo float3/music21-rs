@@ -21,9 +21,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::instrument::{
-    Instrument as RsInstrument, SearchLanguage, ensemble_name_by_size,
-};
+use music21::instrument::{Instrument as RsInstrument, SearchLanguage, ensemble_name_by_size};
 
 use crate::interval::{interval_from_any, interval_object};
 use crate::pitch::{Pitch, pitch_from_any};
@@ -668,7 +666,7 @@ fn unbundleInstruments<'py>(
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(streamIn, inPlace, |stream| {
-        music21_rs_crate::instrument::unbundle_instruments(stream);
+        music21::instrument::unbundle_instruments(stream);
         Ok(())
     })
 }
@@ -682,7 +680,7 @@ fn bundleInstruments<'py>(
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(streamIn, inPlace, |stream| {
-        music21_rs_crate::instrument::bundle_instruments(stream);
+        music21::instrument::bundle_instruments(stream);
         Ok(())
     })
 }
@@ -697,7 +695,7 @@ fn deduplicate<'py>(
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     crate::stream::changed(s, inPlace, |stream| {
-        music21_rs_crate::instrument::deduplicate(stream);
+        music21::instrument::deduplicate(stream);
         Ok(())
     })
 }
@@ -709,7 +707,7 @@ fn partitionByInstrument<'py>(streamObj: &Bound<'py, PyAny>) -> PyResult<Bound<'
     let read = crate::stream::crate_stream(streamObj)?;
     crate::stream::from_crate(
         streamObj.py(),
-        &music21_rs_crate::instrument::partition_by_instrument(&read),
+        &music21::instrument::partition_by_instrument(&read),
     )
 }
 

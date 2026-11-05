@@ -7,18 +7,18 @@
 //! none.
 //!
 //! ```
-//! use music21_rs::alpha::analysis::ornament_recognizer::TrillRecognizer;
-//! use music21_rs::expressions::OrnamentKind;
-//! use music21_rs::{Duration, Note, StreamElement};
+//! use music21::alpha::analysis::ornament_recognizer::TrillRecognizer;
+//! use music21::expressions::OrnamentKind;
+//! use music21::{Duration, Note, StreamElement};
 //!
 //! let played: Vec<StreamElement> = ["G4", "A4", "G4", "A4"]
 //!     .iter()
 //!     .map(|name| Ok(Note::from_name(name)?.with_duration(Duration::new(0.25)?).into()))
-//!     .collect::<music21_rs::Result<_>>()?;
+//!     .collect::<music21::Result<_>>()?;
 //! let trill = TrillRecognizer::default().recognize(&played, &[])?.expect("a trill");
 //! assert_eq!(trill.kind(), OrnamentKind::Trill);
 //! assert_eq!(trill.quarter_length(), 0.25);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::defaults::{FloatType, IntegerType};

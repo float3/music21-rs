@@ -504,8 +504,8 @@ impl Realization {
 /// An ornament.
 ///
 /// ```
-/// use music21_rs::expressions::{Ornament, OrnamentKind};
-/// use music21_rs::{KeySignature, Note};
+/// use music21::expressions::{Ornament, OrnamentKind};
+/// use music21::{KeySignature, Note};
 ///
 /// let mordent = Ornament::of_kind(OrnamentKind::Mordent);
 /// let played = mordent.realize(&Note::from_name("C4")?, &KeySignature::new(0))?;
@@ -518,7 +518,7 @@ impl Realization {
 ///     })
 ///     .collect();
 /// assert_eq!(names, ["C4 0.125", "B3 0.125", "C4 0.75"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -696,7 +696,7 @@ impl Ornament {
     /// the first. The spanner is answered rather than added, as music21's is.
     ///
     /// ```
-    /// use music21_rs::{
+    /// use music21::{
     ///     expressions::{Ornament, OrnamentKind},
     ///     Duration, Note, SpannerKind, Stream,
     /// };
@@ -708,7 +708,7 @@ impl Ornament {
     /// let extension = trill.split_client(&mut stream, &[0, 1])?.unwrap();
     /// assert_eq!(extension.kind(), SpannerKind::TrillExtension);
     /// assert_eq!(extension.spanned(), [Some(0), Some(1)]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -882,14 +882,14 @@ impl Ornament {
     /// under `key`: music21's `getSize`.
     ///
     /// ```
-    /// use music21_rs::expressions::{Ornament, OrnamentKind};
-    /// use music21_rs::{KeySignature, Pitch};
+    /// use music21::expressions::{Ornament, OrnamentKind};
+    /// use music21::{KeySignature, Pitch};
     ///
     /// let mordent = Ornament::of_kind(OrnamentKind::Mordent);
     /// let g = Pitch::from_name("G4")?;
     /// assert_eq!(mordent.size(&g, &KeySignature::new(0))?.directed_name(), "M-2");
     /// assert_eq!(mordent.size(&g, &KeySignature::new(1))?.directed_name(), "m-2");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

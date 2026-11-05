@@ -207,11 +207,11 @@ pub struct SearchMatch<'a> {
 /// with only the wildcard algorithm, as it starts, every run matches.
 ///
 /// ```
-/// use music21_rs::duration::Duration;
-/// use music21_rs::note::Note;
-/// use music21_rs::search::{Algorithm, Filter, SearchTerm, StreamSearcher};
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::duration::Duration;
+/// use music21::note::Note;
+/// use music21::search::{Algorithm, Filter, SearchTerm, StreamSearcher};
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("3/4 c4. d8 e4 g4. a8 f4 c'8 d'4.")?;
 /// let mut searcher = StreamSearcher::new(vec![
@@ -227,7 +227,7 @@ pub struct SearchMatch<'a> {
 /// searcher.algorithms.push(Algorithm::Rhythm);
 /// let found = searcher.run(&line)?;
 /// assert_eq!(found.iter().map(|found| found.index).collect::<Vec<_>>(), [0, 3]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct StreamSearcher {

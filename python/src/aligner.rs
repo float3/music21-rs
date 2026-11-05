@@ -43,12 +43,12 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::alpha::analysis::aligner::{
+use music21::alpha::analysis::aligner::{
     ChangeOp, change_places, delete_cost, fill_distance_matrix, hashes_equal_without_reference,
     insert_cost, moves_from_location, num_similarities, op_from_location, setup_distance_matrix,
     substitution_cost,
 };
-use music21_rs_crate::alpha::analysis::hasher::{HashValue, NoteHash};
+use music21::alpha::analysis::hasher::{HashValue, NoteHash};
 
 use crate::Walkable;
 

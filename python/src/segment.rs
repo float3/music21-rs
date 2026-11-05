@@ -15,9 +15,9 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
 
-use music21_rs_crate::Pitch as RsPitch;
-use music21_rs_crate::figuredbass::rules::Rules as RsRules;
-use music21_rs_crate::figuredbass::segment::{self as rs, Consecutive, Segment as RsSegment};
+use music21::Pitch as RsPitch;
+use music21::figuredbass::rules::Rules as RsRules;
+use music21::figuredbass::segment::{self as rs, Consecutive, Segment as RsSegment};
 
 use crate::pitch::{Pitch, pitch_from_any};
 
@@ -226,7 +226,7 @@ impl Segment {
         slf: &Bound<'py, PyAny>,
         next: &Bound<'py, PyAny>,
         special: bool,
-        run: impl FnOnce(&RsSegment, &mut RsSegment) -> music21_rs_crate::Result<Consecutive>,
+        run: impl FnOnce(&RsSegment, &mut RsSegment) -> music21::Result<Consecutive>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let me = Self::value(slf)?;
         let mut other = Self::value(next)?;

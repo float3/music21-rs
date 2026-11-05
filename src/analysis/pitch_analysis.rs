@@ -16,13 +16,13 @@ use crate::{
 /// not among them.
 ///
 /// ```
-/// use music21_rs::analysis::pitch_analysis::pitch_attribute_count;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::pitch_analysis::pitch_attribute_count;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 d c e")?;
 /// let counts = pitch_attribute_count(&line, |pitch| pitch.name())?;
 /// assert_eq!(counts, [("C".to_string(), 2), ("D".to_string(), 1), ("E".to_string(), 1)]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

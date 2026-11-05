@@ -14,12 +14,12 @@
 //! those instead of the writer test's scores, which is how the corpus is
 //! swept.
 
-use music21_rs::analysis::floating_key::KeyAnalyzer;
-use music21_rs::analysis::windowed::{WindowStep, WindowType, WindowedAnalysis};
-use music21_rs::analysis::{KeyProfile, estimate_key_of_stream};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::StreamElement;
-use music21_rs::{FloatType, Stream, StreamKind};
+use music21::analysis::floating_key::KeyAnalyzer;
+use music21::analysis::windowed::{WindowStep, WindowType, WindowedAnalysis};
+use music21::analysis::{KeyProfile, estimate_key_of_stream};
+use music21::musicxml::from_musicxml;
+use music21::stream::StreamElement;
+use music21::{FloatType, Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::{answers, music21_name};
 use pyo3::prelude::*;

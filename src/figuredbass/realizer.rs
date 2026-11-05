@@ -89,9 +89,9 @@ type Moment = ((FloatType, FloatType), Vec<Voice>);
 /// A bass line and its figures, in a key and a meter.
 ///
 /// ```
-/// use music21_rs::Pitch;
-/// use music21_rs::figuredbass::realizer::FiguredBassLine;
-/// use music21_rs::figuredbass::rules::Rules;
+/// use music21::Pitch;
+/// use music21::figuredbass::realizer::FiguredBassLine;
+/// use music21::figuredbass::rules::Rules;
 ///
 /// let mut line = FiguredBassLine::default();
 /// line.add_element(Pitch::from_name("C3")?, 1.0, None);
@@ -99,7 +99,7 @@ type Moment = ((FloatType, FloatType), Vec<Voice>);
 /// line.add_element(Pitch::from_name("C3")?, 2.0, None);
 /// let realization = line.realize(&Rules::default(), 4, &Pitch::from_name("B5")?)?;
 /// assert_eq!(realization.num_solutions(), 30);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[must_use]
@@ -266,8 +266,8 @@ impl FiguredBassLine {
     /// notes beamed. music21's `generateBassLine`.
     ///
     /// ```
-    /// use music21_rs::figuredbass::realizer::FiguredBassLine;
-    /// use music21_rs::{Key, Pitch, TimeSignature};
+    /// use music21::figuredbass::realizer::FiguredBassLine;
+    /// use music21::{Key, Pitch, TimeSignature};
     ///
     /// let key = Key::from_tonic("B")?;
     /// let mut line = FiguredBassLine::in_key_and_time(&key, TimeSignature::new(3, 4)?)?;
@@ -277,7 +277,7 @@ impl FiguredBassLine {
     /// let written = line.generate_bass_line()?;
     /// assert_eq!(written.measures().len(), 2);
     /// assert_eq!(written.notes().len(), 4);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -886,9 +886,9 @@ impl Realization {
     /// run past a barline tied, its tuplets bracketed and its notes beamed.
     ///
     /// ```
-    /// use music21_rs::Pitch;
-    /// use music21_rs::figuredbass::realizer::FiguredBassLine;
-    /// use music21_rs::figuredbass::rules::Rules;
+    /// use music21::Pitch;
+    /// use music21::figuredbass::realizer::FiguredBassLine;
+    /// use music21::figuredbass::rules::Rules;
     ///
     /// let mut line = FiguredBassLine::default();
     /// line.add_element(Pitch::from_name("C3")?, 2.0, None);
@@ -899,7 +899,7 @@ impl Realization {
     /// let score = realization.generate_realization_from_possibility_progression(&voicings[0])?;
     /// assert_eq!(score.parts().len(), 2);
     /// assert_eq!(score.parts()[0].measures().len(), 2);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

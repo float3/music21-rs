@@ -17,9 +17,9 @@
 //! runs those instead of the writer test's scores, which is how the corpus
 //! is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::notation::TieType;
-use music21_rs::{Stream, StreamElement, StreamEvent, StreamKind};
+use music21::musicxml::from_musicxml;
+use music21::notation::TieType;
+use music21::{Stream, StreamElement, StreamEvent, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -189,7 +189,7 @@ fn kind(element: &StreamElement) -> Option<&'static str> {
     })
 }
 
-fn pitch_text(pitch: &music21_rs::Pitch) -> String {
+fn pitch_text(pitch: &music21::Pitch) -> String {
     let alter = pitch
         .written_accidental()
         .map_or(String::new(), |accidental| bits(accidental.alter()));
@@ -246,7 +246,7 @@ fn describe(element: &StreamElement, offset: f64) -> String {
     )
 }
 
-fn attempt(label: &str, run: impl FnOnce() -> music21_rs::Result<Vec<String>>) -> Vec<String> {
+fn attempt(label: &str, run: impl FnOnce() -> music21::Result<Vec<String>>) -> Vec<String> {
     match run() {
         Ok(lines) => lines
             .into_iter()
@@ -256,7 +256,7 @@ fn attempt(label: &str, run: impl FnOnce() -> music21_rs::Result<Vec<String>>) -
     }
 }
 
-fn sharps(signature: &music21_rs::key::keysignature::KeySignature) -> String {
+fn sharps(signature: &music21::key::keysignature::KeySignature) -> String {
     signature.sharps().to_string()
 }
 
@@ -285,7 +285,7 @@ fn found(event: Option<&StreamEvent>) -> String {
 
 /// music21's `opFrac`, for the points asked about.
 fn snapped(value: f64) -> f64 {
-    music21_rs::makenotation::op_frac(value)
+    music21::makenotation::op_frac(value)
 }
 
 fn points(part: &Stream) -> Vec<f64> {
@@ -303,7 +303,7 @@ fn points(part: &Stream) -> Vec<f64> {
     out
 }
 
-fn meters(stream: &Stream) -> music21_rs::Result<Vec<String>> {
+fn meters(stream: &Stream) -> music21::Result<Vec<String>> {
     Ok(vec![format!(
         " {}",
         stream
@@ -315,7 +315,7 @@ fn meters(stream: &Stream) -> music21_rs::Result<Vec<String>> {
     )])
 }
 
-fn instruments(stream: &Stream) -> music21_rs::Result<Vec<String>> {
+fn instruments(stream: &Stream) -> music21::Result<Vec<String>> {
     Ok(vec![format!(
         " {}",
         stream

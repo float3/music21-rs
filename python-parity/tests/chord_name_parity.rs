@@ -2,7 +2,7 @@
 //! every Forte prime form, a list of spelled chords and chords built from
 //! integers, in `data/chord_name_expectations.toml`.
 
-use music21_rs::Chord;
+use music21::Chord;
 use music21_rs_python_parity::{music21_figure, music21_name};
 
 use std::path::Path;

@@ -252,8 +252,8 @@ impl Stream {
     /// the chord's first note.
     ///
     /// ```
-    /// use music21_rs::stream::ConsecutiveOptions;
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::stream::ConsecutiveOptions;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("3/4 c4 d' r b b'")?;
     /// let names: Vec<String> = line
@@ -262,7 +262,7 @@ impl Stream {
     ///     .map(|step| step.interval().short_name())
     ///     .collect();
     /// assert_eq!(names, ["M9", "P8"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -302,7 +302,7 @@ impl Stream {
     /// `harmonicInterval`. `None` where no note of `other` sounds.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let upper = from_tiny_notation("4/4 e'2 d'2")?.flatten();
     /// let lower = from_tiny_notation("4/4 c1")?.flatten();
@@ -313,7 +313,7 @@ impl Stream {
     ///     .collect();
     /// let expected = ["Major Tenth", "Major Ninth"].map(|name| Some(name.to_string()));
     /// assert_eq!(names, expected);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn harmonic_intervals(&self, other: &Stream) -> Vec<(usize, Option<Interval>)> {
         self.events

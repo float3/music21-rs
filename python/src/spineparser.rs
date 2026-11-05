@@ -10,7 +10,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::humdrum::{GlobalComment as RsGlobalComment, MiscTandem as RsMiscTandem};
+use music21::humdrum::{GlobalComment as RsGlobalComment, MiscTandem as RsMiscTandem};
 
 /// music21's `GlobalComment`: a comment on the whole score.
 ///

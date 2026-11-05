@@ -722,8 +722,8 @@ fn placed(offset: FloatType, voice: Option<usize>, element: &StreamElement) -> P
 /// millions of quarters, and that many measures do not fit in memory.
 ///
 /// ```
-/// use music21_rs::makenotation::make_measures;
-/// use music21_rs::{Duration, Note, Stream, TimeSignature};
+/// use music21::makenotation::make_measures;
+/// use music21::{Duration, Note, Stream, TimeSignature};
 ///
 /// let mut line = Stream::new();
 /// line.insert(0.0, TimeSignature::new(3, 4)?);
@@ -734,7 +734,7 @@ fn placed(offset: FloatType, voice: Option<usize>, element: &StreamElement) -> P
 /// let measured = make_measures(&line)?;
 /// assert_eq!(measured.measures().len(), 2);
 /// assert_eq!(measured.measures()[1].number(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn make_measures(stream: &Stream) -> Result<Stream> {
     make_measures_by(stream, &[])

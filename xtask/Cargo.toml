@@ -17,11 +17,11 @@ python = ["dep:pyo3", "dep:reqwest", "dep:music21_rs_python"]
 harte = { path = "../harte" }
 # The crate itself, so the benchmark can time it with no Python in the way
 # beside timing it through the wheel. Only the `bench` command reads it.
-music21-rs = { path = ".." }
+music21 = { path = ".." }
 # The wheel crate, linked in rather than installed, so music21's own suite can
 # be run against the crate that is compiled here as well as against the wheel
-# that ships. Renamed because the wheel crate's lib is also `music21_rs`, which
-# is the name the extension module has to have.
+# that ships. Its library is `music21_rs`, the extension module's name; taken
+# as `music21_rs_python` so the code says which half it means.
 music21_rs_python = { package = "music21-rs-python", path = "../python", optional = true }
 proc-macro2 = "1.0.106"
 pyo3 = { version = "0.29.0", features = ["auto-initialize"], optional = true }

@@ -9,7 +9,7 @@ classes, `Pitch`, `Interval`, `Chord`, `Note`, `Duration`, `Key`, `Scale`,
 `RomanNumeral`, `TimeSignature`, `ToneRow` and others, implemented in Rust
 and packaged for Python. the classes have music21's names, arguments,
 properties and `repr`, and give music21's answers. the rust half is the
-[music21-rs](https://crates.io/crates/music21-rs) crate; the wheel needs no
+[music21](https://crates.io/crates/music21) crate; the wheel needs no
 Rust toolchain and no music21 to run on its own. music21's stream
 machinery, its `converter` and the corpus are not included; those remain
 music21's. the package does read scores in seven formats into streams of its

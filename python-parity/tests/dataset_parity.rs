@@ -11,10 +11,10 @@
 //! name must index the same, and ids in every spelling must find the same
 //! extractors.
 
-use music21_rs::features::{
+use music21::features::{
     DataSet, Library, OutputFormat, all_features_as_list, extractors_by_id, index_of,
 };
-use music21_rs::musicxml::from_musicxml;
+use music21::musicxml::from_musicxml;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

@@ -7,7 +7,7 @@
 /// Its priority is the line it was written on, as music21 gives it.
 ///
 /// ```
-/// use music21_rs::humdrum::MiscTandem;
+/// use music21::humdrum::MiscTandem;
 ///
 /// let tandem = MiscTandem::new("*staff1", 2);
 /// assert_eq!(tandem.tandem(), "*staff1");

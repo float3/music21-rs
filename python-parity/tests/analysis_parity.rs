@@ -15,10 +15,10 @@
 //! `ANALYSIS_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::analysis::{elements, metrical, patel, pitch_analysis, segment_by_rests};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::{ConsecutiveOptions, StreamElement};
-use music21_rs::{FloatType, Stream, StreamKind};
+use music21::analysis::{elements, metrical, patel, pitch_analysis, segment_by_rests};
+use music21::musicxml::from_musicxml;
+use music21::stream::{ConsecutiveOptions, StreamElement};
+use music21::{FloatType, Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::{answers, music21_name};
 use pyo3::prelude::*;

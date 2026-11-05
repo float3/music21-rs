@@ -23,9 +23,9 @@
 //! `VOLPIANO_PARITY_SCORES`, a `;`-separated list of corpus names, runs
 //! those scores in the second half instead of the reader test's.
 
-use music21_rs::musicxml::{ExportOptions, from_musicxml, to_musicxml};
-use music21_rs::volpiano::{from_volpiano, to_volpiano};
-use music21_rs::{SpannerKind, Stream, StreamElement, StreamKind};
+use music21::musicxml::{ExportOptions, from_musicxml, to_musicxml};
+use music21::volpiano::{from_volpiano, to_volpiano};
+use music21::{SpannerKind, Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;

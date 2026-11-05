@@ -12,7 +12,7 @@
 //! from being heard as notes of their own.
 
 use crate::display_class_names;
-use music21_rs::{Chord, pitch_class_name};
+use music21::{Chord, pitch_class_name};
 use serde::Serialize;
 use std::{collections::BTreeMap, f64::consts::PI};
 use wasm_bindgen::prelude::*;

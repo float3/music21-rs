@@ -12,8 +12,8 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::figuredbass::possibility as rs;
-use music21_rs_crate::{Error as RsError, Pitch as RsPitch};
+use music21::figuredbass::possibility as rs;
+use music21::{Error as RsError, Pitch as RsPitch};
 
 use crate::pitch::pitch_from_any;
 

@@ -16,10 +16,8 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use music21_rs_crate::FloatType;
-use music21_rs_crate::tuningsystem::scala::{
-    ScalaDegree as RsScalaDegree, ScalaScale as RsScalaScale,
-};
+use music21::FloatType;
+use music21::tuningsystem::scala::{ScalaDegree as RsScalaDegree, ScalaScale as RsScalaScale};
 
 /// The names the `scala` facade replaces in `music21.scale.scala`.
 ///
@@ -36,7 +34,7 @@ pub const NAMES: &[&str] = &["ScalaPitch", "ScalaData"];
 
 /// A value that cannot be read, as Python fails to read one: music21 reads a
 /// line with `float()`, which raises `ValueError`.
-fn scala_error(error: music21_rs_crate::Error) -> PyErr {
+fn scala_error(error: music21::Error) -> PyErr {
     PyValueError::new_err(crate::pitch::message(&error))
 }
 
@@ -331,8 +329,8 @@ impl ScalaData {
 
 /// The archive as read once, since every name is answered out of it.
 #[cfg(feature = "scala-archive")]
-fn archive() -> &'static music21_rs_crate::tuningsystem::scala::ScalaArchive {
-    use music21_rs_crate::tuningsystem::scala::ScalaArchive;
+fn archive() -> &'static music21::tuningsystem::scala::ScalaArchive {
+    use music21::tuningsystem::scala::ScalaArchive;
     static ARCHIVE: std::sync::OnceLock<ScalaArchive> = std::sync::OnceLock::new();
     ARCHIVE.get_or_init(ScalaArchive::bundled)
 }

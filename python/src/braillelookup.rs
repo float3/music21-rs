@@ -13,7 +13,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::braille::lookup;
+use music21::braille::lookup;
 
 use crate::Walkable;
 

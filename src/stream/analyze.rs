@@ -116,8 +116,8 @@ impl Stream {
     /// bare `key` finds Aarden's, which is music21's default.
     ///
     /// ```
-    /// use music21_rs::stream::Analysis;
-    /// use music21_rs::{Note, Stream};
+    /// use music21::stream::Analysis;
+    /// use music21::{Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// for name in ["C4", "E4", "G4", "C5"] {
@@ -135,7 +135,7 @@ impl Stream {
     ///
     /// // A stream with no pitches has no ambitus.
     /// assert!(Stream::new().analyze("ambitus")?.is_none());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// A stream with no pitches has no ambitus and answers nothing for
@@ -183,14 +183,14 @@ impl Stream {
     /// A stream with no pitches is, as music21 answers for one.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream};
+    /// use music21::{Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// line.push(Note::from_name("G#4")?);
     /// assert!(line.is_twelve_tone());
     /// line.push(Note::from_name("G~4")?);
     /// assert!(!line.is_twelve_tone());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn is_twelve_tone(&self) -> bool {
         self.pitches()
@@ -207,7 +207,7 @@ impl Stream {
     /// own `notesAndRests`.
     ///
     /// ```
-    /// use music21_rs::{Duration, KeySignature, Note, Rest, Stream};
+    /// use music21::{Duration, KeySignature, Note, Rest, Stream};
     ///
     /// let mut line = Stream::new();
     /// line.insert(0.0, KeySignature::new(2));
@@ -216,7 +216,7 @@ impl Stream {
     /// // The key signature is left out and the rest kept.
     /// assert_eq!(line.notes_and_rests().len(), 2);
     /// assert_eq!(line.notes().len(), 1);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn notes_and_rests(&self) -> Vec<(FloatType, StreamElement)> {
         self.flatten()

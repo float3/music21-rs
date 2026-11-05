@@ -12,8 +12,8 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyTuple;
 
-use music21_rs_crate::figuredbass::resolution::{self as rs, AugmentedSixth, ChordInfo};
-use music21_rs_crate::{Error as RsError, Pitch as RsPitch};
+use music21::figuredbass::resolution::{self as rs, AugmentedSixth, ChordInfo};
+use music21::{Error as RsError, Pitch as RsPitch};
 
 use crate::pitch::{Pitch, pitch_from_any};
 

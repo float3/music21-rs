@@ -14,9 +14,9 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::noteworthy::{from_noteworthy, from_nwc, nwc_lines};
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::noteworthy::{from_noteworthy, from_nwc, nwc_lines};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -243,7 +243,7 @@ fn the_crate_reads_noteworthy_as_music21_does() {
             }
         }
 
-        let mut subjects: Vec<(String, music21_rs::Result<music21_rs::Stream>, Bound<'_, PyAny>)> =
+        let mut subjects: Vec<(String, music21::Result<music21::Stream>, Bound<'_, PyAny>)> =
             Vec::new();
         for file in FILES {
             let path = directory.join(file);

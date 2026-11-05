@@ -1,4 +1,4 @@
-use music21_rs::Polyrhythm;
+use music21::Polyrhythm;
 use rodio::{
     DeviceSinkBuilder,
     source::{SineWave, Source},

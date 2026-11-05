@@ -17,11 +17,11 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
-use music21_rs_crate::expressions::{
+use music21::expressions::{
     Ornament as RsOrnament, OrnamentDelay, OrnamentKind, Realization,
     TextExpression as RsTextExpression,
 };
-use music21_rs_crate::{
+use music21::{
     Duration as RsDuration, Interval as RsInterval, IntervalDirection,
     KeySignature as RsKeySignature, Note as RsNote, Pitch as RsPitch,
 };
@@ -648,8 +648,8 @@ impl Ornament {
             return Ok(size.clone_ref(py));
         }
         let made = if schleifer {
-            let second = music21_rs_crate::GenericInterval::new(2)
-                .map_err(crate::interval::interval_error)?;
+            let second =
+                music21::GenericInterval::new(2).map_err(crate::interval::interval_error)?;
             crate::installed_new(
                 py,
                 "music21.interval",
@@ -695,14 +695,13 @@ impl Ornament {
         let unison = || -> PyResult<Py<PyAny>> {
             crate::interval::interval_object(
                 py,
-                music21_rs_crate::Interval::from_name("P1")
-                    .map_err(crate::interval::interval_error)?,
+                music21::Interval::from_name("P1").map_err(crate::interval::interval_error)?,
             )
         };
         let size = if shape == Shape::Turn {
             let which = match which {
-                Some("upper") => music21_rs_crate::expressions::TurnNote::Upper,
-                Some("lower") => music21_rs_crate::expressions::TurnNote::Lower,
+                Some("upper") => music21::expressions::TurnNote::Upper,
+                Some("lower") => music21::expressions::TurnNote::Lower,
                 _ => {
                     return Err(ExpressionException::new_err(
                         "Turn.getSize requires 'which' parameter be set to 'upper' or 'lower'",
@@ -880,7 +879,7 @@ impl Ornament {
                         "music21.pitch",
                         "Accidental",
                         crate::pitch::Accidental::from_inner(
-                            music21_rs_crate::Accidental::new("natural")
+                            music21::Accidental::new("natural")
                                 .map_err(crate::pitch::pitch_error)?,
                         ),
                     )?;
@@ -1437,7 +1436,7 @@ impl TextExpression {
     fn set_placement(&mut self, value: Option<&str>) -> PyResult<()> {
         let placement = match value.filter(|said| !said.is_empty()) {
             Some(said) => Some(
-                music21_rs_crate::notation::Placement::from_name(said)
+                music21::notation::Placement::from_name(said)
                     .map_err(|error| ExpressionException::new_err(crate::pitch::message(&error)))?,
             ),
             None => None,

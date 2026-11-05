@@ -127,7 +127,7 @@ fn known() -> &'static [Trigram; 7] {
 /// of [`LANGUAGE_CODES`] wins.
 ///
 /// ```
-/// use music21_rs::features::language::most_likely_language;
+/// use music21::features::language::most_likely_language;
 ///
 /// let text = "Ich habe ein Buch, und ich gehe nach Hause mit meinem Bruder.";
 /// assert_eq!(most_likely_language(text), Some("de"));

@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::{Duration as RsDuration, FullMeasure, Rest as RsRest};
+use music21::{Duration as RsDuration, FullMeasure, Rest as RsRest};
 
 use crate::duration::{
     Duration, adopt_duration, copied_duration, duration_from_any, duration_object_for,

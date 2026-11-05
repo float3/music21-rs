@@ -2,8 +2,8 @@
 //! `cargo run --example analyze_midi -- song.mid`. Given no file, it writes
 //! a short melody as MIDI in memory and reads that back.
 
-use music21_rs::stream::Analysis;
-use music21_rs::{Note, Stream, StreamKind, from_midi, midi, to_midi};
+use music21::stream::Analysis;
+use music21::{Note, Stream, StreamKind, from_midi, midi, to_midi};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bytes = match std::env::args().nth(1) {
@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// A D major arpeggio and back, as a MIDI file.
-fn melody() -> music21_rs::Result<Vec<u8>> {
+fn melody() -> music21::Result<Vec<u8>> {
     let mut part = Stream::with_kind(StreamKind::Part);
     for name in ["D4", "F#4", "A4", "D5", "C#5", "A4", "F#4", "D4"] {
         part.push(Note::from_name(name)?);

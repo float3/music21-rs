@@ -12,9 +12,9 @@
 //! those instead of the writer test's scores, which is how the corpus is
 //! swept.
 
-use music21_rs::bar::{Barline, BarlineType};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::{Stream, StreamKind};
+use music21::bar::{Barline, BarlineType};
+use music21::musicxml::from_musicxml;
+use music21::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

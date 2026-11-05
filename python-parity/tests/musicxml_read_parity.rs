@@ -2,7 +2,7 @@
 //!
 //! Each score's file is read twice: by music21, which then writes it out
 //! again with its own `ScoreExporter`, and by
-//! `music21_rs::musicxml::from_musicxml`, whose score the crate's writer
+//! `music21::musicxml::from_musicxml`, whose score the crate's writer
 //! writes out. The writer is held to music21's by `musicxml_parity`, so the
 //! two documents are the same text only if the two readers read the same
 //! score. A score the test builds itself, for want of a corpus score holding
@@ -11,8 +11,8 @@
 //! `MUSICXML_PARITY_SCORES`, a `;`-separated list of corpus names, runs
 //! those scores instead of the ones this test knows.
 
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, from_musicxml, to_musicxml};
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, from_musicxml, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_rs_facade;
 use pyo3::prelude::*;

@@ -117,13 +117,13 @@ impl SearchLanguage {
 /// An instrument of one of music21's kinds: music21's `Instrument`.
 ///
 /// ```
-/// use music21_rs::instrument::{Instrument, SearchLanguage};
+/// use music21::instrument::{Instrument, SearchLanguage};
 ///
 /// let clarinet = Instrument::from_name("Clarinet in A", SearchLanguage::All)?;
 /// assert_eq!(clarinet.kind(), "Clarinet");
 /// assert!(clarinet.is_a("WoodwindInstrument"));
 /// assert_eq!(clarinet.transposition().unwrap().directed_name(), "m-3");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -581,7 +581,7 @@ impl Instrument {
     /// string instrument music21 tunes: music21's `stringPitches`.
     ///
     /// ```
-    /// use music21_rs::Instrument;
+    /// use music21::Instrument;
     ///
     /// let violin = Instrument::of_kind("Violin")?;
     /// let open: Vec<String> = violin
@@ -591,7 +591,7 @@ impl Instrument {
     ///     .map(|pitch| pitch.name_with_octave())
     ///     .collect();
     /// assert_eq!(open, ["G3", "D4", "A4", "E5"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn string_pitches(&self) -> Option<&[Pitch]> {
         self.string_pitches.as_deref()
@@ -614,13 +614,13 @@ impl Instrument {
     /// `"low"`.
     ///
     /// ```
-    /// use music21_rs::Instrument;
+    /// use music21::Instrument;
     ///
     /// let mut woodblock = Instrument::of_kind("Woodblock")?;
     /// woodblock.set_modifier("LO");
     /// assert_eq!(woodblock.modifier(), Some("low"));
     /// assert_eq!(woodblock.percussion_pitch(), Some(77));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn set_modifier(&mut self, modifier: &str) {
         let mut modifier = modifier.trim().to_lowercase();
@@ -761,7 +761,7 @@ pub fn ensemble_name_by_size(players: usize) -> Option<&'static str> {
 /// the same modifier struck open.
 ///
 /// ```
-/// use music21_rs::instrument::for_percussion_key;
+/// use music21::instrument::for_percussion_key;
 ///
 /// let drum = for_percussion_key(36)?;
 /// assert_eq!(drum.kind(), "BassDrum");
@@ -775,7 +775,7 @@ pub fn ensemble_name_by_size(players: usize) -> Option<&'static str> {
 /// assert_eq!(clap.name(), Some("Hand Clap"));
 ///
 /// assert!(for_percussion_key(22).is_err());
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -792,7 +792,7 @@ pub fn for_percussion_key(key: u8) -> Result<Instrument> {
 /// `raiseIfUnmapped=False`, which is how its MIDI reader asks.
 ///
 /// ```
-/// use music21_rs::instrument::for_percussion_key_or_unmapped;
+/// use music21::instrument::for_percussion_key_or_unmapped;
 ///
 /// let bare = for_percussion_key_or_unmapped(22);
 /// assert_eq!(bare.kind(), "UnpitchedPercussion");

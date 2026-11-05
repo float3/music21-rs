@@ -7,7 +7,7 @@
 /// standing at its offset.
 ///
 /// ```
-/// use music21_rs::humdrum::GlobalComment;
+/// use music21::humdrum::GlobalComment;
 ///
 /// let comment = GlobalComment::new("transcribed by hand", -37);
 /// assert_eq!(comment.comment(), "transcribed by hand");

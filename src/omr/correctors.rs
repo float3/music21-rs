@@ -73,13 +73,13 @@ pub const PROBABILITY_ON_ADDITION: FloatType = 0.004;
 /// pitch is left out.
 ///
 /// ```
-/// use music21_rs::omr::correctors::measure_hash;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::omr::correctors::measure_hash;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 d8 r8 e2")?;
 /// let measure = line.measures()[0];
 /// assert_eq!(measure_hash(measure)?, "PFGZ");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -561,9 +561,9 @@ impl SinglePart {
 /// A score being corrected, part by part: music21's `ScoreCorrector`.
 ///
 /// ```
-/// use music21_rs::omr::correctors::ScoreCorrector;
-/// use music21_rs::tinynotation::from_tiny_notation;
-/// use music21_rs::{Stream, StreamKind};
+/// use music21::omr::correctors::ScoreCorrector;
+/// use music21::tinynotation::from_tiny_notation;
+/// use music21::{Stream, StreamKind};
 ///
 /// // The third bar is a quarter short.
 /// let part = from_tiny_notation("4/4 c4 d e f g a b c' d'4 e' f'")?;
@@ -574,7 +574,7 @@ impl SinglePart {
 /// assert_eq!(corrector.single_parts()[0].incorrect_measures(), [2]);
 /// corrector.run()?;
 /// assert_eq!(corrector.single_parts()[0].hashed_notes()[2], "PPPP");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct ScoreCorrector {

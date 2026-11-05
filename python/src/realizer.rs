@@ -23,13 +23,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString, PyTuple};
 
-use music21_rs_crate::figuredbass::realizer::{
-    FiguredBassLine as RsLine, Realization as RsRealization,
-};
-use music21_rs_crate::figuredbass::segment::Possibility;
-use music21_rs_crate::key::{Key as RsKey, KeySignature as RsKeySignature};
-use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
-use music21_rs_crate::{Pitch as RsPitch, Stream as RsStream};
+use music21::figuredbass::realizer::{FiguredBassLine as RsLine, Realization as RsRealization};
+use music21::figuredbass::segment::Possibility;
+use music21::key::{Key as RsKey, KeySignature as RsKeySignature};
+use music21::meter::TimeSignature as RsTimeSignature;
+use music21::{Pitch as RsPitch, Stream as RsStream};
 
 use crate::Walkable;
 
@@ -43,7 +41,7 @@ pyo3::create_exception!(
 );
 
 /// music21's error for a line that cannot be read or realized.
-fn line_error(error: &music21_rs_crate::Error) -> PyErr {
+fn line_error(error: &music21::Error) -> PyErr {
     FiguredBassLineException::new_err(crate::pitch::message(error))
 }
 
@@ -137,7 +135,7 @@ impl FiguredBassLine {
             .key
             .bind(py)
             .getattr("sharps")?
-            .extract::<music21_rs_crate::IntegerType>()?;
+            .extract::<music21::IntegerType>()?;
         line.set_key_signature(RsKeySignature::new(sharps));
         Ok(line)
     }
@@ -328,7 +326,7 @@ impl FiguredBassLine {
 #[pyfunction]
 #[pyo3(signature = (bassNote, notationString = String::new()))]
 fn addLyricsToBassNote(bassNote: &Bound<'_, PyAny>, notationString: String) -> PyResult<()> {
-    let notation = music21_rs_crate::figuredbass::Notation::parse(&notationString)
+    let notation = music21::figuredbass::Notation::parse(&notationString)
         .map_err(|error| line_error(&error))?;
     let figures = notation.figure_strings();
     let width = figures
@@ -486,10 +484,10 @@ fn read_rules<'py>(
     _py: Python<'py>,
     fbRules: Option<&Bound<'py, PyAny>>,
     maxPitch: Option<&Bound<'py, PyAny>>,
-) -> PyResult<(music21_rs_crate::figuredbass::rules::Rules, RsPitch)> {
+) -> PyResult<(music21::figuredbass::rules::Rules, RsPitch)> {
     let rules = match fbRules.filter(|given| !given.is_none()) {
         Some(given) => crate::segment::rules_of(given)?,
-        None => music21_rs_crate::figuredbass::rules::Rules::default(),
+        None => music21::figuredbass::rules::Rules::default(),
     };
     let top = match maxPitch.filter(|given| !given.is_none()) {
         Some(given) => crate::pitch::pitch_from_any(given)?,

@@ -4,8 +4,8 @@
 //!
 //! Reading needs no help: the crate reads `-` as well as `b`.
 
-use music21_rs_crate::chordsymbol::ChordSymbolFigure;
-use music21_rs_crate::key::KeySignature;
+use music21::chordsymbol::ChordSymbolFigure;
+use music21::key::KeySignature;
 
 /// A modifier as music21 writes it: `bb` is `--`, `b`` `-``.
 pub(crate) fn music21_modifier(modifier: &str) -> String {

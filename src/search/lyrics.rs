@@ -127,15 +127,15 @@ type Sung<'a> = (usize, &'a StreamElement, &'a [Lyric], Option<IntegerType>);
 /// and notes there.
 ///
 /// ```
-/// use music21_rs::search::LyricSearcher;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::search::LyricSearcher;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4_Et d_in f_terra a_pax")?;
 /// let searcher = LyricSearcher::new(&line);
 /// assert_eq!(searcher.index_text(), "Et in terra pax");
 /// let found = searcher.search("in ter")?;
 /// assert_eq!(found[0].elements().len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct LyricSearcher<'a> {

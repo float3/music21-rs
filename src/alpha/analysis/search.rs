@@ -2,17 +2,17 @@
 //! `alpha.analysis.search`.
 //!
 //! ```
-//! use music21_rs::alpha::analysis::search::{ScaleRunOptions, find_consecutive_scale};
-//! use music21_rs::scale::{Scale, ScaleType};
-//! use music21_rs::tinynotation::from_tiny_notation;
-//! use music21_rs::Pitch;
+//! use music21::alpha::analysis::search::{ScaleRunOptions, find_consecutive_scale};
+//! use music21::scale::{Scale, ScaleType};
+//! use music21::tinynotation::from_tiny_notation;
+//! use music21::Pitch;
 //!
 //! let line = from_tiny_notation("4/4 a4 b c'# d' e' f'#")?.flatten();
 //! let a_major = Scale::new(ScaleType::Major, Pitch::from_name("A4")?);
 //! let runs = find_consecutive_scale(&line, &a_major, &ScaleRunOptions::default())?;
 //! assert_eq!(runs.len(), 1);
 //! assert_eq!(runs[0].elements.len(), 6);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use std::collections::BTreeSet;

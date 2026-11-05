@@ -25,7 +25,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::metadata::primitives::{
+use music21::metadata::primitives::{
     Certainty, Contributor as RsContributor, Date as RsDate, DateKind, DatePart,
     DatePrimitive as RsDatePrimitive, ROLE_ABBREVIATIONS, Relevance, Text as RsText,
     strip_certainty,
@@ -68,7 +68,7 @@ fn refused(said: String) -> PyErr {
 }
 
 /// A crate error as music21's `MetadataException`.
-fn primitive_error(error: music21_rs_crate::Error) -> PyErr {
+fn primitive_error(error: music21::Error) -> PyErr {
     crate::pitch::specific_error(&error).unwrap_or_else(|| refused(crate::pitch::message(&error)))
 }
 

@@ -507,7 +507,7 @@ impl Spanner {
     /// A spanner of a kind joining the elements at these positions.
     ///
     /// ```
-    /// use music21_rs::{Spanner, SpannerKind};
+    /// use music21::{Spanner, SpannerKind};
     ///
     /// let line = Spanner::new(SpannerKind::Line, vec![2, 5]);
     /// assert_eq!(line.len(), 2);
@@ -685,13 +685,13 @@ impl Spanner {
     /// as music21's starts out.
     ///
     /// ```
-    /// use music21_rs::{OctaveShift, Spanner};
+    /// use music21::{OctaveShift, Spanner};
     ///
     /// let ottava = Spanner::ottava(OctaveShift::from_name("8va", true)?, vec![0, 1]);
     /// let shift = ottava.shift().expect("an ottava shifts");
     /// assert_eq!(shift.name(), "8va");
     /// assert!(shift.up());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn ottava(shift: OctaveShift, spanned: Vec<usize>) -> Self {
         let mut ottava = Self::new(SpannerKind::Ottava, spanned);
@@ -713,7 +713,7 @@ impl Spanner {
     /// A slur over the elements at these positions.
     ///
     /// ```
-    /// use music21_rs::{Note, Spanner, SpannerKind, Stream};
+    /// use music21::{Note, Spanner, SpannerKind, Stream};
     ///
     /// let mut stream = Stream::new();
     /// for name in ["C4", "D4", "E4"] {
@@ -724,7 +724,7 @@ impl Spanner {
     /// let slur = &stream.spanners()[0];
     /// assert_eq!(slur.kind(), SpannerKind::Slur);
     /// assert!(slur.is_first(0) && slur.is_last(2));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn slur(spanned: Vec<usize>) -> Self {
         Self::new(SpannerKind::Slur, spanned)
@@ -734,7 +734,7 @@ impl Spanner {
     /// opening fifteen tenths wide, as music21's starts out.
     ///
     /// ```
-    /// use music21_rs::{Spanner, SpannerKind};
+    /// use music21::{Spanner, SpannerKind};
     ///
     /// let hairpin = Spanner::wedge(SpannerKind::Crescendo, vec![0, 3]);
     /// assert!(hairpin.kind().is_wedge());
@@ -767,7 +767,7 @@ impl Spanner {
     /// one that stands in no stream.
     ///
     /// ```
-    /// use music21_rs::Spanner;
+    /// use music21::Spanner;
     ///
     /// let slur = Spanner::slur(vec![4, 5, 6]);
     /// assert_eq!(slur.spanned(), [Some(4), Some(5), Some(6)]);

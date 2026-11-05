@@ -23,7 +23,7 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::analysis::reduction::ScoreReduction as RsScoreReduction;
+use music21::analysis::reduction::ScoreReduction as RsScoreReduction;
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["ScoreReduction"];

@@ -32,7 +32,7 @@ static DEFAULT_STEP: LazyLock<Interval> =
 /// A scale built by walking a cycle of intervals from a tonic.
 ///
 /// ```
-/// use music21_rs::{Pitch, StepScale};
+/// use music21::{Pitch, StepScale};
 ///
 /// let tonic = Pitch::from_name("C4")?;
 /// let cyclical = StepScale::cyclical(tonic.clone(), &["m3", "M3"])?;
@@ -42,7 +42,7 @@ static DEFAULT_STEP: LazyLock<Interval> =
 /// let repeating = StepScale::octave_repeating(tonic, &["m3", "M3"])?;
 /// let names: Vec<String> = repeating.pitches()?.iter().map(|p| p.name()).collect();
 /// assert_eq!(names, ["C", "Eb", "G", "C"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 /// `Interval` implements neither `PartialEq` nor `Hash`, so neither is derived
 /// here; compare realized [`pitches`](StepScale::pitches) instead.

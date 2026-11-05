@@ -1,7 +1,7 @@
 //! What the MusicXML writer's and reader's parity tests share: the scores,
 //! the layout a score is stripped of, and how two documents are compared.
 
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
 
@@ -1028,7 +1028,7 @@ fn sung(lyric: Option<String>) -> String {
 /// from an open one -- a muted conga is key 62 with the *high* drum's
 /// modifier where 63 is that modifier struck open, and a cuica and a
 /// surdo carry no modifier at all.
-fn struck(drum: Option<&music21_rs::Instrument>) -> String {
+fn struck(drum: Option<&music21::Instrument>) -> String {
     match drum {
         None => "None None None".to_string(),
         Some(drum) => format!(
@@ -1049,15 +1049,12 @@ fn said(text: Option<&str>) -> String {
 /// How a note, chord or rest is written: its value and dots, and the class
 /// of each articulation and expression it carries.
 fn drawn(
-    duration: Option<&music21_rs::Duration>,
-    articulations: &[music21_rs::articulations::Articulation],
-    expressions: &[music21_rs::expressions::Expression],
+    duration: Option<&music21::Duration>,
+    articulations: &[music21::articulations::Articulation],
+    expressions: &[music21::expressions::Expression],
 ) -> String {
-    use music21_rs::expressions::Expression;
-    let written = match duration
-        .map(music21_rs::Duration::written_values)
-        .as_deref()
-    {
+    use music21::expressions::Expression;
+    let written = match duration.map(music21::Duration::written_values).as_deref() {
         None => "quarter/0".to_string(),
         Some([]) => "zero/0".to_string(),
         Some([one]) => match one.duration_type() {
@@ -1086,12 +1083,12 @@ fn drawn(
 
 #[allow(dead_code)]
 /// A measure's own barline, where it is not an ordinary one.
-fn barline(barline: Option<&music21_rs::Barline>) -> Option<String> {
+fn barline(barline: Option<&music21::Barline>) -> Option<String> {
     let barline = barline?;
     let direction = barline
         .repeat_direction()
         .map(|direction| direction.as_str());
-    if barline.bar_type() == music21_rs::BarlineType::Regular && direction.is_none() {
+    if barline.bar_type() == music21::BarlineType::Regular && direction.is_none() {
         return None;
     }
     Some(format!(
@@ -1116,7 +1113,7 @@ fn barlines(measure: &Stream) -> Option<String> {
 
 #[allow(dead_code)]
 fn describe(element: &StreamElement) -> String {
-    let tie = |note: &music21_rs::Note| option(note.tie().map(|tie| tie.tie_type().as_str()));
+    let tie = |note: &music21::Note| option(note.tie().map(|tie| tie.tie_type().as_str()));
     match element {
         StreamElement::Unpitched(stroke) => {
             format!("Unpitched {}", struck(stroke.stored_instrument()))
@@ -1160,7 +1157,7 @@ fn describe(element: &StreamElement) -> String {
                 ))
                 .collect::<Vec<_>>()
                 .join(" "),
-            sung(chord.notes().first().and_then(music21_rs::Note::lyric)),
+            sung(chord.notes().first().and_then(music21::Note::lyric)),
             drawn(chord.duration(), chord.articulations(), chord.expressions())
         ),
         StreamElement::Rest(rest) => format!(
@@ -1219,7 +1216,7 @@ fn describe(element: &StreamElement) -> String {
 #[allow(dead_code)]
 pub fn outline(score: &Stream) -> String {
     let mut out = Vec::new();
-    let line = |event: &music21_rs::StreamEvent| {
+    let line = |event: &music21::StreamEvent| {
         format!(
             "    {} {} {}",
             number(event.offset()),
@@ -1245,7 +1242,7 @@ pub fn outline(score: &Stream) -> String {
             out.extend(barlines(measure));
             // A humdrum instruction is compared on its own, and music21's
             // outline says nothing for it.
-            let said = |event: &&music21_rs::StreamEvent| {
+            let said = |event: &&music21::StreamEvent| {
                 !matches!(event.element(), StreamElement::MiscTandem(_))
             };
             for held in measure.events().iter().filter(said) {

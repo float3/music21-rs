@@ -14,9 +14,9 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::roman as rs_roman;
-use music21_rs_crate::scale::Scale as RsScale;
-use music21_rs_crate::{
+use music21::roman as rs_roman;
+use music21::scale::Scale as RsScale;
+use music21::{
     Chord as RsChord, ImpliedQuality as RsImpliedQuality, Interval as RsInterval, Key as RsKey,
     Minor67Default as RsMinor67Default, RomanNumeral as RsRomanNumeral,
 };
@@ -212,7 +212,7 @@ impl RomanNumeral {
     pub(crate) fn object_on(
         py: Python<'_>,
         numeral: Self,
-        chord: music21_rs_crate::Chord,
+        chord: music21::Chord,
     ) -> PyResult<Py<Self>> {
         Self::object_on_as(py, numeral, chord, false)
     }
@@ -223,7 +223,7 @@ impl RomanNumeral {
     pub(crate) fn object_on_as(
         py: Python<'_>,
         numeral: Self,
-        chord: music21_rs_crate::Chord,
+        chord: music21::Chord,
         holdable: bool,
     ) -> PyResult<Py<Self>> {
         let found = if holdable {
@@ -340,7 +340,7 @@ impl RomanNumeral {
     /// other octave is moved there afterwards.
     fn chord(&self) -> PyResult<RsChord> {
         if self.blank || self.silent {
-            return RsChord::new::<&[music21_rs_crate::Pitch]>(&[]).map_err(roman_error);
+            return RsChord::new::<&[music21::Pitch]>(&[]).map_err(roman_error);
         }
         let chord = self.inner.to_chord().map_err(roman_error)?;
         // A numeral read over a scale is already spelled where that scale
@@ -861,7 +861,7 @@ impl RomanNumeral {
             return Ok(py.None());
         }
         Ok(crate::pitch::Accidental::from_inner(
-            music21_rs_crate::pitch::Accidental::new(f64::from(alteration)).map_err(roman_error)?,
+            music21::pitch::Accidental::new(f64::from(alteration)).map_err(roman_error)?,
         )
         .into_pyobject(py)?
         .into_any()
@@ -894,11 +894,11 @@ impl RomanNumeral {
             return Ok(py.None());
         }
         let key = self.inner.key();
-        let scale = music21_rs_crate::scale::Scale::new(
+        let scale = music21::scale::Scale::new(
             if key.mode() == "minor" {
-                music21_rs_crate::scale::ScaleType::Minor
+                music21::scale::ScaleType::Minor
             } else {
-                music21_rs_crate::scale::ScaleType::Major
+                music21::scale::ScaleType::Major
             },
             key.tonic(),
         );
@@ -1027,8 +1027,7 @@ impl RomanNumeral {
             py.None().into_bound(py)
         } else {
             crate::pitch::Accidental::from_inner(
-                music21_rs_crate::pitch::Accidental::new(f64::from(alteration))
-                    .map_err(roman_error)?,
+                music21::pitch::Accidental::new(f64::from(alteration)).map_err(roman_error)?,
             )
             .into_pyobject(py)?
             .into_any()
@@ -1452,7 +1451,7 @@ impl RomanNumeral {
     #[getter]
     fn get_figuresNotationObj(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let column = if self.blank {
-            music21_rs_crate::figuredbass::Notation::default()
+            music21::figuredbass::Notation::default()
         } else {
             self.inner.figures_notation().clone()
         };
@@ -1474,7 +1473,7 @@ impl RomanNumeral {
             return String::new();
         }
         let figure = self.inner.figure();
-        let (primary, _) = music21_rs_crate::roman::split_secondary(figure);
+        let (primary, _) = music21::roman::split_secondary(figure);
         if primary == "Cad64" {
             return if self.inner.key().mode() == "minor" {
                 "i64".to_string()

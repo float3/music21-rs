@@ -85,9 +85,9 @@ impl Stream {
     /// it, as music21 pads it.
     ///
     /// ```
-    /// use music21_rs::stream::{LyricsOptions, SungLyric};
-    /// use music21_rs::notation::Lyric;
-    /// use music21_rs::{Note, Stream};
+    /// use music21::stream::{LyricsOptions, SungLyric};
+    /// use music21::notation::Lyric;
+    /// use music21::{Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// for (name, word) in [("C4", "this"), ("D4", "is"), ("E4", "sung")] {
@@ -105,7 +105,7 @@ impl Stream {
     ///     })
     ///     .collect();
     /// assert_eq!(words, ["this", "is", "sung"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn lyrics(&self, options: &LyricsOptions) -> BTreeMap<IntegerType, Vec<SungLyric>> {
         let leaves = self.leaves();

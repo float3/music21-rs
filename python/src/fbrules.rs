@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyList;
 
-use music21_rs_crate::figuredbass::rules::Rules as RsRules;
+use music21::figuredbass::rules::Rules as RsRules;
 
 use crate::pitch::pitch_from_any;
 
@@ -80,7 +80,7 @@ impl Rules {
                 py,
                 "music21.note",
                 "Note",
-                crate::note::Note::wrap(py, music21_rs_crate::Note::from_pitch(pitch.clone()))?,
+                crate::note::Note::wrap(py, music21::Note::from_pitch(pitch.clone()))?,
             )?;
             limits.append((*part, note))?;
         }

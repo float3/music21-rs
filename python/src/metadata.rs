@@ -30,7 +30,7 @@ use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
-use music21_rs_crate::metadata::{
+use music21::metadata::{
     Metadata as RsMetadata, MetadataQuery, MetadataValue, ValueKind, is_contributor_unique_name,
     primitives as rsprim, unique_name_from_namespace, unique_name_of, unique_name_of_plural,
     value_kind_of,
@@ -217,14 +217,14 @@ impl Metadata {
     /// `uniqueNameToNamespaceName`.
     #[staticmethod]
     fn uniqueNameToNamespaceName(uniqueName: &str) -> Option<&'static str> {
-        music21_rs_crate::metadata::namespace_name(uniqueName)
+        music21::metadata::namespace_name(uniqueName)
     }
 
     /// The unique name a namespaced one stands for: music21's
     /// `namespaceNameToUniqueName`.
     #[staticmethod]
     fn namespaceNameToUniqueName(namespaceName: &str) -> Option<&'static str> {
-        music21_rs_crate::metadata::unique_name_from_namespace(namespaceName)
+        music21::metadata::unique_name_from_namespace(namespaceName)
     }
 
     /// Whether a unique name is one of the contributor names: music21's
@@ -232,13 +232,13 @@ impl Metadata {
     #[staticmethod]
     #[pyo3(signature = (uniqueName))]
     fn isContributorUniqueName(uniqueName: Option<&str>) -> bool {
-        uniqueName.is_some_and(music21_rs_crate::metadata::is_contributor_unique_name)
+        uniqueName.is_some_and(music21::metadata::is_contributor_unique_name)
     }
 
     /// Whether the vocabulary knows a name, by its unique name or its
     /// namespaced one: music21's `isStandardName`.
     fn isStandardName(&self, name: &str) -> bool {
-        music21_rs_crate::metadata::is_standard_name(name)
+        music21::metadata::is_standard_name(name)
     }
 
     /// music21 freezes a score by pickling it, and what this object is
@@ -767,7 +767,7 @@ fn software_line(py: Python<'_>) -> String {
 }
 
 /// A crate error as music21's `MetadataException`.
-fn metadata_error(error: music21_rs_crate::Error) -> PyErr {
+fn metadata_error(error: music21::Error) -> PyErr {
     crate::pitch::specific_error(&error)
         .unwrap_or_else(|| MetadataException::new_err(crate::pitch::message(&error)))
 }

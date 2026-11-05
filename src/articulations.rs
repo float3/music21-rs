@@ -759,7 +759,7 @@ impl ArticulationKind {
 /// where they sit and what else they say does not count.
 ///
 /// ```
-/// use music21_rs::articulations::{Articulation, ArticulationKind};
+/// use music21::articulations::{Articulation, ArticulationKind};
 ///
 /// let accent = Articulation::of_kind(ArticulationKind::StrongAccent);
 /// assert_eq!(accent.name(), "strong accent");

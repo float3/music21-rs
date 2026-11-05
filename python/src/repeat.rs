@@ -19,9 +19,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::repeat::{
-    RepeatExpression as RsRepeatExpression, RepeatExpressionKind as Kind,
-};
+use music21::repeat::{RepeatExpression as RsRepeatExpression, RepeatExpressionKind as Kind};
 
 pyo3::create_exception!(
     music21_rs_facade,

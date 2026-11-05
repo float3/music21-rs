@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyTuple;
 
-use music21_rs_crate::chord::tables;
+use music21::chord::tables;
 
 /// The names the `chord.tables` facade replaces in `music21.chord.tables`.
 pub const NAMES: &[&str] = &[

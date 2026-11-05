@@ -17,7 +17,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::layout::{
+use music21::layout::{
     PageLayout as RsPageLayout, ScoreLayout as RsScoreLayout, StaffLayout as RsStaffLayout,
     StaffType, SystemLayout as RsSystemLayout, Tenths,
 };

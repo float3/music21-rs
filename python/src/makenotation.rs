@@ -34,12 +34,12 @@ use pyo3::IntoPyObjectExt;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyString};
 
-use music21_rs_crate::StreamElement;
-use music21_rs_crate::duration::TupletBracket;
-use music21_rs_crate::makenotation::{
+use music21::StreamElement;
+use music21::duration::TupletBracket;
+use music21::makenotation::{
     make_beams, make_tuplet_brackets, set_stem_direction_for_beam_groups, tie_pitch_set,
 };
-use music21_rs_crate::notation::Beams as RsBeams;
+use music21::notation::Beams as RsBeams;
 
 use crate::Walkable;
 
@@ -95,7 +95,7 @@ fn target<'py>(s: &Bound<'py, PyAny>, inPlace: bool, method: &str) -> PyResult<B
 /// same place.
 fn carry<'py, F>(target: &Bound<'py, PyAny>, run: F) -> PyResult<()>
 where
-    F: FnOnce(&mut music21_rs_crate::Stream) -> PyResult<()>,
+    F: FnOnce(&mut music21::Stream) -> PyResult<()>,
 {
     let py = target.py();
     let (mut read, objects) = crate::stream::read_with_leaves(target)?;

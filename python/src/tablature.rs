@@ -16,7 +16,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use music21_rs_crate::tablature::{
+use music21::tablature::{
     FirstFret as RsFirstFret, FretBoard as RsFretBoard, FretNote as RsFretNote,
 };
 

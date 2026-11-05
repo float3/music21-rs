@@ -248,13 +248,13 @@ pub fn best_choice(options: &[Vec<Pitch>], rules: EnharmonicRules) -> Result<Vec
 /// `B#3` may come back as `C4`.
 ///
 /// ```
-/// use music21_rs::{Pitch, analysis::enharmonics::{EnharmonicRules, best_spelling}};
+/// use music21::{Pitch, analysis::enharmonics::{EnharmonicRules, best_spelling}};
 ///
 /// let pitches: Vec<Pitch> = ["D--", "E", "F##"].iter().map(|n| n.parse()).collect::<Result<_, _>>()?;
 /// let best = best_spelling(&pitches, EnharmonicRules::MELODIC)?;
 /// let names: Vec<String> = best.iter().map(Pitch::name).collect();
 /// assert_eq!(names, ["C", "E", "G"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

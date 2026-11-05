@@ -54,7 +54,7 @@ impl Stream {
     /// [`Stream::chordify_with`] with music21's defaults.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut upper = Stream::with_kind(StreamKind::Part);
     /// upper.push(Note::from_name("E4")?.with_duration(Duration::half()));
@@ -72,7 +72,7 @@ impl Stream {
     ///     .map(|pitch| pitch.name_with_octave())
     ///     .collect();
     /// assert_eq!(names, ["C4", "E4", "G3", "E4"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

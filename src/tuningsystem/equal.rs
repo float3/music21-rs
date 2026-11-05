@@ -12,14 +12,14 @@
 //! cents`.
 //!
 //! ```
-//! use music21_rs::tuningsystem::EqualDivision;
+//! use music21::tuningsystem::EqualDivision;
 //!
 //! let bohlen_pierce = EqualDivision::tritave(13)?;
 //! assert_eq!(bohlen_pierce.to_string(), "13edt");
 //! assert!((bohlen_pierce.step_cents() - 146.304).abs() < 1e-3);
 //! // Its ninth degree is nowhere near an octave, which is the point of it.
 //! assert!((bohlen_pierce.cents_at(8) - 1170.4).abs() < 0.1);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};

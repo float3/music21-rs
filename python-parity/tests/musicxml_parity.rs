@@ -3,7 +3,7 @@
 //! Each score is parsed from music21's corpus with this crate's classes
 //! installed, then written twice: by music21's own `ScoreExporter`, with
 //! `makeNotation=False` so that nothing is worked out again, and by
-//! `music21_rs::musicxml::to_musicxml` over the same score read into the
+//! `music21::musicxml::to_musicxml` over the same score read into the
 //! crate. The two documents must be the same text.
 //!
 //! What the crate leaves to a page -- layout, positions, fonts -- is taken
@@ -14,7 +14,7 @@
 //! those scores instead of the ones below, which is how a score is tried
 //! before it is added.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_rs_facade;
 use pyo3::prelude::*;

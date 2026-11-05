@@ -16,7 +16,7 @@ use super::{
     chord_symbol_voicing_above_notes, chord_symbol_voicing_notes, js_error, key_alters, natural_at,
     spell_midi, spell_midi_in_chord,
 };
-use music21_rs::{Pitch, abc_duration, abc_note, pitch_name_from_abc_note};
+use music21::{Pitch, abc_duration, abc_note, pitch_name_from_abc_note};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use wasm_bindgen::prelude::*;

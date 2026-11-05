@@ -18,7 +18,7 @@ const facts = $("#facts");
 const pitches = $("#pitches");
 const actions = $("#actions");
 
-$("#docs-link").href = "../docs/music21_rs/index.html";
+$("#docs-link").href = "../docs/music21/index.html";
 
 const realizeExamples = [
     ["I", "C"],

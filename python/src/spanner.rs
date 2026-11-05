@@ -20,7 +20,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::spanner::{Spanner as RsSpanner, SpannerKind};
+use music21::spanner::{Spanner as RsSpanner, SpannerKind};
 
 /// The names this module hands out: the base class and the kinds, each
 /// under the name music21 gives it.
@@ -78,12 +78,12 @@ impl Spanner {
         // What music21's own constructor for each kind starts out with.
         match kind {
             SpannerKind::Ottava => {
-                inner.set_shift(music21_rs_crate::spanner::OctaveShift::from_name("8va", true).ok())
+                inner.set_shift(music21::spanner::OctaveShift::from_name("8va", true).ok())
             }
             SpannerKind::Line => inner.set_line_type(Some("solid".to_string())),
             SpannerKind::Glissando => inner.set_line_type(Some("wavy".to_string())),
             SpannerKind::MultiMeasureRest => {
-                inner.set_multi_rest(Some(music21_rs_crate::spanner::MultiRest::default()))
+                inner.set_multi_rest(Some(music21::spanner::MultiRest::default()))
             }
             _ => {}
         }
@@ -709,8 +709,8 @@ impl Spanner {
             .shift()
             .is_some_and(|shift| shift.transposing());
         let named = ottava_type_named(value)?;
-        let shift = music21_rs_crate::spanner::OctaveShift::from_name(&named, transposing)
-            .map_err(|_| {
+        let shift =
+            music21::spanner::OctaveShift::from_name(&named, transposing).map_err(|_| {
                 SpannerException::new_err(format!(
                     "cannot create Ottava of type: {}",
                     value
@@ -890,7 +890,7 @@ impl Spanner {
         let Some(shift) = slf.borrow().inner.shift() else {
             return Ok(());
         };
-        let named = music21_rs_crate::spanner::OctaveShift::from_name(shift.name(), value)
+        let named = music21::spanner::OctaveShift::from_name(shift.name(), value)
             .map_err(|error| SpannerException::new_err(crate::pitch::message(&error)))?;
         slf.borrow_mut().inner.set_shift(Some(named));
         Ok(())
@@ -1093,7 +1093,7 @@ impl Spanner {
     fn set_placement(&mut self, value: Option<&str>) -> PyResult<()> {
         let placement = match value.filter(|said| !said.is_empty()) {
             Some(said) => Some(
-                music21_rs_crate::notation::Placement::from_name(said)
+                music21::notation::Placement::from_name(said)
                     .map_err(|error| SpannerException::new_err(crate::pitch::message(&error)))?,
             ),
             None => None,
@@ -1182,8 +1182,8 @@ fn ottava_type_named(value: &Bound<'_, PyAny>) -> PyResult<String> {
 
 /// A tick music21 draws a line's end with, refused by name as music21
 /// refuses one.
-fn read_tick(value: &str) -> PyResult<music21_rs_crate::spanner::LineEnd> {
-    music21_rs_crate::spanner::LineEnd::from_name(value)
+fn read_tick(value: &str) -> PyResult<music21::spanner::LineEnd> {
+    music21::spanner::LineEnd::from_name(value)
         .map_err(|_| SpannerException::new_err(format!("not a valid value: {value}")))
 }
 

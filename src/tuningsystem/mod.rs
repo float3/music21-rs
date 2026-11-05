@@ -655,12 +655,12 @@ impl TuningSystem {
     /// frequency that is not a finite number above nought.
     ///
     /// ```
-    /// use music21_rs::tuningsystem::TuningSystem;
+    /// use music21::tuningsystem::TuningSystem;
     ///
     /// let nineteen = TuningSystem::edo(19);
     /// // A4 at 440 Hz is nearest degree 5 of the fifth period above C-1.
     /// assert_eq!(nineteen.nearest_degree(440.0)?, 5 * 19 + 14);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn nearest_degree(self, hertz: FloatType) -> Result<IntegerType> {
         if !hertz.is_finite() || hertz <= 0.0 {
@@ -690,13 +690,13 @@ impl TuningSystem {
     /// pitch-space value is spelled, with any remainder as a microtone.
     ///
     /// ```
-    /// use music21_rs::tuningsystem::TuningSystem;
+    /// use music21::tuningsystem::TuningSystem;
     ///
     /// // Degree 4 of the five-limit table is a just major third above C-1.
     /// let e = TuningSystem::FiveLimit.pitch_at(64)?;
     /// assert_eq!(e.name_with_octave(), "E4");
     /// assert!((e.microtone().unwrap().cents() + 13.686).abs() < 1e-3);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn pitch_at(self, index: IntegerType) -> Result<Pitch> {
         Pitch::from_pitch_space(OCTAVE_CENTS * self.ratio_at(index.into()).log2() / 100.0)

@@ -27,7 +27,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::alpha::analysis::hasher::{HashValue, Hasher as RsHasher, NoteHash};
+use music21::alpha::analysis::hasher::{HashValue, Hasher as RsHasher, NoteHash};
 
 use crate::Walkable;
 
@@ -210,7 +210,7 @@ impl Hasher {
         };
         let chord = match thisChord.filter(|given| !given.is_none()) {
             Some(given) => match crate::stream::element_read(given)? {
-                Some(music21_rs_crate::stream::StreamElement::Chord(chord)) => Some(chord),
+                Some(music21::stream::StreamElement::Chord(chord)) => Some(chord),
                 _ => None,
             },
             None => None,
@@ -234,9 +234,7 @@ impl Hasher {
             .flatten()
             .filter(|given| !given.is_none())
             .and_then(|given| match crate::stream::element_read(&given) {
-                Ok(Some(music21_rs_crate::stream::StreamElement::Note(note))) => {
-                    Some(note.pitch().clone())
-                }
+                Ok(Some(music21::stream::StreamElement::Note(note))) => Some(note.pitch().clone()),
                 _ => None,
             });
         let value = settings

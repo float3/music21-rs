@@ -13,7 +13,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use music21_rs_crate::pitch::{Language, from_language_name, language_dictionary};
+use music21::pitch::{Language, from_language_name, language_dictionary};
 
 use crate::Walkable;
 use crate::pitch::Pitch;

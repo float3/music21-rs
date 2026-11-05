@@ -10,13 +10,13 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::IntegerType;
-use music21_rs_crate::musicxml::ExportOptions;
-use music21_rs_crate::stream::Stream as RsStream;
+use music21::IntegerType;
+use music21::musicxml::ExportOptions;
+use music21::stream::Stream as RsStream;
 
 use crate::stream::StreamException;
 
-fn format_error(error: music21_rs_crate::Error) -> PyErr {
+fn format_error(error: music21::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(&error))
 }
 
@@ -26,7 +26,7 @@ fn format_error(error: music21_rs_crate::Error) -> PyErr {
 /// streams otherwise, whether or not music21 happens to be importable.
 fn handed_back<'py>(
     py: Python<'py>,
-    read: music21_rs_crate::Result<RsStream>,
+    read: music21::Result<RsStream>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let read = read.map_err(format_error)?;
     if crate::installed_class(py, "music21.note", "Note").is_some() {
@@ -68,7 +68,7 @@ fn to_musicxml(
     if let Some(software) = software {
         options.software = software;
     }
-    music21_rs_crate::musicxml::to_musicxml(&stream, &options).map_err(format_error)
+    music21::musicxml::to_musicxml(&stream, &options).map_err(format_error)
 }
 
 /// Writes a score as ABC and hands back the tune's text.
@@ -89,10 +89,10 @@ fn to_abc(
     measures_per_line: usize,
 ) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    let mut options = music21_rs_crate::abc::ExportOptions::default();
+    let mut options = music21::abc::ExportOptions::default();
     options.unit_length = unit_length;
     options.measures_per_line = measures_per_line;
-    music21_rs_crate::abc::to_abc(&stream, &options).map_err(format_error)
+    music21::abc::to_abc(&stream, &options).map_err(format_error)
 }
 
 /// Writes a score as a standard MIDI file and hands back its bytes, as
@@ -113,11 +113,11 @@ fn to_midi<'py>(
     acceptable_channels: Option<Vec<u8>>,
 ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
     let stream = crate::stream::crate_stream(score)?;
-    let mut options = music21_rs_crate::midi::ExportOptions::default();
+    let mut options = music21::midi::ExportOptions::default();
     options.add_start_delay = add_start_delay;
     options.add_end_delay = add_end_delay;
     options.acceptable_channels = acceptable_channels;
-    let bytes = music21_rs_crate::midi::to_midi(&stream, &options).map_err(format_error)?;
+    let bytes = music21::midi::to_midi(&stream, &options).map_err(format_error)?;
     Ok(pyo3::types::PyBytes::new(py, &bytes))
 }
 
@@ -133,7 +133,7 @@ fn to_midi<'py>(
 /// compressed `.mxl` is a zip holding the document; unpack it first.
 #[pyfunction]
 fn from_musicxml<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::musicxml::from_musicxml(text))
+    handed_back(py, music21::musicxml::from_musicxml(text))
 }
 
 /// Reads ABC text as music21's `converter.parse` reads it.
@@ -146,7 +146,7 @@ fn from_musicxml<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>
 /// metadata are read and left out.
 #[pyfunction]
 fn from_abc<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::abc::from_abc(text))
+    handed_back(py, music21::abc::from_abc(text))
 }
 
 /// Reads the tune numbered `number` out of ABC text holding several, as
@@ -159,7 +159,7 @@ fn from_abc_number<'py>(
     text: &str,
     number: IntegerType,
 ) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::abc::from_abc_number(text, number))
+    handed_back(py, music21::abc::from_abc_number(text, number))
 }
 
 /// Reads the bytes of a standard MIDI file as music21's `converter.parse`
@@ -175,7 +175,7 @@ fn from_abc_number<'py>(
 /// format 2 file, are refused.
 #[pyfunction]
 fn from_midi<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::midi::from_midi(data))
+    handed_back(py, music21::midi::from_midi(data))
 }
 
 /// Reads a line of TinyNotation, as music21's
@@ -186,7 +186,7 @@ fn from_midi<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
 /// starts in.
 #[pyfunction]
 fn from_tiny_notation<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::tinynotation::from_tiny_notation(text))
+    handed_back(py, music21::tinynotation::from_tiny_notation(text))
 }
 
 /// Reads a Humdrum file as music21's `converter.parse` reads one, as a
@@ -199,7 +199,7 @@ fn from_tiny_notation<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, P
 /// scores. Words, barlines and metadata are read and left out.
 #[pyfunction]
 fn from_humdrum<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::humdrum::from_humdrum(text))
+    handed_back(py, music21::humdrum::from_humdrum(text))
 }
 
 /// Reads the text of an MEI document as music21's `converter.parse` reads
@@ -209,7 +209,7 @@ fn from_humdrum<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>>
 /// left out.
 #[pyfunction]
 fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::mei::from_mei(text))
+    handed_back(py, music21::mei::from_mei(text))
 }
 
 /// Writes a score's roman numerals as a RomanText analysis, as music21's
@@ -222,7 +222,7 @@ fn from_mei<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
 #[pyfunction]
 fn to_roman_text(score: &Bound<'_, PyAny>) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    music21_rs_crate::romantext::to_roman_text(&stream).map_err(format_error)
+    music21::romantext::to_roman_text(&stream).map_err(format_error)
 }
 
 /// Reads a Capella score as music21's `converter.parse` reads a `.capx`, as
@@ -249,7 +249,7 @@ fn from_capella<'py>(py: Python<'py>, data: &Bound<'py, PyAny>) -> PyResult<Boun
             String::from_utf8_lossy(&bytes).into_owned()
         }
     };
-    handed_back(py, music21_rs_crate::capella::from_capella(&text))
+    handed_back(py, music21::capella::from_capella(&text))
 }
 
 /// Reads a MuseData work as music21's `converter.parse` reads one, as a
@@ -270,7 +270,7 @@ fn from_musedata<'py>(py: Python<'py>, texts: &Bound<'py, PyAny>) -> PyResult<Bo
             .collect::<PyResult<_>>()?
     };
     let texts: Vec<&str> = texts.iter().map(String::as_str).collect();
-    handed_back(py, music21_rs_crate::musedata::from_musedata(&texts))
+    handed_back(py, music21::musedata::from_musedata(&texts))
 }
 
 /// Reads the text of a NoteWorthy Composer `.nwctxt` file as music21's
@@ -280,7 +280,7 @@ fn from_musedata<'py>(py: Python<'py>, texts: &Bound<'py, PyAny>) -> PyResult<Bo
 /// title are read and left out.
 #[pyfunction]
 fn from_noteworthy<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::noteworthy::from_noteworthy(text))
+    handed_back(py, music21::noteworthy::from_noteworthy(text))
 }
 
 /// Reads Volpiano, the chant font's notation, as music21's
@@ -291,7 +291,7 @@ fn from_noteworthy<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
 /// and neumes are read and left out.
 #[pyfunction]
 fn from_volpiano<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::volpiano::from_volpiano(text))
+    handed_back(py, music21::volpiano::from_volpiano(text))
 }
 
 /// Writes a score as Volpiano, as music21's `volpiano.fromStream` writes
@@ -304,7 +304,7 @@ fn from_volpiano<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>
 #[pyfunction]
 fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    music21_rs_crate::volpiano::to_volpiano(&stream).map_err(format_error)
+    music21::volpiano::to_volpiano(&stream).map_err(format_error)
 }
 
 /// Writes a score as LilyPond, as music21's `lily.translate`
@@ -321,9 +321,9 @@ fn to_volpiano(score: &Bound<'_, PyAny>) -> PyResult<String> {
 #[pyo3(signature = (score, version = (2, 24)))]
 fn to_lilypond(score: &Bound<'_, PyAny>, version: (u32, u32)) -> PyResult<String> {
     let stream = crate::stream::crate_stream(score)?;
-    let mut options = music21_rs_crate::lily::LilyOptions::default();
+    let mut options = music21::lily::LilyOptions::default();
     options.version = version;
-    music21_rs_crate::lily::to_lilypond(&stream, &options).map_err(format_error)
+    music21::lily::to_lilypond(&stream, &options).map_err(format_error)
 }
 
 /// Reads a NoteWorthy Composer `.nwc` file's `bytes` as music21's
@@ -343,7 +343,7 @@ fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
     } else {
         data
     };
-    handed_back(py, music21_rs_crate::noteworthy::from_nwc(data))
+    handed_back(py, music21::noteworthy::from_nwc(data))
 }
 
 /// Reads RomanText as music21's `converter.parse` reads it, as a `Score`.
@@ -356,7 +356,7 @@ fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
 /// title, composer and other metadata are read and left out.
 #[pyfunction]
 fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    handed_back(py, music21_rs_crate::romantext::from_roman_text(text))
+    handed_back(py, music21::romantext::from_roman_text(text))
 }
 
 /// Reads a tabular analysis of the Digital and Cognitive Musicology Lab as
@@ -371,10 +371,7 @@ fn from_roman_text<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAn
 #[pyo3(signature = (text, dcml_version=1))]
 fn from_tsv<'py>(py: Python<'py>, text: &str, dcml_version: u8) -> PyResult<Bound<'py, PyAny>> {
     let version = tsv_version(dcml_version)?;
-    handed_back(
-        py,
-        music21_rs_crate::romantext::tsv::from_tsv(text, version),
-    )
+    handed_back(py, music21::romantext::tsv::from_tsv(text, version))
 }
 
 /// Writes a score's roman numerals as one of the lab's tables, as music21's
@@ -391,12 +388,12 @@ fn from_tsv<'py>(py: Python<'py>, text: &str, dcml_version: u8) -> PyResult<Boun
 fn to_tsv(score: &Bound<'_, PyAny>, dcml_version: u8) -> PyResult<String> {
     let version = tsv_version(dcml_version)?;
     let stream = crate::stream::crate_stream(score)?;
-    music21_rs_crate::romantext::tsv::to_tsv(&stream, version).map_err(format_error)
+    music21::romantext::tsv::to_tsv(&stream, version).map_err(format_error)
 }
 
 /// The standard a number names, as music21 refuses anything but its two.
-fn tsv_version(number: u8) -> PyResult<music21_rs_crate::romantext::tsv::Version> {
-    music21_rs_crate::romantext::tsv::Version::from_number(number)
+fn tsv_version(number: u8) -> PyResult<music21::romantext::tsv::Version> {
+    music21::romantext::tsv::Version::from_number(number)
         .map_err(|error| pyo3::exceptions::PyValueError::new_err(crate::pitch::message(&error)))
 }
 
@@ -411,7 +408,7 @@ fn tsv_version(number: u8) -> PyResult<music21_rs_crate::romantext::tsv::Version
 #[pyfunction]
 fn from_clercq_temperley<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
     // music21's converter raises `CTSongException` for text that is no song.
-    let read = music21_rs_crate::romantext::clercq_temperley::from_clercq_temperley(text)
+    let read = music21::romantext::clercq_temperley::from_clercq_temperley(text)
         .map_err(crate::clercqtemperley::song_error)?;
     crate::stream::from_crate(py, &read)
 }

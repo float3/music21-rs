@@ -2,7 +2,7 @@
 //! music21's, file by file.
 //!
 //! Each table is read twice, by music21's `romanText.tsvConverter` and by
-//! `music21_rs::romantext::tsv::from_tsv`, and the two scores are compared
+//! `music21::romantext::tsv::from_tsv`, and the two scores are compared
 //! as an outline -- every measure and every chord in it, with its offset,
 //! its length and its pitches -- and then as the MusicXML each side's
 //! writer makes of its own. The crate's writer is held to music21's by
@@ -31,9 +31,9 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::romantext::from_roman_text;
-use music21_rs::romantext::tsv::{Version, from_tsv, to_tsv, to_tsv_with_extra, tsv_to_chords};
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::romantext::from_roman_text;
+use music21::romantext::tsv::{Version, from_tsv, to_tsv, to_tsv_with_extra, tsv_to_chords};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -344,7 +344,7 @@ fn listed<'py>(py: Python<'py>, iterator: &Bound<'py, PyAny>) -> PyResult<Bound<
 /// The measures of each ending, in the order the brackets were made: what
 /// music21 reads off a `RepeatBracket` and the crate off the measures
 /// themselves.
-fn endings_of(score: &music21_rs::Stream) -> Vec<Vec<String>> {
+fn endings_of(score: &music21::Stream) -> Vec<Vec<String>> {
     let mut endings: Vec<(Vec<u32>, Vec<String>)> = Vec::new();
     for part in score.parts() {
         for measure in part.measures() {

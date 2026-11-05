@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::PyTuple;
 
-use music21_rs_crate::analysis::harmonic_function::{FunctionDetail, HarmonicFunction};
+use music21::analysis::harmonic_function::{FunctionDetail, HarmonicFunction};
 
 use crate::key::Key;
 use crate::roman::RomanNumeral;

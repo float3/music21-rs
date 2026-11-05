@@ -2,12 +2,12 @@
 //! `tablature`.
 //!
 //! ```
-//! use music21_rs::tablature::{FretBoard, FretNote};
+//! use music21::tablature::{FretBoard, FretNote};
 //!
 //! let board = FretBoard::guitar(vec![FretNote::new(Some(1), Some(2), Some(2))], 4);
 //! let pitches = board.pitches()?;
 //! assert_eq!(pitches[5].as_ref().map(|pitch| pitch.name_with_octave()), Some("F#4".to_string()));
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use std::fmt;

@@ -8,7 +8,7 @@ use crate::notation::{Lyric, verses};
 /// `True`, `False`, `'auto'` or `'always'`.
 ///
 /// ```
-/// use music21_rs::{Duration, FullMeasure, Rest};
+/// use music21::{Duration, FullMeasure, Rest};
 ///
 /// let mut rest = Rest::new(Duration::half());
 /// assert_eq!(rest.full_measure(), FullMeasure::Auto);
@@ -151,7 +151,7 @@ impl Rest {
     /// this on the rest's style.
     ///
     /// ```
-    /// use music21_rs::Rest;
+    /// use music21::Rest;
     ///
     /// let mut rest = Rest::default();
     /// assert_eq!(rest.color(), None);

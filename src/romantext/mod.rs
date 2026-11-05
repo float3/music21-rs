@@ -1134,7 +1134,7 @@ fn score_of(tokens: &[Token]) -> Result<Stream> {
 /// lines before the first heading each of them.
 ///
 /// ```
-/// use music21_rs::romantext::from_roman_text;
+/// use music21::romantext::from_roman_text;
 ///
 /// let score = from_roman_text("Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n")?;
 /// let part = score.parts()[0];
@@ -1145,7 +1145,7 @@ fn score_of(tokens: &[Token]) -> Result<Stream> {
 ///     .map(|pitch| pitch.name())
 ///     .collect();
 /// assert_eq!(names, ["G", "B", "D", "F#", "A", "D"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_roman_text(text: &str) -> Result<Stream> {
     let tokens = tokenize(text)?;
@@ -1192,12 +1192,12 @@ pub fn from_roman_text(text: &str) -> Result<Stream> {
 /// part, an opus score by score.
 ///
 /// ```
-/// use music21_rs::romantext::{from_roman_text, to_roman_text};
+/// use music21::romantext::{from_roman_text, to_roman_text};
 ///
 /// let score = from_roman_text("Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n")?;
 /// let written = to_roman_text(&score)?;
 /// assert!(written.ends_with("Time Signature: 3/4\nm1 G: I b3 V6\nm2 I\n"));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

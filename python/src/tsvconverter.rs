@@ -40,9 +40,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::FloatType;
-use music21_rs_crate::Key as RsKey;
-use music21_rs_crate::romantext::tsv::{
+use music21::FloatType;
+use music21::Key as RsKey;
+use music21::romantext::tsv::{
     Direction, TabChord as RsTabChord, Version, character_swaps, form_of, handle_added_tones,
     is_minor, local_key, local_key_as_roman, secondary_key,
 };

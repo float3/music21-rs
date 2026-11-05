@@ -8,11 +8,11 @@
 //! five degrees, repeats allowed and not, and steps of one degree and two.
 //! The runs found -- which notes, and which way -- must be music21's.
 
-use music21_rs::alpha::analysis::search::{
+use music21::alpha::analysis::search::{
     PitchAttribute, RunDirection, ScaleRunOptions, find_consecutive_scale,
 };
-use music21_rs::scale::{Scale, ScaleType};
-use music21_rs::{Note, Pitch, Stream};
+use music21::scale::{Scale, ScaleType};
+use music21::{Note, Pitch, Stream};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

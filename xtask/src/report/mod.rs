@@ -121,7 +121,7 @@ struct BeyondReport {
 struct Sizes {
     /// The `music21` package as it lands in site-packages, corpus and all.
     music21: Option<u64>,
-    /// What `cargo add music21-rs` fetches: the source the crate publishes.
+    /// What `cargo add music21` fetches: the source the crate publishes.
     crate_source: Option<u64>,
     /// The built wheel, which is what `pip install music21-rs` fetches.
     wheel: Option<u64>,

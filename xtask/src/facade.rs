@@ -274,8 +274,8 @@ fn serves_metadata_name(body: &str, name: &str) -> bool {
     if !body.contains("fn __getattr__") || !body.contains("unique_name_of(") {
         return false;
     }
-    music21_rs::metadata::unique_name_of(name).is_some()
-        || music21_rs::metadata::unique_name_of_plural(name).is_some()
+    music21::metadata::unique_name_of(name).is_some()
+        || music21::metadata::unique_name_of_plural(name).is_some()
 }
 
 #[cfg(test)]

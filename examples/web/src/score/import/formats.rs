@@ -4,13 +4,13 @@
 //! None of them carries anything the editor wants beside the score.
 
 use super::{Imported, stream::Extras};
-use music21_rs::{
+use music21::{
     Stream, humdrum::from_humdrum, makenotation::make_ties, mei::from_mei, midi::from_midi,
     romantext::from_roman_text, tinynotation::from_tiny_notation,
 };
 
 fn imported(
-    read: music21_rs::Result<Stream>,
+    read: music21::Result<Stream>,
     format: &str,
     extras: &Extras,
 ) -> Result<Imported, String> {

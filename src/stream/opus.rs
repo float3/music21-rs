@@ -34,8 +34,8 @@ impl Stream {
     /// `Opus.getScoreByNumber`.
     ///
     /// ```
-    /// use music21_rs::metadata::{Metadata, MetadataQuery};
-    /// use music21_rs::{Stream, StreamKind};
+    /// use music21::metadata::{Metadata, MetadataQuery};
+    /// use music21::{Stream, StreamKind};
     ///
     /// let mut opus = Stream::with_kind(StreamKind::Opus);
     /// for number in ["1", "2"] {

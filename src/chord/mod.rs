@@ -469,14 +469,14 @@ impl Chord {
     /// note added that is to be read in a given inversion all the same.
     ///
     /// ```
-    /// use music21_rs::Chord;
+    /// use music21::Chord;
     ///
     /// let mut chord = Chord::new("C4 E4 G4")?;
     /// chord.set_inversion_override(Some(1));
     /// assert_eq!(chord.inversion(), Some(1));
     /// assert_eq!(chord.found_inversion(), Some(0));
     /// assert_eq!(chord.inversion_name()?, Some(6));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn set_inversion_override(&mut self, inversion: Option<u8>) {
         self.inversion_override = inversion;
@@ -1194,11 +1194,11 @@ impl Chord {
     /// sorted.
     ///
     /// ```
-    /// use music21_rs::Chord;
+    /// use music21::Chord;
     ///
     /// assert!(Chord::new("C4 E4 G4")?.is_sorted_diatonic_ascending());
     /// assert!(!Chord::new("E4 C4 G4")?.is_sorted_diatonic_ascending());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn is_sorted_diatonic_ascending(&self) -> bool {
         self.notes.windows(2).all(|pair| {

@@ -17,14 +17,14 @@ use crate::pitch::Pitch;
 /// A note with no pitch, as a drum stroke: music21's `note.Unpitched`.
 ///
 /// ```
-/// use music21_rs::percussion::Unpitched;
+/// use music21::percussion::Unpitched;
 ///
 /// let stroke = Unpitched::new();
 /// assert_eq!((stroke.display_step(), stroke.display_octave()), ('B', 4));
 ///
 /// let low = Unpitched::from_display_name("D5")?;
 /// assert_eq!(low.display_name(), "D5");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -162,8 +162,8 @@ impl From<Note> for PercussionNote {
 /// its members stay in the order given.
 ///
 /// ```
-/// use music21_rs::percussion::{PercussionChord, PercussionNote, Unpitched};
-/// use music21_rs::Note;
+/// use music21::percussion::{PercussionChord, PercussionNote, Unpitched};
+/// use music21::Note;
 ///
 /// let chord = PercussionChord::new(vec![
 ///     Unpitched::from_display_name("E3")?.into(),
@@ -172,7 +172,7 @@ impl From<Note> for PercussionNote {
 /// assert_eq!(chord.len(), 2);
 /// assert!(chord.is_unpitched(0) && !chord.is_unpitched(1));
 /// assert_eq!(chord.pitches().len(), 1);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

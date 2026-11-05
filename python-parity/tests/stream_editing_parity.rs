@@ -13,9 +13,9 @@
 //! runs those instead of the writer test's scores, which is how the corpus
 //! is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::notation::TieType;
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::musicxml::from_musicxml;
+use music21::notation::TieType;
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -173,7 +173,7 @@ fn kind(element: &StreamElement) -> Option<&'static str> {
     })
 }
 
-fn pitch_text(pitch: &music21_rs::Pitch) -> String {
+fn pitch_text(pitch: &music21::Pitch) -> String {
     let alter = pitch
         .written_accidental()
         .map_or(String::new(), |accidental| bits(accidental.alter()));
@@ -252,7 +252,7 @@ fn dump(stream: &Stream) -> Vec<String> {
         .collect()
 }
 
-fn attempt(label: &str, run: impl FnOnce() -> music21_rs::Result<Vec<String>>) -> Vec<String> {
+fn attempt(label: &str, run: impl FnOnce() -> music21::Result<Vec<String>>) -> Vec<String> {
     match run() {
         Ok(lines) => lines
             .into_iter()
@@ -287,8 +287,8 @@ fn flat_notes(stream: &Stream) -> Vec<String> {
 
 fn edited(
     measure: &Stream,
-    run: impl FnOnce(&mut Stream) -> music21_rs::Result<()>,
-) -> music21_rs::Result<Vec<String>> {
+    run: impl FnOnce(&mut Stream) -> music21::Result<()>,
+) -> music21::Result<Vec<String>> {
     let mut copy = measure.clone();
     run(&mut copy)?;
     let mut lines = dump(&copy);
@@ -297,8 +297,8 @@ fn edited(
 }
 
 fn our_report(score: &Stream) -> Vec<String> {
-    use music21_rs::stream::Anchor;
-    use music21_rs::{Duration, Note, Pitch};
+    use music21::stream::Anchor;
+    use music21::{Duration, Note, Pitch};
     let mut lines = Vec::new();
     for (i, part) in score.parts().into_iter().enumerate() {
         for (label, ignore) in [("ties", false), ("ties-rests", true)] {
@@ -308,7 +308,7 @@ fn our_report(score: &Stream) -> Vec<String> {
                 Ok(flat_notes(&copy))
             }));
         }
-        let scaled = |out: Stream| -> music21_rs::Result<Vec<String>> {
+        let scaled = |out: Stream| -> music21::Result<Vec<String>> {
             let mut lines = vec![measure_offsets(&out)];
             lines.extend(dump(&out));
             Ok(lines)
