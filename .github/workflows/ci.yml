@@ -1678,8 +1678,8 @@ jobs:
   # on any green master, not only in the run that releases music21-rs. Where
   # that run does release music21-rs, harte goes after it, since its manifest
   # names the music21-rs version it builds against and `cargo publish` builds
-  # it against what crates.io has. It has a token of its own, HARTE_KEY: the
-  # one music21-rs is published with cannot create or publish another crate.
+  # it against what crates.io has. CARGO_REGISTRY_TOKEN is scoped to both
+  # crates, `music21` and `harte`.
   publish-harte:
     name: Publish harte to crates.io
     runs-on: ubuntu-latest
@@ -1722,7 +1722,7 @@ jobs:
       - name: Publish harte
         if: steps.published.outputs.already == 'false'
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.HARTE_KEY }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --package harte --locked
 
   publish-harte-pypi:
