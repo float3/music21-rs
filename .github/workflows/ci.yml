@@ -328,10 +328,24 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # The last listed is `python`; 3.14 is the newest the wheel is
+      # published for.
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version: |
+            3.14
+            3.13
+
+      # The oldest the wheel is published for. setup-python has no 3.9 for
+      # the current Ubuntu image, and uv has one for every platform.
+      - name: Install Python 3.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install uv
+          uv python install 3.9
+          echo "PYTHON39=$(uv python find 3.9)" >> "$GITHUB_ENV"
 
       - name: Cache cargo artifacts
         uses: Swatinem/rust-cache@v2
@@ -341,7 +355,7 @@ jobs:
       - name: Build the wheel
         run: |
           python -m pip install "maturin>=1.7,<2" pytest
-          maturin build --release --manifest-path python/Cargo.toml --out target/wheels
+          maturin build --release --manifest-path python/Cargo.toml --out target/wheels --interpreter "$PYTHON39" python3.13 python3.14
 
       # Installed from the wheel rather than `maturin develop`, so what the
       # tests import is what a user would get.
@@ -351,6 +365,20 @@ jobs:
           set -euo pipefail
           python -m pip install --no-index --find-links target/wheels music21-rs
           python -m pytest python/tests -q
+
+      # The oldest and newest Pythons the wheel is published for, which
+      # nothing else runs it on.
+      - name: Test it on Python 3.9 and 3.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          for interpreter in "$PYTHON39" python3.14; do
+            venv="$RUNNER_TEMP/$(basename "$interpreter")-venv"
+            "$interpreter" -m venv "$venv"
+            "$venv/bin/python" -m pip install pytest
+            "$venv/bin/python" -m pip install --no-index --find-links target/wheels music21-rs
+            "$venv/bin/python" -m pytest python/tests -q
+          done
 
       # The same suite again with music21 importable, which is what
       # `pip install music21 music21-rs` gives. Every one of its
@@ -1463,7 +1491,7 @@ jobs:
           path: dist
 
   wheels-native:
-    name: Wheels (${{ matrix.os }} py${{ matrix.python-version }})
+    name: Wheels (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: release
     # `release` runs past gates a merged pull request already proved, which
@@ -1473,40 +1501,58 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # One job per runner builds the wheel for every Python on it, so a
+        # release waits on three runners rather than one per version: macOS
+        # runners can sit unassigned for most of an hour.
+        #
         # macos-15-intel is the x86_64 runner, macos-15 the Apple Silicon
         # one. The plain version numbers are the Apple Silicon images now, so
         # the x86_64 half has to name itself; macos-13 was retired and
         # macos-14 is deprecated.
-        os: [windows-latest, macos-15-intel, macos-15]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
-        exclude:
+        include:
+          - os: windows-latest
+            versions: "3.9 3.10 3.11 3.12 3.13 3.14"
+          - os: macos-15-intel
+            versions: "3.9 3.10 3.11 3.12 3.13 3.14"
           # setup-python still has no 3.9 build for Apple Silicon -- the
-          # manifest carries darwin x64 alone for every 3.9 -- so that one
-          # combination installs from the sdist instead.
+          # manifest carries darwin x64 alone for every 3.9 -- so 3.9 there
+          # installs from the sdist instead.
           - os: macos-15
-            python-version: "3.9"
+            versions: "3.10 3.11 3.12 3.13 3.14"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # setup-python takes its versions one per line.
+      - name: List the versions
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'lines<<EOF'
+            tr ' ' '\n' <<< "${{ matrix.versions }}"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ steps.versions.outputs.lines }}
 
-      - name: Build wheel
+      - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           args: >-
             --release
             --manifest-path python/Cargo.toml
             --out dist
-            --interpreter python
+            --interpreter ${{ matrix.versions }}
 
-      - name: Upload wheel
+      - name: Upload wheels
         uses: actions/upload-artifact@v7
         with:
-          name: dist-${{ matrix.os }}-${{ matrix.python-version }}
+          name: dist-${{ matrix.os }}
           path: dist
 
   sdist:
