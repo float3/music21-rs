@@ -2,8 +2,8 @@
 //! `cargo run --features musicxml --example abc_to_musicxml -- tune.abc`.
 //! Given no file, it converts a short tune of its own.
 
-use music21_rs::from_abc;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::from_abc;
+use music21::musicxml::{ExportOptions, to_musicxml};
 
 const TUNE: &str = "X:1
 T:A Short Tune

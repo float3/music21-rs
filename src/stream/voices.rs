@@ -227,7 +227,7 @@ impl Stream {
     /// measure.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream, StreamKind};
+    /// use music21::{Note, Stream, StreamKind};
     ///
     /// let mut upper = Stream::with_kind(StreamKind::Voice);
     /// upper.insert(0.0, Note::from_name("E5")?);
@@ -245,7 +245,7 @@ impl Stream {
     /// assert_eq!(parts.len(), 2);
     /// assert_eq!(parts[1].id(), Some("P1-v1"));
     /// assert_eq!(parts[1].pitches()[0].name_with_octave(), "C3");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -385,8 +385,8 @@ impl Stream {
     /// nothing else.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream, StreamKind};
-    /// use music21_rs::stream::VoiceAllocation;
+    /// use music21::{Note, Stream, StreamKind};
+    /// use music21::stream::VoiceAllocation;
     ///
     /// let mut score = Stream::with_kind(StreamKind::Score);
     /// for name in ["E5", "C3"] {
@@ -399,7 +399,7 @@ impl Stream {
     /// let joined = score.parts_to_voices(&VoiceAllocation::Each(2), false, true)?;
     /// assert_eq!(joined.parts().len(), 1);
     /// assert_eq!(joined.parts()[0].measures()[0].voices().len(), 2);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

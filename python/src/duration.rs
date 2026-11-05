@@ -11,7 +11,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::{PyDict, PyFloat, PyList, PyTuple};
 
-use music21_rs_crate::{
+use music21::{
     Duration as RsDuration, DurationType as RsDurationType, Placement, Tuplet as RsTuplet,
     TupletBracket, TupletShow, TupletType,
 };
@@ -524,7 +524,7 @@ impl Tuplet {
             .inner
             .augmented(amountToScale)
             .map_err(|error| match error {
-                music21_rs_crate::Error::Value(message) => PyValueError::new_err(message),
+                music21::Error::Value(message) => PyValueError::new_err(message),
                 other => duration_error(other),
             })?;
         scaled.frozen = false;
@@ -1007,11 +1007,7 @@ impl Duration {
     /// A grace note's duration as music21 holds one: its written values
     /// sounding nothing, unlinked, in a `GraceDuration` or, for an
     /// unslashed one that takes time, an `AppoggiaturaDuration`.
-    fn grace(
-        py: Python<'_>,
-        inner: RsDuration,
-        marks: &music21_rs_crate::Grace,
-    ) -> PyResult<Py<PyAny>> {
+    fn grace(py: Python<'_>, inner: RsDuration, marks: &music21::Grace) -> PyResult<Py<PyAny>> {
         let mut base = Self::wrap(inner);
         let mut written_type = base.get_type(py)?;
         if written_type == "zero" {
@@ -2636,7 +2632,7 @@ pub(crate) fn grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDurati
     {
         value.set_tuplets(tuplets);
     }
-    let mut marks = music21_rs_crate::Grace::new();
+    let mut marks = music21::Grace::new();
     marks.set_slash(grace.slash);
     marks.set_steal_time_previous(grace.steal_previous);
     marks.set_steal_time_following(grace.steal_following);
@@ -2680,7 +2676,7 @@ fn music21_grace_value(object: &Bound<'_, PyAny>) -> PyResult<Option<RsDuration>
         }
     }
     let mut value = written.grace_duration();
-    let mut marks = music21_rs_crate::Grace::new();
+    let mut marks = music21::Grace::new();
     let said = |name: &str| {
         object
             .getattr(name)
@@ -2820,7 +2816,7 @@ fn nextSmallerType(durType: String) -> PyResult<String> {
 #[pyo3(name = "quarterLengthToClosestType")]
 fn quarterLengthToClosestType(qLen: f64) -> PyResult<(String, bool)> {
     let (kind, exact) =
-        music21_rs_crate::duration::quarter_length_to_closest_type(qLen).map_err(duration_error)?;
+        music21::duration::quarter_length_to_closest_type(qLen).map_err(duration_error)?;
     Ok((kind.music21_name().to_string(), exact))
 }
 
@@ -2857,10 +2853,10 @@ fn dottedMatch(py: Python<'_>, qLen: f64, maxDots: u32) -> PyResult<Py<PyAny>> {
 #[pyfunction]
 #[pyo3(name = "quarterLengthToNonPowerOf2Tuplet")]
 fn quarterLengthToNonPowerOf2Tuplet(qLen: f64) -> PyResult<(Tuplet, DurationTuple)> {
-    let (tuplet, kind, dots) =
-        music21_rs_crate::duration::quarter_length_to_non_power_of_2_tuplet(qLen).ok_or_else(
-            || DurationException::new_err(format!("No such tuplet for quarterLength {qLen}")),
-        )?;
+    let (tuplet, kind, dots) = music21::duration::quarter_length_to_non_power_of_2_tuplet(qLen)
+        .ok_or_else(|| {
+            DurationException::new_err(format!("No such tuplet for quarterLength {qLen}"))
+        })?;
     Ok((Tuplet::wrap(tuplet), DurationTuple::of(kind, dots)))
 }
 
@@ -2869,7 +2865,7 @@ fn quarterLengthToNonPowerOf2Tuplet(qLen: f64) -> PyResult<(Tuplet, DurationTupl
 #[pyfunction]
 #[pyo3(name = "quarterLengthToTuplet", signature = (qLen, maxToReturn = 4))]
 fn quarterLengthToTuplet(qLen: f64, maxToReturn: usize) -> Vec<Tuplet> {
-    music21_rs_crate::duration::quarter_length_to_tuplet(qLen, maxToReturn)
+    music21::duration::quarter_length_to_tuplet(qLen, maxToReturn)
         .into_iter()
         .map(Tuplet::wrap)
         .collect()
@@ -2888,7 +2884,7 @@ fn quarterConversion<'py>(
         let zero = DurationTuple::of(RsDurationType::Zero, 0);
         return Ok((PyTuple::new(py, [zero])?, None));
     }
-    let (components, tuplet) = music21_rs_crate::duration::quarter_conversion(qLen);
+    let (components, tuplet) = music21::duration::quarter_conversion(qLen);
     let components: Vec<DurationTuple> = components
         .into_iter()
         .map(|(kind, dots)| DurationTuple::of(kind, dots))

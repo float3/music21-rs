@@ -23,8 +23,8 @@ impl Stream {
     /// left as they are.
     ///
     /// ```
-    /// use music21_rs::notation::{Tie, TieType};
-    /// use music21_rs::{Duration, Note, Stream, StreamElement};
+    /// use music21::notation::{Tie, TieType};
+    /// use music21::{Duration, Note, Stream, StreamElement};
     ///
     /// let mut stream = Stream::new();
     /// let mut first = Note::from_name("C4")?.with_duration(Duration::half());
@@ -38,7 +38,7 @@ impl Stream {
     /// let leaves = stream.leaves();
     /// assert_eq!(leaves.len(), 1);
     /// assert_eq!(leaves[0].1.quarter_length(), 3.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

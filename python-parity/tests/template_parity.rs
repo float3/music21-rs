@@ -20,9 +20,9 @@
 //! those instead of the writer test's scores, which is how the corpus is
 //! swept.
 
-use music21_rs::FloatType;
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::{Stream, StreamElement, TemplateOptions};
+use music21::FloatType;
+use music21::musicxml::from_musicxml;
+use music21::stream::{Stream, StreamElement, TemplateOptions};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -253,7 +253,7 @@ fn spanners(stream: &Stream) -> Vec<(String, usize)> {
 }
 
 fn notes(measure: &Stream) -> Vec<Noted> {
-    let texts = |lyrics: &[music21_rs::notation::Lyric]| -> Vec<String> {
+    let texts = |lyrics: &[music21::notation::Lyric]| -> Vec<String> {
         lyrics
             .iter()
             .map(|lyric| lyric.explicit_text().unwrap_or_default())

@@ -10,8 +10,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use music21_rs_crate::Chord as RsChord;
-use music21_rs_crate::analysis::neoriemannian::{
+use music21::Chord as RsChord;
+use music21::analysis::neoriemannian::{
     self as rs, ChainOrder, Mediant, MediantSide, Respell, Transform,
 };
 

@@ -10,7 +10,7 @@ use crate::Walkable;
 use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::{
+use music21::{
     Duration as RsDuration, KeySignature as RsKeySignature, Note as RsNote, Notehead as RsNotehead,
     Pitch as RsPitch, StemDirection as RsStemDirection,
 };
@@ -154,7 +154,7 @@ pub(crate) fn instrument_for_note<'py>(
 pub(crate) fn fold_lyric_objects(
     py: Python<'_>,
     objects: &Py<PyList>,
-    verses: &mut Vec<music21_rs_crate::notation::Lyric>,
+    verses: &mut Vec<music21::notation::Lyric>,
 ) {
     let held: Vec<_> = objects
         .bind(py)
@@ -172,7 +172,7 @@ pub(crate) fn fold_lyric_objects(
 pub(crate) fn settle_lyric_objects(
     py: Python<'_>,
     objects: &mut Option<Py<PyList>>,
-    verses: &mut Vec<music21_rs_crate::notation::Lyric>,
+    verses: &mut Vec<music21::notation::Lyric>,
 ) {
     if let Some(objects) = objects.take() {
         fold_lyric_objects(py, &objects, verses);
@@ -182,7 +182,7 @@ pub(crate) fn settle_lyric_objects(
 /// A Python list of `Lyric` objects, one for each verse.
 pub(crate) fn lyric_objects<'py>(
     py: Python<'py>,
-    verses: Vec<music21_rs_crate::notation::Lyric>,
+    verses: Vec<music21::notation::Lyric>,
 ) -> PyResult<Bound<'py, PyList>> {
     let list = PyList::empty(py);
     for verse in verses {
@@ -212,7 +212,7 @@ pub(crate) fn lyric_objects_from<'py>(
             list.append(item)?;
             continue;
         }
-        let verse = music21_rs_crate::notation::Lyric::new(item.extract::<String>()?);
+        let verse = music21::notation::Lyric::new(item.extract::<String>()?);
         list.append(crate::installed_new(
             py,
             "music21.note",
@@ -638,7 +638,7 @@ impl Note {
 
     /// Writes a volume straight in, letting go of whatever object was
     /// standing for the old one.
-    pub(crate) fn replace_volume(&mut self, volume: Option<music21_rs_crate::Volume>) {
+    pub(crate) fn replace_volume(&mut self, volume: Option<music21::Volume>) {
         self.inner.set_volume(volume);
         self.volume = None;
     }
@@ -707,7 +707,7 @@ impl Note {
                     .getattr("noteSize")
                     .ok()
                     .and_then(|size| size.extract::<String>().ok())
-                    .and_then(|size| music21_rs_crate::notation::NoteSize::from_name(&size)),
+                    .and_then(|size| music21::notation::NoteSize::from_name(&size)),
             );
         }
         // music21 keeps the tie on an object a caller may still be holding,
@@ -1350,7 +1350,7 @@ impl Note {
                 "filled" | "yes" => Some(true),
                 "notfilled" | "no" => Some(false),
                 other => {
-                    return Err(not_rest_error(music21_rs_crate::Error::Notation(format!(
+                    return Err(not_rest_error(music21::Error::Notation(format!(
                         "not a valid notehead fill value: '{other}'"
                     ))));
                 }
@@ -1376,7 +1376,7 @@ impl Note {
                 "yes" => true,
                 "no" => false,
                 other => {
-                    return Err(not_rest_error(music21_rs_crate::Error::Notation(format!(
+                    return Err(not_rest_error(music21::Error::Notation(format!(
                         "notehead parentheses must be True or False, not '{other}'"
                     ))));
                 }

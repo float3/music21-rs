@@ -10,7 +10,7 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
-use music21_rs_crate::analysis::transposition::TranspositionChecker as RsChecker;
+use music21::analysis::transposition::TranspositionChecker as RsChecker;
 
 use crate::Walkable;
 use crate::pitch::{Pitch, pitch_from_any};

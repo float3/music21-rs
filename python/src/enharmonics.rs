@@ -12,8 +12,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
-use music21_rs_crate::Pitch as RsPitch;
-use music21_rs_crate::analysis::enharmonics::{self as rs, EnharmonicRules};
+use music21::Pitch as RsPitch;
+use music21::analysis::enharmonics::{self as rs, EnharmonicRules};
 
 use crate::Walkable;
 use crate::pitch::{Pitch, pitch_from_any};

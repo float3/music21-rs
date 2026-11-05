@@ -6,7 +6,7 @@
 /// segment there, in the middle of the measure if need be.
 ///
 /// ```
-/// use music21_rs::braille::SegmentDivision;
+/// use music21::braille::SegmentDivision;
 ///
 /// assert_eq!(SegmentDivision::Required.class_name(), "BrailleSegmentDivision");
 /// assert_eq!(

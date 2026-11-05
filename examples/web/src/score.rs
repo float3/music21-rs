@@ -7,8 +7,8 @@
 //! number, the staff position it was written on, and where in the text it
 //! came from. Everything musical is decided here.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::{
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::{
     Accidental, Chord, Clef, Duration, DurationType, Interval, Key, KeySignature, Metadata,
     MetronomeMark, MidiNote, Minor67Default, Note, Pitch, Placement, Rest, RomanNumeral, Stream,
     StreamElement, StreamKind, Tie, TieType, TimeSignature, TuningSystem, Tuplet, TupletType,
@@ -1049,7 +1049,7 @@ fn key_alters(sharps: i32) -> BTreeMap<char, i32> {
 /// The clef a voice is written in: the one it names, or treble or bass by
 /// where its notes lie. A clef written an octave from where it sounds keeps
 /// that, since the pitches handed over are the sounding ones.
-fn voice_clef(voice: &Voice) -> Result<Clef, music21_rs::Error> {
+fn voice_clef(voice: &Voice) -> Result<Clef, music21::Error> {
     let octave_change = if voice.clef.ends_with("-8") {
         -1
     } else if voice.clef.ends_with("+8") {
@@ -1111,7 +1111,7 @@ fn voice_timeline(voice: &Voice) -> Vec<(f64, f64, Vec<Pitch>)> {
 
 /// The score as the crate's streams: a part for each voice, cut into
 /// measures, every length spelled in written values.
-fn notated(score: &Score) -> Result<Stream, music21_rs::Error> {
+fn notated(score: &Score) -> Result<Stream, music21::Error> {
     let values = notatable();
     let barlines = score.barlines();
     let sharps = score.key.as_ref().map_or(0, |key| key.sharps).clamp(-7, 7);
@@ -1173,7 +1173,7 @@ fn notated(score: &Score) -> Result<Stream, music21_rs::Error> {
     Ok(out)
 }
 
-fn musicxml(score: &Score) -> Result<String, music21_rs::Error> {
+fn musicxml(score: &Score) -> Result<String, music21::Error> {
     // The editor's scores are nobody's but their writer's: no title or
     // composer is made up for one that names none.
     let mut options = ExportOptions::default();
@@ -1277,10 +1277,7 @@ fn mark_tuplets(notes: &mut [XmlNote]) {
 /// its ties, its tuplet and whether its accidental is written: one is, where
 /// the note differs from what the key signature or an earlier note in the
 /// measure left in force.
-fn measure_elements(
-    notes: &[XmlNote],
-    sharps: i32,
-) -> Result<Vec<StreamElement>, music21_rs::Error> {
+fn measure_elements(notes: &[XmlNote], sharps: i32) -> Result<Vec<StreamElement>, music21::Error> {
     let key = key_alters(sharps);
     let mut in_force: BTreeMap<(char, i32), i32> = BTreeMap::new();
     let mut elements = Vec::new();
@@ -1473,7 +1470,7 @@ fn tuning_cents(input: ScoreInput, tuning: &str, tonic: &str) -> Result<TuningCe
         .unwrap_or(0);
     let class_above = |midi: i32, root: i32| (midi - root).rem_euclid(12);
     if tuning == "RecursiveJustIntonation" {
-        use music21_rs::tuningsystem::adaptive::RECURSIVE_JI;
+        use music21::tuningsystem::adaptive::RECURSIVE_JI;
         let roots = roots_by_onset(&Score::from_input(input.clone())?);
         let notes = input
             .voices
@@ -1551,7 +1548,7 @@ pub fn score_tuning_cents(input: JsValue, tuning: &str, tonic: &str) -> Result<J
 /// suggested fingering on the given open strings (MIDI numbers, lowest
 /// first), and the symbol's own chord where no fingering covers it.
 fn chord_symbol_voicing_notes(figure: &str, open_strings: &[i32]) -> Result<Vec<i32>, JsValue> {
-    let chord = music21_rs::ChordSymbol::parse(figure)
+    let chord = music21::ChordSymbol::parse(figure)
         .and_then(|symbol| symbol.to_chord())
         .map_err(js_error)?;
     voicing_notes(&chord, open_strings)
@@ -1566,7 +1563,7 @@ fn chord_symbol_voicing_above_notes(
     open_strings: &[i32],
     thumb: &[i32],
 ) -> Result<Vec<i32>, JsValue> {
-    let chord = music21_rs::ChordSymbol::parse(figure)
+    let chord = music21::ChordSymbol::parse(figure)
         .and_then(|symbol| symbol.to_chord())
         .map_err(js_error)?;
     let pitches = chord.pitches();
@@ -1590,19 +1587,19 @@ fn chord_symbol_voicing_above_notes(
     if kept.is_empty() || open_strings.is_empty() {
         return voicing_notes(&chord, open_strings);
     }
-    let upper = music21_rs::Chord::new(kept.as_slice()).map_err(js_error)?;
+    let upper = music21::Chord::new(kept.as_slice()).map_err(js_error)?;
     voicing_notes(&upper, open_strings)
 }
 
 /// The crate's suggested fingering of a chord on the given open strings, as
 /// the notes it sounds, or the chord's own notes where no fingering covers it.
-fn voicing_notes(chord: &music21_rs::Chord, open_strings: &[i32]) -> Result<Vec<i32>, JsValue> {
+fn voicing_notes(chord: &music21::Chord, open_strings: &[i32]) -> Result<Vec<i32>, JsValue> {
     let names = open_strings
         .iter()
         .map(|&midi| Pitch::from_midi(midi).map(|pitch| pitch.name_with_octave()))
-        .collect::<music21_rs::Result<Vec<_>>>()
+        .collect::<music21::Result<Vec<_>>>()
         .map_err(js_error)?;
-    let fingering = music21_rs::GuitarTuning::new(names)
+    let fingering = music21::GuitarTuning::new(names)
         .ok()
         .and_then(|tuning| chord.guitar_fingering_with_tuning(&tuning));
     let mut notes: Vec<i32> = match fingering {
@@ -1632,7 +1629,7 @@ fn spell_midi_in_chord(midi: i32, figure: &str, tonic: &str, mode: &str) -> Resu
     let key = Key::from_tonic_mode(tonic, mode)
         .or_else(|_| Key::from_tonic_mode("C", "major"))
         .map_err(js_error)?;
-    let mut spellings = music21_rs::ChordSymbol::parse(figure)
+    let mut spellings = music21::ChordSymbol::parse(figure)
         .and_then(|symbol| symbol.to_chord())
         .map(|chord| chord.pitches())
         .unwrap_or_default();
@@ -1643,7 +1640,7 @@ fn spell_midi_in_chord(midi: i32, figure: &str, tonic: &str, mode: &str) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use music21_rs::midi::read_midi_bytes_with_tempo;
+    use music21::midi::read_midi_bytes_with_tempo;
 
     /// One voice per list, each note a quarter long at the start given.
     type Notes<'a> = &'a [(f64, &'a [(i32, i32)])];
@@ -1941,7 +1938,7 @@ mod tests {
     #[test]
     fn what_the_editor_writes_the_crate_reads_back() {
         let xml = musicxml(&chorale()).expect("MusicXML writes");
-        let read = music21_rs::musicxml::from_musicxml(&xml).expect("MusicXML reads");
+        let read = music21::musicxml::from_musicxml(&xml).expect("MusicXML reads");
         assert_eq!(read.parts().len(), 4);
         assert_eq!(read.pitches().len(), 8);
         let meter = read.parts()[0].measures()[0]

@@ -6,8 +6,8 @@
 //! `cargo run --release -p xtask --features python -- regenerate-fixtures`,
 //! over a grid of notes, lengths, keys, accidentals, delays and nachschlags.
 
-use music21_rs::expressions::{Ornament, OrnamentDelay, OrnamentKind};
-use music21_rs::{Accidental, AccidentalDisplayOptions, Duration, KeySignature, Note, Pitch};
+use music21::expressions::{Ornament, OrnamentDelay, OrnamentKind};
+use music21::{Accidental, AccidentalDisplayOptions, Duration, KeySignature, Note, Pitch};
 use music21_rs_python_parity::music21_name;
 use serde::Deserialize;
 

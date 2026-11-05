@@ -378,9 +378,9 @@ dependencies = [
 
 [[package]]
 name = "harte"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
- "music21-rs",
+ "music21",
  "thiserror",
 ]
 
@@ -768,8 +768,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "music21-rs"
-version = "0.16.0"
+name = "music21"
+version = "0.17.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -782,10 +782,10 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "harte",
- "music21-rs",
+ "music21",
  "pyo3",
  "serde",
  "serde_json",
@@ -795,7 +795,7 @@ dependencies = [
 name = "music21-rs-python-parity"
 version = "0.0.0"
 dependencies = [
- "music21-rs",
+ "music21",
  "music21-rs-python",
  "pyo3",
  "regex",

@@ -1,6 +1,6 @@
 //! WebAssembly bindings for the browser examples.
 
-use music21_rs::{
+use music21::{
     ALL_TUNING_SYSTEMS, Chord, ChordResolutionSuggestion, Error, GuitarTuning, Interval, Key,
     KnownChordType, Pitch, Polyrhythm, Result, ScalaArchive, ScalaScale, TuningSystem, abc_chord,
     abc_duration, pitch_class_name,
@@ -36,7 +36,7 @@ struct PlayableTuningSystemInfo {
 /// historical temperaments, and the equal temperaments beyond twelve.
 fn all_playable() -> impl Iterator<Item = TuningSystem> {
     ALL_TUNING_SYSTEMS.into_iter().chain(
-        music21_rs::tuningsystem::COMMON_EQUAL_TEMPERAMENTS
+        music21::tuningsystem::COMMON_EQUAL_TEMPERAMENTS
             .into_iter()
             .filter(|tuning_system| !ALL_TUNING_SYSTEMS.contains(tuning_system)),
     )
@@ -735,7 +735,7 @@ fn known_chord_info(
         .zip(estimated_key.as_ref())
         .and_then(|(chord, key)| {
             let root = Pitch::from_name(on_c.first()?).ok()?;
-            music21_rs::analyze_chord_with_root(chord, key.clone(), &root)
+            music21::analyze_chord_with_root(chord, key.clone(), &root)
                 .ok()
                 .flatten()
         })
@@ -1126,7 +1126,7 @@ fn pitch_infos(pitches: &[Pitch]) -> Vec<PitchInfo> {
 
 /// Which shelf a tuning system sits on in the explorer.
 fn tuning_family(tuning_system: TuningSystem) -> &'static str {
-    use music21_rs::tuningsystem::{
+    use music21::tuningsystem::{
         COMMON_EQUAL_TEMPERAMENTS, COMMON_TWELVE_TONE_TUNING_SYSTEMS, HISTORICAL_TEMPERAMENTS,
     };
     if HISTORICAL_TEMPERAMENTS.contains(&tuning_system) {
@@ -1168,7 +1168,7 @@ struct TemperamentInfo {
 /// Lists the regular temperaments the crate carries from the Xenharmonic
 /// Wiki, with the scale sizes each one makes.
 pub fn regular_temperaments() -> Result<JsValue, JsValue> {
-    use music21_rs::tuningsystem::WIKI_TEMPERAMENTS;
+    use music21::tuningsystem::WIKI_TEMPERAMENTS;
     let infos = WIKI_TEMPERAMENTS
         .iter()
         .map(|named| {
@@ -1256,7 +1256,7 @@ pub fn temperament_scale(
     notes: u32,
     root_frequency_hz: f64,
 ) -> Result<JsValue, JsValue> {
-    use music21_rs::tuningsystem::WIKI_TEMPERAMENTS;
+    use music21::tuningsystem::WIKI_TEMPERAMENTS;
     check_root_frequency(root_frequency_hz)?;
     let named = WIKI_TEMPERAMENTS
         .iter()
@@ -1342,7 +1342,7 @@ pub fn equal_division_presets() -> Result<JsValue, JsValue> {
     .into_iter()
     .map(|(divisions, numerator, denominator, note)| {
         let label =
-            music21_rs::tuningsystem::EqualDivision::of_ratio(divisions, numerator, denominator)
+            music21::tuningsystem::EqualDivision::of_ratio(divisions, numerator, denominator)
                 .map(|division| division.to_string())
                 .unwrap_or_else(|_| format!("{divisions}ed{numerator}/{denominator}"));
         EqualDivisionPreset {
@@ -1366,7 +1366,7 @@ pub fn equal_division_scale(
     denominator: i32,
     root_frequency_hz: f64,
 ) -> Result<JsValue, JsValue> {
-    use music21_rs::tuningsystem::EqualDivision;
+    use music21::tuningsystem::EqualDivision;
     check_root_frequency(root_frequency_hz)?;
     let division = EqualDivision::of_ratio(divisions, numerator, denominator)
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
@@ -1396,7 +1396,7 @@ pub fn adaptive_frequency(
     degree: f64,
     root_frequency_hz: f64,
 ) -> Result<f64, JsValue> {
-    use music21_rs::tuningsystem::{C4, adaptive::RECURSIVE_JI};
+    use music21::tuningsystem::{C4, adaptive::RECURSIVE_JI};
     check_root_frequency(root_frequency_hz)?;
     if !context_degree.is_finite() || !degree.is_finite() {
         return Err(JsValue::from_str("degrees must be finite"));
@@ -1465,7 +1465,7 @@ pub fn scale_frequency(
 #[wasm_bindgen]
 /// The frequency of middle C in equal temperament at A440.
 pub fn middle_c_hz() -> f64 {
-    music21_rs::tuningsystem::C4
+    music21::tuningsystem::C4
 }
 
 fn ratio_cents(ratio: f64) -> f64 {
@@ -1475,7 +1475,7 @@ fn ratio_cents(ratio: f64) -> f64 {
 #[cfg(test)]
 mod adaptive_tests {
     use super::adaptive_frequency;
-    use music21_rs::tuningsystem::C4;
+    use music21::tuningsystem::C4;
 
     #[test]
     fn a_third_above_a_third_is_two_just_thirds() {
@@ -1565,14 +1565,14 @@ fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
     // French sixth fits C minor and F# minor alike, their scores differing
     // only by rounding -- is read in the one with the lower tonic, so the
     // label a chord gets does not depend on which way the rounding fell.
-    let estimates = music21_rs::estimate_key_from_chords(std::slice::from_ref(chord)).ok()?;
+    let estimates = music21::estimate_key_from_chords(std::slice::from_ref(chord)).ok()?;
     let best = estimates.first()?.score();
     let estimated_key = estimates
         .iter()
         .take_while(|estimate| (best - estimate.score()).abs() <= 1e-9)
         .min_by(|a, b| {
             let class =
-                |estimate: &music21_rs::KeyEstimate| estimate.key().tonic().ps().rem_euclid(12.0);
+                |estimate: &music21::KeyEstimate| estimate.key().tonic().ps().rem_euclid(12.0);
             class(a)
                 .total_cmp(&class(b))
                 .then_with(|| a.key().mode().cmp(b.key().mode()))
@@ -1591,13 +1591,13 @@ fn estimated_key_for_chord(chord: &Chord) -> Option<Key> {
 }
 
 fn roman_numeral_for_chord(chord: &Chord, key: &Key) -> Option<RomanNumeralInfo> {
-    music21_rs::analyze_chord(chord, key.clone())
+    music21::analyze_chord(chord, key.clone())
         .ok()
         .flatten()
         .map(roman_numeral_info)
 }
 
-fn roman_numeral_info(roman_numeral: music21_rs::RomanNumeral) -> RomanNumeralInfo {
+fn roman_numeral_info(roman_numeral: music21::RomanNumeral) -> RomanNumeralInfo {
     RomanNumeralInfo {
         figure: roman_numeral.figure().to_string(),
         key_context: display_key_context(roman_numeral.key()),
@@ -1623,7 +1623,7 @@ fn display_key_context(key: &Key) -> String {
     format!("{} {}", key.tonic().name(), key.mode())
 }
 
-fn guitar_fingering_info(fingering: music21_rs::GuitarFingering) -> GuitarFingeringInfo {
+fn guitar_fingering_info(fingering: music21::GuitarFingering) -> GuitarFingeringInfo {
     GuitarFingeringInfo {
         strings: fingering
             .strings
@@ -1690,7 +1690,7 @@ mod tests {
         estimated_key_for_chord, known_chord_info, parse_guitar_tuning, parse_midi_input,
         parse_pitch_midi_number, pitch_infos,
     };
-    use music21_rs::{Chord, KnownChordType, Pitch};
+    use music21::{Chord, KnownChordType, Pitch};
 
     #[test]
     fn keys_are_named_as_the_crate_names_pitch_classes() {
@@ -2214,7 +2214,7 @@ fn key_from_text(key: &str) -> Result<Key, JsValue> {
     Key::from_tonic(key.trim()).map_err(|err| JsValue::from_str(&format!("Key {key:?}: {err}")))
 }
 
-fn describe_numeral(numeral: &music21_rs::RomanNumeral) -> Result<RomanInfo, JsValue> {
+fn describe_numeral(numeral: &music21::RomanNumeral) -> Result<RomanInfo, JsValue> {
     let chord = numeral
         .to_chord()
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
@@ -2247,7 +2247,7 @@ fn describe_numeral(numeral: &music21_rs::RomanNumeral) -> Result<RomanInfo, JsV
 #[wasm_bindgen]
 /// Realizes a roman numeral figure in a key: `V65/V` in `g`, say.
 pub fn realize_roman(figure: &str, key: &str) -> Result<JsValue, JsValue> {
-    let numeral = music21_rs::RomanNumeral::new(figure.trim(), key_from_text(key)?)
+    let numeral = music21::RomanNumeral::new(figure.trim(), key_from_text(key)?)
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let info = describe_numeral(&numeral)?;
     serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
@@ -2263,7 +2263,7 @@ pub fn roman_from_chord(chord: &str, key: &str) -> Result<JsValue, JsValue> {
     } else {
         Some(key_from_text(key)?)
     };
-    let numeral = music21_rs::roman_numeral_from_chord(&chord, key.as_ref())
+    let numeral = music21::roman_numeral_from_chord(&chord, key.as_ref())
         .map_err(|err| JsValue::from_str(&err.to_string()))?
         .ok_or_else(|| JsValue::from_str("the chord has no root to name"))?;
     let info = describe_numeral(&numeral)?;
@@ -2282,7 +2282,7 @@ struct ScaleTypeInfo {
 #[wasm_bindgen]
 /// The scale types the crate realizes, by music21's class names.
 pub fn scale_types() -> Result<JsValue, JsValue> {
-    use music21_rs::scale::{Scale, ScaleType};
+    use music21::scale::{Scale, ScaleType};
     let infos = ScaleType::ALL
         .iter()
         .map(|scale_type| ScaleTypeInfo {
@@ -2315,21 +2315,21 @@ struct ScaleInfo {
     steps: Vec<String>,
 }
 
-fn scale_type_named(id: &str) -> Result<music21_rs::scale::ScaleType, JsValue> {
-    music21_rs::scale::ScaleType::ALL
+fn scale_type_named(id: &str) -> Result<music21::scale::ScaleType, JsValue> {
+    music21::scale::ScaleType::ALL
         .into_iter()
         .find(|scale_type| scale_type.music21_name() == id)
         .ok_or_else(|| JsValue::from_str(&format!("no scale type named {id}")))
 }
 
-fn describe_realized(scale: &music21_rs::scale::Scale) -> Result<ScaleInfo, JsValue> {
+fn describe_realized(scale: &music21::scale::Scale) -> Result<ScaleInfo, JsValue> {
     let pitches = scale
         .pitches()
         .map_err(|err| JsValue::from_str(&err.to_string()))?;
     let steps = pitches
         .windows(2)
         .map(|pair| {
-            music21_rs::Interval::between_pitches(&pair[0], &pair[1])
+            music21::Interval::between_pitches(&pair[0], &pair[1])
                 .map(|interval| interval.directed_name())
                 .unwrap_or_default()
         })
@@ -2383,7 +2383,7 @@ pub fn realize_scale(scale_type: &str, tonic: &str) -> Result<JsValue, JsValue> 
     } else {
         tonic
     };
-    let scale = music21_rs::scale::Scale::new(scale_type_named(scale_type)?, tonic);
+    let scale = music21::scale::Scale::new(scale_type_named(scale_type)?, tonic);
     let info = describe_realized(&scale)?;
     serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
 }
@@ -2408,7 +2408,7 @@ pub fn derive_scales(pitches: &str, limit: usize) -> Result<JsValue, JsValue> {
         return Err(JsValue::from_str("give some pitches, such as C E G B"));
     }
     let mut found = Vec::new();
-    for scale_type in music21_rs::scale::ScaleType::ALL {
+    for scale_type in music21::scale::ScaleType::ALL {
         let ranked = scale_type
             .derive_ranked(&pitches, Some(3))
             .map_err(|err| JsValue::from_str(&err.to_string()))?;
@@ -2469,8 +2469,8 @@ struct ToneRowInfo {
     historical: Vec<HistoricalMatch>,
 }
 
-fn parse_row(input: &str) -> Result<music21_rs::serial::ToneRow, JsValue> {
-    use music21_rs::serial::ToneRow;
+fn parse_row(input: &str) -> Result<music21::serial::ToneRow, JsValue> {
+    use music21::serial::ToneRow;
     let tokens: Vec<&str> = input
         .split(|c: char| c.is_whitespace() || c == ',')
         .filter(|token| !token.is_empty())
@@ -2506,7 +2506,7 @@ fn row_frequencies(pitch_classes: &[u8]) -> Vec<f64> {
 /// Describes a tone row: its matrix, its forty-eight forms, whether it is
 /// all-interval or a Link chord, and which historical row it is.
 pub fn tone_row(input: &str) -> Result<JsValue, JsValue> {
-    use music21_rs::serial::{Transformation, TransformationConvention};
+    use music21::serial::{Transformation, TransformationConvention};
     let row = parse_row(input)?;
     let twelve = row.is_twelve_tone_row();
     let matrix = if twelve {
@@ -2583,7 +2583,7 @@ struct HistoricalRowInfo {
 #[wasm_bindgen]
 /// The seventy-one historical twelve-tone rows music21 carries.
 pub fn historical_rows() -> Result<JsValue, JsValue> {
-    let rows = music21_rs::serial::HISTORICAL_ROWS
+    let rows = music21::serial::HISTORICAL_ROWS
         .iter()
         .map(|row| HistoricalRowInfo {
             name: row.name,

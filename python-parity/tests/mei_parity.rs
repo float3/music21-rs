@@ -1,7 +1,7 @@
 //! The crate's MEI reader against music21's, document by document.
 //!
 //! Each document is read twice, by music21 and by
-//! `music21_rs::mei::from_mei`, and the two scores are compared as an
+//! `music21::mei::from_mei`, and the two scores are compared as an
 //! outline and then as the MusicXML each side's writer makes of its own.
 //! The crate's writer is held to music21's by `musicxml_parity`, so the two
 //! texts are the same only if the two readers made the same score.
@@ -16,9 +16,9 @@
 //! a `;`-separated list of such names or `@` and the path of a file of them,
 //! runs those instead of the ones below.
 
-use music21_rs::mei::from_mei;
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::mei::from_mei;
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::{
+use music21::{
     Accidental as RsAccidental, AccidentalDisplayOptions, Interval, Microtone as RsMicrotone,
     Pitch as RsPitch, PitchOptions,
 };
@@ -45,7 +45,7 @@ pyo3::create_exception!(
 /// The crate's `Display` prefixes every message with its kind, `Pitch error:`;
 /// music21's exceptions carry the message alone, and the doctests compare
 /// it.
-pub(crate) fn message(error: &music21_rs_crate::Error) -> String {
+pub(crate) fn message(error: &music21::Error) -> String {
     let text = error.to_string();
     match text.split_once(" error: ") {
         Some((_, rest)) => rest.to_string(),
@@ -167,7 +167,7 @@ fn cached_name(py: Python<'_>, usr_str: &Bound<'_, PyAny>) -> PyResult<String> {
     parse_into_name_cache(py, usr_str)
 }
 
-pub(crate) fn pitch_error(error: music21_rs_crate::Error) -> PyErr {
+pub(crate) fn pitch_error(error: music21::Error) -> PyErr {
     specific_error(&error).unwrap_or_else(|| PitchException::new_err(message(&error)))
 }
 
@@ -175,15 +175,11 @@ pub(crate) fn pitch_error(error: music21_rs_crate::Error) -> PyErr {
 /// own, whatever module the error came out of: an accidental it cannot
 /// spell, a microtone it cannot read, or an argument that was never a value
 /// at all.
-pub(crate) fn specific_error(error: &music21_rs_crate::Error) -> Option<PyErr> {
+pub(crate) fn specific_error(error: &music21::Error) -> Option<PyErr> {
     match error {
-        music21_rs_crate::Error::Accidental(_) => {
-            Some(AccidentalException::new_err(message(error)))
-        }
-        music21_rs_crate::Error::Microtone(_) => Some(MicrotoneException::new_err(message(error))),
-        music21_rs_crate::Error::Value(_) => {
-            Some(pyo3::exceptions::PyValueError::new_err(message(error)))
-        }
+        music21::Error::Accidental(_) => Some(AccidentalException::new_err(message(error))),
+        music21::Error::Microtone(_) => Some(MicrotoneException::new_err(message(error))),
+        music21::Error::Value(_) => Some(pyo3::exceptions::PyValueError::new_err(message(error))),
         _ => None,
     }
 }
@@ -2317,14 +2313,13 @@ pub(crate) fn simplify_multiple_enharmonics(
         inputs.push(pitch_from_any(&item?)?);
     }
     let signature = match keyContext.filter(|value| !value.is_none()) {
-        Some(context) => Some(music21_rs_crate::KeySignature::new(
+        Some(context) => Some(music21::KeySignature::new(
             context.getattr("sharps")?.extract::<i32>()?,
         )),
         None => None,
     };
-    let simplified =
-        music21_rs_crate::pitch::simplify_multiple_enharmonics(&inputs, None, signature)
-            .map_err(pitch_error)?;
+    let simplified = music21::pitch::simplify_multiple_enharmonics(&inputs, None, signature)
+        .map_err(pitch_error)?;
     Ok(simplified
         .into_iter()
         .map(|pitch| Pitch::wrap(pitch, false))
@@ -2335,7 +2330,7 @@ pub(crate) fn simplify_multiple_enharmonics(
 #[pyfunction]
 #[pyo3(name = "convertPitchClassToStr")]
 pub(crate) fn convert_pitch_class_to_str(pitch_class: i32) -> String {
-    music21_rs_crate::convert_pitch_class_to_str(pitch_class)
+    music21::convert_pitch_class_to_str(pitch_class)
 }
 
 /// music21's `pitch.isValidAccidentalName`.

@@ -60,7 +60,7 @@ fn held_directly(stream: &Stream) -> Vec<bool> {
 /// voice in it holds. The notes keep their instruments too.
 ///
 /// ```
-/// use music21_rs::{instrument::unbundle_instruments, Instrument, Stream, StreamElement, Unpitched};
+/// use music21::{instrument::unbundle_instruments, Instrument, Stream, StreamElement, Unpitched};
 ///
 /// let mut stream = Stream::new();
 /// for (offset, kind) in [(0.0, "BassDrum"), (1.0, "Cowbell")] {
@@ -78,7 +78,7 @@ fn held_directly(stream: &Stream) -> Vec<bool> {
 ///     })
 ///     .collect();
 /// assert_eq!(said, ["0 BassDrum", "0 stroke", "1 Cowbell", "1 stroke"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn unbundle_instruments(stream: &mut Stream) {
     let added: Vec<StreamEvent> = stream
@@ -220,7 +220,7 @@ pub(crate) fn settle(instruments: &[&Instrument]) -> Option<Vec<Option<Instrumen
 /// instruments of several kinds the bare `Instrument`s go.
 ///
 /// ```
-/// use music21_rs::{instrument::deduplicate, Instrument, Stream, StreamElement};
+/// use music21::{instrument::deduplicate, Instrument, Stream, StreamElement};
 ///
 /// let mut named = Instrument::new();
 /// named.set_name(Some("Semi-Hollow Body".to_string()));
@@ -234,7 +234,7 @@ pub(crate) fn settle(instruments: &[&Instrument]) -> Option<Vec<Option<Instrumen
 /// let StreamElement::Instrument(left) = event.element() else { panic!() };
 /// assert_eq!(left.part_name(), Some("Electric Guitar"));
 /// assert_eq!(left.name(), Some("Semi-Hollow Body"));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn deduplicate(stream: &mut Stream) {
     // Each leaf's part, for the leaves in one.
@@ -303,7 +303,7 @@ pub fn deduplicate(stream: &mut Stream) {
 /// carried across, as the places they name move.
 ///
 /// ```
-/// use music21_rs::{instrument::partition_by_instrument, Instrument, Note, Stream};
+/// use music21::{instrument::partition_by_instrument, Instrument, Note, Stream};
 ///
 /// let mut part = Stream::new();
 /// part.insert(0.0, Instrument::of_kind("Piccolo")?);
@@ -315,7 +315,7 @@ pub fn deduplicate(stream: &mut Stream) {
 /// let names: Vec<Option<&str>> = score.parts().iter().map(|part| part.id()).collect();
 /// assert_eq!(names, [Some("Piccolo"), Some("Trombone")]);
 /// assert_eq!(score.parts()[1].notes().len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn partition_by_instrument(stream: &Stream) -> Stream {
     let flattened: Vec<Stream> = if stream.has_part_like_streams() {

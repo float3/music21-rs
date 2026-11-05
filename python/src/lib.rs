@@ -23,7 +23,7 @@ use pyo3::prelude::*;
 /// as that module's exception class.
 macro_rules! error_into {
     ($vis:vis $name:ident, $exception:ty) => {
-        $vis fn $name(error: music21_rs_crate::Error) -> PyErr {
+        $vis fn $name(error: music21::Error) -> PyErr {
             // An accidental no name spells, a microtone that cannot be read
             // and an argument that was never a value raise music21's class
             // for them whichever module they came out of.

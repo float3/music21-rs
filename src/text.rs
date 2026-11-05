@@ -3,13 +3,13 @@
 //! end, and the [`TextBox`] a page carries.
 //!
 //! ```
-//! use music21_rs::text::{assemble_lyrics, prepend_article};
-//! use music21_rs::tinynotation::from_tiny_notation;
+//! use music21::text::{assemble_lyrics, prepend_article};
+//! use music21::tinynotation::from_tiny_notation;
 //!
 //! let mut line = from_tiny_notation("4/4 c4_Hi d4_there")?;
 //! assert_eq!(assemble_lyrics(&line, 1, " "), "Hi there");
 //! assert_eq!(prepend_article("Ale is Dear, The", None)?, "The Ale is Dear");
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::{

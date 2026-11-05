@@ -100,11 +100,11 @@ impl TranspositionChecker {
     /// `numDistinctTranspositions`.
     ///
     /// ```
-    /// use music21_rs::{Pitch, analysis::transposition::TranspositionChecker};
+    /// use music21::{Pitch, analysis::transposition::TranspositionChecker};
     ///
     /// let augmented = ["C4", "E4", "G#4"].iter().map(|n| n.parse()).collect::<Result<_, _>>()?;
     /// assert_eq!(TranspositionChecker::new(augmented)?.distinct_count()?, 4);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

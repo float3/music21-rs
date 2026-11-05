@@ -21,7 +21,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::bar::{Barline as RsBarline, BarlineType, RepeatDirection};
+use music21::bar::{Barline as RsBarline, BarlineType, RepeatDirection};
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["Barline", "Repeat", "BarException"];

@@ -9,7 +9,7 @@
 //! the strings its own documentation reads, and so is setting every modifier
 //! a percussion instrument's drum map knows.
 
-use music21_rs::instrument::{Instrument, SearchLanguage};
+use music21::instrument::{Instrument, SearchLanguage};
 use music21_rs_python_parity::music21_name;
 use serde::Deserialize;
 
@@ -258,13 +258,13 @@ fn ensembles_are_named_as_music21_names_them() {
     let expected = expectations();
     for (players, name) in expected.ensemble_names.iter().enumerate() {
         assert_eq!(
-            music21_rs::instrument::ensemble_name_by_size(players),
+            music21::instrument::ensemble_name_by_size(players),
             Some(name.as_str()),
             "{players} players"
         );
     }
     assert_eq!(
-        music21_rs::instrument::ensemble_name_by_size(expected.ensemble_names.len()),
+        music21::instrument::ensemble_name_by_size(expected.ensemble_names.len()),
         None
     );
 }

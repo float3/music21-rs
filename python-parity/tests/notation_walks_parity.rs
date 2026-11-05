@@ -6,11 +6,11 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::expressions::{Expression, Ornament, OrnamentKind};
-use music21_rs::makenotation::{make_measures, make_ties};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::volume::dynamic_context;
-use music21_rs::{
+use music21::expressions::{Expression, Ornament, OrnamentKind};
+use music21::makenotation::{make_measures, make_ties};
+use music21::musicxml::from_musicxml;
+use music21::volume::dynamic_context;
+use music21::{
     Beams, Chord, Duration, Note, Rest, Spanner, SpannerKind, Stream, StreamElement, StreamKind,
 };
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};

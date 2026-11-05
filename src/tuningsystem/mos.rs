@@ -37,12 +37,12 @@ pub const OCTAVE_CENTS: FloatType = 1200.0;
 /// have traded places.
 ///
 /// ```
-/// use music21_rs::tuningsystem::Mos;
+/// use music21::tuningsystem::Mos;
 ///
 /// let diatonic: Mos = "5L 2s".parse()?;
 /// assert_eq!(diatonic.notes(), 7);
 /// assert_eq!(diatonic.brightest_word(), "LLLsLLs");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -156,14 +156,14 @@ impl FromStr for Mos {
 /// same way.
 ///
 /// ```
-/// use music21_rs::tuningsystem::{MosScale, OCTAVE_CENTS};
+/// use music21::tuningsystem::{MosScale, OCTAVE_CENTS};
 ///
 /// // Seven fifths folded into an octave are the diatonic scale. Stacked
 /// // upwards from the tonic they land in its brightest mode, Lydian.
 /// let diatonic = MosScale::new(701.955, OCTAVE_CENTS, 7)?;
 /// assert_eq!(diatonic.pattern()?.to_string(), "5L 2s");
 /// assert_eq!(diatonic.word()?, "LLLsLLs");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

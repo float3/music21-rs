@@ -54,12 +54,12 @@ fn default_scale(scale: Option<&Scale>) -> Result<Scale> {
 /// edge counts in the bin below it.
 ///
 /// ```
-/// use music21_rs::audiosearch::histogram;
+/// use music21::audiosearch::histogram;
 ///
 /// let (counts, edges) = histogram(&[1.0, 2.0, 2.0, 3.0, 5.0], 4)?;
 /// assert_eq!(counts, [3, 1, 0, 1]);
 /// assert_eq!(edges, [1.0, 2.0, 3.0, 4.0, 5.0]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -116,7 +116,7 @@ pub fn interpolation(correlation: &[FloatType], peak: usize) -> FloatType {
 /// bits.
 ///
 /// ```
-/// use music21_rs::audiosearch::autocorrelation_frequency;
+/// use music21::audiosearch::autocorrelation_frequency;
 ///
 /// let rate = 44100.0;
 /// let signal: Vec<f64> = (0..1024)
@@ -125,7 +125,7 @@ pub fn interpolation(correlation: &[FloatType], peak: usize) -> FloatType {
 /// let frequency = autocorrelation_frequency(&signal, rate)?;
 /// // music21 finds 442.2033...: the interpolated peak sits a little early.
 /// assert!((frequency - 442.2033).abs() < 1e-3);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -263,12 +263,12 @@ pub fn detect_pitch_frequencies(
 /// and last `smooth_levels`.
 ///
 /// ```
-/// use music21_rs::audiosearch::smooth_frequencies;
+/// use music21::audiosearch::smooth_frequencies;
 ///
 /// let smoothed = smooth_frequencies(&[100.0, 100.0, 400.0, 100.0, 100.0], 3)?;
 /// // Each average takes in the ones made before it.
 /// assert_eq!(smoothed, [200, 233, 244, 200, 200]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

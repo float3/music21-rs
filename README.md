@@ -1,8 +1,8 @@
 # music21-rs
 
 [![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/music21-rs.svg)](https://crates.io/crates/music21-rs)
-[![docs.rs](https://docs.rs/music21-rs/badge.svg)](https://docs.rs/music21-rs)
+[![crates.io](https://img.shields.io/crates/v/music21.svg)](https://crates.io/crates/music21)
+[![docs.rs](https://docs.rs/music21/badge.svg)](https://docs.rs/music21)
 [![music21 members in the crate](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-crate.json)](https://hilll.dev/music21-rs/reports/#ported)
 [![music21 doctests passing](https://img.shields.io/endpoint?url=https%3A%2F%2Fhilll.dev%2Fmusic21-rs%2Freports%2Fbadge-doctests.json)](https://hilll.dev/music21-rs/reports/#doctests)
 
@@ -80,7 +80,7 @@ example, is 441 KB. music21 installs 105 MB.
 ## using the crate
 
 ```bash
-cargo add music21-rs
+cargo add music21
 ```
 
 default features are empty. `serde` adds `Serialize` and `Deserialize` to the
@@ -144,19 +144,19 @@ function's documentation lists them.
 name a chord and read its set class:
 
 ```rust
-use music21_rs::Chord;
+use music21::Chord;
 
 let chord: Chord = "C Eb G Bb".parse()?;
 assert_eq!(chord.pitched_common_name(), "C-minor seventh chord");
 assert_eq!(chord.forte_class().as_deref(), Some("4-26"));
 assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 spell and transpose pitches:
 
 ```rust
-use music21_rs::{Interval, Pitch};
+use music21::{Interval, Pitch};
 
 let mut pitch = Pitch::from_name("C#4")?;
 pitch.get_higher_enharmonic_in_place()?;
@@ -165,13 +165,13 @@ assert_eq!(pitch.name_with_octave(), "Db4");
 let fifth = Interval::from_name("P5")?;
 assert_eq!(fifth.transpose_pitch(&pitch)?.name_with_octave(), "Ab4");
 assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 realize a roman numeral in a key, and analyse a chord as one:
 
 ```rust
-use music21_rs::{Chord, Key, RomanNumeral};
+use music21::{Chord, Key, RomanNumeral};
 
 let key = Key::from_tonic("c")?;
 let numeral = RomanNumeral::new("viio7", key.clone())?;
@@ -179,26 +179,26 @@ assert_eq!(numeral.to_chord()?.pitch_names(), ["B", "D", "F", "Ab"]);
 
 let analysed = RomanNumeral::analyze(&Chord::new("F Ab C")?, key)?;
 assert_eq!(analysed.map(|n| n.figure().to_string()), Some("iv".to_string()));
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 beats and accent weights of a time signature:
 
 ```rust
-use music21_rs::TimeSignature;
+use music21::TimeSignature;
 
 let six_eight = TimeSignature::new(6, 8)?;
 assert_eq!(six_eight.beat_count(), 2);
 assert_eq!(six_eight.accent_weight(1.5)?, 0.5);
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 write a score as MusicXML, with the `musicxml` feature:
 
 ```rust
 # #[cfg(feature = "musicxml")] {
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::{Clef, Note, Stream, StreamKind, TimeSignature};
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::{Clef, Note, Stream, StreamKind, TimeSignature};
 
 let mut measure = Stream::with_kind(StreamKind::Measure);
 measure.set_number(1);
@@ -216,13 +216,13 @@ let xml = to_musicxml(&score, &ExportOptions::default())?;
 assert!(xml.contains("<beats>3</beats>"));
 
 // And read it back.
-let read = music21_rs::musicxml::from_musicxml(&xml)?;
+let read = music21::musicxml::from_musicxml(&xml)?;
 assert_eq!(read.parts()[0].measures()[0].pitches().len(), 3);
 # }
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
-full API documentation is on [docs.rs](https://docs.rs/music21-rs).
+full API documentation is on [docs.rs](https://docs.rs/music21).
 
 ## beyond music21
 

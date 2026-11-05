@@ -55,8 +55,8 @@ impl LengthType {
 /// Another reading of a passage: music21's `Variant`.
 ///
 /// ```
-/// use music21_rs::variant::{LengthType, Variant};
-/// use music21_rs::{Duration, Note};
+/// use music21::variant::{LengthType, Variant};
+/// use music21::{Duration, Note};
 ///
 /// let mut variant = Variant::named("ossia");
 /// variant.contents_mut().push(Note::from_name("D4")?.with_duration(Duration::half()));
@@ -65,7 +65,7 @@ impl LengthType {
 ///
 /// variant.set_replacement_quarter_length(Some(4.0));
 /// assert_eq!(variant.length_type(), LengthType::Deletion);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -791,17 +791,17 @@ fn made_variant(
 /// as long as it lasts: music21's `addVariant`.
 ///
 /// ```
-/// use music21_rs::tinynotation::from_tiny_notation;
-/// use music21_rs::variant::add_variant;
+/// use music21::tinynotation::from_tiny_notation;
+/// use music21::variant::add_variant;
 ///
 /// let mut line = from_tiny_notation("4/4 c4 d e f g1")?;
 /// let other = from_tiny_notation("4/4 c4 d e g")?;
 /// add_variant(&mut line, 0.0, Some(other.measures()[0]), Some("draft"), None, None);
 /// assert_eq!(line.events().iter().filter(|event| matches!(
 ///     event.element(),
-///     music21_rs::StreamElement::Variant(_)
+///     music21::StreamElement::Variant(_)
 /// )).count(), 1);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn add_variant(
     stream: &mut Stream,
@@ -2024,15 +2024,15 @@ impl Stream {
     /// first of its class where it starts.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
-    /// use music21_rs::variant::merge_variants;
+    /// use music21::tinynotation::from_tiny_notation;
+    /// use music21::variant::merge_variants;
     ///
     /// let first = from_tiny_notation("4/4 c1 d1 e1")?;
     /// let second = from_tiny_notation("4/4 c1 f1 e1")?;
     /// let merged = merge_variants(&first, &second, "second")?;
     /// let made = merged.activate_variants(Some("second"), true)?;
     /// assert_eq!(made.pitches()[1].name(), "F");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

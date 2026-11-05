@@ -25,11 +25,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::IntegerType;
-use music21_rs_crate::search::{
+use music21::IntegerType;
+use music21::search::{
     ContiguousSegmentSearcher as RsSearcher, Matching, Repetitions, SegmentMatcher as RsMatcher,
 };
-use music21_rs_crate::stream::Stream as RsStream;
+use music21::stream::Stream as RsStream;
 
 use crate::Walkable;
 
@@ -368,7 +368,7 @@ fn found_runs<'py>(
     py: Python<'py>,
     searched: &Searched,
     container: &Bound<'py, PyAny>,
-    runs: &[music21_rs_crate::search::ContiguousSegment<'_>],
+    runs: &[music21::search::ContiguousSegment<'_>],
     matching: Option<Matching>,
     given: &[(Vec<IntegerType>, Py<PyAny>)],
 ) -> PyResult<Bound<'py, PyList>> {
@@ -417,7 +417,7 @@ fn normalized(py: Python<'_>, active: &[u8], matching: Option<Matching>) -> PyRe
         .iter()
         .map(|class| IntegerType::from(*class))
         .collect();
-    let row = music21_rs_crate::serial::ToneRow::new(classes.iter().copied());
+    let row = music21::serial::ToneRow::new(classes.iter().copied());
     Ok(match matching {
         Some(Matching::Transposed) => pyo3::types::PyString::new(py, &row.intervals_as_string())
             .into_any()
@@ -442,7 +442,7 @@ fn normalize_as(
     segment: &Bound<'_, PyAny>,
 ) -> PyResult<Py<PyAny>> {
     let classes = classes_of(segment)?;
-    let row = music21_rs_crate::serial::ToneRow::new(classes.iter().copied());
+    let row = music21::serial::ToneRow::new(classes.iter().copied());
     match matching {
         Matching::Transposed => as_intervals(py, row),
         Matching::Transformed => as_row(py, row),
@@ -754,7 +754,7 @@ macro_rules! matchers {
                 #[staticmethod]
                 fn normalize(py: Python<'_>, segment: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
                     let classes = classes_of(segment)?;
-                    let row = music21_rs_crate::serial::ToneRow::new(classes.iter().copied());
+                    let row = music21::serial::ToneRow::new(classes.iter().copied());
                     $shape(py, row)
                 }
 
@@ -765,7 +765,7 @@ macro_rules! matchers {
 }
 
 /// The pitch classes as a list: what music21's plain matcher normalizes to.
-fn as_classes(py: Python<'_>, row: music21_rs_crate::serial::ToneRow) -> PyResult<Py<PyAny>> {
+fn as_classes(py: Python<'_>, row: music21::serial::ToneRow) -> PyResult<Py<PyAny>> {
     let listed = PyList::empty(py);
     for class in row.pitch_classes() {
         listed.append(*class)?;
@@ -774,14 +774,14 @@ fn as_classes(py: Python<'_>, row: music21_rs_crate::serial::ToneRow) -> PyResul
 }
 
 /// The intervals the classes make, written as music21 writes them.
-fn as_intervals(py: Python<'_>, row: music21_rs_crate::serial::ToneRow) -> PyResult<Py<PyAny>> {
+fn as_intervals(py: Python<'_>, row: music21::serial::ToneRow) -> PyResult<Py<PyAny>> {
     Ok(pyo3::types::PyString::new(py, &row.intervals_as_string())
         .into_any()
         .unbind())
 }
 
 /// The row the classes are.
-fn as_row(py: Python<'_>, row: music21_rs_crate::serial::ToneRow) -> PyResult<Py<PyAny>> {
+fn as_row(py: Python<'_>, row: music21::serial::ToneRow) -> PyResult<Py<PyAny>> {
     crate::serial::ToneRow::object(py, row)
 }
 
@@ -865,7 +865,7 @@ fn labelled<'py>(
     matching: Matching,
     convention: Convention,
 ) -> PyResult<Bound<'py, PyAny>> {
-    use music21_rs_crate::serial::TransformationConvention;
+    use music21::serial::TransformationConvention;
 
     let copied = py
         .import("copy")?
@@ -924,7 +924,7 @@ fn labelled<'py>(
             Ok(class) => class.call1((&first, &last))?,
             Err(_) => crate::spanner::Spanner::object(
                 py,
-                &music21_rs_crate::Spanner::line(vec![place.first, place.last]),
+                &music21::Spanner::line(vec![place.first, place.last]),
                 vec![first.clone().unbind(), last.clone().unbind()],
             )?
             .into_bound(py),

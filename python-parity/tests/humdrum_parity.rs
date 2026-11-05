@@ -1,7 +1,7 @@
 //! The crate's Humdrum reader against music21's, file by file.
 //!
 //! Each file is read twice, by music21 and by
-//! `music21_rs::humdrum::from_humdrum`, and the two scores are compared as
+//! `music21::humdrum::from_humdrum`, and the two scores are compared as
 //! an outline -- every part, measure and voice, and in each the elements in
 //! order -- and then as the MusicXML each side's writer makes of its own.
 //! The crate's writer is held to music21's by `musicxml_parity`, so the two
@@ -16,10 +16,10 @@
 //! of. `HUMDRUM_PARITY_FILES`, a `;`-separated list of such names or `@`
 //! and the path of a file of them, runs those instead of the ones below.
 
-use music21_rs::humdrum::from_humdrum;
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::humdrum::from_humdrum;
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

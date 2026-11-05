@@ -5,7 +5,7 @@
 [![docs.rs](https://docs.rs/harte/badge.svg)](https://docs.rs/harte)
 
 Harte chord notation, `C:maj7/3`, `Bb:(b3,5,b7,9)`, `F:sus4(*3,9)`, `N`,
-read into [music21-rs](https://crates.io/crates/music21-rs) chords. it is a
+read into [music21](https://crates.io/crates/music21) chords. it is a
 port of [harte-library](https://github.com/andreamust/harte-library), and
 builds the chord harte-library builds for every label in that library's
 coverage set.

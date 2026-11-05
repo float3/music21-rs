@@ -194,7 +194,7 @@ impl Key {
     /// hand leaves the signature behind; this is such a key.
     ///
     /// ```
-    /// use music21_rs::key::Key;
+    /// use music21::key::Key;
     ///
     /// let key = Key::from_tonic("B").unwrap().with_sharps(0);
     /// assert_eq!(key.tonic().name(), "B");

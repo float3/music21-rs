@@ -19,9 +19,9 @@
 //! `OPUS_PARITY_WORKS`, a `;`-separated list of corpus files, runs those
 //! instead of `WORKS`, which is how the rest of the corpus is swept.
 
-use music21_rs::abc::from_abc;
-use music21_rs::metadata::{Metadata, MetadataQuery};
-use music21_rs::{Stream, StreamKind};
+use music21::abc::from_abc;
+use music21::metadata::{Metadata, MetadataQuery};
+use music21::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use regex::Regex;

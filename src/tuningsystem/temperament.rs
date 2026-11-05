@@ -23,13 +23,13 @@
 //! only the usual one.
 //!
 //! ```
-//! use music21_rs::tuningsystem::{Monzo, Temperament};
+//! use music21::tuningsystem::{Monzo, Temperament};
 //!
 //! // Meantone: one period to the octave, generator a fifth of 696.7 cents.
 //! let meantone = Temperament::from_mapping(1, &[1, 4, 10], 696.7, &[2, 3, 5, 7])?;
 //! assert!(meantone.tempers_out(&Monzo::from_ratio(81, 80)?));
 //! assert_eq!(meantone.pattern(7)?.to_string(), "5L 2s");
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::defaults::{FloatType, IntegerType, UnsignedIntegerType};
@@ -67,14 +67,14 @@ const MAPPING_TOLERANCE: FloatType = 0.2;
 /// single generator.
 ///
 /// ```
-/// use music21_rs::tuningsystem::{Monzo, Temperament};
+/// use music21::tuningsystem::{Monzo, Temperament};
 ///
 /// // Porcupine, from its own infobox: three generators to a fourth.
 /// let porcupine = Temperament::from_mapping(1, &[-3, -5], 163.6, &[2, 3, 5])?;
 /// assert!(porcupine.tempers_out(&Monzo::from_ratio(250, 243)?));
 /// assert_eq!(porcupine.pattern(7)?.to_string(), "1L 6s");
 /// assert_eq!(porcupine.rank(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

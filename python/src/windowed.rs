@@ -20,13 +20,11 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
-use music21_rs_crate::Stream as RsStream;
-use music21_rs_crate::analysis::windowed::{
-    WindowStep, WindowType, WindowedAnalysis as RsWindowed,
-};
-use music21_rs_crate::makenotation::{make_measures_by, make_ties};
-use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
-use music21_rs_crate::stream::StreamKind;
+use music21::Stream as RsStream;
+use music21::analysis::windowed::{WindowStep, WindowType, WindowedAnalysis as RsWindowed};
+use music21::makenotation::{make_measures_by, make_ties};
+use music21::meter::TimeSignature as RsTimeSignature;
+use music21::stream::StreamKind;
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["WindowedAnalysis", "WindowedAnalysisException"];
@@ -216,7 +214,7 @@ impl WindowedAnalysis {
         source: &RsStream,
         ratio: &str,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let refuse = |error: music21_rs_crate::Error| {
+        let refuse = |error: music21::Error| {
             WindowedAnalysisException::new_err(crate::pitch::message(&error))
         };
         let meter = RsTimeSignature::from_ratio_string(ratio).map_err(refuse)?;

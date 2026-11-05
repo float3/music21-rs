@@ -1,7 +1,7 @@
 //! The crate's RomanText reader against music21's, file by file.
 //!
 //! Each analysis is read twice, by music21 and by
-//! `music21_rs::romantext::from_roman_text`, and the two scores are compared
+//! `music21::romantext::from_roman_text`, and the two scores are compared
 //! as an outline -- every measure, and in it each chord with its notes, its
 //! length, its ties and its lyric -- and then, where music21 can write the
 //! score at all, as the MusicXML each side's writer makes of its own. The
@@ -15,9 +15,9 @@
 //! a `;`-separated list of such names or `@` and the path of a file of them,
 //! runs those instead of the ones below.
 
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::romantext::from_roman_text;
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::romantext::from_roman_text;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

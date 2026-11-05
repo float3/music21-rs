@@ -514,11 +514,11 @@ impl MeterTerminal {
     /// until they agree, which is why six eighths come out as sixteenths.
     ///
     /// ```
-    /// use music21_rs::meter::MeterTerminal;
+    /// use music21::meter::MeterTerminal;
     ///
     /// let bar = MeterTerminal::new(4, 4)?.subdivided_nested_hierarchy(2, None, true)?;
     /// assert_eq!(bar.to_string(), "{{{1/4+1/4}+{1/4+1/4}}}");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn subdivided_nested_hierarchy(
         &self,
@@ -550,12 +550,12 @@ impl MeterTerminal {
     /// count can say. The form has to come to the same length as this span.
     ///
     /// ```
-    /// use music21_rs::meter::MeterTerminal;
+    /// use music21::meter::MeterTerminal;
     ///
     /// let beats = MeterTerminal::from_partition_string("3/8+2/8")?;
     /// let bar = MeterTerminal::new(5, 8)?.subdivided_nested_hierarchy_by(2, &beats, true)?;
     /// assert_eq!(bar.to_string(), "{{{1/8+1/8+1/8}+{1/8+1/8}}}");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn subdivided_nested_hierarchy_by(
         &self,

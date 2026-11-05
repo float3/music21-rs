@@ -13,7 +13,7 @@
 //! object was inserted into its stream, which a score built here has no
 //! counterpart for; which quartets there are is the musical question.
 
-use music21_rs::{
+use music21::{
     Chord, Duration, MetronomeMark, Note, Pitch, QuartetOptions, Rest, Stream, StreamKind,
     iterate_all_voice_leading_quartets,
 };

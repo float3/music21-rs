@@ -8,8 +8,8 @@
 
 use std::path::Path;
 
-use music21_rs::pitch::{Accidental, AccidentalDisplayOptions};
-use music21_rs::{KeySignature, Pitch};
+use music21::pitch::{Accidental, AccidentalDisplayOptions};
+use music21::{KeySignature, Pitch};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

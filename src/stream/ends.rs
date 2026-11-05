@@ -15,8 +15,8 @@ impl Stream {
     /// else holding part-like streams, which is [`Self::final_barlines`].
     ///
     /// ```
-    /// use music21_rs::bar::{Barline, BarlineType};
-    /// use music21_rs::{Stream, StreamKind};
+    /// use music21::bar::{Barline, BarlineType};
+    /// use music21::{Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// for bar_type in [BarlineType::Double, BarlineType::Final] {
@@ -107,8 +107,8 @@ impl Stream {
     /// the start says nothing about it, as in music21.
     ///
     /// ```
-    /// use music21_rs::layout::{Layout, StaffLayout};
-    /// use music21_rs::{Stream, StreamElement, StreamKind};
+    /// use music21::layout::{Layout, StaffLayout};
+    /// use music21::{Stream, StreamElement, StreamKind};
     ///
     /// let mut measure = Stream::with_kind(StreamKind::Measure);
     /// assert_eq!(measure.staff_lines(), 5);

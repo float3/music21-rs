@@ -10,9 +10,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::duration::Duration as RsDuration;
-use music21_rs_crate::notation::Placement;
-use music21_rs_crate::tempo::{
+use music21::duration::Duration as RsDuration;
+use music21::notation::Placement;
+use music21::tempo::{
     MetricModulation as RsMetricModulation, MetronomeMark as RsMetronomeMark, ModulationSide,
     TempoText as RsTempoText, convert_tempo_by_referent as rs_convert_tempo_by_referent,
 };
@@ -902,7 +902,7 @@ impl TempoText {
             Some(value) => value,
             None => Self::get_text(slf)?.bind(slf.py()).extract()?,
         };
-        Ok(music21_rs_crate::tempo::is_common_tempo_text(&text))
+        Ok(music21::tempo::is_common_tempo_text(&text))
     }
 
     /// music21 freezes a score by pickling it; the words go as the crate's
@@ -1137,7 +1137,7 @@ impl MetricModulation {
 
     fn apply(
         slf: &Bound<'_, Self>,
-        change: impl FnOnce(&mut RsMetricModulation) -> music21_rs_crate::Result<()>,
+        change: impl FnOnce(&mut RsMetricModulation) -> music21::Result<()>,
     ) -> PyResult<()> {
         let py = slf.py();
         let before = slf.borrow().value(py)?;

@@ -97,7 +97,7 @@ impl Stream {
     /// music21's `findGaps`.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream};
+    /// use music21::{Duration, Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// line.insert(0.0, Note::from_name("C4")?.with_duration(Duration::quarter()));
@@ -106,7 +106,7 @@ impl Stream {
     /// assert_eq!(gaps.events()[0].offset(), 1.0);
     /// assert_eq!(gaps.events()[0].element().quarter_length(), 1.0);
     /// assert!(!line.is_gapless());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn find_gaps(&self) -> Option<Stream> {
         let mut gaps = Stream::with_kind(self.kind());
@@ -182,7 +182,7 @@ impl Stream {
     /// gathers them.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream};
+    /// use music21::{Duration, Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// line.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
@@ -193,7 +193,7 @@ impl Stream {
     /// assert_eq!(overlaps[0].0, 0.0);
     /// assert_eq!(overlaps[0].1.len(), 2);
     /// assert!(!line.is_sequence());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn overlaps(&self) -> Vec<(FloatType, Vec<StreamEvent>)> {
         let flat = self.flatten();
@@ -219,7 +219,7 @@ impl Stream {
     /// from -- finds each again by that position.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// let mut measure = Stream::with_kind(StreamKind::Measure);
@@ -233,7 +233,7 @@ impl Stream {
     /// let found = part.overlap_positions();
     /// assert_eq!(found.len(), 1);
     /// assert_eq!(found[0], (0.0, vec![1, 0]));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn overlap_positions(&self) -> Vec<(FloatType, Vec<usize>)> {
         let leaves = self.leaves();

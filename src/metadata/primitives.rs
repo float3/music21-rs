@@ -143,13 +143,13 @@ impl DatePart {
 /// missing, and any part may say how sure it is.
 ///
 /// ```
-/// use music21_rs::metadata::primitives::{Certainty, Date, DatePart};
+/// use music21::metadata::primitives::{Certainty, Date, DatePart};
 ///
 /// let read = Date::from_written("1030?/12~/?4")?;
 /// assert_eq!(read.value(DatePart::Year), Some(1030));
 /// assert_eq!(read.certainty(DatePart::Year), Some(Certainty::Uncertain));
 /// assert_eq!(read.to_string(), "1030?/12~/04?");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Default, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -567,7 +567,7 @@ impl DateKind {
 /// in how they are written.
 ///
 /// ```
-/// use music21_rs::metadata::primitives::{DateKind, DatePrimitive, Relevance};
+/// use music21::metadata::primitives::{DateKind, DatePrimitive, Relevance};
 ///
 /// let span = DatePrimitive::between(["2009/12/31", "2010/1/28"])?;
 /// assert_eq!(span.to_string(), "2009/12/31 to 2010/01/28");
@@ -575,7 +575,7 @@ impl DateKind {
 ///
 /// let prior = DatePrimitive::relative("2009/12/31", Relevance::Prior)?;
 /// assert_eq!(prior.to_string(), "prior to 2009/12/31");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -730,7 +730,7 @@ impl fmt::Display for DatePrimitive {
 /// translation, and the scheme it was encoded by.
 ///
 /// ```
-/// use music21_rs::metadata::primitives::Text;
+/// use music21::metadata::primitives::Text;
 ///
 /// let title = Text::new("concerto in d").in_language("en");
 /// assert_eq!(title.to_string(), "concerto in d");
@@ -850,7 +850,7 @@ impl fmt::Display for Text {
 /// names.
 ///
 /// ```
-/// use music21_rs::metadata::primitives::{Contributor, Text};
+/// use music21::metadata::primitives::{Contributor, Text};
 ///
 /// let composer = Contributor::new("composer", [Text::new("Beethoven, Ludwig van")]);
 /// assert_eq!(composer.role(), Some("composer"));

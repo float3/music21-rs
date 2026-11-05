@@ -26,12 +26,12 @@ use pyo3::types::PyDict;
 use pyo3::types::PyList;
 use pyo3::types::PyTuple;
 
-use music21_rs_crate::duration::DurationType as RsDurationType;
-use music21_rs_crate::meter::BeamedNote as RsBeamedNote;
-use music21_rs_crate::meter::MeterTerminal as RsMeterTerminal;
-use music21_rs_crate::meter::OffsetAlign as RsOffsetAlign;
-use music21_rs_crate::meter::TimeSignature as RsTimeSignature;
-use music21_rs_crate::{
+use music21::duration::DurationType as RsDurationType;
+use music21::meter::BeamedNote as RsBeamedNote;
+use music21::meter::MeterTerminal as RsMeterTerminal;
+use music21::meter::OffsetAlign as RsOffsetAlign;
+use music21::meter::TimeSignature as RsTimeSignature;
+use music21::{
     Duration as RsDuration, FloatType, Rest as RsRest, Stream as RsStream, UnsignedIntegerType,
 };
 
@@ -87,10 +87,10 @@ fn checked_numerator(value: &str) -> PyResult<()> {
         .iter()
         .map(|(numerator, part)| u128::from(*numerator) * (denominator / u128::from(*part).max(1)))
         .sum();
-    if numerator > u128::from(music21_rs_crate::meter::MAX_NUMERATOR) {
+    if numerator > u128::from(music21::meter::MAX_NUMERATOR) {
         return Err(TimeSignatureException::new_err(format!(
             "cannot make a TimeSignature with a numerator above {}: {value}",
-            music21_rs_crate::meter::MAX_NUMERATOR
+            music21::meter::MAX_NUMERATOR
         )));
     }
     Ok(())
@@ -2176,7 +2176,7 @@ impl MeterSequence {
     fn partitionStr(&self) -> String {
         match self.inner.len() {
             0 => "Empty".to_string(),
-            count => music21_rs_crate::meter::partition_name(count),
+            count => music21::meter::partition_name(count),
         }
     }
 
@@ -2608,8 +2608,8 @@ fn sounding_stream(measure: &Bound<'_, PyAny>) -> PyResult<RsStream> {
 #[pyfunction]
 #[pyo3(name = "bestTimeSignature")]
 fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
-    let inner = music21_rs_crate::meter::best_time_signature(&sounding_stream(meas)?)
-        .map_err(meter_error)?;
+    let inner =
+        music21::meter::best_time_signature(&sounding_stream(meas)?).map_err(meter_error)?;
     crate::installed_new(
         meas.py(),
         "music21.meter.base",

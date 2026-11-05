@@ -10,8 +10,8 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::capella::from_capella;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::capella::from_capella;
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

@@ -1,4 +1,13 @@
-# Unreleased
+# music21-rs 0.17.0
+
+`harte` 0.10.0 depends on this release.
+
+## breaking changes
+
+- **The crate is `music21` on crates.io**: `cargo add music21` and
+  `use music21::Chord`, where it was `music21-rs` and `use music21_rs::Chord`.
+  `music21-rs` stays at 0.16.0 there. The Python package is still
+  `music21-rs` on PyPI, imported as `music21_rs`.
 
 ## added
 

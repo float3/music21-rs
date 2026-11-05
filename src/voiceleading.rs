@@ -641,7 +641,7 @@ pub fn iterate_all_voice_leading_quartets(
 /// by, since a voice held through has its notes start earlier.
 ///
 /// ```
-/// use music21_rs::{voiceleading::{voice_leading_quartet_positions, QuartetOptions}, Note, Stream, StreamKind};
+/// use music21::{voiceleading::{voice_leading_quartet_positions, QuartetOptions}, Note, Stream, StreamKind};
 ///
 /// let mut upper = Stream::with_kind(StreamKind::Part);
 /// upper.insert(0.0, Note::from_name("C5")?);
@@ -653,7 +653,7 @@ pub fn iterate_all_voice_leading_quartets(
 /// score.insert(0.0, upper);
 /// score.insert(0.0, lower);
 /// assert_eq!(voice_leading_quartet_positions(&score, QuartetOptions::default()), [(1.0, [0, 1, 2, 3])]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn voice_leading_quartet_positions(
     stream: &Stream,
@@ -779,13 +779,13 @@ pub fn verticality_at(stream: &Stream, offset: FloatType) -> Vec<(usize, Vec<Str
 /// element.
 ///
 /// ```
-/// use music21_rs::{voiceleading::verticality_positions_at, Note, Stream};
+/// use music21::{voiceleading::verticality_positions_at, Note, Stream};
 ///
 /// let mut stream = Stream::new();
 /// stream.insert(0.0, Note::from_name("C4")?);
 /// stream.insert(1.0, Note::from_name("D4")?);
 /// assert_eq!(verticality_positions_at(&stream, 0.5), [(0, vec![0])]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn verticality_positions_at(stream: &Stream, offset: FloatType) -> Vec<(usize, Vec<usize>)> {
     parts_by_position(stream)

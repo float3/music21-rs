@@ -7,7 +7,7 @@
 //! rehearsal mark, and whether a part plays on the drum channel.
 
 use super::{Imported, decode_text, stream::Extras, zip::Archive};
-use music21_rs::musicxml::from_musicxml;
+use music21::musicxml::from_musicxml;
 use roxmltree::{Document, Node, ParsingOptions};
 pub(super) fn read_compressed(archive: &Archive<'_>) -> Result<Imported, String> {
     // The container names the score; failing that, the first XML file in the

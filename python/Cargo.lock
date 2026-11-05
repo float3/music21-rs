@@ -26,9 +26,9 @@ dependencies = [
 
 [[package]]
 name = "harte"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
- "music21-rs",
+ "music21",
  "thiserror",
 ]
 
@@ -66,8 +66,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
-name = "music21-rs"
-version = "0.16.0"
+name = "music21"
+version = "0.17.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -80,10 +80,10 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "harte",
- "music21-rs",
+ "music21",
  "pyo3",
  "serde",
  "serde_json",

@@ -21,9 +21,9 @@ use pyo3::exceptions::{PyIndexError, PyNotImplementedError, PyTypeError, PyValue
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PySet, PySlice, PyString, PyTuple};
 
-use music21_rs_crate::braille::SegmentDivision;
-use music21_rs_crate::stream::{Stream as RsStream, StreamElement, StreamEvent, StreamKind};
-use music21_rs_crate::tree::{
+use music21::braille::SegmentDivision;
+use music21::stream::{Stream as RsStream, StreamElement, StreamEvent, StreamKind};
+use music21::tree::{
     self as rs_tree, ElementTimespan as RsSpan, Flatten, Horizontality as RsHorizontality,
     TimespanTree as RsTree, Verticality as RsVerticality,
 };
@@ -287,12 +287,12 @@ fn leaf_value(element: &Bound<'_, PyAny>) -> PyResult<StreamElement> {
 /// A value lasting as long as an element the crate has none for.
 fn stand_in(length: f64) -> PyResult<StreamElement> {
     if length <= 0.0 {
-        return Ok(StreamElement::MetronomeMark(
-            music21_rs_crate::MetronomeMark::new(60.0),
-        ));
+        return Ok(StreamElement::MetronomeMark(music21::MetronomeMark::new(
+            60.0,
+        )));
     }
-    let duration = music21_rs_crate::Duration::new(length).map_err(|error| stream_error(&error))?;
-    Ok(StreamElement::Rest(music21_rs_crate::Rest::new(duration)))
+    let duration = music21::Duration::new(length).map_err(|error| stream_error(&error))?;
+    Ok(StreamElement::Rest(music21::Rest::new(duration)))
 }
 
 /// A measure's own barlines among its elements, where music21 keeps them:
@@ -1093,7 +1093,7 @@ impl TimespanTree {
     ) -> PyResult<Option<Bound<'py, PyAny>>> {
         let py = span.py();
         let Ok(found) = span.cast::<PitchedTimespan>() else {
-            return Err(stream_error(&music21_rs_crate::Error::Tree(format!(
+            return Err(stream_error(&music21::Error::Tree(format!(
                 "PitchedTimespan {}, must be a PitchedTimespan",
                 span.repr()?
             ))));

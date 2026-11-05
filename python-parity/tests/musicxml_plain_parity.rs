@@ -18,7 +18,7 @@
 //! `MUSICXML_PLAIN_PARITY_SCORES`, a `;`-separated list of corpus names,
 //! runs those scores instead.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_rs_facade;
 use pyo3::prelude::*;

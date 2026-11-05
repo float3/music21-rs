@@ -20,11 +20,11 @@
 //! a `;`-separated list of corpus names, runs those instead of the writer
 //! test's scores, which is how the corpus is swept.
 
-use music21_rs::FloatType;
-use music21_rs::analysis::reduction::{PartGroup, PartReduction, ScoreReduction};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::notation::Lyric;
-use music21_rs::stream::{Stream, StreamElement, StreamKind};
+use music21::FloatType;
+use music21::analysis::reduction::{PartGroup, PartReduction, ScoreReduction};
+use music21::musicxml::from_musicxml;
+use music21::notation::Lyric;
+use music21::stream::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -268,7 +268,7 @@ fn describe(stream: &Stream) -> Vec<Entry> {
                     .map(|lyric| lyric.explicit_text().unwrap_or_default())
                     .collect()
             };
-            let shown = |pitches: Vec<music21_rs::pitch::Pitch>| -> String {
+            let shown = |pitches: Vec<music21::pitch::Pitch>| -> String {
                 pitches
                     .iter()
                     .map(|pitch| match pitch.written_accidental() {

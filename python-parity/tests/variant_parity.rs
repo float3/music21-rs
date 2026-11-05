@@ -14,12 +14,12 @@
 //! `VARIANT_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::variant::{
+use music21::musicxml::from_musicxml;
+use music21::variant::{
     Variant, make_all_variants_replacements, make_variant_blocks, merge_part_as_ossia,
     merge_variants, refine_variant, replaced_elements,
 };
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -184,7 +184,7 @@ fn bits(value: f64) -> String {
     value.to_bits().to_string()
 }
 
-fn pitch_text(pitch: &music21_rs::Pitch) -> String {
+fn pitch_text(pitch: &music21::Pitch) -> String {
     let alter = pitch
         .written_accidental()
         .map_or(String::new(), |accidental| bits(accidental.alter()));
@@ -230,7 +230,7 @@ fn dump(element: &StreamElement, offset: f64) -> Option<String> {
                 "M@{}#{}:{}[{}]",
                 bits(offset),
                 measure.number(),
-                bits(music21_rs::variant::highest_time(measure)),
+                bits(music21::variant::highest_time(measure)),
                 inner.join(" ")
             )
         }
@@ -304,7 +304,7 @@ fn our_report(x: &Stream, y: &Stream) -> (Vec<String>, Vec<String>) {
     let mut attempt =
         |lines: &mut Vec<String>,
          label: String,
-         run: &mut dyn FnMut() -> music21_rs::Result<Vec<String>>| {
+         run: &mut dyn FnMut() -> music21::Result<Vec<String>>| {
             match run() {
                 Ok(more) => lines.extend(more),
                 Err(error) => {

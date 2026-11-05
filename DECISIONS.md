@@ -464,6 +464,16 @@ and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
 no longer stops a release. it still runs on every push to master and
 publishes the reports page.
 
+**crates take the plain name, `-rs` is for the repository and PyPI.**
+the crate is `music21`, as `git2` comes from git2-rs and `numpy` is PyO3's
+bindings rather than NumPy's own: on crates.io a port or binding takes the
+name of what it ports, and its description says what it is. the
+repository keeps `-rs`. on PyPI the name has to tell the package from the
+original, so it is `music21-rs` and `harte-rs`; harte-rs is imported as
+`harte` because it replaces harte-library, and the wheel as `music21_rs`
+until it can replace music21 (see the Python goals). *costs:* `music21-rs`
+up to 0.16.0 is a different crate on crates.io from `music21` after it.
+
 **harte-rs is pure Python over the wheel.** its `Harte` subclasses the
 wheel's `Chord` in Python, and the label is read by a `_HarteLabel` the
 wheel carries, so harte-rs builds one platform-independent wheel and the

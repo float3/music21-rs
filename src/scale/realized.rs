@@ -18,13 +18,13 @@ use crate::tuningsystem::scala::{ScalaDegree, ScalaScale};
 /// A named scale realized from a tonic pitch.
 ///
 /// ```
-/// use music21_rs::{Pitch, Scale, ScaleType};
+/// use music21::{Pitch, Scale, ScaleType};
 ///
 /// let scale = Scale::new(ScaleType::Octatonic, Pitch::from_name("C4")?);
 /// let names: Vec<String> = scale.pitches()?.iter().map(|p| p.name()).collect();
 ///
 /// assert_eq!(names, ["C", "D", "Eb", "F", "Gb", "Ab", "A", "B", "C"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

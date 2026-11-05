@@ -1,7 +1,7 @@
 //! The CSS colour names against `webcolors`, which music21's MusicXML writer
 //! reads a colour given by name out of.
 
-use music21_rs::musicxml::CSS_COLORS;
+use music21::musicxml::CSS_COLORS;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

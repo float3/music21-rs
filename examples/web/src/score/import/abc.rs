@@ -7,13 +7,13 @@
 
 use super::super::spell_in_key;
 use super::{Beat, Imported, KeySig, Part, TICKS};
-use music21_rs::abc::{ExportOptions, to_abc as write_abc};
-use music21_rs::bar::{Barline, BarlineType, Ending, RepeatDirection};
-use music21_rs::clef::ClefKind;
-use music21_rs::expressions::TextExpression;
-use music21_rs::metadata::Metadata;
-use music21_rs::notation::{Placement, Tie, TieType};
-use music21_rs::{
+use music21::abc::{ExportOptions, to_abc as write_abc};
+use music21::bar::{Barline, BarlineType, Ending, RepeatDirection};
+use music21::clef::ClefKind;
+use music21::expressions::TextExpression;
+use music21::metadata::Metadata;
+use music21::notation::{Placement, Tie, TieType};
+use music21::{
     Chord, ChordSymbol, Clef, Duration, DurationType, Instrument, Key, KeySignature, MetronomeMark,
     Note, Pitch, Rest, Stream, StreamElement, StreamKind, TimeSignature, Tuplet,
     estimate_key_from_pitches,
@@ -516,15 +516,15 @@ fn to_stream(imported: &Imported) -> Result<Stream, String> {
         // The notation the measures leave unsaid: which accidentals are
         // written, the beams, and the tuplets' brackets. The measures and
         // their ties are made here, so nothing is cut or tied again.
-        music21_rs::makenotation::make_accidentals(&mut stream);
+        music21::makenotation::make_accidentals(&mut stream);
         // A meter no beaming rule fits leaves its notes unbeamed.
-        let _ = music21_rs::makenotation::make_beams(&mut stream);
+        let _ = music21::makenotation::make_beams(&mut stream);
         for event in stream.events_mut() {
             if let StreamElement::Stream(measure) = event.element_mut() {
-                music21_rs::makenotation::make_tuplet_brackets(measure);
+                music21::makenotation::make_tuplet_brackets(measure);
                 for inner in measure.events_mut() {
                     if let StreamElement::Stream(voice) = inner.element_mut() {
-                        music21_rs::makenotation::make_tuplet_brackets(voice);
+                        music21::makenotation::make_tuplet_brackets(voice);
                     }
                 }
             }

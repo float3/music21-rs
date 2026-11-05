@@ -18,7 +18,7 @@ const deriveForm = $("#derive-form");
 const deriveInput = $("#derive-input");
 const derived = $("#derived");
 
-$("#docs-link").href = "../docs/music21_rs/index.html";
+$("#docs-link").href = "../docs/music21/index.html";
 
 let wasm = null;
 let current = null;

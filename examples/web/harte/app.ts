@@ -18,7 +18,7 @@ const hot = $("#hot");
 const hotRoot = $("#hot-root");
 const shorthands = $("#shorthands");
 
-$("#docs-link").href = "../docs/music21_rs/index.html";
+$("#docs-link").href = "../docs/music21/index.html";
 
 const exampleLabels = [
     "C:maj",

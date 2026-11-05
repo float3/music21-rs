@@ -428,10 +428,10 @@ pub fn interpolate_elements(
 /// source, since then nothing lies between them to scale.
 ///
 /// ```
-/// use music21_rs::tempo::interpolated_offset;
+/// use music21::tempo::interpolated_offset;
 ///
 /// assert_eq!(interpolated_offset(11.0, (10.0, 20.5), (14.0, 25.0))?, 21.625);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn interpolated_offset(
     offset: FloatType,
@@ -463,7 +463,7 @@ pub enum ModulationSide {
 /// A tempo said in words and not in numbers: music21's `TempoText`.
 ///
 /// ```
-/// use music21_rs::tempo::TempoText;
+/// use music21::tempo::TempoText;
 ///
 /// let slow = TempoText::new("slow");
 /// assert_eq!(slow.metronome_mark().number(), Some(56.0));
@@ -550,7 +550,7 @@ pub fn is_common_tempo_text(text: &str) -> bool {
 /// and this type is handed ([`MetricModulation::update_from`]).
 ///
 /// ```
-/// use music21_rs::{tempo::{MetricModulation, MetronomeMark}, Duration};
+/// use music21::{tempo::{MetricModulation, MetronomeMark}, Duration};
 ///
 /// let mut modulation = MetricModulation::new();
 /// modulation.set_old_metronome(Some(MetronomeMark::new(60.0)));

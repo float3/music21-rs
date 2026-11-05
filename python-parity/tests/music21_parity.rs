@@ -6,7 +6,7 @@ use std::{
     sync::OnceLock,
 };
 
-use music21_rs::Chord;
+use music21::Chord;
 use serde::Deserialize;
 use utils::{
     get_tables, init_py, init_py_with_dummies, prepare,

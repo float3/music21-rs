@@ -18,9 +18,9 @@ use crate::{
 /// another gives no empty run.
 ///
 /// ```
-/// use music21_rs::analysis::segment_by_rests::segments_list;
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::segment_by_rests::segments_list;
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let part = from_tiny_notation("C4 r D E r r F r G r A B r c")?;
 /// let leaves = part.leaves();
@@ -36,7 +36,7 @@ use crate::{
 ///     })
 ///     .collect();
 /// assert_eq!(names, [vec!["C"], vec!["D", "E"], vec!["F"], vec!["G"], vec!["A", "B"], vec!["C"]]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn segments_list(stream: &Stream, remove_empty: bool) -> Vec<Vec<usize>> {
     let marks = marks(stream);

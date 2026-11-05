@@ -26,9 +26,9 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::analysis::reduce_chords::{ReductionOptions, reduce_chords};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::{Stream, StreamElement};
+use music21::analysis::reduce_chords::{ReductionOptions, reduce_chords};
+use music21::musicxml::from_musicxml;
+use music21::stream::{Stream, StreamElement};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
@@ -253,7 +253,7 @@ fn listed(reduction: &Stream) -> String {
 /// A barline as music21 names its class: one that plays a passage again is
 /// a `Repeat` there, where the crate keeps the direction on the barline
 /// itself.
-fn named(barline: &music21_rs::bar::Barline) -> &'static str {
+fn named(barline: &music21::bar::Barline) -> &'static str {
     if barline.repeat_direction().is_some() {
         "Repeat"
     } else {

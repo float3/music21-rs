@@ -13,9 +13,9 @@
 //! those instead of the writer test's scores, which is how the corpus is
 //! swept.
 
-use music21_rs::features::{DataInstance, Extractor, jsymbolic, native};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::{FloatType, StreamKind};
+use music21::features::{DataInstance, Extractor, jsymbolic, native};
+use music21::musicxml::from_musicxml;
+use music21::{FloatType, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -287,11 +287,11 @@ fn the_crate_writes_a_data_set_as_music21_does() {
         )?;
         let mut failures = Vec::new();
 
-        let mut set = music21_rs::features::DataSet::new("Composer");
+        let mut set = music21::features::DataSet::new("Composer");
         for id in TABLE_IDS {
-            set.add_extractors(music21_rs::features::extractors_by_id(
+            set.add_extractors(music21::features::extractors_by_id(
                 &[id],
-                &music21_rs::features::Library::ALL,
+                &music21::features::Library::ALL,
             ));
         }
         for (name, value) in TABLE_SCORES {
@@ -321,9 +321,9 @@ fn the_crate_writes_a_data_set_as_music21_does() {
         }
 
         for (name, format) in [
-            ("tab", music21_rs::features::OutputFormat::Tab),
-            ("csv", music21_rs::features::OutputFormat::Csv),
-            ("arff", music21_rs::features::OutputFormat::Arff),
+            ("tab", music21::features::OutputFormat::Tab),
+            ("csv", music21::features::OutputFormat::Csv),
+            ("arff", music21::features::OutputFormat::Arff),
         ] {
             let theirs: String = music21
                 .getattr("written")?

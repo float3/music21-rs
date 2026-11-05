@@ -58,7 +58,7 @@ const chordBaseHref = isFileExample ? "../chord/index.html" : "../chord/";
 chordLinkTop.href = chordBaseHref;
 browserLinkTop.href = isFileExample ? "../chords/index.html" : "../chords/";
 tuningLinkTop.href = isFileExample ? "../tuning/index.html" : "../tuning/";
-docsLink.href = "../docs/music21_rs/index.html";
+docsLink.href = "../docs/music21/index.html";
 
 for (const value of examplesList) {
     const button = document.createElement("button");

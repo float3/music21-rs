@@ -94,7 +94,7 @@ pub fn dynamic_str_from_decimal(value: FloatType) -> &'static str {
 /// A dynamic mark and the loudness it stands for.
 ///
 /// ```
-/// use music21_rs::Dynamic;
+/// use music21::Dynamic;
 ///
 /// let forte = Dynamic::new("f");
 /// assert_eq!(forte.volume_scalar(), 0.7);
@@ -107,7 +107,7 @@ pub fn dynamic_str_from_decimal(value: FloatType) -> &'static str {
 /// let soft = Dynamic::from_scalar(0.4)?;
 /// assert_eq!(soft.value(), "mp");
 /// assert_eq!(soft.volume_scalar(), 0.4);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

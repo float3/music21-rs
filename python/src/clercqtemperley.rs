@@ -40,8 +40,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
-use music21_rs_crate::Chord as RsChord;
-use music21_rs_crate::romantext::clercq_temperley::{
+use music21::Chord as RsChord;
+use music21::romantext::clercq_temperley::{
     CtLabels, CtRule as RsCtRule, CtSong as RsCtSong, GroupKind, fixup_chord_atom, is_same,
 };
 
@@ -284,7 +284,7 @@ impl CTSong {
             .home_time_signature()
             .map_err(song_error)?
             .ok_or_else(|| CTSongException::new_err("a song with no S: rule to read"))?;
-        let element = music21_rs_crate::StreamElement::TimeSignature(meter);
+        let element = music21::StreamElement::TimeSignature(meter);
         crate::stream::element_object(py, &element)?
             .map(Bound::unbind)
             .ok_or_else(|| CTSongException::new_err("no class for a time signature"))
@@ -299,7 +299,7 @@ impl CTSong {
             .home_key()
             .map_err(song_error)?
             .ok_or_else(|| CTSongException::new_err("a song with no S: rule to read"))?;
-        let element = music21_rs_crate::StreamElement::Key(key);
+        let element = music21::StreamElement::Key(key);
         crate::stream::element_object(py, &element)?
             .map(Bound::unbind)
             .ok_or_else(|| CTSongException::new_err("no class for a key"))
@@ -580,7 +580,7 @@ impl CTRule {
         let said = slf.borrow().said(py)?;
         let meter = match tsContext.filter(|given| !given.is_none()) {
             Some(given) => Some(
-                music21_rs_crate::TimeSignature::from_ratio_string(
+                music21::TimeSignature::from_ratio_string(
                     given.getattr("ratioString")?.str()?.to_str()?,
                 )
                 .map_err(rule_error)?,
@@ -589,10 +589,8 @@ impl CTRule {
         };
         let key = match keyContext.filter(|given| !given.is_none()) {
             Some(given) => Some(
-                music21_rs_crate::Key::from_tonic(
-                    given.getattr("tonicPitchNameWithCase")?.str()?.to_str()?,
-                )
-                .map_err(rule_error)?,
+                music21::Key::from_tonic(given.getattr("tonicPitchNameWithCase")?.str()?.to_str()?)
+                    .map_err(rule_error)?,
             ),
             None => None,
         };

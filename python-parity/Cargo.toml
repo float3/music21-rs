@@ -12,12 +12,12 @@ name = "parity"
 path = "tests/main.rs"
 
 [dependencies]
-music21-rs = { path = "..", default-features = false, features = [
+music21 = { path = "..", default-features = false, features = [
     "language-detection",
     "musicxml",
 ] }
-# Renamed because the wheel crate's lib is also called `music21_rs`,
-# which is the name the extension module has to have.
+# The wheel crate, whose library is `music21_rs`, the extension module's
+# name; taken as `music21_rs_python` so the code says which half it means.
 # The bundled Scala archive comes with it: music21's own `scale.scala`
 # examples ask for a scale by name, and the archive is where a name is
 # answered. The wheel leaves that feature off.

@@ -25,8 +25,8 @@ pub fn divide(coefficient: FloatType, distance: IntegerType) -> FloatType {
 /// at its distance, and the key scoring best is the measure's.
 ///
 /// ```
-/// use music21_rs::analysis::floating_key::KeyAnalyzer;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::floating_key::KeyAnalyzer;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 e g c' c e g c' g b d' g d f# a d'")?;
 /// let analyzer = KeyAnalyzer::new(&line)?;
@@ -36,7 +36,7 @@ pub fn divide(coefficient: FloatType, distance: IntegerType) -> FloatType {
 ///     .map(|key| key.tonic_pitch_name_with_case())
 ///     .collect();
 /// assert_eq!(keys, ["C", "C", "G", "G"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct KeyAnalyzer<'a> {

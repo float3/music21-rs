@@ -20,7 +20,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
-use music21_rs_crate::braille::text::{
+use music21::braille::text::{
     BrailleKeyboard as RsKeyboard, BrailleText as RsText, BrailleTextLine as RsLine,
 };
 
@@ -34,7 +34,7 @@ pyo3::create_exception!(
 );
 
 /// music21's error for braille that will not fit, out of the crate's.
-fn text_error(error: &music21_rs_crate::Error) -> PyErr {
+fn text_error(error: &music21::Error) -> PyErr {
     BrailleTextException::new_err(crate::pitch::message(error))
 }
 
@@ -266,7 +266,7 @@ impl BrailleText {
     /// back onto the objects.
     fn step(
         slf: &Bound<'_, Self>,
-        run: impl FnOnce(&mut RsText) -> music21_rs_crate::error::Result<()>,
+        run: impl FnOnce(&mut RsText) -> music21::error::Result<()>,
     ) -> PyResult<()> {
         let py = slf.py();
         let mut me = slf.borrow_mut();

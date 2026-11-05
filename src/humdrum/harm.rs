@@ -48,7 +48,7 @@ impl Harm {
     /// `HarmParser.parse`, which answers an empty dictionary there.
     ///
     /// ```
-    /// use music21_rs::humdrum::harm::Harm;
+    /// use music21::humdrum::harm::Harm;
     ///
     /// let read = Harm::parse("#IV7b").expect("a harm token");
     /// assert_eq!(read.accidental(), "#");
@@ -280,7 +280,7 @@ fn next_interval(rest: &str) -> Option<(&str, &str)> {
 /// music21's `convertHarmToRoman`.
 ///
 /// ```
-/// use music21_rs::humdrum::harm::convert_harm_to_roman;
+/// use music21::humdrum::harm::convert_harm_to_roman;
 ///
 /// assert_eq!(convert_harm_to_roman("V7b").as_deref(), Some("V65"));
 /// assert_eq!(convert_harm_to_roman("Gnd").as_deref(), Some("Ger2"));

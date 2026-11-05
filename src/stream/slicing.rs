@@ -153,12 +153,12 @@ impl Stream {
     /// and a score part by part.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("4/4 c2 d4 e4")?;
     /// let sliced = line.slice_by_quarter_lengths(&[1.0])?;
     /// assert_eq!(sliced.notes().len(), 4);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

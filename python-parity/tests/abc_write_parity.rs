@@ -31,9 +31,9 @@
 //! which leave the key outside every measure (Aird's 411, as with Aird's 722
 //! below).
 
-use music21_rs::Stream;
-use music21_rs::abc::{ExportOptions as AbcOptions, from_abc, from_abc_number, to_abc};
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::Stream;
+use music21::abc::{ExportOptions as AbcOptions, from_abc, from_abc_number, to_abc};
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

@@ -11,7 +11,7 @@
 //! dependencies, which the chord-table bridge deliberately stubs out. This test
 //! therefore needs neither Python nor the submodule — only the checked-in file.
 
-use music21_rs::{Interval, Pitch, Scale, ScaleType};
+use music21::{Interval, Pitch, Scale, ScaleType};
 use music21_rs_python_parity::music21_name;
 
 /// An octave downwards, for stepping back to the bottom of the range.

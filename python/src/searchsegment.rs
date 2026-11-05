@@ -25,9 +25,9 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::IntegerType;
-use music21_rs_crate::error::Result as RsResult;
-use music21_rs_crate::search::{
+use music21::IntegerType;
+use music21::error::Result as RsResult;
+use music21::search::{
     Searched, Segments, Translation, cut_translation_into_segments, notes_sorted, score_similarity,
     translate_diatonic_stream_to_string, translate_intervals_and_speed, translate_stream_to_string,
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,

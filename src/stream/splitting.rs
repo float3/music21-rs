@@ -57,15 +57,15 @@ impl Stream {
     /// naming nothing for what moved.
     ///
     /// ```
-    /// use music21_rs::stream::InForce;
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::stream::InForce;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("4/4 c2 d2")?;
     /// let measure = line.measures()[0].clone();
     /// let (first, second) = measure.split_at_quarter_length(1.0, &InForce::default())?;
     /// assert_eq!(first.notes().len(), 1);
     /// assert_eq!(second.notes().len(), 2);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

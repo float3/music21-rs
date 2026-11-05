@@ -659,17 +659,17 @@ fn a_songsterr_ending_runs_on_to_the_bar_that_closes_the_repeat() {
 /// Two bars of G major in MIDI, closing on a chord struck across the
 /// barline.
 fn midi_file() -> Vec<u8> {
-    let mut notes: Vec<music21_rs::MidiNote> = [67, 71, 74, 66, 67]
+    let mut notes: Vec<music21::MidiNote> = [67, 71, 74, 66, 67]
         .iter()
         .enumerate()
         .map(|(index, &pitch)| {
-            music21_rs::MidiNote::new(pitch, index as f64, 1.0, 90).expect("valid note")
+            music21::MidiNote::new(pitch, index as f64, 1.0, 90).expect("valid note")
         })
         .collect();
     for pitch in [55, 59] {
-        notes.push(music21_rs::MidiNote::new(pitch, 5.0, 3.0, 90).expect("valid note"));
+        notes.push(music21::MidiNote::new(pitch, 5.0, 3.0, 90).expect("valid note"));
     }
-    music21_rs::midi::write_midi_bytes(&notes, 100.0).expect("MIDI writes")
+    music21::midi::write_midi_bytes(&notes, 100.0).expect("MIDI writes")
 }
 
 #[test]
@@ -733,13 +733,12 @@ fn a_midi_track_keeps_its_name_program_meter_and_tempo() {
 
 #[test]
 fn a_midi_file_of_drums_alone_is_refused_with_the_reason() {
-    let strokes: Vec<music21_rs::MidiNote> = (0..4)
+    let strokes: Vec<music21::MidiNote> = (0..4)
         .map(|beat| {
-            music21_rs::MidiNote::with_channel(36, f64::from(beat), 1.0, 100, 9)
-                .expect("valid note")
+            music21::MidiNote::with_channel(36, f64::from(beat), 1.0, 100, 9).expect("valid note")
         })
         .collect();
-    let bytes = music21_rs::midi::write_midi_bytes(&strokes, 120.0).expect("MIDI writes");
+    let bytes = music21::midi::write_midi_bytes(&strokes, 120.0).expect("MIDI writes");
     let imported = read_file("drums.midi", &bytes).expect("the file reads");
     let error = to_abc(&imported).unwrap_err();
     assert!(error.contains("unpitched percussion"), "{error}");

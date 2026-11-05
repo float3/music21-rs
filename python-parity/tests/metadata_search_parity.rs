@@ -13,7 +13,7 @@
 //! read as a pattern. It also holds `OLD_MUSIC21_NAMES`, the grandfathered
 //! field names a search takes, to music21's own two tables.
 
-use music21_rs::metadata::{Metadata, MetadataQuery, OLD_MUSIC21_NAMES};
+use music21::metadata::{Metadata, MetadataQuery, OLD_MUSIC21_NAMES};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use regex::Regex;

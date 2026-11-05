@@ -226,12 +226,12 @@ impl HarmonicFunction {
     /// `functionToRoman`.
     ///
     /// ```
-    /// use music21_rs::{Key, analysis::harmonic_function::HarmonicFunction};
+    /// use music21::{Key, analysis::harmonic_function::HarmonicFunction};
     ///
     /// let minor = Key::from_tonic_mode("a", "minor")?;
     /// let numeral = HarmonicFunction::SubdominantMinorParallelklangMajor.to_roman(&minor)?;
     /// assert_eq!(numeral.figure(), "VI");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

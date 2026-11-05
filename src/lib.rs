@@ -9,13 +9,13 @@
 //! music21, it has tuning systems, regular temperaments and polyrhythms.
 //!
 //! ```
-//! use music21_rs::Chord;
+//! use music21::Chord;
 //!
 //! let chord: Chord = "C E- G B-".parse()?;
 //! assert_eq!(chord.pitched_common_name(), "C-minor seventh chord");
 //! assert_eq!(chord.forte_class().as_deref(), Some("4-26"));
 //! assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 //!
 //! The main types are re-exported at the crate root; each module holds the

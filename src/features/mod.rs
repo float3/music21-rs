@@ -13,14 +13,14 @@
 //! many pieces into one table and writes it for a machine-learning tool.
 //!
 //! ```
-//! use music21_rs::features::{DataInstance, jsymbolic};
-//! use music21_rs::tinynotation::from_tiny_notation;
+//! use music21::features::{DataInstance, jsymbolic};
+//! use music21::tinynotation::from_tiny_notation;
 //!
 //! let line = from_tiny_notation("4/4 c4 d e f g a b c'")?;
 //! let data = DataInstance::new(&line)?;
 //! let range = jsymbolic::extractor("P10").expect("the range extractor");
 //! assert_eq!(range.extract(&data)?.vector(), [12.0]);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 mod dataset;

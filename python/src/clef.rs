@@ -13,8 +13,8 @@ use pyo3::prelude::*;
 use crate::Walkable;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::clef::{Clef as RsClef, ClefKind};
-use music21_rs_crate::notation::StemDirection;
+use music21::clef::{Clef as RsClef, ClefKind};
+use music21::notation::StemDirection;
 
 use crate::pitch::pitch_from_any;
 

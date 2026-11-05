@@ -19,11 +19,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use music21_rs_crate::braille::basic::NoteContext;
-use music21_rs_crate::braille::segment::{
-    Affinity, BrailleElement, BrailleElementGrouping as RsGrouping,
-};
-use music21_rs_crate::meter::TimeSignature;
+use music21::braille::basic::NoteContext;
+use music21::braille::segment::{Affinity, BrailleElement, BrailleElementGrouping as RsGrouping};
+use music21::meter::TimeSignature;
 
 use crate::Walkable;
 
@@ -108,7 +106,7 @@ fn grouping_globals(py: Python<'_>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
 
 /// The sharps a key signature object is written with, or nothing where it
 /// is one of music21's non-traditional signatures.
-fn sharps_of(object: &Bound<'_, PyAny>) -> Option<music21_rs_crate::IntegerType> {
+fn sharps_of(object: &Bound<'_, PyAny>) -> Option<music21::IntegerType> {
     if object
         .getattr("isNonTraditional")
         .and_then(|flag| flag.is_truthy())
@@ -197,7 +195,7 @@ pub(crate) fn crate_grouping(
             sharps_of(&key)
         },
         time_signature: match crate::stream::element_read(&meter)? {
-            Some(music21_rs_crate::stream::StreamElement::TimeSignature(meter)) => meter,
+            Some(music21::stream::StreamElement::TimeSignature(meter)) => meter,
             // A grouping with no meter of its own is written in four-four,
             // as music21's default is.
             _ => TimeSignature::new(4, 4).map_err(|error| crate::stream::stream_error(&error))?,
@@ -360,7 +358,7 @@ impl BrailleElementGrouping {
     /// grouping out: each element's English, a voice's elements in turn,
     /// and a note of the repeats and the hyphen at the end.
     fn __str__(&self, py: Python<'_>) -> PyResult<String> {
-        use music21_rs_crate::braille::lookup::symbol;
+        use music21::braille::lookup::symbol;
         let mut written: Vec<String> = Vec::new();
         let said = |object: &Bound<'_, PyAny>| -> String {
             match object

@@ -142,7 +142,7 @@ impl Stream {
     /// what music21 answers rather than refusing.
     ///
     /// ```
-    /// use music21_rs::{Duration, MetronomeMark, Note, Stream, StreamKind};
+    /// use music21::{Duration, MetronomeMark, Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// part.insert(0.0, Note::from_name("C4")?.with_duration(Duration::whole()));
@@ -158,7 +158,7 @@ impl Stream {
     /// assert_eq!(bare.seconds(None)?, 0.0);
     /// bare.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
     /// assert!(bare.seconds(None)?.is_nan());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

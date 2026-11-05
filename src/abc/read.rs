@@ -2302,14 +2302,14 @@ fn handler_of(text: &str) -> Result<(Handler, Vec<Spanning>)> {
 /// numbers.
 ///
 /// ```
-/// use music21_rs::abc::from_abc;
+/// use music21::abc::from_abc;
 ///
 /// let score = from_abc("X:1\nT:Scale\nM:4/4\nL:1/4\nK:G\nG A B c | d e f g |\n")?;
 /// let part = score.parts()[0];
 /// assert_eq!(part.measures().len(), 2);
 /// // The key's F sharp is read into the note.
 /// assert_eq!(part.measures()[1].pitches()[2].name_with_octave(), "F#5");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_abc(text: &str) -> Result<Stream> {
     let (handler, spanners) = handler_of(text)?;

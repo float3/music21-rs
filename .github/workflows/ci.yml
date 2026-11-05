@@ -703,7 +703,7 @@ jobs:
             echo "harte declares rust-version $declared, music21-rs ${{ steps.msrv.outputs.version }}" >&2
             exit 1
           fi
-          cargo check --package music21-rs --package harte --all-features --locked
+          cargo check --package music21 --package harte --all-features --locked
 
   semver:
     name: Semver Checks
@@ -752,8 +752,15 @@ jobs:
           if [[ -z "$BASELINE" ]]; then
             BASELINE="$FALLBACK"
           fi
+          # The crate was published as `music21-rs` up to 0.16.0; a baseline
+          # under that name is another crate, with nothing of this one's to
+          # compare.
+          if ! git show "$BASELINE:Cargo.toml" | grep -qx 'name = "music21"'; then
+            echo "$BASELINE is not the music21 crate; nothing to compare against"
+            exit 0
+          fi
           echo "comparing against $BASELINE"
-          cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
+          cargo semver-checks --package music21 --all-features --baseline-rev "$BASELINE"
 
       # `harte` has a version of its own and no tag, so its baseline is what
       # a downstream holds: the newest version on crates.io, which is what
@@ -860,7 +867,7 @@ jobs:
           # `python` feature, dragging pyo3 and reqwest into a documentation
           # build with no use for either.
           cargo +nightly doc --workspace --no-deps
-          cargo +nightly doc --package music21-rs --all-features --no-deps
+          cargo +nightly doc --package music21 --all-features --no-deps
         env:
           RUSTDOCFLAGS: --cfg docsrs
 
@@ -996,7 +1003,7 @@ jobs:
               "dom.js",
               "theme.css",
               "theme.js",
-              "docs/music21_rs/index.html",
+              "docs/music21/index.html",
               "python/index.html",
               "python/music21_rs.html",
               "chord/app.js",
@@ -1418,7 +1425,7 @@ jobs:
 
           git fetch --tags --force
           changed=true
-          url="https://crates.io/api/v1/crates/music21-rs/$current_version"
+          url="https://crates.io/api/v1/crates/music21/$current_version"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null \
             && curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
             changed=false
@@ -1653,7 +1660,7 @@ jobs:
           set -euo pipefail
 
           version="${{ needs.release.outputs.version }}"
-          url="https://crates.io/api/v1/crates/music21-rs/$version"
+          url="https://crates.io/api/v1/crates/music21/$version"
           if curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
             echo "already=true" >> "$GITHUB_OUTPUT"
           else

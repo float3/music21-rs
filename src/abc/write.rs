@@ -85,7 +85,7 @@ impl Default for ExportOptions {
 /// are read as belonging to the measure that follows.
 ///
 /// ```
-/// use music21_rs::abc::{ExportOptions, from_abc, to_abc};
+/// use music21::abc::{ExportOptions, from_abc, to_abc};
 ///
 /// let tune = "X:1\nT:Scale\nM:4/4\nL:1/4\nK:G\nGABc|defg|a4|]\n";
 /// let score = from_abc(tune)?;
@@ -96,7 +96,7 @@ impl Default for ExportOptions {
 /// );
 /// // What was written reads back as the score it was written from.
 /// assert_eq!(to_abc(&from_abc(&written)?, &ExportOptions::default())?, written);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn to_abc(stream: &Stream, options: &ExportOptions) -> Result<String> {
     if stream.kind() == StreamKind::Opus {

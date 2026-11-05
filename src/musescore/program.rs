@@ -30,13 +30,13 @@ const NAMES: [&str; 7] = [
 /// A MuseScore installation.
 ///
 /// ```no_run
-/// use music21_rs::musescore::MuseScore;
+/// use music21::musescore::MuseScore;
 /// use std::path::Path;
 ///
 /// let musescore = MuseScore::find().expect("MuseScore is installed");
 /// let score = musescore.read(Path::new("quartet.mscz"))?;
 /// musescore.write(&score, Path::new("quartet.pdf"), &Default::default())?;
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MuseScore {

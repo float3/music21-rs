@@ -10,7 +10,7 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::pitch::{Language, from_language_name, language_dictionary};
+use music21::pitch::{Language, from_language_name, language_dictionary};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;

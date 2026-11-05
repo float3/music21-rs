@@ -6,7 +6,7 @@
 //! music21 answered, recorded in `data/articulation_expectations.toml` by
 //! `cargo run --release -p xtask --features python -- regenerate-fixtures`.
 
-use music21_rs::articulations::{Articulation, ArticulationKind};
+use music21::articulations::{Articulation, ArticulationKind};
 use serde::Deserialize;
 
 use std::path::Path;

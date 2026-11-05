@@ -57,7 +57,7 @@ fn error(message: impl Into<String>) -> Error {
 /// notes are passed over, as is an attribute record after the first.
 ///
 /// ```
-/// use music21_rs::musedata::from_musedata;
+/// use music21::musedata::from_musedata;
 ///
 /// let part = "\n\n\n01/01/01 x\nWK#:1 MV#:1\nsource\nWork\nMovement\nFlute\n\
 /// 1 0\nGroup memberships: score\nscore: part 1 of 1\n\
@@ -65,7 +65,7 @@ fn error(message: impl Into<String>) -> Error {
 /// measure 2\nE5     4        h     u\n/END\n";
 /// let score = from_musedata(&[part])?;
 /// assert_eq!(score.parts()[0].measures().len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

@@ -14,9 +14,9 @@
 //! runs those instead of the writer test's scores, which is how the corpus
 //! is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::notation::TieType;
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::musicxml::from_musicxml;
+use music21::notation::TieType;
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -151,7 +151,7 @@ fn kind(element: &StreamElement) -> Option<&'static str> {
     })
 }
 
-fn pitch_text(pitch: &music21_rs::Pitch) -> String {
+fn pitch_text(pitch: &music21::Pitch) -> String {
     let alter = pitch
         .written_accidental()
         .map_or(String::new(), |accidental| bits(accidental.alter()));
@@ -230,7 +230,7 @@ fn dump(stream: &Stream) -> Vec<String> {
         .collect()
 }
 
-fn attempt(label: &str, run: impl FnOnce() -> music21_rs::Result<Vec<String>>) -> Vec<String> {
+fn attempt(label: &str, run: impl FnOnce() -> music21::Result<Vec<String>>) -> Vec<String> {
     match run() {
         Ok(lines) => lines
             .into_iter()

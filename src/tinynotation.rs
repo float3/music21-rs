@@ -564,7 +564,7 @@ impl Reader {
 /// in.
 ///
 /// ```
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let part = from_tiny_notation("tinyNotation: 3/4 E4 r f# g=lastG trip{b-8 a g} c'2.")?;
 /// let measures = part.measures();
@@ -576,7 +576,7 @@ impl Reader {
 ///     .collect();
 /// // The last note starts in this measure and runs on past its barline.
 /// assert_eq!(names, ["G4", "Bb4", "A4", "G4", "C5"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_tiny_notation(text: &str) -> Result<Stream> {
     let text = text.trim_start();

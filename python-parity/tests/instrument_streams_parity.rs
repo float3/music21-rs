@@ -7,10 +7,10 @@
 //! out is written as the same text. music21 is music21 here, with nothing of
 //! the crate installed over it.
 
-use music21_rs::instrument::{
+use music21::instrument::{
     bundle_instruments, deduplicate, partition_by_instrument, unbundle_instruments,
 };
-use music21_rs::{Stream, StreamKind};
+use music21::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

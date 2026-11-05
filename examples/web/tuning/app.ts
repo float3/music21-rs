@@ -27,7 +27,7 @@ const shareButton = $("#share");
 const errorNode = $("#error");
 const { fail, clearError } = errorLine(errorNode);
 
-$("#docs-link").href = "../docs/music21_rs/index.html";
+$("#docs-link").href = "../docs/music21/index.html";
 
 // ---------------------------------------------------------------- constants
 

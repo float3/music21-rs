@@ -186,7 +186,7 @@ fn page_open(report: &Report, root: &str, current: Option<View>, title: &str) ->
                     <h1>{title}</h1>
                 </div>
                 <div class="top-links">
-                    <a href="{site}docs/music21_rs/index.html">Rust docs</a>
+                    <a href="{site}docs/music21/index.html">Rust docs</a>
                     <a href="{site}python/">Python docs</a>
                 </div>
             </header>
