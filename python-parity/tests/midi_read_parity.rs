@@ -1,7 +1,7 @@
 //! The crate's MIDI reader against music21's, file by file.
 //!
 //! Each file is read twice: by music21, which then writes it out as MusicXML
-//! with its own exporter, and by `music21_rs::midi::from_midi`, whose score
+//! with its own exporter, and by `music21::midi::from_midi`, whose score
 //! the crate's MusicXML writer writes out. The writer is held to music21's
 //! by `musicxml_parity`, so the two documents are the same text only if the
 //! two readers made the same score of the file: the same chords and voices,
@@ -21,8 +21,8 @@
 //! no file either side ships holds. `MIDI_PARITY_FILES`, a `;`-separated
 //! list, runs those instead of the ones below.
 
-use music21_rs::midi::from_midi;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::midi::from_midi;
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

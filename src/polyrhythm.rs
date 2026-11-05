@@ -295,7 +295,7 @@ impl Polyrhythm {
     /// is set.
     ///
     /// ```
-    /// use music21_rs::Polyrhythm;
+    /// use music21::Polyrhythm;
     ///
     /// let score = Polyrhythm::new(4, &[3, 2])?.with_tempo(90)?.to_score("C4")?;
     /// let parts = score.parts();
@@ -303,7 +303,7 @@ impl Polyrhythm {
     /// let triplets = parts[0].measures()[0].notes();
     /// assert_eq!(triplets.len(), 3);
     /// assert!((triplets[1].0 - 4.0 / 3.0).abs() < 1e-9);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn to_score<T>(&self, base: T) -> Result<Stream>
     where

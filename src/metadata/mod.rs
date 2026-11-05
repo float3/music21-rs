@@ -140,7 +140,7 @@ impl MetadataValue {
 /// A score's metadata: named values in the order the names were first given.
 ///
 /// ```
-/// use music21_rs::metadata::Metadata;
+/// use music21::metadata::Metadata;
 ///
 /// let mut md = Metadata::new();
 /// md.add_text("title", "Wer nur den lieben Gott");
@@ -279,7 +279,7 @@ impl Metadata {
     /// `alternativeTitle` and `movementName` that says anything.
     ///
     /// ```
-    /// use music21_rs::metadata::Metadata;
+    /// use music21::metadata::Metadata;
     ///
     /// let mut said = Metadata::new();
     /// said.add_text("popularTitle", "Eroica");
@@ -336,7 +336,7 @@ impl Metadata {
     /// `compos` finds `composer`. A field naming nothing finds nothing.
     ///
     /// ```
-    /// use music21_rs::metadata::{Metadata, MetadataQuery};
+    /// use music21::metadata::{Metadata, MetadataQuery};
     ///
     /// let mut md = Metadata::new();
     /// md.add_contributor("composer", "Joplin, Scott");
@@ -467,7 +467,7 @@ fn contributor_answers_to(role: Option<&str>, field: Option<&str>) -> bool {
 /// and `title` both name the title, `OTL` names nothing.
 ///
 /// ```
-/// use music21_rs::metadata::unique_name_of;
+/// use music21::metadata::unique_name_of;
 ///
 /// assert_eq!(unique_name_of("title"), Some("title"));
 /// assert_eq!(unique_name_of("otl"), Some("title"));
@@ -660,7 +660,7 @@ pub enum ValueKind {
 /// say otherwise.
 ///
 /// ```
-/// use music21_rs::metadata::{ValueKind, value_kind_of};
+/// use music21::metadata::{ValueKind, value_kind_of};
 ///
 /// assert_eq!(value_kind_of("title"), Some(ValueKind::Text));
 /// assert_eq!(value_kind_of("composer"), Some(ValueKind::Contributor));
@@ -709,7 +709,7 @@ pub fn namespace_name(unique_name: &str) -> Option<&'static str> {
 /// the vocabulary stands for none.
 ///
 /// ```
-/// use music21_rs::metadata::unique_name_from_namespace;
+/// use music21::metadata::unique_name_from_namespace;
 ///
 /// assert_eq!(unique_name_from_namespace("humdrum:OPC"), Some("localeOfComposition"));
 /// assert_eq!(unique_name_from_namespace("soundtracker:SampleName"), None);
@@ -728,7 +728,7 @@ pub fn unique_name_from_namespace(namespaced: &str) -> Option<&'static str> {
 /// these, as music21's answer is not either.
 ///
 /// ```
-/// use music21_rs::metadata::is_standard_name;
+/// use music21::metadata::is_standard_name;
 ///
 /// assert!(is_standard_name("librettist"));
 /// assert!(is_standard_name("marcrel:LBT"));
@@ -748,7 +748,7 @@ pub fn is_standard_name(name: &str) -> bool {
 /// the name rather than the first.
 ///
 /// ```
-/// use music21_rs::metadata::unique_name_of_plural;
+/// use music21::metadata::unique_name_of_plural;
 ///
 /// assert_eq!(unique_name_of_plural("composers"), Some("composer"));
 /// assert_eq!(unique_name_of_plural("software"), Some("software"));

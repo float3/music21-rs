@@ -11,9 +11,9 @@
 //! names, runs those instead of the writer test's scores, which is how the
 //! corpus is swept.
 
-use music21_rs::metadata::{Metadata, STANDARD_PROPERTIES};
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::text::{
+use music21::metadata::{Metadata, STANDARD_PROPERTIES};
+use music21::musicxml::from_musicxml;
+use music21::text::{
     ARTICLES, assemble_all_lyrics, assemble_lyrics, postpend_article, prepend_article,
 };
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};

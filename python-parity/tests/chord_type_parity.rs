@@ -7,7 +7,7 @@
 //! `cargo run --release -p xtask --features python -- regenerate-fixtures`, so this test needs neither
 //! Python nor the submodule.
 
-use music21_rs::known_chord_symbol_types;
+use music21::known_chord_symbol_types;
 use serde::Deserialize;
 
 use std::collections::BTreeMap;
@@ -102,7 +102,7 @@ fn every_alias_target_is_a_known_kind() {
     // music21's CHORD_ALIASES map the spellings MusicXML uses onto real
     // kinds. The crate carries the same table, and every target is a kind.
     let expectations = expectations();
-    let carried: BTreeMap<String, String> = music21_rs::chordsymbol::CHORD_KIND_ALIASES
+    let carried: BTreeMap<String, String> = music21::chordsymbol::CHORD_KIND_ALIASES
         .iter()
         .map(|(alias, target)| ((*alias).to_string(), (*target).to_string()))
         .collect();

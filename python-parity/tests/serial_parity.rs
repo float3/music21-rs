@@ -7,7 +7,7 @@
 //! so this test needs neither Python nor the submodule; `fixture_freshness.rs`
 //! keeps the fixture itself honest against a bumped submodule.
 
-use music21_rs::{HISTORICAL_ROWS, ToneRow, historical_row_by_name};
+use music21::{HISTORICAL_ROWS, ToneRow, historical_row_by_name};
 use serde::Deserialize;
 
 use std::path::Path;

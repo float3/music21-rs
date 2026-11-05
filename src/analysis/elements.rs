@@ -16,9 +16,9 @@
 /// `most_common` is a sort by count that leaves ties as they stand.
 ///
 /// ```
-/// use music21_rs::analysis::elements::attribute_count;
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::elements::attribute_count;
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 d8 e8 f2")?;
 /// let lengths = attribute_count(line.recurse(), |(_, element)| match element {
@@ -28,7 +28,7 @@
 ///     _ => None,
 /// });
 /// assert_eq!(lengths, [(1.0, 1), (0.5, 2), (2.0, 1)]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn attribute_count<T, K: PartialEq>(
     elements: impl IntoIterator<Item = T>,

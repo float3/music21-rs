@@ -12,7 +12,7 @@ classifiers = [
 # Released with the music21-rs wheel and at its version, since it builds on
 # that wheel's `_HarteLabel`: `harte_rs_requires_its_own_music21_rs` holds
 # both numbers to python/Cargo.toml's.
-dependencies = ["music21-rs==0.16.0"]
+dependencies = ["music21-rs==0.17.0"]
 description = "Harte chord notation read into music21-rs chords; a replacement for harte-library"
 keywords = ["music", "music-theory", "chords", "harte", "music21"]
 license = "AGPL-3.0-only"
@@ -20,7 +20,7 @@ license-files = ["LICENSE-harte-library"]
 name = "harte-rs"
 readme = "README.md"
 requires-python = ">=3.9"
-version = "0.16.0"
+version = "0.17.0"
 
 [project.urls]
 Repository = "https://github.com/float3/music21-rs"

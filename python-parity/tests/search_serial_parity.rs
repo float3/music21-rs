@@ -12,14 +12,14 @@
 //! music. `SEARCH_PARITY_SCORES`, a `;`-separated list of corpus names, runs
 //! those instead, which is how the corpus is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::search::{
+use music21::musicxml::from_musicxml;
+use music21::search::{
     ContiguousSegment, ContiguousSegmentSearcher, Matching, Repetitions, SegmentMatcher,
 };
-use music21_rs::serial::{ToneRow, TransformationConvention};
-use music21_rs::spanner::{Spanner, SpannerKind};
-use music21_rs::stream::{Stream, StreamElement};
-use music21_rs::{FloatType, IntegerType};
+use music21::serial::{ToneRow, TransformationConvention};
+use music21::spanner::{Spanner, SpannerKind};
+use music21::stream::{Stream, StreamElement};
+use music21::{FloatType, IntegerType};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -172,7 +172,7 @@ fn notes(segment: &ContiguousSegment<'_>) -> Notes {
         .collect()
 }
 
-fn found(result: music21_rs::Result<Vec<ContiguousSegment<'_>>>) -> (Found, String) {
+fn found(result: music21::Result<Vec<ContiguousSegment<'_>>>) -> (Found, String) {
     match result {
         Ok(found) => (
             found
@@ -187,7 +187,7 @@ fn found(result: music21_rs::Result<Vec<ContiguousSegment<'_>>>) -> (Found, Stri
 
 fn matched(
     matching: Matching,
-    result: music21_rs::Result<Vec<ContiguousSegment<'_>>>,
+    result: music21::Result<Vec<ContiguousSegment<'_>>>,
 ) -> (Matched, String) {
     match result {
         Ok(found) => (
@@ -216,7 +216,7 @@ fn matched(
     }
 }
 
-fn labelled(result: music21_rs::Result<Stream>) -> Labelled {
+fn labelled(result: music21::Result<Stream>) -> Labelled {
     match result {
         Ok(stream) => {
             let is_line = |spanner: &&Spanner| spanner.kind() == SpannerKind::Line;

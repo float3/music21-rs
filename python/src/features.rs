@@ -41,12 +41,12 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple, PyType};
 
-use music21_rs_crate::features::{
+use music21::features::{
     DataInstance as RsDataInstance, DataSet as RsDataSet, Extractor as RsExtractor, Feature,
     Library, OutputFormat, Value, all_features_as_list, extractors_by_id, index_of,
 };
-use music21_rs_crate::metadata::Metadata;
-use music21_rs_crate::stream::Stream as RsStream;
+use music21::metadata::Metadata;
+use music21::stream::Stream as RsStream;
 
 use crate::Walkable;
 

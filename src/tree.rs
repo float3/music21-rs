@@ -9,15 +9,15 @@
 //! pitches sounding there.
 //!
 //! ```
-//! use music21_rs::tinynotation::from_tiny_notation;
-//! use music21_rs::tree::{Flatten, as_timespans};
+//! use music21::tinynotation::from_tiny_notation;
+//! use music21::tree::{Flatten, as_timespans};
 //!
 //! let line = from_tiny_notation("4/4 c2 e4 g")?;
 //! let tree = as_timespans(&line, Flatten::Flat, None);
 //! let third = tree.verticality_at(3.0);
 //! assert_eq!(third.start_timespans().len(), 1);
 //! assert_eq!(tree.maximum_overlap(), Some(3));
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::{

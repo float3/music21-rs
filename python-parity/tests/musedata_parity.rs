@@ -13,9 +13,9 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musedata::from_musedata;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::metadata::MetadataValue;
+use music21::musedata::from_musedata;
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -249,11 +249,8 @@ fn the_crate_reads_musedata_as_music21_does() {
             .collect();
         files.sort();
 
-        let mut subjects: Vec<(
-            String,
-            music21_rs::Result<music21_rs::Stream>,
-            Bound<'_, PyAny>,
-        )> = Vec::new();
+        let mut subjects: Vec<(String, music21::Result<music21::Stream>, Bound<'_, PyAny>)> =
+            Vec::new();
         let texts: Vec<String> = files.iter().map(|path| text_of(path)).collect();
         let all: Vec<&str> = texts.iter().map(String::as_str).collect();
         subjects.push((

@@ -653,8 +653,8 @@ impl Pitch {
     /// whole semitone, are added on top in cents.
     ///
     /// ```
-    /// use music21_rs::Pitch;
-    /// use music21_rs::tuningsystem::{EqualDivision, Just, Reference};
+    /// use music21::Pitch;
+    /// use music21::tuningsystem::{EqualDivision, Just, Reference};
     ///
     /// let a440 = Reference::a440();
     /// let e5 = Pitch::from_name("E5")?.frequency_hz_tuned(&Just, &a440)?;
@@ -664,7 +664,7 @@ impl Pitch {
     /// let sharp = Pitch::from_name("C#4")?.frequency_hz_tuned(&nineteen, &a440)?;
     /// let flat = Pitch::from_name("Db4")?.frequency_hz_tuned(&nineteen, &a440)?;
     /// assert!(sharp < flat);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn frequency_hz_tuned(
         &self,
@@ -717,14 +717,14 @@ impl Pitch {
     /// is not a finite number above nought.
     ///
     /// ```
-    /// use music21_rs::Pitch;
-    /// use music21_rs::tuningsystem::TuningSystem;
+    /// use music21::Pitch;
+    /// use music21::tuningsystem::TuningSystem;
     ///
     /// // 330 Hz is a hair flat of E4; the five-limit E is flatter still.
     /// let e = Pitch::from_frequency_in(330.0, TuningSystem::FiveLimit)?;
     /// assert_eq!(e.name_with_octave(), "E4");
     /// assert!(e.frequency_hz() < 330.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn from_frequency_in(hertz: FloatType, tuning_system: TuningSystem) -> Result<Self> {
         tuning_system.pitch_at(tuning_system.nearest_degree(hertz)?)

@@ -12,11 +12,11 @@
 //! quarter length estimate and score follower's decision are compared on
 //! numbers drawn here from a fixed seed.
 
-use music21_rs::Pitch;
-use music21_rs::audiosearch;
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::scale::{Scale, ScaleType};
-use music21_rs::stream::{Stream, StreamElement};
+use music21::Pitch;
+use music21::audiosearch;
+use music21::musicxml::from_musicxml;
+use music21::scale::{Scale, ScaleType};
+use music21::stream::{Stream, StreamElement};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -216,7 +216,7 @@ fn bits(value: f64) -> String {
     value.to_bits().to_string()
 }
 
-fn scales() -> music21_rs::Result<Vec<(&'static str, Option<Scale>)>> {
+fn scales() -> music21::Result<Vec<(&'static str, Option<Scale>)>> {
     Ok(vec![
         ("major", None),
         (
@@ -252,7 +252,7 @@ fn notes_line(part: &Stream) -> String {
         .join(" ")
 }
 
-fn stages(frequencies: &[f64]) -> music21_rs::Result<Vec<String>> {
+fn stages(frequencies: &[f64]) -> music21::Result<Vec<String>> {
     let mut lines = Vec::new();
     for (label, scale) in scales()? {
         let scale = scale.as_ref();
@@ -508,7 +508,7 @@ fn the_crate_finds_notes_in_recordings_as_music21_does() {
         for lengths in [vec![12, 12, 24, 6, 6, 48], vec![30, 31, 29, 60, 15, 90, 31]] {
             let objects: Vec<StreamElement> = lengths
                 .iter()
-                .map(|_| music21_rs::Note::from_name("C4").expect("C4").into())
+                .map(|_| music21::Note::from_name("C4").expect("C4").into())
                 .collect();
             let (made, estimate) =
                 audiosearch::notes_and_durations_to_stream(&objects, &lengths, Some(&notes), true)

@@ -685,7 +685,7 @@ impl Tuplet {
     /// a written value: music21's `Tuplet(actual, normal)`.
     ///
     /// ```
-    /// use music21_rs::Tuplet;
+    /// use music21::Tuplet;
     ///
     /// let triplet = Tuplet::ratio(3, 2);
     /// assert_eq!(triplet.duration_actual(), None);
@@ -814,13 +814,13 @@ impl Tuplet {
     /// music21's `augmentOrDiminish`. The ratio stays as it is.
     ///
     /// ```
-    /// use music21_rs::{DurationType, Tuplet};
+    /// use music21::{DurationType, Tuplet};
     ///
     /// let mut sextuplet = Tuplet::ratio(6, 2);
     /// sextuplet.set_duration_type(DurationType::Eighth, 0);
     /// let halved = sextuplet.augmented(0.5)?;
     /// assert_eq!(halved.duration_actual(), Some((DurationType::Sixteenth, 0)));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -893,7 +893,7 @@ impl Tuplet {
     /// how long the `actual` notes would last unaltered.
     ///
     /// ```
-    /// use music21_rs::{DurationType, FractionType, Tuplet};
+    /// use music21::{DurationType, FractionType, Tuplet};
     ///
     /// assert_eq!(Tuplet::ratio(3, 2).multiplier(), FractionType::new(2, 3));
     /// // Three quarters in the time of one half.
@@ -1294,7 +1294,7 @@ impl Duration {
     /// written as one value is left alone.
     ///
     /// ```
-    /// use music21_rs::{Duration, DurationType};
+    /// use music21::{Duration, DurationType};
     ///
     /// let mut duration = Duration::quarter();
     /// duration.add_duration_tuple(DurationType::Half, 0);
@@ -1419,7 +1419,7 @@ impl Duration {
     /// as they are upstream.
     ///
     /// ```
-    /// use music21_rs::{Duration, DurationType};
+    /// use music21::{Duration, DurationType};
     ///
     /// let grace = Duration::new(1.25)?.grace_duration();
     /// assert_eq!(grace.quarter_length(), 0.0);
@@ -1428,7 +1428,7 @@ impl Duration {
     ///     grace.components(),
     ///     [(DurationType::Quarter, 0), (DurationType::Sixteenth, 0)]
     /// );
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn grace_duration(&self) -> Duration {
         let mut written: Vec<DurationTuple> = self
@@ -1459,11 +1459,11 @@ impl Duration {
     /// one that was said is left as it was written.
     ///
     /// ```
-    /// use music21_rs::{Duration, DurationType};
+    /// use music21::{Duration, DurationType};
     ///
     /// assert!(Duration::new(0.5)?.expression_is_inferred());
     /// assert!(!Duration::from_type(DurationType::Eighth).expression_is_inferred());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn expression_is_inferred(&self) -> bool {
         !self.said

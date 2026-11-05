@@ -337,9 +337,9 @@ pub fn melodic_lines(stream: &Stream) -> Vec<Vec<Pitch>> {
 /// can hand back its own.
 ///
 /// ```
-/// use music21_rs::analysis::melodic_line_positions;
-/// use music21_rs::stream::StreamElement;
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::melodic_line_positions;
+/// use music21::stream::StreamElement;
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 r d e")?;
 /// let leaves = line.leaves();
@@ -357,7 +357,7 @@ pub fn melodic_lines(stream: &Stream) -> Vec<Vec<Pitch>> {
 ///     })
 ///     .collect();
 /// assert_eq!(names, [vec!["C", "D", "E"]]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn melodic_line_positions(stream: &Stream) -> Vec<Vec<usize>> {
     let leaves = stream.leaves();

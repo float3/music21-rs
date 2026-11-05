@@ -7,8 +7,8 @@
 //! `clefFromString`, the stem directions and the best clefs are checked
 //! behaviourally, over the grids that file records.
 
-use music21_rs::clef::{Clef, ClefKind};
-use music21_rs::{Pitch, StemDirection};
+use music21::clef::{Clef, ClefKind};
+use music21::{Pitch, StemDirection};
 use serde::Deserialize;
 
 use std::path::Path;

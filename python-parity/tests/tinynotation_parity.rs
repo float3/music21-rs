@@ -2,7 +2,7 @@
 //!
 //! Each line is read twice: by music21, which then writes it out as MusicXML
 //! with its own exporter, and by
-//! `music21_rs::tinynotation::from_tiny_notation`, whose part the crate's
+//! `music21::tinynotation::from_tiny_notation`, whose part the crate's
 //! MusicXML writer writes out. The writer is held to music21's by
 //! `musicxml_parity`, so the two documents are the same text only if the two
 //! readers read the same part and cut it into the same measures.
@@ -12,9 +12,9 @@
 //! `TINY_PARITY_LINES`, a `;`-separated list, runs those lines instead of
 //! the ones below.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::tinynotation::from_tiny_notation;
-use music21_rs::{Stream, StreamKind};
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::tinynotation::from_tiny_notation;
+use music21::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

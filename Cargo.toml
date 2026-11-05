@@ -10,7 +10,12 @@ name = "music21-rs"
 readme = "README.md"
 repository = "https://github.com/float3/music21-rs"
 rust-version = "1.90"
-version = "0.16.0"
+version = "0.17.0"
+
+# `use music21::Chord`: the package carries `-rs` to tell it from music21 on
+# crates.io, and the library is music21's own name.
+[lib]
+name = "music21"
 
 # docs.rs builds default features only, and this crate's defaults are empty --
 # without this every `serde` impl and all of `ScalaArchive::bundled()` would be

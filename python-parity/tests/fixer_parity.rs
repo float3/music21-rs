@@ -11,10 +11,10 @@
 //! `DeleteFixer`. Every note of the reading -- its pitch, colour and
 //! ornaments -- and the measures left must be music21's.
 
-use music21_rs::alpha::analysis::aligner::StreamAligner;
-use music21_rs::alpha::analysis::fixer::{OrnamentFixer, delete_measures, fix_enharmonics};
-use music21_rs::expressions::Expression;
-use music21_rs::{Duration, Note, Stream, StreamElement, StreamKind};
+use music21::alpha::analysis::aligner::StreamAligner;
+use music21::alpha::analysis::fixer::{OrnamentFixer, delete_measures, fix_enharmonics};
+use music21::expressions::Expression;
+use music21::{Duration, Note, Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;

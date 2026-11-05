@@ -29,8 +29,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
-use music21_rs_crate::IntegerType;
-use music21_rs_crate::search::{LyricIdentifier, LyricSearcher as RsLyricSearcher};
+use music21::IntegerType;
+use music21::search::{LyricIdentifier, LyricSearcher as RsLyricSearcher};
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["IndexedLyric", "LyricSearcher"];
@@ -314,7 +314,7 @@ fn identifier_object<'py>(
 /// A stream read for searching, with the crate's reading of it beside the
 /// objects at each position.
 struct Reading {
-    stream: music21_rs_crate::Stream,
+    stream: music21::Stream,
     leaves: Vec<Py<PyAny>>,
 }
 

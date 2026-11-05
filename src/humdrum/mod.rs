@@ -1558,13 +1558,13 @@ fn place_comments(
 /// again, are not read.
 ///
 /// ```
-/// use music21_rs::humdrum::from_humdrum;
+/// use music21::humdrum::from_humdrum;
 ///
 /// let score = from_humdrum("**kern\n*clefG2\n*M2/4\n=1\n4c\n4d\n=2\n2e\n==\n*-\n")?;
 /// let part = score.parts()[0];
 /// assert_eq!(part.measures().len(), 2);
 /// assert_eq!(part.measures()[1].pitches()[0].name_with_octave(), "E4");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_humdrum(text: &str) -> Result<Stream> {
     let lines: Vec<&str> = text.lines().collect();

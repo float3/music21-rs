@@ -9,8 +9,8 @@
 // Each test using this module uses its own part of it.
 #![allow(dead_code)]
 
-use music21_rs::expressions::{Expression, Fermata, Ornament, OrnamentKind};
-use music21_rs::{
+use music21::expressions::{Expression, Fermata, Ornament, OrnamentKind};
+use music21::{
     Chord, Clef, Duration, Dynamic, Instrument, Note, Rest, Stream, StreamElement, StreamKind,
     TimeSignature,
 };

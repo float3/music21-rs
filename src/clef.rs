@@ -360,13 +360,13 @@ impl ClefKind {
 /// note written on its lowest line.
 ///
 /// ```
-/// use music21_rs::clef::{Clef, ClefKind};
+/// use music21::clef::{Clef, ClefKind};
 ///
 /// let alto = Clef::from_string("C3", 0)?;
 /// assert_eq!(alto.kind(), ClefKind::AltoClef);
 /// assert_eq!(alto.lowest_line(), Some(25));
 /// assert_eq!(alto.name(), "alto");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -482,7 +482,7 @@ impl Clef {
     /// music21's does; setting the lowest line moves nothing.
     ///
     /// ```
-    /// use music21_rs::clef::Clef;
+    /// use music21::clef::Clef;
     ///
     /// let mut treble = Clef::treble();
     /// treble.set_octave_change(1);
@@ -515,7 +515,7 @@ impl Clef {
     /// lowest and the highest. Guitar tablature's stems always go down.
     ///
     /// ```
-    /// use music21_rs::{clef::Clef, Pitch, StemDirection};
+    /// use music21::{clef::Clef, Pitch, StemDirection};
     ///
     /// let pitches: Vec<Pitch> = ["C3", "B3", "C3"]
     ///     .iter()
@@ -524,7 +524,7 @@ impl Clef {
     /// let bass = Clef::bass();
     /// assert_eq!(bass.stem_direction_for_pitches(&pitches, true, false)?, StemDirection::Up);
     /// assert_eq!(bass.stem_direction_for_pitches(&pitches, false, false)?, StemDirection::Down);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -693,12 +693,12 @@ impl Clef {
     /// octave down.
     ///
     /// ```
-    /// use music21_rs::{clef::{Clef, ClefKind}, Pitch};
+    /// use music21::{clef::{Clef, ClefKind}, Pitch};
     ///
     /// let d4 = [Pitch::from_name("D4")?];
     /// assert_eq!(Clef::best_for(&d4, false).kind(), ClefKind::TrebleClef);
     /// assert_eq!(Clef::best_for(&d4, true).kind(), ClefKind::Treble8vbClef);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn best_for(pitches: &[Pitch], allow_treble_8vb: bool) -> Self {
         let average = if pitches.is_empty() {

@@ -254,7 +254,7 @@ pub enum DynamicContext {
 /// caller that has them.
 ///
 /// ```
-/// use music21_rs::{volume::{realize_volume, DynamicContext}, Dynamic, Note, Stream};
+/// use music21::{volume::{realize_volume, DynamicContext}, Dynamic, Note, Stream};
 ///
 /// let mut stream = Stream::new();
 /// stream.insert(0.0, Dynamic::new("pp"));
@@ -266,12 +266,12 @@ pub enum DynamicContext {
 ///     .notes()
 ///     .iter()
 ///     .map(|(_, note)| match note {
-///         music21_rs::StreamElement::Note(note) => note.volume().velocity(),
+///         music21::StreamElement::Note(note) => note.volume().velocity(),
 ///         _ => None,
 ///     })
 ///     .collect();
 /// assert_eq!(velocities, [Some(45), Some(127)]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocity: bool) {
     let in_force: Vec<Option<FloatType>> = match context {
@@ -334,14 +334,14 @@ pub fn realize_volume(stream: &mut Stream, context: &DynamicContext, use_velocit
 /// each element.
 ///
 /// ```
-/// use music21_rs::{volume::dynamics_in_force, Dynamic, Note, Stream};
+/// use music21::{volume::dynamics_in_force, Dynamic, Note, Stream};
 ///
 /// let mut stream = Stream::new();
 /// stream.insert(0.0, Note::from_name("G3")?);
 /// stream.insert(1.0, Dynamic::new("ff"));
 /// stream.insert(1.0, Note::from_name("G3")?);
 /// assert_eq!(dynamics_in_force(&stream), [None, Some(1), Some(1)]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn dynamics_in_force(stream: &Stream) -> Vec<Option<usize>> {
     let leaves = stream.leaves();
@@ -508,7 +508,7 @@ fn is_power_of_two(value: i128) -> bool {
 /// another voice. A dynamic at the note's own offset is before it.
 ///
 /// ```
-/// use music21_rs::{volume::dynamic_context, Dynamic, Note, Stream, StreamKind};
+/// use music21::{volume::dynamic_context, Dynamic, Note, Stream, StreamKind};
 ///
 /// let mut measure = Stream::with_kind(StreamKind::Measure);
 /// measure.insert(0.0, Dynamic::new("ff"));
@@ -516,7 +516,7 @@ fn is_power_of_two(value: i128) -> bool {
 /// measure.insert(1.0, Note::from_name("D4")?);
 /// assert_eq!(dynamic_context(&measure, 2), Some(0));
 /// assert_eq!(dynamic_context(&Stream::new(), 0), None);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn dynamic_context(stream: &Stream, position: usize) -> Option<usize> {
     // The streams holding the note, outermost first: each with the offset it

@@ -17,7 +17,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::humdrum::harm::{Harm, convert_harm_to_roman};
+use music21::humdrum::harm::{Harm, convert_harm_to_roman};
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &["convertHarmToRoman", "HarmParser"];

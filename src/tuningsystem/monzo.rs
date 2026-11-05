@@ -88,13 +88,13 @@ fn strip_primes(mut value: IntegerType) -> IntegerType {
 /// their monzos, which is the whole reason for writing intervals this way.
 ///
 /// ```
-/// use music21_rs::tuningsystem::Monzo;
+/// use music21::tuningsystem::Monzo;
 ///
 /// let comma = Monzo::from_ratio(81, 80)?;
 /// assert_eq!(comma.exponents(), [-4, 4, -1]);
 /// assert_eq!(comma.limit(), Some(5));
 /// assert_eq!(comma.to_string(), "[-4 4 -1⟩");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -318,13 +318,13 @@ impl FromStr for Monzo {
 /// tempers out.
 ///
 /// ```
-/// use music21_rs::tuningsystem::{Monzo, Val};
+/// use music21::tuningsystem::{Monzo, Val};
 ///
 /// let twelve = Val::patent(12, 5)?;
 /// assert_eq!(twelve.entries(), [12, 19, 28]);
 /// assert_eq!(twelve.map(&Monzo::from_ratio(3, 2)?), 7);
 /// assert!(twelve.tempers_out(&Monzo::from_ratio(81, 80)?));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

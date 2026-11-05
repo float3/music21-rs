@@ -135,7 +135,7 @@ impl Note {
     /// leans on.
     ///
     /// ```
-    /// use music21_rs::{Duration, DurationType, Note};
+    /// use music21::{Duration, DurationType, Note};
     ///
     /// let note = Note::from_name("G4")?.with_duration(Duration::half());
     /// let grace = note.grace_note(false);
@@ -144,7 +144,7 @@ impl Note {
     /// assert_eq!(duration.components(), [(DurationType::Half, 0)]);
     /// assert!(duration.grace().unwrap().slash());
     /// assert!(!note.grace_note(true).duration().unwrap().grace().unwrap().slash());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn grace_note(&self, appoggiatura: bool) -> Self {
         let written = self.duration.clone().unwrap_or_default();

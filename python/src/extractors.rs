@@ -30,7 +30,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::features::{Extractor as RsExtractor, Library, extractors_by_id};
+use music21::features::{Extractor as RsExtractor, Library, extractors_by_id};
 
 use crate::features::{FeatureException, feature_object, prepared};
 
@@ -44,7 +44,7 @@ pyo3::create_exception!(music21_rs_facade, NativeFeatureException, FeatureExcept
 /// A crate error as the exception the library this row belongs to raises:
 /// music21 keeps one for each, and its own doctests read the module each
 /// lives in.
-fn library_error(library: Library, error: music21_rs_crate::Error) -> PyErr {
+fn library_error(library: Library, error: music21::Error) -> PyErr {
     let said = crate::pitch::message(&error);
     match library {
         Library::JSymbolic => JSymbolicFeatureException::new_err(said),

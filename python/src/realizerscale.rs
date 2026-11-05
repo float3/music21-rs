@@ -10,11 +10,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use music21_rs_crate::figuredbass::Notation as RsNotation;
-use music21_rs_crate::figuredbass::scale::{
-    FiguredBassMode, FiguredBassScale as RsFiguredBassScale,
-};
-use music21_rs_crate::{Pitch as RsPitch, Scale as RsScale};
+use music21::figuredbass::Notation as RsNotation;
+use music21::figuredbass::scale::{FiguredBassMode, FiguredBassScale as RsFiguredBassScale};
+use music21::{Pitch as RsPitch, Scale as RsScale};
 
 use crate::pitch::{Pitch, pitch_from_any};
 use crate::spelling::music21_name;

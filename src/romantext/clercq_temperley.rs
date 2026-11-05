@@ -59,12 +59,12 @@ impl Default for CtLabels {
 /// A song read into a part: music21's `CTSong(text).toPart()`.
 ///
 /// ```
-/// use music21_rs::romantext::clercq_temperley::from_clercq_temperley;
+/// use music21::romantext::clercq_temperley::from_clercq_temperley;
 ///
 /// let song = "% Simple Gifts\nVr: I | I |\nS: [A] $Vr\n";
 /// let part = from_clercq_temperley(song)?;
 /// assert_eq!(part.measures().len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -533,7 +533,7 @@ pub struct MeasureGroup {
 /// and, on a minor degree, its `a` as an augmented one.
 ///
 /// ```
-/// use music21_rs::romantext::clercq_temperley::fixup_chord_atom;
+/// use music21::romantext::clercq_temperley::fixup_chord_atom;
 ///
 /// assert_eq!(fixup_chord_atom("iix"), "iio");
 /// assert_eq!(fixup_chord_atom("viih7"), "vii/o7");

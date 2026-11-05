@@ -485,12 +485,12 @@ impl Interval {
     /// Parses an interval name such as `"M3"`, `"P5"`, or `"-m6"`.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// let fifth = Interval::from_name("P5")?;
     /// assert_eq!(fifth.semitones(), 7.0);
     /// assert_eq!(Interval::from_name("-m6")?.semitones(), -8.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn from_name(name: impl AsRef<str>) -> Result<Self> {
         let (diatonic, chromatic, inferred) = parse_interval_name(name.as_ref())?;
@@ -506,11 +506,11 @@ impl Interval {
     /// Creates an implicit diatonic interval from a chromatic semitone count.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// assert_eq!(Interval::from_semitones(4)?.directed_name(), "M3");
     /// assert_eq!(Interval::from_semitones(-7)?.directed_name(), "P-5");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn from_semitones(semitones: IntegerType) -> Result<Self> {
         let chromatic = ChromaticInterval::from_int(semitones);
@@ -527,14 +527,14 @@ impl Interval {
     /// Returns the directed interval from `start` to `end`.
     ///
     /// ```
-    /// use music21_rs::{Interval, Pitch};
+    /// use music21::{Interval, Pitch};
     ///
     /// let up = Interval::between_pitches(&Pitch::from_name("C4")?, &Pitch::from_name("E-4")?)?;
     /// assert_eq!(up.directed_name(), "m3");
     /// let down = Interval::between_pitches(&Pitch::from_name("C4")?, &Pitch::from_name("A3")?)?;
     /// assert_eq!(down.directed_name(), "m-3");
     /// assert_eq!(down.semitones(), -3.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn between_pitches(start: &Pitch, end: &Pitch) -> Result<Self> {
         Self::between(start.clone(), end.clone())
@@ -564,11 +564,11 @@ impl Interval {
     /// Returns the human-readable interval name, such as `"Major Third"`.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// assert_eq!(Interval::from_name("M3")?.name(), "Major Third");
     /// assert_eq!(Interval::from_name("d5")?.name(), "Diminished Fifth");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn name(&self) -> String {
         self.nice_name()
@@ -587,10 +587,10 @@ impl Interval {
     /// Returns the complementary interval inversion.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// assert_eq!(Interval::from_name("M3")?.inversion()?.directed_name(), "m6");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn inversion(&self) -> Result<Self> {
         let direction = match self.direction() {
@@ -642,12 +642,12 @@ impl Interval {
     /// Transposes a pitch by this interval.
     ///
     /// ```
-    /// use music21_rs::{Interval, Pitch};
+    /// use music21::{Interval, Pitch};
     ///
     /// let third = Interval::from_name("M3")?;
     /// let raised = third.transpose_pitch(&Pitch::from_name("B-3")?)?;
     /// assert_eq!(raised.name_with_octave(), "D4");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn transpose_pitch(&self, pitch: &Pitch) -> Result<Pitch> {
         self.transpose_pitch_with_options(pitch, false, Some(4))
@@ -663,10 +663,10 @@ impl Interval {
     /// Returns music21's compact undirected name, such as `"P5"` or `"m3"`.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// assert_eq!(Interval::from_name("-M10")?.short_name(), "M10");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn short_name(&self) -> String {
         format!(
@@ -679,10 +679,10 @@ impl Interval {
     /// Returns the compact name folded into one octave, so a ninth is `"M2"`.
     ///
     /// ```
-    /// use music21_rs::Interval;
+    /// use music21::Interval;
     ///
     /// assert_eq!(Interval::from_name("M10")?.simple_name(), "M3");
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn simple_name(&self) -> String {
         format!(

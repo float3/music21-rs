@@ -43,12 +43,12 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::variant::{
+use music21::variant::{
     add_variant, make_all_variants_replacements, merge_part_as_ossia,
     merge_variant_measure_streams, merge_variant_scores, merge_variants,
     merge_variants_equal_duration, refine_variant,
 };
-use music21_rs_crate::{FloatType, Stream as RsStream, StreamElement};
+use music21::{FloatType, Stream as RsStream, StreamElement};
 
 use crate::Walkable;
 

@@ -3,7 +3,7 @@
 //!
 //! music21 splits a scale in two — an `AbstractScale`, which is the pattern
 //! of steps, and a `ConcreteScale`, which is that pattern standing on a
-//! tonic. The crate's [`music21_rs_crate::scale::Scale`] is the second, and its
+//! tonic. The crate's [`music21::scale::Scale`] is the second, and its
 //! `ScaleType` is the first; the twenty concrete classes music21 names are
 //! built here from that one pair rather than written out twenty times.
 
@@ -16,11 +16,11 @@ use crate::Walkable;
 use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
-use music21_rs_crate::scale::{
+use music21::scale::{
     DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
     Simplification as RsSimplification, SolfegVariant as RsSolfegVariant,
 };
-use music21_rs_crate::{Interval as RsInterval, Pitch as RsPitch, StepScale as RsStepScale};
+use music21::{Interval as RsInterval, Pitch as RsPitch, StepScale as RsStepScale};
 
 use crate::interval::interval_from_any;
 use crate::pitch::{Pitch, pitch_from_any};
@@ -462,7 +462,7 @@ impl AbstractScale {
             .iter()
             .map(pitch_from_any)
             .collect::<PyResult<Vec<_>>>()?;
-        let risen = music21_rs_crate::scale::fix_default_octave_for_pitch_list(&values);
+        let risen = music21::scale::fix_default_octave_for_pitch_list(&values);
         for (object, (given, filled)) in objects.iter().zip(values.iter().zip(&risen)) {
             if given.octave().is_none()
                 && let Some(octave) = filled.octave()
@@ -1089,7 +1089,7 @@ impl ConcreteScale {
             let steps = ["m2", "M2", "m2", "M2", "m2", "M2", "m2", "M2"]
                 .iter()
                 .map(RsInterval::from_name)
-                .collect::<music21_rs_crate::Result<Vec<_>>>()
+                .collect::<music21::Result<Vec<_>>>()
                 .map_err(scale_error)?;
             me.inner = RsScale::from_steps(tonic, steps)
                 .map_err(scale_error)?

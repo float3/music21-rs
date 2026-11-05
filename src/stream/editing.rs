@@ -87,7 +87,7 @@ impl Stream {
     /// note whatever lies between.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let mut line = from_tiny_notation("4/4 c4 c4 d4 d4")?;
     /// line.extend_ties(false);
@@ -95,13 +95,13 @@ impl Stream {
     ///     .notes()
     ///     .iter()
     ///     .map(|(_, note)| match note {
-    ///         music21_rs::StreamElement::Note(note) => note.tie().map(|tie| tie.tie_type()),
+    ///         music21::StreamElement::Note(note) => note.tie().map(|tie| tie.tie_type()),
     ///         _ => None,
     ///     })
     ///     .collect();
-    /// assert_eq!(ties[0], Some(music21_rs::notation::TieType::Start));
-    /// assert_eq!(ties[1], Some(music21_rs::notation::TieType::Stop));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// assert_eq!(ties[0], Some(music21::notation::TieType::Start));
+    /// assert_eq!(ties[1], Some(music21::notation::TieType::Stop));
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn extend_ties(&mut self, ignore_rests: bool) {
         // music21's `flatten().notes`: the notes and chords, flattened and
@@ -255,12 +255,12 @@ impl Stream {
     /// `augmentOrDiminish`.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("4/4 c4 d8 e8")?;
     /// let longer = line.augment_or_diminish(2.0)?;
     /// assert_eq!(longer.notes()[2].0, 3.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

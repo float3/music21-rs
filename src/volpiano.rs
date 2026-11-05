@@ -90,7 +90,7 @@ const BELOW_LOWEST_LINE: IntegerType = 5;
 /// measure being read. Tokens that are none of these are passed over.
 ///
 /// ```
-/// use music21_rs::volpiano::from_volpiano;
+/// use music21::volpiano::from_volpiano;
 ///
 /// let part = from_volpiano("1---c--d---fg---3")?;
 /// let names: Vec<String> = part
@@ -100,7 +100,7 @@ const BELOW_LOWEST_LINE: IntegerType = 5;
 ///     .collect();
 /// assert_eq!(names, ["C4", "D4", "F4", "G4"]);
 /// assert_eq!(part.spanners().len(), 1);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -259,11 +259,11 @@ fn flat_token(token: char) -> Option<char> {
 /// after it).
 ///
 /// ```
-/// use music21_rs::volpiano::{from_volpiano, to_volpiano};
+/// use music21::volpiano::{from_volpiano, to_volpiano};
 ///
 /// let part = from_volpiano("1--c--d---f--d---ed--c")?;
 /// assert_eq!(to_volpiano(&part)?, "1---c-d-f-d-ed-c-");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

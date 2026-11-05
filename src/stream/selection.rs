@@ -15,14 +15,14 @@ impl Stream {
     /// and id; the elements keep their offsets, and spanners theirs.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("4/4 c4 d4 e4 f4 g4 a4")?.flatten();
     /// let index = line.events().iter().position(|event| event.offset() == 2.0).unwrap();
     /// let around = line.extract_context(index, 1.0, 1.0)?;
     /// let offsets: Vec<f64> = around.notes().iter().map(|(offset, _)| *offset).collect();
     /// assert_eq!(offsets, [1.0, 2.0, 3.0]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -74,14 +74,14 @@ impl Stream {
     /// spanner names nothing for an element taken out.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let mut line = from_tiny_notation("4/4 c4 r4 e2")?.flatten();
     /// line.remove_by_class(&["Rest", "TimeSignature"]);
     /// assert!(line.events().iter().all(|event| !event.element().is_instance("Rest")));
     /// assert_eq!(line.notes().len(), 2);
     /// assert!(line.time_signatures(false)?.is_empty());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn remove_by_class(&mut self, classes: &[&str]) {
         self.remove_where(|element| classes.iter().any(|class| element.is_instance(class)));

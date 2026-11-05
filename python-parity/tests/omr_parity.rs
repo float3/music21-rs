@@ -16,10 +16,10 @@
 //! OMR and entered by hand, is evaluated by both with
 //! `evaluateCorrectingModel`.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::omr::correctors::{MeasureRelationship, ScoreCorrector};
-use music21_rs::omr::evaluators::{auto_correlation_best_measure, evaluate_correcting_model};
-use music21_rs::{Stream, StreamElement};
+use music21::musicxml::from_musicxml;
+use music21::omr::correctors::{MeasureRelationship, ScoreCorrector};
+use music21::omr::evaluators::{auto_correlation_best_measure, evaluate_correcting_model};
+use music21::{Stream, StreamElement};
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -194,7 +194,7 @@ fn relationship_lines(lists: &[Vec<MeasureRelationship>]) -> Vec<String> {
         .collect()
 }
 
-fn pitch_text(pitch: &music21_rs::Pitch) -> String {
+fn pitch_text(pitch: &music21::Pitch) -> String {
     let alter = pitch
         .written_accidental()
         .map_or(String::new(), |accidental| bits(accidental.alter()));
@@ -287,7 +287,7 @@ fn our_report(score: Stream) -> (Vec<String>, String) {
             lines.push(format!("hdist {}", written.join(" ")));
         }
     }
-    let rest = (|| -> music21_rs::Result<Vec<String>> {
+    let rest = (|| -> music21::Result<Vec<String>> {
         let mut lines = Vec::new();
         let vertical = corrector.run_vertical_correction_model()?;
         lines.extend(

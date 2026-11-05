@@ -25,7 +25,7 @@ impl Stream {
     /// classes leaves the stream as it stands.
     ///
     /// ```
-    /// use music21_rs::{Dynamic, Note, Stream};
+    /// use music21::{Dynamic, Note, Stream};
     ///
     /// let mut line = Stream::new();
     /// for place in [0.0, 10.0, 20.0] {
@@ -42,7 +42,7 @@ impl Stream {
     /// // Ten to the next note, ten again past the dynamic, and the last
     /// // keeps the length it came with to the end of the stream.
     /// assert_eq!(lengths, [10.0, 10.0, 1.0]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -91,7 +91,7 @@ impl Stream {
     /// copied.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream};
+    /// use music21::{Note, Stream};
     ///
     /// let mut from = Stream::new();
     /// from.insert(0.0, Note::from_name("F#4")?);
@@ -100,7 +100,7 @@ impl Stream {
     /// let mut into = Stream::new();
     /// into.merge_elements(&from, None);
     /// assert_eq!(into.len(), 2);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn merge_elements(&mut self, other: &Stream, classes: Option<&[&str]>) {
         for event in other.events() {
@@ -126,7 +126,7 @@ impl Stream {
     /// [`Stream::template`](Self::template) keeps.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream, StreamKind};
+    /// use music21::{Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// part.set_id(Some("hi".to_string()));
@@ -138,7 +138,7 @@ impl Stream {
     /// assert_eq!(empty.id(), Some("hi"));
     /// assert_eq!(empty.name(), Some("Flute"));
     /// assert!(empty.is_empty());
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn clone_empty(&self) -> Stream {
         let mut empty = Stream::with_kind(self.kind());

@@ -1,10 +1,10 @@
 //! Names each chord of a progression as a roman numeral in the key the
 //! progression is heard in: `cargo run --example roman_analysis`.
 
-use music21_rs::stream::Analysis;
-use music21_rs::{Chord, Key, RomanNumeral, Stream, StreamElement};
+use music21::stream::Analysis;
+use music21::{Chord, Key, RomanNumeral, Stream, StreamElement};
 
-fn main() -> music21_rs::Result<()> {
+fn main() -> music21::Result<()> {
     let mut progression = Stream::new();
     for notes in [
         "C4 E4 G4",

@@ -34,8 +34,8 @@ use super::{
 /// A part that cannot be cut into measures, as its meters say.
 ///
 /// ```
-/// use music21_rs::makenotation::make_notation;
-/// use music21_rs::{Duration, Note, Stream, StreamKind, TimeSignature};
+/// use music21::makenotation::make_notation;
+/// use music21::{Duration, Note, Stream, StreamKind, TimeSignature};
 ///
 /// let mut part = Stream::with_kind(StreamKind::Part);
 /// part.insert(0.0, TimeSignature::new(2, 4)?);
@@ -47,7 +47,7 @@ use super::{
 /// make_notation(&mut part)?;
 /// let measures = part.measures();
 /// assert_eq!(measures.len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn make_notation(stream: &mut Stream) -> Result<()> {
     keeping_spanners(stream, Kept::Retained, &mut |stream| {
@@ -644,15 +644,15 @@ fn same_pitches(left: &StreamElement, right: &StreamElement) -> bool {
 /// is cut start on its first piece and end on its last.
 ///
 /// ```
-/// use music21_rs::makenotation::split_at_durations;
-/// use music21_rs::{Duration, Note, Stream};
+/// use music21::makenotation::split_at_durations;
+/// use music21::{Duration, Note, Stream};
 ///
 /// let mut line = Stream::new();
 /// line.insert(0.0, Note::from_name("C4")?.with_duration(Duration::new(5.0)?));
 /// split_at_durations(&mut line)?;
 /// assert_eq!(line.len(), 2);
 /// assert_eq!(line.events()[1].offset(), 4.0);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

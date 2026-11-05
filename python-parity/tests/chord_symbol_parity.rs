@@ -1,7 +1,7 @@
 //! Checks the crate's reading of chord symbol figures against music21's
 //! `ChordSymbol`, in `data/chord_symbol_expectations.toml`.
 
-use music21_rs::chordsymbol::ChordSymbol;
+use music21::chordsymbol::ChordSymbol;
 use music21_rs_python_parity::music21_name;
 
 use std::path::Path;

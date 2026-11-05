@@ -7,7 +7,7 @@
 //! or cents.
 //!
 //! ```
-//! use music21_rs::ScalaScale;
+//! use music21::ScalaScale;
 //!
 //! let scale: ScalaScale = "! example.scl\n\
 //!                          !\n\
@@ -22,7 +22,7 @@
 //! assert_eq!(scale.ratio_at(1), 1.5);
 //! // Degree 2 is the first degree of the next period.
 //! assert_eq!(scale.ratio_at(2), 2.0);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use super::Ratio;
@@ -309,7 +309,7 @@ impl ScalaScale {
     /// This crate does no file IO of its own, so read the file yourself:
     ///
     /// ```no_run
-    /// use music21_rs::ScalaScale;
+    /// use music21::ScalaScale;
     ///
     /// let bytes = std::fs::read("partch_43.scl")?;
     /// let scale = ScalaScale::parse_bytes(&bytes)?;
@@ -550,7 +550,7 @@ impl Display for ScalaScale {
 /// also keeps the crate free of file IO and usable from wasm.
 ///
 /// ```
-/// use music21_rs::ScalaArchive;
+/// use music21::ScalaArchive;
 ///
 /// let mut archive = ScalaArchive::new();
 /// archive.insert("mbira_banda.scl", b"Mbira Banda\n 1\n 2/1\n")?;
@@ -558,7 +558,7 @@ impl Display for ScalaScale {
 ///
 /// assert_eq!(archive.search("mbira"), ["mbira_banda.scl"]);
 /// assert!(archive.get("slendro5_2.scl").is_some());
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

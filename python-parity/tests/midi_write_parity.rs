@@ -3,7 +3,7 @@
 //! Each subject is read twice, by music21's reader and by the crate's, and
 //! each side writes what it read as a MIDI file: music21 with
 //! `midi.translate.streamToMidiFile(...).writestr()`, the crate with
-//! `music21_rs::midi::to_midi`. The readers are held to music21's by their
+//! `music21::midi::to_midi`. The readers are held to music21's by their
 //! own tests, so two files differ only where the writers do. A difference
 //! is reported as the first event that differs, both files read back by
 //! music21's own MIDI reader.
@@ -17,7 +17,7 @@
 //! test makes up TinyNotation lines from seeds, and has each side read
 //! back the file it wrote and write it again.
 
-use music21_rs::midi::{ExportOptions, to_midi};
+use music21::midi::{ExportOptions, to_midi};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -294,9 +294,9 @@ fn compare(given: Option<Vec<String>>, round_trip: bool) -> (Vec<String>, usize)
             let read = match kind {
                 "xml" => {
                     let text: String = helpers.getattr("source_text")?.call1((name,))?.extract()?;
-                    music21_rs::musicxml::from_musicxml(&text)
+                    music21::musicxml::from_musicxml(&text)
                 }
-                "tiny" => music21_rs::tinynotation::from_tiny_notation(name),
+                "tiny" => music21::tinynotation::from_tiny_notation(name),
                 "built" => built(name),
                 other => {
                     failures.push(format!("{subject}: no subject of kind {other}"));
@@ -326,7 +326,7 @@ fn compare(given: Option<Vec<String>>, round_trip: bool) -> (Vec<String>, usize)
                             continue;
                         }
                     };
-                    let ours = match music21_rs::midi::from_midi(&ours)
+                    let ours = match music21::midi::from_midi(&ours)
                         .and_then(|score| to_midi(&score, &ExportOptions::default()))
                     {
                         Ok(bytes) => bytes,
@@ -389,8 +389,8 @@ fn compare(given: Option<Vec<String>>, round_trip: bool) -> (Vec<String>, usize)
 }
 
 /// The streams the helper's `built` makes, made the same way here.
-fn built(name: &str) -> music21_rs::Result<music21_rs::Stream> {
-    use music21_rs::{Duration, Note, Stream, StreamKind};
+fn built(name: &str) -> music21::Result<music21::Stream> {
+    use music21::{Duration, Note, Stream, StreamKind};
     let mut part = Stream::with_kind(StreamKind::Part);
     if name == "percussion" {
         let mut at = 0.0;
@@ -412,9 +412,9 @@ fn built(name: &str) -> music21_rs::Result<music21_rs::Stream> {
             ("Agogo", "low"),
             ("Whistle", "long"),
         ] {
-            let mut played = music21_rs::Instrument::of_kind(class)?;
+            let mut played = music21::Instrument::of_kind(class)?;
             played.set_modifier(modifier);
-            let mut stroke = music21_rs::percussion::Unpitched::new();
+            let mut stroke = music21::percussion::Unpitched::new();
             stroke.written_mut().set_duration(Duration::new(1.0)?);
             stroke.written_mut().set_stored_instrument(Some(played));
             part.insert(at, stroke);

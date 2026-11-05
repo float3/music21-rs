@@ -41,7 +41,7 @@ impl Stream {
     /// then says it is at written pitch too.
     ///
     /// ```
-    /// use music21_rs::{Instrument, Note, Stream, StreamElement, StreamKind};
+    /// use music21::{Instrument, Note, Stream, StreamElement, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// part.push(StreamElement::Instrument(Box::new(Instrument::of_kind(
@@ -54,7 +54,7 @@ impl Stream {
     /// let StreamElement::Note(note) = written.leaves()[1].1 else { unreachable!() };
     /// assert_eq!(note.pitch().name_with_octave(), "C5");
     /// assert_eq!(written.at_sounding_pitch(), Some(false));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn to_written_pitch(&self) -> Result<Stream> {
         self.to_written_pitch_by(false)

@@ -703,7 +703,7 @@ jobs:
             echo "harte declares rust-version $declared, music21-rs ${{ steps.msrv.outputs.version }}" >&2
             exit 1
           fi
-          cargo check --package music21-rs --package harte --all-features --locked
+          cargo check --package music21-rs --package harte-rs --all-features --locked
 
   semver:
     name: Semver Checks
@@ -755,7 +755,7 @@ jobs:
           echo "comparing against $BASELINE"
           cargo semver-checks --package music21-rs --all-features --baseline-rev "$BASELINE"
 
-      # `harte` has a version of its own and no tag, so its baseline is what
+      # `harte-rs` has a version of its own and no tag, so its baseline is what
       # a downstream holds: the newest version on crates.io, which is what
       # cargo-semver-checks compares against when given no baseline. Before
       # its first release there is nobody to break and nothing to compare.
@@ -768,10 +768,10 @@ jobs:
         run: |
           set -euo pipefail
           if curl -sfL -H "User-Agent: music21-rs semver check" \
-            https://crates.io/api/v1/crates/harte >/dev/null; then
-            cargo semver-checks --package harte --all-features
+            https://crates.io/api/v1/crates/harte-rs >/dev/null; then
+            cargo semver-checks --package harte-rs --all-features
           else
-            echo "harte is not on crates.io yet; nothing to compare against"
+            echo "harte-rs is not on crates.io yet; nothing to compare against"
           fi
 
   test:
@@ -996,7 +996,7 @@ jobs:
               "dom.js",
               "theme.css",
               "theme.js",
-              "docs/music21_rs/index.html",
+              "docs/music21/index.html",
               "python/index.html",
               "python/music21_rs.html",
               "chord/app.js",
@@ -1666,7 +1666,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --locked
 
-  # The `harte` crate is released from this repository at a version of its
+  # The `harte-rs` crate is released from this repository at a version of its
   # own, so it is published whenever that version is not on crates.io yet:
   # on any green master, not only in the run that releases music21-rs. Where
   # that run does release music21-rs, harte goes after it, since its manifest
@@ -1674,7 +1674,7 @@ jobs:
   # it against what crates.io has. It has a token of its own, HARTE_KEY: the
   # one music21-rs is published with cannot create or publish another crate.
   publish-harte:
-    name: Publish harte to crates.io
+    name: Publish harte-rs to crates.io
     runs-on: ubuntu-latest
     needs:
       - release
@@ -1705,7 +1705,7 @@ jobs:
 
           version="$(python3 -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("harte/Cargo.toml").read_text())["package"]["version"])')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          url="https://crates.io/api/v1/crates/harte/$version"
+          url="https://crates.io/api/v1/crates/harte-rs/$version"
           if curl -sfL -H "User-Agent: music21-rs release workflow" "$url" >/dev/null; then
             echo "already=true" >> "$GITHUB_OUTPUT"
           else
@@ -1716,7 +1716,7 @@ jobs:
         if: steps.published.outputs.already == 'false'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.HARTE_KEY }}
-        run: cargo publish --package harte --locked
+        run: cargo publish --package harte-rs --locked
 
   publish-harte-pypi:
     name: Publish harte-rs to PyPI

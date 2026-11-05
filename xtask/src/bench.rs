@@ -41,11 +41,11 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use music21_rs::figuredbass::Notation as RsNotation;
-use music21_rs::figuredbass::rules::Rules as RsRules;
-use music21_rs::figuredbass::scale::FiguredBassScale as RsFiguredBassScale;
-use music21_rs::figuredbass::segment::Segment as RsSegment;
-use music21_rs::{
+use music21::figuredbass::Notation as RsNotation;
+use music21::figuredbass::rules::Rules as RsRules;
+use music21::figuredbass::scale::FiguredBassScale as RsFiguredBassScale;
+use music21::figuredbass::segment::Segment as RsSegment;
+use music21::{
     Chord as RsChord, Interval as RsInterval, Note as RsNote, Pitch as RsPitch,
     ToneRow as RsToneRow, Transformation as RsTransformation,
 };

@@ -211,8 +211,8 @@ pub struct Failure {
 /// and [`DataSet::to_text`] writes the table for a machine-learning tool.
 ///
 /// ```
-/// use music21_rs::features::{DataSet, Library, OutputFormat, extractors_by_id};
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::features::{DataSet, Library, OutputFormat, extractors_by_id};
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let mut set = DataSet::new("Composer");
 /// set.add_extractors(extractors_by_id(&["R31", "R35"], &[Library::JSymbolic]));
@@ -223,7 +223,7 @@ pub struct Failure {
 ///     "Identifier,Initial_Time_Signature_0,Initial_Time_Signature_1,Changes_of_Meter,Composer\n\
 ///      first_piece,4,4,0,Bach"
 /// );
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct DataSet {

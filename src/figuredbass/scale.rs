@@ -95,15 +95,15 @@ static DIMINISHED_OCTAVE: LazyLock<Interval> =
 /// The key a figured bass is counted in: a tonic and a mode.
 ///
 /// ```
-/// use music21_rs::Pitch;
-/// use music21_rs::figuredbass::Notation;
-/// use music21_rs::figuredbass::scale::FiguredBassScale;
+/// use music21::Pitch;
+/// use music21::figuredbass::Notation;
+/// use music21::figuredbass::scale::FiguredBassScale;
 ///
 /// let c_major = FiguredBassScale::default();
 /// let first_inversion = Notation::parse("6")?;
 /// let names = c_major.pitch_names(&Pitch::from_name("D3")?, &first_inversion)?;
 /// assert_eq!(names, ["D", "F", "B"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

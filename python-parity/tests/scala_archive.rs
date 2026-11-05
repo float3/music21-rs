@@ -4,7 +4,7 @@
 //! `music21` submodule, and `cargo test` on the library must work without it.
 //! It needs no Python, unlike the parity suite next to it.
 
-use music21_rs::{Ratio, ScalaArchive, ScalaScale};
+use music21::{Ratio, ScalaArchive, ScalaScale};
 
 use std::path::{Path, PathBuf};
 

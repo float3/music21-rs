@@ -443,6 +443,14 @@ and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
 no longer stops a release. it still runs on every push to master and
 publishes the reports page.
 
+**packages end in `-rs`, libraries do not.** `music21-rs` is `use music21`,
+`harte-rs` is `use harte`, as harte-rs on PyPI is `import harte`. the
+suffix keeps the packages apart from music21 and harte-library where both
+sit in one list; the code uses the names the music is known by. the Python
+wheel stays `music21_rs`, since `music21` is music21's own import name and
+the wheel is installed beside it. *costs:* the library name is not the one
+`cargo add` takes, so each README says it.
+
 **harte-rs is pure Python over the wheel.** its `Harte` subclasses the
 wheel's `Chord` in Python, and the label is read by a `_HarteLabel` the
 wheel carries, so harte-rs builds one platform-independent wheel and the

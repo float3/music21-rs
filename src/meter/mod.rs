@@ -89,13 +89,13 @@ impl BeatDivision {
 /// A time signature, such as `4/4` or `6/8`.
 ///
 /// ```
-/// use music21_rs::TimeSignature;
+/// use music21::TimeSignature;
 ///
 /// let six_eight = TimeSignature::from_ratio_string("6/8")?;
 /// assert_eq!(six_eight.beat_count(), 2);
 /// assert_eq!(six_eight.beat_quarter_length(), 1.5);
 /// assert_eq!(six_eight.classification(), "Compound Duple");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 /// Not `Copy`, `Eq` or `Hash`: a meter is about to carry the partitions it
 /// is felt in, and those weigh their parts in floats.
@@ -730,12 +730,12 @@ impl TimeSignature {
     /// changes; its beats and partitions stay the meter's.
     ///
     /// ```
-    /// use music21_rs::{Duration, TimeSignature};
+    /// use music21::{Duration, TimeSignature};
     ///
     /// let mut meter = TimeSignature::new(3, 8)?;
     /// meter.set_bar_duration(Some(Duration::new(1.75)?));
     /// assert_eq!(meter.bar_duration().quarter_length(), 1.75);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn set_bar_duration(&mut self, written: Option<Duration>) {
         self.overridden_bar_duration = written;

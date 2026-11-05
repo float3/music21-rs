@@ -122,13 +122,13 @@ impl StreamElement {
     /// music21's `isinstance` by class name.
     ///
     /// ```
-    /// use music21_rs::{Note, StreamElement};
+    /// use music21::{Note, StreamElement};
     ///
     /// let note: StreamElement = Note::from_name("C4")?.into();
     /// assert!(note.is_instance("NotRest"));
     /// assert!(note.is_instance("GeneralNote"));
     /// assert!(!note.is_instance("Rest"));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn is_instance(&self, class: &str) -> bool {
         self.music21_classes().contains(&class)

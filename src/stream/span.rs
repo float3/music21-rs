@@ -90,8 +90,8 @@ impl Stream {
     /// the float that names it.
     ///
     /// ```
-    /// use music21_rs::stream::OffsetSpan;
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::stream::OffsetSpan;
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut measure = Stream::with_kind(StreamKind::Measure);
     /// measure.insert(0.0, Note::from_name("C4")?.with_duration(Duration::half()));
@@ -111,7 +111,7 @@ impl Stream {
     /// let found = measure.elements_in_span(&OffsetSpan::between(1.0, 2.0));
     /// assert_eq!(found.len(), 1);
     /// assert_eq!(found[0].offset(), 2.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn elements_in_span(&self, span: &OffsetSpan) -> Vec<&StreamEvent> {
         let start = Exact::held(span.start);
@@ -141,7 +141,7 @@ impl Stream {
     /// music21's `getElementsByClass`.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream, StreamKind, TimeSignature};
+    /// use music21::{Note, Stream, StreamKind, TimeSignature};
     ///
     /// let mut measure = Stream::with_kind(StreamKind::Measure);
     /// measure.insert(0.0, TimeSignature::new(4, 4)?);
@@ -150,7 +150,7 @@ impl Stream {
     /// assert_eq!(measure.elements_of_class(&["GeneralNote"]).len(), 1);
     /// assert!(measure.has_element_of_class(&["TimeSignature"]));
     /// assert_eq!(measure.elements_not_of_class(&["Note"]).len(), 1);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn elements_of_class(&self, classes: &[&str]) -> Vec<&StreamEvent> {
         self.events
@@ -191,7 +191,7 @@ impl OffsetSpan {
     /// can ask this of each rather than keep a second copy of the rules.
     ///
     /// ```
-    /// use music21_rs::stream::OffsetSpan;
+    /// use music21::stream::OffsetSpan;
     ///
     /// // A half note at nought does not begin in a span of no length at
     /// // 1, which is what music21's `mustBeginInSpan` asks by default.

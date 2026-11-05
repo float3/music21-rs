@@ -50,8 +50,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::FloatType;
-use music21_rs_crate::omr::correctors::{
+use music21::FloatType;
+use music21::omr::correctors::{
     MeasureRelationship as RsMeasureRelationship, Opcode, OpcodeTag, PROBABILITY_ON_ADDITION,
     PROBABILITY_ON_EQUALITY, PROBABILITY_ON_OMISSION, hash_grace, hash_note, hash_quarter_length,
     hash_rest, incorrect_measures, measure_difference, measure_hash, opcodes,
@@ -567,19 +567,16 @@ impl SinglePart {
     /// The part as the crate holds one, read afresh: music21's
     /// `measureStream` is a live view of it, and its own example inserts
     /// a time signature and asks again.
-    fn read(&self, py: Python<'_>) -> PyResult<music21_rs_crate::Stream> {
+    fn read(&self, py: Python<'_>) -> PyResult<music21::Stream> {
         crate::stream::crate_stream(self.scorePart.bind(py))
     }
 
     /// The part's measure rhythms and those flagged, as the crate reads
     /// them.
-    fn crate_part(
-        &self,
-        py: Python<'_>,
-    ) -> PyResult<music21_rs_crate::omr::correctors::SinglePart> {
+    fn crate_part(&self, py: Python<'_>) -> PyResult<music21::omr::correctors::SinglePart> {
         let part = self.read(py)?;
         let number = self.partNumber.bind(py).extract::<usize>().unwrap_or(0);
-        music21_rs_crate::omr::correctors::SinglePart::from_part(&part, number)
+        music21::omr::correctors::SinglePart::from_part(&part, number)
             .map_err(|error| crate::stream::stream_error(&error))
     }
 }

@@ -84,7 +84,7 @@ fn import_error(message: impl Into<String>) -> Error {
 /// `converter.parse` for the format.
 ///
 /// ```
-/// use music21_rs::musicxml::from_musicxml;
+/// use music21::musicxml::from_musicxml;
 ///
 /// let score = from_musicxml(
 ///     "<score-partwise><part-list><score-part id=\"P1\"><part-name>Flute</part-name>\
@@ -96,7 +96,7 @@ fn import_error(message: impl Into<String>) -> Error {
 /// let part = score.parts()[0];
 /// assert_eq!(part.name(), Some("Flute"));
 /// assert_eq!(part.measures()[0].pitches()[0].name_with_octave(), "C4");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_musicxml(document: &str) -> Result<Stream> {
     let root = Xml::parse(document)?;

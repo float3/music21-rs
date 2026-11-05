@@ -33,7 +33,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
-use music21_rs_crate::search::{
+use music21::search::{
     Algorithm, SearchTerm, Searched, StreamSearcher as RsStreamSearcher, Translation,
     approximate_note_search, approximate_note_search_no_rhythm,
     approximate_note_search_only_rhythm, approximate_note_search_weighted,
@@ -43,8 +43,8 @@ use music21_rs_crate::search::{
     translate_note_with_duration_to_bytes, translate_stream_to_string,
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,
 };
-use music21_rs_crate::stream::{Stream as RsStream, StreamElement};
-use music21_rs_crate::{FloatType, IntegerType};
+use music21::stream::{Stream as RsStream, StreamElement};
+use music21::{FloatType, IntegerType};
 
 use crate::Walkable;
 
@@ -177,7 +177,7 @@ fn terms_of(searchList: &Bound<'_, PyAny>) -> PyResult<Vec<SearchTerm>> {
 }
 
 /// music21's error for what a search cannot answer, out of the crate's.
-fn search_error(error: &music21_rs_crate::Error) -> PyErr {
+fn search_error(error: &music21::Error) -> PyErr {
     SearchException::new_err(crate::pitch::message(error))
 }
 

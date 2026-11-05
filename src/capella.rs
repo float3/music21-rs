@@ -47,7 +47,7 @@ type Staff = (String, Placed);
 /// measure's own (where a MusicXML writer passes it over).
 ///
 /// ```
-/// use music21_rs::capella::from_capella;
+/// use music21::capella::from_capella;
 ///
 /// let score = from_capella(
 ///     "<score><systems><system><staves><staff layout=\"S\"><voices><voice><noteObjects>\
@@ -58,7 +58,7 @@ type Staff = (String, Placed);
 /// )?;
 /// let pitches = score.pitches();
 /// assert_eq!(pitches[0].name_with_octave(), "C4");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

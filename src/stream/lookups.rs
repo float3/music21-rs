@@ -51,12 +51,12 @@ impl Stream {
     /// found here.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("4/4 c4 d4 e2")?.flatten();
     /// let found = line.element_at_or_before(1.5, &["Note"]).unwrap();
     /// assert_eq!(found.offset(), 1.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn element_at_or_before(
         &self,
@@ -137,12 +137,12 @@ impl Stream {
     /// answers for its first part with measures.
     ///
     /// ```
-    /// use music21_rs::tinynotation::from_tiny_notation;
+    /// use music21::tinynotation::from_tiny_notation;
     ///
     /// let line = from_tiny_notation("3/4 c4 d4 e4 f2.")?;
     /// let (beat, measure) = line.beat_and_measure_from_offset(4.0, true)?;
     /// assert_eq!((beat, measure.number()), (2.0, 2));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors

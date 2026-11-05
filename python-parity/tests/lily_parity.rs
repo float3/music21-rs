@@ -9,8 +9,8 @@
 //! `LILY_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::lily::{LilyOptions, to_lilypond};
-use music21_rs::musicxml::from_musicxml;
+use music21::lily::{LilyOptions, to_lilypond};
+use music21::musicxml::from_musicxml;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

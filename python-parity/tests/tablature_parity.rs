@@ -6,8 +6,8 @@
 //! the same notes, order them the same lowest first, and sound the same
 //! pitches or refuse the same boards.
 
-use music21_rs::IntegerType;
-use music21_rs::tablature::{FretBoard, FretNote};
+use music21::IntegerType;
+use music21::tablature::{FretBoard, FretNote};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;

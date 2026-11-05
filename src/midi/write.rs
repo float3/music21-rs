@@ -68,8 +68,8 @@ impl Default for ExportOptions {
 /// chords they are, for as long as they last.
 ///
 /// ```
-/// use music21_rs::midi::{from_midi, to_midi, ExportOptions};
-/// use music21_rs::{Duration, Note, Stream, StreamKind};
+/// use music21::midi::{from_midi, to_midi, ExportOptions};
+/// use music21::{Duration, Note, Stream, StreamKind};
 ///
 /// let mut part = Stream::with_kind(StreamKind::Part);
 /// part.push(Note::from_name("C4")?.with_duration(Duration::half()));
@@ -77,7 +77,7 @@ impl Default for ExportOptions {
 /// let bytes = to_midi(&part, &ExportOptions::default())?;
 /// assert_eq!(&bytes[..4], b"MThd");
 /// assert_eq!(from_midi(&bytes)?.notes().len(), 2);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// Repeats are played out first, as [`Stream::expand_repeats`] plays them.

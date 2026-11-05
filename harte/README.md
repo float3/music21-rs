@@ -1,8 +1,8 @@
-# harte
+# harte-rs
 
 [![CI](https://github.com/float3/music21-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/float3/music21-rs/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/harte.svg)](https://crates.io/crates/harte)
-[![docs.rs](https://docs.rs/harte/badge.svg)](https://docs.rs/harte)
+[![crates.io](https://img.shields.io/crates/v/harte-rs.svg)](https://crates.io/crates/harte-rs)
+[![docs.rs](https://docs.rs/harte-rs/badge.svg)](https://docs.rs/harte-rs)
 
 Harte chord notation, `C:maj7/3`, `Bb:(b3,5,b7,9)`, `F:sus4(*3,9)`, `N`,
 read into [music21-rs](https://crates.io/crates/music21-rs) chords. it is a
@@ -29,10 +29,10 @@ removes the third. a degree is written the Harte way, `b3`, `#11`, `bb7`.
 ## using the crate
 
 ```bash
-cargo add harte
+cargo add harte-rs
 ```
 
-default features are empty. `serde` adds `Serialize` and `Deserialize` to
+the library is `harte`: `use harte::Harte`. default features are empty. `serde` adds `Serialize` and `Deserialize` to
 `Harte` and `HarteInterval`, and turns on music21-rs's `serde`.
 
 ```rust
@@ -66,7 +66,7 @@ assert!(Harte::new("N")?.is_empty());
 # Ok::<(), harte::Error>(())
 ```
 
-the full API is on [docs.rs](https://docs.rs/harte).
+the full API is on [docs.rs](https://docs.rs/harte-rs).
 
 ## Python
 
@@ -92,7 +92,7 @@ release names the music21-rs release it builds against.
 
 ```bash
 # the crate's tests, including the comparison with harte-library's coverage set
-cargo test -p harte --all-features
+cargo test -p harte-rs --all-features
 # regenerate data/harte_expectations.toml from the pinned harte-library checkout
 cargo run --release -p xtask --features python -- regenerate-fixtures
 ```

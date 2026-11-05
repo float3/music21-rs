@@ -9,14 +9,14 @@
 //! as music21's does, space for space.
 //!
 //! ```
-//! use music21_rs::lily::{LilyOptions, to_lilypond};
-//! use music21_rs::tinynotation::from_tiny_notation;
+//! use music21::lily::{LilyOptions, to_lilypond};
+//! use music21::tinynotation::from_tiny_notation;
 //!
 //! let line = from_tiny_notation("4/4 c4 d8 e f#4. g8")?;
 //! let text = to_lilypond(&line, &LilyOptions::default())?;
 //! assert!(text.starts_with("\\version \"2.24\""));
 //! assert!(text.contains("fis' 4."));
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::bar::BarlineType;

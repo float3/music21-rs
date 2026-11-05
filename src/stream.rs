@@ -762,14 +762,14 @@ impl Stream {
     /// Creates an empty stream.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream};
+    /// use music21::{Note, Stream};
     ///
     /// let mut stream = Stream::new();
     /// stream.push(Note::from_name("C4")?);
     /// stream.push(Note::from_name("E4")?);
     /// assert_eq!(stream.len(), 2);
     /// assert_eq!(stream.end_offset(), 2.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn new() -> Self {
         Self::default()
@@ -778,7 +778,7 @@ impl Stream {
     /// Creates an empty stream standing for one of music21's subclasses.
     ///
     /// ```
-    /// use music21_rs::{Stream, StreamKind};
+    /// use music21::{Stream, StreamKind};
     ///
     /// let part = Stream::with_kind(StreamKind::Part);
     /// assert_eq!(part.kind(), StreamKind::Part);
@@ -988,14 +988,14 @@ impl Stream {
     /// [`Stream::leaves`].
     ///
     /// ```
-    /// use music21_rs::{Note, Spanner, Stream};
+    /// use music21::{Note, Spanner, Stream};
     ///
     /// let mut stream = Stream::new();
     /// stream.push(Note::from_name("C4")?);
     /// stream.push(Note::from_name("D4")?);
     /// stream.add_spanner(Spanner::slur(vec![0, 1]));
     /// assert_eq!(stream.spanners().len(), 1);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn add_spanner(&mut self, spanner: Spanner) {
         self.labels.spanners.push(spanner);
@@ -1042,14 +1042,14 @@ impl Stream {
     /// Inserts an element at a quarter-length offset.
     ///
     /// ```
-    /// use music21_rs::{Note, Stream};
+    /// use music21::{Note, Stream};
     ///
     /// let mut stream = Stream::new();
     /// stream.insert(2.0, Note::from_name("G4")?);
     /// stream.insert(0.0, Note::from_name("C4")?);
     /// let offsets: Vec<f64> = stream.events().iter().map(|event| event.offset()).collect();
     /// assert_eq!(offsets, [0.0, 2.0]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn insert(&mut self, offset: FloatType, element: impl Into<StreamElement>) {
         self.events.push(StreamEvent::new(offset, element));
@@ -1059,14 +1059,14 @@ impl Stream {
     /// Appends an element after the current end of the stream.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Rest, Stream};
+    /// use music21::{Duration, Note, Rest, Stream};
     ///
     /// let mut stream = Stream::new();
     /// stream.push(Note::from_name("C4")?.with_duration(Duration::half()));
     /// stream.push(Rest::new(Duration::new(1.0)?));
     /// stream.push(Note::from_name("D4")?);
     /// assert_eq!(stream.events()[2].offset(), 3.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn push(&mut self, element: impl Into<StreamElement>) {
         let element = element.into();
@@ -1082,7 +1082,7 @@ impl Stream {
     /// The events in offset order.
     ///
     /// ```
-    /// use music21_rs::{Note, Rest, Stream, StreamElement};
+    /// use music21::{Note, Rest, Stream, StreamElement};
     ///
     /// let mut stream = Stream::new();
     /// stream.push(Note::from_name("C4")?);
@@ -1097,7 +1097,7 @@ impl Stream {
     ///     })
     ///     .collect();
     /// assert_eq!(names, ["C4", "G4"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn events(&self) -> &[StreamEvent] {
         &self.events
@@ -1129,7 +1129,7 @@ impl Stream {
     /// nesting held them, part by part.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// for name in ["C4", "D4"] {
@@ -1140,7 +1140,7 @@ impl Stream {
     /// let flat = part.flatten();
     /// assert_eq!(flat.len(), 2);
     /// assert_eq!(flat.events()[1].offset(), 4.0);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn flatten(&self) -> Self {
         let mut flattened = Self::with_kind(self.kind);
@@ -1179,7 +1179,7 @@ impl Stream {
     /// themselves included: music21's `recurse`.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// for name in ["C4", "D4"] {
@@ -1190,7 +1190,7 @@ impl Stream {
     /// // Two measures and the note in each.
     /// let offsets: Vec<f64> = part.recurse().iter().map(|(offset, _)| *offset).collect();
     /// assert_eq!(offsets, [0.0, 0.0, 4.0, 4.0]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn recurse(&self) -> Vec<(FloatType, &StreamElement)> {
         let mut out = Vec::new();
@@ -1581,7 +1581,7 @@ impl Stream {
     /// The measures this stream holds.
     ///
     /// ```
-    /// use music21_rs::{Duration, Note, Stream, StreamKind};
+    /// use music21::{Duration, Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// for name in ["C4", "D4"] {
@@ -1591,7 +1591,7 @@ impl Stream {
     /// }
     /// assert_eq!(part.measures().len(), 2);
     /// assert_eq!(part.measures()[1].len(), 1);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn measures(&self) -> Vec<&Stream> {
         self.streams_of_kind(StreamKind::Measure)
@@ -1606,7 +1606,7 @@ impl Stream {
     /// `flatten().notes`, which leaves rests out.
     ///
     /// ```
-    /// use music21_rs::{Chord, Note, Rest, Stream};
+    /// use music21::{Chord, Note, Rest, Stream};
     ///
     /// let mut stream = Stream::new();
     /// stream.push(Note::from_name("C4")?);
@@ -1614,7 +1614,7 @@ impl Stream {
     /// stream.push(Chord::new("E4 G4")?);
     /// let offsets: Vec<f64> = stream.notes().iter().map(|(offset, _)| *offset).collect();
     /// assert_eq!(offsets, [0.0, 2.0]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn notes(&self) -> Vec<(FloatType, StreamElement)> {
         self.flatten()

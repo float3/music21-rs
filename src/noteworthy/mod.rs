@@ -57,14 +57,14 @@ fn error(message: impl Into<String>) -> Error {
 /// diminuendo marks, performance styles, a second verse -- is passed over.
 ///
 /// ```
-/// use music21_rs::noteworthy::from_noteworthy;
+/// use music21::noteworthy::from_noteworthy;
 ///
 /// let score = from_noteworthy(
 ///     "!NoteWorthyComposer(2.0)\n|AddStaff|\n|Clef|Type:Bass\n|TimeSig|Signature:4/4\n|Note|Dur:Whole|Pos:1\n",
 /// )?;
 /// let pitches = score.pitches();
 /// assert_eq!(pitches[0].name_with_octave(), "E3");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

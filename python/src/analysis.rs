@@ -26,7 +26,7 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use music21_rs_crate::analysis::KeyEstimate;
+use music21::analysis::KeyEstimate;
 
 use crate::Walkable;
 
@@ -81,8 +81,7 @@ pyo3::create_exception!(
 #[pyfunction]
 fn nPVI(streamForAnalysis: &Bound<'_, PyAny>) -> PyResult<f64> {
     let read = crate::stream::crate_stream(streamForAnalysis)?;
-    music21_rs_crate::analysis::patel::n_pvi(&read)
-        .map_err(|error| crate::stream::stream_error(&error))
+    music21::analysis::patel::n_pvi(&read).map_err(|error| crate::stream::stream_error(&error))
 }
 
 /// music21's `analysis.patel.melodicIntervalVariability`: how varied the
@@ -98,17 +97,15 @@ fn melodicIntervalVariability(
 ) -> PyResult<f64> {
     let read = crate::stream::crate_stream(streamForAnalysis)?;
     let options = crate::stream::consecutive_options(skipKeywords)?;
-    music21_rs_crate::analysis::patel::melodic_interval_variability(&read, &options).map_err(
-        |error| match error {
+    music21::analysis::patel::melodic_interval_variability(&read, &options).map_err(|error| {
+        match error {
             // A line too short for a deviation at all, which music21 has
             // raised as a `ValueError` since v9 rather than as one of its
             // own exceptions.
-            music21_rs_crate::Error::Analysis(said) => {
-                pyo3::exceptions::PyValueError::new_err(said)
-            }
+            music21::Error::Analysis(said) => pyo3::exceptions::PyValueError::new_err(said),
             error => crate::stream::stream_error(&error),
-        },
-    )
+        }
+    })
 }
 
 /// music21's `analysis.metrical.labelBeatDepth`: a lyric under each note
@@ -124,7 +121,7 @@ fn melodicIntervalVariability(
 fn labelBeatDepth<'py>(streamIn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let py = streamIn.py();
     let read = crate::stream::read_with_leaves(streamIn)?;
-    let depths = music21_rs_crate::analysis::metrical::beat_depths(&read.0)
+    let depths = music21::analysis::metrical::beat_depths(&read.0)
         .map_err(|error| crate::stream::stream_error(&error))?;
     for (position, depth) in depths {
         let Some(object) = read.1.get(position) else {
@@ -148,7 +145,7 @@ fn labelBeatDepth<'py>(streamIn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAn
 fn thomassenMelodicAccent(streamIn: &Bound<'_, PyAny>) -> PyResult<()> {
     let py = streamIn.py();
     let read = crate::stream::read_with_leaves(streamIn)?;
-    let accents = music21_rs_crate::analysis::metrical::thomassen_melodic_accent(&read.0)
+    let accents = music21::analysis::metrical::thomassen_melodic_accent(&read.0)
         .map_err(|error| crate::stream::stream_error(&error))?;
     for (position, accent) in accents.iter().enumerate() {
         if let Some(object) = read.1.get(position) {
@@ -257,7 +254,7 @@ impl Segmenter {
         let py = workOrPart.py();
         let (stream, leaves) = crate::stream::read_with_leaves(workOrPart)?;
         Ok(
-            music21_rs_crate::analysis::segment_by_rests::segments_list(&stream, removeEmptyLists)
+            music21::analysis::segment_by_rests::segments_list(&stream, removeEmptyLists)
                 .into_iter()
                 .map(|run| {
                     run.into_iter()
@@ -294,7 +291,7 @@ impl Segmenter {
 /// distance plus one.
 #[pyfunction]
 fn divide(coefficient: f64, distance: i32) -> f64 {
-    music21_rs_crate::analysis::floating_key::divide(coefficient, distance)
+    music21::analysis::floating_key::divide(coefficient, distance)
 }
 
 /// music21's `analysis.floatingKey.KeyAnalyzer`: the key of every measure,
@@ -342,7 +339,7 @@ impl KeyAnalyzer {
             return Err(FloatingKeyException::new_err("Need a Stream to initialize"));
         };
         let stream = crate::stream::crate_stream(s)?;
-        let analyzer = music21_rs_crate::analysis::floating_key::KeyAnalyzer::new(&stream)
+        let analyzer = music21::analysis::floating_key::KeyAnalyzer::new(&stream)
             .map_err(|error| FloatingKeyException::new_err(crate::pitch::message(&error)))?;
         Ok(Self {
             stream: s.clone().unbind(),
@@ -486,7 +483,7 @@ impl KeyAnalyzer {
     /// Every measure's readings, best first, as the crate reads them.
     fn readings(&self, py: Python<'_>) -> PyResult<Vec<Option<Vec<KeyEstimate>>>> {
         let stream = crate::stream::crate_stream(self.stream.bind(py))?;
-        let mut analyzer = music21_rs_crate::analysis::floating_key::KeyAnalyzer::new(&stream)
+        let mut analyzer = music21::analysis::floating_key::KeyAnalyzer::new(&stream)
             .map_err(|error| FloatingKeyException::new_err(crate::pitch::message(&error)))?;
         analyzer.window_size = self.windowSize;
         Ok(analyzer.raw_key_by_measure())

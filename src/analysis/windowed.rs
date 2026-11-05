@@ -49,9 +49,9 @@ pub enum WindowStep {
 /// a `Result`.
 ///
 /// ```
-/// use music21_rs::analysis::{KeyProfile, estimate_key_of_stream};
-/// use music21_rs::analysis::windowed::{WindowType, WindowedAnalysis};
-/// use music21_rs::tinynotation::from_tiny_notation;
+/// use music21::analysis::{KeyProfile, estimate_key_of_stream};
+/// use music21::analysis::windowed::{WindowType, WindowedAnalysis};
+/// use music21::tinynotation::from_tiny_notation;
 ///
 /// let line = from_tiny_notation("4/4 c4 e g c' f a c' f'")?;
 /// let windowed = WindowedAnalysis::new(&line)?;
@@ -62,7 +62,7 @@ pub enum WindowStep {
 /// });
 /// assert_eq!(keys.first(), Some(&Some("C".to_string())));
 /// assert_eq!(keys.last(), Some(&Some("F".to_string())));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug)]
 pub struct WindowedAnalysis {

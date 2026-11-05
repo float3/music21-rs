@@ -21,9 +21,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
-use music21_rs_crate::braille::basic;
-use music21_rs_crate::stream::StreamElement;
-use music21_rs_crate::{IntegerType, Pitch};
+use music21::braille::basic;
+use music21::stream::StreamElement;
+use music21::{IntegerType, Pitch};
 
 /// The names this module hands out.
 pub const NAMES: &[&str] = &[
@@ -61,7 +61,7 @@ pyo3::create_exception!(
 
 /// music21's error for what cannot be written in braille, out of the
 /// crate's.
-fn braille_error(error: &music21_rs_crate::Error) -> PyErr {
+fn braille_error(error: &music21::Error) -> PyErr {
     BrailleBasicException::new_err(crate::pitch::message(error))
 }
 

@@ -1,7 +1,7 @@
 //! The crate's ABC reader against music21's, tune by tune.
 //!
 //! Each tune is read twice: by music21, which then writes it out as MusicXML
-//! with its own `ScoreExporter`, and by `music21_rs::abc::from_abc`, whose
+//! with its own `ScoreExporter`, and by `music21::abc::from_abc`, whose
 //! score the crate's MusicXML writer writes out. The writer is held to
 //! music21's by `musicxml_parity`, so the two documents are the same text
 //! only if the two readers read the same score.
@@ -13,9 +13,9 @@
 //! `;`-separated list of such names or `@` and the path of a file of them,
 //! runs those instead of `musicxml_common`'s `ABC_TUNES`.
 
-use music21_rs::abc::{from_abc, from_abc_number};
-use music21_rs::metadata::MetadataValue;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
+use music21::abc::{from_abc, from_abc_number};
+use music21::metadata::MetadataValue;
+use music21::musicxml::{ExportOptions, to_musicxml};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

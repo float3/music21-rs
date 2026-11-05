@@ -25,8 +25,8 @@ pub static DEFAULT_MAX_PITCH: LazyLock<Pitch> =
 /// Whether any part sings higher than a part above it.
 ///
 /// ```
-/// use music21_rs::Pitch;
-/// use music21_rs::figuredbass::possibility::voice_crossing;
+/// use music21::Pitch;
+/// use music21::figuredbass::possibility::voice_crossing;
 ///
 /// let pitches = |names: &[&str]| -> Vec<Pitch> {
 ///     names.iter().map(|name| Pitch::from_name(*name).unwrap()).collect()

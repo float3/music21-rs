@@ -160,12 +160,12 @@ impl Transform {
     /// it keeps `chord`'s duration.
     ///
     /// ```
-    /// use music21_rs::{Chord, Pitch, analysis::neoriemannian::Transform};
+    /// use music21::{Chord, Pitch, analysis::neoriemannian::Transform};
     ///
     /// let c_major = Chord::new("C4 E4 G4")?;
     /// let e_minor = Transform::L.apply(&c_major)?;
     /// assert_eq!(e_minor.pitches().iter().map(Pitch::name_with_octave).collect::<Vec<_>>(), ["B3", "E4", "G4"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -356,13 +356,13 @@ pub fn lrp_chain(
 /// No transformations at all leave `chord` as it was.
 ///
 /// ```
-/// use music21_rs::{Chord, Pitch, analysis::neoriemannian::*};
+/// use music21::{Chord, Pitch, analysis::neoriemannian::*};
 ///
 /// let c_major = Chord::new("C4 E4 G4")?;
 /// let lp = Transform::parse_chain("LP")?;
 /// let ended = lrp_combination(&c_major, &lp, ChainOrder::LeftToRight, Respell::Keep)?;
 /// assert_eq!(ended.pitches().iter().map(Pitch::name_with_octave).collect::<Vec<_>>(), ["B3", "E4", "G#4"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

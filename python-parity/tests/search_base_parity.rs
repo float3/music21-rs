@@ -10,9 +10,9 @@
 //! `;`-separated list of corpus names, runs those instead of the writer
 //! test's scores, which is how the corpus is swept.
 
-use music21_rs::FloatType;
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::search::{
+use music21::FloatType;
+use music21::musicxml::from_musicxml;
+use music21::search::{
     Algorithm, Filter, SearchTerm, StreamSearcher, approximate_note_search,
     approximate_note_search_no_rhythm, approximate_note_search_only_rhythm,
     approximate_note_search_weighted, most_common_measure_rhythms, note_name_rhythmic_search,
@@ -20,7 +20,7 @@ use music21_rs::search::{
     translate_intervals_and_speed, translate_stream_to_string,
     translate_stream_to_string_no_rhythm, translate_stream_to_string_only_rhythm,
 };
-use music21_rs::stream::Stream;
+use music21::stream::Stream;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

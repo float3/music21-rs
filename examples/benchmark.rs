@@ -20,7 +20,7 @@ fn time<T>(label: &str, iterations: u32, mut f: impl FnMut() -> T) {
 }
 
 fn main() {
-    use music21_rs::{Chord, ChromaticInterval, Interval, Pitch};
+    use music21::{Chord, ChromaticInterval, Interval, Pitch};
     let n = 200_000;
     time("Pitch::from_name(\"C#4\")", n, || {
         Pitch::from_name("C#4").unwrap()

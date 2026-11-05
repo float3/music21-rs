@@ -13,7 +13,7 @@ use crate::Walkable;
 use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
 
-use music21_rs_crate::{
+use music21::{
     HISTORICAL_ROWS, ToneRow as RsToneRow, Transformation, TransformationConvention,
     TwelveToneMatrix as RsMatrix, historical_row_by_name, row_to_matrix,
 };
@@ -78,7 +78,7 @@ fn pitch_class_of(item: &Bound<'_, PyAny>) -> PyResult<i32> {
     Ok(pitch_class_of_pitch(&pitch_from_any(item)?))
 }
 
-fn pitch_class_of_pitch(pitch: &music21_rs_crate::Pitch) -> i32 {
+fn pitch_class_of_pitch(pitch: &music21::Pitch) -> i32 {
     (pitch.ps().round_ties_even() as i32).rem_euclid(12)
 }
 
@@ -98,8 +98,8 @@ pub(crate) fn row_from_any(row: Option<&Bound<'_, PyAny>>) -> PyResult<RsToneRow
 /// music21 keeps a row as a stream of `note.Note`s, and its own tests hand
 /// three of them straight to `Chord` — so what a row yields has to be a note
 /// a chord can be built from, not a note-shaped stand-in.
-fn row_note(py: Python<'_>, pitch: music21_rs_crate::Pitch) -> PyResult<Py<PyAny>> {
-    Ok(crate::note::Note::object(py, music21_rs_crate::Note::from_pitch(pitch))?.into_any())
+fn row_note(py: Python<'_>, pitch: music21::Pitch) -> PyResult<Py<PyAny>> {
+    Ok(crate::note::Note::object(py, music21::Note::from_pitch(pitch))?.into_any())
 }
 
 /// music21's `serial.ToneRow`.

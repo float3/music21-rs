@@ -20,7 +20,7 @@ mod readme {}
 use std::fmt;
 use std::str::FromStr;
 
-use music21_rs::{Chord, FloatType, IntegerType, Interval, Pitch};
+use music21::{Chord, FloatType, IntegerType, Interval, Pitch};
 
 /// What can go wrong reading Harte notation.
 #[derive(Debug, thiserror::Error)]
@@ -30,7 +30,7 @@ pub enum Error {
     Harte(String),
     /// The chord the label names could not be built.
     #[error(transparent)]
-    Music21(#[from] music21_rs::Error),
+    Music21(#[from] music21::Error),
 }
 
 /// The result of reading Harte notation.

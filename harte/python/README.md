@@ -8,7 +8,7 @@ read into [music21-rs](https://pypi.org/project/music21-rs/) chords. it is
 a replacement for [harte-library](https://github.com/andreamust/harte-library):
 it is imported as `harte`, has the same modules and names, and builds the
 chord harte-library builds for every label in that library's coverage set.
-the label is read by the [harte](https://crates.io/crates/harte) Rust crate,
+the label is read by the [harte-rs](https://crates.io/crates/harte-rs) Rust crate,
 and the chord is a music21-rs `Chord`, so neither music21 nor lark is
 needed.
 

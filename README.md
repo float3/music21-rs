@@ -83,7 +83,7 @@ example, is 441 KB. music21 installs 105 MB.
 cargo add music21-rs
 ```
 
-default features are empty. `serde` adds `Serialize` and `Deserialize` to the
+the library is `music21`: `use music21::Chord`. default features are empty. `serde` adds `Serialize` and `Deserialize` to the
 public types; `scala-archive` bundles the Scala scale archive described below;
 `language-detection` bundles music21's excerpts in seven languages, about
 1.9 MB, for its language feature `TX1` and `features::language`;
@@ -144,19 +144,19 @@ function's documentation lists them.
 name a chord and read its set class:
 
 ```rust
-use music21_rs::Chord;
+use music21::Chord;
 
 let chord: Chord = "C Eb G Bb".parse()?;
 assert_eq!(chord.pitched_common_name(), "C-minor seventh chord");
 assert_eq!(chord.forte_class().as_deref(), Some("4-26"));
 assert_eq!(chord.chord_symbol().as_deref(), Some("Cm7"));
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 spell and transpose pitches:
 
 ```rust
-use music21_rs::{Interval, Pitch};
+use music21::{Interval, Pitch};
 
 let mut pitch = Pitch::from_name("C#4")?;
 pitch.get_higher_enharmonic_in_place()?;
@@ -165,13 +165,13 @@ assert_eq!(pitch.name_with_octave(), "Db4");
 let fifth = Interval::from_name("P5")?;
 assert_eq!(fifth.transpose_pitch(&pitch)?.name_with_octave(), "Ab4");
 assert_eq!(fifth.pythagorean_ratio()?.to_string(), "3/2");
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 realize a roman numeral in a key, and analyse a chord as one:
 
 ```rust
-use music21_rs::{Chord, Key, RomanNumeral};
+use music21::{Chord, Key, RomanNumeral};
 
 let key = Key::from_tonic("c")?;
 let numeral = RomanNumeral::new("viio7", key.clone())?;
@@ -179,26 +179,26 @@ assert_eq!(numeral.to_chord()?.pitch_names(), ["B", "D", "F", "Ab"]);
 
 let analysed = RomanNumeral::analyze(&Chord::new("F Ab C")?, key)?;
 assert_eq!(analysed.map(|n| n.figure().to_string()), Some("iv".to_string()));
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 beats and accent weights of a time signature:
 
 ```rust
-use music21_rs::TimeSignature;
+use music21::TimeSignature;
 
 let six_eight = TimeSignature::new(6, 8)?;
 assert_eq!(six_eight.beat_count(), 2);
 assert_eq!(six_eight.accent_weight(1.5)?, 0.5);
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 write a score as MusicXML, with the `musicxml` feature:
 
 ```rust
 # #[cfg(feature = "musicxml")] {
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::{Clef, Note, Stream, StreamKind, TimeSignature};
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::{Clef, Note, Stream, StreamKind, TimeSignature};
 
 let mut measure = Stream::with_kind(StreamKind::Measure);
 measure.set_number(1);
@@ -216,10 +216,10 @@ let xml = to_musicxml(&score, &ExportOptions::default())?;
 assert!(xml.contains("<beats>3</beats>"));
 
 // And read it back.
-let read = music21_rs::musicxml::from_musicxml(&xml)?;
+let read = music21::musicxml::from_musicxml(&xml)?;
 assert_eq!(read.parts()[0].measures()[0].pitches().len(), 3);
 # }
-# Ok::<(), music21_rs::Error>(())
+# Ok::<(), music21::Error>(())
 ```
 
 full API documentation is on [docs.rs](https://docs.rs/music21-rs).
@@ -242,7 +242,7 @@ the tuning code has no counterpart in music21:
   their cents, so one written as ratios and one written as cents still match.
   The Scala archive has 44 such groups.
 - Harte chord notation, `C:maj7/3` or `Bb:(b3,5,b7,9)`, as the
-  [`harte`](harte/) crate beside this one: a port of
+  [`harte-rs`](harte/) crate beside this one: a port of
   [harte-library](https://github.com/andreamust/harte-library) that builds
   music21-rs chords, checked against every label in that library's
   8,064-chord coverage set. it is not music21's, so it is not in this crate.
@@ -348,7 +348,7 @@ contributors for the original library.
 
 ### harte-library
 
-the [`harte`](harte/) crate in this repository is a port of
+the [`harte-rs`](harte/) crate in this repository is a port of
 [harte-library](https://github.com/andreamust/harte-library) by Andrea
 Poltronieri, licensed
 [MIT](https://github.com/andreamust/harte-library/blob/main/LICENSE), and

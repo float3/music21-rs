@@ -33,12 +33,12 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
-use music21_rs_crate::analysis::reduce_chords::{
+use music21::analysis::reduce_chords::{
     ChordWeight, ReductionOptions, SliceWeigher, WeighedChord, measure_chord_weights,
     reduce_chords, reduced_measure_places, slice_weight,
 };
-use music21_rs_crate::chord::Chord as RsChord;
-use music21_rs_crate::duration::Duration as RsDuration;
+use music21::chord::Chord as RsChord;
+use music21::duration::Duration as RsDuration;
 
 use crate::Walkable;
 
@@ -484,7 +484,7 @@ impl ChordReducer {
             .unwrap_or(0);
         let length = chord
             .duration()
-            .map_or(0.0, music21_rs_crate::duration::Duration::quarter_length);
+            .map_or(0.0, music21::duration::Duration::quarter_length);
         Ok(algorithm.of(&chord, length, strength, at == of - 1))
     }
 }

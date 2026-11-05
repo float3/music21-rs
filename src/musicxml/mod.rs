@@ -113,8 +113,8 @@ impl Default for ExportOptions {
 /// Writes a score as a MusicXML document.
 ///
 /// ```
-/// use music21_rs::{Duration, Note, Stream, StreamKind, TimeSignature};
-/// use music21_rs::musicxml::{ExportOptions, to_musicxml};
+/// use music21::{Duration, Note, Stream, StreamKind, TimeSignature};
+/// use music21::musicxml::{ExportOptions, to_musicxml};
 ///
 /// let mut measure = Stream::with_kind(StreamKind::Measure);
 /// measure.set_number(1);
@@ -129,15 +129,15 @@ impl Default for ExportOptions {
 /// assert!(xml.contains("<step>D</step>"));
 /// assert!(xml.contains("<alter>1</alter>"));
 /// assert!(xml.contains("<duration>10080</duration>"));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// With [`ExportOptions::make_notation`] a part or a stream of loose notes
 /// may be handed in as readily as a score:
 ///
 /// ```
-/// use music21_rs::{Duration, Note, Stream, StreamKind, TimeSignature};
-/// use music21_rs::musicxml::{ExportOptions, to_musicxml};
+/// use music21::{Duration, Note, Stream, StreamKind, TimeSignature};
+/// use music21::musicxml::{ExportOptions, to_musicxml};
 ///
 /// let mut part = Stream::with_kind(StreamKind::Part);
 /// part.insert(0.0, TimeSignature::new(3, 4)?);
@@ -148,7 +148,7 @@ impl Default for ExportOptions {
 /// // A dotted half tied to a half, in two measures.
 /// assert_eq!(xml.matches("<measure ").count(), 2);
 /// assert!(xml.contains("<tie type=\"start\" />"));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -4083,7 +4083,7 @@ fn normalize_color(color: &str) -> Result<String> {
 /// case the name is written in; `None` for a name CSS does not have.
 ///
 /// ```
-/// use music21_rs::musicxml::css_color_hex;
+/// use music21::musicxml::css_color_hex;
 ///
 /// assert_eq!(css_color_hex("Red"), Some("#FF0000"));
 /// assert_eq!(css_color_hex("grey"), css_color_hex("gray"));

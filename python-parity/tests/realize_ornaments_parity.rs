@@ -22,8 +22,8 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::makenotation::realize_ornaments;
-use music21_rs::musicxml::from_musicxml;
+use music21::makenotation::realize_ornaments;
+use music21::musicxml::from_musicxml;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use pyo3::types::PyModule;

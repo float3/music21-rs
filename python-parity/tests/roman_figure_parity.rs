@@ -1,7 +1,7 @@
 //! Checks the crate's realization of roman numeral figures against
 //! music21's `RomanNumeral`, in `data/roman_figure_expectations.toml`.
 
-use music21_rs::{Key, RomanNumeral};
+use music21::{Key, RomanNumeral};
 use music21_rs_python_parity::music21_name;
 
 use std::path::Path;

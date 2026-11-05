@@ -9,8 +9,8 @@
 //! `BRAILLE_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::braille::translate::{BrailleOptions, measure_to_braille, stream_to_braille};
-use music21_rs::musicxml::from_musicxml;
+use music21::braille::translate::{BrailleOptions, measure_to_braille, stream_to_braille};
+use music21::musicxml::from_musicxml;
 use music21_rs_python_parity::answers;
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
@@ -178,12 +178,12 @@ fn the_crate_writes_scores_in_braille_as_music21_does() {
             let Some(part) = parts.first() else {
                 continue;
             };
-            let measures: Vec<&music21_rs::stream::Stream> = part
+            let measures: Vec<&music21::stream::Stream> = part
                 .events()
                 .iter()
                 .filter_map(|event| match event.element() {
-                    music21_rs::stream::StreamElement::Stream(inner)
-                        if inner.kind() == music21_rs::stream::StreamKind::Measure =>
+                    music21::stream::StreamElement::Stream(inner)
+                        if inner.kind() == music21::stream::StreamKind::Measure =>
                     {
                         Some(&**inner)
                     }

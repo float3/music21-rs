@@ -22,7 +22,7 @@ use crate::error::{Error, Result};
 /// A parsed Xenakis sieve.
 ///
 /// ```
-/// use music21_rs::Sieve;
+/// use music21::Sieve;
 ///
 /// // Every third semitone: a cycle of minor thirds.
 /// let sieve = Sieve::parse("3@0")?;
@@ -32,7 +32,7 @@ use crate::error::{Error, Result};
 /// // The major scale, as Xenakis would write it.
 /// let major = Sieve::parse("(-3@2 & 4) | (-3@1 & 4@1) | (3@2 & 4@2) | (-3 & 4@3)")?;
 /// assert_eq!(major.interval_widths()?, [2, 2, 1, 2, 2, 2, 1]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[must_use]
@@ -359,7 +359,7 @@ impl Sieve {
     /// members in the range.
     ///
     /// ```
-    /// use music21_rs::Sieve;
+    /// use music21::Sieve;
     ///
     /// assert_eq!(Sieve::parse("2&4&8|5")?.compressed(0, 99)?.to_string(), "8@0|5@0");
     /// assert_eq!(Sieve::parse("(5|2)&4&8")?.compressed(0, 99)?.to_string(), "8@0");
@@ -367,7 +367,7 @@ impl Sieve {
     ///     Sieve::parse("3@0^4@0")?.compressed(0, 99)?.to_string(),
     ///     "6@3|12@4|12@6|12@8"
     /// );
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn compressed(&self, low: IntegerType, high: IntegerType) -> Result<Self> {
         let classes = if self.root.is_bound() {
@@ -440,14 +440,14 @@ impl Sieve {
     /// `range` or else from the least of them to the greatest.
     ///
     /// ```
-    /// use music21_rs::Sieve;
+    /// use music21::Sieve;
     ///
     /// assert_eq!(Sieve::from_segment(&[2, 4, 6, 8], None)?.to_string(), "2@0");
     /// assert_eq!(
     ///     Sieve::from_segment(&[2, 4, 6, 8], Some((0, 19)))?.to_string(),
     ///     "12@8|14@6|16@4|18@2"
     /// );
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
@@ -509,11 +509,11 @@ impl fmt::Display for Node {
 /// with kept.
 ///
 /// ```
-/// use music21_rs::Sieve;
+/// use music21::Sieve;
 ///
 /// assert_eq!(Sieve::parse("3@11")?.to_string(), "3@2");
 /// assert_eq!(Sieve::parse("(5|2)&4&8")?.to_string(), "{5@0|2@0}&4@0&8@0");
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 impl fmt::Display for Sieve {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

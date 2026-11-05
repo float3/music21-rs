@@ -646,7 +646,7 @@ impl Beams {
     /// longer, or as more than one value.
     ///
     /// ```
-    /// use music21_rs::{Beams, Duration, Note, Rest, StreamElement};
+    /// use music21::{Beams, Duration, Note, Rest, StreamElement};
     ///
     /// let elements: Vec<StreamElement> = vec![
     ///     Note::from_name("C4")?.with_duration(Duration::quarter()).into(),
@@ -659,7 +659,7 @@ impl Beams {
     ///     .map(|beams| beams.as_ref().map(Beams::len))
     ///     .collect();
     /// assert_eq!(levels, [None, Some(1), Some(2), None]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn naive_beams<'a>(
         elements: impl IntoIterator<Item = &'a crate::stream::StreamElement>,

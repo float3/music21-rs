@@ -10,9 +10,9 @@
 //! loudly, each part or group of parts plays.
 //!
 //! ```
-//! use music21_rs::analysis::reduction::ScoreReduction;
-//! use music21_rs::stream::{Stream, StreamElement, StreamKind};
-//! use music21_rs::tinynotation::from_tiny_notation;
+//! use music21::analysis::reduction::ScoreReduction;
+//! use music21::stream::{Stream, StreamElement, StreamKind};
+//! use music21::tinynotation::from_tiny_notation;
 //!
 //! let mut part = from_tiny_notation("4/4 c4 d e f g1")?;
 //! part.set_kind(StreamKind::Part);
@@ -31,7 +31,7 @@
 //! let reduced = reduction.reduce()?;
 //! let notes = reduced.parts()[0].notes();
 //! assert_eq!(notes.len(), 1);
-//! # Ok::<(), music21_rs::Error>(())
+//! # Ok::<(), music21::Error>(())
 //! ```
 
 use crate::{

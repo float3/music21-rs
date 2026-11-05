@@ -9,7 +9,7 @@
 //! needs neither Python nor the submodule. `fixture_freshness.rs` is what stops
 //! the fixture itself going stale against a bumped submodule.
 
-use music21_rs::{
+use music21::{
     Accidental, DEFAULT_TEMPO_VALUES, Instrument, Interval, KeyProfile, humdrum, key,
     roman::FUNCTIONALITY_SCORES,
     scale::{HUMDRUM_SOLFEG_SYLLABLES, SOLFEG_SYLLABLES},
@@ -286,7 +286,7 @@ struct DynamicDecimalExpectation {
 
 #[test]
 fn dynamics_match_music21() {
-    use music21_rs::dynamics::{Dynamic, SHORT_NAMES, dynamic_str_from_decimal};
+    use music21::dynamics::{Dynamic, SHORT_NAMES, dynamic_str_from_decimal};
 
     let expectations = expectations();
     let mut mismatches = Vec::new();

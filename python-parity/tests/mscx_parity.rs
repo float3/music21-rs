@@ -64,10 +64,10 @@
 //! `name.mscx` in it that has a `name.musicxml` beside it, each expected to
 //! agree. That is how a score is tried before it is added here.
 
-use music21_rs::musescore::from_mscx;
-use music21_rs::musicxml::{ExportOptions, from_musicxml, to_musicxml};
-use music21_rs::notation::StemDirection;
-use music21_rs::{Stream, StreamElement};
+use music21::musescore::from_mscx;
+use music21::musicxml::{ExportOptions, from_musicxml, to_musicxml};
+use music21::notation::StemDirection;
+use music21::{Stream, StreamElement};
 use std::path::{Path, PathBuf};
 
 use crate::musicxml_common;

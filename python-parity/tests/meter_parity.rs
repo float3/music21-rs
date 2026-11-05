@@ -9,8 +9,8 @@
 //! `cargo run --release -p xtask --features python -- regenerate-fixtures` and committed, so this test
 //! needs neither Python nor the submodule.
 
-use music21_rs::TimeSignature;
-use music21_rs::meter::MeterTerminal;
+use music21::TimeSignature;
+use music21::meter::MeterTerminal;
 use serde::Deserialize;
 
 use std::path::Path;

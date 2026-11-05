@@ -23,7 +23,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
 
-use music21_rs_crate::analysis::{KeyProfile, estimate_key_of_stream, melodic_line_positions};
+use music21::analysis::{KeyProfile, estimate_key_of_stream, melodic_line_positions};
 
 use crate::Walkable;
 

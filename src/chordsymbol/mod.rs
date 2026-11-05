@@ -1045,7 +1045,7 @@ impl ChordSymbol {
 /// who wants the flat reading.
 ///
 /// ```
-/// use music21_rs::{ChordSymbol, Note, Stream, realize_chord_symbol_durations};
+/// use music21::{ChordSymbol, Note, Stream, realize_chord_symbol_durations};
 ///
 /// let mut stream = Stream::new();
 /// stream.insert(0.0, ChordSymbol::parse("C")?);
@@ -1057,11 +1057,11 @@ impl ChordSymbol {
 /// let held: Vec<f64> = stream
 ///     .events()
 ///     .iter()
-///     .filter(|event| matches!(event.element(), music21_rs::StreamElement::ChordSymbol(_)))
+///     .filter(|event| matches!(event.element(), music21::StreamElement::ChordSymbol(_)))
 ///     .map(|event| event.element().quarter_length())
 ///     .collect();
 /// assert_eq!(held, [2.0, 6.0]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn realize_chord_symbol_durations(stream: &mut Stream) {
     let lengths = chord_symbol_durations(stream);
@@ -1084,7 +1084,7 @@ pub fn realize_chord_symbol_durations(stream: &mut Stream) {
 /// something of its own beside each element.
 ///
 /// ```
-/// use music21_rs::{chordsymbol::chord_symbol_durations, ChordSymbol, Note, Stream};
+/// use music21::{chordsymbol::chord_symbol_durations, ChordSymbol, Note, Stream};
 ///
 /// let mut stream = Stream::new();
 /// stream.insert(0.0, ChordSymbol::parse("C")?);
@@ -1092,7 +1092,7 @@ pub fn realize_chord_symbol_durations(stream: &mut Stream) {
 /// stream.insert(3.0, ChordSymbol::parse("G7")?);
 /// stream.insert(3.0, Note::from_name("B3")?);
 /// assert_eq!(chord_symbol_durations(&stream), [(0, 3.0), (2, 1.0)]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn chord_symbol_durations(stream: &Stream) -> Vec<(usize, FloatType)> {
     let end = stream.end_offset();

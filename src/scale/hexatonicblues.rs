@@ -46,7 +46,7 @@ impl BluesForm {
 /// music21's `WeightedHexatonicBlues`, with the randomness made explicit.
 ///
 /// ```
-/// use music21_rs::{BluesForm, Pitch, WeightedHexatonicBlues};
+/// use music21::{BluesForm, Pitch, WeightedHexatonicBlues};
 ///
 /// let blues = WeightedHexatonicBlues::new(Pitch::from_name("C4")?);
 ///
@@ -57,7 +57,7 @@ impl BluesForm {
 /// let names: Vec<String> = blues.pitches(BluesForm::Pentatonic)?
 ///     .iter().map(|p| p.name()).collect();
 /// assert_eq!(names, ["C", "Eb", "F", "G", "Bb", "C"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

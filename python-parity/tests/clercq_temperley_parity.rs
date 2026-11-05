@@ -2,7 +2,7 @@
 //! song by song.
 //!
 //! Each song is read twice, by music21's `romanText.clercqTemperley` and by
-//! `music21_rs::romantext::clercq_temperley::from_clercq_temperley`, and
+//! `music21::romantext::clercq_temperley::from_clercq_temperley`, and
 //! the two parts are compared as an outline -- every measure and every
 //! chord in it, with its offset, its length, its pitches, its ties and what
 //! is written under it -- and then as the MusicXML each side's writer makes
@@ -24,9 +24,9 @@
 //!
 //! music21 is music21 here, with nothing of the crate installed over it.
 
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::romantext::clercq_temperley::from_clercq_temperley;
-use music21_rs::stream::{Stream, StreamKind};
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::romantext::clercq_temperley::from_clercq_temperley;
+use music21::stream::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

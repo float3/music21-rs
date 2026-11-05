@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "harte"
-version = "0.9.0"
+name = "harte-rs"
+version = "0.10.0"
 dependencies = [
  "music21-rs",
  "thiserror",
@@ -67,7 +67,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "music21-rs"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -80,9 +80,9 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.16.0"
+version = "0.17.0"
 dependencies = [
- "harte",
+ "harte-rs",
  "music21-rs",
  "pyo3",
  "serde",

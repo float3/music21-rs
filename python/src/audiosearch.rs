@@ -38,15 +38,15 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyList, PyTuple};
 
-use music21_rs_crate::audiosearch::{
+use music21::audiosearch::{
     REST_FREQUENCY, autocorrelation_frequency, decision_process, detect_pitch_frequencies,
     histogram, interpolation, joined_pitches, normalize_input_frequency,
     pitch_frequencies_to_objects, prepare_thresholds, quantize_duration, quarter_length_estimation,
     smooth_frequencies, transcribed_notes,
 };
-use music21_rs_crate::scale::Scale as RsScale;
-use music21_rs_crate::{Duration as RsDuration, Note as RsNote, Rest as RsRest};
-use music21_rs_crate::{FloatType, Pitch as RsPitch};
+use music21::scale::Scale as RsScale;
+use music21::{Duration as RsDuration, Note as RsNote, Rest as RsRest};
+use music21::{FloatType, Pitch as RsPitch};
 
 use crate::Walkable;
 

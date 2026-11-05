@@ -30,12 +30,12 @@ use crate::Walkable;
 use crate::spelling::{music21_figure, music21_name};
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21_rs_crate::chordsymbol::{
+use music21::chordsymbol::{
     ChordStepModification as RsChordStepModification,
     ChordStepModificationType as RsChordStepModificationType, ChordSymbolFigure,
     alter_to_chord_symbol_string, inversion_is_valid_for_kind, voice_chord_notation,
 };
-use music21_rs_crate::{ChordSymbol as RsChordSymbol, Interval as RsInterval, Pitch as RsPitch};
+use music21::{ChordSymbol as RsChordSymbol, Interval as RsInterval, Pitch as RsPitch};
 
 use crate::chord::Chord;
 use crate::interval::interval_from_any;
@@ -74,10 +74,7 @@ const UNIDENTIFIED: &str = "Chord Symbol Cannot Be Identified";
 /// music21 passes its own `Chord` here, which under the harness is one of
 /// ours. A `ChordSymbol` is a chord of music21's own class, built before the
 /// swap, so it is read by its pitches and the root its figure fixed.
-pub(crate) fn chord_of(
-    py: Python<'_>,
-    inChord: &Bound<'_, PyAny>,
-) -> PyResult<music21_rs_crate::Chord> {
+pub(crate) fn chord_of(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<music21::Chord> {
     if let Ok(chord) = inChord.extract::<PyRef<'_, Chord>>() {
         return Ok(chord.synced_inner(py));
     }
@@ -85,13 +82,13 @@ pub(crate) fn chord_of(
     for pitch in inChord.getattr("pitches")?.walk()? {
         names.push(pitch?.getattr("nameWithOctave")?.extract::<String>()?);
     }
-    let mut chord = music21_rs_crate::Chord::new(names.as_slice())
+    let mut chord = music21::Chord::new(names.as_slice())
         .map_err(|error| HarmonyException::new_err(crate::pitch::message(&error)))?;
     if let Ok(overrides) = inChord.getattr("_overrides")
         && let Ok(root) = overrides.call_method1("get", ("root",))
         && !root.is_none()
         && let Ok(name) = root.getattr("nameWithOctave")?.extract::<String>()
-        && let Ok(root) = music21_rs_crate::Pitch::from_name(name)
+        && let Ok(root) = music21::Pitch::from_name(name)
     {
         chord.set_root(Some(root));
     }
@@ -172,7 +169,7 @@ pub fn chordSymbolFromChord<'py>(
 #[pyfunction]
 #[pyo3(name = "getAbbreviationListGivenChordType")]
 fn getAbbreviationListGivenChordType(chordType: String) -> PyResult<Vec<String>> {
-    music21_rs_crate::chordsymbol::abbreviations_for_kind(&chordType)
+    music21::chordsymbol::abbreviations_for_kind(&chordType)
         .map(|list| list.iter().map(|each| (*each).to_string()).collect())
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
@@ -191,7 +188,7 @@ fn alterToChordSymbolString(alter: i32) -> String {
 #[pyfunction]
 #[pyo3(name = "getCurrentAbbreviationFor")]
 fn getCurrentAbbreviationFor(chordType: String) -> PyResult<String> {
-    music21_rs_crate::chordsymbol::current_abbreviation_for_kind(&chordType)
+    music21::chordsymbol::current_abbreviation_for_kind(&chordType)
         .map(str::to_string)
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
@@ -201,7 +198,7 @@ fn getCurrentAbbreviationFor(chordType: String) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(name = "getNotationStringGivenChordType")]
 fn getNotationStringGivenChordType(chordType: String) -> PyResult<String> {
-    music21_rs_crate::chordsymbol::notation_for_kind(&chordType)
+    music21::chordsymbol::notation_for_kind(&chordType)
         .map(str::to_string)
         .ok_or_else(|| PyKeyError::new_err(chordType))
 }
@@ -736,7 +733,7 @@ impl ChordSymbol {
         if !timed {
             let none = crate::duration::Duration::object(
                 py,
-                music21_rs_crate::Duration::new(0.0).map_err(harmony_error)?,
+                music21::Duration::new(0.0).map_err(harmony_error)?,
             )?;
             slf.setattr("duration", none)?;
         }
@@ -897,8 +894,8 @@ impl ChordSymbol {
         }
         let root_name: String = root.getattr("name")?.extract()?;
         let mut figure = root_name.clone();
-        let kind = music21_rs_crate::chordsymbol::resolve_kind_alias(&kind);
-        if music21_rs_crate::chordsymbol::notation_for_kind(kind).is_some() {
+        let kind = music21::chordsymbol::resolve_kind_alias(&kind);
+        if music21::chordsymbol::notation_for_kind(kind).is_some() {
             figure.push_str(&abbreviation_for(py, kind));
         }
         for modification in modifications.iter() {
@@ -909,7 +906,7 @@ impl ChordSymbol {
                 String::new()
             } else {
                 let semitones: f64 = interval.getattr("semitones")?.extract()?;
-                alter_to_chord_symbol_string(semitones.round() as music21_rs_crate::IntegerType)
+                alter_to_chord_symbol_string(semitones.round() as music21::IntegerType)
             };
             figure.push_str(&format!(" {mod_type} {prefix}{degree}"));
         }
@@ -1309,7 +1306,7 @@ pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbo
         .getattr("duration")?
         .getattr("quarterLength")?
         .extract()?;
-    symbol.set_duration(music21_rs_crate::Duration::new(length).map_err(harmony_error)?);
+    symbol.set_duration(music21::Duration::new(length).map_err(harmony_error)?);
     let py = slf.py();
     let me = slf.borrow();
     if !symbol.is_no_chord() {
@@ -1326,7 +1323,7 @@ pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbo
         me.placement
             .as_ref()
             .and_then(|placement| placement.bind(py).extract::<String>().ok())
-            .and_then(|name| music21_rs_crate::Placement::from_name(&name).ok()),
+            .and_then(|name| music21::Placement::from_name(&name).ok()),
     );
     Ok(symbol)
 }
@@ -1360,7 +1357,7 @@ fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
         let (kind, entry): (String, Bound<'_, PyAny>) = item?.extract()?;
         // A kind the crate knows is read by the crate's reading, which
         // refuses what music21 refuses; only one added since is looked up.
-        if music21_rs_crate::chordsymbol::notation_for_kind(&kind).is_some() {
+        if music21::chordsymbol::notation_for_kind(&kind).is_some() {
             continue;
         }
         let abbreviations: Vec<String> = entry.get_item(1)?.extract()?;
@@ -1377,7 +1374,7 @@ fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
 /// A kind's notation, from music21's live table where there is one and the
 /// crate's own where not.
 fn live_notation(py: Python<'_>, kind: &str) -> Option<String> {
-    let resolved = music21_rs_crate::chordsymbol::resolve_kind_alias(kind);
+    let resolved = music21::chordsymbol::resolve_kind_alias(kind);
     match py
         .import("music21.harmony")
         .and_then(|harmony| harmony.getattr("CHORD_TYPES"))
@@ -1387,7 +1384,7 @@ fn live_notation(py: Python<'_>, kind: &str) -> Option<String> {
             .ok()
             .and_then(|entry| entry.get_item(0).ok())
             .and_then(|notation| notation.extract::<String>().ok()),
-        Err(_) => music21_rs_crate::chordsymbol::notation_for_kind(resolved).map(str::to_string),
+        Err(_) => music21::chordsymbol::notation_for_kind(resolved).map(str::to_string),
     }
 }
 
@@ -1509,7 +1506,7 @@ fn abbreviation_for(py: Python<'_>, kind: &str) -> String {
         .and_then(|list| list.get_item(0))
         .and_then(|first| first.extract::<String>())
         .unwrap_or_else(|_| {
-            music21_rs_crate::chordsymbol::current_abbreviation_for_kind(kind)
+            music21::chordsymbol::current_abbreviation_for_kind(kind)
                 .unwrap_or("")
                 .to_string()
         })
@@ -1590,7 +1587,7 @@ pub(crate) fn read_music21(object: &Bound<'_, PyAny>) -> PyResult<RsChordSymbol>
         .and_then(|duration| duration.getattr("quarterLength"))
         .and_then(|length| length.extract::<f64>())
     {
-        symbol.set_duration(music21_rs_crate::Duration::new(length).map_err(harmony_error)?);
+        symbol.set_duration(music21::Duration::new(length).map_err(harmony_error)?);
     }
     symbol.set_placement(
         object
@@ -1598,7 +1595,7 @@ pub(crate) fn read_music21(object: &Bound<'_, PyAny>) -> PyResult<RsChordSymbol>
             .ok()
             .filter(|placement| !placement.is_none())
             .and_then(|placement| placement.extract::<String>().ok())
-            .and_then(|name| music21_rs_crate::Placement::from_name(&name).ok()),
+            .and_then(|name| music21::Placement::from_name(&name).ok()),
     );
     Ok(symbol)
 }

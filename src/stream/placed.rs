@@ -203,7 +203,7 @@ impl Stream {
     /// which is music21's `getContextByClass` for music written once.
     ///
     /// ```
-    /// use music21_rs::{KeySignature, Note, Stream, StreamElement, stream::StreamKind};
+    /// use music21::{KeySignature, Note, Stream, StreamElement, stream::StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// part.insert(0.0, KeySignature::new(-1));
@@ -214,7 +214,7 @@ impl Stream {
     ///     .find(|placed| matches!(placed.element(), StreamElement::Note(_)))
     ///     .unwrap();
     /// assert_eq!(note.key_signature().map(KeySignature::sharps), Some(-1));
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn placed(&self) -> Vec<Placed<'_>> {
         let parts = self.has_part_like_streams();

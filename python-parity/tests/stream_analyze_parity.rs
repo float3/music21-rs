@@ -21,9 +21,9 @@
 //! runs those instead of the writer test's scores, which is how the corpus
 //! is swept.
 
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::Analysis;
-use music21_rs::{Stream, StreamElement, StreamKind};
+use music21::musicxml::from_musicxml;
+use music21::stream::Analysis;
+use music21::{Stream, StreamElement, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -202,7 +202,7 @@ fn the_crate_analyzes_a_stream_as_music21_does() {
         let their_small = music21.getattr("small_stream")?.call0()?;
         let mut our_small = Stream::new();
         for name in ["C4", "E4", "G4", "C5"] {
-            our_small.push(music21_rs::Note::from_name(name).expect("a note name"));
+            our_small.push(music21::Note::from_name(name).expect("a note name"));
         }
         for name in &names {
             let theirs: String = music21

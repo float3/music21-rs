@@ -13,10 +13,10 @@
 //! before it must be the same, in the same order: a `Chord` is a
 //! `ChordBase` before it is a `NotRest`.
 
-use music21_rs::clef::{Clef, ClefKind};
-use music21_rs::instrument::Instrument;
-use music21_rs::layout::{Layout, StaffLayout};
-use music21_rs::{
+use music21::clef::{Clef, ClefKind};
+use music21::instrument::Instrument;
+use music21::layout::{Layout, StaffLayout};
+use music21::{
     Barline, Chord, Dynamic, Key, KeySignature, MetricModulation, MetronomeMark, Note,
     PercussionChord, Rest, Stream, StreamElement, StreamKind, TimeSignature, Unpitched,
 };
@@ -67,7 +67,7 @@ fn subjects() -> Vec<(&'static str, StreamElement)> {
         ("note.Note('C4')", note("C4").into()),
         (
             "note.Rest()",
-            Rest::new(music21_rs::Duration::quarter()).into(),
+            Rest::new(music21::Duration::quarter()).into(),
         ),
         ("note.Unpitched()", Unpitched::new().into()),
         (
@@ -113,15 +113,15 @@ fn subjects() -> Vec<(&'static str, StreamElement)> {
         ("dynamics.Dynamic('mf')", Dynamic::new("mf").into()),
         (
             "bar.Barline()",
-            Barline::new(music21_rs::bar::BarlineType::Regular).into(),
+            Barline::new(music21::bar::BarlineType::Regular).into(),
         ),
         (
             "bar.Repeat()",
-            Barline::repeat(music21_rs::bar::RepeatDirection::Start, None).into(),
+            Barline::repeat(music21::bar::RepeatDirection::Start, None).into(),
         ),
         (
             "bar.Repeat(direction='end', times=2)",
-            Barline::repeat(music21_rs::bar::RepeatDirection::End, Some(2)).into(),
+            Barline::repeat(music21::bar::RepeatDirection::End, Some(2)).into(),
         ),
         (
             "layout.StaffLayout()",

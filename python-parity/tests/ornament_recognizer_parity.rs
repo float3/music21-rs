@@ -11,9 +11,9 @@
 //! the same: no ornament, or the same class with the same note length,
 //! nachschlag, accidental and size, or the same error.
 
-use music21_rs::alpha::analysis::ornament_recognizer::{TrillRecognizer, TurnRecognizer};
-use music21_rs::expressions::Ornament;
-use music21_rs::{Chord, Duration, KeySignature, Note, Rest, StreamElement};
+use music21::alpha::analysis::ornament_recognizer::{TrillRecognizer, TurnRecognizer};
+use music21::expressions::Ornament;
+use music21::{Chord, Duration, KeySignature, Note, Rest, StreamElement};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;

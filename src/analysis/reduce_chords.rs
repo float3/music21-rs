@@ -75,7 +75,7 @@ impl Default for ReductionOptions {
 /// measure and whether it is consonant: music21's `weightAlgorithm`.
 ///
 /// ```
-/// use music21_rs::analysis::reduce_chords::{ReductionOptions, SliceWeigher};
+/// use music21::analysis::reduce_chords::{ReductionOptions, SliceWeigher};
 ///
 /// let mut options = ReductionOptions::default();
 /// options.weight_algorithm = SliceWeigher::new(|quarter_length, _, _, _| quarter_length);
@@ -125,7 +125,7 @@ impl std::fmt::Debug for SliceWeigher {
 /// sounding slice, times a tenth unless it is consonant.
 ///
 /// ```
-/// use music21_rs::analysis::reduce_chords::slice_weight;
+/// use music21::analysis::reduce_chords::slice_weight;
 ///
 /// assert_eq!(slice_weight(2.0, 0.5, false, true), 1.0);
 /// assert!((slice_weight(2.0, 0.5, true, false) - 0.2).abs() < 1e-12);

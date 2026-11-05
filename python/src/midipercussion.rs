@@ -12,7 +12,7 @@
 
 use pyo3::prelude::*;
 
-use music21_rs_crate::instrument;
+use music21::instrument;
 
 pyo3::create_exception!(
     music21_rs_facade,
@@ -146,7 +146,7 @@ impl PercussionMapper {
                 midiInstrument.repr()?
             )));
         };
-        let pitch = music21_rs_crate::Pitch::from_midi(i32::from(key))
+        let pitch = music21::Pitch::from_midi(i32::from(key))
             .map_err(|error| MIDIPercussionException::new_err(crate::pitch::message(&error)))?;
         Ok(crate::installed_new(
             py,

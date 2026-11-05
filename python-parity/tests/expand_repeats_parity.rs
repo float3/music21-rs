@@ -12,7 +12,7 @@
 //! `EXPAND_REPEATS_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the ones below.
 
-use music21_rs::{Stream, StreamKind};
+use music21::{Stream, StreamKind};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};
@@ -142,7 +142,7 @@ fn the_crate_plays_repeats_out_as_music21_does() {
                 Ok(lines) => lines,
                 Err(error) => {
                     // What music21 cannot play out the crate must refuse too.
-                    let refused = music21_rs::musicxml::from_musicxml(&text)
+                    let refused = music21::musicxml::from_musicxml(&text)
                         .and_then(|score| score.expand_repeats())
                         .is_err();
                     if !refused {
@@ -153,7 +153,7 @@ fn the_crate_plays_repeats_out_as_music21_does() {
                     continue;
                 }
             };
-            let ours = match music21_rs::musicxml::from_musicxml(&text)
+            let ours = match music21::musicxml::from_musicxml(&text)
                 .and_then(|score| score.expand_repeats())
             {
                 Ok(score) => played(&score),

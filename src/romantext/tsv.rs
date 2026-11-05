@@ -186,7 +186,7 @@ pub enum Direction {
 /// music21's `isMinor`.
 ///
 /// ```
-/// use music21_rs::romantext::tsv::is_minor;
+/// use music21::romantext::tsv::is_minor;
 ///
 /// assert!(!is_minor("F"));
 /// assert!(is_minor("f"));
@@ -203,7 +203,7 @@ pub fn is_minor(key: &str) -> bool {
 /// figures, and the lab says a seventh's quality where music21 does not.
 ///
 /// ```
-/// use music21_rs::romantext::tsv::{Direction, character_swaps};
+/// use music21::romantext::tsv::{Direction, character_swaps};
 ///
 /// assert_eq!(character_swaps("ii%", Direction::IntoMusic21), "ii\u{f8}");
 /// assert_eq!(character_swaps("ii\u{f8}", Direction::IntoDcml), "ii%");
@@ -415,7 +415,7 @@ fn added_tones(written: &str) -> Vec<AddedTone<'_>> {
 /// cadential six-four, which music21 has a figure of its own for.
 ///
 /// ```
-/// use music21_rs::romantext::tsv::handle_added_tones;
+/// use music21::romantext::tsv::handle_added_tones;
 ///
 /// assert_eq!(handle_added_tones("V(64)"), "Cad64");
 /// assert_eq!(handle_added_tones("i(4+2)"), "i[no3][add4][add2]");
@@ -879,14 +879,14 @@ fn cells(line: &str) -> Vec<String> {
 /// `extendDuration`.
 ///
 /// ```
-/// use music21_rs::romantext::tsv::{Version, from_tsv};
+/// use music21::romantext::tsv::{Version, from_tsv};
 ///
 /// let table = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n\
 ///              .C.I\t1\t1.0\t4/4\tC\tI\tI\n\
 ///              V\t2\t1.0\t4/4\tC\tI\tV\n";
 /// let read = from_tsv(table, Version::One)?;
 /// assert_eq!(read.parts().len(), 1);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors
@@ -1074,7 +1074,7 @@ fn set_length(
 /// here too; [`to_tsv_with_extra`] is how a caller hands them back.
 ///
 /// ```
-/// use music21_rs::romantext::tsv::{Version, from_tsv, to_tsv};
+/// use music21::romantext::tsv::{Version, from_tsv, to_tsv};
 ///
 /// let table = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n\
 ///              I\t1\t1.0\t4/4\tC\tC\tI\n";
@@ -1082,7 +1082,7 @@ fn set_length(
 /// let mut lines = written.lines();
 /// assert!(lines.next().is_some_and(|header| header.starts_with("chord\t")));
 /// assert!(lines.next().is_some_and(|row| row.starts_with("I\t\t1\t1.0")));
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 ///
 /// # Errors

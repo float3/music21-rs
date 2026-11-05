@@ -9,9 +9,9 @@
 //! `SEARCH_PARITY_SCORES`, a `;`-separated list of corpus names, runs those
 //! instead of the writer test's scores, which is how the corpus is swept.
 
-use music21_rs::FloatType;
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::search::{
+use music21::FloatType;
+use music21::musicxml::from_musicxml;
+use music21::search::{
     Segments, index_score_parts, index_score_parts_with, score_similarity,
     translate_stream_to_string,
 };

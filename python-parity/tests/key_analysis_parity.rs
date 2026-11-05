@@ -14,8 +14,8 @@ use music21_rs_python_parity::music21_name;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use music21_rs::Pitch;
-use music21_rs::analysis::{
+use music21::Pitch;
+use music21::analysis::{
     KeyProfile, estimate_key_from_distribution, melodic_interval_counts, pitch_class_distribution,
     pitch_span,
 };

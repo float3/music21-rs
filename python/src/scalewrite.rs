@@ -12,7 +12,7 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyString};
 
-use music21_rs_crate::musicxml::ExportOptions;
+use music21::musicxml::ExportOptions;
 
 use crate::scale::{ConcreteScale, ScaleException};
 
@@ -256,7 +256,7 @@ fn musicxml_of(obj: &Bound<'_, PyAny>, kind: Kind) -> PyResult<String> {
     options.make_notation = true;
     let measure = degree_measure(obj, kind)?;
     let stream = crate::stream::crate_stream(&measure)?;
-    music21_rs_crate::musicxml::to_musicxml(&stream, &options)
+    music21::musicxml::to_musicxml(&stream, &options)
         .map_err(|error| ScaleException::new_err(crate::pitch::message(&error)))
 }
 
@@ -319,7 +319,7 @@ fn midi_of(obj: &Bound<'_, PyAny>, keywords: Option<&Bound<'_, PyDict>>) -> PyRe
             None => Ok(default),
         }
     };
-    let mut options = music21_rs_crate::midi::ExportOptions::default();
+    let mut options = music21::midi::ExportOptions::default();
     options.add_start_delay = flag("addStartDelay", false)?;
     options.add_end_delay = flag("addEndDelay", true)?;
     options.acceptable_channels = None;
@@ -329,7 +329,7 @@ fn midi_of(obj: &Bound<'_, PyAny>, keywords: Option<&Bound<'_, PyDict>>) -> PyRe
     let holder = py.get_type::<crate::stream::Stream>().call0()?;
     holder.call_method1("insert", (0, copied))?;
     let stream = crate::stream::crate_stream(&holder)?;
-    music21_rs_crate::midi::to_midi(&stream, &options)
+    music21::midi::to_midi(&stream, &options)
         .map_err(|error| ScaleException::new_err(crate::pitch::message(&error)))
 }
 

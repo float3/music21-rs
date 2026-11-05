@@ -267,7 +267,7 @@ impl Language {
 /// is what music21's dictionary keeps.
 ///
 /// ```
-/// use music21_rs::pitch::{Language, language_dictionary};
+/// use music21::pitch::{Language, language_dictionary};
 ///
 /// let german = language_dictionary(Language::German);
 /// assert_eq!(german.len(), 63);
@@ -301,7 +301,7 @@ pub fn language_dictionary(language: Language) -> Vec<(String, String)> {
 /// language calls no pitch by that name: music21's `toPitch`.
 ///
 /// ```
-/// use music21_rs::pitch::{Language, from_language_name};
+/// use music21::pitch::{Language, from_language_name};
 ///
 /// assert_eq!(from_language_name("Es", Language::German).name(), "Eb");
 /// assert_eq!(from_language_name("H", Language::German).name(), "B");

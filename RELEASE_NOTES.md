@@ -1,9 +1,20 @@
-# Unreleased
+# music21-rs 0.17.0
+
+`harte-rs` 0.10.0 depends on this release.
+
+## breaking changes
+
+- **The library is `music21`**: `use music21::Chord` where it was
+  `use music21_rs::Chord`. The package is still `music21-rs`, and the
+  Python package still `music21_rs`.
+- **The `harte` crate is now `harte-rs`** on crates.io, from 0.10.0. Its
+  library is still `harte`, so `use harte::Harte` is unchanged; depend on
+  `harte-rs` in place of `harte`.
 
 ## added
 
 - **harte-rs on PyPI**, a replacement for harte-library imported as
-  `harte`: the same modules and names, with the label read by the `harte`
+  `harte`: the same modules and names, with the label read by the `harte-rs`
   crate and the chord a music21-rs `Chord`. harte-library's own test suite
   gives the same results on it as on music21. It is released with the
   wheel, at its version.

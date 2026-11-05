@@ -14,11 +14,11 @@
 //! runs those instead of the writer test's scores, which is how the corpus
 //! is swept.
 
-use music21_rs::FloatType;
-use music21_rs::IntegerType;
-use music21_rs::musicxml::from_musicxml;
-use music21_rs::stream::StreamElement;
-use music21_rs::tree::{ElementTimespan, Flatten, TimespanTree, as_timespans};
+use music21::FloatType;
+use music21::IntegerType;
+use music21::musicxml::from_musicxml;
+use music21::stream::StreamElement;
+use music21::tree::{ElementTimespan, Flatten, TimespanTree, as_timespans};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use pyo3::prelude::*;
 use utils::{init_py, prepare};

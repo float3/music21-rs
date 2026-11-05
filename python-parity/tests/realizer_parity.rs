@@ -17,12 +17,10 @@
 //! music21 is music21 here, with nothing of the crate installed over it. A
 //! mismatch leaves both documents in `target/realizer-parity/`.
 
-use music21_rs::figuredbass::realizer::{FiguredBassLine, Realization};
-use music21_rs::figuredbass::rules::Rules;
-use music21_rs::musicxml::{ExportOptions, to_musicxml};
-use music21_rs::{
-    Duration, Key, Note, Pitch, Rest, RomanNumeral, Stream, StreamKind, TimeSignature,
-};
+use music21::figuredbass::realizer::{FiguredBassLine, Realization};
+use music21::figuredbass::rules::Rules;
+use music21::musicxml::{ExportOptions, to_musicxml};
+use music21::{Duration, Key, Note, Pitch, Rest, RomanNumeral, Stream, StreamKind, TimeSignature};
 use music21_rs_python_parity::doctest::{add_dependency_venv, repo_root};
 use music21_rs_python_parity::music21_name;
 use pyo3::prelude::*;
@@ -334,7 +332,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
         // What differs between the two documents, if anything does.
         let differs = |what: String,
                        theirs: PyResult<String>,
-                       ours: music21_rs::Result<Stream>|
+                       ours: music21::Result<Stream>|
          -> Option<String> {
             let theirs = match theirs {
                 Ok(text) => normalize_ids(text.trim_end()),
@@ -362,7 +360,7 @@ fn the_realizer_writes_the_scores_music21_s_writes() {
                 Some(format!("{what}: {difference}"))
             }
         };
-        let in_score = |part: music21_rs::Result<Stream>| -> music21_rs::Result<Stream> {
+        let in_score = |part: music21::Result<Stream>| -> music21::Result<Stream> {
             let mut score = Stream::with_kind(StreamKind::Score);
             score.insert(0.0, part?);
             Ok(score)

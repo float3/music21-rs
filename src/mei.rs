@@ -1498,7 +1498,7 @@ fn metadata_of(root: &Xml) -> Metadata {
 /// file. A barline written inside a layer is passed over.
 ///
 /// ```
-/// use music21_rs::mei::from_mei;
+/// use music21::mei::from_mei;
 ///
 /// let score = from_mei(
 ///     r#"<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>
@@ -1516,7 +1516,7 @@ fn metadata_of(root: &Xml) -> Metadata {
 ///     .map(|pitch| pitch.name_with_octave())
 ///     .collect();
 /// assert_eq!(names, ["C4", "Eb4"]);
-/// # Ok::<(), music21_rs::Error>(())
+/// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_mei(document: &str) -> Result<Stream> {
     let root = Xml::parse(document).map_err(|_| mei_error("MEI document is not valid XML."))?;

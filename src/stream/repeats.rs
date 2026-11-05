@@ -24,14 +24,14 @@ impl Stream {
     /// back as it is.
     ///
     /// ```
-    /// use music21_rs::bar::{Barline, RepeatDirection};
-    /// use music21_rs::{Note, Stream, StreamKind};
+    /// use music21::bar::{Barline, RepeatDirection};
+    /// use music21::{Note, Stream, StreamKind};
     ///
     /// let mut part = Stream::with_kind(StreamKind::Part);
     /// for (index, name) in ["C4", "D4"].into_iter().enumerate() {
     ///     let mut measure = Stream::with_kind(StreamKind::Measure);
     ///     measure.set_number(index as i32 + 1);
-    ///     measure.push(Note::from_name(name)?.with_duration(music21_rs::Duration::whole()));
+    ///     measure.push(Note::from_name(name)?.with_duration(music21::Duration::whole()));
     ///     if index == 0 {
     ///         measure.set_right_barline(Some(Barline::repeat(RepeatDirection::End, None)));
     ///     }
@@ -44,7 +44,7 @@ impl Stream {
     ///     .map(|measure| measure.number_with_suffix())
     ///     .collect();
     /// assert_eq!(numbers, ["1", "1a", "2"]);
-    /// # Ok::<(), music21_rs::Error>(())
+    /// # Ok::<(), music21::Error>(())
     /// ```
     ///
     /// # Errors
