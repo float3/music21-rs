@@ -246,6 +246,7 @@ the tuning code has no counterpart in music21:
   [harte-library](https://github.com/andreamust/harte-library) that builds
   music21-rs chords, checked against every label in that library's
   8,064-chord coverage set. it is not music21's, so it is not in this crate.
+  for Python, [harte-rs](harte/python/) replaces harte-library with it.
 
 ## browser demos
 

@@ -358,7 +358,8 @@ MusicXML.
   over music21 as with music21 alone.
 - [harte-library](https://github.com/andreamust/harte-library), a third-party
   chord parser built on music21, gives identical results for its 8,116 tests
-  on both.
+  on both. [harte-rs](https://pypi.org/project/harte-rs/) is a replacement
+  for it built on this wheel.
 
 `style.Style` is provided but not installed over music21's, whose
 version does more. missing behaviour raises

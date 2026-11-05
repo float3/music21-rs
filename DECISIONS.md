@@ -443,6 +443,17 @@ and a runner dying under it lost 0.14.0 and 0.15.0. *costs:* a red report
 no longer stops a release. it still runs on every push to master and
 publishes the reports page.
 
+**harte-rs is pure Python over the wheel.** its `Harte` subclasses the
+wheel's `Chord` in Python, and the label is read by a `_HarteLabel` the
+wheel carries, so harte-rs builds one platform-independent wheel and the
+release adds no native jobs. it is released with the wheel, at the wheel's
+version, and asks for exactly that wheel, since `_HarteLabel` is not
+public; `harte_rs_requires_its_own_music21_rs` holds the numbers together.
+a second native extension would carry its own copy of the crate, and
+could not extend the wheel's `Chord` in Rust.
+*costs:* a harte-rs release with every music21-rs release, changed or not,
+and the harte crate's own version is not harte-rs's.
+
 **the wheel is built per Python version, not abi3.** *debated 2026-11-02,
 again 2026-11-05:* one abi3 wheel per platform would cut the release matrix,
 but the limited API made stream and object paths 9–11% slower (`Note('C#4')`,

@@ -32,3 +32,33 @@ fn wheel_version_matches_the_crate() {
          the wheel and the crate ship as one version"
     );
 }
+
+/// harte-rs builds on the wheel's `_HarteLabel`, so it is released with the
+/// wheel, at its version, and asks for exactly that wheel.
+#[test]
+fn harte_rs_requires_its_own_music21_rs() {
+    let wheel_version = version_of("python/Cargo.toml");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("python-parity has a parent directory");
+    let text = std::fs::read_to_string(root.join("harte/python/pyproject.toml"))
+        .expect("reading harte/python/pyproject.toml");
+    let table: toml::Table = text.parse().expect("parsing harte/python/pyproject.toml");
+    let project = &table["project"];
+    assert_eq!(
+        project["version"].as_str(),
+        Some(wheel_version.as_str()),
+        "harte-rs ships at the wheel's version, {wheel_version}"
+    );
+    let wanted = format!("music21-rs=={wheel_version}");
+    assert_eq!(
+        project["dependencies"]
+            .as_array()
+            .expect("harte-rs lists its dependencies")
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .collect::<Vec<_>>(),
+        [wanted.as_str()],
+        "harte-rs asks for the wheel it is released with"
+    );
+}
