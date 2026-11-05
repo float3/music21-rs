@@ -68,6 +68,16 @@ assert!(Harte::new("N")?.is_empty());
 
 the full API is on [docs.rs](https://docs.rs/harte).
 
+## Python
+
+[harte-rs](https://pypi.org/project/harte-rs/) is this crate for Python, a
+replacement for harte-library imported as `harte`, with the chord a
+music21-rs `Chord`; see [harte/python](https://github.com/float3/music21-rs/tree/master/harte/python).
+
+```bash
+pip install harte-rs
+```
+
 ## browser demo
 
 [hilll.dev/music21-rs/harte](https://hilll.dev/music21-rs/harte/) reads a

@@ -967,6 +967,7 @@ dependencies = [
 name = "music21-rs-python"
 version = "0.16.0"
 dependencies = [
+ "harte",
  "music21-rs",
  "pyo3",
  "serde",

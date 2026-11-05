@@ -1,5 +1,21 @@
 # Unreleased
 
+## added
+
+- **harte-rs on PyPI**, a replacement for harte-library imported as
+  `harte`: the same modules and names, with the label read by the `harte`
+  crate and the chord a music21-rs `Chord`. harte-library's own test suite
+  gives the same results on it as on music21. It is released with the
+  wheel, at its version.
+- `harte::DEGREE_SHORTHANDS`, the shorthands `Harte::prettify` folds
+  degrees into, in the order it tries them.
+
+## changed
+
+- A copy the wheel makes of an object of a Python subclass, such as
+  `transpose` hands back, keeps the attributes the subclass set on the
+  original, as music21's `deepcopy` does.
+
 ## fixed
 
 - **The wheel imports on Python 3.9 and 3.10**, which it is published for:

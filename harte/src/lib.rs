@@ -92,8 +92,9 @@ pub const SHORTHAND_DEGREES: [Shorthand; 48] = [
 ];
 
 /// The shorthands [`Harte::prettify`] folds a set of degrees into, tried in
-/// this order, so a ninth is written as one before its seventh is.
-const DEGREE_SHORTHANDS: &[(&[&str], &str)] = &[
+/// this order, so a ninth is written as one before its seventh is;
+/// harte-library's `DEGREE_SHORTHAND_MAP`.
+pub const DEGREE_SHORTHANDS: &[(&[&str], &str)] = &[
     (&["3", "5", "b7", "9"], "9"),
     (&["3", "5", "7", "9"], "maj9"),
     (&["b3", "5", "b7", "9"], "min9"),

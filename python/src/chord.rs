@@ -162,7 +162,7 @@ pub(crate) fn duration_from_keywords(
     Ok(None)
 }
 
-error_into!(chord_error, ChordException);
+error_into!(pub(crate) chord_error, ChordException);
 
 /// music21's `chord.Chord`.
 #[pyclass(

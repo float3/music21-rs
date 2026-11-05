@@ -64,6 +64,7 @@ pub mod formats;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
+pub mod hartelabel;
 pub mod hasher;
 pub mod instrument;
 mod instrument_kinds;
@@ -287,7 +288,33 @@ where
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
+    carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
+}
+
+/// Gives a copy of a Python subclass's object the attributes that subclass
+/// set on the original, as music21's `deepcopy` does: `Harte('C:maj')`
+/// transposed is still a `Harte` with a label. Only a class from outside
+/// music21 has attributes of its own to carry, and only what the copy does
+/// not already have is carried, so a music21 half started fresh for the copy
+/// keeps its own sites and offset; `_cache` is left behind as music21's
+/// `deepcopy` leaves it.
+fn carry_attributes(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
+    let py = source.py();
+    let module: String = source.get_type().getattr("__module__")?.extract()?;
+    if module == "music21" || module.starts_with("music21.") || module.starts_with("music21_rs") {
+        return Ok(());
+    }
+    let (Ok(from), Ok(into)) = (source.getattr("__dict__"), copy.getattr("__dict__")) else {
+        return Ok(());
+    };
+    let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+    for (key, value) in from.cast::<pyo3::types::PyDict>()?.iter() {
+        if key.ne("_cache")? && !into.contains(&key)? {
+            into.set_item(key, deepcopy.call1((value,))?)?;
+        }
+    }
+    Ok(())
 }
 
 /// Records where a new object came from, as music21's own methods do.
@@ -1954,6 +1981,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pymodule]
 pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     register_all(m)?;
+    // Not music21's: what the harte-rs package builds its `Harte` on.
+    hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.
