@@ -155,6 +155,27 @@ note (`2/4+3/8` counts `{{1/4+1/4}+{1/8+1/8+1/8}}`).
 
 ## the Python facade
 
+**goal: the package stands on its own.** music21-rs is meant to need no
+music21 at all: everything a music21 user imports, the corpus, `converter`
+and the stream machinery included, answered by the Rust crate. at that
+point the PyPI package `music21-rs` is imported as `music21`, as harte-rs is
+imported as `harte`, and installs in music21's place. until then it is
+imported as `music21_rs` and runs beside music21, which supplies what it
+lacks; taking music21's import name before that would break everyone who
+uses both. the reports page's count of ported members is the measure of how
+far off that is.
+
+**goal: anything built on music21 can run on music21-rs.** a library that
+depends on music21 is written against music21, and its users should be able
+to put music21-rs underneath it without changing it: one switch on their
+side, and that library's `import music21` is answered by music21-rs. today
+the switch is `music21_rs.install_into_music21()` with music21 installed;
+once the package stands on its own it has to remain possible, without
+music21 installed, for code that never heard of music21-rs. this is what
+`xtask downstream` measures, with harte-library's own suite. *costs:* every
+name kept where music21 keeps it, with music21's signatures, rather than
+where it would sit best in a package of its own.
+
 **the package keeps no sites, as the crate keeps none.** a stream of the
 package's holds objects, so it *could* write itself onto each of them and let
 an element answer `offset`, `activeSite` and `getContextByClass` as music21's
