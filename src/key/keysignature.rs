@@ -1,5 +1,5 @@
 use crate::{
-    defaults::IntegerType,
+    defaults::{IntegerType, UnsignedIntegerType},
     error::{Error, Result},
     interval::Interval,
     pitch::{Accidental, Pitch},
@@ -45,12 +45,30 @@ pub fn mode_sharps_alter(mode: &str) -> Option<IntegerType> {
         .find_map(|(name, value)| (*name == mode.to_lowercase()).then_some(*value))
 }
 
+/// The most sharps or flats a signature is read with. music21 sets no
+/// limit, but every count is a walk round the circle of fifths, and past
+/// quadruple sharps its spellings only repeat.
+const MOST_SHARPS: IntegerType = 1000;
+
+/// How many fifths a count of sharps walks, refusing one past
+/// [`MOST_SHARPS`].
+fn fifths_walked(sharps: IntegerType) -> Result<UnsignedIntegerType> {
+    let walked = sharps.unsigned_abs();
+    if walked > MOST_SHARPS.unsigned_abs() {
+        return Err(Error::Key(format!(
+            "a signature of {sharps} sharps is more than {MOST_SHARPS} either way"
+        )));
+    }
+    Ok(walked)
+}
+
 /// Returns the major-key tonic pitch for a key-signature sharp count.
 pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
     if sharp_count == 0 {
         return Pitch::from_name("C");
     }
 
+    let walked = fifths_walked(sharp_count)?;
     let mut pitch = Pitch::from_name("C")?;
     pitch.octave_setter(None);
 
@@ -60,7 +78,7 @@ pub fn sharps_to_pitch(sharp_count: IntegerType) -> Result<Pitch> {
         &*PERFECT_FIFTH_DOWN
     };
 
-    for _ in 0..sharp_count.abs() {
+    for _ in 0..walked {
         pitch = interval.transpose_pitch(&pitch)?;
         pitch.octave_setter(None);
     }
@@ -267,9 +285,10 @@ impl KeySignature {
         } else {
             ("F", &*PERFECT_FOURTH)
         };
+        let walked = fifths_walked(sharps)?;
         let mut current = Pitch::from_name(start)?;
-        let mut altered = Vec::with_capacity(sharps.unsigned_abs() as usize);
-        for _ in 0..sharps.abs() {
+        let mut altered = Vec::with_capacity(walked as usize);
+        for _ in 0..walked {
             current = interval.transpose_pitch(&current)?;
             current.octave_setter(None);
             altered.push(current.clone());
@@ -317,8 +336,9 @@ impl KeySignature {
         } else {
             &*PERFECT_FIFTH_UP
         };
+        let walked = fifths_walked(sharps)?;
         let mut transposed = pitch.clone();
-        for _ in 0..sharps.unsigned_abs() {
+        for _ in 0..walked {
             transposed = step.transpose_pitch_with_options(&transposed, false, None)?;
         }
         transposed.octave_setter(pitch.octave());
@@ -358,7 +378,7 @@ impl KeySignature {
         } else if mode.is_none() && tonic.is_some() {
             let tonic_name = tonic.expect("checked is_some above");
             let major_sharps = pitch_name_to_sharps(tonic_name, None)?;
-            canonical_mode_for_offset(our_sharps - major_sharps)
+            canonical_mode_for_offset(our_sharps.saturating_sub(major_sharps))
                 .ok_or_else(|| {
                     Error::Key(format!(
                         "Could not solve for mode from sharps={our_sharps}, tonic={tonic_name}"
@@ -372,7 +392,7 @@ impl KeySignature {
         let sharp_alteration_from_major = mode_sharps_alter(&resolved_mode)
             .ok_or_else(|| Error::Key(format!("Mode {resolved_mode} is unknown")))?;
 
-        let tonic_pitch = sharps_to_pitch(our_sharps - sharp_alteration_from_major)?;
+        let tonic_pitch = sharps_to_pitch(our_sharps.saturating_sub(sharp_alteration_from_major))?;
         Ok(Key::new(tonic_pitch, &resolved_mode, our_sharps))
     }
 }
@@ -765,5 +785,21 @@ mod tests {
         assert_eq!(sharps_to_pitch(-7).unwrap().name(), "Cb");
         assert_eq!(sharps_to_pitch(7).unwrap().name(), "C#");
         assert_eq!(KeySignature::new(-7).as_key("major").tonic().name(), "Cb");
+    }
+
+    #[test]
+    fn a_count_of_sharps_past_the_limit_is_refused() {
+        for sharps in [MOST_SHARPS + 1, IntegerType::MAX, IntegerType::MIN] {
+            let signature = KeySignature::new(sharps);
+            assert!(sharps_to_pitch(sharps).is_err(), "{sharps}");
+            assert!(signature.altered_pitches().is_err(), "{sharps}");
+            assert!(
+                signature.try_as_key(Some("minor"), None).is_err(),
+                "{sharps}"
+            );
+            let c = Pitch::from_name("C4").unwrap();
+            assert!(signature.transpose_pitch_from_c(&c).is_err(), "{sharps}");
+        }
+        assert!(sharps_to_pitch(MOST_SHARPS).is_ok());
     }
 }

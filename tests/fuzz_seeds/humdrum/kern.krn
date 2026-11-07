@@ -1,0 +1,21 @@
+!!!COM: Seed
+!!!OTL: Fuzz seed
+**kern	**kern	**dynam	**text
+*staff2	*staff1	*staff1	*staff1
+*Ipiano	*Ipiano	*	*
+*clefF4	*clefG2	*	*
+*k[f#]	*k[f#]	*	*
+*G:	*G:	*	*
+*M3/4	*M3/4	*	*
+*MM96	*MM96	*	*
+=1-	=1-	=1-	=1-
+4GG	4g	p	Seed
+4B	*^	.	.
+.	8a	8b	.	.
+4d	8.c#L	16eJ	<	-ing
+=2	=2	=2	=2	=2
+2.G;	2.dd	2.r	f	words
+*	*v	*v	*	*
+==	==	==	==
+*-	*-	*-	*-
+!!!RDF**kern: L = long note

@@ -397,7 +397,10 @@ fn verse(verse: &Xml) -> Result<Option<Lyric>> {
     };
     let mut lyric = Lyric::new(text);
     if let Some(index) = verse.get("i") {
-        lyric.set_number(integer(index)? + 1);
+        let number = integer(index)?
+            .checked_add(1)
+            .ok_or_else(|| error(format!("verse {index} is past the last a lyric can be")))?;
+        lyric.set_number(number);
     }
     if verse.get("hyphen") == Some("true") {
         lyric.set_syllabic(Syllabic::Begin);
@@ -563,5 +566,14 @@ mod tests {
     #[test]
     fn a_document_with_no_systems_is_refused() {
         assert!(from_capella("<score/>").is_err());
+    }
+
+    #[test]
+    fn a_verse_numbered_past_the_largest_integer_is_refused() {
+        let score = from_capella(&staff(
+            "<chord><duration base=\"1/4\"/><lyric><verse i=\"2147483647\">la\
+             </verse></lyric><heads><head pitch=\"C5\"/></heads></chord>",
+        ));
+        assert!(score.is_err());
     }
 }

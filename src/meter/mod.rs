@@ -533,6 +533,11 @@ impl TimeSignature {
     /// meter this returns; how they are grouped is [`Self::parts`].
     pub fn from_ratio_string(ratio: &str) -> Result<Self> {
         let parts = Self::parts(ratio)?;
+        if parts.iter().any(|(_, part)| *part == 0) {
+            return Err(Error::Meter(format!(
+                "time signature denominator must be non-zero: {ratio}"
+            )));
+        }
         let word = division_word(ratio);
         let summed = ratio.split('+').any(|part| !part.contains('/'));
         let denominator = parts[0].1;
@@ -1114,9 +1119,15 @@ impl TimeSignature {
             3 => 3,
             other => other,
         };
-        let (span, unit) = split_span(self.numerator, self.denominator, top);
+        // A unit too short to count is shorter than a 128th, so the bar is
+        // one partition.
+        let Some((span, unit)) = split_span(self.numerator, self.denominator, top) else {
+            return (1, 1, 1);
+        };
         let second = default_division(span, unit);
-        let (span, unit) = split_span(span, unit, second);
+        let Some((span, unit)) = split_span(span, unit, second) else {
+            return (1, 1, 1);
+        };
         let third = default_division(span, unit);
         // music21 partitions the accent sequence into that many equal parts
         // written as whole numbers of a note value, and gives up — leaving
@@ -1700,7 +1711,8 @@ pub fn best_time_signature(measure: &crate::Stream) -> Result<TimeSignature> {
             denominator as UnsignedIntegerType,
         )
     };
-    let (numerator, denominator) = simplified_signature(numerator, denominator);
+    let (numerator, denominator) = simplified_signature(numerator, denominator)
+        .ok_or_else(|| Error::Meter("Cannot find a good match for this measure".to_string()))?;
 
     let strength =
         |ratio: (UnsignedIntegerType, UnsignedIntegerType)| -> Result<(TimeSignature, FloatType)> {
@@ -1804,18 +1816,19 @@ fn binary_signature(
 
 /// The rare signatures written the usual way: sixteen-sixteen and one-one
 /// are four-four, and a whole or half denominator is written in quarters.
+/// Nothing when the quarters are too many to count.
 fn simplified_signature(
     numerator: UnsignedIntegerType,
     denominator: UnsignedIntegerType,
-) -> (UnsignedIntegerType, UnsignedIntegerType) {
+) -> Option<(UnsignedIntegerType, UnsignedIntegerType)> {
     if numerator == denominator && !matches!(numerator, 2 | 4) {
-        (4, 4)
+        Some((4, 4))
     } else if numerator != denominator && denominator == 1 {
-        (numerator * 4, 4)
+        Some((numerator.checked_mul(4)?, 4))
     } else if numerator != denominator && denominator == 2 {
-        (numerator * 2, 4)
+        Some((numerator.checked_mul(2)?, 4))
     } else {
-        (numerator, denominator)
+        Some((numerator, denominator))
     }
 }
 
@@ -1828,15 +1841,16 @@ fn is_binary(quarter_length: FloatType) -> bool {
 
 /// A span of `count` units of `1/unit`, divided into `parts` equal spans, as
 /// a count of a unit: `6/8` in two is `3/8`, and `1/4` in two is `1/8`.
+/// Nothing when the unit is too short to count.
 fn split_span(
     count: UnsignedIntegerType,
     unit: UnsignedIntegerType,
     parts: UnsignedIntegerType,
-) -> (UnsignedIntegerType, UnsignedIntegerType) {
+) -> Option<(UnsignedIntegerType, UnsignedIntegerType)> {
     if count.is_multiple_of(parts) {
-        (count / parts, unit)
+        Some((count / parts, unit))
     } else {
-        (count, unit * parts)
+        Some((count, unit.checked_mul(parts)?))
     }
 }
 
@@ -1890,6 +1904,22 @@ mod tests {
         assert!(TimeSignature::from_ratio_string("6000/4+6000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+4000000000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+1/8").is_err());
+    }
+
+    #[test]
+    fn a_meter_with_a_part_over_nought_is_refused() {
+        use super::TimeSignature;
+
+        assert!(TimeSignature::from_ratio_string("3/8+2/0").is_err());
+        assert!(TimeSignature::from_ratio_string("3/0+2/8").is_err());
+    }
+
+    #[test]
+    fn a_meter_of_the_shortest_units_is_one_accent() {
+        use super::TimeSignature;
+
+        let signature = TimeSignature::new(1, 1 << 31).unwrap();
+        assert_eq!(signature.accent_weights(), [1.0]);
     }
 
     #[test]
@@ -2211,6 +2241,17 @@ mod tests {
         assert_eq!(best(&[4.0]), "4/4");
         // Tuplets are passed over when the shortest value is looked for.
         assert_eq!(best(&[1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0, 1.0]), "2/4");
+    }
+
+    #[test]
+    fn a_measure_too_long_for_any_signature_has_none() {
+        use crate::{Note, Pitch, Stream};
+
+        let mut note = Note::from_pitch(Pitch::from_name("C4").unwrap());
+        note.set_duration(Duration::new(4_294_967_296.0).unwrap());
+        let mut measure = Stream::new();
+        measure.push(note);
+        assert!(best_time_signature(&measure).is_err());
     }
 
     /// music21's own `averageBeatStrength` example: `C4 D4 E8 F8` under

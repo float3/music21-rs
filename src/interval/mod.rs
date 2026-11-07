@@ -241,12 +241,18 @@ fn specifier_from_generic_chromatic(
     } else {
         -0.0001
     };
-    let diff = (these_semis + rounding_error).round() as IntegerType - normal_semis;
+    // Saturating, so a count no specifier reaches is refused, not wrapped.
+    let diff = ((these_semis + rounding_error).round() as IntegerType).saturating_sub(normal_semis);
 
     if g_int.is_perfectable() {
-        specifier_at(&PERFECTABLE_SPECIFIERS, 4 + diff, "Perfect", diff)
+        specifier_at(
+            &PERFECTABLE_SPECIFIERS,
+            diff.saturating_add(4),
+            "Perfect",
+            diff,
+        )
     } else {
-        specifier_at(&MAJOR_SPECIFIERS, 5 + diff, "Major", diff)
+        specifier_at(&MAJOR_SPECIFIERS, diff.saturating_add(5), "Major", diff)
     }
 }
 
@@ -355,9 +361,10 @@ pub fn convert_semitone_to_specifier_generic_microtone(
         cents -= 100.0;
         whole += 1.0;
     }
-    let whole = whole as IntegerType;
-    let size = whole.abs() % 12;
-    let octave = whole.abs() / 12;
+    // Unsigned, as the least integer has no positive of its own.
+    let whole = (whole as IntegerType).unsigned_abs();
+    let size = (whole % 12) as IntegerType;
+    let octave = (whole / 12) as IntegerType;
     let (specifier, generic) = semitones_to_specifier_generic(size);
     (specifier, (generic + octave * 7) * dir_scale, cents)
 }
@@ -980,7 +987,15 @@ impl Interval {
         } else {
             p.microtone().map_or(0.0, crate::pitch::Microtone::cents)
         };
-        let new_dnn = p.diatonic_note_number() + self.diatonic.generic.staff_distance();
+        let new_dnn = p
+            .checked_diatonic_note_number()
+            .and_then(|dnn| dnn.checked_add(self.diatonic.generic.staff_distance()))
+            .ok_or_else(|| {
+                Error::Interval(format!(
+                    "cannot move {} past the last octave an integer counts",
+                    p.name_with_octave()
+                ))
+            })?;
         let (new_step, new_octave) = convert_diatonic_number_to_step(new_dnn);
         let mut pitch2 = crate::pitch::PitchOptions::new()
             .step(new_step)
@@ -1338,6 +1353,48 @@ mod tests {
             [-3, -1, 0, 1, 2, 7].map(staff_distance_to_generic_number),
             [-4, -2, 1, 2, 3, 8]
         );
+    }
+
+    #[test]
+    fn a_pitch_moved_past_the_highest_octave_is_refused() {
+        use super::Interval;
+        use crate::IntegerType;
+        use crate::pitch::Pitch;
+
+        let pitch = Pitch::from_name("D2147483647").unwrap();
+        assert!(
+            Interval::from_name("M2")
+                .unwrap()
+                .transpose_pitch(&pitch)
+                .is_err()
+        );
+        let mut pitch = Pitch::from_name("D").unwrap();
+        pitch.set_octave(Some(IntegerType::MIN));
+        assert!(
+            Interval::from_name("M-2")
+                .unwrap()
+                .transpose_pitch(&pitch)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn the_least_count_of_semitones_is_an_interval() {
+        use super::{Interval, convert_semitone_to_specifier_generic_microtone};
+        use crate::IntegerType;
+
+        let interval = Interval::from_semitones(IntegerType::MIN).unwrap();
+        assert_eq!(interval.semitones(), f64::from(IntegerType::MIN));
+        let (_, generic, _) = convert_semitone_to_specifier_generic_microtone(-1e300);
+        assert!(generic < 0);
+    }
+
+    #[test]
+    fn semitones_too_many_for_any_quality_are_refused() {
+        use super::Interval;
+
+        assert!(Interval::from_generic_and_chromatic(-2, -2_147_483_647).is_err());
+        assert!(Interval::from_generic_and_chromatic(2, 2_147_483_647).is_err());
     }
 
     #[test]

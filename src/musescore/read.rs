@@ -53,6 +53,10 @@ use crate::xml::Xml;
 /// A length or a place in time, in whole notes, as MuseScore counts.
 type Frac = Ratio<i64>;
 
+/// The most dots a note is read with: MuseScore writes four at most, and
+/// each halves the length the ticks count in.
+const MOST_DOTS: i64 = 16;
+
 fn mscx_error(message: impl Into<String>) -> Error {
     Error::MuseScore(message.into())
 }
@@ -61,20 +65,23 @@ fn refused(what: impl std::fmt::Display) -> Error {
     mscx_error(format!("{what} cannot be read yet"))
 }
 
-/// A fraction as MuseScore writes one: `3/4`, or a whole number.
+/// A fraction as MuseScore writes one: `3/4`, or a whole number. Its terms
+/// are read as `i32`, so that the ticks reckoned from them fit an `i64`.
 fn fraction(text: &str) -> Result<Frac> {
     let text = text.trim();
     let bad = || mscx_error(format!("{text:?} is not a fraction"));
     match text.split_once('/') {
         Some((numerator, denominator)) => {
-            let numerator: i64 = numerator.trim().parse().map_err(|_| bad())?;
-            let denominator: i64 = denominator.trim().parse().map_err(|_| bad())?;
+            let numerator: i32 = numerator.trim().parse().map_err(|_| bad())?;
+            let denominator: i32 = denominator.trim().parse().map_err(|_| bad())?;
             if denominator == 0 {
                 return Err(bad());
             }
-            Ok(Frac::new(numerator, denominator))
+            Ok(Frac::new(numerator.into(), denominator.into()))
         }
-        None => Ok(Frac::from_integer(text.parse().map_err(|_| bad())?)),
+        None => Ok(Frac::from_integer(
+            text.parse::<i32>().map_err(|_| bad())?.into(),
+        )),
     }
 }
 
@@ -837,7 +844,11 @@ impl Reader {
     ) -> Result<Box<ChordRest>> {
         let is_rest = element.tag == "Rest";
         let written = element.child_text("durationType");
-        let dots = child_integer(element, "dots")?.unwrap_or(0).max(0) as u32;
+        let dots = child_integer(element, "dots")?.unwrap_or(0).max(0);
+        if dots > MOST_DOTS {
+            return Err(refused(format!("a note of {dots} dots")));
+        }
+        let dots = dots as u32;
         let (value, base, order, measure_rest) = if written == "measure" {
             let length = element
                 .find("duration")
@@ -3579,6 +3590,17 @@ mod tests {
             "<Chord><durationType>{value}</durationType><Note><pitch>{pitch}</pitch>\
              <tpc>{tpc}</tpc></Note></Chord>"
         )
+    }
+
+    #[test]
+    fn a_length_past_what_ticks_count_is_refused() {
+        let dotted = "<Chord><dots>2147483647</dots><durationType>quarter</durationType>\
+                      <Note><pitch>60</pitch><tpc>14</tpc></Note></Chord>";
+        assert!(from_mscx(&document(dotted)).is_err());
+        let rest = "<Rest><durationType>measure</durationType>\
+                    <duration>9223372036854775807</duration></Rest>";
+        assert!(from_mscx(&document(rest)).is_err());
+        assert!(fraction("3/4").is_ok());
     }
 
     #[test]

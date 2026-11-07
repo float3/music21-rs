@@ -1011,8 +1011,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
             .find("part-abbreviation")
             .is_some_and(|name| name.get("print-object") == Some("no"));
 
-        let adjusted =
-            |text: &str| -> Option<u8> { parse_int(text).map(|value| (value - 1).max(0) as u8) };
+        let adjusted = |text: &str| -> Option<u8> {
+            parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
+        };
         let mut instrument: Option<Instrument> = None;
         let mut unpitched = false;
         if let Some(midi) = score_part.find("midi-instrument") {
@@ -1608,7 +1609,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             self.measure.suffix = Some(rest);
         }
         let last = self.part.last_measure_number;
-        if self.measure.suffix.as_deref() == Some("X") && self.measure.number != last + 1 {
+        if self.measure.suffix.as_deref() == Some("X")
+            && Some(self.measure.number) != last.checked_add(1)
+        {
             let mut suffix = format!("X{}", self.measure.number);
             if let Some(before) = &self.part.last_number_suffix {
                 suffix = format!("{before}{suffix}");
@@ -2155,8 +2158,12 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 .iter()
                 .find(|(held, _)| *held == staff)
                 .and_then(|(_, clef)| clef.lowest_line().filter(|_| clef.places_pitches()))
-                .map_or(35, |lowest| lowest + 4);
-            rest.set_step_shift(displayed.diatonic_note_number() - middle);
+                .map_or(35, |lowest| lowest.saturating_add(4));
+            let shift = displayed
+                .checked_diatonic_note_number()
+                .and_then(|position| position.checked_sub(middle))
+                .ok_or_else(|| import_error(format!("a rest shown at {name} is too far off")))?;
+            rest.set_step_shift(shift);
         }
         let mut general = General::default();
         let uid = 0;
@@ -4004,26 +4011,39 @@ fn transpose_interval(written: &Xml) -> Result<Interval> {
     let chromatic = written
         .find("chromatic")
         .and_then(|c| parse_int(c.stripped()));
+    let too_far = || import_error("a <transpose> too far for an interval");
     let mut octave_change = 0;
     if let Some(octaves) = written
         .find("octave-change")
         .and_then(|o| parse_int(o.stripped()))
     {
-        octave_change = octaves * 12;
+        octave_change = octaves.checked_mul(12).ok_or_else(too_far)?;
         if let Some(diatonic) = &mut diatonic {
-            *diatonic += 7 * octaves;
+            *diatonic = octaves
+                .checked_mul(7)
+                .and_then(|steps| diatonic.checked_add(steps))
+                .ok_or_else(too_far)?;
         }
     }
+    let semitones =
+        |chromatic: IntegerType| chromatic.checked_add(octave_change).ok_or_else(too_far);
     match (diatonic, chromatic) {
         (Some(diatonic), Some(chromatic)) => {
-            let actual = |steps: IntegerType| if steps < 0 { steps - 1 } else { steps + 1 };
-            Interval::from_generic_and_chromatic(actual(diatonic), chromatic + octave_change)
-                .or_else(|_| {
-                    let steps = diatonic - octave_change * 7 / 12;
-                    Interval::from_generic_and_chromatic(actual(steps), chromatic + octave_change)
-                })
+            let actual = |steps: IntegerType| {
+                let generic = if steps < 0 {
+                    steps.checked_sub(1)
+                } else {
+                    steps.checked_add(1)
+                };
+                generic.ok_or_else(too_far)
+            };
+            let semitones = semitones(chromatic)?;
+            Interval::from_generic_and_chromatic(actual(diatonic)?, semitones).or_else(|_| {
+                let steps = diatonic - octave_change / 12 * 7;
+                Interval::from_generic_and_chromatic(actual(steps)?, semitones)
+            })
         }
-        (None, Some(chromatic)) => Interval::from_semitones(chromatic + octave_change),
+        (None, Some(chromatic)) => Interval::from_semitones(semitones(chromatic)?),
         _ => Interval::from_name("P1"),
     }
 }
@@ -4056,6 +4076,46 @@ mod tests {
                 depth > crate::xml::MAX_DEPTH - 2,
                 "{depth}"
             );
+        }
+    }
+
+    #[test]
+    fn a_midi_program_below_any_integer_reads_as_the_first() {
+        let document = score(&format!("<measure number=\"1\">{NOTE}</measure>")).replace(
+            "<part-name>Flute</part-name>",
+            "<part-name>Flute</part-name><midi-instrument id=\"P1-I1\">\
+             <midi-program>-2147483648</midi-program></midi-instrument>",
+        );
+        assert!(from_musicxml(&document).is_ok());
+    }
+
+    #[test]
+    fn a_rest_shown_past_the_last_octave_is_refused() {
+        let rest = "<note><rest><display-step>C</display-step>\
+                    <display-octave>2147483647</display-octave></rest>\
+                    <duration>1</duration><type>quarter</type></note>";
+        assert!(from_musicxml(&score(&format!("<measure number=\"1\">{rest}</measure>"))).is_err());
+    }
+
+    #[test]
+    fn a_measure_after_the_largest_number_is_read() {
+        let measures = format!(
+            "<measure number=\"2147483647\">{NOTE}</measure><measure number=\"5X\">{NOTE}</measure>"
+        );
+        assert!(from_musicxml(&score(&measures)).is_ok());
+    }
+
+    #[test]
+    fn a_transposition_of_too_many_octaves_is_refused() {
+        for change in [
+            "<diatonic>1</diatonic><chromatic>2</chromatic>",
+            "<chromatic>2</chromatic>",
+        ] {
+            let transpose = Xml::parse(&format!(
+                "<transpose>{change}<octave-change>2147483647</octave-change></transpose>"
+            ))
+            .unwrap();
+            assert!(transpose_interval(&transpose).is_err(), "{change}");
         }
     }
 
