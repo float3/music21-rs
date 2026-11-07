@@ -7,6 +7,8 @@
 //! read: stage 2, with its `$` attribute records and its columns for beams,
 //! accidentals, notations and lyrics, and the older stage 1.
 
+use std::collections::HashMap;
+
 use crate::articulations::{Articulation, ArticulationKind};
 use crate::bar::{Barline, BarlineType, RepeatDirection};
 use crate::chord::Chord;
@@ -493,7 +495,9 @@ impl Part {
             .iter()
             .map(|(start, end)| self.lines.get(*start..*end).unwrap_or(&[]))
             .collect();
-        let mut previous: Option<Option<TieType>> = None;
+        // The last note, chord or rest of each voice, by its number, for the
+        // ties across measures; a measure without voices continues voice 0.
+        let mut last_by_voice: HashMap<usize, Option<Option<TieType>>> = HashMap::new();
         let mut slurs = Slurs::default();
         let mut bars = 0;
         for (index, lines) in measures.iter().enumerate() {
@@ -531,7 +535,13 @@ impl Part {
                     }
                 }
             }
-            self.fill(&mut measure, lines, divisions, &mut previous, &mut slurs)?;
+            self.fill(
+                &mut measure,
+                lines,
+                divisions,
+                &mut last_by_voice,
+                &mut slurs,
+            )?;
             if bars == 0 {
                 let bar = self.time_signature()?.bar_duration().quarter_length();
                 let length = measure.end_offset();
@@ -586,18 +596,22 @@ impl Part {
     }
 
     /// The notes, chords and rests of one measure's records, in voices where
-    /// a `back` record says to start another.
+    /// a `back` record says to start another. Each voice ties on from the
+    /// voice of its number in the measure before.
     fn fill(
         &self,
         measure: &mut Stream,
         lines: &[String],
         divisions: FloatType,
-        previous: &mut Option<Option<TieType>>,
+        last_by_voice: &mut HashMap<usize, Option<Option<TieType>>>,
         slurs: &mut Slurs,
     ) -> Result<()> {
         let voices = lines.iter().any(|line| line.starts_with("back"));
         let mut voice = voices.then(|| Stream::with_kind(StreamKind::Voice));
         let mut pending: Vec<Record<'_>> = Vec::new();
+        let mut number = 0;
+        let mut last = last_by_voice.get(&number).copied().flatten();
+        let previous = &mut last;
         for line in lines {
             let record = Record {
                 line,
@@ -615,6 +629,9 @@ impl Part {
                 if let Some(done) = voice.replace(Stream::with_kind(StreamKind::Voice)) {
                     append_at(measure, 0.0, StreamElement::Stream(Box::new(done)));
                 }
+                last_by_voice.insert(number, *previous);
+                number += 1;
+                *previous = last_by_voice.get(&number).copied().flatten();
             }
             if record.is_rest() {
                 self.flush(
@@ -651,6 +668,7 @@ impl Part {
             previous,
             slurs,
         )?;
+        last_by_voice.insert(number, *previous);
         if let Some(voice) = voice
             && !voice.is_empty()
         {
@@ -1186,6 +1204,38 @@ mod tests {
             .map(|dynamic| dynamic.value().to_string())
             .collect();
         assert_eq!(values, ["pp"]);
+    }
+
+    #[test]
+    fn ties_stay_in_their_voice_across_a_back() {
+        let part = "\n\n\n04/16/93 E. Correia\nWK#:581       MV#:3c\n\
+            Breitkopf & Hartel, Vol. 13\nClarinet Quintet\nTrio II\nPiano\n1 0\n\
+            Group memberships: score\nscore: part 1 of 1\n\
+            $  K:0   Q:1   T:2/4   C:4\nmeasure 1\nC5     1        q     u\n\
+            E5     1-       q     u\nback   2\nC4     1        q     d\n\
+            G3     1-       q     d\nmeasure 2\nE5     2        h     u\n\
+            back   2\nG3     1        q     d\nA3     1        q     d\n\
+            measure 3\nF5     2        h\n/END\n";
+        let score = from_musedata(&[part]).expect("the part is read");
+        let ties = |stream: &Stream| -> Vec<Option<&'static str>> {
+            stream
+                .notes()
+                .iter()
+                .map(|(_, element)| match element {
+                    StreamElement::Note(note) => note.tie().map(|tie| tie.tie_type().as_str()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let parts = score.parts();
+        let measures = parts[0].measures();
+        let first = measures[0].voices();
+        let second = measures[1].voices();
+        assert_eq!(ties(first[0]), [None, Some("start")]);
+        assert_eq!(ties(first[1]), [None, Some("start")]);
+        assert_eq!(ties(second[0]), [Some("stop")]);
+        assert_eq!(ties(second[1]), [Some("stop"), None]);
+        assert_eq!(ties(measures[2]), [None]);
     }
 
     #[test]
