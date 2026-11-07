@@ -4004,26 +4004,39 @@ fn transpose_interval(written: &Xml) -> Result<Interval> {
     let chromatic = written
         .find("chromatic")
         .and_then(|c| parse_int(c.stripped()));
+    let too_far = || import_error("a <transpose> too far for an interval");
     let mut octave_change = 0;
     if let Some(octaves) = written
         .find("octave-change")
         .and_then(|o| parse_int(o.stripped()))
     {
-        octave_change = octaves * 12;
+        octave_change = octaves.checked_mul(12).ok_or_else(too_far)?;
         if let Some(diatonic) = &mut diatonic {
-            *diatonic += 7 * octaves;
+            *diatonic = octaves
+                .checked_mul(7)
+                .and_then(|steps| diatonic.checked_add(steps))
+                .ok_or_else(too_far)?;
         }
     }
+    let semitones =
+        |chromatic: IntegerType| chromatic.checked_add(octave_change).ok_or_else(too_far);
     match (diatonic, chromatic) {
         (Some(diatonic), Some(chromatic)) => {
-            let actual = |steps: IntegerType| if steps < 0 { steps - 1 } else { steps + 1 };
-            Interval::from_generic_and_chromatic(actual(diatonic), chromatic + octave_change)
-                .or_else(|_| {
-                    let steps = diatonic - octave_change * 7 / 12;
-                    Interval::from_generic_and_chromatic(actual(steps), chromatic + octave_change)
-                })
+            let actual = |steps: IntegerType| {
+                let generic = if steps < 0 {
+                    steps.checked_sub(1)
+                } else {
+                    steps.checked_add(1)
+                };
+                generic.ok_or_else(too_far)
+            };
+            let semitones = semitones(chromatic)?;
+            Interval::from_generic_and_chromatic(actual(diatonic)?, semitones).or_else(|_| {
+                let steps = diatonic - octave_change / 12 * 7;
+                Interval::from_generic_and_chromatic(actual(steps)?, semitones)
+            })
         }
-        (None, Some(chromatic)) => Interval::from_semitones(chromatic + octave_change),
+        (None, Some(chromatic)) => Interval::from_semitones(semitones(chromatic)?),
         _ => Interval::from_name("P1"),
     }
 }
@@ -4056,6 +4069,20 @@ mod tests {
                 depth > crate::xml::MAX_DEPTH - 2,
                 "{depth}"
             );
+        }
+    }
+
+    #[test]
+    fn a_transposition_of_too_many_octaves_is_refused() {
+        for change in [
+            "<diatonic>1</diatonic><chromatic>2</chromatic>",
+            "<chromatic>2</chromatic>",
+        ] {
+            let transpose = Xml::parse(&format!(
+                "<transpose>{change}<octave-change>2147483647</octave-change></transpose>"
+            ))
+            .unwrap();
+            assert!(transpose_interval(&transpose).is_err(), "{change}");
         }
     }
 
