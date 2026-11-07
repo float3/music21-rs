@@ -830,9 +830,10 @@ impl<'a> Expansion<'a> {
                     self.rules[rule].text()
                 ))
             })?;
-        // Every time through makes a measure at least.
+        // Every time through makes a measure at least, and after the first
+        // as many as the first made.
         self.make_room(repeats)?;
-        for _ in 0..repeats {
+        for time in 0..repeats {
             let meter = self.states[rule].meter.clone();
             let key = self.states[rule].key.clone();
             let returned = self.expand(named, Some(meter.clone()), Some(key.clone()))?;
@@ -841,6 +842,9 @@ impl<'a> Expansion<'a> {
                     "rule {content} expands to no measure at all"
                 )));
             };
+            if time == 0 {
+                self.make_room(returned.len().saturating_mul(repeats - 1))?;
+            }
             self.insert_key_and_meter(*first, &meter, &key);
             places.extend(returned);
         }
@@ -1262,6 +1266,7 @@ mod tests {
         let started = std::time::Instant::now();
         assert!(from_clercq_temperley("Vr: I | V |\nS: $Vr*9223372036854775807\n").is_err());
         assert!(from_clercq_temperley("S: I |*9223372036854775807\n").is_err());
+        assert!(from_clercq_temperley("Vr: I | V |\nS: $Vr*65535\n").is_err());
         assert!(started.elapsed() < std::time::Duration::from_millis(500));
     }
 }
