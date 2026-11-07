@@ -25,9 +25,8 @@
 
 mod dataset;
 pub mod jsymbolic;
-/// Which language a text is in: music21's `LanguageDetector`, with the
-/// `language-detection` feature.
-#[cfg(feature = "language-detection")]
+/// Which language a text is in: music21's `Trigram`, and its
+/// `LanguageDetector` with the `language-detection` feature.
 pub mod language;
 pub mod native;
 
