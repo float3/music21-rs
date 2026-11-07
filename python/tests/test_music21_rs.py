@@ -8194,6 +8194,29 @@ def test_a_chord_added_to_sorts_by_staff_position():
     assert [p.nameWithOctave for p in c.pitches] == ["F#3", "G--3"]
 
 
+def test_a_stream_sorts_by_the_priority_its_elements_carry():
+    """music21 sorts what stands at one offset by each element's own
+    `priority` before its `classSortOrder`."""
+    first, second = m.GlobalComment("first"), m.GlobalComment("second")
+    second.priority = -1
+    s = m.Stream()
+    s.insert(0, first)
+    s.insert(0, second)
+    assert [c.comment for c in s] == ["second", "first"]
+
+    note = pytest.importorskip("music21.note")
+    stream = pytest.importorskip("music21.stream")
+    orders = []
+    for made in (m.Stream(), stream.Stream()):
+        notes = [note.Note(name) for name in "CDE"]
+        notes[1].priority = -1
+        notes[2].priority = 1
+        for n in notes:
+            made.insert(0, n)
+        orders.append([n.name for n in made])
+    assert orders[0] == orders[1] == ["D", "C", "E"]
+
+
 def test_a_pickled_tuplet_keeps_its_written_value():
     """A dotted half in a triplet sounds a half; pickled and read back it is
     still written as the dotted half, as music21's is."""

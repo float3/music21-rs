@@ -158,6 +158,25 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
+/// music21's `priority` for an object, as it stands when the object is
+/// put in: 0 for one that says nothing.
+///
+/// Read once, as the stream is not told when it changes: music21 hears of
+/// that through the element's sites, which the package does not keep.
+/// Asked of the class first, where music21 defines it, since an element
+/// without one refuses through `__getattr__` at some cost.
+fn priority_of(object: &Bound<'_, PyAny>) -> i64 {
+    let name = pyo3::intern!(object.py(), "priority");
+    if !object.get_type().hasattr(name).unwrap_or(false) {
+        return 0;
+    }
+
+    object
+        .getattr(name)
+        .and_then(|priority| priority.extract::<i64>())
+        .unwrap_or(0)
+}
+
 /// Where a listed element sorts among those at its offset: as anything
 /// held, or after all of them, as music21 keeps a measure's right barline.
 #[derive(Clone, Copy)]
@@ -550,7 +569,7 @@ impl Stream {
     }
 
     fn put(&mut self, offset: f64, object: &Bound<'_, PyAny>) {
-        self.put_with_priority(offset, object, 0);
+        self.put_with_priority(offset, object, priority_of(object));
     }
 
     /// Puts an object in with music21's `priority`, which comes before
