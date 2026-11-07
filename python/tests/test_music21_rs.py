@@ -8229,6 +8229,21 @@ def test_a_chord_sorted_in_place_moves_its_note_objects_with_it():
     assert [held.index(n) for n in c.notes] == [4, 1, 5, 3, 2, 0]
 
 
+def test_a_pitch_a_chord_and_a_note_share_reaches_both():
+    """A note built on a pitch a chord handed out keeps that object, as
+    music21's does, so an edit through it reaches the note and the chord,
+    whether or not the note has handed it out since."""
+    for ask in (False, True):
+        c = m.Chord("C4 E4")
+        p = c.pitches[0]
+        n = m.Note(p)
+        if ask:
+            assert n.pitch is p
+        p.octave = 5
+        assert n.nameWithOctave == "C5"
+        assert [x.nameWithOctave for x in c.pitches] == ["C5", "E4"]
+
+
 def test_a_pickled_tuplet_keeps_its_written_value():
     """A dotted half in a triplet sounds a half; pickled and read back it is
     still written as the dotted half, as music21's is."""
