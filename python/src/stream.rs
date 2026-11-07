@@ -38,8 +38,8 @@
 #![allow(non_snake_case)]
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
 use pyo3::prelude::*;
@@ -62,26 +62,76 @@ use crate::tempo::{MetronomeMark, TempoException};
 
 pyo3::create_exception!(music21_rs_facade, StreamException, crate::Music21Exception);
 
+/// How many times something a stream may hold has changed how long it
+/// lasts, and how many times one has changed its `priority`. These stand
+/// in for music21's `informSites`: a stream here keeps no sites to be told,
+/// so it keeps what it worked out from either only while the count it read
+/// stands. One count for every stream rather than one per element, since
+/// checking a version on every element would read every element again.
+static LENGTHS: AtomicU64 = AtomicU64::new(0);
+static PRIORITIES: AtomicU64 = AtomicU64::new(0);
+
+/// Tells every stream that something it may hold has changed its length.
+pub(crate) fn length_changed() {
+    LENGTHS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Tells every stream that something it may hold has changed its
+/// `priority`.
+pub(crate) fn priority_changed() {
+    PRIORITIES.fetch_add(1, Ordering::Relaxed);
+}
+
+/// What an installed element's `informSites` tells this package's streams
+/// before music21's own sites: a change of `priority` or of length, as
+/// music21 says which, and both where it does not.
+#[pyfunction]
+#[pyo3(signature = (changedInformation = None))]
+pub(crate) fn tell_streams(changedInformation: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    let mut changed = None;
+    if let Some(said) = changedInformation.and_then(|said| said.cast::<PyDict>().ok()) {
+        // A priority or a duration says so under one name or the other.
+        for name in ["changedElement", "changedAttribute"] {
+            if let Some(what) = said.get_item(name)? {
+                changed = what.extract::<String>().ok();
+                break;
+            }
+        }
+    }
+    if changed.as_deref() != Some("duration") {
+        priority_changed();
+    }
+    if changed.as_deref() != Some("priority") {
+        length_changed();
+    }
+    Ok(())
+}
+
+/// The class attribute an installed class carries to say its
+/// `informSites` reaches [`tell_streams`].
+pub(crate) const TELLS_STREAMS: &str = "_tellsPackageStreams";
+
 /// One thing a stream holds: where it stands, music21's `classSortOrder`
 /// for it, the order it was put in, and the object itself.
 struct Held {
     offset: f64,
     /// music21's `priority`, which comes before `classSortOrder` in its
     /// sort: a caller, or `measures` collecting what was in force, writes
-    /// it to put something first whatever its class says.
-    priority: i64,
+    /// it to put something first whatever its class says. Read again when
+    /// some element's priority changes.
+    priority: AtomicI64,
     order: i64,
     index: u64,
     object: Py<PyAny>,
 }
 
-/// What a stream works out from what it holds and nothing else, kept until
-/// what it holds next changes: music21's order, the `elements` tuple, and
-/// where each object first stands. An element's own state is never kept
-/// here -- its length above all, which a caller can change without the
-/// stream hearing of it -- and is read afresh each time.
+/// What a stream works out from what it holds, kept until what it holds
+/// next changes or some element's priority does: music21's order, the
+/// `elements` tuple, and where each object first stands.
 #[derive(Default)]
 struct Derived {
+    /// The count of priority changes this was worked out at.
+    priorities: u64,
     /// Positions in `held`, in music21's order.
     order: OnceLock<Vec<usize>>,
     /// `elements`, built once for every read of it and of `s[i]`.
@@ -103,6 +153,78 @@ struct Place {
 /// How many lookups scan before [`Derived::places`] is built.
 const SCANS_BEFORE_MAP: usize = 8;
 
+impl Derived {
+    fn at(priorities: u64) -> Self {
+        Self {
+            priorities,
+            ..Self::default()
+        }
+    }
+
+    /// Positions in `held`, in music21's order: by offset, then
+    /// `priority`, then `classSortOrder`, then when each was put in.
+    fn order(&self, held: &[Held]) -> &[usize] {
+        self.order.get_or_init(|| {
+            let mut order: Vec<usize> = (0..held.len()).collect();
+            order.sort_by(|&left, &right| {
+                let (left, right) = (&held[left], &held[right]);
+                left.offset
+                    .total_cmp(&right.offset)
+                    .then(priority(left).cmp(&priority(right)))
+                    .then(left.order.cmp(&right.order))
+                    .then(left.index.cmp(&right.index))
+            });
+            order
+        })
+    }
+
+    /// Where each object first stands, once enough lookups have scanned
+    /// since the last change for the map to pay; `None` until then.
+    fn places(&self, held: &[Held]) -> Option<&HashMap<usize, Place>> {
+        if let Some(places) = self.places.get() {
+            return Some(places);
+        }
+        if self.scans.fetch_add(1, Ordering::Relaxed) < SCANS_BEFORE_MAP {
+            return None;
+        }
+
+        let mut places: HashMap<usize, Place> = HashMap::with_capacity(held.len());
+        for (sorted, &at) in self.order(held).iter().enumerate() {
+            let key = held[at].object.as_ptr() as usize;
+            places.entry(key).or_insert(Place { held: at, sorted });
+        }
+        // An object held twice is found in `held` where it was put first,
+        // which need not be where it is listed first.
+        for (at, one) in held.iter().enumerate() {
+            if let Some(place) = places.get_mut(&(one.object.as_ptr() as usize))
+                && at < place.held
+            {
+                place.held = at;
+            }
+        }
+        Some(self.places.get_or_init(|| places))
+    }
+}
+
+fn priority(held: &Held) -> i64 {
+    held.priority.load(Ordering::Relaxed)
+}
+
+/// Where a stream's elements end, as last worked out, and the count of
+/// length changes it was worked out at.
+#[derive(Clone, Copy)]
+struct KeptEnd {
+    lengths: u64,
+    end: f64,
+}
+
+/// A lock that a panic elsewhere has not made useless: what it guards is
+/// worked out again from scratch whenever it is stale.
+fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
+    lock.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// music21's `stream.Stream`: objects at quarter-length offsets, kept in
 /// order of offset, then of `classSortOrder`, then of when each was put in.
 ///
@@ -114,10 +236,14 @@ const SCANS_BEFORE_MAP: usize = 8;
 pub struct Stream {
     kind: StreamKind,
     /// What the stream holds, in the order it was put in: read through
-    /// `held` and written only through `held_mut`, which lets go of
-    /// `derived`.
+    /// `held` and written only through `put` and `held_mut`, which let go
+    /// of `derived`.
     contents: Vec<Held>,
-    derived: Derived,
+    derived: Mutex<Arc<Derived>>,
+    /// Where what is held ends, kept while every element is one the stream
+    /// hears of changes to and none has changed: an append then costs one
+    /// length rather than all of them.
+    kept_end: Mutex<Option<KeptEnd>>,
     next: u64,
     /// music21's `id`, where a caller gave one.
     id: Option<Py<PyAny>>,
@@ -269,6 +395,46 @@ fn length_of(object: &Bound<'_, PyAny>) -> PyResult<f64> {
         return Ok(ours.borrow().inner.quarter_length());
     }
     duration.getattr("quarterLength")?.extract()
+}
+
+/// How long an object lasts, where a stream hears of every change to that
+/// and to its `priority`; `None` where it would not, and both have to be
+/// read afresh each time. One of this package's notes, rests and chords is
+/// marked as read, so that it says when its length changes.
+///
+/// Heard of are those notes, rests and chords; anything whose class says
+/// nothing of a length or a priority and can be told nothing of either;
+/// the classes installed into music21, whose `informSites` tells
+/// [`tell_streams`]; and the humdrum elements, whose priority setter does.
+/// Not heard of are music21's own objects not installed, which tell only
+/// the sites music21 keeps, and anything a caller wrote in Python.
+fn heard_length(object: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
+    let py = object.py();
+    let class = object.get_type();
+    let tells = class.hasattr(pyo3::intern!(py, TELLS_STREAMS))?;
+    let priority_heard = tells
+        || object.cast::<crate::spineparser::GlobalComment>().is_ok()
+        || object.cast::<crate::spineparser::MiscTandem>().is_ok()
+        || !class.hasattr(pyo3::intern!(py, "priority"))?;
+    if !priority_heard {
+        return Ok(None);
+    }
+
+    if let Some(length) = crate::note::watched_length(object) {
+        return Ok(Some(length));
+    }
+    if tells {
+        return length_of(object).map(Some);
+    }
+    // Nothing to read and nowhere to write one: no length, ever.
+    let fixed = class
+        .getattr(pyo3::intern!(py, "__dictoffset__"))?
+        .extract::<isize>()?
+        == 0
+        && object.cast::<Stream>().is_err()
+        && !class.hasattr(pyo3::intern!(py, "duration"))?
+        && !class.hasattr(pyo3::intern!(py, "__getattr__"))?;
+    Ok(fixed.then_some(0.0))
 }
 
 /// Whether an object is of a class, named or given: a name matches any
@@ -464,7 +630,8 @@ impl Stream {
         Self {
             kind,
             contents: Vec::new(),
-            derived: Derived::default(),
+            derived: Mutex::new(Arc::new(Derived::at(PRIORITIES.load(Ordering::Relaxed)))),
+            kept_end: Mutex::new(None),
             next: 0,
             id: None,
             sounding: None,
@@ -577,15 +744,36 @@ impl Stream {
     /// offset: `measures` gives what it collects the priority music21
     /// gives it, so the clef it found is listed before the measure.
     fn put_with_priority(&mut self, offset: f64, object: &Bound<'_, PyAny>, priority: i64) {
+        // Marked whether or not an end is kept yet, so that one kept later
+        // hears of its changes; and the end kept so far carries over where
+        // this one is heard of too.
+        let length = heard_length(object).ok().flatten();
+        let kept = locked(&self.kept_end)
+            .take()
+            .filter(|kept| kept.lengths == LENGTHS.load(Ordering::Relaxed))
+            .zip(length)
+            .map(|(kept, length)| KeptEnd {
+                end: kept.end.max(offset + length),
+                ..kept
+            });
+
         let index = self.next;
-        self.held_mut().push(Held {
+        self.contents.push(Held {
             offset,
-            priority,
+            priority: AtomicI64::new(priority),
             order: sort_order(object),
             index,
             object: object.clone().unbind(),
         });
         self.next += 1;
+        self.let_go();
+        *locked(&self.kept_end) = kept;
+    }
+
+    /// Lets go of what was worked out from what is held.
+    fn let_go(&mut self) {
+        let priorities = PRIORITIES.load(Ordering::Relaxed);
+        *locked(&self.derived) = Arc::new(Derived::at(priorities));
     }
 
     /// What the stream holds, in the order it was put in.
@@ -593,61 +781,42 @@ impl Stream {
         &self.contents
     }
 
-    /// What the stream holds, to change: the one way to write it, so what
-    /// was worked out from it is let go of whatever the change.
+    /// What the stream holds, to change: the one way to write it besides
+    /// `put`, so what was worked out from it is let go of whatever the
+    /// change.
     fn held_mut(&mut self) -> &mut Vec<Held> {
-        self.derived = Derived::default();
+        self.let_go();
+        *locked(&self.kept_end) = None;
         &mut self.contents
     }
 
-    /// Positions in `held`, in music21's order: by offset, then
-    /// `priority`, then `classSortOrder`, then when each was put in.
-    fn order(&self) -> &[usize] {
-        self.derived.order.get_or_init(|| {
-            let held = self.held();
-            let mut order: Vec<usize> = (0..held.len()).collect();
-            order.sort_by(|&left, &right| {
-                let (left, right) = (&held[left], &held[right]);
-                left.offset
-                    .total_cmp(&right.offset)
-                    .then(left.priority.cmp(&right.priority))
-                    .then(left.order.cmp(&right.order))
-                    .then(left.index.cmp(&right.index))
-            });
-            order
-        })
-    }
-
-    /// Where each object first stands, once enough lookups have scanned
-    /// since the last change for the map to pay; `None` until then.
-    fn places(&self) -> Option<&HashMap<usize, Place>> {
-        if let Some(places) = self.derived.places.get() {
-            return Some(places);
-        }
-        if self.derived.scans.fetch_add(1, Ordering::Relaxed) < SCANS_BEFORE_MAP {
-            return None;
+    /// What was worked out from what is held, worked out afresh where
+    /// some element's priority has changed since: each priority is read
+    /// again, as music21 sorts again when an element tells it of one.
+    fn derived(&self) -> Arc<Derived> {
+        let priorities = PRIORITIES.load(Ordering::Relaxed);
+        let kept = Arc::clone(&locked(&self.derived));
+        if kept.priorities == priorities {
+            return kept;
         }
 
-        let mut places: HashMap<usize, Place> = HashMap::with_capacity(self.held().len());
-        for (sorted, &at) in self.order().iter().enumerate() {
-            let key = self.held()[at].object.as_ptr() as usize;
-            places.entry(key).or_insert(Place { held: at, sorted });
-        }
-        // An object held twice is found in `held` where it was put first,
-        // which need not be where it is listed first.
-        for (at, held) in self.held().iter().enumerate() {
-            if let Some(place) = places.get_mut(&(held.object.as_ptr() as usize))
-                && at < place.held
-            {
-                place.held = at;
+        // Read outside the lock: a priority is Python, which may read
+        // this stream in turn.
+        Python::attach(|py| {
+            for held in self.held() {
+                let now = priority_of(held.object.bind(py));
+                held.priority.store(now, Ordering::Relaxed);
             }
-        }
-        Some(self.derived.places.get_or_init(|| places))
+        });
+        let fresh = Arc::new(Derived::at(priorities));
+        *locked(&self.derived) = Arc::clone(&fresh);
+        fresh
     }
 
     /// The position in `held` where an object was first put, by identity.
     fn held_position(&self, object: &Bound<'_, PyAny>) -> Option<usize> {
-        if let Some(places) = self.places() {
+        let derived = self.derived();
+        if let Some(places) = derived.places(self.held()) {
             return places
                 .get(&(object.as_ptr() as usize))
                 .map(|place| place.held);
@@ -660,12 +829,14 @@ impl Stream {
     /// The position in music21's order where an object is first listed,
     /// by identity.
     fn sorted_position(&self, object: &Bound<'_, PyAny>) -> Option<usize> {
-        if let Some(places) = self.places() {
+        let derived = self.derived();
+        if let Some(places) = derived.places(self.held()) {
             return places
                 .get(&(object.as_ptr() as usize))
                 .map(|place| place.sorted);
         }
-        self.order()
+        derived
+            .order(self.held())
             .iter()
             .position(|&at| self.held()[at].object.as_ptr() == object.as_ptr())
     }
@@ -705,14 +876,38 @@ impl Stream {
 
     /// What this stream holds, in music21's order.
     fn sorted(&self) -> Vec<&Held> {
-        self.order().iter().map(|&at| &self.held()[at]).collect()
+        let derived = self.derived();
+        let held = self.held();
+        derived.order(held).iter().map(|&at| &held[at]).collect()
     }
 
-    /// The offset just past the last thing held.
+    /// The offset just past the last thing held: kept where nothing held
+    /// has changed its length since, and read off every element otherwise.
     fn end(&self, py: Python<'_>) -> PyResult<f64> {
+        let lengths = LENGTHS.load(Ordering::Relaxed);
+        if let Some(kept) = *locked(&self.kept_end)
+            && kept.lengths == lengths
+        {
+            return Ok(kept.end);
+        }
+
         let mut end: f64 = 0.0;
+        let mut heard = true;
         for held in self.held() {
-            end = end.max(held.offset + length_of(held.object.bind(py))?);
+            let object = held.object.bind(py);
+            let length = match heard_length(object)? {
+                Some(length) => length,
+                None => {
+                    heard = false;
+                    length_of(object)?
+                }
+            };
+            end = end.max(held.offset + length);
+        }
+        // Kept as at the count read before reading: a change made while
+        // reading leaves it stale, not wrong.
+        if heard {
+            *locked(&self.kept_end) = Some(KeptEnd { lengths, end });
         }
         Ok(end)
     }
@@ -1054,7 +1249,9 @@ impl Stream {
         for held in self.held() {
             visit.call(&held.object)?;
         }
-        if let Some(elements) = self.derived.elements.get() {
+        if let Ok(derived) = self.derived.try_lock()
+            && let Some(elements) = derived.elements.get()
+        {
             visit.call(elements)?;
         }
         visit.call(&self.id)
@@ -2893,12 +3090,12 @@ impl Stream {
     /// Everything held, in order.
     #[getter]
     fn elements<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyTuple>> {
-        if let Some(elements) = self.derived.elements.get() {
+        let derived = self.derived();
+        if let Some(elements) = derived.elements.get() {
             return Ok(elements.bind(py).clone());
         }
         let made = PyTuple::new(py, self.sorted().iter().map(|held| held.object.bind(py)))?;
-        Ok(self
-            .derived
+        Ok(derived
             .elements
             .get_or_init(|| made.unbind())
             .bind(py)

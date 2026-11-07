@@ -85,6 +85,7 @@ impl GlobalComment {
     #[setter]
     fn set_priority(&mut self, value: i32) {
         self.inner = RsGlobalComment::new(self.inner.comment(), value);
+        crate::stream::priority_changed();
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -162,6 +163,7 @@ impl MiscTandem {
     #[setter]
     fn set_priority(&mut self, value: i32) {
         self.inner = RsMiscTandem::new(self.inner.tandem(), value);
+        crate::stream::priority_changed();
     }
 
     fn __repr__(&self) -> String {

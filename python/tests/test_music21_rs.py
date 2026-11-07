@@ -8217,6 +8217,81 @@ def test_a_stream_sorts_by_the_priority_its_elements_carry():
     assert orders[0] == orders[1] == ["D", "C", "E"]
 
 
+def test_a_priority_changed_after_insertion_resorts_the_stream():
+    """music21 hears of a `priority` set on an element it holds, and lists
+    what stands at that offset again by it."""
+    first, second = m.GlobalComment("first"), m.GlobalComment("second")
+    s = m.Stream()
+    s.insert(0, first)
+    s.insert(0, second)
+    assert [c.comment for c in s] == ["first", "second"]
+    second.priority = -1
+    assert [c.comment for c in s] == ["second", "first"]
+    assert s.index(second) == 0
+
+
+def test_an_installed_priority_changed_after_insertion_resorts_the_stream():
+    """Once installed, an element's `priority` is music21's own, which tells
+    its sites; the package's stream hears of it too."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import note, stream
+for made in (m.Stream(), stream.Stream()):
+    notes = [note.Note(name) for name in 'CDE']
+    for n in notes:
+        made.insert(0, n)
+    names = [n.name for n in made]
+    notes[2].priority = -1
+    print(names, [n.name for n in made])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "['C', 'D', 'E'] ['E', 'C', 'D']",
+        "['C', 'D', 'E'] ['E', 'C', 'D']",
+    ]
+
+
+def test_a_stream_hears_every_change_to_a_held_length():
+    """A stream keeps its end between appends, so every way of changing
+    the length of something it holds has to reach it."""
+    s = m.Stream()
+    n, r, c = m.Note("C4"), m.Rest(), m.Chord("C4 E4 G4")
+    s.append([n, r, c])
+    assert s.highestTime == 3.0
+    n.quarterLength = 4
+    assert s.highestTime == 4.0
+    n.duration.quarterLength = 5
+    assert s.highestTime == 5.0
+    n.duration = m.Duration(6.0)
+    assert s.highestTime == 6.0
+    n.duration.type = "quarter"
+    assert s.highestTime == 3.0
+    r.duration.type = "whole"
+    assert s.highestTime == 5.0
+    r.duration.dots = 1
+    assert s.highestTime == 7.0
+    c.quarterLength = 8
+    assert s.highestTime == 10.0
+    c.duration.appendTuplet(m.Tuplet(3, 2))
+    assert s.highestTime == pytest.approx(2 + 16 / 3)
+    shared = c.notes[0]
+    held = m.Stream()
+    held.append(shared)
+    c.duration.quarterLength = 2
+    assert held.highestTime == 2.0
+    assert s.highestTime == 7.0
+    later = m.Note("D4")
+    s.append(later)
+    assert s.elementOffset(later) == 7.0
+    later.quarterLength = 0.5
+    s.append(m.Note("E4"))
+    assert s.highestTime == 8.5
+
+
 def test_a_chord_sorted_in_place_moves_its_note_objects_with_it():
     """The note objects a chord has handed out are reordered as its pitches
     are, so each still carries the pitch at its place."""

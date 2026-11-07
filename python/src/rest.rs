@@ -51,6 +51,9 @@ pub struct Rest {
     /// music21's `stepShift`: how many lines or spaces the rest is drawn
     /// above or below where it would be. Layout, so the facade's alone.
     step_shift: i32,
+    /// Whether a stream has read this rest's length and keeps it: a
+    /// change to the length is then told to every stream.
+    pub(crate) watched: bool,
 }
 
 /// music21's `fullMeasure` value for the crate's: `True`, `False`, `'auto'`
@@ -97,6 +100,7 @@ impl Rest {
             articulations: None,
             style: None,
             step_shift: 0,
+            watched: false,
         }
     }
 
@@ -107,6 +111,34 @@ impl Rest {
             .as_ref()
             .and_then(|object| duration_value_of(py, object))
             .unwrap_or_else(|| self.inner.duration().clone())
+    }
+
+    /// How long the rest lasts, read without making its `Duration` object:
+    /// `None` when the one it holds is not the package's own.
+    pub(crate) fn held_quarter_length(&self, py: Python<'_>) -> Option<f64> {
+        let Some(object) = &self.duration else {
+            return Some(self.inner.duration().quarter_length());
+        };
+        let ours = object.bind(py).cast::<Duration>().ok()?.try_borrow().ok()?;
+        Some(ours.inner.quarter_length())
+    }
+
+    /// Marks this rest and its duration as read by a stream, so that a
+    /// change to its length is told to every stream.
+    pub(crate) fn watch(&mut self, py: Python<'_>) {
+        self.watched = true;
+        if let Some(duration) = &self.duration {
+            crate::duration::watch(py, duration);
+        }
+    }
+
+    /// Tells every stream this rest's length has changed, where one has
+    /// read it, and marks the duration it now holds.
+    fn tell_streams(&mut self, py: Python<'_>) {
+        if self.watched {
+            crate::stream::length_changed();
+            self.watch(py);
+        }
     }
 
     fn duration_object(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -374,6 +406,7 @@ impl Rest {
         let had_one = slf.borrow().duration.is_some();
         let duration = slf.borrow_mut().attach_duration(py, value)?;
         adopt_duration(py, &duration, slf.as_any())?;
+        slf.borrow_mut().tell_streams(py);
         if had_one {
             told_sites(slf.as_any(), &duration.bind(py).getattr("quarterLength")?)?;
         }
@@ -397,6 +430,7 @@ impl Rest {
         // After the duration object, which refuses a new length where it is
         // a FrozenDuration, so the note keeps the length it has.
         self.inner.set_duration(inner);
+        self.tell_streams(py);
         Ok(())
     }
 

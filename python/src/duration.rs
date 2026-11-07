@@ -888,6 +888,19 @@ pub struct Duration {
     /// Duration at all", so keeping the slot is what lets music21's own
     /// classes take one of ours.
     pub(crate) client: Option<Py<PyAny>>,
+    /// Whether a stream reads this duration through a note it holds, so a
+    /// change to the length has to be told to every stream.
+    watched: bool,
+}
+
+/// Marks a duration of this package as read by a stream, so that a change
+/// to its length is told to every stream.
+pub(crate) fn watch(py: Python<'_>, duration: &Py<PyAny>) {
+    if let Ok(ours) = duration.bind(py).cast::<Duration>()
+        && let Ok(mut ours) = ours.try_borrow_mut()
+    {
+        ours.watched = true;
+    }
 }
 
 /// music21's `informSites`, called on whatever holds a duration that has
@@ -953,6 +966,7 @@ impl Clone for Duration {
             unlinked_type: self.unlinked_type.clone(),
             expression_is_inferred: self.expression_is_inferred,
             client: None,
+            watched: false,
         })
     }
 }
@@ -1047,6 +1061,7 @@ impl Duration {
             unlinked_type: None,
             expression_is_inferred: true,
             client: None,
+            watched: false,
         }
     }
 
@@ -1277,7 +1292,22 @@ impl Duration {
             Some(client) if !client.is_none() => Some(client.unbind()),
             _ => None,
         };
+        self.tell_streams(slots.py());
         Ok(())
+    }
+
+    /// Tells every stream this duration's length has changed, where one
+    /// may be reading it: through a note it holds, or through whatever
+    /// holds the duration, unless that is a note no stream has read.
+    fn tell_streams(&self, py: Python<'_>) {
+        let read = self.watched
+            || self
+                .client
+                .as_ref()
+                .is_some_and(|client| crate::note::may_be_watched(client.bind(py)));
+        if read {
+            crate::stream::length_changed();
+        }
     }
 
     pub(crate) fn from_keywords(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -2228,6 +2258,7 @@ impl Duration {
     /// duration that its length has changed, so that the streams holding it
     /// can update. Answers `False` when the duration has no owner.
     fn informClient(&self, py: Python<'_>) -> PyResult<bool> {
+        self.tell_streams(py);
         let Some(client) = &self.client else {
             return Ok(false);
         };

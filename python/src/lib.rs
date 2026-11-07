@@ -1201,6 +1201,18 @@ def make_class(facade, original):
         # A one-element tuple; see `lineage` for why it is not the class.
         '_replaces': (original,),
     })
+    if issubclass(original, _base.Music21Object):
+        # music21 tells an element's sites of a new priority or length
+        # through `informSites`. The package's streams keep no sites, so
+        # they are told first, and keep what they worked out until then.
+        inform = original.informSites
+
+        def informSites(self, changedInformation=None):
+            tell_streams(changedInformation)
+            return inform(self, changedInformation)
+
+        namespace['informSites'] = informSites
+        namespace['_tellsPackageStreams'] = True
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
                  # What music21 says about its own attributes, which its test
                  # runner reads off the class to build a doctest per entry.
@@ -1355,6 +1367,8 @@ fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
                 c"music21_rs_install.py",
                 c"music21_rs_install",
             )?;
+            // What an installed class's `informSites` calls first.
+            helper.add_function(wrap_pyfunction!(crate::stream::tell_streams, &helper)?)?;
             py.import("sys")?
                 .getattr("modules")?
                 .set_item("music21_rs_install", &helper)?;
