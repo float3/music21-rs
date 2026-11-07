@@ -1634,9 +1634,15 @@ impl Stream {
             )));
         }
         if let Some(at) = self.held_position(target) {
+            // In as music21 puts it in, newly: after what else stands at
+            // that offset, and by its own priority.
+            let index = self.next;
+            self.next += 1;
             let held = &mut self.held_mut()[at];
             held.object = replacement.clone().unbind();
             held.order = sort_order(replacement);
+            held.priority = AtomicI64::new(priority_of(replacement));
+            held.index = index;
             return Ok(());
         }
         if !recurse {

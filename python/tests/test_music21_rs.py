@@ -8287,6 +8287,28 @@ def test_a_stream_refuses_an_object_it_already_holds():
         s.append(theirs)
 
 
+def test_a_replacement_stands_after_what_else_is_at_its_offset():
+    """music21's `replace` puts the replacement in as newly inserted, so it
+    is listed after what else stands at its offset."""
+    orders = []
+    makers = [(m.Stream, m.Note)]
+    try:
+        from music21 import note, stream
+
+        makers.append((stream.Stream, note.Note))
+    except ImportError:
+        pass
+    for made, note_class in makers:
+        a, b, c = (note_class(name) for name in "CDE")
+        s = made()
+        s.insert(0, a)
+        s.insert(0, b)
+        s.replace(a, c)
+        orders.append([n.name for n in s])
+    assert orders[0] == ["D", "E"]
+    assert all(order == orders[0] for order in orders)
+
+
 def test_a_stream_hears_every_change_to_a_held_length():
     """A stream keeps its end between appends, so every way of changing
     the length of something it holds has to reach it."""
