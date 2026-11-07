@@ -370,6 +370,7 @@ impl Building {
         };
         spanner.set_placement(self.placement);
         spanner.set_id_local(self.id_local.clone());
+        spanner.set_complete(true);
         if self.kind != SpannerKind::Crescendo && self.kind != SpannerKind::Diminuendo {
             spanner.set_line_type(self.line_type.clone());
         }

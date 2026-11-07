@@ -7484,6 +7484,31 @@ def test_routed_musicxml_keeps_a_rest_hidden():
     assert _routed_differences("musicxml", paths, ("print-object",), drawn=False) == []
 
 
+def test_routed_scores_carry_music21s_own_metadata():
+    """A score read through the crate carries music21's own `Metadata`, as
+    its readers make it, saying what the file says."""
+    pytest.importorskip("music21.stream")
+    assert _routed_differences("musicxml", ("corpus/demos/two-parts.xml",), ("Metadata",)) == []
+    assert _routed_differences("abc", ("corpus/ryansMammoth/AcaciaReel.abc",), ("Metadata",)) == []
+
+
+def test_routed_abc_slurs_are_left_incomplete():
+    """music21's ABC reader leaves its slurs incomplete, where its MusicXML
+    reader marks them complete; one read through the crate says the same."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/AbithaMugginsFavoriteReel.abc",)
+    assert _routed_differences("abc", paths, ("Slur",)) == []
+
+
+def test_routed_abc_slurs_stand_where_they_start():
+    """music21's ABC reader puts a slur into its part where the part had
+    got to when the slur opened; one read through the crate stands there
+    too."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/7thRegimentReel.abc",)
+    assert _routed_differences("abc", paths, (" Slur ",)) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

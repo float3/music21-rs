@@ -647,6 +647,9 @@ impl AbcNote {
 struct Spanning {
     kind: SpannerKind,
     uids: Vec<usize>,
+    /// Where its part had got to when it opened, which is where music21
+    /// appends it to the part.
+    offset: FloatType,
 }
 
 /// music21's `ABCHandler`.
@@ -1064,6 +1067,7 @@ impl Handler {
                     spanners.push(Spanning {
                         kind,
                         uids: Vec::new(),
+                        offset: 0.0,
                     });
                     let made = spanners.len() - 1;
                     self.tokens[index] = Token::SpannerStart(kind, Some(made));
@@ -1729,8 +1733,10 @@ fn part_of(
         lyric_targets: Vec::new(),
         post_transposition: 0,
     };
-    // Which of the handler's spanners this voice starts, in order.
-    let mut started: Vec<usize> = Vec::new();
+    // Which of the handler's spanners this voice starts, in order, each
+    // with where the part had got to: the measure it opened in, or the
+    // length of the part's own line.
+    let mut started: Vec<(usize, Option<usize>, FloatType)> = Vec::new();
     let mut part = Line::default();
     let mut measures: Vec<MeasureIr> = Vec::new();
     let mut brackets: Vec<Bracket> = Vec::new();
@@ -1865,7 +1871,9 @@ fn part_of(
                             }
                         }
                     }
-                    Token::SpannerStart(_, Some(index)) => started.push(*index),
+                    Token::SpannerStart(_, Some(index)) => {
+                        started.push((*index, place, line.end));
+                    }
                     _ => {}
                 }
             }
@@ -1889,6 +1897,15 @@ fn part_of(
             // Lyric targets name a measure by its place among them.
             measures.push(measure);
         }
+    }
+
+    // Where each measure stood as music21 appended it, before `reBar`
+    // cut any in two: where a spanner opening in it was appended.
+    let mut appended_at: Vec<FloatType> = Vec::new();
+    let mut reached = 0.0;
+    for measure in &measures {
+        appended_at.push(reached);
+        reached = op_frac(reached + measure.line.end);
     }
 
     re_bar(&mut measures, &mut brackets);
@@ -2000,9 +2017,18 @@ fn part_of(
         let _ = crate::makenotation::make_beams(&mut stream);
     }
 
+    // A measure's spanner stands where the measure did when music21
+    // appended the spanner to the part.
     let held: Vec<Spanning> = started
         .into_iter()
-        .map(|index| reader.spanners[index].clone())
+        .map(|(index, measure, end)| {
+            let mut held = reader.spanners[index].clone();
+            held.offset = match measure {
+                Some(measure) => appended_at.get(measure).copied().unwrap_or(reached),
+                None => end,
+            };
+            held
+        })
         .collect();
     Ok((stream, uids, held))
 }
@@ -2244,7 +2270,7 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             .iter()
             .map(|uid| uids.iter().position(|held| *held == Some((part, *uid))))
             .collect();
-        let made = match spanner.kind {
+        let mut made = match spanner.kind {
             SpannerKind::Crescendo | SpannerKind::Diminuendo => {
                 let template = Spanner::wedge(spanner.kind, Vec::new());
                 let mut wedge = Spanner::with_unplaced(spanner.kind, positions);
@@ -2254,6 +2280,7 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             }
             kind => Spanner::with_unplaced(kind, positions),
         };
+        made.set_offset(spanner.offset);
         score.add_spanner(made);
     }
     Ok(score)

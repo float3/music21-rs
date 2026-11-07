@@ -5014,7 +5014,15 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                     let built = crate::spanner::music21_object(py, spanner, joined)?;
                     let home = home_part(spanner, &parts, stream.staff_groups())
                         .map_or(&made, |place| &parts[place].0);
-                    home.call_method1("insert", (0.0, &built))?;
+                    // Where the reader put it: nought but for an ABC
+                    // slur or hairpin, which music21 appends where its part
+                    // had got to. A pedal mark's offset says where its line
+                    // resumes, and music21 puts the mark itself at nought.
+                    let at = match spanner.kind() {
+                        music21::spanner::SpannerKind::PedalMark => 0.0,
+                        _ => spanner.offset(),
+                    };
+                    home.call_method1("insert", (at, &built))?;
                     // An octave line joins every note under it, which
                     // music21's reader fills in once it stands in its part.
                     if spanner.kind() == music21::spanner::SpannerKind::Ottava {
@@ -5036,28 +5044,19 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             made.call_method1("insert", (0.0, made_group))?;
         }
     }
-    // The metadata a reader found, which music21 keeps among the elements.
-    if let Some(metadata) = stream.metadata() {
-        // music21's constructor signs its metadata with music21's version
-        // before its reader adds what the file names.
-        let signed;
-        let metadata = match whose {
-            Whose::Music21 => {
-                signed = signed_by_music21(py, metadata)?;
-                &signed
-            }
-            Whose::Wheel => metadata,
-        };
+    // The metadata a reader found, which music21 keeps among the elements:
+    // music21's own on music21's streams, which its readers make and
+    // nothing installed stands in for.
+    if let Some(metadata) = stream.metadata()
+        && whose == Whose::Music21
+    {
+        made.setattr("metadata", music21_metadata(py, metadata)?)?;
+    } else if let Some(metadata) = stream.metadata() {
         // The installed class, so music21's own `metadata` setter can put
         // it into the stream: it inserts the object, and its streams hold
         // nothing that is not a `Music21Object`.
-        // On music21's own streams, a class music21's setter will take:
-        // it drops anything that is not its own `Metadata`, silently.
         let wrapped = crate::metadata::Metadata::wrap(metadata.clone());
-        let carried = match whose {
-            Whose::Music21 => crate::holdable_new(py, "music21.metadata", "Metadata", wrapped)?,
-            Whose::Wheel => crate::installed_new(py, "music21.metadata", "Metadata", wrapped)?,
-        };
+        let carried = crate::installed_new(py, "music21.metadata", "Metadata", wrapped)?;
         made.setattr("metadata", carried)?;
     }
     if let Some(at) = stream.at_sounding_pitch() {
@@ -5148,24 +5147,43 @@ fn music21_measure_drawing(
     Ok(())
 }
 
-/// `metadata` with music21's version first under `software`, as music21's
-/// `Metadata()` starts.
-fn signed_by_music21(
-    py: Python<'_>,
+/// A crate score's metadata as music21's own `Metadata`, which its
+/// constructor signs with music21's version before each value the reader
+/// found is added, in the order it was found.
+fn music21_metadata<'py>(
+    py: Python<'py>,
     metadata: &music21::metadata::Metadata,
-) -> PyResult<music21::metadata::Metadata> {
-    let line: String = py
-        .import("music21.defaults")?
-        .getattr("software")?
-        .extract()?;
-    let mut signed = metadata.clone();
-    let named = signed.get("software").to_vec();
-    signed.set("software", Vec::new());
-    signed.add_text("software", line);
-    for value in named {
-        signed.add("software", value);
+) -> PyResult<Bound<'py, PyAny>> {
+    use music21::metadata::MetadataContent;
+
+    let made = py
+        .import("music21.metadata")?
+        .getattr("Metadata")?
+        .call0()?;
+    let primitives = py.import("music21.metadata.primitives")?;
+    for (name, value) in metadata.all() {
+        let given = match value.content() {
+            MetadataContent::Contributor(contributor) => {
+                let keywords = PyDict::new(py);
+                keywords.set_item("role", contributor.role())?;
+                let names: Vec<&str> = contributor.names().iter().map(|name| name.data()).collect();
+                keywords.set_item("names", names)?;
+                primitives
+                    .getattr("Contributor")?
+                    .call((), Some(&keywords))?
+            }
+            MetadataContent::Text(text) if text.language().is_some() => {
+                let keywords = PyDict::new(py);
+                keywords.set_item("language", text.language())?;
+                primitives
+                    .getattr("Text")?
+                    .call((text.data(),), Some(&keywords))?
+            }
+            _ => pyo3::types::PyString::new(py, value.text()).into_any(),
+        };
+        made.call_method1("add", (name, given))?;
     }
-    Ok(signed)
+    Ok(made)
 }
 
 /// The wheel's object for one element of a crate stream, where it has a

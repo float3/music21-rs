@@ -1726,8 +1726,9 @@ const MUSIC21_MEMBERS: &[&str] = &[
 ];
 
 /// A crate spanner as music21's own, joining `spanned`, for a score built
-/// into music21's streams: music21's reader makes its own spanners, which
-/// nothing installed stands in for, and marks each it finished complete.
+/// into music21's streams: music21's readers make their own spanners, which
+/// nothing installed stands in for, and some mark each they finished
+/// complete.
 /// What it carries is read off this package's object for it, which says it
 /// as music21 does; a kind music21 has no class of that name for is this
 /// package's object, as before.
@@ -1769,7 +1770,9 @@ pub(crate) fn music21_object<'py>(
     if let Some(id_local) = inner.id_local() {
         made.setattr("idLocal", id_local)?;
     }
-    made.setattr("completeStatus", true)?;
+    if inner.complete() {
+        made.setattr("completeStatus", true)?;
+    }
     Ok(made)
 }
 
