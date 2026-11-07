@@ -39,6 +39,7 @@ pub mod analysis;
 pub mod articulations;
 pub mod audiosearch;
 pub mod bar;
+pub mod base;
 pub mod braillebasic;
 pub mod braillelookup;
 pub mod braillenotegrouping;
@@ -275,7 +276,8 @@ pub(crate) fn copy_as_same_type<'py, T>(
     value: T,
 ) -> PyResult<Bound<'py, PyAny>>
 where
-    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False, BaseType = PyAny>,
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T::BaseType: base::Footing,
 {
     let py = slf.py();
     let class = slf.as_any().get_type();
@@ -284,13 +286,16 @@ where
     // for one would import music21, and the wheel has to work for someone who
     // installed only the wheel.
     if class.is(T::type_object(py)) {
-        return Ok(Bound::new(py, value)?.into_any());
+        let copy = Bound::new(py, base::built(value))?.into_any();
+        base::carry_groups(slf.as_any(), &copy)?;
+        return Ok(copy);
     }
     // Through the helper, so that the copy gets the music21 half started as
     // a fresh object of that class would: `__new__` alone leaves an object
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
+    base::carry_groups(slf.as_any(), &copy)?;
     carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
 }
@@ -804,10 +809,10 @@ pub(crate) fn installed_new<T>(
 ) -> PyResult<Py<T>>
 where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
-    T: Into<pyo3::PyClassInitializer<T>>,
+    T::BaseType: base::Footing,
 {
     let Some(class) = installed_class(py, module, name) else {
-        return Py::new(py, value);
+        return Py::new(py, base::built(value));
     };
     let object = blank_installed(&class)?;
     let cell = object.cast::<T>()?;
@@ -827,10 +832,10 @@ where
 pub(crate) fn holdable_new<T>(py: Python<'_>, module: &str, name: &str, value: T) -> PyResult<Py<T>>
 where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
-    T: Into<pyo3::PyClassInitializer<T>>,
+    T::BaseType: base::Footing,
 {
     let Some(class) = holdable_class(py, module, name) else {
-        return Py::new(py, value);
+        return Py::new(py, base::built(value));
     };
     let object = blank_installed(&class)?;
     let cell = object.cast::<T>()?;
@@ -1268,6 +1273,10 @@ def make_class(facade, original):
                     break
             else:
                 namespace.setdefault(name, _OwnAttribute())
+        # music21 keeps `groups` in each object's dictionary too, where the
+        # package keeps its own on its `Music21Object`; music21's copying and
+        # freezing carry the dictionary, so that is where it has to be.
+        namespace.setdefault('groups', _OwnAttribute())
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
                  # What music21 says about its own attributes, which its test
                  # runner reads off the class to build a doctest per entry.
@@ -1874,6 +1883,16 @@ exceptions![
         Some("music21.base")
     ),
     (
+        "ElementException",
+        base::ElementException,
+        Some("music21.base")
+    ),
+    (
+        "GroupException",
+        base::GroupException,
+        Some("music21.exceptions21")
+    ),
+    (
         "StreamException",
         stream::StreamException,
         Some("music21.exceptions21")
@@ -1948,6 +1967,7 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    base::register(m)?;
     pitch::register(m)?;
     figuredbass::register(m)?;
     possibility::register(m)?;

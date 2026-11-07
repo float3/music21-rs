@@ -41,6 +41,7 @@ error_into!(instrument_error, InstrumentException);
 #[pyclass(
     name = "Instrument",
     module = "music21.instrument",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -82,7 +83,7 @@ impl Instrument {
         if name.is_some() {
             inner.set_name(name);
         }
-        Ok(PyClassInitializer::from(Self::wrap(inner)))
+        Ok(crate::base::built(Self::wrap(inner)))
     }
 
     fn wrap(inner: RsInstrument) -> Self {

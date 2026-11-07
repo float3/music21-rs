@@ -308,6 +308,10 @@ reason = "an analysis over a stream"
 kind = "facade-only"
 reason = "two marks and how the change is drawn"
 
+[Music21Object]
+kind = "facade-only"
+reason = "music21's groups, a list of names no crate value carries"
+
 [PercussionChord]
 kind = "facade-only"
 reason = "its unpitched notes"

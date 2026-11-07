@@ -9016,3 +9016,168 @@ print(music21.note.Note('E'))
     done = _run_without_music21(code, tmp_path)
     assert done.stdout.splitlines()[0] == "False"
     assert "No module named 'music21'" in done.stderr
+
+
+def test_notes_rests_and_chords_are_music21s_general_notes():
+    """The package's elements stand on its `Music21Object`, `GeneralNote`
+    and `NotRest` as music21's do, so `isinstance` asks what music21 asks."""
+    note, rest, chord = m.Note("C4"), m.Rest(), m.Chord("C4 E4 G4")
+    for each in (note, rest, chord, m.Measure(), m.System(), m.TimeSignature("3/4")):
+        assert isinstance(each, m.Music21Object)
+    assert all(isinstance(each, m.GeneralNote) for each in (note, rest, chord))
+    assert isinstance(note, m.NotRest) and isinstance(chord, m.NotRest)
+    assert not isinstance(rest, m.NotRest)
+    assert issubclass(m.PercussionChord, m.NotRest)
+    assert issubclass(m.ChordSymbol, m.NotRest)
+    assert not issubclass(m.Clef, m.GeneralNote)
+    assert m.System().classes[:2] == ["System", "Stream"]
+
+
+def test_a_python_subclass_of_general_note_is_one():
+    """Code written for music21 subclasses its base classes."""
+
+    class Mark(m.GeneralNote):
+        pass
+
+    made = Mark(groups=None)
+    assert isinstance(made, m.GeneralNote) and isinstance(made, m.Music21Object)
+    assert list(made.groups) == []
+
+
+def test_groups_are_music21s_groups():
+    """`groups` is a list of distinct names, compared ignoring case and
+    order, carried by a copy and refusing a name that is not a string."""
+    note = m.Note("C4")
+    note.groups.append("flute")
+    note.groups.append("flute")
+    assert list(note.groups) == ["flute"]
+    copied = copy.deepcopy(note)
+    assert list(copied.groups) == ["flute"]
+    assert copied.groups is not note.groups
+    other = m.Rest()
+    other.groups.append("FLUTE")
+    assert note.groups == other.groups
+    assert not note.groups == ["flute"]
+    with pytest.raises(Exception, match="Only strings can be used as group names"):
+        note.groups.append(5)
+
+
+# Where the package's classes still stand apart from music21's: classes it
+# defines with one base where music21 gives two, or with a base music21's
+# class does not have. Each is (class, the other class, whether music21's
+# class is a subclass of the other).
+_HIERARCHY_GAPS = {
+    ("music21.articulations.FrettedPluck", "music21.articulations.Fingering", True),
+    ("music21.articulations.Spiccato", "music21.articulations.Accent", True),
+    ("music21.articulations.Spiccato", "music21.articulations.DynamicArticulation", True),
+    ("music21.articulations.Stress", "music21.articulations.LengthArticulation", True),
+    ("music21.articulations.StringFingering", "music21.articulations.Fingering", True),
+    ("music21.articulations.StringHarmonic", "music21.articulations.Harmonic", True),
+    ("music21.key.Key", "music21.scale.ConcreteScale", True),
+    ("music21.key.Key", "music21.scale.DiatonicScale", True),
+    ("music21.key.Key", "music21.scale.Scale", True),
+    ("music21.layout.PageLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.ScoreLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.StaffLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.SystemLayout", "music21.layout.LayoutBase", True),
+    ("music21.scale.RagMarwa", "music21.scale.DiatonicScale", False),
+    ("music21.search.serial.TransposedInvertedMultisetMatcher",
+     "music21.search.serial.TransposedMultisetMatcher", True),
+    ("music21.serial.HistoricalTwelveToneRow", "music21.stream.Stream", True),
+    ("music21.serial.ToneRow", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneMatrix", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneRow", "music21.stream.Stream", True),
+    ("music21.stream.PartStaff", "music21.stream.Part", True),
+}
+
+
+def test_every_class_is_a_kind_of_what_music21s_is():
+    """For every class with a music21 counterpart, `issubclass` against
+    every other such class answers as it does between music21's two,
+    apart from the gaps listed above."""
+    pytest.importorskip("music21.base")
+    import importlib
+
+    pairs = {}
+    for name in m.music21_rs.__all__:
+        ours = getattr(m.music21_rs, name)
+        if not isinstance(ours, type) or not ours.__module__.startswith("music21."):
+            continue
+        # Exceptions are built on whichever `Music21Exception` was there
+        # first, and are checked where they are built.
+        if issubclass(ours, BaseException):
+            continue
+        try:
+            theirs = getattr(importlib.import_module(ours.__module__), ours.__name__)
+        except (ImportError, AttributeError):
+            continue
+        if isinstance(theirs, type):
+            pairs[ours] = theirs
+    assert len(pairs) > 400
+
+    def named(cls):
+        return f"{cls.__module__}.{cls.__name__}"
+
+    found = set()
+    for ours, theirs in pairs.items():
+        for other, their_other in pairs.items():
+            expected = issubclass(theirs, their_other)
+            if issubclass(ours, other) != expected:
+                found.add((named(ours), named(other), expected))
+    assert sorted(found - _HIERARCHY_GAPS) == [], "new gaps"
+    assert sorted(_HIERARCHY_GAPS - found) == [], "these match now; drop them"
+
+
+def test_provide_music21_answers_for_music21s_base_classes(tmp_path):
+    """Provided, music21's base classes are the package's, so code checking
+    `isinstance` against them or subclassing them runs unchanged."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import base, note, stream, chord
+from music21.base import Music21Object, Groups, ElementException
+n = note.Note('C4')
+print(isinstance(n, note.GeneralNote), isinstance(n, note.NotRest), isinstance(n, Music21Object))
+print(isinstance(note.Rest(), note.NotRest), issubclass(chord.Chord, note.NotRest))
+print(isinstance(n.groups, Groups), issubclass(ElementException, base.Music21ObjectException.__base__))
+class Mine(note.GeneralNote):
+    pass
+print(isinstance(Mine(), base.Music21Object), stream.System().classes[0])
+print(issubclass(stream.Opus, stream.Stream), issubclass(stream.Voice, base.Music21Object))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "False True",
+        "True True",
+        "True System",
+        "True True",
+    ]
+
+
+def test_an_installed_note_is_still_music21s_general_note():
+    """Installed, a note is an instance of music21's own base classes and
+    of the package's, and keeps music21's `groups`."""
+    pytest.importorskip("music21.stream")
+    code = """
+import copy
+import music21_rs as m
+m.install_into_music21()
+from music21 import base, note, chord, stream
+n = note.Note('C4')
+print(isinstance(n, note.GeneralNote), isinstance(n, base.Music21Object), isinstance(n, m.NotRest))
+print(isinstance(chord.Chord('C E G'), note.NotRest), isinstance(note.Rest(), note.NotRest))
+n.groups.append('x')
+print(type(n.groups) is base.Groups, list(copy.deepcopy(n).groups))
+s = stream.Stream([n, note.Rest()])
+print(len(s.getElementsByClass(note.GeneralNote)))
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "True False",
+        "True ['x']",
+        "2",
+    ]

@@ -20,6 +20,7 @@ use music21::interval::ChromaticInterval as RsChromaticInterval;
 #[pyclass(
     name = "Articulation",
     module = "music21.articulations",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -99,7 +100,7 @@ impl Articulation {
                 made.set_bend(&value)?;
             }
         }
-        Ok(PyClassInitializer::from(made))
+        Ok(crate::base::built(made))
     }
 
     fn set_bend(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {

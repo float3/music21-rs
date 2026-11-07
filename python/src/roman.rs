@@ -233,7 +233,7 @@ impl RomanNumeral {
     /// The numeral, standing on the chord it names.
     pub(crate) fn initializer(py: Python<'_>, numeral: Self) -> PyResult<PyClassInitializer<Self>> {
         let chord = Chord::from_inner(py, numeral.chord()?)?;
-        Ok(PyClassInitializer::from(chord).add_subclass(numeral))
+        Ok(crate::base::built(chord).add_subclass(numeral))
     }
 
     /// The same as an object, and as the class music21 now has under that
@@ -270,7 +270,7 @@ impl RomanNumeral {
         };
         let Some(class) = found else {
             let chord = Chord::from_inner(py, chord)?;
-            return Py::new(py, PyClassInitializer::from(chord).add_subclass(numeral));
+            return Py::new(py, crate::base::built(chord).add_subclass(numeral));
         };
         let chord = Chord::from_inner(py, chord)?;
         let object = crate::blank_installed(&class)?;

@@ -53,6 +53,7 @@ enum Shape {
 #[pyclass(
     name = "Ornament",
     module = "music21.expressions",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -131,7 +132,7 @@ impl Ornament {
                 }
             }
         }
-        Ok(PyClassInitializer::from(made))
+        Ok(crate::base::built(made))
     }
 
     fn shape(&self) -> Shape {
@@ -1357,6 +1358,7 @@ impl Trill {
 #[pyclass(
     name = "TextExpression",
     module = "music21.expressions",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -1397,8 +1399,13 @@ impl TextExpression {
     /// music21's `TextExpression(content=None)`.
     #[new]
     #[pyo3(signature = (content = None, **_keywords))]
-    fn new(content: Option<String>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::wrap(RsTextExpression::new(content.unwrap_or_default()))
+    fn new(
+        content: Option<String>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self::wrap(RsTextExpression::new(
+            content.unwrap_or_default(),
+        )))
     }
 
     /// What music21 says this is, as its `classes` answers.

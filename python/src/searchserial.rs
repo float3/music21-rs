@@ -174,6 +174,7 @@ fn empty_stream(py: Python<'_>) -> PyResult<Py<PyAny>> {
 #[pyclass(
     name = "ContiguousSegmentOfNotes",
     module = "music21.search.serial",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -235,7 +236,7 @@ impl ContiguousSegmentOfNotes {
         segment: Option<&Bound<'_, PyAny>>,
         containerStream: Option<&Bound<'_, PyAny>>,
         partNumber: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let held = PyList::empty(py);
         if let Some(segment) = segment.filter(|given| !given.is_none()) {
             for note in segment.walk()? {
@@ -248,7 +249,7 @@ impl ContiguousSegmentOfNotes {
             Some(given) => given.clone().unbind(),
             None => empty_stream(py)?,
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             segment: held.into_any().unbind(),
             containerStream,
             partNumber: match partNumber {
@@ -257,7 +258,7 @@ impl ContiguousSegmentOfNotes {
             },
             activeSegment: PyList::empty(py).into_any().unbind(),
             matchedSegment: py.None(),
-        })
+        }))
     }
 
     /// The measure the run starts in: music21's `startMeasureNumber`,
@@ -730,7 +731,7 @@ macro_rules! matchers {
                     #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
                 ) -> PyResult<PyClassInitializer<Self>> {
                     Ok(
-                        PyClassInitializer::from(SegmentMatcher::of(
+                        crate::base::built(SegmentMatcher::of(
                             py,
                             $matching,
                             inputStream,

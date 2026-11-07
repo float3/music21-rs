@@ -32,6 +32,7 @@ pyo3::create_exception!(
 #[pyclass(
     name = "RepeatExpression",
     module = "music21.repeat",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -72,8 +73,8 @@ impl RepeatExpression {
     /// said of it.
     #[new]
     #[pyo3(signature = (**_keywords))]
-    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::wrap(RsRepeatExpression::new(Kind::Coda))
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Self::wrap(RsRepeatExpression::new(Kind::Coda)))
     }
 
     /// What music21 says this object is, its own chain down to
@@ -206,7 +207,7 @@ macro_rules! repeat_kinds {
                     text: Option<&str>,
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyClassInitializer<Self> {
-                    PyClassInitializer::from(RepeatExpression::of_kind($kind, text))
+                    crate::base::built(RepeatExpression::of_kind($kind, text))
                         .add_subclass($class)
                 }
             }

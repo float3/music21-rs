@@ -2463,7 +2463,7 @@ fn grace_object(
             }
             return Ok(object.unbind());
         }
-        let made = PyClassInitializer::from(base)
+        let made = crate::base::built(base)
             .add_subclass(marks)
             .add_subclass(AppoggiaturaDuration);
         return Ok(Py::new(py, made)?.into_any());
@@ -2478,7 +2478,7 @@ fn grace_object(
         }
         return Ok(object.unbind());
     }
-    let made = PyClassInitializer::from(base).add_subclass(marks);
+    let made = crate::base::built(base).add_subclass(marks);
     Ok(Py::new(py, made)?.into_any())
 }
 
@@ -2533,7 +2533,7 @@ impl GraceDuration {
         base.linked = false;
         base.unlinked_type = Some(written);
         base.inner = RsDuration::new(0.0).map_err(duration_error)?;
-        Ok(PyClassInitializer::from(base).add_subclass(Self {
+        Ok(crate::base::built(base).add_subclass(Self {
             slash: true,
             steal_previous: None,
             steal_following: None,

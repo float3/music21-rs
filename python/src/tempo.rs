@@ -68,6 +68,7 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
 #[pyclass(
     name = "MetronomeMark",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -264,8 +265,8 @@ impl MetronomeMark {
         number: Option<f64>,
         referent: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::build(text, number, referent, keywords)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::build(text, number, referent, keywords).map(crate::base::built)
     }
 
     /// Built again here, since a Python subclass hands `__new__` its own
@@ -656,6 +657,7 @@ impl MetronomeMark {
 #[pyclass(
     name = "TempoText",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -731,16 +733,16 @@ impl TempoText {
     fn new(
         text: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let written = match text.filter(|text| !text.is_none()) {
             Some(text) => Some(text.str()?.extract::<String>()?),
             None => None,
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             said: written.is_some(),
             inner: RsTempoText::new(written.unwrap_or_default()),
             text_expression: None,
-        })
+        }))
     }
 
     /// Built again here, where the music21 half exists to share a style
@@ -1000,6 +1002,7 @@ fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
 #[pyclass(
     name = "MetricModulation",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -1165,8 +1168,8 @@ impl MetricModulation {
     fn new(
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
-        Self::blank()
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self::blank())
     }
 
     fn __traverse__(

@@ -85,6 +85,7 @@ error_into!(scale_error, ScaleException);
 #[pyclass(
     name = "Scale",
     module = "music21.scale",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -100,8 +101,11 @@ impl Scale {
 
     #[new]
     #[pyo3(signature = (*_arguments, **_keywords))]
-    fn new(_arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+    fn new(
+        _arguments: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     /// music21's `isConcrete`: whether the scale stands on a tonic. A bare
@@ -289,7 +293,7 @@ impl AbstractScale {
     ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self {
+            crate::base::built(Scale).add_subclass(Self {
                 scale_type,
                 numbered_mode,
                 octave_duplicating,
@@ -373,7 +377,7 @@ impl AbstractScale {
         let scale_type = mode
             .filter(|value| !value.is_none())
             .and_then(|value| Self::scale_type_of(value));
-        Ok(PyClassInitializer::from(Scale).add_subclass(Self {
+        Ok(crate::base::built(Scale).add_subclass(Self {
             scale_type,
             numbered_mode: mode.and_then(|value| value.extract::<i64>().ok()),
             // A pattern named by mode alone repeats at the octave.
@@ -897,9 +901,7 @@ impl ConcreteScale {
                 octatonic_mode: None,
             };
             built.named_pattern = false;
-            return Ok(
-                Py::new(py, PyClassInitializer::from(Scale).add_subclass(built))?.into_any(),
-            );
+            return Ok(Py::new(py, crate::base::built(Scale).add_subclass(built))?.into_any());
         }
         let name = scale.scale_type().music21_name();
         let module = py
@@ -913,7 +915,7 @@ impl ConcreteScale {
         }
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self {
+            crate::base::built(Scale).add_subclass(Self {
                 inner: scale,
                 family: "Concrete".to_string(),
                 named_pattern: true,
@@ -1023,7 +1025,7 @@ impl ConcreteScale {
             built.inner = RsScale::from_pitches(&pitch_list(&pitches)?).map_err(scale_error)?;
             built.has_tonic = true;
         }
-        Ok(PyClassInitializer::from(Scale).add_subclass(built))
+        Ok(crate::base::built(Scale).add_subclass(built))
     }
 
     /// The pattern of steps is only known once the class is, which is why it

@@ -71,6 +71,7 @@ fn read_tenths(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Tenths>> {
 #[pyclass(
     name = "LayoutBase",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -86,8 +87,8 @@ impl LayoutBase {
 
     #[new]
     #[pyo3(signature = (**_keywords))]
-    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     fn __repr__(&self) -> &'static str {
@@ -100,6 +101,7 @@ impl LayoutBase {
 #[pyclass(
     name = "ScoreLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -131,7 +133,10 @@ impl ScoreLayout {
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'_>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsScoreLayout::default(),
             pageLayout: None,
@@ -154,7 +159,7 @@ impl ScoreLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// How many millimetres the tenths below are.
@@ -287,6 +292,7 @@ fn said(value: Option<Tenths>) -> String {
 #[pyclass(
     name = "PageLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -304,7 +310,7 @@ impl PageLayout {
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsPageLayout::default(),
         };
@@ -328,7 +334,7 @@ impl PageLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// `leftMargin`, where the score says.
@@ -463,6 +469,7 @@ impl PageLayout {
 #[pyclass(
     name = "SystemLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -480,7 +487,7 @@ impl SystemLayout {
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsSystemLayout::default(),
         };
@@ -503,7 +510,7 @@ impl SystemLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// `leftMargin`, where the score says.
@@ -627,6 +634,7 @@ impl SystemLayout {
 #[pyclass(
     name = "StaffLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -653,7 +661,7 @@ impl StaffLayout {
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsStaffLayout::default(),
             given_size: None,
@@ -688,7 +696,7 @@ impl StaffLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// How far the staff stands from the one above.

@@ -543,7 +543,7 @@ impl BrailleKeyboard {
     fn new(py: Python<'_>, lineLength: usize) -> PyResult<PyClassInitializer<Self>> {
         let keyboard = RsKeyboard::new(lineLength);
         Ok(
-            PyClassInitializer::from(BrailleText::of(py, keyboard.text)?).add_subclass(Self {
+            crate::base::built(BrailleText::of(py, keyboard.text)?).add_subclass(Self {
                 right_hand_line: keyboard.right_hand_line,
                 left_hand_line: keyboard.left_hand_line,
                 highest_measure_number_length: keyboard.highest_measure_number_length,

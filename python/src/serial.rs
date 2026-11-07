@@ -106,6 +106,7 @@ fn row_note(py: Python<'_>, pitch: music21::Pitch) -> PyResult<Py<PyAny>> {
 #[pyclass(
     name = "ToneRow",
     module = "music21.serial",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -124,15 +125,15 @@ impl ToneRow {
     /// twelve pitch classes, `ToneRow` otherwise.
     pub(crate) fn object(py: Python<'_>, inner: RsToneRow) -> PyResult<Py<PyAny>> {
         if inner.len() == 12 {
-            let init = PyClassInitializer::from(ToneRow::of(inner)).add_subclass(TwelveToneRow);
+            let init = crate::base::built(ToneRow::of(inner)).add_subclass(TwelveToneRow);
             Ok(Py::new(py, init)?.into_any())
         } else {
-            Ok(Py::new(py, ToneRow::of(inner))?.into_any())
+            Ok(Py::new(py, crate::base::built(ToneRow::of(inner)))?.into_any())
         }
     }
 
     fn twelve(py: Python<'_>, inner: RsToneRow, id: Option<String>) -> PyResult<Py<PyAny>> {
-        let init = PyClassInitializer::from(ToneRow { inner, id }).add_subclass(TwelveToneRow);
+        let init = crate::base::built(ToneRow { inner, id }).add_subclass(TwelveToneRow);
         Ok(Py::new(py, init)?.into_any())
     }
 }
@@ -168,9 +169,12 @@ impl ToneRow {
 
     #[new]
     #[pyo3(signature = (row = None, **kwargs))]
-    fn new(row: Option<&Bound<'_, PyAny>>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(
+        row: Option<&Bound<'_, PyAny>>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = kwargs;
-        Ok(Self::of(row_from_any(row)?))
+        Ok(crate::base::built(Self::of(row_from_any(row)?)))
     }
 
     #[getter]
@@ -449,7 +453,7 @@ impl TwelveToneRow {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let _ = kwargs;
-        Ok(PyClassInitializer::from(ToneRow::of(row_from_any(row)?)).add_subclass(TwelveToneRow))
+        Ok(crate::base::built(ToneRow::of(row_from_any(row)?)).add_subclass(TwelveToneRow))
     }
 }
 
@@ -476,7 +480,7 @@ impl HistoricalTwelveToneRow {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let _ = kwargs;
-        Ok(PyClassInitializer::from(ToneRow::of(row_from_any(row)?))
+        Ok(crate::base::built(ToneRow::of(row_from_any(row)?))
             .add_subclass(TwelveToneRow)
             .add_subclass(Self {
                 composer,
@@ -500,6 +504,7 @@ impl HistoricalTwelveToneRow {
 #[pyclass(
     name = "TwelveToneMatrix",
     module = "music21.serial",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -633,7 +638,7 @@ fn row_to_matrix_text(p: Vec<i32>) -> String {
 #[allow(non_snake_case)]
 fn get_historical_row_by_name(py: Python<'_>, rowName: &str) -> PyResult<Py<PyAny>> {
     let row = historical_row_by_name(rowName).map_err(serial_error)?;
-    let init = PyClassInitializer::from(ToneRow::of(row.row()))
+    let init = crate::base::built(ToneRow::of(row.row()))
         .add_subclass(TwelveToneRow)
         .add_subclass(HistoricalTwelveToneRow {
             composer: Some(row.composer.to_string()),

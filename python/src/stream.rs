@@ -263,7 +263,7 @@ fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
 /// `Part`, `PartStaff`, `Measure`, `Voice` and `Opus` are the same class
 /// under music21's other names; a score's parts are what
 /// `iterateAllVoiceLeadingQuartets` reads as its voices.
-#[pyclass(name = "Stream", module = "music21.stream", subclass, dict, weakref)]
+#[pyclass(name = "Stream", module = "music21.stream", extends = crate::base::Music21Object, subclass, dict, weakref)]
 pub struct Stream {
     kind: StreamKind,
     /// What the stream holds, in the order it was put in: read through
@@ -912,7 +912,7 @@ impl Stream {
 
     /// A stream built here, made a site of what it holds.
     fn born(py: Python<'_>, built: Self) -> PyResult<Bound<'_, Stream>> {
-        let made = Bound::new(py, built)?;
+        let made = Bound::new(py, crate::base::built(built))?;
         Self::birth(&made)?;
         Ok(made)
     }
@@ -929,7 +929,7 @@ impl Stream {
             (None, None) => Some(Here::of(source.as_any())?),
         };
         drop(from);
-        Bound::new(py, built)
+        Bound::new(py, crate::base::built(built))
     }
 
     /// A barline this measure keeps beside what it holds, entered as one
@@ -1551,8 +1551,8 @@ impl Stream {
         givenElements: Option<&Bound<'_, PyAny>>,
         _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::filled(py, StreamKind::Stream, givenElements, keywords)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::filled(py, StreamKind::Stream, givenElements, keywords).map(crate::base::built)
     }
 
     /// Makes the stream just built a site of what it was given, now that
@@ -2355,7 +2355,7 @@ impl Stream {
             let editorial = object.getattr("editorial")?;
             match interval {
                 Some(interval) => {
-                    let made = Bound::new(py, crate::interval::Interval::wrap(interval))?;
+                    let made = crate::interval::Interval::wrap(interval).into_pyobject(py)?;
                     editorial.setattr("harmonicInterval", made)?;
                 }
                 None => editorial.setattr("harmonicInterval", py.None())?,
@@ -3573,7 +3573,9 @@ impl Stream {
                 Ok(Some(crate::key::Key::object(py, key)?.bind(py).clone()))
             }
             Some(Analysis::Ambitus(span)) => Ok(Some(
-                Bound::new(py, crate::interval::Interval::wrap(span))?.into_any(),
+                crate::interval::Interval::wrap(span)
+                    .into_pyobject(py)?
+                    .into_any(),
             )),
             Some(_) => Err(crate::discrete::DiscreteAnalysisException::new_err(
                 format!("this package cannot hand back the answer to {method:?}"),
@@ -5505,6 +5507,7 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 StreamKind::Score => py.get_type::<Score>(),
                 StreamKind::Part => py.get_type::<Part>(),
                 StreamKind::PartStaff => py.get_type::<PartStaff>(),
+                StreamKind::System => py.get_type::<System>(),
                 StreamKind::Measure => py.get_type::<Measure>(),
                 StreamKind::Voice => py.get_type::<Voice>(),
                 StreamKind::Opus => py.get_type::<Opus>(),
@@ -5517,6 +5520,7 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 StreamKind::Score => "Score",
                 StreamKind::Part => "Part",
                 StreamKind::PartStaff => "PartStaff",
+                StreamKind::System => "System",
                 StreamKind::Measure => "Measure",
                 StreamKind::Voice => "Voice",
                 StreamKind::Opus => "Opus",
@@ -5659,7 +5663,7 @@ fn element_new<T>(
 ) -> PyResult<Py<T>>
 where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
-    T: Into<pyo3::PyClassInitializer<T>>,
+    T::BaseType: crate::base::Footing,
 {
     if holdable {
         crate::holdable_new(py, module, name, value)
@@ -5943,7 +5947,7 @@ macro_rules! stream_kinds {
                     _arguments: &Bound<'_, PyTuple>,
                     keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
-                    Ok(PyClassInitializer::from(Stream::filled(
+                    Ok(crate::base::built(Stream::filled(
                         py,
                         $kind,
                         givenElements,
@@ -5982,6 +5986,13 @@ stream_kinds!(
         StreamKind::PartStaff,
         -20,
         "music21's `PartStaff`: one staff of a part written on several."
+    ),
+    (
+        System,
+        "System",
+        StreamKind::System,
+        -20,
+        "music21's `System`: one line of a page's staves."
     ),
     (
         Measure,
@@ -6052,6 +6063,7 @@ fn kind_of(object: &Bound<'_, PyAny>) -> PyResult<StreamKind> {
         StreamKind::Score,
         StreamKind::PartStaff,
         StreamKind::Part,
+        StreamKind::System,
         StreamKind::Measure,
         StreamKind::Voice,
     ] {
@@ -8312,7 +8324,7 @@ fn realizeChordSymbolDurations<'py>(piece: &Bound<'py, PyAny>) -> PyResult<Bound
 /// What sounds or stands in each part of a score at one time: music21's
 /// `voiceLeading.Verticality`, as far as `getVerticalityFromObject` builds
 /// one.
-#[pyclass(name = "Verticality", module = "music21.voiceLeading", weakref)]
+#[pyclass(name = "Verticality", module = "music21.voiceLeading", extends = crate::base::Music21Object, weakref)]
 pub struct Verticality {
     /// Each part's number and what it holds there.
     content: Py<PyDict>,
@@ -8327,14 +8339,17 @@ impl Verticality {
 
     #[new]
     #[pyo3(signature = (contentDict = None))]
-    fn new(py: Python<'_>, contentDict: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'_>,
+        contentDict: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let content = match contentDict {
             Some(given) => given.copy()?,
             None => PyDict::new(py),
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             content: content.unbind(),
-        })
+        }))
     }
 
     fn __traverse__(
@@ -8720,6 +8735,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Stream>()?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;
+    // What music21's `System` says of itself, which nothing here reads.
+    let system = m.py().get_type::<System>();
+    system.setattr("systemNumber", 0)?;
+    system.setattr("systemNumbering", "Score")?;
     m.add_class::<Verticality>()?;
     m.add_class::<Placed>()?;
     m.add_function(wrap_pyfunction!(realizeVolume, m)?)?;

@@ -328,6 +328,7 @@ fn kind_of(stream: &Bound<'_, PyAny>) -> PyResult<StreamKind> {
         StreamKind::Score,
         StreamKind::PartStaff,
         StreamKind::Part,
+        StreamKind::System,
         StreamKind::Measure,
         StreamKind::Voice,
     ] {
@@ -579,10 +580,7 @@ fn span_object(
     if !span.is_pitched() {
         return Py::new(py, value);
     }
-    let pitched = Bound::new(
-        py,
-        PyClassInitializer::from(value).add_subclass(PitchedTimespan),
-    )?;
+    let pitched = Bound::new(py, crate::base::built(value).add_subclass(PitchedTimespan))?;
     Ok(pitched.into_any().cast_into::<ElementTimespan>()?.unbind())
 }
 

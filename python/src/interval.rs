@@ -390,6 +390,7 @@ impl Specifier {
 #[pyclass(
     name = "GenericInterval",
     module = "music21.interval",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -477,12 +478,12 @@ impl GenericInterval {
     fn new(
         value: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let inner = match value {
             Some(value) => generic_from_any(value)?,
             None => RsGeneric::new(1).map_err(interval_error)?,
         };
-        Ok(Self::wrap(inner))
+        Ok(crate::base::built(Self::wrap(inner)))
     }
 
     #[getter]
@@ -691,6 +692,7 @@ impl GenericInterval {
 #[pyclass(
     name = "DiatonicInterval",
     module = "music21.interval",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -734,7 +736,7 @@ impl DiatonicInterval {
         specifier: Option<&Bound<'_, PyAny>>,
         generic: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let generic = match generic {
             Some(generic) => generic_from_any(generic)?,
             None => RsGeneric::new(1).map_err(interval_error)?,
@@ -744,7 +746,7 @@ impl DiatonicInterval {
             None => RsSpecifier::Perfect,
         };
         RsDiatonic::try_new(specifier, generic)
-            .map(Self::wrap)
+            .map(|inner| crate::base::built(Self::wrap(inner)))
             .map_err(interval_error)
     }
 
@@ -922,6 +924,7 @@ impl DiatonicInterval {
 #[pyclass(
     name = "ChromaticInterval",
     module = "music21.interval",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -987,14 +990,14 @@ impl ChromaticInterval {
     fn new(
         semitones: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let semitones = match semitones {
             Some(value) => semitones_from_any(value)?,
             None => 0.0,
         };
-        Ok(Self::wrap(
+        Ok(crate::base::built(Self::wrap(
             RsChromatic::new(semitones).map_err(interval_error)?,
-        ))
+        )))
     }
 
     #[getter]
@@ -1109,6 +1112,7 @@ impl ChromaticInterval {
 #[pyclass(
     name = "Interval",
     module = "music21.interval",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -1432,12 +1436,12 @@ impl Interval {
         noteEnd: Option<&Bound<'_, PyAny>>,
         name: Option<String>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
+    ) -> PyClassInitializer<Self> {
         let _ = (
             arg0, arg1, diatonic, chromatic, pitchStart, pitchEnd, noteStart, noteEnd, name,
         );
         let _ = _keywords;
-        Self::wrap(PERFECT_UNISON.clone())
+        crate::base::built(Self::wrap(PERFECT_UNISON.clone()))
     }
 
     /// music21's construction proper, which a direct caller reaches through

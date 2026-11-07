@@ -32,6 +32,7 @@ pyo3::create_exception!(music21_rs_facade, BarException, crate::Music21Exception
 #[pyclass(
     name = "Barline",
     module = "music21.bar",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -95,13 +96,13 @@ impl Barline {
         r#type: Option<&Bound<'_, PyAny>>,
         location: Option<String>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self::wrap(RsBarline::new(BarlineType::Regular));
         if let Some(said) = r#type.filter(|said| !said.is_none()) {
             made.set_type(said)?;
         }
         made.location = location;
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// What music21 says this is: its own class and every class it is a
@@ -241,10 +242,7 @@ impl Repeat {
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let way = read_direction(&direction)?;
-        Ok(
-            PyClassInitializer::from(Barline::wrap(RsBarline::repeat(way, times)))
-                .add_subclass(Repeat),
-        )
+        Ok(crate::base::built(Barline::wrap(RsBarline::repeat(way, times))).add_subclass(Repeat))
     }
 
     /// Which way the music repeats: music21's `direction`, `'start'` or

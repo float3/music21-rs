@@ -2088,7 +2088,7 @@ impl NoteStyle {
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Style).add_subclass(NoteStyle)
+        crate::base::built(Style).add_subclass(NoteStyle)
     }
 
     #[classattr]

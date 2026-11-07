@@ -65,6 +65,7 @@ fn analytic_key(value: &Bound<'_, PyAny>) -> PyResult<RsKey> {
 #[pyclass(
     name = "VoiceLeadingQuartet",
     module = "music21.voiceLeading",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -276,8 +277,8 @@ impl VoiceLeadingQuartet {
         v2n2: &Bound<'_, PyAny>,
         key: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::build(py, v1n1, v1n2, v2n1, v2n2, key, keywords)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::build(py, v1n1, v1n2, v2n1, v2n2, key, keywords).map(crate::base::built)
     }
 
     /// Built again here, since a Python subclass hands `__new__` its own

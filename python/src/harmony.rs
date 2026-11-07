@@ -636,7 +636,7 @@ impl ChordSymbol {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(PyClassInitializer::from(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
+        Ok(crate::base::built(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
     }
 
     fn __traverse__(
@@ -1406,7 +1406,7 @@ impl NoChord {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(PyClassInitializer::from(Chord::build(py, None, None)?)
+        Ok(crate::base::built(Chord::build(py, None, None)?)
             .add_subclass(ChordSymbol::blank(py))
             .add_subclass(NoChord))
     }

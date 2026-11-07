@@ -248,7 +248,7 @@ macro_rules! extractors {
                     _arguments: &Bound<'_, pyo3::types::PyTuple>,
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
-                    Ok(PyClassInitializer::from(FeatureExtractor::of(
+                    Ok(crate::base::built(FeatureExtractor::of(
                         row_of($id, Library::$library),
                         Library::$library,
                     ))

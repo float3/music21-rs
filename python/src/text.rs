@@ -101,6 +101,7 @@ fn said(error: &music21::Error) -> String {
 #[pyclass(
     name = "TextBox",
     module = "music21.text",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -137,7 +138,7 @@ impl TextBox {
         x: Option<&Bound<'_, PyAny>>,
         y: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let given = |value: Option<&Bound<'_, PyAny>>| -> PyResult<Py<PyAny>> {
             match value.filter(|value| !value.is_none()) {
                 Some(value) => Ok(value.clone().unbind()),
@@ -145,12 +146,12 @@ impl TextBox {
                 None => Ok(500i32.into_pyobject(py)?.into_any().unbind()),
             }
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             content,
             page: 1,
             style: None,
             placed: (given(x)?, given(y)?),
-        })
+        }))
     }
 
     /// music21's `classSortOrder`, which puts a text box before the text

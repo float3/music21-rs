@@ -168,6 +168,7 @@ error_into!(pub(crate) chord_error, ChordException);
 #[pyclass(
     name = "Chord",
     module = "music21.chord",
+    extends = crate::base::NotRest,
     subclass,
     skip_from_py_object,
     weakref
@@ -1834,9 +1835,9 @@ impl Chord {
         py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = (notes, keywords);
-        Self::build(py, None, None)
+        Self::build(py, None, None).map(crate::base::built)
     }
 
     /// music21's construction proper, which a direct caller reaches through
@@ -3656,7 +3657,7 @@ impl Chord {
             let text = name.into_pyobject(py)?;
             annotated.addLyric(py, text.as_any(), None, false, None)?;
         }
-        Ok(Some(Py::new(py, annotated)?.into_any()))
+        Ok(Some(Py::new(py, crate::base::built(annotated))?.into_any()))
     }
 
     /// music21's `Pitch.getStringHarmonic`, which reads the notehead off the

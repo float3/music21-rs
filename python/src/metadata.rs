@@ -67,6 +67,7 @@ pyo3::create_exception!(
 #[pyclass(
     name = "Metadata",
     module = "music21.metadata",
+    extends = crate::base::Music21Object,
     subclass,
     dict,
     skip_from_py_object,
@@ -101,7 +102,10 @@ impl Metadata {
     /// having no version of anybody else's to write.
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'_>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self::wrap(RsMetadata::new());
         made.inner.add_text("software", software_line(py));
         if let Some(keywords) = keywords {
@@ -110,7 +114,7 @@ impl Metadata {
                 made.write(&name, &value)?;
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// Reads one name: music21's `__getattr__`, which answers a string or

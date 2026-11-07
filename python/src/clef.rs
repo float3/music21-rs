@@ -27,6 +27,7 @@ error_into!(clef_error, ClefException);
 #[pyclass(
     name = "Clef",
     module = "music21.clef",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     weakref
@@ -42,7 +43,7 @@ impl Clef {
     fn initializer(class: &str) -> PyResult<PyClassInitializer<Self>> {
         let kind = ClefKind::from_class_name(class)
             .ok_or_else(|| ClefException::new_err(format!("no clef class {class}")))?;
-        Ok(PyClassInitializer::from(Self {
+        Ok(crate::base::built(Self {
             inner: RsClef::of_kind(kind),
             lowest_line_given: false,
         }))

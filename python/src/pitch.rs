@@ -2057,7 +2057,7 @@ impl Pitch {
             .extract::<PyRef<crate::chord::Chord>>()
             .map_err(|_| PitchException::new_err("getStringHarmonic needs a chord.Chord"))?;
         match chord.getStringHarmonic(py)? {
-            Some(sounded) => Ok(Bound::new(py, sounded)?.into_any()),
+            Some(sounded) => Ok(Bound::new(py, crate::base::built(sounded))?.into_any()),
             None => Ok(false.into_pyobject(py)?.to_owned().into_any()),
         }
     }

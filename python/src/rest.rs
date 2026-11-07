@@ -28,6 +28,7 @@ use crate::note::{
 #[pyclass(
     name = "Rest",
     module = "music21.note",
+    extends = crate::base::GeneralNote,
     subclass,
     skip_from_py_object,
     weakref
@@ -293,7 +294,7 @@ impl Rest {
         stepShift: i32,
         fullMeasure: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let keywords = match keywords {
             Some(keywords) => keywords.copy()?,
             None => PyDict::new(py),
@@ -327,7 +328,7 @@ impl Rest {
         if let Some(full) = fullMeasure.filter(|value| !value.is_none()) {
             rest.inner.set_full_measure(full_measure_from(full)?);
         }
-        Ok(rest)
+        Ok(crate::base::built(rest))
     }
 
     /// A rest is written out as text and read back; what the crate does not

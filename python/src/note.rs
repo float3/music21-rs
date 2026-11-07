@@ -345,6 +345,7 @@ pub(crate) fn deep_copied_objects(
 #[pyclass(
     name = "Note",
     module = "music21.note",
+    extends = crate::base::NotRest,
     subclass,
     skip_from_py_object,
     weakref
@@ -1008,7 +1009,7 @@ impl Note {
         py: Python<'_>,
         pitch: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let inner = match pitch.filter(|value| !value.is_none()) {
             Some(value) => RsNote::from_pitch(crate::pitch::pitch_from_any_with_keywords(
                 py, value, keywords,
@@ -1049,7 +1050,7 @@ impl Note {
             };
             note.attach_duration(py, &duration)?;
         }
-        Ok(note)
+        Ok(crate::base::built(note))
     }
 
     // Setting it keeps the pitch object given, as music21 does: its own

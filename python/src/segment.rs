@@ -667,7 +667,7 @@ impl OverlaidSegment {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Segment).add_subclass(OverlaidSegment)
+        crate::base::built(Segment).add_subclass(OverlaidSegment)
     }
 }
 

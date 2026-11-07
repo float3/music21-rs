@@ -246,6 +246,9 @@ HOMES = {
 
 ALSO = {
     'music21': (
+        'ElementException',
+        'Groups',
+        'Music21Object',
         'Music21ObjectException',
         'SitesException',
     ),

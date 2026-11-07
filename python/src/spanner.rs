@@ -37,6 +37,7 @@ pyo3::create_exception!(
 #[pyclass(
     name = "Spanner",
     module = "music21.spanner",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
     dict,
@@ -217,8 +218,8 @@ impl Spanner {
     fn new(
         _spannedElements: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Ok(Self::of_kind(SpannerKind::Slur))
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Self::of_kind(SpannerKind::Slur)))
     }
 
     /// The notes given are joined here, in `__init__` rather than in
@@ -1756,7 +1757,7 @@ macro_rules! spanner_kinds {
                     _spannedElements: &Bound<'_, PyTuple>,
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
-                    Ok(PyClassInitializer::from(Spanner::of_kind($kind)).add_subclass($class))
+                    Ok(crate::base::built(Spanner::of_kind($kind)).add_subclass($class))
                 }
             }
         )*

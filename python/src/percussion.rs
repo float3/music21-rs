@@ -22,6 +22,7 @@ pub const NAMES: &[&str] = &["PercussionChord"];
 #[pyclass(
     name = "PercussionChord",
     module = "music21.percussion",
+    extends = crate::base::NotRest,
     subclass,
     skip_from_py_object,
     weakref
@@ -123,10 +124,10 @@ impl PercussionChord {
     fn new(
         notes: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, pyo3::types::PyDict>>,
-    ) -> PyResult<Self> {
-        Ok(Self {
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Self {
             notes: Self::read(notes)?,
-        })
+        }))
     }
 
     /// Nothing here is a chord, whatever it holds: music21's `isChord`,

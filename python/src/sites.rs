@@ -16,7 +16,8 @@
 //! tells: a site is read as one only while the stream still holds the
 //! element, which answers the same for every way a stream lets go.
 //!
-//! The members are put on each class as descriptors (`register`), so an
+//! The members are put on the package's `Music21Object`, which every
+//! element class is built on, as descriptors (`register`), so an
 //! installed class -- which stands on music21's own `Music21Object` --
 //! reads music21's instead: installing puts music21's members back on top.
 
@@ -1406,49 +1407,10 @@ impl Sites {
     }
 }
 
-/// music21's `Music21Object` classes the package stands in for, which get
-/// the members here.
+/// The classes that get the members here: the package's `Music21Object`,
+/// which every element class is built on.
 fn element_classes(py: Python<'_>) -> Vec<Bound<'_, pyo3::types::PyType>> {
-    vec![
-        py.get_type::<crate::note::Note>(),
-        py.get_type::<crate::rest::Rest>(),
-        py.get_type::<crate::chord::Chord>(),
-        py.get_type::<crate::percussion::PercussionChord>(),
-        py.get_type::<Stream>(),
-        py.get_type::<crate::articulations::Articulation>(),
-        py.get_type::<crate::bar::Barline>(),
-        py.get_type::<crate::clef::Clef>(),
-        py.get_type::<crate::dynamics::Dynamic>(),
-        py.get_type::<crate::expressions::Ornament>(),
-        py.get_type::<crate::expressions::TextExpression>(),
-        py.get_type::<crate::instrument::Instrument>(),
-        py.get_type::<crate::interval::GenericInterval>(),
-        py.get_type::<crate::interval::DiatonicInterval>(),
-        py.get_type::<crate::interval::ChromaticInterval>(),
-        py.get_type::<crate::interval::Interval>(),
-        py.get_type::<crate::key::KeySignature>(),
-        py.get_type::<crate::layout::LayoutBase>(),
-        py.get_type::<crate::layout::ScoreLayout>(),
-        py.get_type::<crate::layout::PageLayout>(),
-        py.get_type::<crate::layout::SystemLayout>(),
-        py.get_type::<crate::layout::StaffLayout>(),
-        py.get_type::<crate::metadata::Metadata>(),
-        py.get_type::<crate::meter::TimeSignature>(),
-        py.get_type::<crate::repeat::RepeatExpression>(),
-        py.get_type::<crate::scale::Scale>(),
-        py.get_type::<crate::searchserial::ContiguousSegmentOfNotes>(),
-        py.get_type::<crate::serial::ToneRow>(),
-        py.get_type::<crate::serial::TwelveToneMatrix>(),
-        py.get_type::<crate::spanner::Spanner>(),
-        py.get_type::<crate::spineparser::GlobalComment>(),
-        py.get_type::<crate::spineparser::MiscTandem>(),
-        py.get_type::<crate::stream::Verticality>(),
-        py.get_type::<crate::tempo::MetronomeMark>(),
-        py.get_type::<crate::tempo::TempoText>(),
-        py.get_type::<crate::tempo::MetricModulation>(),
-        py.get_type::<crate::text::TextBox>(),
-        py.get_type::<crate::voiceleading::VoiceLeadingQuartet>(),
-    ]
+    vec![py.get_type::<crate::base::Music21Object>()]
 }
 
 /// Every member put on the classes, which installing replaces with
