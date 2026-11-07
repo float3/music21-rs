@@ -1029,7 +1029,10 @@ impl Stream {
         }
     }
 
-    /// Creates a stream from events, sorted by offset.
+    /// Creates a stream from events, sorted by offset, those at one offset
+    /// kept in the order given: a caller that knows music21's order, its
+    /// priorities among it, hands it in here, where [`Stream::insert`]
+    /// sorts them by class.
     pub fn from_events(events: impl IntoIterator<Item = StreamEvent>) -> Self {
         let mut stream = Self {
             events: events.into_iter().collect(),
@@ -1052,8 +1055,7 @@ impl Stream {
     /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn insert(&mut self, offset: FloatType, element: impl Into<StreamElement>) {
-        self.events.push(StreamEvent::new(offset, element));
-        self.sort_events();
+        self.insert_sorted(vec![StreamEvent::new(offset, element)]);
     }
 
     /// Appends an element after the current end of the stream.
@@ -1069,9 +1071,19 @@ impl Stream {
     /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn push(&mut self, element: impl Into<StreamElement>) {
-        let element = element.into();
-        let offset = self.end_offset();
-        self.events.push(StreamEvent::new(offset, element));
+        let event = StreamEvent::new(self.end_offset(), element);
+        // What takes no time can sort before the last element at the end,
+        // as a clef does before a dynamic; music21 sorts again then.
+        let sorts_before_last = self
+            .events
+            .last()
+            .is_some_and(|last| crate::makenotation::event_order(&event, last).is_lt());
+        if sorts_before_last {
+            self.insert_sorted(vec![event]);
+            return;
+        }
+
+        self.events.push(event);
     }
 
     /// Returns immutable events in offset order.
@@ -1709,6 +1721,10 @@ impl Stream {
         Ok(out)
     }
 
+    /// Puts the events in offset order, keeping the order they were given
+    /// in at one offset: how [`Stream::from_events`] takes an order from a
+    /// caller that knows more of it than the crate does, music21's
+    /// priorities among them.
     fn sort_events(&mut self) {
         self.events.sort_by(|left, right| {
             left.offset
@@ -1825,6 +1841,40 @@ mod tests {
         assert_eq!(stream.events()[0].offset(), 0.0);
         assert_eq!(stream.events()[1].offset(), 2.0);
         assert_eq!(stream.end_offset(), 2.5);
+    }
+
+    #[test]
+    fn a_clef_inserted_after_a_note_sorts_before_it() {
+        // music21 sorts what stands at one offset by its class order, so
+        // a clef put in after a note at the start still comes first.
+        let mut stream = Stream::new();
+        stream.insert(0.0, Note::from_name("C4").unwrap());
+        stream.insert(0.0, Clef::treble());
+        assert!(matches!(
+            stream.events()[0].element(),
+            StreamElement::Clef(_)
+        ));
+        assert!(matches!(
+            stream.events()[1].element(),
+            StreamElement::Note(_)
+        ));
+    }
+
+    #[test]
+    fn a_clef_pushed_after_a_dynamic_sorts_before_it() {
+        // music21's `append` sorts a stream again where what is appended
+        // would sort before the last element.
+        let mut stream = Stream::new();
+        stream.push(Dynamic::new("p"));
+        stream.push(Clef::treble());
+        assert!(matches!(
+            stream.events()[0].element(),
+            StreamElement::Clef(_)
+        ));
+        assert!(matches!(
+            stream.events()[1].element(),
+            StreamElement::Dynamic(_)
+        ));
     }
 
     #[test]

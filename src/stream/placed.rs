@@ -428,7 +428,8 @@ mod tests {
         part.insert(1.0, second);
 
         let numbers: Vec<_> = part.placed().iter().map(Placed::measure_number).collect();
-        assert_eq!(numbers, [None, Some(1), Some(2)]);
+        // A measure sorts before a key at one offset, as in music21.
+        assert_eq!(numbers, [Some(1), None, Some(2)]);
     }
 
     /// The composite lists what `leaves` lists, in the same order.
