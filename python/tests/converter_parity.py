@@ -56,6 +56,8 @@ ATTRIBUTES = {
     'GlobalComment': ('comment',),
     'MiscTandem': ('tandem',),
     'Spanner': ('placement', 'type', 'idLocal', 'completeStatus'),
+    'Measure': ('showNumber', 'layoutWidth', 'numberSuffix', 'paddingLeft', 'paddingRight'),
+    'Part': ('partName', 'partAbbreviation'),
     'Music21Object': ('style',),
 }
 
@@ -97,7 +99,19 @@ def _shown(value):
     return _repr(value)
 
 
+# Whether to pass over where things are drawn and in what font and
+# colour, to see what else differs: `--no-style`.
+IGNORE_STYLE = False
+
+# What MusicXML says of where and how a thing is drawn.
+DRAWN = re.compile(
+    r' (?:default-[xy]|relative-[xy]|color|font-[a-z]+|width|justify|halign|valign)="[^"]*"'
+)
+
+
 def _style(style):
+    if IGNORE_STYLE:
+        return 'style()'
     said = []
     for name in STYLE:
         value = getattr(style, name, None)
@@ -179,6 +193,8 @@ def _musicxml(score):
     # The date written and every id are made new by each write.
     written = written.split('</identification>', 1)[-1]
     written = re.sub(r' id="[^"]*"', '', written)
+    if IGNORE_STYLE:
+        written = DRAWN.sub('', written)
     return ADDRESS.sub('', written).splitlines()
 
 
@@ -215,7 +231,11 @@ def main(arguments):
     warnings.simplefilter('ignore')
     music21_rs.install_into_music21()
     fmt, paths = arguments[0], arguments[1:]
+    global IGNORE_STYLE
     shown = 40
+    if paths and paths[0] == '--no-style':
+        IGNORE_STYLE = True
+        paths = paths[1:]
     if paths and paths[0].startswith('--lines='):
         shown = int(paths[0].split('=', 1)[1])
         paths = paths[1:]

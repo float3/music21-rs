@@ -5069,6 +5069,9 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             made.setattr("numberSuffix", stream.number_suffix())?;
             made.setattr("paddingLeft", stream.padding_left())?;
             made.setattr("paddingRight", stream.padding_right())?;
+            if whose == Whose::Music21 {
+                music21_measure_drawing(py, stream, &made)?;
+            }
         }
         StreamKind::Part | StreamKind::PartStaff => {
             made.setattr("partName", stream.name())?;
@@ -5077,6 +5080,31 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
         _ => {}
     }
     Ok(Built { made, leaves })
+}
+
+/// How a measure is drawn, on music21's own: whether its number shows,
+/// and how wide it is.
+fn music21_measure_drawing(
+    py: Python<'_>,
+    stream: &RsStream,
+    made: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    if stream.number_hidden() {
+        let never = py
+            .import("music21.stream.enums")?
+            .getattr("ShowNumber")?
+            .getattr("NEVER")?;
+        made.setattr("showNumber", never)?;
+    }
+    if let Some(width) = stream.layout_width() {
+        let width = match width {
+            music21::style::StyleValue::Whole(whole) => whole.into_pyobject(py)?.into_any(),
+            music21::style::StyleValue::Decimal(value) => value.into_pyobject(py)?.into_any(),
+            music21::style::StyleValue::Text(text) => text.into_pyobject(py)?.into_any(),
+        };
+        made.setattr("layoutWidth", width)?;
+    }
+    Ok(())
 }
 
 /// `metadata` with music21's version first under `software`, as music21's
@@ -5241,7 +5269,16 @@ fn element_object_as<'py>(
             class_named("music21.key", "Key")?.call1((key.tonic().name(), key.mode()))?
         }
         StreamElement::TimeSignature(meter) => {
-            class_named("music21.meter.base", "TimeSignature")?.call1((meter.ratio_string(),))?
+            let made = class_named("music21.meter.base", "TimeSignature")?
+                .call1((meter.ratio_string(),))?;
+            // How it is drawn, which the ratio does not say.
+            if let Some(symbol) = meter.symbol() {
+                made.setattr("symbol", symbol)?;
+            }
+            if meter.symbolize_denominator() {
+                made.setattr("symbolizeDenominator", true)?;
+            }
+            made
         }
         StreamElement::MetronomeMark(mark) => element_new(
             py,
@@ -5358,7 +5395,7 @@ fn element_object_as<'py>(
         // A kind added to the crate since has no class here yet either.
         _ => return Ok(None),
     };
-    carry_notation(py, element, &made)?;
+    carry_notation(py, element, &made, whose)?;
     Ok(Some(made))
 }
 
@@ -5370,10 +5407,14 @@ fn element_object_as<'py>(
 /// `note.articulations` was empty. A fermata and an arpeggio are left
 /// behind: this package has no class for either, and building music21's
 /// would be depending on music21, which it does not.
+///
+/// On music21's streams they are music21's own, as its reader makes them,
+/// and each expression stands in the order it was read.
 fn carry_notation(
     py: Python<'_>,
     element: &StreamElement,
     made: &Bound<'_, PyAny>,
+    whose: Whose,
 ) -> PyResult<()> {
     let (articulations, expressions) = match element {
         StreamElement::Note(note) => (note.articulations(), note.expressions()),
@@ -5391,6 +5432,16 @@ fn carry_notation(
         }
         made.setattr("articulations", held)?;
     }
+    if whose == Whose::Music21 && !expressions.is_empty() {
+        let held = PyList::empty(py);
+        for expression in expressions {
+            if let Some(made) = music21_expression(py, expression)? {
+                held.append(made)?;
+            }
+        }
+        made.setattr("expressions", held)?;
+        return Ok(());
+    }
     let ornaments: Vec<_> = expressions
         .iter()
         .filter_map(|expression| match expression {
@@ -5406,6 +5457,33 @@ fn carry_notation(
         made.setattr("expressions", held)?;
     }
     Ok(())
+}
+
+/// An expression on a note as music21's reader makes it: an ornament as
+/// the class installed over music21's, a fermata and an arpeggio as
+/// music21's own. A kind added to the crate since is left out.
+fn music21_expression<'py>(
+    py: Python<'py>,
+    expression: &music21::expressions::Expression,
+) -> PyResult<Option<Bound<'py, PyAny>>> {
+    use music21::expressions::Expression;
+
+    let module = py.import("music21.expressions")?;
+    Ok(Some(match expression {
+        Expression::Ornament(ornament) => {
+            crate::expressions::Ornament::object(py, (**ornament).clone())?.into_bound(py)
+        }
+        Expression::Fermata(fermata) => {
+            let made = module.getattr("Fermata")?.call0()?;
+            made.setattr("type", fermata.fermata_type().as_str())?;
+            if let Some(shape) = fermata.shape() {
+                made.setattr("shape", shape)?;
+            }
+            made
+        }
+        Expression::Arpeggio(kind) => module.getattr("ArpeggioMark")?.call1((kind.as_str(),))?,
+        _ => return Ok(None),
+    }))
 }
 
 /// music21's other stream classes, each the same `Stream` under its name.

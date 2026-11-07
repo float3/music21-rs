@@ -7411,6 +7411,29 @@ def test_routed_musicxml_spanners_are_music21s():
     assert _routed_differences("musicxml", paths, names) == []
 
 
+def test_routed_musicxml_keeps_fermatas_and_arpeggios():
+    """A fermata or an arpeggio read through the crate is music21's own,
+    among the note's expressions where music21's reader puts it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv66.6.mxl", "musicxml/lilypondTestSuite/32d-Arpeggio.xml")
+    assert _routed_differences("musicxml", paths, ("expressions=",)) == []
+
+
+def test_routed_musicxml_keeps_a_meters_symbol():
+    """A meter read through the crate keeps the symbol it is drawn with."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/lilypondTestSuite/11f-TimeSignatures-SymbolMeaning.xml",)
+    assert _routed_differences("musicxml", paths, ("TimeSignature", "<time")) == []
+
+
+def test_routed_musicxml_keeps_an_implicit_measures_number_hidden():
+    """A measure written `implicit` and read through the crate shows no
+    number, as music21's reader has it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv69.6.xml",)
+    assert _routed_differences("musicxml", paths, (" Measure ", "<measure")) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

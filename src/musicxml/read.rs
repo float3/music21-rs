@@ -265,6 +265,7 @@ struct MeasureIr {
     ending: Option<Ending>,
     padding_left: FloatType,
     padding_right: FloatType,
+    width: Option<StyleValue>,
     measure_numbering: Option<String>,
     items: Vec<Item>,
     voices: Vec<VoiceIr>,
@@ -1321,6 +1322,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     ending: measure.ending.clone(),
                     padding_left: measure.padding_left,
                     padding_right: measure.padding_right,
+                    width: measure.width.clone(),
                     // music21 makes the staff's measures from a template,
                     // which keeps nothing of how the measure is drawn.
                     measure_numbering: None,
@@ -1447,6 +1449,7 @@ fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
     stream.set_ending(measure.ending);
     stream.set_padding_left(measure.padding_left);
     stream.set_padding_right(measure.padding_right);
+    stream.set_layout_width(measure.width);
     stream.set_measure_numbering(measure.measure_numbering);
     (stream, uids)
 }
@@ -1598,6 +1601,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `parseMeasureAttributes` and `parseMeasureNumbers`.
     fn measure_attributes(&mut self) {
         self.measure.hidden = yes(self.element.get("implicit"));
+        self.measure.width = self.element.get("width").map(StyleValue::read);
         let raw = self.element.get("number").unwrap_or("");
         // music21's `getNumFromStr`: the digits, and whatever is left.
         let digits: String = raw.chars().filter(char::is_ascii_digit).collect();

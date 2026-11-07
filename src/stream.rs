@@ -755,6 +755,9 @@ struct Labels {
     padding_left: FloatType,
     #[cfg_attr(feature = "serde", serde(default))]
     padding_right: FloatType,
+    /// How wide a measure is drawn: music21's `layoutWidth`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    layout_width: Option<crate::style::StyleValue>,
     /// music21's `atSoundingPitch`, `None` for its `'unknown'`.
     #[cfg_attr(feature = "serde", serde(default))]
     at_sounding_pitch: Option<bool>,
@@ -836,6 +839,17 @@ impl Stream {
     /// Says whether the measure's number is left unshown.
     pub fn set_number_hidden(&mut self, hidden: bool) {
         self.labels.number_hidden = hidden;
+    }
+
+    /// How wide the measure is drawn, in tenths, where the score says:
+    /// music21's `layoutWidth`.
+    pub fn layout_width(&self) -> Option<&crate::style::StyleValue> {
+        self.labels.layout_width.as_ref()
+    }
+
+    /// Says how wide the measure is drawn.
+    pub fn set_layout_width(&mut self, width: Option<crate::style::StyleValue>) {
+        self.labels.layout_width = width;
     }
 
     /// Which measures' numbers are shown from this measure on, as MusicXML's
