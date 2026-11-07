@@ -1237,7 +1237,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         };
         self.last_measure_offset += shift;
         self.measures.push(measure);
-        Ok(finale_forward.map(|place| (index, place.is_some() && !use_voices)))
+        Ok(finale_forward.map(|_| (index, !use_voices)))
     }
 
     /// music21's `removeFinaleIncorrectEndingForwardRest`: a hidden rest
@@ -1476,9 +1476,9 @@ struct MeasureParser<'p, 'a, 'x> {
     marked_full: Vec<usize>,
     /// Whether the rest being read said so.
     marking_full: bool,
-    /// Whether the last thing read was a rest made of Finale's `<forward>`;
-    /// the inner value is its seq.
-    finale_forward: Option<Option<usize>>,
+    /// The seq of the last thing read, when it was a rest made of Finale's
+    /// `<forward>`.
+    finale_forward: Option<usize>,
     pedal_starts: Vec<(usize, FloatType)>,
     /// The staff layouts read here, by staff number and offset, each with
     /// what it was put in as, where it was put anywhere: music21's
@@ -1660,7 +1660,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             rest.set_hidden(true);
             let seq = self.seq;
             self.insert_note(element, staff_number(element), rest.into());
-            self.finale_forward = Some(Some(seq));
+            self.finale_forward = Some(seq);
         }
         self.offset = op_frac(self.offset + change);
         Ok(())
