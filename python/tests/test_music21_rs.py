@@ -577,6 +577,58 @@ def test_an_augmented_sixth_in_major_implies_the_minor_key():
     assert _implied_scales(roman) == expected
 
 
+def _augmented_sixth_secondary_keys(roman):
+    """The key an augmented sixth over a secondary numeral is read in, as
+    the numeral is made, after `_setImpliedScaleFromKey`, and as the parse
+    steps leave it."""
+    found = []
+    for figure, key in [
+        ("Ger65/V", None),
+        ("Ger65/V", "C"),
+        ("Ger65/V", "c"),
+        ("It6/V", "C"),
+        ("Fr43/V", "C"),
+        ("Ger65/IV", "C"),
+        ("Ger65/bVI", "C"),
+        ("It6/iv", "C"),
+        ("Fr43/vi", "a"),
+        ("V/V", "C"),
+    ]:
+        found.append(repr(roman.RomanNumeral(figure, key).secondaryRomanNumeralKey))
+    rn = roman.RomanNumeral("Ger65/V", "C")
+    rn._setImpliedScaleFromKey()
+    found.append(repr(rn.secondaryRomanNumeralKey))
+    rn = roman.RomanNumeral("Ger65/V", "C")
+    unused_rest, scale = rn._correctForSecondaryRomanNumeral(rn.key, "Ger65/V")
+    found.append(repr(rn.secondaryRomanNumeralKey))
+    rn._parseRNAloneAmidstAug6("Ger65", scale)
+    found.append(repr(rn.secondaryRomanNumeralKey))
+    return found
+
+
+def test_an_augmented_sixth_makes_its_secondary_key_minor():
+    """music21 reads an augmented sixth over a secondary numeral in the
+    minor key on the secondary's root, so `Ger65/V` in C is in g minor."""
+    expected = [
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of f minor>",
+        "<music21.key.Key of a- minor>",
+        "<music21.key.Key of f minor>",
+        "<music21.key.Key of f# minor>",
+        "<music21.key.Key of G major>",
+        "<music21.key.Key of g minor>",
+        "<music21.key.Key of G major>",
+        "<music21.key.Key of g minor>",
+    ]
+    assert _augmented_sixth_secondary_keys(m) == expected
+    roman = pytest.importorskip("music21.roman")
+    assert _augmented_sixth_secondary_keys(roman) == expected
+
+
 class _Placed:
     """A note or chord at an offset, as a stream would hold it."""
 

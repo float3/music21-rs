@@ -186,10 +186,7 @@ impl RomanNumeral {
         if self.blank || self.state.implied_from_key {
             return None;
         }
-        if !matches!(
-            self.inner.roman_numeral().as_str(),
-            "It" | "Fr" | "Ger" | "Sw"
-        ) {
+        if !is_augmented_sixth(&self.inner.roman_numeral()) {
             return None;
         }
         let key = self.inner.effective_key_of().ok()?;
@@ -197,6 +194,16 @@ impl RomanNumeral {
             return None;
         }
         RsKey::from_tonic_mode(&key.tonic().name(), Some("minor")).ok()
+    }
+
+    /// The minor key on the same tonic when this numeral is an augmented
+    /// sixth and `key` is major, since music21 reads augmented sixths in
+    /// minor; otherwise `key` itself.
+    fn minor_for_sixth(&self, key: RsKey) -> PyResult<RsKey> {
+        if key.mode() != "major" || !is_augmented_sixth(&self.inner.roman_numeral()) {
+            return Ok(key);
+        }
+        RsKey::from_tonic_mode(&key.tonic().name(), Some("minor")).map_err(roman_error)
     }
 
     /// Replaces the figure this numeral reads, and the chord it stands on.
@@ -583,6 +590,11 @@ fn established_key(applied: &RsRomanNumeral) -> PyResult<RsKey> {
         _ => "major",
     };
     RsKey::from_tonic_mode(&root.name(), Some(mode)).map_err(roman_error)
+}
+
+/// Whether a numeral alone names an augmented sixth by its nationality.
+fn is_augmented_sixth(numeral: &str) -> bool {
+    matches!(numeral, "It" | "Fr" | "Ger" | "Sw")
 }
 
 /// The same key with a minor third, which is where every augmented sixth is
@@ -985,7 +997,8 @@ impl RomanNumeral {
         if self.blank || self.inner.secondary().is_none() {
             return Ok(py.None());
         }
-        crate::key::Key::object(py, self.inner.effective_key_of().map_err(roman_error)?)
+        let key = self.inner.effective_key_of().map_err(roman_error)?;
+        crate::key::Key::object(py, self.minor_for_sixth(key)?)
     }
 
     /// music21's `caseMatters`: whether an upper-case numeral means major
@@ -1293,11 +1306,24 @@ impl RomanNumeral {
                 me.state.bracketed = Some(bracketed);
             }
         }
-        let scale = if read.minor {
-            parallel_minor(py, useScale)?
-        } else {
-            useScale.clone().unbind()
+        if !read.minor {
+            return Ok((read.rest, useScale.clone())
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+
+        let scale = parallel_minor(py, useScale)?;
+        // A major scale turned minor takes the key a secondary numeral
+        // made with it: music21 reads `Ger65/V` in C in g minor.
+        let established = match &slf.borrow().state.secondary_key {
+            Some(Some(established)) => Some(established.clone_ref(py)),
+            _ => None,
         };
+        if let Some(established) = established.filter(|_| !scale.bind(py).is(useScale)) {
+            let minor = parallel_minor(py, established.bind(py))?;
+            slf.borrow_mut().state.secondary_key = Some(Some(minor));
+        }
         Ok((read.rest, scale).into_pyobject(py)?.into_any().unbind())
     }
 
