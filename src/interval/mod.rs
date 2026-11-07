@@ -241,12 +241,18 @@ fn specifier_from_generic_chromatic(
     } else {
         -0.0001
     };
-    let diff = (these_semis + rounding_error).round() as IntegerType - normal_semis;
+    // Saturating, so a count no specifier reaches is refused, not wrapped.
+    let diff = ((these_semis + rounding_error).round() as IntegerType).saturating_sub(normal_semis);
 
     if g_int.is_perfectable() {
-        specifier_at(&PERFECTABLE_SPECIFIERS, 4 + diff, "Perfect", diff)
+        specifier_at(
+            &PERFECTABLE_SPECIFIERS,
+            diff.saturating_add(4),
+            "Perfect",
+            diff,
+        )
     } else {
-        specifier_at(&MAJOR_SPECIFIERS, 5 + diff, "Major", diff)
+        specifier_at(&MAJOR_SPECIFIERS, diff.saturating_add(5), "Major", diff)
     }
 }
 
@@ -1338,6 +1344,14 @@ mod tests {
             [-3, -1, 0, 1, 2, 7].map(staff_distance_to_generic_number),
             [-4, -2, 1, 2, 3, 8]
         );
+    }
+
+    #[test]
+    fn semitones_too_many_for_any_quality_are_refused() {
+        use super::Interval;
+
+        assert!(Interval::from_generic_and_chromatic(-2, -2_147_483_647).is_err());
+        assert!(Interval::from_generic_and_chromatic(2, 2_147_483_647).is_err());
     }
 
     #[test]
