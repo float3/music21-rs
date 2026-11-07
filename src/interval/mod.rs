@@ -361,9 +361,10 @@ pub fn convert_semitone_to_specifier_generic_microtone(
         cents -= 100.0;
         whole += 1.0;
     }
-    let whole = whole as IntegerType;
-    let size = whole.abs() % 12;
-    let octave = whole.abs() / 12;
+    // Unsigned, as the least integer has no positive of its own.
+    let whole = (whole as IntegerType).unsigned_abs();
+    let size = (whole % 12) as IntegerType;
+    let octave = (whole / 12) as IntegerType;
     let (specifier, generic) = semitones_to_specifier_generic(size);
     (specifier, (generic + octave * 7) * dir_scale, cents)
 }
@@ -1375,6 +1376,17 @@ mod tests {
                 .transpose_pitch(&pitch)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn the_least_count_of_semitones_is_an_interval() {
+        use super::{Interval, convert_semitone_to_specifier_generic_microtone};
+        use crate::IntegerType;
+
+        let interval = Interval::from_semitones(IntegerType::MIN).unwrap();
+        assert_eq!(interval.semitones(), f64::from(IntegerType::MIN));
+        let (_, generic, _) = convert_semitone_to_specifier_generic_microtone(-1e300);
+        assert!(generic < 0);
     }
 
     #[test]
