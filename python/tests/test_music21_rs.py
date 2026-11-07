@@ -7518,6 +7518,23 @@ def test_routed_mei_notes_keep_their_ids():
     assert [line for line in found if "Slur" not in line] == []
 
 
+def test_routed_midi_notes_keep_their_tick():
+    """A note or chord read from MIDI through the crate says in its
+    editorial at which tick it started, as music21's reader writes it."""
+    pytest.importorskip("music21.stream")
+    paths = ("midi/testPrimitive/test05.mid", "midi/testPrimitive/test16.mid")
+    assert _routed_differences("midi", paths, ("editorial=",)) == []
+
+
+def test_routed_midi_hides_the_tempo_copied_to_later_parts():
+    """music21's MIDI reader copies the tempo onto every part and hides the
+    copies after the first; a score read through the crate hides them
+    too."""
+    pytest.importorskip("music21.stream")
+    paths = ("midi/testPrimitive/test02.mid", "midi/testPrimitive/test11.mid")
+    assert _routed_differences("midi", paths, ("MetronomeMark",)) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

@@ -46,6 +46,15 @@ struct Notation {
     hidden: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     id: Option<String>,
+    /// The tick a MIDI file starts it on, before it is quantized: what
+    /// music21 keeps as `editorial.midiTickStart`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    midi_tick_start: crate::display::Drawn<Option<u64>>,
+    /// How far quantizing moved its offset and its length: music21's
+    /// `editorial.offsetQuantizationError` and
+    /// `quarterLengthQuantizationError`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    quantization_errors: crate::display::Drawn<(Option<FloatType>, Option<FloatType>)>,
 }
 
 impl Note {
@@ -325,6 +334,29 @@ impl Note {
     /// Names the note, or takes its name away.
     pub fn set_id(&mut self, id: Option<String>) {
         self.notation.id = id;
+    }
+
+    /// The tick a MIDI file starts the note on: music21's
+    /// `editorial.midiTickStart`.
+    pub fn midi_tick_start(&self) -> Option<u64> {
+        self.notation.midi_tick_start.0
+    }
+
+    /// Says which tick a MIDI file starts the note on.
+    pub fn set_midi_tick_start(&mut self, tick: Option<u64>) {
+        self.notation.midi_tick_start.0 = tick;
+    }
+
+    /// How far quantizing moved the note's offset and its length, where it
+    /// moved them: music21's `editorial.offsetQuantizationError` and
+    /// `quarterLengthQuantizationError`.
+    pub fn quantization_errors(&self) -> (Option<FloatType>, Option<FloatType>) {
+        self.notation.quantization_errors.0
+    }
+
+    /// Says how far quantizing moved the note.
+    pub fn set_quantization_errors(&mut self, errors: (Option<FloatType>, Option<FloatType>)) {
+        self.notation.quantization_errors.0 = errors;
     }
 
     /// How the note is played: its accents, staccatos, bowings and

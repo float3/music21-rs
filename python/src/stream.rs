@@ -5352,15 +5352,22 @@ fn element_object_as<'py>(
             }
             made
         }
-        StreamElement::MetronomeMark(mark) => element_new(
-            py,
-            "music21.tempo",
-            "MetronomeMark",
-            MetronomeMark::wrap(mark.clone()),
-            holdable,
-        )?
-        .into_bound(py)
-        .into_any(),
+        StreamElement::MetronomeMark(mark) => {
+            let made = element_new(
+                py,
+                "music21.tempo",
+                "MetronomeMark",
+                MetronomeMark::wrap(mark.clone()),
+                holdable,
+            )?
+            .into_bound(py)
+            .into_any();
+            // On music21's own streams, whose marks are drawn with a style.
+            if holdable && mark.hidden() {
+                made.getattr("style")?.setattr("hideObjectOnPrint", true)?;
+            }
+            made
+        }
         StreamElement::Barline(barline) => {
             crate::bar::Barline::object(py, barline.clone())?.into_bound(py)
         }
@@ -5504,6 +5511,25 @@ fn carry_notation(
     };
     if hidden {
         made.getattr("style")?.setattr("hideObjectOnPrint", true)?;
+    }
+    // The tick a MIDI file started it on, and how far quantizing moved it,
+    // which music21's reader writes into the editorial in that order.
+    let (tick, (offset_error, length_error)) = match element {
+        StreamElement::Note(note) => (note.midi_tick_start(), note.quantization_errors()),
+        StreamElement::Chord(chord) => (chord.midi_tick_start(), chord.quantization_errors()),
+        _ => (None, (None, None)),
+    };
+    if whose == Whose::Music21 && (tick, offset_error, length_error) != (None, None, None) {
+        let editorial = made.getattr("editorial")?;
+        if let Some(tick) = tick {
+            editorial.setattr("midiTickStart", tick)?;
+        }
+        if let Some(error) = offset_error {
+            editorial.setattr("offsetQuantizationError", error)?;
+        }
+        if let Some(error) = length_error {
+            editorial.setattr("quarterLengthQuantizationError", error)?;
+        }
     }
     if !articulations.is_empty() {
         let held = PyList::empty(py);

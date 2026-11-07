@@ -515,6 +515,7 @@ fn track_to_part(
                     pitched.push(note);
                 }
                 let mut chord = Chord::new(pitched)?.with_duration(duration);
+                chord.set_midi_tick_start(Some(start));
                 // A chord's lyrics are kept on its first note.
                 if let (Some(lyric), Some(singer)) = (lyric, chord.notes_mut().first_mut()) {
                     singer.set_lyric(Some(lyric))?;
@@ -537,6 +538,7 @@ fn track_to_part(
                 let mut note = Note::from_pitch(Pitch::from_midi(IntegerType::from(event.first))?)
                     .with_duration(duration);
                 note.set_volume(Some(volume_of(event.second)));
+                note.set_midi_tick_start(Some(start));
                 if let Some(lyric) = lyric {
                     note.set_lyric(Some(lyric))?;
                 }
@@ -570,6 +572,7 @@ fn track_to_part(
                 let mut mark = mark.clone();
                 if !is_first {
                     mark.set_number_implicit(true);
+                    mark.set_hidden(true);
                 }
                 events.push(StreamEvent::new(event.offset(), mark));
             }

@@ -1188,6 +1188,20 @@ fn best_match(
     best.unwrap_or((0.0, 0.0, 1.0, target))
 }
 
+/// Which way and how far `target` was moved to the place `best_match`
+/// found for it: music21's `signedError`.
+fn signed_error(
+    target: FloatType,
+    found: (FloatType, FloatType, FloatType, FloatType),
+    zero_allowed: bool,
+) -> FloatType {
+    let (nearest, _, signed) = nearest_multiple(target, found.2);
+    if !zero_allowed && nearest == 0.0 {
+        return ((target - found.3) * 1e7).round_ties_even() / 1e7;
+    }
+    signed
+}
+
 /// The divisions of a quarter music21 quantizes to unless told otherwise:
 /// sixteenths and triplet eighths.
 pub const QUANTIZATION_DIVISORS: [u32; 2] = [4, 3];
@@ -1209,8 +1223,10 @@ pub fn quantize(stream: &mut Stream, divisors: &[u32]) -> Result<()> {
     for index in 0..events.len() {
         let original = events[index].offset();
         let sign = if original < 0.0 { -1.0 } else { 1.0 };
-        let offset = op_frac(best_match(original.abs(), divisors, true, 0.0).3 * sign);
+        let landing = best_match(original.abs(), divisors, true, 0.0);
+        let offset = op_frac(landing.3 * sign);
         let mut element = events[index].element().clone();
+        let offset_error = signed_error(original.abs(), landing, true) * sign;
 
         let is_grace = element.duration().is_some_and(Duration::is_grace);
         let length = element.quarter_length().max(0.0);
@@ -1222,11 +1238,25 @@ pub fn quantize(stream: &mut Stream, divisors: &[u32]) -> Result<()> {
             .map(|event| best_match(event.offset(), divisors, true, 0.0).3)
             .find(|landing| *landing > offset);
         let gap = ahead.map_or(0.0, |landing| op_frac(landing - offset));
-        let matched = best_match(length, divisors, zero_allowed, gap).3;
+        let fitted = best_match(length, divisors, zero_allowed, gap);
+        let matched = fitted.3;
         let is_stream = matches!(element, StreamElement::Stream(_));
+        let mut length_error = None;
         if !is_grace && !is_stream && !(matched == 0.0 && matches!(element, StreamElement::Rest(_)))
         {
             set_quarter_length(&mut element, op_frac(matched))?;
+            length_error = Some(signed_error(length, fitted, zero_allowed));
+        }
+        // How far each moved, which music21 writes into the editorial of
+        // what has one where it is not nought.
+        let errors = (
+            Some(offset_error).filter(|error| *error != 0.0),
+            length_error.filter(|error| *error != 0.0),
+        );
+        match &mut element {
+            StreamElement::Note(note) => note.set_quantization_errors(errors),
+            StreamElement::Chord(chord) => chord.set_quantization_errors(errors),
+            _ => {}
         }
         let dropped = matched == 0.0 && matches!(element, StreamElement::Rest(_));
         events[index] = StreamEvent::new(offset, element);

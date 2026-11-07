@@ -48,6 +48,15 @@ use quality::*;
 pub struct Chord {
     notes: Vec<Note>,
     duration: Option<Duration>,
+    /// The tick a MIDI file starts it on: music21's
+    /// `editorial.midiTickStart`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    midi_tick_start: crate::display::Drawn<Option<u64>>,
+    /// How far quantizing moved its offset and its length: music21's
+    /// `editorial.offsetQuantizationError` and
+    /// `quarterLengthQuantizationError`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    quantization_errors: crate::display::Drawn<(Option<FloatType>, Option<FloatType>)>,
     /// A volume for the chord as a whole, used when its notes carry none.
     #[cfg_attr(feature = "serde", serde(default))]
     volume: Option<Volume>,
@@ -206,6 +215,28 @@ impl Display for Chord {
 }
 
 impl Chord {
+    /// The tick a MIDI file starts the chord on: music21's
+    /// `editorial.midiTickStart`.
+    pub fn midi_tick_start(&self) -> Option<u64> {
+        self.midi_tick_start.0
+    }
+
+    /// Says which tick a MIDI file starts the chord on.
+    pub fn set_midi_tick_start(&mut self, tick: Option<u64>) {
+        self.midi_tick_start.0 = tick;
+    }
+
+    /// How far quantizing moved the chord's offset and its length, where
+    /// it moved them.
+    pub fn quantization_errors(&self) -> (Option<FloatType>, Option<FloatType>) {
+        self.quantization_errors.0
+    }
+
+    /// Says how far quantizing moved the chord.
+    pub fn set_quantization_errors(&mut self, errors: (Option<FloatType>, Option<FloatType>)) {
+        self.quantization_errors.0 = errors;
+    }
+
     /// Builds a chord from any supported note collection.
     ///
     /// Empty inputs are valid: pass `""`, an empty vector or slice, or
@@ -225,6 +256,8 @@ impl Chord {
         Self {
             notes: Vec::new(),
             duration: None,
+            midi_tick_start: crate::display::Drawn(None),
+            quantization_errors: crate::display::Drawn((None, None)),
             volume: None,
             color: None,
             notehead: Notehead::default(),
