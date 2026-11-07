@@ -381,18 +381,22 @@ fn transposition_of(element: &Xml) -> Result<Interval> {
                 .map_err(|_| mei_error(format!("{name} is no number: {text:?}"))),
         }
     };
-    let mut diatonic = read("trans.diat")?;
+    // Reckoned in i64, where the least i32 has a positive.
+    let mut diatonic = i64::from(read("trans.diat")?);
     let semitones = read("trans.semi")?;
+    let wide = i64::from(semitones);
     // A transposition of more than an octave written with its steps inside
     // one has the octaves put back.
-    if (semitones - diatonic).abs() > 5 * (semitones.abs() / 12 + 1) {
-        if semitones < 0 {
-            diatonic -= 7 * (semitones.abs() / 12);
-        } else if semitones > 0 {
-            diatonic += 7 * (semitones.abs() / 12);
+    if (wide - diatonic).abs() > 5 * (wide.abs() / 12 + 1) {
+        if wide < 0 {
+            diatonic -= 7 * (wide.abs() / 12);
+        } else if wide > 0 {
+            diatonic += 7 * (wide.abs() / 12);
         }
     }
     diatonic += diatonic.signum();
+    let diatonic = IntegerType::try_from(diatonic)
+        .map_err(|_| mei_error(format!("a transposition of {diatonic} steps is too far")))?;
     Interval::from_generic_and_chromatic(diatonic, semitones)
 }
 
@@ -1637,6 +1641,22 @@ mod tests {
             <staffDef n="2" clef.shape="F" clef.line="4"/>
             </staffGrp></scoreDef><section>{body}</section></score></music></mei>"#
         )
+    }
+
+    #[test]
+    fn a_transposition_past_any_interval_is_refused() {
+        for (steps, semitones) in [
+            ("2147483647", "0"),
+            ("-2147483648", "0"),
+            ("0", "-2147483648"),
+            ("-2147483648", "2147483647"),
+        ] {
+            let written = format!("<staffDef trans.diat=\"{steps}\" trans.semi=\"{semitones}\"/>");
+            let staff = Xml::parse(&written).unwrap();
+            assert!(transposition_of(&staff).is_err(), "{written}");
+        }
+        let staff = Xml::parse("<staffDef trans.diat=\"-1\" trans.semi=\"-2\"/>").unwrap();
+        assert_eq!(transposition_of(&staff).unwrap().directed_name(), "M-2");
     }
 
     #[test]
