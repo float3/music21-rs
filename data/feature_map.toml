@@ -1171,10 +1171,14 @@ elements = "events"
 getElementAfterElement = "element_after"
 getElementsByClass = "elements_of_class"
 getElementsByOffset = "elements_in_span"
+getElementById = "element_by_id"
 # The key and the metre a stream opens with are read at an offset, since
 # that is the question a crate stream answers.
 keySignature = "key_signature_at"
 timeSignature = "time_signature_at"
+# music21's ranged `measures(numberStart, numberEnd)`; the crate's
+# `measures` takes no range and answers every measure held.
+measures = "measures_between"
 pop = "remove_event"
 splitByClass = "split_by"
 
@@ -1184,27 +1188,20 @@ attachMelodicIntervals = "attaches an interval to each note; `melodic_intervals`
 beat = "where one element sits in its bar; `placed` answers it for every element at once, and `beat_and_measure_from_offset` for a point. The wheel's `Stream.placed()`, its own member, hands the crate's answers back with each element, its offset and its measure number"
 beatStr = "as `beat`"
 beatStrength = "as `beat`"
-clear = "empties a stream in place; `clone_empty` answers an empty one of the same kind"
-clef = "the clef a stream opens with; the clef in force is read by `in_force_before`, a crate stream keeping no clef of its own"
 containerInHierarchy = "needs the sites a crate stream does not keep"
-duration = "a crate stream has no `Duration` of its own; `highest_time` answers when the last thing in it ends"
 elementOffset = "asks where one object sits; a crate stream owns values rather than objects, so `events` gives each with its offset"
-first = "as `elementOffset`: `events` answers in order"
-getElementById = "an id on every element, which only a stream and a note carry here"
 getElementsByGroup = "as `addGroupForElements`"
 index = "as `elementOffset`"
 isAtEnd = "asks whether one object is kept at the end; a crate stream owns values rather than objects, and keeps only a measure's barlines there (`right_barline`). The wheel answers it for the right barline"
-last = "as `elementOffset`: `events` answers in order"
 makeImmutable = "music21's mutability machinery, which a value has no need of"
 makeMutable = "as `makeImmutable`"
-measure = "one measure by its number; `measures` answers them all, each carrying its own `number`"
 mergeAttributes = "what `clone_empty` carries over"
 plot = "plotting, which the crate leaves to its caller"
 recurseRepr = "music21's own text dump of a stream"
 remove = "takes a named object out; `retain_leaves` and `remove_event` take out by place or by test"
 replace = "swaps one object for another; `events_mut` reaches each in place"
 setDerivationMethod = "derivations, which a crate stream does not keep"
-setElementOffset = "as `elementOffset`: `events_mut` reaches each in place"
+setElementOffset = "moves one object; an event's offset is fixed once it is in a stream, so an element is moved by taking it out (`remove_event`) and inserting it again"
 show = "rendering, which the crate leaves to its caller"
 sort = "a crate stream keeps itself in music21's order as it is built: `insert` and `push` put each element where music21's sort would, by offset and then class, and `from_events` keeps the order it is given at one offset, which is where music21's priorities are handed in; there is nothing left to sort"
 sorted = "as `sort`"
@@ -1253,8 +1250,11 @@ rust = [
 note = "Every part of a piece together."
 facade = "Stream"
 
+[class.renames]
+measures = "measures_between"
+
 [class.excluded]
-measure = "one measure by its number; `measures` answers them all, each carrying its own `number`"
+measure = "a score of each part's measure of one number; `measures_between(n, Some(n))` answers it, `measure` reading only a stream's own measures"
 
 [[class]]
 python = "stream/base.py"
