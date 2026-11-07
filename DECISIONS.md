@@ -176,43 +176,38 @@ music21 installed, for code that never heard of music21-rs. this is what
 name kept where music21 keeps it, with music21's signatures, rather than
 where it would sit best in a package of its own.
 
-**the package keeps no sites, as the crate keeps none.** a stream of the
-package's holds objects, so it *could* write itself onto each of them and let
-an element answer `offset`, `activeSite` and `getContextByClass` as music21's
-does. it does not: where a thing stands is the stream's own to say, which is
-the crate's rule carried all the way out, and the members that need a site are
-refused or left out with the reason said -- `beatDuration`, and the context an
-element would walk outwards through. what a stream can answer *about* where
-something stands it does answer, by asking the crate and handing back its own
-objects: `beatAndMeasureFromOffset`, `getElementAtOrBefore`, `measures`
-collecting the clef and meter in force.
+**the package keeps music21's sites; the crate keeps none.** an element of
+the package's put into one of its streams answers `sites`, `activeSite`,
+`offset` (in its `activeSite`), `getOffsetBySite`, `getContextByClass`,
+`contextSites`, `next`, `previous`, the four beat members and
+`measureNumber` as music21's does. a stream writes a weak reference to
+itself into the element's row of one table as it puts the element in,
+and becomes its `activeSite` then and whenever it hands it out; a context
+search walks those rows outwards, measure to part to score, as music21's
+`contextSites` does, and asks each stream for the nearest element of a
+class from a list it keeps per class until what it holds changes -- not
+music21's tree, on which weak sites stalled on paper. a site counts only while its stream still holds the
+element, so no way of letting go has to remember to clear it. the crate
+stays value-based -- `Stream::placed` says where something stands with no
+reference back -- so the sites are the facade's alone, and an installed
+class reads music21's own members, put back on it by the install helper.
 
-*costs:* code written against music21 that reads `n.offset` or walks contexts
-has to ask the stream instead. the gain is that nothing holds a reference back
-to what holds it, so there are no cycles for the garbage collector to break
-and no object that is in two streams at two offsets.
-
-*debated 2026-10-30, kept.* the harm was narrower than the rule: an installed
-note in one of these streams read `offset` as 0.0 and `beat` as nan without
-complaint. so once the wheel is installed into music21 its readers hand back
-music21's own streams, whose sites answer, and standalone they hand back the
-package's own; music21 merely being importable decides nothing. building
-music21's containers costs about 3.8 times the read on a large score, still
-under music21's own parser. weak sites in the package's streams were tried
-on paper and stall on music21's tree walk, which a context search needs.
-
-*debated 2026-10-31.* a member that needs a site is refused, not absent:
-`offset`, `activeSite`, the four beat members and `measureNumber` raise an
-`AttributeError` that says why and names `elementOffset`, `placed()` and
-`install_into_music21()`. it is a `__getattr__`, never a getter, so an
-installed class still reads music21's own property. `Stream.placed()` is
-the package's own answer: one record per element, built from the crate's
-`Stream::placed`. a measure's repr names its number, as music21's does,
-without the offset, which is the part's to say. snapshots of the offset at
-hand-out and weak back-references were weighed and rejected: a snapshot is
-wrong after the first edit, and a back-reference is the site this rule
-refuses. *costs:* `placed()` is a member music21 does not have, and a
-stream's barlines and spanners get no record from it.
+*debated 2026-11-07:* reversed by the maintainer: code written for
+music21 must run on the package alone (goal: anything built on music21 can
+run on music21-rs), and such code reads `n.offset`, `n.beat` and
+`n.measureNumber` and walks contexts; a refusal that names `placed()` is
+a rewrite every such caller would have to make. *costs:* a weak reference
+and a table row for every element ever put in a stream, and a lookup in
+that table on every put and every element handed out; every element class
+carries `weakref`; a stream built in Rust is a site only once it is a
+Python object, so each place that builds one has to make it one; the
+streams standing in for music21's iterators (`notes`,
+`getElementsByClass`, `getElementsByOffset`) are no sites of what they
+hold and hand it out as the stream they were picked from's; there are
+references back to what holds an element, though weak ones, and one
+object can stand in two streams at two offsets. derivations are still not
+kept, so a search does not follow one, a spanner is no site of what it
+spans, and the search's sort leaves out music21's `isNotGrace`.
 
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
@@ -521,9 +516,52 @@ directions were argued from the report and the code: coverage gaps,
 stream speed, committed seeded fuzzers, a targeted port
 (`MultiMeasureRest`) and Rust-user hygiene, in that order. Element-level
 `beat` was rejected again: the package keeps no sites, and
-`Stream.placed()` answers it.
+`Stream.placed()` answers it -- since reversed (2026-11-07): the package
+keeps music21's sites.
 
 ## decisions made and then unmade
+
+**the package keeps no sites, as the crate keeps none** (2026-10-30 to
+2026-11-07; reversed, see "the package keeps music21's sites"). as it
+stood:
+
+> **the package keeps no sites, as the crate keeps none.** a stream of the
+> package's holds objects, so it *could* write itself onto each of them and let
+> an element answer `offset`, `activeSite` and `getContextByClass` as music21's
+> does. it does not: where a thing stands is the stream's own to say, which is
+> the crate's rule carried all the way out, and the members that need a site are
+> refused or left out with the reason said -- `beatDuration`, and the context an
+> element would walk outwards through. what a stream can answer *about* where
+> something stands it does answer, by asking the crate and handing back its own
+> objects: `beatAndMeasureFromOffset`, `getElementAtOrBefore`, `measures`
+> collecting the clef and meter in force.
+>
+> *costs:* code written against music21 that reads `n.offset` or walks contexts
+> has to ask the stream instead. the gain is that nothing holds a reference back
+> to what holds it, so there are no cycles for the garbage collector to break
+> and no object that is in two streams at two offsets.
+>
+> *debated 2026-10-30, kept.* the harm was narrower than the rule: an installed
+> note in one of these streams read `offset` as 0.0 and `beat` as nan without
+> complaint. so once the wheel is installed into music21 its readers hand back
+> music21's own streams, whose sites answer, and standalone they hand back the
+> package's own; music21 merely being importable decides nothing. building
+> music21's containers costs about 3.8 times the read on a large score, still
+> under music21's own parser. weak sites in the package's streams were tried
+> on paper and stall on music21's tree walk, which a context search needs.
+>
+> *debated 2026-10-31.* a member that needs a site is refused, not absent:
+> `offset`, `activeSite`, the four beat members and `measureNumber` raise an
+> `AttributeError` that says why and names `elementOffset`, `placed()` and
+> `install_into_music21()`. it is a `__getattr__`, never a getter, so an
+> installed class still reads music21's own property. `Stream.placed()` is
+> the package's own answer: one record per element, built from the crate's
+> `Stream::placed`. a measure's repr names its number, as music21's does,
+> without the offset, which is the part's to say. snapshots of the offset at
+> hand-out and weak back-references were weighed and rejected: a snapshot is
+> wrong after the first edit, and a back-reference is the site this rule
+> refuses. *costs:* `placed()` is a member music21 does not have, and a
+> stream's barlines and spanners get no record from it.
 
 **deciding an installed object's half once per class.** the install helper
 asked `issubclass` on every object it built; deciding it when the class is
