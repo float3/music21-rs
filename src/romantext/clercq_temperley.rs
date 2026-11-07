@@ -830,6 +830,8 @@ impl<'a> Expansion<'a> {
                     self.rules[rule].text()
                 ))
             })?;
+        // Every time through makes a measure at least.
+        self.make_room(repeats)?;
         for _ in 0..repeats {
             let meter = self.states[rule].meter.clone();
             let key = self.states[rule].key.clone();
@@ -887,7 +889,7 @@ impl<'a> Expansion<'a> {
             // The group said nothing but a key or a meter.
             return Ok(());
         }
-        self.make_room()?;
+        self.make_room(1)?;
         let measure = self.built.len();
         self.built.push(Built::default());
         let meter = self.states[rule].meter.clone();
@@ -934,8 +936,8 @@ impl<'a> Expansion<'a> {
         places.push(measure);
         // A measure played more than once is copied, the copies saying
         // nothing about the key or the meter.
+        self.make_room(repeats.saturating_sub(1))?;
         for _ in 1..repeats {
-            self.make_room()?;
             let mut copy = self.built[measure].clone();
             copy.meter = None;
             copy.key = None;
@@ -996,9 +998,9 @@ impl<'a> Expansion<'a> {
     }
 
     /// An error once the song has made [`MAX_MEASURES`] measures, the most
-    /// the crate makes for a stream.
-    fn make_room(&self) -> Result<()> {
-        if self.built.len() >= MAX_MEASURES {
+    /// the crate makes for a stream, or would with `more` to come.
+    fn make_room(&self, more: usize) -> Result<()> {
+        if self.built.len().saturating_add(more) > MAX_MEASURES {
             return Err(ct_error(format!(
                 "the song would make more than {MAX_MEASURES} measures"
             )));
@@ -1251,5 +1253,15 @@ mod tests {
         assert!(from_clercq_temperley("S: I |*200000\n").is_err());
         assert!(from_clercq_temperley("Vr: I |*1000\nS: $Vr*1000\n").is_err());
         assert!(from_clercq_temperley("Vr: I |*100\nS: $Vr*100\n").is_ok());
+    }
+
+    /// Repeats too many for the limit are refused before any is made, as
+    /// making the first hundred thousand took seconds.
+    #[test]
+    fn repeats_past_the_measure_limit_are_refused_at_once() {
+        let started = std::time::Instant::now();
+        assert!(from_clercq_temperley("Vr: I | V |\nS: $Vr*9223372036854775807\n").is_err());
+        assert!(from_clercq_temperley("S: I |*9223372036854775807\n").is_err());
+        assert!(started.elapsed() < std::time::Duration::from_millis(500));
     }
 }
