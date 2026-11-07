@@ -385,8 +385,50 @@ pub(crate) fn installed_class<'py>(
     module: &str,
     name: &str,
 ) -> Option<Bound<'py, PyAny>> {
-    let installed = built_helper(py)?.getattr("installed").ok()?;
-    installed.get_item((module, name)).ok()
+    let helper = built_helper(py)?;
+    if let Some(found) = known_installed()
+        .get(module)
+        .and_then(|names| names.get(name))
+    {
+        return found.as_ref().map(|class| class.bind(py).clone());
+    }
+    let found = helper
+        .getattr("installed")
+        .ok()?
+        .get_item((module, name))
+        .ok();
+    known_installed()
+        .entry(module.to_owned())
+        .or_default()
+        .insert(
+            name.to_owned(),
+            found.as_ref().map(|class| class.clone().unbind()),
+        );
+    found
+}
+
+/// What [`installed_class`] has found, by module and name, absent ones
+/// included.
+///
+/// Every object a facade hands out asks, and asking the helper's dictionary
+/// builds two strings, hashes them and a tuple of them each time: a tenth of
+/// what a chord's notes cost. Installing a class forgets all of it.
+static INSTALLED_BY_NAME: std::sync::LazyLock<std::sync::Mutex<InstalledByName>> =
+    std::sync::LazyLock::new(Default::default);
+
+type InstalledByName =
+    std::collections::HashMap<String, std::collections::HashMap<String, Option<Py<PyAny>>>>;
+
+/// The table [`INSTALLED_BY_NAME`] holds, locked.
+fn known_installed() -> std::sync::MutexGuard<'static, InstalledByName> {
+    INSTALLED_BY_NAME
+        .lock()
+        .unwrap_or_else(|held| held.into_inner())
+}
+
+/// Forgets what [`installed_class`] found, since a class has been installed.
+fn forget_installed() {
+    known_installed().clear();
 }
 
 /// A class music21's own streams will hold for this name, where nothing
@@ -818,8 +860,14 @@ pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<
     let Some(helper) = built_helper(py) else {
         return class.getattr("__new__")?.call1((class,));
     };
-    helper.getattr("blank")?.call1((class,))
+    BLANK
+        .get_or_try_init(py, || helper.getattr("blank").map(Bound::unbind))?
+        .bind(py)
+        .call1((class,))
 }
+
+/// The helper's `blank`, looked up once rather than on every object built.
+static BLANK: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
 
 /// The Python half of installing a facade class into music21.
 ///
@@ -1328,6 +1376,7 @@ pub fn class_to_install<'py>(
     helper
         .getattr("installed")?
         .set_item((module.name()?, name), &built)?;
+    forget_installed();
     // Each class installed makes every other one a little more itself: what
     // `getElementsByClass` matches on has to name the installed classes, not
     // only the ones they replaced.
