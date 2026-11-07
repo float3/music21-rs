@@ -2,6 +2,24 @@
 
 `harte` 0.12.0 depends on this release.
 
+## breaking changes
+
+- **A reader's error says what kind of trouble it is and where.**
+  `Error::Abc`, `Humdrum`, `Xml`, `Mei`, `RomanText`, `Capella`,
+  `MuseData`, `Noteworthy`, `MuseScore`, `Midi` and `MusicXml` hold a
+  `Box<FormatError>` where they held a `String`: its `kind` (a
+  `FormatErrorKind`: `Malformed`, `Invalid`, `Unsupported`, `TooLarge`,
+  `NotFound`, `External`), its `position` (a `Position` of line, column,
+  measure, part, track and tick, whichever the reader knew) and its
+  `message`, the text the `String` held. `Error::format_error()` and
+  `Error::position()` ask for them; both types are `non_exhaustive`.
+  `Display` reads as before, and the wheel raises the same exceptions
+  with the same messages. Positions are given for XML (line and column,
+  under MusicXML, MEI, Capella and MuseScore too), MusicXML (measure and
+  part), Humdrum (line), MIDI (track and tick) and RomanText and DCML
+  (measure); limits the fuzzer met are `TooLarge`. Code that matched
+  `Error::Abc(message)` reads `error.message`.
+
 ## added
 
 - **The wheel's elements keep music21's sites.** Put into one of the

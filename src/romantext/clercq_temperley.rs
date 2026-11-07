@@ -25,7 +25,7 @@
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::key::{Key, convert_key_string_to_music21_key_string};
 use crate::makenotation::{MAX_MEASURES, op_frac};
 use crate::metadata::{Metadata, MetadataValue};
@@ -588,7 +588,7 @@ fn bracketed(atom: &str) -> &str {
 /// An error in a song, which music21 raises as a `CTSongException` or a
 /// `CTRuleException`.
 fn ct_error(said: impl Into<String>) -> Error {
-    Error::RomanText(said.into())
+    Error::roman_text(said.into())
 }
 
 /// The rule's text split at every barline, the barlines kept: music21's
@@ -765,9 +765,10 @@ impl<'a> Expansion<'a> {
             )));
         }
         if self.expanding.len() >= MAX_DEPTH {
-            return Err(ct_error(format!(
-                "rules are nested more than {MAX_DEPTH} deep"
-            )));
+            return Err(
+                ct_error(format!("rules are nested more than {MAX_DEPTH} deep"))
+                    .of_kind(FormatErrorKind::TooLarge),
+            );
         }
         self.expanding.push(rule);
         let expanded = self.expand_groups(rule, meter, key);
@@ -1007,7 +1008,8 @@ impl<'a> Expansion<'a> {
         if self.built.len().saturating_add(more) > MAX_MEASURES {
             return Err(ct_error(format!(
                 "the song would make more than {MAX_MEASURES} measures"
-            )));
+            ))
+            .of_kind(FormatErrorKind::TooLarge));
         }
         Ok(())
     }

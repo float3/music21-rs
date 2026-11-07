@@ -14,7 +14,7 @@ use crate::chordsymbol::ChordSymbol;
 use crate::clef::Clef;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, Tuplet};
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::interval::Interval;
 use crate::key::KeySignature;
 use crate::makenotation::split_element;
@@ -29,7 +29,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
 fn abc_error(message: impl Into<String>) -> Error {
-    Error::Abc(message.into())
+    Error::abc(message.into())
 }
 
 /// The ABC version a file is read as where it names none: music21's
@@ -630,7 +630,7 @@ impl AbcNote {
         // A note music21 can find no pitch in is read as a C.
         let (name, display) = match self.pitch_name(&rest, forced_key) {
             Ok(read) => read,
-            Err(Error::Abc(message)) if message.starts_with("cannot find any pitch") => {
+            Err(Error::Abc(read)) if read.message.starts_with("cannot find any pitch") => {
                 (Some("C".to_string()), Some(false))
             }
             Err(error) => return Err(error),
@@ -2318,7 +2318,8 @@ fn extract_reference_number(text: &str, number: IntegerType) -> Result<String> {
     if collected.is_empty() {
         return Err(abc_error(format!(
             "cannot find requested reference number in source file: {number}"
-        )));
+        ))
+        .of_kind(FormatErrorKind::NotFound));
     }
     Ok(collected.join("\n"))
 }

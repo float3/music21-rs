@@ -13,7 +13,8 @@ use std::collections::HashMap;
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
-use crate::error::{Error, Result};
+use crate::error::FormatErrorKind::{Malformed, Unsupported};
+use crate::error::{Error, Position, Result};
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::key::KeySignature;
 use crate::makenotation::{
@@ -29,7 +30,7 @@ use crate::tempo::MetronomeMark;
 use crate::volume::Volume;
 
 fn midi_error(message: impl Into<String>) -> Error {
-    Error::Midi(message.into())
+    Error::midi(message.into())
 }
 
 /// What an event is, as far as a score cares.
@@ -80,7 +81,7 @@ const KEY_SIGNATURE: u8 = 0x59;
 /// A number of so many bytes, high byte first, and what follows it.
 fn number(bytes: &[u8], length: usize) -> Result<(u64, &[u8])> {
     if bytes.len() < length {
-        return Err(midi_error("the MIDI data ends inside a number"));
+        return Err(midi_error("the MIDI data ends inside a number").of_kind(Malformed));
     }
     let value = bytes[..length]
         .iter()
@@ -209,35 +210,39 @@ fn track_events(mut data: &[u8]) -> Track {
 /// `MidiFile.readstr`.
 fn read_file(bytes: &[u8]) -> Result<(Vec<Track>, FloatType)> {
     if bytes.get(..4) != Some(b"MThd") {
-        return Err(midi_error("badly formatted midi bytes: no MThd header"));
+        return Err(midi_error("badly formatted midi bytes: no MThd header").of_kind(Malformed));
     }
     let (length, rest) = number(&bytes[4..], 4)?;
     if length != 6 {
-        return Err(midi_error("badly formatted midi bytes"));
+        return Err(midi_error("badly formatted midi bytes").of_kind(Malformed));
     }
     let (format, rest) = number(rest, 2)?;
     if format > 1 {
-        return Err(midi_error(format!(
-            "cannot handle midi file format: {format}"
-        )));
+        return Err(
+            midi_error(format!("cannot handle midi file format: {format}")).of_kind(Unsupported),
+        );
     }
     let (count, rest) = number(rest, 2)?;
     let (division, mut rest) = number(rest, 2)?;
     if division & 0x8000 != 0 {
         return Err(midi_error(
             "a file timed in frames a second, not ticks a quarter, is not read",
-        ));
+        )
+        .of_kind(Unsupported));
     }
     let ticks = (division & 0x7FFF) as FloatType;
     if ticks == 0.0 {
         return Err(midi_error("a quarter of no ticks"));
     }
     let mut tracks = Vec::new();
-    for _ in 0..count {
+    for index in 0..count as usize {
+        let here = || Position::track(index);
         if rest.get(..4) != Some(b"MTrk") {
-            return Err(midi_error("badly formed midi string: missing leading MTrk"));
+            return Err(midi_error("badly formed midi string: missing leading MTrk")
+                .of_kind(Malformed)
+                .placed(here));
         }
-        let (length, after) = number(&rest[4..], 4)?;
+        let (length, after) = number(&rest[4..], 4).map_err(|error| error.placed(here))?;
         let length = (length as usize).min(after.len());
         tracks.push(track_events(&after[..length]));
         rest = &after[length..];
@@ -339,11 +344,12 @@ fn meta_of(events: &[(u64, Event)]) -> Result<Vec<(u64, StreamElement)>> {
     let mut found = Vec::new();
     let mut last_program: Option<u8> = None;
     for (time, event) in events {
+        let here = || Position::default().at_tick(*time);
         let element: Option<StreamElement> = match event.kind {
             Kind::Meta(TIME_SIGNATURE) if event.data.len() >= 2 => {
-                let denominator = 2_u32
-                    .checked_pow(u32::from(event.data[1]))
-                    .ok_or_else(|| midi_error("a time signature over too large a value"))?;
+                let denominator = 2_u32.checked_pow(u32::from(event.data[1])).ok_or_else(|| {
+                    midi_error("a time signature over too large a value").placed(here)
+                })?;
                 Some(TimeSignature::new(u32::from(event.data[0]), denominator)?.into())
             }
             Kind::Meta(KEY_SIGNATURE) if event.data.len() >= 2 => {
@@ -358,7 +364,7 @@ fn meta_of(events: &[(u64, Event)]) -> Result<Vec<(u64, StreamElement)>> {
             Kind::Meta(SET_TEMPO) if event.data.len() >= 3 => {
                 let (micros, _) = number(&event.data, 3)?;
                 if micros == 0 {
-                    return Err(midi_error("a tempo of no time to the quarter"));
+                    return Err(midi_error("a tempo of no time to the quarter").placed(here));
                 }
                 let bpm = (60_000_000.0 / micros as FloatType * 100.0).round_ties_even() / 100.0;
                 Some(MetronomeMark::new(bpm).into())
@@ -622,17 +628,19 @@ pub fn from_midi(bytes: &[u8]) -> Result<Stream> {
     let mut conductor: Vec<StreamEvent> = Vec::new();
     let mut parts: Vec<StreamEvent> = Vec::new();
     let mut seen_notes = false;
-    for track in &tracks {
+    for (index, track) in tracks.iter().enumerate() {
+        let here = |error: Error| error.placed(|| Position::track(index));
         let has_notes = track.iter().any(|(_, event)| event.is_note_on());
         if has_notes {
             let is_first = !seen_notes;
             seen_notes = true;
-            let (part, _) = track_to_part(track, per_quarter, &conductor, is_first)?;
+            let (part, _) =
+                track_to_part(track, per_quarter, &conductor, is_first).map_err(here)?;
             parts.push(StreamEvent::new(0.0, part));
         } else {
             // A track with no notes adds to the conductor, which is
             // quantized again as a whole each time.
-            let (more, _) = track_to_part(track, per_quarter, &[], false)?;
+            let (more, _) = track_to_part(track, per_quarter, &[], false).map_err(here)?;
             conductor.extend(more.events().iter().cloned());
             let mut all = Stream::new().with_events(sorted_events(conductor));
             let mut events = all.events().to_vec();
@@ -664,6 +672,29 @@ mod tests {
         bytes.extend((track.len() as u32).to_be_bytes());
         bytes.extend(track);
         bytes
+    }
+
+    #[test]
+    fn a_refusal_names_its_track_and_tick() {
+        // A second track promised and not there.
+        let mut bytes = file(&[(0, 0x90, 60, 80), (96, 0x80, 60, 0)]);
+        bytes[11] = 2;
+        let error = from_midi(&bytes).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Midi error: badly formed midi string: missing leading MTrk"
+        );
+        assert_eq!(error.format_error().unwrap().kind, Malformed);
+        assert_eq!(error.position(), Some(&Position::track(1)));
+
+        // A tempo of no time to the quarter, a beat in.
+        let mut track: Vec<u8> = vec![0, 0x90, 60, 80, 96, 0x80, 60, 0];
+        track.extend([0, 0xFF, 0x51, 3, 0, 0, 0, 0, 0xFF, 0x2F, 0]);
+        let mut bytes = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk".to_vec();
+        bytes.extend((track.len() as u32).to_be_bytes());
+        bytes.extend(track);
+        let error = from_midi(&bytes).unwrap_err();
+        assert_eq!(error.position(), Some(&Position::track(0).at_tick(96)));
     }
 
     #[test]

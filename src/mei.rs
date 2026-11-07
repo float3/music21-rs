@@ -15,7 +15,7 @@ use crate::chord::Chord;
 use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Tuplet, TupletType};
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::expressions::{Expression, Ornament, OrnamentKind};
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::interval::Interval;
@@ -32,7 +32,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::xml::Xml;
 
 fn mei_error(message: impl Into<String>) -> Error {
-    Error::Mei(message.into())
+    Error::mei(message.into())
 }
 
 /// A tag with any namespace prefix taken off.
@@ -1523,7 +1523,15 @@ fn metadata_of(root: &Xml) -> Metadata {
 /// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_mei(document: &str) -> Result<Stream> {
-    let root = Xml::parse(document).map_err(|_| mei_error("MEI document is not valid XML."))?;
+    // music21's words for it, at the place the XML reader stopped.
+    let root = Xml::parse(document).map_err(|read| {
+        let refused =
+            mei_error("MEI document is not valid XML.").of_kind(FormatErrorKind::Malformed);
+        match read.position() {
+            Some(position) => refused.placed(|| position.clone()),
+            None => refused,
+        }
+    })?;
     if local(&root.tag) != "mei" {
         return Err(mei_error(format!(
             "Root element should be <mei> in the MEI namespace, not <{}>.",

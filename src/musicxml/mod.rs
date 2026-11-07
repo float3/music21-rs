@@ -194,7 +194,7 @@ fn holds_sounding_pitch(stream: &Stream) -> bool {
 }
 
 fn export_error(message: impl Into<String>) -> Error {
-    Error::MusicXml(message.into())
+    Error::music_xml(message.into())
 }
 
 // ------------------------------------------------------------------ score
@@ -4725,7 +4725,7 @@ mod tests {
             with_measure(|exporter| exporter.note_element(&note, 0, None, None).unwrap_err());
         assert_eq!(
             error,
-            Error::MusicXml(
+            Error::music_xml(
                 "Cannot convert complex durations to MusicXML. Try exporting with \
                  makeNotation=True or manually running splitAtDurations()"
                     .to_string()
@@ -4787,7 +4787,7 @@ mod tests {
         beam.set_direction(None);
         assert_eq!(
             beam_element(&beam).unwrap_err(),
-            Error::MusicXml(
+            Error::music_xml(
                 "partial beam defined without a proper direction set (set to None)".to_string()
             )
         );
@@ -5131,7 +5131,7 @@ mod tests {
         score.push(part);
         assert_eq!(
             to_musicxml(&score, &ExportOptions::default()).unwrap_err(),
-            Error::MusicXml(
+            Error::music_xml(
                 "Cannot export with makeNotation=False if there are no measures".to_string()
             )
         );

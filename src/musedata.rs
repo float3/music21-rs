@@ -33,7 +33,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::TempoText;
 
 fn error(message: impl Into<String>) -> Error {
-    Error::MuseData(message.into())
+    Error::muse_data(message.into())
 }
 
 /// Reads the files of a MuseData work, in order, into a score, as music21's

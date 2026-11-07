@@ -7,7 +7,7 @@
 //! and the only text a MusicXML reader asks for. The prolog, the doctype,
 //! comments and processing instructions are passed over.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 
 /// One element of a parsed document.
 #[derive(Clone, Debug, Default)]
@@ -114,11 +114,23 @@ struct Reader<'a> {
     at: usize,
 }
 
-fn malformed(what: impl std::fmt::Display) -> Error {
-    Error::Xml(format!("the document is not well-formed XML: {what}"))
-}
-
 impl Reader<'_> {
+    /// The document refused as not well-formed, at the line and column the
+    /// reader stands on.
+    fn malformed(&self, what: impl std::fmt::Display) -> Error {
+        let before = &self.text[..self.at];
+        let line = before.matches('\n').count() + 1;
+        let column = before
+            .rsplit_once('\n')
+            .map_or(before, |(_, last)| last)
+            .chars()
+            .count()
+            + 1;
+        Error::xml(format!("the document is not well-formed XML: {what}"))
+            .of_kind(FormatErrorKind::Malformed)
+            .placed(|| Position::line(line).with_column(column))
+    }
+
     fn rest(&self) -> &str {
         &self.text[self.at..]
     }
@@ -130,7 +142,7 @@ impl Reader<'_> {
                 self.at += found + end.len();
                 Ok(())
             }
-            None => Err(malformed(format!("no `{end}` closes what was opened"))),
+            None => Err(self.malformed(format!("no `{end}` closes what was opened"))),
         }
     }
 
@@ -148,7 +160,7 @@ impl Reader<'_> {
                 _ => {}
             }
         }
-        Err(malformed("the doctype is not closed"))
+        Err(self.malformed("the doctype is not closed"))
     }
 
     /// Skips whitespace, comments, processing instructions and the doctype,
@@ -177,7 +189,7 @@ impl Reader<'_> {
             })
             .unwrap_or(rest.len());
         if end == 0 {
-            return Err(malformed("a name was expected"));
+            return Err(self.malformed("a name was expected"));
         }
         let name = rest[..end].to_string();
         self.at += end;
@@ -192,12 +204,12 @@ impl Reader<'_> {
     /// One element, the reader standing on its `<`, nested `depth` deep.
     fn element(&mut self, depth: usize) -> Result<Xml> {
         if depth > MAX_DEPTH {
-            return Err(malformed(format!(
-                "elements are nested more than {MAX_DEPTH} deep"
-            )));
+            return Err(self
+                .malformed(format!("elements are nested more than {MAX_DEPTH} deep"))
+                .of_kind(FormatErrorKind::TooLarge));
         }
         if !self.rest().starts_with('<') {
-            return Err(malformed("an element was expected"));
+            return Err(self.malformed("an element was expected"));
         }
         self.at += 1;
         let mut element = Xml {
@@ -218,7 +230,7 @@ impl Reader<'_> {
             let name = self.name()?;
             self.skip_space();
             if !self.rest().starts_with('=') {
-                return Err(malformed(format!("the attribute {name} has no value")));
+                return Err(self.malformed(format!("the attribute {name} has no value")));
             }
             self.at += 1;
             self.skip_space();
@@ -227,12 +239,12 @@ impl Reader<'_> {
                 .chars()
                 .next()
                 .filter(|quote| matches!(quote, '"' | '\''))
-                .ok_or_else(|| malformed(format!("the attribute {name} is not quoted")))?;
+                .ok_or_else(|| self.malformed(format!("the attribute {name} is not quoted")))?;
             self.at += 1;
             let end = self
                 .rest()
                 .find(quote)
-                .ok_or_else(|| malformed(format!("the attribute {name} is not closed")))?;
+                .ok_or_else(|| self.malformed(format!("the attribute {name} is not closed")))?;
             let value = unescape(&self.rest()[..end]);
             self.at += end + 1;
             element.attributes.push((name, value));
@@ -253,7 +265,7 @@ impl Reader<'_> {
         loop {
             let rest = self.rest();
             let Some(open) = rest.find('<') else {
-                return Err(malformed(format!("<{}> is not closed", element.tag)));
+                return Err(self.malformed(format!("<{}> is not closed", element.tag)));
             };
             text.push_str(&unescape(&rest[..open]));
             self.at += open;
@@ -269,7 +281,7 @@ impl Reader<'_> {
                 let end = self
                     .rest()
                     .find("]]>")
-                    .ok_or_else(|| malformed("a CDATA section is not closed"))?;
+                    .ok_or_else(|| self.malformed("a CDATA section is not closed"))?;
                 text.push_str(&self.rest()[..end]);
                 self.at += end + 3;
             } else if rest.starts_with("<?") {
@@ -372,6 +384,21 @@ mod tests {
     fn a_document_that_does_not_close_is_refused() {
         assert!(Xml::parse("<a><b></a").is_err());
         assert!(Xml::parse("not xml").is_err());
+    }
+
+    #[test]
+    fn a_refusal_says_where_the_reader_stood() {
+        let error = Xml::parse("<a>\n  <b x=1/>\n</a>").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "XML error: the document is not well-formed XML: the attribute x is not quoted"
+        );
+        let said = error.format_error().unwrap();
+        assert_eq!(said.kind, FormatErrorKind::Malformed);
+        assert_eq!(said.position, Some(Position::line(2).with_column(8)));
+
+        let deep = Xml::parse(&nested(MAX_DEPTH + 1)).unwrap_err();
+        assert_eq!(deep.format_error().unwrap().kind, FormatErrorKind::TooLarge);
     }
 
     fn nested(depth: usize) -> String {

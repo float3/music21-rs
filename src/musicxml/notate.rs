@@ -49,7 +49,7 @@ pub(super) fn notated(stream: &Stream) -> Result<Stream> {
         StreamKind::Part | StreamKind::PartStaff => from_part(stream)?,
         StreamKind::Stream => from_stream(stream)?,
         kind => {
-            return Err(Error::MusicXml(format!(
+            return Err(Error::music_xml(format!(
                 "making the notation of a lone {kind} is not supported"
             )));
         }

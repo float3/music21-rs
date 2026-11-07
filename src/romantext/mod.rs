@@ -22,7 +22,7 @@ use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::key::{Key, KeySignature, convert_key_string_to_music21_key_string};
 use crate::makenotation::{MAX_MEASURES, make_accidentals, make_beams, op_frac, sorted_events};
 use crate::metadata::{Metadata, MetadataValue};
@@ -33,7 +33,7 @@ use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 fn roman_text_error(message: impl Into<String>) -> Error {
-    Error::RomanText(message.into())
+    Error::roman_text(message.into())
 }
 
 /// One word of a measure line: music21's `RTAtom` and its kinds.
@@ -620,7 +620,9 @@ impl Translator {
                 return Err(roman_text_error(format!(
                     "measure {} would make more than {MAX_MEASURES} measures",
                     numbers[0]
-                )));
+                ))
+                .of_kind(FormatErrorKind::TooLarge)
+                .placed(|| Position::measure(numbers[0].to_string())));
             }
             // Measures the file leaves out hold the last chord still.
             for number in self.last_measure_number + 1..numbers[0] {
@@ -1531,7 +1533,10 @@ mod tests {
     #[test]
     fn a_gap_of_more_measures_than_a_stream_takes_is_refused() {
         let gap = crate::makenotation::MAX_MEASURES + 2;
-        assert!(from_roman_text(&format!("m1 C: I\nm{gap} V\n")).is_err());
+        let refused = from_roman_text(&format!("m1 C: I\nm{gap} V\n")).unwrap_err();
+        let said = refused.format_error().unwrap();
+        assert_eq!(said.kind, FormatErrorKind::TooLarge);
+        assert_eq!(said.position, Some(Position::measure(gap.to_string())));
         assert!(from_roman_text("m1 C: I\nm1000 V\n").is_ok());
     }
 }

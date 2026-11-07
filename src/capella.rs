@@ -22,7 +22,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::xml::Xml;
 
 fn error(message: impl Into<String>) -> Error {
-    Error::Capella(message.into())
+    Error::capella(message.into())
 }
 
 /// What a staff holds, each element at its offset.

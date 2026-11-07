@@ -19,7 +19,7 @@ use crate::duration::{
     Duration, DurationType, Grace, Tuplet, TupletBracket, TupletShow, TupletType,
 };
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::expressions::{
     ArpeggioType, Expression, Fermata, FermataType, Ornament, OrnamentDelay, OrnamentKind,
     RehearsalMark, TextExpression,
@@ -76,7 +76,7 @@ const ENCLOSURES: [&str; 15] = [
 const NO_STAFF: i32 = 0;
 
 fn import_error(message: impl Into<String>) -> Error {
-    Error::MusicXml(message.into())
+    Error::music_xml(message.into())
 }
 
 /// Reads a MusicXML document -- the text of a `.musicxml` file, or of the
@@ -104,7 +104,8 @@ pub fn from_musicxml(document: &str) -> Result<Stream> {
         return Err(import_error(format!(
             "only a score-partwise document can be read, not <{}>",
             root.tag
-        )));
+        ))
+        .of_kind(FormatErrorKind::Unsupported));
     }
     Importer::default().score(&root)
 }
@@ -873,7 +874,13 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let part = self.part;
         let mut last_forward: Option<(usize, bool)> = None;
         for measure in part.find_all("measure") {
-            last_forward = self.measure(measure)?;
+            // What goes wrong inside a measure says which one, by the number
+            // the document gives it, and in which part.
+            last_forward = self.measure(measure).map_err(|error| {
+                error.placed(|| {
+                    Position::measure(measure.get("number").unwrap_or("")).in_part(&self.id)
+                })
+            })?;
         }
         self.remove_finale_ending_rest(last_forward);
         self.end_multi_rest();
@@ -4123,6 +4130,26 @@ mod tests {
                     <display-octave>2147483647</display-octave></rest>\
                     <duration>1</duration><type>quarter</type></note>";
         assert!(from_musicxml(&score(&format!("<measure number=\"1\">{rest}</measure>"))).is_err());
+    }
+
+    #[test]
+    fn a_refusal_names_its_measure_and_part() {
+        let rest = "<note><rest><display-step>C</display-step>\
+                    <display-octave>2147483647</display-octave></rest>\
+                    <duration>1</duration><type>quarter</type></note>";
+        let measures = format!(
+            "<measure number=\"1\">{NOTE}</measure><measure number=\"2a\">{rest}</measure>"
+        );
+        let error = from_musicxml(&score(&measures)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("MusicXML export error: a rest shown at")
+        );
+        assert_eq!(
+            error.position(),
+            Some(&Position::measure("2a").in_part("P1"))
+        );
     }
 
     #[test]

@@ -107,6 +107,24 @@ on stable Rust in about nine seconds in CI; deeper runs set
 refused here, and every reader carries checks a well-formed file
 never needs.
 
+**a reader's error says what kind of trouble and where.** *changed
+2026-11-07.* each format's `Error` variant holds a boxed `FormatError`: a
+`FormatErrorKind` (malformed, invalid, unsupported, too large, not found,
+an external program), the `Position` the reader knew -- line and column
+of XML, a Humdrum line in the whole document, a MusicXML measure by the
+number it gives and its part, a MIDI track and tick, a RomanText or DCML
+measure -- and the reader's message, word for word what it was, so that
+`Display` and the wheel's exceptions are unchanged. a reader's loop over
+measures or tracks places what goes wrong inside one, filling only what
+the error does not already say, rather than every call site carrying
+its place. one struct for every format rather than a variant per kind of
+trouble: callers ask the kind and the place the same way whichever
+reader refused, and the type is `non_exhaustive` so either can grow.
+*costs:* a break for anyone matching `Error::Abc(message)`, an error
+outside a format's variant (a pitch a MusicXML note cannot spell) has no
+place, and ABC, MEI, Capella, MuseData and NoteWorthy say no place yet
+beyond what the XML reader under them knows.
+
 **`#![forbid(unsafe_code)]`.** the crate contains no unsafe Rust, and cannot
 grow any without the attribute coming off. the wheel denies rather than
 forbids it, with exactly one allow, because a pyo3 exception type standing on

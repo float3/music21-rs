@@ -22,7 +22,7 @@ use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Grace, Tuplet, TupletType};
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::expressions::{Expression, Fermata, Ornament, OrnamentKind};
 use crate::instrument::Instrument;
 use crate::key::{Key, KeySignature};
@@ -44,7 +44,7 @@ pub use tandem::MiscTandem;
 use tables::REFERENCE_NAMES;
 
 fn humdrum_error(message: impl Into<String>) -> Error {
-    Error::Humdrum(message.into())
+    Error::humdrum(message.into())
 }
 
 /// The tokens that say where a spine goes rather than what it holds.
@@ -892,7 +892,8 @@ fn spines_of(lines: &[(usize, Vec<String>)], width: usize) -> Result<Vec<Spine>>
             let Some(spine) = spine else {
                 return Err(humdrum_error(format!(
                     "spine-path token at line {line} has no active spine"
-                )));
+                ))
+                .placed(|| Position::line(*line)));
             };
             match cell.as_str() {
                 "*-" => {}
@@ -939,7 +940,8 @@ fn spines_of(lines: &[(usize, Vec<String>)], width: usize) -> Result<Vec<Spine>>
         if exchange.is_some() {
             return Err(humdrum_error(format!(
                 "ProtoSpine found with unpaired exchange instruction at line {line}"
-            )));
+            ))
+            .placed(|| Position::line(*line)));
         }
         current = next;
     }
@@ -1308,7 +1310,8 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
             run = 0;
         }
         if line.starts_with("!!!") {
-            reference(&mut metadata, line)?;
+            reference(&mut metadata, line)
+                .map_err(|error| error.placed(|| Position::line(index + 1)))?;
         } else if line.starts_with("!!") {
             globals.push(GlobalLine {
                 line: index + 1,
@@ -1609,7 +1612,8 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
     if ends.last().copied().unwrap_or(0) <= starts[starts.len() - 1] {
         ends.push(lines.len());
     }
-    let mut pieces: Vec<&[&str]> = Vec::new();
+    // Each piece, with how many lines of the document stand before it.
+    let mut pieces: Vec<(usize, &[&str])> = Vec::new();
     for (index, end) in ends.iter().enumerate() {
         let start = if index == 0 { 0 } else { ends[index - 1] + 1 };
         let stop = if index + 1 == ends.len() {
@@ -1617,7 +1621,7 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
         } else {
             (*end + 1).min(lines.len())
         };
-        pieces.push(&lines[start.min(stop)..stop]);
+        pieces.push((start.min(stop), &lines[start.min(stop)..stop]));
     }
     if pieces.len() < 2 {
         return Err(humdrum_error(
@@ -1626,8 +1630,8 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
     }
     let mut events = Vec::new();
     let mut offset = 0.0;
-    for (index, piece) in pieces.iter().enumerate() {
-        let mut score = score_of(piece)?;
+    for (index, (before, piece)) in pieces.iter().enumerate() {
+        let mut score = score_of(piece).map_err(|error| error.lines_down(*before))?;
         let mut metadata = score.metadata().cloned().unwrap_or_default();
         metadata.set(
             "number",
@@ -1785,6 +1789,21 @@ mod tests {
         assert_eq!(triplet.tuplets()[0].actual(), 3);
         assert!(duration_of("qf").unwrap().is_grace());
         assert!(duration_of("c").is_err());
+    }
+
+    #[test]
+    fn a_refusal_names_its_line_in_the_whole_document() {
+        let unpaired = "**kern\t**kern\n*x\t*\n4c\t4d\n*-\t*-\n";
+        let error = from_humdrum(unpaired).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Humdrum error: ProtoSpine found with unpaired exchange instruction at line 2"
+        );
+        assert_eq!(error.position(), Some(&Position::line(2)));
+
+        let opus = format!("**kern\n4c\n*-\n{unpaired}");
+        let error = from_humdrum(&opus).unwrap_err();
+        assert_eq!(error.position(), Some(&Position::line(5)));
     }
 
     #[test]

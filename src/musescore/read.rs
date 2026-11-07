@@ -26,7 +26,7 @@ use crate::duration::{
     Duration, DurationType, Grace, Tuplet, TupletBracket, TupletShow, TupletType,
 };
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::expressions::{
     ArpeggioType, Expression, Fermata, FermataType, Ornament, OrnamentDelay, OrnamentKind,
     TextExpression,
@@ -58,11 +58,11 @@ type Frac = Ratio<i64>;
 const MOST_DOTS: i64 = 16;
 
 fn mscx_error(message: impl Into<String>) -> Error {
-    Error::MuseScore(message.into())
+    Error::muse_score(message.into())
 }
 
 fn refused(what: impl std::fmt::Display) -> Error {
-    mscx_error(format!("{what} cannot be read yet"))
+    mscx_error(format!("{what} cannot be read yet")).of_kind(FormatErrorKind::Unsupported)
 }
 
 /// A fraction as MuseScore writes one: `3/4`, or a whole number. Its terms
@@ -846,7 +846,9 @@ impl Reader {
         let written = element.child_text("durationType");
         let dots = child_integer(element, "dots")?.unwrap_or(0).max(0);
         if dots > MOST_DOTS {
-            return Err(refused(format!("a note of {dots} dots")));
+            return Err(
+                refused(format!("a note of {dots} dots")).of_kind(FormatErrorKind::TooLarge)
+            );
         }
         let dots = dots as u32;
         let (value, base, order, measure_rest) = if written == "measure" {

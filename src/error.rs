@@ -45,9 +45,10 @@ pub enum Error {
     /// Error associated with tuning-system parsing or lookup.
     #[error("TuningSystem error: {0}")]
     TuningSystem(String),
-    /// Error associated with MIDI import or export.
+    /// Error associated with MIDI import or export, or a MIDI value out of
+    /// range.
     #[error("Midi error: {0}")]
-    Midi(String),
+    Midi(Box<FormatError>),
     /// Error associated with analysis helpers.
     #[error("Analysis error: {0}")]
     Analysis(String),
@@ -81,32 +82,32 @@ pub enum Error {
     FiguredBass(String),
     /// ABC text that cannot be read.
     #[error("ABC error: {0}")]
-    Abc(String),
+    Abc(Box<FormatError>),
     /// Humdrum that cannot be read.
     #[error("Humdrum error: {0}")]
-    Humdrum(String),
+    Humdrum(Box<FormatError>),
     /// A document that is not well-formed XML.
     #[error("XML error: {0}")]
-    Xml(String),
+    Xml(Box<FormatError>),
     /// MEI that cannot be read.
     #[error("MEI error: {0}")]
-    Mei(String),
+    Mei(Box<FormatError>),
     /// RomanText that cannot be read.
     #[error("RomanText error: {0}")]
-    RomanText(String),
+    RomanText(Box<FormatError>),
     /// Capella's CapXML that cannot be read.
     #[error("Capella error: {0}")]
-    Capella(String),
+    Capella(Box<FormatError>),
     /// MuseData that cannot be read.
     #[error("MuseData error: {0}")]
-    MuseData(String),
+    MuseData(Box<FormatError>),
     /// NoteWorthy Composer text that cannot be read.
     #[error("NoteWorthy error: {0}")]
-    Noteworthy(String),
+    Noteworthy(Box<FormatError>),
     /// A MuseScore file that cannot be read, or MuseScore itself could not be
     /// run or could not convert a file.
     #[error("MuseScore error: {0}")]
-    MuseScore(String),
+    MuseScore(Box<FormatError>),
     /// Error associated with ornaments and other expressions.
     #[error("Expression error: {0}")]
     Expression(String),
@@ -157,10 +158,11 @@ pub enum Error {
     /// way.
     #[error("Variant error: {0}")]
     Variant(String),
-    /// A score that cannot be written as MusicXML.
+    /// A MusicXML document that cannot be read, or a score that cannot be
+    /// written as one.
     #[cfg(feature = "musicxml")]
     #[error("MusicXML export error: {0}")]
-    MusicXml(String),
+    MusicXml(Box<FormatError>),
     /// A value the caller gave that nothing musical could be read from.
     ///
     /// music21 keeps this apart from its own exceptions — an octave written
@@ -169,6 +171,301 @@ pub enum Error {
     /// two separately, so the crate keeps them apart too.
     #[error("Value error: {0}")]
     Value(String),
+}
+
+/// A document of one format that cannot be read or written: what kind of
+/// trouble it is, where the reader stood, and the reader's own words.
+///
+/// Its `Display` is the message alone; the [`Error`] variant holding it
+/// names the format, and holds it boxed, so that the crate's every
+/// `Result` is no wider for it.
+///
+/// ```
+/// use music21::error::{FormatErrorKind, Position};
+///
+/// let error = music21::mei::from_mei("<mei><music").unwrap_err();
+/// let read = error.format_error().unwrap();
+/// assert_eq!(read.kind, FormatErrorKind::Malformed);
+/// assert_eq!(error.position(), Some(&Position::line(1).with_column(12)));
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct FormatError {
+    /// What kind of trouble it is.
+    pub kind: FormatErrorKind,
+    /// Where in the document the reader was, where it knows.
+    pub position: Option<Position>,
+    /// What the reader or writer says went wrong.
+    pub message: String,
+}
+
+impl FormatError {
+    /// An error of `kind` saying `message`, at no position yet.
+    pub fn new(kind: FormatErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            position: None,
+            message: message.into(),
+        }
+    }
+
+    /// The same error, at `position`.
+    #[must_use]
+    pub fn with_position(mut self, position: Position) -> Self {
+        self.position = Some(position);
+        self
+    }
+}
+
+impl std::fmt::Display for FormatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+/// What kind of trouble a [`FormatError`] is.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[non_exhaustive]
+pub enum FormatErrorKind {
+    /// The document breaks its format's syntax: XML that is not
+    /// well-formed, a token or a number that cannot be read, a file that
+    /// ends early.
+    Malformed,
+    /// The document reads, but says something that cannot be: a value out
+    /// of range, a reference to nothing, two things that contradict.
+    Invalid,
+    /// Something the reader or the writer does not handle, or that the
+    /// format has no way to say.
+    Unsupported,
+    /// Past a limit the crate sets on what it reads, so that a hostile
+    /// file cannot exhaust memory or time: elements nested past
+    /// `MAX_DEPTH`, more than `MAX_MEASURES` measures, more than sixteen
+    /// dots.
+    TooLarge,
+    /// What was asked for is not in the document: a tune's reference
+    /// number, a part.
+    NotFound,
+    /// A program the crate runs could not be run, or failed: MuseScore.
+    External,
+}
+
+/// Where in a document a reader was when it stopped: whichever of these
+/// the reader knows. Lines and columns count from one, a column in
+/// characters.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
+#[non_exhaustive]
+pub struct Position {
+    /// The line of the document.
+    pub line: Option<usize>,
+    /// The column of that line.
+    pub column: Option<usize>,
+    /// The measure, by the number the document gives it: MusicXML's are
+    /// text, `"12"` or `"X1"`.
+    pub measure: Option<String>,
+    /// The part, by the id the document gives it.
+    pub part: Option<String>,
+    /// A MIDI file's track, counted from nought.
+    pub track: Option<usize>,
+    /// A MIDI track's tick, from its start.
+    pub tick: Option<u64>,
+}
+
+impl Position {
+    /// A line of the document.
+    pub fn line(line: usize) -> Self {
+        Self {
+            line: Some(line),
+            ..Self::default()
+        }
+    }
+
+    /// A measure, by the number the document gives it.
+    pub fn measure(number: impl Into<String>) -> Self {
+        Self {
+            measure: Some(number.into()),
+            ..Self::default()
+        }
+    }
+
+    /// A MIDI file's track, counted from nought.
+    pub fn track(index: usize) -> Self {
+        Self {
+            track: Some(index),
+            ..Self::default()
+        }
+    }
+
+    /// The same position, at a column of its line.
+    #[must_use]
+    pub fn with_column(mut self, column: usize) -> Self {
+        self.column = Some(column);
+        self
+    }
+
+    /// The same position, in a part.
+    #[must_use]
+    pub fn in_part(mut self, part: impl Into<String>) -> Self {
+        self.part = Some(part.into());
+        self
+    }
+
+    /// The same position, at a tick of its track.
+    #[must_use]
+    pub fn at_tick(mut self, tick: u64) -> Self {
+        self.tick = Some(tick);
+        self
+    }
+
+    /// Fills what this position does not say from `outer`, which a reader
+    /// knew further out: a track around a tick.
+    fn fill_from(&mut self, outer: Position) {
+        self.line = self.line.or(outer.line);
+        self.column = self.column.or(outer.column);
+        self.measure = self.measure.take().or(outer.measure);
+        self.part = self.part.take().or(outer.part);
+        self.track = self.track.or(outer.track);
+        self.tick = self.tick.or(outer.tick);
+    }
+}
+
+impl std::fmt::Display for Position {
+    /// `line 3, column 7`, `part P1, measure 12`, `track 2, tick 960`.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut said = Vec::new();
+        if let Some(part) = &self.part {
+            said.push(format!("part {part}"));
+        }
+        if let Some(measure) = &self.measure {
+            said.push(format!("measure {measure}"));
+        }
+        if let Some(track) = self.track {
+            said.push(format!("track {track}"));
+        }
+        if let Some(tick) = self.tick {
+            said.push(format!("tick {tick}"));
+        }
+        if let Some(line) = self.line {
+            said.push(format!("line {line}"));
+        }
+        if let Some(column) = self.column {
+            said.push(format!("column {column}"));
+        }
+        f.write_str(&said.join(", "))
+    }
+}
+
+/// The crate's constructor of each format's error, of kind
+/// [`FormatErrorKind::Invalid`] until a reader says otherwise.
+macro_rules! format_constructors {
+    ($($(#[$attribute:meta])* $name:ident => $variant:ident,)*) => {
+        impl Error {
+            $(
+                $(#[$attribute])*
+                pub(crate) fn $name(message: impl Into<String>) -> Self {
+                    Self::$variant(Box::new(FormatError::new(FormatErrorKind::Invalid, message)))
+                }
+            )*
+        }
+    };
+}
+
+format_constructors! {
+    midi => Midi,
+    abc => Abc,
+    humdrum => Humdrum,
+    xml => Xml,
+    mei => Mei,
+    roman_text => RomanText,
+    capella => Capella,
+    muse_data => MuseData,
+    noteworthy => Noteworthy,
+    muse_score => MuseScore,
+    #[cfg(feature = "musicxml")]
+    music_xml => MusicXml,
+}
+
+impl Error {
+    /// The document error this is, where it is a format's: which kind of
+    /// trouble, where, and the reader's words.
+    pub fn format_error(&self) -> Option<&FormatError> {
+        match self {
+            Self::Midi(error)
+            | Self::Abc(error)
+            | Self::Humdrum(error)
+            | Self::Xml(error)
+            | Self::Mei(error)
+            | Self::RomanText(error)
+            | Self::Capella(error)
+            | Self::MuseData(error)
+            | Self::Noteworthy(error)
+            | Self::MuseScore(error) => Some(error.as_ref()),
+            #[cfg(feature = "musicxml")]
+            Self::MusicXml(error) => Some(error.as_ref()),
+            _ => None,
+        }
+    }
+
+    fn format_error_mut(&mut self) -> Option<&mut FormatError> {
+        match self {
+            Self::Midi(error)
+            | Self::Abc(error)
+            | Self::Humdrum(error)
+            | Self::Xml(error)
+            | Self::Mei(error)
+            | Self::RomanText(error)
+            | Self::Capella(error)
+            | Self::MuseData(error)
+            | Self::Noteworthy(error)
+            | Self::MuseScore(error) => Some(error.as_mut()),
+            #[cfg(feature = "musicxml")]
+            Self::MusicXml(error) => Some(error.as_mut()),
+            _ => None,
+        }
+    }
+
+    /// Where in its document a format's error was met, where the reader
+    /// knows.
+    pub fn position(&self) -> Option<&Position> {
+        self.format_error()?.position.as_ref()
+    }
+
+    /// The same error, of `kind` where it is a format's.
+    #[must_use]
+    pub(crate) fn of_kind(mut self, kind: FormatErrorKind) -> Self {
+        if let Some(error) = self.format_error_mut() {
+            error.kind = kind;
+        }
+        self
+    }
+
+    /// The same error, its line counted `before` lines further down: a
+    /// reader that read one piece of a document places what went wrong in
+    /// the whole of it.
+    #[must_use]
+    pub(crate) fn lines_down(mut self, before: usize) -> Self {
+        let line = self
+            .format_error_mut()
+            .and_then(|error| error.position.as_mut())
+            .and_then(|position| position.line.as_mut());
+        if let Some(line) = line {
+            *line += before;
+        }
+        self
+    }
+
+    /// The same error, placed at what `position` says where a format's
+    /// error does not already say it: a reader's loop over measures or
+    /// tracks places what went wrong inside one.
+    #[must_use]
+    pub(crate) fn placed(mut self, position: impl FnOnce() -> Position) -> Self {
+        if let Some(error) = self.format_error_mut() {
+            match &mut error.position {
+                Some(known) => known.fill_from(position()),
+                None => error.position = Some(position()),
+            }
+        }
+        self
+    }
 }
 
 impl From<Infallible> for Error {
@@ -249,6 +546,38 @@ mod tests {
     }
 
     #[test]
+    fn a_format_error_shows_as_its_message_under_its_format() {
+        let error = Error::abc("cannot read the meter \"x\"").placed(|| Position::line(3));
+        assert_eq!(error.to_string(), "ABC error: cannot read the meter \"x\"");
+        assert_eq!(error.position(), Some(&Position::line(3)));
+        assert_eq!(error.format_error().unwrap().kind, FormatErrorKind::Invalid);
+        assert!(Error::Pitch("pitch".to_string()).format_error().is_none());
+    }
+
+    #[test]
+    fn a_position_said_inside_keeps_what_it_says() {
+        let error = Error::midi("a tempo of no time to the quarter")
+            .placed(|| Position::default().at_tick(96))
+            .placed(|| Position::track(2).at_tick(0))
+            .of_kind(FormatErrorKind::Malformed);
+        let position = error.position().unwrap();
+        assert_eq!(position, &Position::track(2).at_tick(96));
+        assert_eq!(position.to_string(), "track 2, tick 96");
+        assert_eq!(
+            Position::measure("12").in_part("P1").to_string(),
+            "part P1, measure 12"
+        );
+        assert_eq!(
+            Position::line(4).with_column(2).to_string(),
+            "line 4, column 2"
+        );
+        let shifted = Error::humdrum("x")
+            .placed(|| Position::line(2))
+            .lines_down(3);
+        assert_eq!(shifted.position(), Some(&Position::line(5)));
+    }
+
+    #[test]
     fn test_source_none() {
         let errors = [
             Error::Music21Object("music21".to_string()),
@@ -263,7 +592,7 @@ mod tests {
             Error::Ordinal("ordinal".to_string()),
             Error::Polyrhythm("polyrhythm".to_string()),
             Error::TuningSystem("tuning system".to_string()),
-            Error::Midi("midi".to_string()),
+            Error::midi("midi"),
             Error::Analysis("analysis".to_string()),
         ];
 
@@ -318,7 +647,7 @@ mod tests {
                 Error::TuningSystem("tuning system".to_string()),
                 "TuningSystem error: tuning system",
             ),
-            (Error::Midi("midi".to_string()), "Midi error: midi"),
+            (Error::midi("midi"), "Midi error: midi"),
             (
                 Error::Analysis("analysis".to_string()),
                 "Analysis error: analysis",
