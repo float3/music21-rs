@@ -8355,3 +8355,49 @@ def test_a_turn_recognizer_reads_its_intervals_as_they_stand():
     assert not turns.isAcceptableInterval(m.Interval("M2"))
     assert turns.isAcceptableInterval(m.Interval("M3"))
     assert m.TrillRecognizer().recognize([m.Note("C4")]) is False
+
+
+SCALE_RUN_LINES = (
+    "4/4 a4 b c'# d' e' f'#",
+    "4/4 f'#4 e' d' c'# b a g# f#",
+    "4/4 c4 d e f g a b c' d' r e' f' e d c",
+    "4/4 a4 b c'# a b c'# d' e' f'# g'# a'",
+)
+
+
+def test_find_consecutive_scale_matches_music21s():
+    search = pytest.importorskip("music21.alpha.analysis.search")
+    converter = pytest.importorskip("music21.converter")
+    scale = pytest.importorskip("music21.scale")
+    for line in SCALE_RUN_LINES:
+        theirs = converter.parse("tinyNotation: " + line).flatten()
+        for keywords in ({}, {"degreesRequired": 3}, {"comparisonAttribute": "pitchClass"}):
+            for tonic in ("A4", "C4"):
+                music21_runs = search.findConsecutiveScale(
+                    theirs, scale.MajorScale(tonic), **keywords
+                )
+                our_runs = m.findConsecutiveScale(theirs, m.MajorScale(tonic), **keywords)
+                assert [
+                    (run["direction"], [(o, n.nameWithOctave) for o, n in _offsets(run["stream"])])
+                    for run in our_runs
+                ] == [
+                    (run["direction"], [(o, n.nameWithOctave) for o, n in _offsets(run["stream"])])
+                    for run in music21_runs
+                ], (line, keywords, tonic)
+    with pytest.raises(m.SearchModuleException, match="scale must be a concrete scale class"):
+        m.findConsecutiveScale(theirs, "A major")
+
+
+def _offsets(stream):
+    return [(float(stream.elementOffset(n)), n) for n in stream.notes]
+
+
+def test_find_consecutive_scale_hands_back_the_callers_notes():
+    line = m.Stream()
+    for name in ("A4", "B4", "C#5", "D5", "E5", "G4"):
+        line.append(m.Note(name))
+    runs = m.findConsecutiveScale(line, m.MajorScale("A4"))
+    assert len(runs) == 1
+    found = list(runs[0]["stream"].notes)
+    assert found[0] is line.notes[0]
+    assert [n.nameWithOctave for n in found] == ["A4", "B4", "C#5", "D5", "E5"]
