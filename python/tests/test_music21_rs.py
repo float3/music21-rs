@@ -8936,3 +8936,59 @@ except ImportError as error:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert done.stdout.startswith("music21 is installed")
+
+
+def test_provided_music21_places_functions_where_music21_has_them(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import chord, duration, instrument, meter, metadata, roman, search, stream
+print(duration.quarterLengthToClosestType(0.75))
+print(roman.romanNumeralFromChord(chord.Chord('G3 B3 D4'), 'C').figure)
+print(chord.fromForteClass('3-11').commonName)
+print(meter.bestTimeSignature is meter.base.bestTimeSignature)
+print(search.noteNameSearch is search.base.noteNameSearch)
+print(callable(instrument.partitionByInstrument), metadata.Contributor.__name__)
+print(stream.StreamException is music21_rs.StreamException)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "('eighth', False)",
+        "V",
+        "minor triad",
+        "True",
+        "True",
+        "True Contributor",
+        "True",
+    ]
+
+
+def test_every_exported_name_has_a_music21_home_or_none(tmp_path):
+    """A name the package exports is placed in a module of music21's, or
+    listed as one music21 has nowhere: a new function with neither means
+    `tests/generate_homes.py` has to be run again."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21_rs import _homes, _provide
+from music21_rs import music21_rs as extension
+placed = {name for names in _provide._contents().values() for name in names}
+exported = {*extension.__all__, *extension.__exception_names__}
+print(sorted(exported - placed - set(_homes.NO_HOME)))
+print(sorted(placed & set(_homes.NO_HOME)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["[]", "[]"]
+
+
+def test_music21_homes_are_where_music21_keeps_them():
+    """`_homes.py` is what `generate_homes.py` works out from music21 now:
+    every home is a module of music21's that defines the name."""
+    pytest.importorskip("music21.stream")
+    script = pathlib.Path(__file__).with_name("generate_homes.py")
+    done = subprocess.run(
+        [sys.executable, str(script), "--check"], capture_output=True, text=True
+    )
+    assert done.returncode == 0, done.stderr

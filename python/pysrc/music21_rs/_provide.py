@@ -3,8 +3,8 @@
 A library written for music21 imports music21 by name. With music21
 installed, `install_into_music21()` puts this package's classes inside it.
 Without it, `provide_music21()` stands in for it: it adds an import hook that
-answers `music21` and each of music21's modules this package has classes for
-with a module built from those classes, under music21's names. Nothing
+answers `music21` and each of music21's modules this package has classes or
+functions for with a module built from them, under music21's names. Nothing
 happens until it is called, or until `music21_rs` is imported with
 `MUSIC21_RS_PROVIDE_MUSIC21=1` in the environment.
 
@@ -20,6 +20,7 @@ import importlib.util
 import sys
 import warnings
 
+from . import _homes
 from . import music21_rs as _extension
 
 ENVIRONMENT_VARIABLE = "MUSIC21_RS_PROVIDE_MUSIC21"
@@ -27,6 +28,7 @@ ENVIRONMENT_VARIABLE = "MUSIC21_RS_PROVIDE_MUSIC21"
 # A package of music21's also carries the names of these submodules of its
 # own: `music21.stream.Stream` is `music21.stream.base.Stream`, and
 # `music21.meter.MeterSequence` is `music21.meter.core.MeterSequence`.
+# `_homes.ALSO` says so name by name now; this is what was done before.
 _REEXPORTED_CHILDREN = ("base", "core")
 
 
@@ -103,8 +105,16 @@ _EXCEPTIONS21 = {
 }
 
 
-def _contents():
-    """Every module this package answers for, mapped to its names."""
+def _contents(homes=True, children=False):
+    """Every module this package answers for, mapped to its names.
+
+    A class says which module of music21's it belongs to; a function or a
+    constant does not, and `_homes` says it for them, with the names music21
+    imports into each module from where they live. `homes` false leaves the
+    table out, which is what `_homes` is worked out against, and `children`
+    copies each `base` and `core` module's names into its package instead,
+    as this did before there was a table.
+    """
     contents = {"music21": {}, "music21.exceptions21": dict(_EXCEPTIONS21)}
     for module, names in _extension.__music21_modules__:
         for name in names:
@@ -120,11 +130,20 @@ def _contents():
         if not isinstance(module, str) or not module.startswith("music21."):
             continue
         contents.setdefault(module, {}).setdefault(name, value)
+    if homes:
+        known = {"Music21Exception": Music21Exception}
+        for table in (_homes.HOMES, _homes.ALSO):
+            for module, names in table.items():
+                for name in names:
+                    value = known.get(name) or getattr(_extension, name)
+                    contents.setdefault(module, {}).setdefault(name, value)
     for module in list(contents):
         parts = module.split(".")
         for end in range(1, len(parts)):
             contents.setdefault(".".join(parts[:end]), {})
     for module in sorted(contents, key=len, reverse=True):
+        if not children:
+            break
         parent, _, child = module.rpartition(".")
         if child in _REEXPORTED_CHILDREN and parent in contents:
             for name, value in contents[module].items():
