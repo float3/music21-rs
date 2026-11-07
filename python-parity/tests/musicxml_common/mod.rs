@@ -184,6 +184,35 @@ pub const SCORES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The scores that take a corpus sweep longest: a whole quartet, a piano
+/// trio movement and two quartet movements. The first two in one test made
+/// the windowed analysis's run seven minutes.
+#[allow(dead_code)]
+pub const HEAVY: &[&str] = &[
+    "beethoven/opus18no4",
+    "schumann_clara/opus17/movement3",
+    "beethoven/opus59no3/movement1.mxl",
+    "beethoven/opus59no3/movement3.mxl",
+];
+
+/// The scores of `chosen` that test `part` of `parts` compares, for a
+/// sweep cut into several tests so that nextest can run them on different
+/// runners. The heavy scores are dealt first, one to a test, and the rest
+/// in turn after them, so no two heavy scores meet in one test until every
+/// test has one.
+#[allow(dead_code)]
+pub fn dealt(chosen: &[String], part: usize, parts: usize) -> Vec<&String> {
+    let (heavy, light): (Vec<&String>, Vec<&String>) = chosen
+        .iter()
+        .partition(|name| HEAVY.contains(&name.as_str()));
+    heavy
+        .into_iter()
+        .chain(light)
+        .skip(part)
+        .step_by(parts)
+        .collect()
+}
+
 /// ABC tunes of the corpus both readers read alike, and what each exercises.
 /// A tune is named by its corpus file, with `#n` after it for the tune
 /// numbered `n` of a file holding several.

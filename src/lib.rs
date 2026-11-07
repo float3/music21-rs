@@ -20,6 +20,7 @@
 //!
 //! The main types are re-exported at the crate root; each module holds the
 //! rest of its area. Every fallible call returns the crate-wide [`Result`].
+//! Coming from music21's Python, start with the [`guide`].
 //!
 //! # Features
 //!
@@ -86,6 +87,8 @@ pub mod features;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
+#[doc = include_str!("guide.md")]
+pub mod guide {}
 /// Humdrum `**kern` scores.
 pub mod humdrum;
 /// Instruments: music21's `instrument` module.
