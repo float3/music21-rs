@@ -9595,19 +9595,47 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.corpus', 'from music21 import converter'):
+for statement in ('import music21.environment', 'from music21 import musicxml'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'corpus'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'environment'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.corpus",
-        "music21-rs does not provide music21.converter",
+        "music21-rs does not provide music21.environment",
+        "music21-rs does not provide music21.musicxml",
         "False True",
+    ]
+
+
+def test_provided_music21_parses_with_the_packages_converter(tmp_path):
+    corpus = pathlib.Path(__file__).resolve().parents[2] / "music21" / "music21" / "corpus"
+    if not corpus.is_dir():
+        pytest.skip("music21's submodule is not checked out")
+    code = f"""
+import music21_rs
+music21_rs.provide_music21()
+import music21
+from music21 import corpus, exceptions21
+score = music21.converter.parse({str(corpus / 'bach' / 'bwv66.6.mxl')!r})
+print(type(score).__name__, len(score.parts), len(score.flatten().notes))
+print(corpus.parse('bach/bwv66.6').metadata.corpusFilePath)
+try:
+    music21.converter.parseFile('/no/such/file.xml')
+except exceptions21.Music21Exception as error:
+    print(type(error).__module__, type(error).__name__)
+print(issubclass(corpus.CorpusException, exceptions21.Music21Exception))
+"""
+    done = _run_without_music21(code, tmp_path, MUSIC21_RS_CORPUS=str(corpus))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Score 4 165",
+        "bach/bwv66.6.mxl",
+        "music21.converter ConverterFileException",
+        "True",
     ]
 
 

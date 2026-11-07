@@ -231,13 +231,7 @@ def _exception():
     """`CorpusException`: music21's own where it can be imported, a plain
     exception under its name where it cannot."""
     if not _made:
-        try:
-            from music21.exceptions21 import CorpusException
-        except Exception:
-            CorpusException = type(
-                "CorpusException", (Exception,), {"__module__": "music21.exceptions21"}
-            )
-        _made.append(CorpusException)
+        _made.append(_converter._music21_exception("CorpusException", "music21.exceptions21"))
     return _made[0]
 
 

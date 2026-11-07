@@ -28,6 +28,7 @@ music21's, and stand-ins of their own where it cannot. They are made on
 first asking, so importing this module imports no music21.
 """
 
+import importlib
 import io
 import os
 import pathlib
@@ -36,6 +37,7 @@ import sys
 import tempfile
 import zipfile
 
+from . import _provide
 from . import music21_rs as _wheel
 
 __all__ = [
@@ -336,6 +338,8 @@ _MISSING = object()
 def _installed():
     """Whether the wheel has been installed into music21: music21's `Note`
     is then the wheel's."""
+    if _provide.providing():
+        return False
     note = sys.modules.get("music21.note")
     return note is not None and isinstance(getattr(note, "Note", None), type) and issubclass(
         note.Note, _wheel.Note
@@ -555,13 +559,20 @@ _made = {}
 
 def _exception(name):
     if name not in _made:
-        try:
-            from music21 import converter
-
-            _made[name] = getattr(converter, name)
-        except Exception:
-            _made[name] = type(name, (Exception,), {"__module__": "music21.converter"})
+        _made[name] = _music21_exception(name, "music21.converter")
     return _made[name]
+
+
+def _music21_exception(name, module):
+    """music21's exception `name` from `module`, or a stand-in under its
+    name: built on the provided `Music21Exception` where `provide_music21()`
+    answers for music21, as music21's own are built on it."""
+    if _provide.providing():
+        return type(name, (_provide.Music21Exception,), {"__module__": module})
+    try:
+        return getattr(importlib.import_module(module), name)
+    except Exception:
+        return type(name, (Exception,), {"__module__": module})
 
 
 def __getattr__(name):

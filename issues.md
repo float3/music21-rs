@@ -265,12 +265,15 @@ two rules, set 2026-09-12, that most of the open work now serves:
     pairs of classes `issubclass` answers otherwise than music21 for are
     listed in the wheel tests' `_HIERARCHY_GAPS`.
 
-15. **what `provide_music21()` cannot provide yet.** `converter`,
-    `corpus`, `common`, `environment`, `musicxml` and `tinyNotation` are
-    not provided at all. Partial, in music21's public names: `stream` 11
-    of 21, `note` 10 of 18, `metadata` 12 of 20, `layout` 6 of 22,
-    `voiceLeading` 8 of 20, `sieve` 8 of 26 (`generate_homes.py
-    --coverage`, 1,059 of 1,902 in all). Five names are placed where
+15. **what `provide_music21()` cannot provide yet.** `common`,
+    `environment`, `musicxml` and `tinyNotation` are not provided at all.
+    Partial, in music21's public names: `converter` 6 of 20 (`parse`,
+    `parseFile`, `parseData`, `parseURL`, `toData` and the exceptions; no
+    subconverters or archive manager), `corpus` 5 of 16 (no search, no
+    `Corpus` classes), `stream` 11 of 21, `note` 10 of 18, `metadata` 12
+    of 20, `layout` 6 of 22, `voiceLeading` 8 of 20, `sieve` 8 of 26
+    (`generate_homes.py --coverage`, 1,073 of 1,938 in all). A provided
+    corpus is read from `MUSIC21_RS_CORPUS`. Five names are placed where
     music21 lacks them: `metadata.MetadataException`,
     `omr.correctors.OmrException`, `tsvConverter.TsvException`,
     `makeNotation.MakeNotationException` and `sieve.Primes`. A provided score's metadata names its software as

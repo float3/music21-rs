@@ -66,7 +66,7 @@ def provide_music21():
     Call it before anything that imports music21's exceptions, so that the
     package's exceptions are built on the `Music21Exception` it provides.
     """
-    if any(isinstance(finder, _Provider) for finder in sys.meta_path):
+    if providing():
         return
     _refuse_real_music21()
     # In before the rest is worked out: working it out builds the package's
@@ -75,6 +75,11 @@ def provide_music21():
     finder = _Provider({"music21": {}, "music21.exceptions21": _EXCEPTIONS21})
     sys.meta_path.insert(0, finder)
     finder.update(_contents())
+
+
+def providing():
+    """Whether `provide_music21()` is answering `import music21`."""
+    return any(isinstance(finder, _Provider) for finder in sys.meta_path)
 
 
 def _refuse_real_music21():
@@ -105,6 +110,13 @@ _EXCEPTIONS21 = {
     "Music21DeprecationWarning": Music21DeprecationWarning,
 }
 
+# music21's modules the package has in Python beside the extension, each by
+# the name of the package's own module.
+_PYTHON_MODULES = {
+    "music21.converter": "converter",
+    "music21.corpus": "corpus",
+}
+
 
 def _contents(homes=True, children=False):
     """Every module this package answers for, mapped to its names.
@@ -131,6 +143,14 @@ def _contents(homes=True, children=False):
         if not isinstance(module, str) or not module.startswith("music21."):
             continue
         contents.setdefault(module, {}).setdefault(name, value)
+    for module, own in _PYTHON_MODULES.items():
+        written = importlib.import_module(f"{__package__}.{own}")
+        for name in written.__all__:
+            contents.setdefault(module, {})[name] = getattr(written, name)
+    # music21 defines it there and imports it into `corpus`.
+    contents["music21.exceptions21"]["CorpusException"] = contents["music21.corpus"][
+        "CorpusException"
+    ]
     if homes:
         known = {"Music21Exception": Music21Exception}
         for table in (_homes.HOMES, _homes.ALSO):
