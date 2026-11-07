@@ -819,10 +819,51 @@ where
     let Some(class) = installed_class(py, module, name) else {
         return Py::new(py, value);
     };
-    let object = blank_installed(&class)?;
+    filled_blank(&class, value)
+}
+
+/// A blank of `class` holding `value`.
+///
+/// The facade's `__new__` builds a default object for the blank, which is
+/// then thrown away: for a note, a pitch parsed and a second installed
+/// object built around it. So `value` waits in [`PENDING`] for a `__new__`
+/// that knows to take it, and is written in afterwards only where nothing
+/// took it.
+fn filled_blank<T>(class: &Bound<'_, PyAny>, value: T) -> PyResult<Py<T>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+{
+    // Whatever an outer blank left waiting is put back: a `__new__` that
+    // does not take its value may build objects of its own.
+    let outer = PENDING.replace(Some(Box::new(value)));
+    let object = blank_installed(class);
+    let left = PENDING.replace(outer);
+    let object = object?;
     let cell = object.cast::<T>()?;
-    *cell.borrow_mut() = value;
+    if let Some(Ok(value)) = left.map(|left| left.downcast::<T>()) {
+        *cell.borrow_mut() = *value;
+    }
     Ok(cell.clone().unbind())
+}
+
+thread_local! {
+    /// The value [`filled_blank`] is building an object around.
+    static PENDING: std::cell::Cell<Option<Box<dyn std::any::Any>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The value an installed object is being built around, for a facade's
+/// `__new__` to take instead of building a default one; `None` when it is
+/// called for anything else.
+pub(crate) fn take_pending<T: 'static>() -> Option<T> {
+    let held = PENDING.take()?;
+    match held.downcast::<T>() {
+        Ok(value) => Some(*value),
+        Err(other) => {
+            PENDING.set(Some(other));
+            None
+        }
+    }
 }
 
 /// The same as [`installed_new`], but building a class music21's own
@@ -842,10 +883,7 @@ where
     let Some(class) = holdable_class(py, module, name) else {
         return Py::new(py, value);
     };
-    let object = blank_installed(&class)?;
-    let cell = object.cast::<T>()?;
-    *cell.borrow_mut() = value;
-    Ok(cell.clone().unbind())
+    filled_blank(&class, value)
 }
 
 /// A blank instance of an installed class, with its music21 half started.
