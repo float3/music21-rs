@@ -1154,11 +1154,30 @@ impl Duration {
     /// What the written values are multiplied by to give the sounding
     /// length: music21's `aggregateTupletMultiplier`, every tuplet's ratio
     /// multiplied together, so a triplet inside a quintuplet is `8/15`.
+    ///
+    /// A product too fine for an `i32` fraction is multiplied in floats, as
+    /// music21 multiplies, and limited to the finest fraction that fits.
     pub fn aggregate_tuplet_multiplier(&self) -> FractionType {
-        self.tuplets()
+        let ratios: Vec<FractionType> = self.tuplets().iter().map(Tuplet::multiplier).collect();
+        let exact = ratios
             .iter()
-            .map(Tuplet::multiplier)
-            .fold(FractionType::from(1), |total, ratio| total * ratio)
+            .try_fold(FractionType::from(1), |total, ratio| {
+                fraction::CheckedMul::checked_mul(&total, ratio)
+            });
+        if let Some(exact) = exact {
+            return exact;
+        }
+        let product: FloatType = ratios
+            .iter()
+            .map(|ratio| ratio.to_f64().unwrap_or(0.0))
+            .product();
+        // The finest denominator whose numerator still fits.
+        let finest = (FloatType::from(IntegerType::MAX) / product).clamp(1.0, 65535.0) as i128;
+        let (numerator, denominator) = limited_fraction(product, finest).unwrap_or((0, 1));
+        FractionType::new(
+            IntegerType::try_from(numerator).unwrap_or(IntegerType::MAX),
+            IntegerType::try_from(denominator).unwrap_or(IntegerType::MAX),
+        )
     }
 
     /// The total of the written values, before any tuplet shortens them:
@@ -1943,6 +1962,25 @@ impl TryFrom<IntegerType> for Duration {
 
 #[cfg(test)]
 mod tests {
+
+    /// Tuplets whose exact product no `i32` fraction holds multiply as
+    /// music21 multiplies them, in floats.
+    #[test]
+    fn tuplets_too_fine_to_multiply_exactly_are_multiplied_as_floats() {
+        use super::{Duration, DurationType, Tuplet};
+        use fraction::ToPrimitive;
+
+        let mut duration = Duration::new(0.25).unwrap();
+        for normal in [2_147_483_647, 2] {
+            duration.append_tuplet(Tuplet::new(3, normal, DurationType::Sixteenth, 0));
+        }
+        let multiplier = duration.aggregate_tuplet_multiplier().to_f64().unwrap();
+        let expected = 2_147_483_647.0 / 3.0 * 2.0 / 3.0;
+        assert!(
+            (multiplier - expected).abs() / expected < 1e-6,
+            "{multiplier}"
+        );
+    }
 
     #[test]
     fn a_type_is_found_from_its_undotted_length_alone() {
