@@ -979,9 +979,12 @@ def lineage(cls):
     anything reading `classes` is concerned, and a `ChordSymbol` built on an
     installed `Chord` is still a `Chord`.
     """
-    known = _lineages.get(cls)
-    if known is not None:
-        return known
+    # Keyed by the class's id, with the class kept beside what it is: an
+    # installed class hashes in Python, through its metaclass, and this is
+    # asked every time anything reads `classes` or `classSet`.
+    held = _lineages.get(id(cls))
+    if held is not None and held[0] is cls:
+        return held[1]
     walked = []
     for ancestor in (cls,) + cls.__mro__:
         # Kept in a tuple rather than as the class itself: `DocTestFinder`
@@ -1022,7 +1025,7 @@ def lineage(cls):
         if member in replaced:
             members.add(replaced[member])
     known = (tuple(names), frozenset(members), tuple(walked))
-    _lineages[cls] = known
+    _lineages[id(cls)] = (cls, known)
     return known
 
 
@@ -1236,16 +1239,23 @@ def make_class(facade, original):
         # `original == installed` answers here too.
         # Only the installed class itself: a subclass shares this metaclass
         # and is a kind of thing of its own.
+        # Which class that is is known once it is built; the hash it takes
+        # is worked out once, since anything keyed by class asks for it.
+        # While it is being built, it is told by what it holds, as before.
         def __eq__(cls, other):
-            return other is cls or ('_replaces' in cls.__dict__ and other is original)
+            return other is cls or (other is original and stands_in(cls))
 
         def __ne__(cls, other):
             return not cls.__eq__(other)
 
-        def __hash__(cls):
-            if '_replaces' in cls.__dict__:
-                return hash(original)
-            return type.__hash__(cls)
+        def __hash__(cls, _hash=hash(original), _identity=type.__hash__):
+            return _hash if stands_in(cls) else _identity(cls)
+
+    def stands_in(cls):
+        built = standing[0]
+        if built is not None:
+            return cls is built
+        return '_replaces' in cls.__dict__
 
     if issubclass(original, _base.Music21Object):
         bases = (facade, original)
@@ -1257,6 +1267,8 @@ def make_class(facade, original):
         # machinery live, and none of it says anything musical.
         bases = machinery_of(original, facade)
         fallback = (facade,)
+    # The class this one stands for, filled in once it is built.
+    standing = [None]
     try:
         installed = Stands(original.__name__, bases, namespace)
     except TypeError:
@@ -1267,6 +1279,7 @@ def make_class(facade, original):
         except TypeError:
             # A facade nothing can be built on at all stands as it is.
             return facade
+    standing[0] = installed
     replaced[original] = installed
     return installed
 

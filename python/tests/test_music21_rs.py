@@ -7535,6 +7535,50 @@ def test_routed_midi_hides_the_tempo_copied_to_later_parts():
     assert _routed_differences("midi", paths, ("MetronomeMark",)) == []
 
 
+def test_an_installed_class_hashes_and_equals_the_class_it_replaces():
+    """An installed class is equal to music21's class it replaces and hashes
+    as it does, so a set or dict built before installing finds it; a Python
+    subclass of it is a class of its own; and looking up what a class is
+    asks no class for its hash in Python, which music21 does millions of
+    times in a suite."""
+    pytest.importorskip("music21.stream")
+    code = """
+import sys
+from music21 import note
+original = note.Note
+import music21_rs as m
+m.install_into_music21()
+from music21 import note
+installed = note.Note
+print(installed == original, original == installed, hash(installed) == hash(original))
+print({original: 1}.get(installed), installed in {original})
+class Mine(installed):
+    pass
+print(Mine == installed, Mine == original, hash(Mine) == hash(original))
+calls = []
+def counting(frame, event, arg):
+    if event == 'call' and frame.f_code.co_name in ('__hash__', '__eq__'):
+        calls.append(frame.f_code.co_name)
+n = note.Note('C4')
+n.classes
+sys.setprofile(counting)
+for _ in range(10):
+    n.classes
+    n.classSet
+sys.setprofile(None)
+print(len(calls))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "1 True",
+        "False False False",
+        "0",
+    ]
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""
