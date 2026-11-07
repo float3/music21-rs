@@ -27,13 +27,13 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::{Error, Result};
 use crate::key::{Key, convert_key_string_to_music21_key_string};
-use crate::makenotation::op_frac;
+use crate::makenotation::{MAX_MEASURES, op_frac};
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
 use crate::notation::Tie;
 use crate::rest::Rest;
 use crate::roman::RomanNumeral;
-use crate::stream::{Stream, StreamElement, StreamKind};
+use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 /// What is written under the chords as a song is read: music21's
 /// `labelRomanNumerals` and `labelSubsectionsOnScore`, both on.
@@ -278,13 +278,16 @@ impl CtSong {
         let places = expansion.expand(song, None, None)?;
         let mut part = Stream::with_kind(StreamKind::Part);
         let mut at = 0.0;
+        let mut measures = Vec::with_capacity(places.len());
         for (index, place) in places.iter().enumerate() {
             let measure = expansion.built[*place]
                 .as_measure(IntegerType::try_from(index + 1).unwrap_or(IntegerType::MAX))?;
             let length = measure.end_offset();
-            part.insert(at, measure);
+            measures.push(StreamEvent::new(at, measure));
             at = op_frac(at + length);
         }
+        // All at once: sorting the part again for each measure is quadratic.
+        part.insert_sorted(measures);
         let mut metadata = Metadata::new();
         metadata.add("title", MetadataValue::new(self.title()));
         part.set_metadata(Some(metadata));
@@ -884,6 +887,7 @@ impl<'a> Expansion<'a> {
             // The group said nothing but a key or a meter.
             return Ok(());
         }
+        self.make_room()?;
         let measure = self.built.len();
         self.built.push(Built::default());
         let meter = self.states[rule].meter.clone();
@@ -931,6 +935,7 @@ impl<'a> Expansion<'a> {
         // A measure played more than once is copied, the copies saying
         // nothing about the key or the meter.
         for _ in 1..repeats {
+            self.make_room()?;
             let mut copy = self.built[measure].clone();
             copy.meter = None;
             copy.key = None;
@@ -988,6 +993,17 @@ impl<'a> Expansion<'a> {
         {
             held.set_tie(tie);
         }
+    }
+
+    /// An error once the song has made [`MAX_MEASURES`] measures, the most
+    /// the crate makes for a stream.
+    fn make_room(&self) -> Result<()> {
+        if self.built.len() >= MAX_MEASURES {
+            return Err(ct_error(format!(
+                "the song would make more than {MAX_MEASURES} measures"
+            )));
+        }
+        Ok(())
     }
 
     /// The key and the meter written into a measure where they have not
@@ -1228,5 +1244,12 @@ mod tests {
         assert!(from_clercq_temperley(&song(MAX_DEPTH - 1)).is_ok());
         assert!(from_clercq_temperley(&song(MAX_DEPTH)).is_err());
         assert!(from_clercq_temperley(&song(10_000)).is_err());
+    }
+
+    #[test]
+    fn a_song_of_more_measures_than_a_stream_takes_is_refused() {
+        assert!(from_clercq_temperley("S: I |*200000\n").is_err());
+        assert!(from_clercq_temperley("Vr: I |*1000\nS: $Vr*1000\n").is_err());
+        assert!(from_clercq_temperley("Vr: I |*100\nS: $Vr*100\n").is_ok());
     }
 }
