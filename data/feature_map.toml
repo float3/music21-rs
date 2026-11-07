@@ -534,6 +534,7 @@ seekChordTablesAddress = "address_of_pitch_classes"
 [[class]]
 python = "romanText/tsvConverter.py"
 name = "TabChordBase"
+facade = "TabChord"
 rust = ["src/romantext/tsv.rs"]
 note = "One row of the lab's tabular analysis, read: the columns both of its standards share, the label music21 builds a numeral from, and the chord that numeral stands for. The one row type here reads a row of either standard, as music21's two subclasses do between them."
 
