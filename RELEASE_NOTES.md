@@ -1,3 +1,29 @@
+# music21-rs 0.19.0
+
+`harte` 0.12.0 depends on this release.
+
+## fixed
+
+- **The music21 submodule follows the fork's master 26cfcc18**
+  (music21 11.0.0b20), and the crate and the wheel with it:
+  - A MuseData tie stays in its voice: after a `back`, the lower voice's
+    first note no longer takes the stop of a tie the upper voice started,
+    and the upper voice of the next measure keeps it.
+  - An ABC tuplet no longer counts as an open parenthesis, so a `)` after
+    `(3` ends the slur around it, where the slur ran on to the end of the
+    tune (cuthbertLab #1798). A `)` ends the latest slur and
+    `!crescendo)!` or `!diminuendo)!` the latest hairpin, so a slur and a
+    hairpin can overlap.
+  - A Humdrum grace note inside a tuplet neither counts toward it nor
+    ends it: `12c 12qd 12e 12f` is one triplet, where the grace note split
+    it in two.
+  - The wheel's `RomanNumeral` drops a secondary numeral and key a caller
+    set when given a figure with no slash, as music21 now does.
+  - The wheel's `RomanNumeral` for an augmented sixth in a major key
+    reports music21's implied scale, the minor key on that tonic
+    (`useImpliedScale` is true), until its key is set again;
+    `_setImpliedScaleFromKey` is new.
+
 # music21-rs 0.18.1
 
 `harte` 0.11.1 depends on this release.
