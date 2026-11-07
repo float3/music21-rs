@@ -152,6 +152,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 flag_value(rest, "--out").map(PathBuf::from),
                 one,
                 rest.iter().any(|arg| arg == "--parallel"),
+                &music21_suite::Options::parse(rest)?,
             )?;
             std::process::exit(code);
         }
@@ -204,7 +205,9 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask --features python -- bench");
     eprintln!("  cargo run --release -p xtask -- downstream");
     eprintln!("  cargo run --release -p xtask -- contributed-back [--check]");
-    eprintln!("  cargo run --release -p xtask --features python -- music21-suite [--parallel]");
+    eprintln!(
+        "  cargo run --release -p xtask --features python -- music21-suite [--parallel] [--only a,b] [--sides music21,music21_rs_wheel] [--profile] [--route-converters musicxml,midi]"
+    );
     eprintln!("  cargo run --release -p xtask -- emit-report-script");
     eprintln!("  cargo run --release -p xtask -- verify-report-script");
     eprintln!("  cargo run --release -p xtask -- emit-temperaments");
