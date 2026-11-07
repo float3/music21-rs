@@ -11,13 +11,13 @@
 //! these having been built from it before any of this runs -- a class
 //! already made keeps the base it was made from, which `rebind` cannot
 //! change. So the base here is a class of this package's own that the
-//! ninety-one kinds extend, and it is what carries the interface each kind
+//! ninety-two kinds extend, and it is what carries the interface each kind
 //! would otherwise be blocked for.
 //!
-//! **`LanguageFeature` stays music21's.** It reads which language a text is
-//! in, which the crate answers only behind its `language-detection`
-//! feature and which the wheel does not turn on, so there is no row to
-//! stand behind it.
+//! **`LanguageFeature` is the crate's too.** It reads which language a
+//! text is in, which the crate answers behind its `language-detection`
+//! feature; the wheel carries that feature, so the row stands behind it as
+//! it does behind every other kind.
 //!
 //! **A class says what it reads before it has read anything.** `fe.id` and
 //! `fe.name` are read off the *class* by music21's own `extractorsById`
@@ -1037,6 +1037,14 @@ extractors!(
         Native,
         true
     ),
+    (
+        LanguageFeature,
+        "LanguageFeature",
+        "music21.features.native",
+        "TX1",
+        Native,
+        true
+    ),
 );
 
 /// The names this facade replaces in `music21.features.jSymbolic`.
@@ -1116,10 +1124,6 @@ pub const JSYMBOLIC_NAMES: &[&str] = &[
 ];
 
 /// The names it replaces in `music21.features.native`.
-///
-/// `LanguageFeature` is not among them: it reads which language a text is
-/// in, which the crate answers only behind its `language-detection` feature
-/// and which the wheel does not turn on.
 pub const NATIVE_NAMES: &[&str] = &[
     "QualityFeature",
     "TonalCertainty",
@@ -1140,4 +1144,5 @@ pub const NATIVE_NAMES: &[&str] = &[
     "IncorrectlySpelledTriadPrevalence",
     "ChordBassMotionFeature",
     "LandiniCadence",
+    "LanguageFeature",
 ];

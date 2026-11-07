@@ -7102,19 +7102,22 @@ def test_a_text_is_read_for_its_language():
 
 
 def test_the_language_classes_install_over_music21s():
-    """Installed, music21's `text` builds the wheel's detector."""
+    """Installed, music21's `text` builds the wheel's detector, and the
+    language feature reads a piece's lyrics with it."""
     pytest.importorskip("music21.stream")
     # In a process of its own, as installing cannot be undone.
     code = (
         "import music21_rs; music21_rs.install_into_music21()\n"
-        "from music21 import text\n"
+        "from music21 import corpus, features, text\n"
         "print(issubclass(text.LanguageDetector, music21_rs.LanguageDetector))\n"
         "print(issubclass(text.Trigram, music21_rs.Trigram))\n"
         "print(text.LanguageDetector().mostLikelyLanguage('Guten Morgen Frau Wieck. Ich bin Robert.'))\n"
+        "s = corpus.parse('handel/rinaldo/lascia_chio_pianga')\n"
+        "print(music21_rs.LanguageFeature(s).extract().vector)\n"
     )
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert done.returncode == 0, done.stderr
-    assert done.stdout.split() == ["True", "True", "de"]
+    assert done.stdout.split() == ["True", "True", "de", "[3]"]
 
 
 def test_a_score_is_reduced_to_the_chords_that_carry_it():
