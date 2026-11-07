@@ -613,11 +613,15 @@ impl KernState {
     }
 
     /// music21's `setTupletTypeForNote`: where a run of tuplet notes starts
-    /// and where it has filled its bracket.
+    /// and where it has filled its bracket. A grace note neither counts
+    /// toward a tuplet nor ends one.
     fn tuplet(&mut self, stream: &mut [Placed], element: &mut StreamElement) {
         let Some(duration) = element.duration().cloned() else {
             return;
         };
+        if duration.is_grace() {
+            return;
+        }
         let tuplets = duration.tuplets();
         if !self.in_tuplet && !tuplets.is_empty() {
             self.in_tuplet = true;
@@ -747,8 +751,8 @@ fn parse_kern(events: &[(String, usize)]) -> Vec<Placed> {
         let sounds = matches!(
             &thing,
             Thing::Element(
-                StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_)
-            )
+                element @ (StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_))
+            ) if !element.duration().is_some_and(Duration::is_grace)
         );
         let index = append(&mut stream, *line, *line, thing);
         if is_measure {
@@ -1783,6 +1787,45 @@ mod tests {
         assert_eq!(name("4C"), "C3");
         assert_eq!(name("4BB-"), "Bb2");
         assert_eq!(name("4r"), "rest");
+    }
+
+    #[test]
+    fn a_grace_note_leaves_a_tuplet_whole() {
+        // music21's `testGraceNoteInsideTuplet`.
+        let types = |cells: &[&str]| -> Vec<Option<&'static str>> {
+            let events: Vec<(String, usize)> = cells
+                .iter()
+                .enumerate()
+                .map(|(line, cell)| (cell.to_string(), line))
+                .collect();
+            parse_kern(&events)
+                .iter()
+                .filter_map(|placed| match &placed.thing {
+                    Thing::Element(element) => Some(
+                        element
+                            .duration()?
+                            .tuplets()
+                            .first()
+                            .and_then(|tuplet| tuplet.tuplet_type())
+                            .map(TupletType::as_str),
+                    ),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(
+            types(&["12c", "12qd", "12e", "12f", "4g"]),
+            [Some("start"), None, None, Some("stop"), None]
+        );
+        assert_eq!(
+            types(&["12c", "12e", "12qd", "12f", "4g"]),
+            [Some("start"), None, None, Some("stop"), None]
+        );
+        // A grace note after an unfinished tuplet: it still stops on its last note.
+        assert_eq!(
+            types(&["12c", "12e", "16qd", "4g"]),
+            [Some("start"), Some("stop"), None, None]
+        );
     }
 
     #[test]
