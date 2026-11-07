@@ -72,6 +72,7 @@ it, into this package's own streams:
 | `from_capella(data)` | a Capella `.capx`'s `bytes`, or its `score.xml` | `Score` |
 | `from_nwc(data)` | a NoteWorthy Composer `.nwc` file's `bytes`, compressed or not | `Score` |
 | `from_volpiano(text)` | Volpiano, the chant font's notation | `Part` |
+| `from_mscx(text)` | MuseScore's `.mscx`, which music21 does not read | `Score` |
 
 the streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
