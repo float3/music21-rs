@@ -1029,7 +1029,10 @@ impl Stream {
         }
     }
 
-    /// Creates a stream from events, sorted by offset.
+    /// Creates a stream from events, sorted by offset, those at one offset
+    /// kept in the order given: a caller that knows music21's order, its
+    /// priorities among it, hands it in here, where [`Stream::insert`]
+    /// sorts them by class.
     pub fn from_events(events: impl IntoIterator<Item = StreamEvent>) -> Self {
         let mut stream = Self {
             events: events.into_iter().collect(),
@@ -1052,8 +1055,7 @@ impl Stream {
     /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn insert(&mut self, offset: FloatType, element: impl Into<StreamElement>) {
-        self.events.push(StreamEvent::new(offset, element));
-        self.sort_events();
+        self.insert_sorted(vec![StreamEvent::new(offset, element)]);
     }
 
     /// Appends an element after the current end of the stream.
@@ -1069,12 +1071,23 @@ impl Stream {
     /// # Ok::<(), music21::Error>(())
     /// ```
     pub fn push(&mut self, element: impl Into<StreamElement>) {
-        let element = element.into();
-        let offset = self.end_offset();
-        self.events.push(StreamEvent::new(offset, element));
+        let event = StreamEvent::new(self.end_offset(), element);
+        // What takes no time can sort before the last element at the end,
+        // as a clef does before a dynamic; music21 sorts again then.
+        let sorts_before_last = self
+            .events
+            .last()
+            .is_some_and(|last| crate::makenotation::event_order(&event, last).is_lt());
+        if sorts_before_last {
+            self.insert_sorted(vec![event]);
+            return;
+        }
+
+        self.events.push(event);
     }
 
-    /// Returns immutable events in offset order.
+    /// The events in the stream's order, to change each element in place;
+    /// where an event stands is fixed, as no offset is set through it.
     pub fn events_mut(&mut self) -> &mut [StreamEvent] {
         &mut self.events
     }
@@ -1117,6 +1130,130 @@ impl Stream {
     /// Whether this stream holds nothing at all.
     pub fn is_empty(&self) -> bool {
         self.events.is_empty()
+    }
+
+    /// The first event in the stream's order, or `None` where it holds
+    /// nothing: music21's `first`.
+    ///
+    /// ```
+    /// use music21::{Note, Stream, StreamElement};
+    ///
+    /// let mut stream = Stream::new();
+    /// assert!(stream.first().is_none());
+    /// stream.push(Note::from_name("C4")?);
+    /// stream.push(Note::from_name("D4")?);
+    /// let StreamElement::Note(note) = stream.first().unwrap().element() else {
+    ///     unreachable!()
+    /// };
+    /// assert_eq!(note.pitch().name_with_octave(), "C4");
+    /// assert_eq!(stream.last().unwrap().offset(), 1.0);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn first(&self) -> Option<&StreamEvent> {
+        self.events.first()
+    }
+
+    /// The last event in the stream's order, or `None` where it holds
+    /// nothing: music21's `last`.
+    pub fn last(&self) -> Option<&StreamEvent> {
+        self.events.last()
+    }
+
+    /// Takes out everything the stream holds, keeping what it says of
+    /// itself, its kind, number and names: music21's `clear`. Its spanners,
+    /// staff groups, metadata and a measure's barlines go too, being among
+    /// music21's elements.
+    ///
+    /// ```
+    /// use music21::{Note, Stream, StreamKind};
+    ///
+    /// let mut measure = Stream::with_kind(StreamKind::Measure);
+    /// measure.set_number(3);
+    /// measure.push(Note::from_name("C4")?);
+    /// measure.clear();
+    /// assert!(measure.is_empty());
+    /// assert_eq!(measure.number(), 3);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn clear(&mut self) {
+        self.events.clear();
+        self.labels.spanners.clear();
+        self.labels.staff_groups.clear();
+        self.labels.metadata = None;
+        self.labels.left_barline = None;
+        self.labels.right_barline = None;
+    }
+
+    /// The clef the stream opens with: the first it holds itself at
+    /// nought, music21's `clef`. A clef in a nested stream is not read; the
+    /// clef in force anywhere is [`Stream::in_force_before`]'s to find.
+    ///
+    /// ```
+    /// use music21::{Clef, Note, Stream, StreamKind};
+    ///
+    /// let mut measure = Stream::with_kind(StreamKind::Measure);
+    /// measure.push(Note::from_name("D3")?);
+    /// assert!(measure.clef().is_none());
+    /// measure.insert(0.0, Clef::bass());
+    /// assert_eq!(measure.clef().unwrap().sign(), Some("F"));
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn clef(&self) -> Option<&Clef> {
+        self.events.iter().find_map(|event| match &event.element {
+            StreamElement::Clef(clef) if event.offset == 0.0 => Some(clef),
+            _ => None,
+        })
+    }
+
+    /// How long the stream lasts, from its start to the end of what ends
+    /// last: music21's `duration`, a duration of its `highestTime`
+    /// ([`Stream::end_offset`]). music21 lets a stream be given a duration
+    /// of its own; a crate stream's is always read off what it holds.
+    ///
+    /// ```
+    /// use music21::{Duration, Note, Stream};
+    ///
+    /// let mut stream = Stream::new();
+    /// stream.insert(3.0, Note::from_name("C4")?);
+    /// assert_eq!(stream.duration()?.quarter_length(), 4.0);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// A stream ending at an infinite offset, which no duration lasts.
+    pub fn duration(&self) -> Result<Duration> {
+        Duration::new(self.end_offset())
+    }
+
+    /// The first event this stream holds itself whose id is `id`, matched
+    /// without regard to case, or `None`: music21's `getElementById`, which
+    /// looks at this stream's own elements and not into the streams they
+    /// hold. Only a stream and a note carry an id here.
+    ///
+    /// ```
+    /// use music21::{Stream, StreamKind};
+    ///
+    /// let mut score = Stream::with_kind(StreamKind::Score);
+    /// for id in ["Soprano", "Alto"] {
+    ///     let mut part = Stream::with_kind(StreamKind::Part);
+    ///     part.set_id(Some(id.to_string()));
+    ///     score.insert(0.0, part);
+    /// }
+    /// let alto = score.element_by_id("alto").unwrap();
+    /// assert_eq!(alto.element().as_stream().unwrap().id(), Some("Alto"));
+    /// assert!(score.element_by_id("Tenor").is_none());
+    /// ```
+    pub fn element_by_id(&self, id: &str) -> Option<&StreamEvent> {
+        let wanted = id.to_lowercase();
+        self.events.iter().find(|event| {
+            let held = match &event.element {
+                StreamElement::Note(note) => note.id(),
+                StreamElement::Stream(stream) => stream.id(),
+                _ => None,
+            };
+            held.is_some_and(|held| held == id || held.to_lowercase() == wanted)
+        })
     }
 
     /// One timeline with the nesting dissolved: music21's `flatten`.
@@ -1602,6 +1739,175 @@ impl Stream {
         self.streams_of_kind(StreamKind::Voice)
     }
 
+    /// The measure of a number, or `None`: music21's `measure`.
+    ///
+    /// Where every measure is numbered nought, as in a stream nobody has
+    /// numbered, they are counted from one instead. A number below nought
+    /// counts back from the last, `-1` being the last. The measure is this
+    /// stream's own, so it carries none of the clef, key or metre in force
+    /// before it, as in music21; [`Stream::measures_between`] collects them.
+    /// A score is not sliced here: `measures_between(n, Some(n))` answers
+    /// music21's `Score.measure`.
+    ///
+    /// ```
+    /// use music21::{Duration, Note, Stream, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// for (number, name) in [(1, "C4"), (2, "D4")] {
+    ///     let mut measure = Stream::with_kind(StreamKind::Measure);
+    ///     measure.set_number(number);
+    ///     measure.push(Note::from_name(name)?.with_duration(Duration::whole()));
+    ///     part.push(measure);
+    /// }
+    /// assert_eq!(part.measure(2).unwrap().number(), 2);
+    /// assert_eq!(part.measure(-1).unwrap().number(), 2);
+    /// assert!(part.measure(3).is_none());
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn measure(&self, number: IntegerType) -> Option<&Stream> {
+        let measures = self.measures();
+        if number < 0 {
+            let index = isize::try_from(measures.len()).ok()? + isize::try_from(number).ok()?;
+            return measures.get(usize::try_from(index).ok()?).copied();
+        }
+
+        let counted = !measures.iter().any(|measure| measure.number() != 0);
+        measures
+            .iter()
+            .enumerate()
+            .find(|(index, measure)| measure_number(*index, measure, counted) == number)
+            .map(|(_, measure)| *measure)
+    }
+
+    /// The measures numbered `start` to `end`, both included, or to the last
+    /// where `end` is `None`: music21's `measures`.
+    ///
+    /// The answer is a stream of this one's kind, its first measure at
+    /// nought, opening with the clef, metre, instrument, key and tempo in
+    /// force where it starts, those its first measure does not open with
+    /// itself. A spanner comes along where it joins something in the
+    /// measures taken, naming nothing for what it joins outside them. A
+    /// score answers a score of each part's measures, without the score's
+    /// own spanners. Measures are numbered as [`Stream::measure`] reads
+    /// them; music21's suffixed numbers (`'4b'`) and indices are not taken.
+    ///
+    /// ```
+    /// use music21::{Clef, Duration, Note, Stream, StreamElement, StreamKind};
+    ///
+    /// let mut part = Stream::with_kind(StreamKind::Part);
+    /// for (number, name) in [(1, "C3"), (2, "D3"), (3, "E3")] {
+    ///     let mut measure = Stream::with_kind(StreamKind::Measure);
+    ///     measure.set_number(number);
+    ///     if number == 1 {
+    ///         measure.insert(0.0, Clef::bass());
+    ///     }
+    ///     measure.push(Note::from_name(name)?.with_duration(Duration::whole()));
+    ///     part.push(measure);
+    /// }
+    /// let excerpt = part.measures_between(2, None);
+    /// assert!(matches!(excerpt.events()[0].element(), StreamElement::Clef(_)));
+    /// let numbers: Vec<i32> = excerpt.measures().iter().map(|m| m.number()).collect();
+    /// assert_eq!(numbers, [2, 3]);
+    /// assert_eq!(excerpt.events()[1].offset(), 0.0);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn measures_between(&self, start: IntegerType, end: Option<IntegerType>) -> Stream {
+        if self.kind == StreamKind::Score {
+            let mut out = self.clone_empty();
+            out.labels.staff_groups = self.labels.staff_groups.clone();
+            for part in self.parts() {
+                out.events
+                    .push(StreamEvent::new(0.0, part.measures_between(start, end)));
+            }
+            return out;
+        }
+
+        let measured: Vec<usize> = self
+            .events
+            .iter()
+            .enumerate()
+            .filter(|(_, event)| {
+                event
+                    .element
+                    .as_stream()
+                    .is_some_and(|stream| stream.kind == StreamKind::Measure)
+            })
+            .map(|(index, _)| index)
+            .collect();
+        let counted = !measured.iter().any(|&index| {
+            self.events[index]
+                .element
+                .as_stream()
+                .is_some_and(|measure| measure.number() != 0)
+        });
+        let matches: Vec<usize> = measured
+            .iter()
+            .enumerate()
+            .filter(|(count, index)| {
+                let Some(measure) = self.events[**index].element.as_stream() else {
+                    return false;
+                };
+                let number = measure_number(*count, measure, counted);
+                number >= start && end.is_none_or(|end| number <= end)
+            })
+            .map(|(_, index)| *index)
+            .collect();
+        let mut out = self.clone_empty();
+        let Some(&first) = matches.first() else {
+            return out;
+        };
+
+        let begins = self.events[first].offset;
+        let mut kept = self.collected_before(first);
+        kept.extend(matches.iter().map(|&index| {
+            let event = &self.events[index];
+            let offset = crate::makenotation::op_frac(event.offset - begins);
+            (StreamEvent::new(offset, event.element.clone()), Some(index))
+        }));
+        out.labels.spanners = self.labels.spanners.clone();
+        out.events = self.events.clone();
+        out.replace_events(kept);
+        out.labels
+            .spanners
+            .retain(|spanner| spanner.spanned().iter().any(Option::is_some));
+        out
+    }
+
+    /// What music21's `measures` collects for the measure at `index`: of
+    /// each class it collects, the one in force where the measure starts,
+    /// unless the measure opens with one itself; in music21's order, at
+    /// nought.
+    fn collected_before(&self, index: usize) -> Vec<(StreamEvent, Option<usize>)> {
+        const COLLECTED: [&str; 5] = [
+            "Clef",
+            "TimeSignature",
+            "Instrument",
+            "KeySignature",
+            "MetronomeMark",
+        ];
+        let Some(measure) = self.events[index].element.as_stream() else {
+            return Vec::new();
+        };
+
+        let begins = self.events[index].offset;
+        let flat = self.flatten();
+        let mut found: Vec<StreamEvent> = COLLECTED
+            .iter()
+            .filter(|class| !opens_with(measure, class))
+            .filter_map(|class| {
+                flat.events
+                    .iter()
+                    .take_while(|event| event.offset <= begins)
+                    .filter(|event| event.element.is_instance(class))
+                    .last()
+                    .map(|event| StreamEvent::new(0.0, event.element.clone()))
+            })
+            .collect();
+        // music21 sorts these before the measure whatever their class.
+        found.sort_by(crate::makenotation::event_order);
+        found.into_iter().map(|event| (event, None)).collect()
+    }
+
     /// Every note and chord on the flattened timeline: music21's
     /// `flatten().notes`, which leaves rests out.
     ///
@@ -1709,6 +2015,10 @@ impl Stream {
         Ok(out)
     }
 
+    /// Puts the events in offset order, keeping the order they were given
+    /// in at one offset: how [`Stream::from_events`] takes an order from a
+    /// caller that knows more of it than the crate does, music21's
+    /// priorities among them.
     fn sort_events(&mut self) {
         self.events.sort_by(|left, right| {
             left.offset
@@ -1716,6 +2026,28 @@ impl Stream {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
     }
+}
+
+/// A measure's number, or where every measure is numbered nought, its
+/// place counted from one, as music21 reads measures by number.
+fn measure_number(index: usize, measure: &Stream, counted: bool) -> IntegerType {
+    if !counted {
+        return measure.number();
+    }
+
+    IntegerType::try_from(index + 1).unwrap_or(IntegerType::MAX)
+}
+
+/// Whether a stream, or one nested in it, holds something of `class` at
+/// its own start.
+fn opens_with(stream: &Stream, class: &str) -> bool {
+    stream.events.iter().any(|event| {
+        (event.offset == 0.0 && event.element.is_instance(class))
+            || event
+                .element
+                .as_stream()
+                .is_some_and(|inner| opens_with(inner, class))
+    })
 }
 
 /// Whether an element is a grace note or chord, which takes no time.
@@ -1825,6 +2157,228 @@ mod tests {
         assert_eq!(stream.events()[0].offset(), 0.0);
         assert_eq!(stream.events()[1].offset(), 2.0);
         assert_eq!(stream.end_offset(), 2.5);
+    }
+
+    #[test]
+    fn a_clef_inserted_after_a_note_sorts_before_it() {
+        // music21 sorts what stands at one offset by its class order, so
+        // a clef put in after a note at the start still comes first.
+        let mut stream = Stream::new();
+        stream.insert(0.0, Note::from_name("C4").unwrap());
+        stream.insert(0.0, Clef::treble());
+        assert!(matches!(
+            stream.events()[0].element(),
+            StreamElement::Clef(_)
+        ));
+        assert!(matches!(
+            stream.events()[1].element(),
+            StreamElement::Note(_)
+        ));
+    }
+
+    #[test]
+    fn a_clef_pushed_after_a_dynamic_sorts_before_it() {
+        // music21's `append` sorts a stream again where what is appended
+        // would sort before the last element.
+        let mut stream = Stream::new();
+        stream.push(Dynamic::new("p"));
+        stream.push(Clef::treble());
+        assert!(matches!(
+            stream.events()[0].element(),
+            StreamElement::Clef(_)
+        ));
+        assert!(matches!(
+            stream.events()[1].element(),
+            StreamElement::Dynamic(_)
+        ));
+    }
+
+    #[test]
+    fn first_and_last_follow_the_streams_order() {
+        let mut stream = Stream::new();
+        assert!(stream.first().is_none());
+        assert!(stream.last().is_none());
+        stream.insert(1.0, Note::from_name("D4").unwrap());
+        stream.insert(0.0, Note::from_name("C4").unwrap());
+        stream.insert(0.0, Clef::treble());
+        assert!(matches!(
+            stream.first().unwrap().element(),
+            StreamElement::Clef(_)
+        ));
+        assert_eq!(stream.last().unwrap().offset(), 1.0);
+    }
+
+    #[test]
+    fn clear_takes_out_what_music21_holds_as_elements() {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(3);
+        measure.set_id(Some("m3".to_string()));
+        measure.push(Note::from_name("C4").unwrap());
+        measure.set_right_barline(Some(Barline::default()));
+        measure.set_left_barline(Some(Barline::default()));
+        measure.set_metadata(Some(Metadata::default()));
+        measure.add_staff_group(StaffGroup::new(vec![0]));
+        measure.clear();
+        assert!(measure.is_empty());
+        assert!(measure.right_barline().is_none());
+        assert!(measure.left_barline().is_none());
+        assert!(measure.metadata().is_none());
+        assert!(measure.staff_groups().is_empty());
+        assert!(measure.spanners().is_empty());
+        assert_eq!(measure.number(), 3);
+        assert_eq!(measure.id(), Some("m3"));
+        assert_eq!(measure.kind(), StreamKind::Measure);
+    }
+
+    #[test]
+    fn the_clef_is_one_held_at_the_start() {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(2.0, Clef::bass());
+        assert!(
+            measure.clef().is_none(),
+            "a clef later on is not the opening one"
+        );
+        measure.insert(0.0, Clef::treble());
+        assert_eq!(measure.clef().unwrap().sign(), Some("G"));
+
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.push(measure);
+        assert!(part.clef().is_none(), "a measure's clef is not its part's");
+    }
+
+    #[test]
+    fn a_streams_duration_is_its_highest_time() {
+        let mut stream = Stream::new();
+        assert_eq!(stream.duration().unwrap().quarter_length(), 0.0);
+        stream.repeat_insert(
+            &Note::from_name("C4").unwrap().into(),
+            &[0.0, 1.0, 2.0, 3.0],
+        );
+        assert_eq!(stream.duration().unwrap().quarter_length(), 4.0);
+        stream.insert(FloatType::INFINITY, Clef::treble());
+        assert!(stream.duration().is_err());
+    }
+
+    #[test]
+    fn an_element_is_found_by_its_id_in_any_case() {
+        let mut note = Note::from_name("C4").unwrap();
+        note.set_id(Some("green".to_string()));
+        let mut stream = Stream::new();
+        stream.push(Rest::default());
+        stream.push(note);
+        assert_eq!(stream.element_by_id("Green").unwrap().offset(), 1.0);
+        assert!(stream.element_by_id("blue").is_none());
+
+        // only this stream's own elements are looked at
+        let mut outer = Stream::new();
+        outer.push(stream);
+        assert!(outer.element_by_id("green").is_none());
+    }
+
+    /// A part of measures of these numbers, each a whole note long, the
+    /// first opening with a bass clef and 4/4, a key change in the third.
+    fn numbered_part(numbers: &[IntegerType]) -> Stream {
+        let mut part = Stream::with_kind(StreamKind::Part);
+        for (index, &number) in numbers.iter().enumerate() {
+            let mut measure = Stream::with_kind(StreamKind::Measure);
+            measure.set_number(number);
+            if index == 0 {
+                measure.insert(0.0, Clef::bass());
+                measure.insert(0.0, TimeSignature::new(4, 4).unwrap());
+                measure.insert(0.0, KeySignature::new(1));
+            }
+            if index == 2 {
+                measure.insert(0.0, KeySignature::new(-2));
+            }
+            measure.push(
+                Note::from_name("C3")
+                    .unwrap()
+                    .with_duration(Duration::whole()),
+            );
+            part.push(measure);
+        }
+        part
+    }
+
+    #[test]
+    fn a_measure_is_found_by_its_number() {
+        let part = numbered_part(&[0, 1, 2, 3]);
+        assert_eq!(part.measure(0).unwrap().number(), 0);
+        assert_eq!(part.measure(2).unwrap().number(), 2);
+        assert!(part.measure(9).is_none());
+        assert_eq!(part.measure(-1).unwrap().number(), 3);
+        assert_eq!(part.measure(-4).unwrap().number(), 0);
+        assert!(part.measure(-5).is_none());
+
+        // all numbered nought: counted from one
+        let unnumbered = numbered_part(&[0, 0, 0]);
+        assert!(unnumbered.measure(0).is_none());
+        assert_eq!(unnumbered.measure(2).unwrap().end_offset(), 4.0);
+        assert!(std::ptr::eq(
+            unnumbered.measure(2).unwrap(),
+            unnumbered.measures()[1]
+        ));
+    }
+
+    #[test]
+    fn measures_between_collect_what_is_in_force() {
+        let part = numbered_part(&[1, 2, 3, 4]);
+        let excerpt = part.measures_between(2, Some(3));
+        assert_eq!(excerpt.kind(), StreamKind::Part);
+        let classes: Vec<&str> = excerpt
+            .events()
+            .iter()
+            .map(|event| event.element().music21_classes()[0])
+            .collect();
+        assert_eq!(
+            classes,
+            [
+                "BassClef",
+                "KeySignature",
+                "TimeSignature",
+                "Measure",
+                "Measure"
+            ]
+        );
+        assert!(
+            excerpt
+                .events()
+                .iter()
+                .take(3)
+                .all(|event| event.offset() == 0.0)
+        );
+        let numbers: Vec<IntegerType> = excerpt.measures().iter().map(|m| m.number()).collect();
+        assert_eq!(numbers, [2, 3]);
+        assert_eq!(excerpt.events()[4].offset(), 4.0);
+
+        // the measure opening with a key of its own takes no other
+        let from_three = part.measures_between(3, None);
+        let keys = from_three
+            .events()
+            .iter()
+            .filter(|event| event.element().is_instance("KeySignature"))
+            .count();
+        assert_eq!(keys, 0);
+        assert_eq!(from_three.measures().len(), 2);
+
+        // the first measure carries its own; nothing is collected
+        assert_eq!(part.measures_between(1, Some(1)).len(), 1);
+        assert!(part.measures_between(7, Some(9)).is_empty());
+    }
+
+    #[test]
+    fn a_score_answers_measures_of_each_part() {
+        let mut score = Stream::with_kind(StreamKind::Score);
+        score.set_id(Some("full".to_string()));
+        score.insert(0.0, numbered_part(&[1, 2, 3]));
+        score.insert(0.0, numbered_part(&[1, 2, 3]));
+        score.add_staff_group(StaffGroup::new(vec![0, 1]));
+        let slice = score.measures_between(2, Some(2));
+        assert_eq!(slice.kind(), StreamKind::Score);
+        assert_eq!(slice.id(), Some("full"));
+        assert_eq!(slice.parts().len(), 2);
+        assert_eq!(slice.parts()[1].measures().len(), 1);
+        assert_eq!(slice.staff_groups().len(), 1);
     }
 
     #[test]

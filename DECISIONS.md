@@ -485,6 +485,14 @@ could not extend the wheel's `Chord` in Rust.
 *costs:* a harte-rs release with every music21-rs release, changed or not,
 and the harte crate's own version is not harte-rs's.
 
+**`from_events` keeps the order it is given at one offset.** `insert` and
+`push` place an element as music21 sorts it (offset, then class: clef,
+key, meter, note); `from_events` does not re-sort, because it is how
+music21's priorities, which the crate does not model, reach a crate
+stream. *debated 2026-11-07:* sorting there moved `musicxml_parity` on
+chopin/mazurka06-2. The other 25 excluded `Stream` members stay excluded:
+each asks after one object's identity or site.
+
 **the wheel is built per Python version, not abi3.** *debated 2026-11-02,
 again 2026-11-05:* one abi3 wheel per platform would cut the release matrix,
 but the limited API made stream and object paths 9–11% slower (`Note('C#4')`,
