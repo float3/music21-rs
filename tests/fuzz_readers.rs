@@ -1,13 +1,16 @@
 //! Fuzzes the crate's readers on stable Rust: each test reads its seeds and
-//! then a fixed number of mutations of them -- bytes flipped, cut short,
+//! then mutations of them for a second or two -- bytes flipped, cut short,
 //! spliced, lines and tags deleted or doubled, numbers swapped for
 //! awkward ones -- and fails if a reader panics instead of returning `Ok`
 //! or `Err`.
 //!
-//! The mutations come from a fixed seed, so a run is repeatable. Three
-//! variables widen a run for a deep local search:
+//! The mutations come from a fixed seed, so a run is repeatable up to the
+//! time it is given. These variables widen a run for a deep local search:
 //!
-//! - `MUSIC21_FUZZ_ITERATIONS`: mutations per reader (default 300).
+//! - `MUSIC21_FUZZ_ITERATIONS`: the most mutations per reader (default
+//!   1000).
+//! - `MUSIC21_FUZZ_SECONDS`: the seconds a reader's mutations may take
+//!   (default 1.5); the seeds are always read.
 //! - `MUSIC21_FUZZ_RNG`: the seed of the generator (default 0x5eed).
 //! - `MUSIC21_FUZZ_CORPUS`: a directory whose files, matched by extension,
 //!   are added to the seeds, such as music21's own `music21/music21`.
@@ -16,9 +19,12 @@
 //!   process -- running out of memory or stack -- which no test can catch.
 //!   Run such a search with `--test-threads=1` and under `ulimit -v`.
 //!
+//! An optimized build keeps the overflow checks a release build drops:
+//!
 //! ```text
-//! MUSIC21_FUZZ_ITERATIONS=200000 MUSIC21_FUZZ_CORPUS=music21/music21 \
-//!     cargo test --release --all-features --test fuzz_readers -- --nocapture
+//! CARGO_PROFILE_DEV_OPT_LEVEL=2 MUSIC21_FUZZ_ITERATIONS=200000 \
+//!     MUSIC21_FUZZ_SECONDS=3600 MUSIC21_FUZZ_CORPUS=music21/music21 \
+//!     cargo test --all-features --test fuzz_readers -- --nocapture
 //! ```
 //!
 //! Each input that panics is written under `target/tmp/fuzz-crashes` and
@@ -39,8 +45,9 @@ const LARGEST_SEED: u64 = 128 * 1024;
 /// The most files a corpus directory adds to one reader's seeds.
 const MOST_CORPUS_SEEDS: usize = 400;
 
-/// An input slower than this is reported, as a reader that loops.
-const SLOWEST_INPUT: Duration = Duration::from_secs(5);
+/// An input slower than this is reported, as a reader that loops. A debug
+/// build takes seconds over the most measures a reader makes.
+const SLOWEST_INPUT: Duration = Duration::from_secs(30);
 
 /// A xorshift generator: small, and the same on every platform.
 struct Rng(u64);
@@ -371,13 +378,18 @@ fn seeds(name: &str, extensions: &[&str], extra: Vec<Vec<u8>>) -> Vec<Vec<u8>> {
     found
 }
 
-/// Reads every seed and `MUSIC21_FUZZ_ITERATIONS` mutations of them with
-/// `reader`, failing with the inputs that panicked.
+/// Reads every seed and then mutations of them with `reader` until
+/// `MUSIC21_FUZZ_ITERATIONS` are read or `MUSIC21_FUZZ_SECONDS` pass,
+/// failing with the inputs that panicked.
 fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
     quiet_panics();
     let iterations: usize = variable("MUSIC21_FUZZ_ITERATIONS")
         .and_then(|value| value.parse().ok())
-        .unwrap_or(300);
+        .unwrap_or(1000);
+    let seconds: f64 = variable("MUSIC21_FUZZ_SECONDS")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(1.5);
+    let budget = Duration::from_secs_f64(seconds);
     let rng_seed: u64 = variable("MUSIC21_FUZZ_RNG")
         .and_then(|value| value.parse().ok())
         .unwrap_or(0x5eed);
@@ -387,6 +399,7 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
     let mut places: Vec<String> = Vec::new();
     let keep_current = variable("MUSIC21_FUZZ_KEEP_CURRENT").is_some();
     let started = Instant::now();
+    let mut mutated = 0;
 
     let mutations = (0..iterations).map(|_| {
         let seed = rng.pick(seeds).clone();
@@ -395,6 +408,12 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
     // Reading lazily keeps the generator's draws in one order either way.
     let inputs = seeds.iter().cloned().chain(mutations);
     for (index, input) in inputs.enumerate() {
+        if index >= seeds.len() {
+            if started.elapsed() > budget {
+                break;
+            }
+            mutated += 1;
+        }
         if keep_current {
             let _ = fs::create_dir_all(&crashes);
             let _ = fs::write(crashes.join(format!("{name}-current")), &input);
@@ -404,7 +423,7 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
         let slow = began.elapsed() > SLOWEST_INPUT;
         let problem = match (panicked, slow) {
             (Some(message), _) => message,
-            (None, true) => format!("took {:?}", began.elapsed()),
+            (None, true) => format!("slow: took {:?}", began.elapsed()),
             (None, false) => continue,
         };
         // One report per place a reader panics, not one per input.
@@ -419,7 +438,7 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
         failures.push(format!("{problem}\n    input: {}", path.display()));
     }
     eprintln!(
-        "fuzz {name}: {} seeds, {iterations} mutations in {:.1?}",
+        "fuzz {name}: {} seeds, {mutated} mutations in {:.1?}",
         seeds.len(),
         started.elapsed()
     );
