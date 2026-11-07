@@ -272,6 +272,7 @@ note = "A string instrument's open strings, the only member music21 gives its st
 [[class]]
 python = "instrument.py"
 name = "MidiPercussionMapMixin"
+facade = "Instrument"
 rust = ["src/instrument/mod.rs"]
 note = "How an instrument in the General MIDI percussion map is played, and the drum that plays. v11 moved this out of `UnpitchedPercussion` into a mixin, the map being a synthesizer's layout rather than a family of instruments -- which is how a whistle, a flute, comes to be in it."
 
@@ -533,6 +534,7 @@ seekChordTablesAddress = "address_of_pitch_classes"
 [[class]]
 python = "romanText/tsvConverter.py"
 name = "TabChordBase"
+facade = "TabChord"
 rust = ["src/romantext/tsv.rs"]
 note = "One row of the lab's tabular analysis, read: the columns both of its standards share, the label music21 builds a numeral from, and the chord that numeral stands for. The one row type here reads a row of either standard, as music21's two subclasses do between them."
 
@@ -678,6 +680,7 @@ note = "A span of a bar written as a ratio, which is what a meter's partitions a
 [[class]]
 python = "meter/core.py"
 name = "MeterNode"
+facade = "MeterTerminal"
 rust = ["src/meter/sequence.rs"]
 note = "What a span and a divided span have in common: their length, comparing ratios, and dividing."
 
@@ -1343,7 +1346,6 @@ rust = ["src/features/language.rs"]
 
 [class.renames]
 parseExcerpt = "from_text"
-makeWords = "from_words"
 
 [class.excluded]
 measure = "the step that counts the letter triples, which building one does"

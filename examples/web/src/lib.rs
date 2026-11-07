@@ -1786,6 +1786,14 @@ mod tests {
     }
 
     #[test]
+    fn harte_info_pairs_each_pitch_with_its_midi() {
+        let info = super::harte_info("C:sus4(*3,9)").unwrap();
+
+        assert_eq!(info.pitches, ["C4", "F4", "G4", "D4"]);
+        assert_eq!(info.midi, [60, 65, 67, 62]);
+    }
+
+    #[test]
     fn display_pitches_for_sequence_adds_concrete_octaves() {
         let chord = Chord::new("C D E").unwrap();
         let names = display_pitches_for_sequence(chord.pitches())
@@ -2129,9 +2137,15 @@ struct HarteInfo {
 #[wasm_bindgen]
 /// Reads a chord label in Harte notation and describes the chord it sounds.
 pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
-    let harte = harte::Harte::new(label).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    let info = harte_info(label).map_err(|err| JsValue::from_str(&err))?;
+    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+/// What the Harte page shows of a label.
+fn harte_info(label: &str) -> Result<HarteInfo, String> {
+    let harte = harte::Harte::new(label).map_err(|err| err.to_string())?;
     let chord = harte.chord();
-    let info = HarteInfo {
+    Ok(HarteInfo {
         label: label.to_string(),
         canonical: harte.to_string(),
         pretty: harte.prettify(),
@@ -2146,7 +2160,8 @@ pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
             .iter()
             .map(Pitch::name_with_octave)
             .collect(),
-        midi: harte.midi_pitches(),
+        // In the order of `pitches`, which each one labels.
+        midi: chord.pitches().iter().map(Pitch::midi).collect(),
         frequencies_hz: chord.pitches().iter().map(Pitch::frequency_hz).collect(),
         bass_index: harte
             .bass_degree()
@@ -2164,8 +2179,7 @@ pub fn harte_chord(label: &str) -> Result<JsValue, JsValue> {
         pitched_common_name: chord.pitched_common_name(),
         forte_class: chord.forte_class(),
         chord_symbol: chord.chord_symbol(),
-    };
-    serde_wasm_bindgen::to_value(&info).map_err(|err| JsValue::from_str(&err.to_string()))
+    })
 }
 
 #[derive(Serialize)]

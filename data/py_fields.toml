@@ -368,6 +368,10 @@ reason = "pitches and the chords made of them"
 kind = "facade-only"
 reason = "a tree and the offset asked about"
 
+[TurnRecognizer]
+kind = "facade-only"
+reason = "the intervals a turn may step by, read into the crate afresh at each question"
+
 [Verticality]
 kind = "facade-only"
 reason = "a dictionary of what sounds at one offset"

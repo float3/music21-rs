@@ -1403,6 +1403,7 @@ _UNTRAVERSED = {
     "TabChordV2": "the text and numbers of a TSV row",
     "TempoText": "a text expression",
     "TextBox": "a style and a place",
+    "TurnRecognizer": "the intervals a turn may step by",
     # Braille's working parts, made and dropped inside one transcription.
     "BrailleElementGrouping": "a transcription's grouping",
     "BrailleText": "lines of braille",
@@ -8199,3 +8200,220 @@ def test_an_inversion_fixed_through_overrides_is_named():
     chord._overrides["inversion"] = 300
     with pytest.raises(m.ChordException, match="Not a normal inversion for a triad: 300"):
         chord.inversionName()
+
+
+def test_meter_nodes_answer_music21s_shared_members():
+    # MeterNode is music21's base of both spans; each facade carries its members.
+    core = pytest.importorskip("music21.meter.core")
+    for ours, theirs in (
+        (m.MeterTerminal("3/8"), core.MeterTerminal("3/8")),
+        (m.MeterSequence("3/8+2/8"), core.MeterSequence("3/8+2/8")),
+    ):
+        assert (ours.numerator, ours.denominator) == (theirs.numerator, theirs.denominator)
+        assert ours.weight == theirs.weight
+        assert ours.duration.quarterLength == theirs.duration.quarterLength
+        assert ours.ratioEqual(m.MeterTerminal("5/8")) == theirs.ratioEqual(core.MeterTerminal("5/8"))
+        assert str(ours.subdivideByCount(3)) == str(theirs.subdivideByCount(3))
+        split = [1, ours.numerator - 1]
+        assert str(ours.subdivideByList(split)) == str(theirs.subdivideByList(split))
+
+
+def test_a_glissandos_slide_type_is_read_and_refused_as_music21s():
+    gliss = m.Glissando(m.Note("C4"), m.Note("C5"))
+    assert gliss.slideType == "chromatic"
+    gliss.slideType = "Diatonic"
+    assert gliss.slideType == "diatonic"
+    with pytest.raises(m.SpannerException, match="not a valid value: purple"):
+        gliss.slideType = "purple"
+    with pytest.raises(AttributeError):
+        m.Slur().slideType
+
+
+def test_a_glissandos_slide_type_matches_music21s():
+    spanner = pytest.importorskip("music21.spanner")
+    ours, theirs = m.Glissando(), spanner.Glissando()
+    for kind in ("continuous", "WHITE", "black"):
+        ours.slideType = kind
+        theirs.slideType = kind
+        assert ours.slideType == theirs.slideType
+
+
+
+def _played(notes):
+    return [(n.nameWithOctave, float(n.quarterLength)) for n in notes]
+
+
+def test_realize_ornaments_plays_each_ornament_in_turn():
+    plain = m.Note("D5")
+    assert m.realizeOrnaments(plain) == [plain]
+    mordent = m.Note("D5")
+    mordent.expressions.append(m.WholeStepMordent())
+    assert _played(m.realizeOrnaments(mordent)) == [
+        ("D5", 0.125), ("C5", 0.125), ("D5", 0.75)
+    ]
+
+
+def test_realize_ornaments_matches_music21s():
+    expressions = pytest.importorskip("music21.expressions")
+    note = pytest.importorskip("music21.note")
+    for kinds in (("WholeStepMordent",), ("Turn",), ("Trill",), ("InvertedTurn", "Trill")):
+        ours, theirs = m.Note("E4"), note.Note("E4")
+        ours.quarterLength = theirs.quarterLength = 2
+        for kind in kinds:
+            ours.expressions.append(getattr(m, kind)())
+            theirs.expressions.append(getattr(expressions, kind)())
+        assert _played(m.realizeOrnaments(ours)) == _played(expressions.realizeOrnaments(theirs))
+
+
+def test_make_ornamental_accidentals_matches_music21s():
+    expressions = pytest.importorskip("music21.expressions")
+    makeNotation = pytest.importorskip("music21.stream.makeNotation")
+    note = pytest.importorskip("music21.note")
+    pitch = pytest.importorskip("music21.pitch")
+    ours, theirs = m.Note("E4"), note.Note("E4")
+    ours.expressions.append(m.Trill())
+    theirs.expressions.append(expressions.Trill())
+    our_past, their_past = [m.Pitch("F#4")], [pitch.Pitch("F#4")]
+    m.makeOrnamentalAccidentals(ours, pitchPast=our_past)
+    makeNotation.makeOrnamentalAccidentals(theirs, pitchPast=their_past)
+    shown = lambda n: [
+        (p.nameWithOctave, p.accidental is not None and p.accidental.displayStatus)
+        for p in n.expressions[0].ornamentalPitches
+    ]
+    assert shown(ours) == shown(theirs) == [("F4", True)]
+    assert [p.nameWithOctave for p in our_past] == [p.nameWithOctave for p in their_past]
+
+
+def _busy(make_note, names, length=0.25):
+    notes = [make_note(name) for name in names]
+    for n in notes:
+        n.quarterLength = length
+    return notes
+
+
+def _ornament(found):
+    if found is False:
+        return False
+    pitches = [p.nameWithOctave for p in getattr(found, "ornamentalPitches", ())]
+    return (type(found).__name__, float(found.quarterLength),
+            getattr(found, "nachschlag", False), pitches)
+
+
+ORNAMENT_CASES = (
+    (["G4", "A4", "G4", "A4"], None),
+    (["A4", "G4", "A4", "G4"], None),
+    (["G4", "A-4", "G4", "A-4"], None),
+    (["G4", "A4", "G4", "A4"], "A4"),
+    (["G4", "C5", "G4", "C5"], None),
+    (["G4", "A4", "G4", "A4", "G4", "F4", "G4"], None),
+    (["B4", "A4", "G4", "A4"], None),
+    (["G4", "A4", "B4", "A4"], "A4"),
+    (["G4", "A4"], None),
+)
+
+
+def test_ornament_recognizers_recognize_as_music21s():
+    recognizer = pytest.importorskip("music21.alpha.analysis.ornamentRecognizer")
+    note = pytest.importorskip("music21.note")
+    duration = pytest.importorskip("music21.duration")
+    for busy_names, simple_name in ORNAMENT_CASES:
+        ours = _busy(m.Note, busy_names)
+        theirs = _busy(note.Note, busy_names)
+        our_simple = [m.Note(simple_name)] if simple_name else None
+        their_simple = [note.Note(simple_name)] if simple_name else None
+        for kind, keywords in (
+            ("TrillRecognizer", {}),
+            ("TrillRecognizer", {"checkNachschlag": True}),
+            ("TurnRecognizer", {}),
+        ):
+            mine = getattr(m, kind)(**keywords)
+            music21s = getattr(recognizer, kind)(**keywords)
+            assert _ornament(mine.recognize(ours, our_simple)) == _ornament(
+                music21s.recognize(theirs, their_simple)
+            ), (kind, keywords, busy_names, simple_name)
+        base, music21_base = m.OrnamentRecognizer(), recognizer.OrnamentRecognizer()
+        assert base.calculateOrnamentNoteQl(ours, our_simple) == (
+            music21_base.calculateOrnamentNoteQl(theirs, their_simple)
+        )
+        assert base.calculateOrnamentTotalQl(ours, our_simple) == (
+            music21_base.calculateOrnamentTotalQl(theirs, their_simple)
+        )
+    turns, music21_turns = m.TurnRecognizer(), recognizer.TurnRecognizer()
+    for name in ("M2", "m-2", "A2", "M3", "P1"):
+        assert turns.isAcceptableInterval(m.Interval(name)) == (
+            music21_turns.isAcceptableInterval(recognizer.interval.Interval(name))
+        )
+    assert m.calculateTrillNoteDuration(3, m.Duration(1.0)) == (
+        recognizer.calculateTrillNoteDuration(3, duration.Duration(1.0))
+    )
+
+
+def test_a_turn_recognizer_reads_its_intervals_as_they_stand():
+    turns = m.TurnRecognizer()
+    assert turns.isAcceptableInterval(m.Interval("M2"))
+    turns.acceptableIntervals = [m.Interval("M3")]
+    assert not turns.isAcceptableInterval(m.Interval("M2"))
+    assert turns.isAcceptableInterval(m.Interval("M3"))
+    assert m.TrillRecognizer().recognize([m.Note("C4")]) is False
+
+
+SCALE_RUN_LINES = (
+    "4/4 a4 b c'# d' e' f'#",
+    "4/4 f'#4 e' d' c'# b a g# f#",
+    "4/4 c4 d e f g a b c' d' r e' f' e d c",
+    "4/4 a4 b c'# a b c'# d' e' f'# g'# a'",
+)
+
+
+def test_find_consecutive_scale_matches_music21s():
+    search = pytest.importorskip("music21.alpha.analysis.search")
+    converter = pytest.importorskip("music21.converter")
+    scale = pytest.importorskip("music21.scale")
+    for line in SCALE_RUN_LINES:
+        theirs = converter.parse("tinyNotation: " + line).flatten()
+        for keywords in ({}, {"degreesRequired": 3}, {"comparisonAttribute": "pitchClass"}):
+            for tonic in ("A4", "C4"):
+                music21_runs = search.findConsecutiveScale(
+                    theirs, scale.MajorScale(tonic), **keywords
+                )
+                our_runs = m.findConsecutiveScale(theirs, m.MajorScale(tonic), **keywords)
+                assert [
+                    (run["direction"], [(o, n.nameWithOctave) for o, n in _offsets(run["stream"])])
+                    for run in our_runs
+                ] == [
+                    (run["direction"], [(o, n.nameWithOctave) for o, n in _offsets(run["stream"])])
+                    for run in music21_runs
+                ], (line, keywords, tonic)
+    with pytest.raises(m.SearchModuleException, match="scale must be a concrete scale class"):
+        m.findConsecutiveScale(theirs, "A major")
+
+
+def _offsets(stream):
+    return [(float(stream.elementOffset(n)), n) for n in stream.notes]
+
+
+def test_find_consecutive_scale_hands_back_the_callers_notes():
+    line = m.Stream()
+    for name in ("A4", "B4", "C#5", "D5", "E5", "G4"):
+        line.append(m.Note(name))
+    runs = m.findConsecutiveScale(line, m.MajorScale("A4"))
+    assert len(runs) == 1
+    found = list(runs[0]["stream"].notes)
+    assert found[0] is line.notes[0]
+    assert [n.nameWithOctave for n in found] == ["A4", "B4", "C#5", "D5", "E5"]
+
+
+def test_transcribe_note_grouping_matches_music21s():
+    note_grouping = pytest.importorskip("music21.braille.noteGrouping")
+    segment = pytest.importorskip("music21.braille.segment")
+    note = pytest.importorskip("music21.note")
+    for show in (True, False):
+        ours = m.BrailleElementGrouping()
+        for name in ("C4", "D4", "E5"):
+            ours.append(m.Note(name))
+        theirs = segment.BrailleElementGrouping(
+            [note.Note(name) for name in ("C4", "D4", "E5")]
+        )
+        assert m.transcribeNoteGrouping(ours, showLeadingOctave=show) == (
+            note_grouping.transcribeNoteGrouping(theirs, showLeadingOctave=show)
+        )

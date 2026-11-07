@@ -34,6 +34,7 @@ macro_rules! error_into {
 }
 
 pub mod aligner;
+pub mod alphasearch;
 pub mod analysis;
 pub mod articulations;
 pub mod audiosearch;
@@ -80,6 +81,7 @@ pub mod neoriemannian;
 pub mod notation;
 pub mod note;
 pub mod omrcorrectors;
+pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
@@ -1479,6 +1481,11 @@ exceptions![
     ),
     ("TextException", text::TextException, Some("music21.text")),
     (
+        "SearchModuleException",
+        alphasearch::SearchModuleException,
+        Some("music21.alpha.analysis.search")
+    ),
+    (
         "TablatureException",
         tablature::TablatureException,
         Some("music21.tablature")
@@ -1900,6 +1907,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     extractors::register(m)?;
     primitives::register(m)?;
     fixer::register(m)?;
+    ornamentrecognizer::register(m)?;
+    alphasearch::register(m)?;
     harmparser::register(m)?;
     spineparser::register(m)?;
     hasher::register(m)?;

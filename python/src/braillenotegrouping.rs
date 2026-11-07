@@ -26,7 +26,7 @@ use music21::braille::segment::{
 use crate::braillesegment::{crate_element, crate_grouping, write_english};
 
 /// The names this module hands out.
-pub const NAMES: &[&str] = &["NoteGroupingTranscriber"];
+pub const NAMES: &[&str] = &["NoteGroupingTranscriber", "transcribeNoteGrouping"];
 
 /// music21's `braille.noteGrouping.NoteGroupingTranscriber`.
 #[pyclass(
@@ -220,7 +220,22 @@ impl NoteGroupingTranscriber {
     }
 }
 
+/// A grouping written by a transcriber of its own, with or without the
+/// octave of its first note: music21's `transcribeNoteGrouping`.
+#[pyfunction]
+#[pyo3(signature = (brailleElementGrouping, showLeadingOctave = true))]
+fn transcribeNoteGrouping(
+    brailleElementGrouping: &Bound<'_, PyAny>,
+    #[pyo3(from_py_with = crate::truthy)] showLeadingOctave: bool,
+) -> PyResult<String> {
+    let py = brailleElementGrouping.py();
+    let transcriber = Bound::new(py, NoteGroupingTranscriber::new(py, None))?;
+    transcriber.borrow_mut().showLeadingOctave = showLeadingOctave;
+    NoteGroupingTranscriber::transcribeGroup(&transcriber, Some(brailleElementGrouping))
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(transcribeNoteGrouping, m)?)?;
     m.add_class::<NoteGroupingTranscriber>()?;
     Ok(())
 }
