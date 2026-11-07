@@ -4956,9 +4956,10 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
         let object = match event.element() {
             StreamElement::Stream(inner) => {
                 let built = build_as(py, inner, whose)?;
+                let first = leaves.len();
                 leaves.extend(built.leaves);
                 if matches!(inner.kind(), StreamKind::Part | StreamKind::PartStaff) {
-                    parts.push(built.made.clone());
+                    parts.push((built.made.clone(), first..leaves.len()));
                 }
                 Some(built.made)
             }
@@ -5011,7 +5012,9 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 }
                 Whose::Music21 => {
                     let built = crate::spanner::music21_object(py, spanner, joined)?;
-                    made.call_method1("insert", (0.0, built))?;
+                    let home = home_part(spanner, &parts, stream.staff_groups())
+                        .map_or(&made, |place| &parts[place].0);
+                    home.call_method1("insert", (0.0, built))?;
                 }
             }
         }
@@ -5022,7 +5025,7 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             let grouped = group
                 .parts()
                 .iter()
-                .filter_map(|place| parts.get(*place).cloned())
+                .filter_map(|place| parts.get(*place).map(|(part, _)| part.clone()))
                 .collect();
             let made_group = crate::layout::music21_staff_group(py, group, grouped)?;
             made.call_method1("insert", (0.0, made_group))?;
@@ -5080,6 +5083,39 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
         _ => {}
     }
     Ok(Built { made, leaves })
+}
+
+/// The part of a score music21's reader puts a spanner in, by its place
+/// among `parts`, each with the range of the score's leaves it holds: the
+/// part holding the first thing it joins, finished as that part was read,
+/// and of a part written on several staves the first staff, which alone
+/// keeps its spanners -- an octave line excepted, which stays with its
+/// notes. None for one joining nothing of any part, and for an arpeggio,
+/// which music21 finishes once every part is read, in the score.
+fn home_part(
+    spanner: &music21::spanner::Spanner,
+    parts: &[(Bound<'_, PyAny>, std::ops::Range<usize>)],
+    groups: &[music21::stream::StaffGroup],
+) -> Option<usize> {
+    use music21::spanner::SpannerKind;
+
+    if spanner.kind() == SpannerKind::ArpeggioMark {
+        return None;
+    }
+    let first = spanner.spanned().iter().flatten().next()?;
+    let holding = parts.iter().position(|(_, held)| held.contains(first))?;
+    if spanner.kind() == SpannerKind::Ottava {
+        return Some(holding);
+    }
+    // A part's own staves are the group whose name is hidden.
+    let staves = groups
+        .iter()
+        .find(|group| group.name_hidden() && group.parts().contains(&holding));
+    Some(
+        staves
+            .and_then(|group| group.parts().first().copied())
+            .unwrap_or(holding),
+    )
 }
 
 /// How a measure is drawn, on music21's own: whether its number shows,
@@ -5303,7 +5339,9 @@ fn element_object_as<'py>(
         .into_any(),
         StreamElement::ChordSymbol(symbol) => {
             if symbol.is_no_chord() {
-                class_named("music21.harmony", "NoChord")?.call0()?
+                let keywords = PyDict::new(py);
+                keywords.set_item("kindStr", symbol.kind_text())?;
+                class_named("music21.harmony", "NoChord")?.call((), Some(&keywords))?
             } else {
                 let keywords = PyDict::new(py);
                 keywords.set_item("root", symbol.root().name())?;

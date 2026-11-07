@@ -48,11 +48,15 @@ pub struct Dynamic {
 impl Dynamic {
     /// The facade around a dynamic of the crate's.
     pub(crate) fn wrap(inner: RsDynamic) -> Self {
+        // Where a reader found it placed, which music21 keeps beside it.
+        let placement = inner
+            .placement()
+            .map(|placement| placement.as_str().to_string());
         let mut made = Self {
             inner,
             long_name: None,
             english_name: None,
-            placement: None,
+            placement,
         };
         made.name_from_value();
         made

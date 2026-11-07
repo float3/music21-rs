@@ -369,6 +369,7 @@ impl Building {
             _ => Spanner::with_unplaced(self.kind, positions),
         };
         spanner.set_placement(self.placement);
+        spanner.set_id_local(self.id_local.clone());
         if self.kind != SpannerKind::Crescendo && self.kind != SpannerKind::Diminuendo {
             spanner.set_line_type(self.line_type.clone());
         }

@@ -1753,6 +1753,9 @@ pub(crate) fn music21_object<'py>(
             made.setattr(*name, value)?;
         }
     }
+    if let Some(id_local) = inner.id_local() {
+        made.setattr("idLocal", id_local)?;
+    }
     made.setattr("completeStatus", true)?;
     Ok(made)
 }

@@ -7331,16 +7331,18 @@ print(converter.Converter.getSubConverterFormats()['musicxml'] is subConverters.
     ]
 
 
-def _routed_differences(fmt, paths, classes=None):
+def _routed_differences(fmt, paths, classes=None, drawn=True):
     """Where the crate's read of each of `paths` differs from music21's,
     through `converter_parity`, in a fresh interpreter with the wheel
-    installed: the lines naming one of `classes` where they are given."""
+    installed: the lines naming one of `classes` where they are given, and
+    passing over where things are drawn unless `drawn`."""
     code = f"""
 import sys
 import warnings
 sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
 warnings.simplefilter('ignore')
 import converter_parity
+converter_parity.IGNORE_STYLE = {not drawn!r}
 import music21_rs
 from music21 import common
 music21_rs.install_into_music21()
@@ -7432,6 +7434,32 @@ def test_routed_musicxml_keeps_an_implicit_measures_number_hidden():
     pytest.importorskip("music21.stream")
     paths = ("corpus/bach/bwv69.6.xml",)
     assert _routed_differences("musicxml", paths, (" Measure ", "<measure")) == []
+
+
+def test_routed_musicxml_puts_spanners_in_their_parts():
+    """A spanner read through the crate stands in the part music21's
+    reader puts it in: the part it was finished in, the first staff of a
+    part written on several."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml", "corpus/schumann_robert/dichterliebe_no2.xml")
+    names = (" Slur ", " Crescendo ", " Diminuendo ", " PedalMark ", " Ottava ")
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
+
+
+def test_routed_musicxml_keeps_where_a_dynamic_is_placed():
+    """A dynamic read through the crate says which side of the staff it is
+    placed on, as the direction holding it does."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schumann_robert/dichterliebe_no2.xml",)
+    assert _routed_differences("musicxml", paths, (" Dynamic ",), drawn=False) == []
+
+
+def test_routed_musicxml_keeps_what_a_no_chord_says():
+    """A no-chord read through the crate keeps the words it is written
+    with."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/testNC.xml",)
+    assert _routed_differences("musicxml", paths, ("NoChord", "<kind")) == []
 
 
 def test_a_blocked_member_says_it_is_not_ported():
