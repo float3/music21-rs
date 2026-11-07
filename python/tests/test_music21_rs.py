@@ -7087,6 +7087,15 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     assert cr.sliceWeight(2.0, 0.5, False, True) == 1.0
     assert round(cr.sliceWeight(2.0, 0.5, True, False), 6) == 0.2
 
+    # Consonance as a chord's own, unless its interval-class set is one
+    # allowed or forbidden.
+    assert cr.isConsonant([m.Pitch("C4"), m.Pitch("E4"), m.Pitch("G4")])
+    assert not cr.isConsonant([m.Pitch("C4"), m.Pitch("D4")])
+    assert cr.isConsonant([m.Pitch("C4"), m.Pitch("D4")], {frozenset({2})})
+    assert not cr.isConsonant(
+        [m.Pitch("C4"), m.Pitch("E4"), m.Pitch("G4")], None, {frozenset({3, 4, 5})}
+    )
+
     # A weight algorithm of the caller's own is called for each slice, and
     # what it raises is raised.
     score = m.Score([m.from_tiny_notation("tinyNotation: 4/4 e1"),
