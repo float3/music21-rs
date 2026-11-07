@@ -19,14 +19,17 @@ use pyo3::types::PyList;
 
 /// The formats `install_into_music21` routes through the crate.
 ///
-/// MIDI alone: of music21's 21 test files and eight corpus scores written
-/// as MIDI, all but one read as the same score to the last attribute, and
-/// write the same MusicXML; `test04.mid` has its closing tempo marks at
-/// 560 where music21 has 558.5, past the last measure. The other readers
-/// agree with music21's on the notes, but the score the wheel builds of
-/// what they read is not music21's in full yet: a MusicXML or Humdrum score
-/// loses its layouts, text boxes and spine comments, and an ABC or MEI
-/// score puts its slurs at nought.
+/// MIDI alone: of music21's 21 test files, all but one read as the same
+/// score to the last attribute, editorials included; `test04.mid` has its
+/// closing tempo marks at 560 where music21 has 558.5, past the last
+/// measure. The others are measured by `tests/converter_parity.py`: a
+/// MusicXML score still lacks where its notes, directions and marks are
+/// drawn, in what font and colour, and the score's own appearance and
+/// fonts; an ABC score's rests lack the empty beams music21's makeBeams
+/// gives them, and a slur the notes it holds that stand in no stream;
+/// Humdrum loses its spine comments, part ids and the priorities that
+/// order its elements; and an MEI score its slurs' place at the end of
+/// the score and their ids.
 pub(crate) const ROUTED: &[&str] = &["midi"];
 
 /// The Python half: one subconverter per format, and the registering.
