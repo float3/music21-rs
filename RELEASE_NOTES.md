@@ -1,3 +1,21 @@
+# music21-rs 0.18.0
+
+`harte` 0.11.0 depends on this release.
+
+## added
+
+- `Stream::first`, `last`, `clear`, `clef`, `duration`, `element_by_id`,
+  `measure` and `measures_between`, as music21's `Stream` has them.
+  `measures_between` is music21's ranged `measures(start, end)`: it carries
+  the clef, meter, instrument, key and tempo in force, and on a score gives
+  a score of each part's range.
+
+## changed
+
+- `Stream::insert` and `push` order what stands at one offset as music21
+  does: a clef before a key before a note. `from_events` still keeps the
+  order it is given.
+
 # music21-rs 0.17.0
 
 `harte` 0.10.0 depends on this release.
