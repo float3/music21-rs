@@ -384,6 +384,13 @@ fn affinity_of(element: &StreamElement) -> Option<(Affinity, i32)> {
     })
 }
 
+/// The affinity braille groups an element by and the order it sorts in
+/// among elements at its place, nothing for one braille does not write:
+/// music21's `setAffinityCode`.
+pub fn affinity_code(element: &StreamElement) -> Option<(Affinity, i32)> {
+    affinity_of(element)
+}
+
 /// Whether music21 counts an element a `GeneralNote`.
 fn is_general_note(element: &StreamElement) -> bool {
     matches!(
@@ -1582,37 +1589,10 @@ impl BrailleSegment {
             Some(Hand::Left) => Some("left"),
             None => None,
         };
-        let mut writer = SegmentWriter {
-            text: BrailleText::new(self.options.max_line_length, hand)?,
-            keys: self.groupings.keys().copied().collect(),
-            current: None,
-            previous: None,
-            last_note: None,
-        };
-        if self.options.show_heading {
-            writer.extract_heading(self)?;
-        }
-        if self.options.show_first_measure_number {
-            writer.extract_measure_number(self)?;
-        }
-        if let Some(length) = self.options.dummy_rest_length {
-            let dummy = lookup::rest("dummy").unwrap_or_default().repeat(length);
-            writer.text.add_signatures(&dummy)?;
-        }
-        writer.previous = None;
-        while let Some(key) = writer.keys.pop_front() {
-            writer.current = Some(key);
-            match key.affinity {
-                Affinity::NoteGrouping => writer.extract_note_grouping(self)?,
-                Affinity::Signature => writer.extract_signature_grouping(self)?,
-                Affinity::LongTextExpression => writer.extract_long_expression_grouping(self)?,
-                Affinity::Inaccord => writer.extract_inaccord_grouping(self)?,
-                Affinity::TempoText => writer.extract_tempo_text_grouping(self)?,
-                _ => {}
-            }
-            writer.previous = writer.current;
-        }
-        Ok(writer.text.render())
+        let text = BrailleText::new(self.options.max_line_length, hand)?;
+        let mut transcriber = SegmentTranscriber::new(text);
+        transcriber.transcribe(self)?;
+        Ok(transcriber.into_text().render())
     }
 
     /// The segment's groupings in English, as music21's `__str__` lists
@@ -1735,6 +1715,7 @@ fn heading_english(
 }
 
 /// The state of a segment being written.
+#[derive(Clone, Debug)]
 struct SegmentWriter {
     text: BrailleText,
     keys: VecDeque<SegmentKey>,
@@ -1968,9 +1949,13 @@ impl SegmentWriter {
     }
 
     fn needs_split_to_fit(&mut self, braille: &str) -> bool {
+        self.needs_split_for(braille.chars().count())
+    }
+
+    fn needs_split_for(&mut self, cells: usize) -> bool {
         let quarter = self.text.line_length / 4;
         let left = self.text.line_length - self.text.current_line().text_location;
-        left > quarter && braille.chars().count() > quarter
+        left > quarter && cells > quarter
     }
 
     fn extract_note_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
@@ -2136,6 +2121,276 @@ impl SegmentWriter {
     }
 }
 
+/// A segment written into a text a step at a time, with what music21's
+/// segment keeps while it writes: the keys still to write, the grouping
+/// being written and the one before it, and the last note written.
+///
+/// [`BrailleSegment::transcribe`] is [`SegmentTranscriber::transcribe`]
+/// into a fresh text; each other step is one of music21's `extract*`
+/// methods, which its own examples call one at a time.
+#[derive(Clone, Debug)]
+pub struct SegmentTranscriber {
+    writer: SegmentWriter,
+}
+
+impl SegmentTranscriber {
+    /// A transcriber writing into a text, with nothing to write yet.
+    pub fn new(text: BrailleText) -> Self {
+        Self {
+            writer: SegmentWriter {
+                text,
+                keys: VecDeque::new(),
+                current: None,
+                previous: None,
+                last_note: None,
+            },
+        }
+    }
+
+    /// The text written so far.
+    pub fn text(&self) -> &BrailleText {
+        &self.writer.text
+    }
+
+    /// The text, to write into directly.
+    pub fn text_mut(&mut self) -> &mut BrailleText {
+        &mut self.writer.text
+    }
+
+    /// The text, once the writing is done.
+    pub fn into_text(self) -> BrailleText {
+        self.writer.text
+    }
+
+    /// The keys still to write: music21's `groupingKeysToProcess`.
+    pub fn keys_mut(&mut self) -> &mut VecDeque<SegmentKey> {
+        &mut self.writer.keys
+    }
+
+    /// The grouping being written: music21's `currentGroupingKey`.
+    pub fn current(&self) -> Option<SegmentKey> {
+        self.writer.current
+    }
+
+    /// Sets the grouping being written.
+    pub fn set_current(&mut self, key: Option<SegmentKey>) {
+        self.writer.current = key;
+    }
+
+    /// The grouping written before it: music21's `previousGroupingKey`.
+    pub fn previous(&self) -> Option<SegmentKey> {
+        self.writer.previous
+    }
+
+    /// Sets the grouping written before.
+    pub fn set_previous(&mut self, key: Option<SegmentKey>) {
+        self.writer.previous = key;
+    }
+
+    /// The pitch of the last note written: music21's `lastNote`.
+    pub fn last_note(&self) -> Option<&Pitch> {
+        self.writer.last_note.as_ref()
+    }
+
+    /// Sets the last note written.
+    pub fn set_last_note(&mut self, pitch: Option<Pitch>) {
+        self.writer.last_note = pitch;
+    }
+
+    /// The whole segment: its heading and first measure number, then each
+    /// grouping in turn: music21's `transcribe`.
+    ///
+    /// # Errors
+    ///
+    /// Something too wide for a line, or that music21 cannot write.
+    pub fn transcribe(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        let writer = &mut self.writer;
+        writer.keys = segment.groupings.keys().copied().collect();
+        if segment.options.show_heading {
+            writer.extract_heading(segment)?;
+        }
+        if segment.options.show_first_measure_number {
+            writer.extract_measure_number(segment)?;
+        }
+        if segment.options.dummy_rest_length.is_some() {
+            self.add_dummy_rests(segment)?;
+        }
+        let writer = &mut self.writer;
+        writer.previous = None;
+        while let Some(key) = writer.keys.pop_front() {
+            writer.current = Some(key);
+            match key.affinity {
+                Affinity::NoteGrouping => writer.extract_note_grouping(segment)?,
+                Affinity::Signature => writer.extract_signature_grouping(segment)?,
+                Affinity::LongTextExpression => writer.extract_long_expression_grouping(segment)?,
+                Affinity::Inaccord => writer.extract_inaccord_grouping(segment)?,
+                Affinity::TempoText => writer.extract_tempo_text_grouping(segment)?,
+                _ => {}
+            }
+            writer.previous = writer.current;
+        }
+        Ok(())
+    }
+
+    /// The heading out of the signatures, tempo and metronome mark the
+    /// segment starts with: music21's `extractHeading`.
+    ///
+    /// # Errors
+    ///
+    /// A heading too wide for a line.
+    pub fn extract_heading(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.writer.extract_heading(segment)
+    }
+
+    /// The number of the first measure still to write: music21's
+    /// `extractMeasureNumber`.
+    ///
+    /// # Errors
+    ///
+    /// A number too wide for a line.
+    pub fn extract_measure_number(&mut self, segment: &BrailleSegment) -> Result<()> {
+        self.writer.extract_measure_number(segment)
+    }
+
+    /// As many dummy rests as the segment asks for: music21's
+    /// `addDummyRests`.
+    ///
+    /// # Errors
+    ///
+    /// Rests too many for a line.
+    pub fn add_dummy_rests(&mut self, segment: &BrailleSegment) -> Result<()> {
+        let length = segment.options.dummy_rest_length.unwrap_or(0);
+        let dummy = lookup::rest("dummy").unwrap_or_default().repeat(length);
+        self.writer.text.add_signatures(&dummy)
+    }
+
+    /// The grouping being written, a group of notes: music21's
+    /// `extractNoteGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written, or one too wide for a line.
+    pub fn extract_note_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.require_current(segment)?;
+        self.writer.extract_note_grouping(segment)
+    }
+
+    /// The grouping being written, signatures: music21's
+    /// `extractSignatureGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written, or signatures too wide for a line.
+    pub fn extract_signature_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.require_current(segment)?;
+        self.writer.extract_signature_grouping(segment)
+    }
+
+    /// The grouping being written, a long text: music21's
+    /// `extractLongExpressionGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written.
+    pub fn extract_long_expression_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.require_current(segment)?;
+        self.writer.extract_long_expression_grouping(segment)
+    }
+
+    /// The grouping being written, voices in accord: music21's
+    /// `extractInaccordGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written, or a voice too wide for a line.
+    pub fn extract_inaccord_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.require_current(segment)?;
+        self.writer.extract_inaccord_grouping(segment)
+    }
+
+    /// The grouping being written, tempo words, which start a heading of
+    /// their own: music21's `extractTempoTextGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written or none before it.
+    pub fn extract_tempo_text_grouping(&mut self, segment: &mut BrailleSegment) -> Result<()> {
+        self.require_current(segment)?;
+        self.writer.extract_tempo_text_grouping(segment)
+    }
+
+    /// Whether a grouping written next shows its first note's octave:
+    /// music21's `showLeadingOctaveFromNoteGrouping`.
+    pub fn show_leading_octave_from(
+        &mut self,
+        grouping: &BrailleElementGrouping,
+        suppress_octave_marks: bool,
+    ) -> bool {
+        self.writer
+            .show_leading_octave_from(grouping, suppress_octave_marks)
+    }
+
+    /// Whether braille this long has to be split to fit what is left of
+    /// the line: music21's `needsSplitToFit`.
+    pub fn needs_split_to_fit(&mut self, braille: &str) -> bool {
+        self.writer.needs_split_to_fit(braille)
+    }
+
+    /// The same for something so many cells long.
+    pub fn needs_split_for(&mut self, cells: usize) -> bool {
+        self.writer.needs_split_for(cells)
+    }
+
+    /// The grouping being written split where the line has room, each half
+    /// written and kept in the segment under its own key: music21's
+    /// `splitNoteGroupingAndTranscribe`. Nothing where no split fits.
+    ///
+    /// # Errors
+    ///
+    /// No grouping being written, or a meter that cannot be halved.
+    pub fn split_and_transcribe(
+        &mut self,
+        segment: &mut BrailleSegment,
+        show_leading_octave_on_first: bool,
+        add_space_to_first: bool,
+    ) -> Result<Option<(String, String)>> {
+        let key = self.require_current(segment)?;
+        let mut grouping = segment.groupings[&key].clone();
+        let split = self.writer.split_and_transcribe(
+            segment,
+            &mut grouping,
+            show_leading_octave_on_first,
+            add_space_to_first,
+        )?;
+        segment.groupings.insert(key, grouping);
+        Ok(split)
+    }
+
+    /// The signs for a grouping repeated so many times: music21's
+    /// `addRepeatSymbols`.
+    ///
+    /// # Errors
+    ///
+    /// Signs too wide for a line.
+    pub fn add_repeat_symbols(&mut self, times: usize) -> Result<()> {
+        self.writer.add_repeat_symbols(times)
+    }
+
+    /// The grouping being written, which the segment has to hold.
+    fn require_current(&self, segment: &BrailleSegment) -> Result<SegmentKey> {
+        self.writer
+            .current
+            .filter(|key| segment.groupings.contains_key(key))
+            .ok_or_else(|| {
+                Error::Notation("no grouping of the segment is being written".to_string())
+            })
+    }
+}
+
+/// The keys of a measure's groupings for the right hand and the left, either
+/// missing where that hand has none.
+pub type KeyPair = (Option<SegmentKey>, Option<SegmentKey>);
+
 /// A piano's two staves cut into segments of groupings for each hand,
 /// written side by side: music21's `BrailleGrandSegment`.
 #[derive(Clone, Debug)]
@@ -2153,7 +2408,7 @@ pub struct BrailleGrandSegment {
 impl BrailleGrandSegment {
     /// The keys of the two hands, paired measure by measure: music21's
     /// `yieldCombinedGroupingKeys`.
-    pub fn combined_keys(&self) -> Vec<(Option<SegmentKey>, Option<SegmentKey>)> {
+    pub fn combined_keys(&self) -> Vec<KeyPair> {
         let mut keys: Vec<SegmentKey> = self.groupings.keys().copied().collect();
         keys.sort_by_key(|key| {
             (
@@ -2234,15 +2489,47 @@ impl BrailleGrandSegment {
     ///
     /// Something too wide for a line, or that music21 cannot write.
     pub fn transcribe(&mut self) -> Result<String> {
-        let mut pairs: VecDeque<(Option<SegmentKey>, Option<SegmentKey>)> =
-            self.combined_keys().into();
         let mut keyboard = BrailleKeyboard::new(self.line_length);
+        self.transcribe_into(&mut keyboard)?;
+        Ok(keyboard.text.render())
+    }
+
+    /// [`BrailleGrandSegment::transcribe`] into a keyboard's text as it
+    /// stands, rather than a fresh one.
+    ///
+    /// # Errors
+    ///
+    /// Something too wide for a line, or that music21 cannot write.
+    pub fn transcribe_into(&mut self, keyboard: &mut BrailleKeyboard) -> Result<()> {
+        let mut pairs: VecDeque<KeyPair> = self.combined_keys().into();
         let Some(last) = pairs.back().copied() else {
-            return Ok(keyboard.text.render());
+            return Ok(());
         };
         let highest = last.0.or(last.1).map_or(0, |key| key.measure);
         keyboard.highest_measure_number_length = highest.to_string().chars().count();
-        // The heading.
+        self.extract_heading(&mut pairs, keyboard)?;
+        while let Some(pair) = pairs.pop_front() {
+            let writes = pair.0.is_some_and(|key| key.affinity >= Affinity::Inaccord)
+                || pair.1.is_some_and(|key| key.affinity >= Affinity::Inaccord);
+            if writes {
+                self.extract_note_grouping(pair, keyboard)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// The heading out of the pairs the segment starts with, which it
+    /// takes off them: music21's `extractHeading`. Nothing is written
+    /// where there is nothing for a heading.
+    ///
+    /// # Errors
+    ///
+    /// A heading too wide for a line.
+    pub fn extract_heading(
+        &mut self,
+        pairs: &mut VecDeque<KeyPair>,
+        keyboard: &mut BrailleKeyboard,
+    ) -> Result<()> {
         let mut sharps: Option<Option<IntegerType>> = None;
         let mut meter: Option<TimeSignature> = None;
         let mut tempo: Option<crate::tempo::TempoText> = None;
@@ -2316,19 +2603,29 @@ impl BrailleGrandSegment {
             }
             keyboard.text.add_heading(&heading)?;
         }
-        while let Some((right, left)) = pairs.pop_front() {
-            let writes = right.is_some_and(|key| key.affinity >= Affinity::Inaccord)
-                || left.is_some_and(|key| key.affinity >= Affinity::Inaccord);
-            if !writes {
-                continue;
-            }
-            let measure = right.or(left).map_or(0, |key| key.measure);
-            let number = number_to_braille(&measure.to_string(), false, false)?;
-            let right_braille = self.braille_from_key(right)?;
-            let left_braille = self.braille_from_key(left)?;
-            keyboard.add_note_groupings(&number, &right_braille, &left_braille)?;
-        }
-        Ok(keyboard.text.render())
+        Ok(())
+    }
+
+    /// A measure's pair of groupings written side by side: music21's
+    /// `extractNoteGrouping`.
+    ///
+    /// # Errors
+    ///
+    /// A pair with neither hand, or a grouping too wide for a line.
+    pub fn extract_note_grouping(
+        &mut self,
+        (right, left): KeyPair,
+        keyboard: &mut BrailleKeyboard,
+    ) -> Result<()> {
+        let Some(measure) = right.or(left).map(|key| key.measure) else {
+            return Err(Error::Notation(
+                "Measure must be defined for leftKey or rightKey".to_string(),
+            ));
+        };
+        let number = number_to_braille(&measure.to_string(), false, false)?;
+        let right_braille = self.braille_from_key(right)?;
+        let left_braille = self.braille_from_key(left)?;
+        keyboard.add_note_groupings(&number, &right_braille, &left_braille)
     }
 
     fn braille_from_key(&mut self, key: Option<SegmentKey>) -> Result<String> {
