@@ -232,6 +232,14 @@ reason = "an analysis over a stream it holds"
 kind = "facade-only"
 reason = "music21's attributes, read into a crate grouping by whoever transcribes it"
 
+[BrailleGrandSegment]
+kind = "facade-only"
+reason = "a segment of both hands' groupings and the pairs of keys it writes, read into the crate's segment at each step"
+
+[BrailleSegment]
+kind = "facade-only"
+reason = "music21's dictionary of groupings and the keys and last note it keeps while writing, read into the crate's segment at each step"
+
 [CTRule]
 kind = "facade-only"
 reason = "a rule's text and what it parsed into"

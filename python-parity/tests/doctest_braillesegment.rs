@@ -1,21 +1,14 @@
 //! music21's `braille/segment.py` doctests against the crate. See
 //! `src/doctest.rs`.
 //!
-//! `BrailleElementGrouping` is the crate's -- a run of elements braille
-//! writes together -- and so is the transcriber music21's segments ask for
-//! each grouping (`braille.noteGrouping`). The segments themselves,
-//! `BrailleSegment` and `BrailleGrandSegment` and the functions that cut a
-//! part into them, are still music21's here, running over the crate's
-//! groupings and the crate's transcriptions, which is the harder test of
-//! the two.
+//! The groupings, the segments, the grand segment and the functions that
+//! cut a part into them are the crate's facades, holding the crate's
+//! notes; so is the transcriber they ask for each grouping
+//! (`braille.noteGrouping`). `splitMeasure` is still music21's.
 //!
-//! `braille.text` is deliberately *not* swapped here, though it has a
-//! facade of its own: music21's `BrailleSegment` derives from its
-//! `BrailleText` and calls `text.BrailleText.__str__(self)` by name, so
-//! with the base class swapped under it that call is handed an object of
-//! the class it no longer names. A class already made keeps the base it
-//! was made from, which `rebind` cannot change; its own suite covers the
-//! laying out.
+//! `braille.text` is not swapped: the segments here are built on the
+//! package's own `BrailleText` whatever music21's module holds, and its
+//! own suite covers the laying out.
 
 use music21_rs_python_parity::doctest;
 

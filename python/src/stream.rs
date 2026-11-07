@@ -7246,6 +7246,14 @@ pub(crate) fn metadata_value(metadata: &Bound<'_, PyAny>) -> PyResult<music21::M
 /// music21 numbers them in; each names what it joins by position among that
 /// stream's leaves.
 pub fn crate_stream(stream: &Bound<'_, PyAny>) -> PyResult<RsStream> {
+    Ok(crate_stream_with_leaves(stream)?.0)
+}
+
+/// [`crate_stream`] beside the object at each of its leaves, for a caller
+/// that hands an answer about a leaf back as the object it was read from.
+pub(crate) fn crate_stream_with_leaves(
+    stream: &Bound<'_, PyAny>,
+) -> PyResult<(RsStream, Vec<Py<PyAny>>)> {
     let mut leaves = Vec::new();
     let mut held = Vec::new();
     let mut read = read_into_with(stream, &mut leaves, false, &mut held)?;
@@ -7265,7 +7273,7 @@ pub fn crate_stream(stream: &Bound<'_, PyAny>) -> PyResult<RsStream> {
             }
         }
     }
-    Ok(read)
+    Ok((read, leaves))
 }
 
 /// Reads a stream, this wheel's or music21's, into the crate with every

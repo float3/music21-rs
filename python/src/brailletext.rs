@@ -281,6 +281,45 @@ impl BrailleText {
     }
 }
 
+/// A text of the crate's as the facade's first half: what a class built on
+/// `BrailleText` starts from.
+pub(crate) fn text_initializer(
+    py: Python<'_>,
+    inner: RsText,
+) -> PyResult<PyClassInitializer<BrailleText>> {
+    Ok(PyClassInitializer::from(BrailleText::of(py, inner)?))
+}
+
+/// The crate's text as one built on `BrailleText` stands, with whatever a
+/// caller wrote through a line object read back into it.
+pub(crate) fn text_value(text: &Bound<'_, BrailleText>) -> PyResult<RsText> {
+    let py = text.py();
+    let mut me = text.borrow_mut();
+    me.synced(py)?;
+    Ok(me.inner.clone())
+}
+
+/// A text written by the crate put back, its lines onto the objects they
+/// had.
+pub(crate) fn set_text_value(text: &Bound<'_, BrailleText>, value: RsText) -> PyResult<()> {
+    let py = text.py();
+    let values = value.all_lines.clone();
+    let mut lines = {
+        let mut me = text.borrow_mut();
+        me.inner = value;
+        std::mem::take(&mut me.lines)
+    };
+    Lines::write(py, &mut lines, &values)?;
+    text.borrow_mut().lines = lines;
+    Ok(())
+}
+
+/// The object for one of a text's lines.
+pub(crate) fn line_object(text: &Bound<'_, BrailleText>, at: usize) -> Option<Py<PyAny>> {
+    let py = text.py();
+    text.borrow().lines.get(at).map(|line| line.clone_ref(py))
+}
+
 #[pymethods]
 impl BrailleText {
     /// music21's `BrailleText(lineLength=40, showHand=None)`.
