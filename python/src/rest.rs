@@ -25,7 +25,13 @@ use crate::note::{
 };
 
 /// music21's `note.Rest`.
-#[pyclass(name = "Rest", module = "music21.note", subclass, skip_from_py_object)]
+#[pyclass(
+    name = "Rest",
+    module = "music21.note",
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
 pub struct Rest {
     pub(crate) inner: RsRest,
     /// The `Duration` object handed out from `.duration`, once asked for:

@@ -104,6 +104,7 @@ pub mod searchserial;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
+pub mod sites;
 pub mod spanner;
 mod spelling;
 pub mod spineparser;
@@ -1117,6 +1118,14 @@ def unported_members(facade, original):
     return blocked
 
 
+class _OwnAttribute:
+    """A name each object keeps in its own dictionary: reading it off the
+    class finds nothing."""
+
+    def __get__(self, instance, owner=None):
+        raise AttributeError
+
+
 def make_class(facade, original):
     def __init__(self, *arguments, **keywords):
         # A class music21 derived from the one replaced, before it was
@@ -1203,8 +1212,9 @@ def make_class(facade, original):
     })
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
-        # through `informSites`. The package's streams keep no sites, so
-        # they are told first, and keep what they worked out until then.
+        # through `informSites`, which reaches music21's streams alone. The
+        # package's streams are told first, and keep what they worked out
+        # until then.
         inform = original.informSites
 
         def informSites(self, changedInformation=None):
@@ -1213,6 +1223,19 @@ def make_class(facade, original):
 
         namespace['informSites'] = informSites
         namespace['_tellsPackageStreams'] = True
+        # The package's own elements answer these through its own sites;
+        # an installed one stands in music21's streams, so music21's
+        # members answer, read off the class replaced.
+        # `sites` is no member of music21's class but of each object, kept
+        # in its dictionary, which the package's member must not stand in
+        # front of.
+        for name in site_members:
+            for ancestor in original.__mro__:
+                if name in vars(ancestor):
+                    namespace.setdefault(name, vars(ancestor)[name])
+                    break
+            else:
+                namespace.setdefault(name, _OwnAttribute())
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
                  # What music21 says about its own attributes, which its test
                  # runner reads off the class to build a doctest per entry.
@@ -1369,6 +1392,9 @@ fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
             )?;
             // What an installed class's `informSites` calls first.
             helper.add_function(wrap_pyfunction!(crate::stream::tell_streams, &helper)?)?;
+            // The members the package's own sites answer, which an
+            // installed class takes from music21 instead.
+            helper.add("site_members", crate::sites::MEMBERS)?;
             py.import("sys")?
                 .getattr("modules")?
                 .set_item("music21_rs_install", &helper)?;
@@ -1806,6 +1832,16 @@ exceptions![
     ),
     ("SieveException", sieve::SieveException, None),
     (
+        "SitesException",
+        sites::SitesException,
+        Some("music21.sites")
+    ),
+    (
+        "Music21ObjectException",
+        sites::Music21ObjectException,
+        Some("music21.base")
+    ),
+    (
         "StreamException",
         stream::StreamException,
         Some("music21.exceptions21")
@@ -1960,6 +1996,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;
+    // Last: it puts its members on classes the others registered.
+    sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --

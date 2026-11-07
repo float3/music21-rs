@@ -866,47 +866,214 @@ def test_a_measure_names_itself_by_its_number():
     assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
 
 
+def _site_namespaces():
+    """The wheel's classes and music21's, under the same names, for running
+    one scenario on both."""
+    note = pytest.importorskip("music21.note")
+    from music21 import meter, sites, stream
+
+    ours = dict(
+        Note=m.Note, Stream=m.Stream, Measure=m.Measure, Part=m.Part, Score=m.Score,
+        Voice=m.Voice, TimeSignature=m.TimeSignature, SitesException=m.SitesException,
+    )
+    theirs = dict(
+        Note=note.Note, Stream=stream.Stream, Measure=stream.Measure, Part=stream.Part,
+        Score=stream.Score, Voice=stream.Voice, TimeSignature=meter.TimeSignature,
+        SitesException=sites.SitesException,
+    )
+    return [type("Names", (), ours), type("Names", (), theirs)]
+
+
+def _on_both(scenario):
+    """What a scenario answers on the wheel and on music21, which must agree."""
+    ours, theirs = (scenario(names) for names in _site_namespaces())
+    assert ours == theirs
+    return ours
+
+
+def test_an_element_knows_the_streams_holding_it():
+    """music21's `sites`, `activeSite` and `offset`: each stream an element
+    is put in becomes a site, the last one reached is the active one, and
+    the offset is the one there."""
+    n = m.Note("C")
+    first, second = m.Stream(id="first"), m.Stream(id="second")
+    first.insert(10, n)
+    second.insert(20, n)
+    assert [site.id for site in n.sites] == ["first", "second"]
+    assert n.sites.get()[0] is None
+    assert (n.activeSite, n.offset) == (second, 20.0)
+    for _ in first:
+        pass
+    assert (n.activeSite, n.offset) == (first, 10.0)
+    assert (n.getOffsetBySite(second), n.getOffsetBySite(None)) == (20.0, 0.0)
+    assert (len(n.sites), n.sites.getSiteCount()) == (3, 2)
+    assert None in n.sites and first in n.sites and m.Stream() not in n.sites
+
+    first.remove(n)
+    assert (n.activeSite, n.offset, list(n.sites)) == (None, 0.0, [second])
+    with pytest.raises(m.SitesException, match="is not stored in stream"):
+        n.getOffsetBySite(first)
+    with pytest.raises(m.SitesException, match="activeSite cannot be set"):
+        n.activeSite = first
+
+
+def test_an_element_offset_is_written_where_it_stands():
+    """Writing `offset` moves an element in its `activeSite`, and sets its
+    own where no stream holds it, which `insert` with no offset reads."""
+    n, line = m.Note("C"), m.Stream()
+    line.insert(2, n)
+    n.offset = 3
+    assert line.elementOffset(n) == 3.0
+    free = m.Note("D")
+    free.offset = 4.5
+    assert (free.offset, free.activeSite) == (4.5, None)
+    held = m.Stream()
+    held.insert(free)
+    assert held.elementOffset(free) == 4.5
+    # Where the stream it stood in is gone, it answers where it stood.
+    held.insert(1, m.Note("E"))
+    held.setElementOffset(free, 6)
+    del held
+    gc.collect()
+    assert (free.offset, free.activeSite) == (6.0, None)
+
+
+def test_a_copied_element_has_no_sites():
+    """music21's deepcopy leaves the sites behind: the copy stands nowhere."""
+    n, line = m.Note("C"), m.Stream()
+    line.insert(5, n)
+    copied = copy.deepcopy(n)
+    assert (copied.activeSite, copied.offset, copied.sites.getSiteCount()) == (None, 0.0, 0)
+    assert n.sites.getSiteCount() == 1
+    copied_line = copy.deepcopy(line)
+    assert copied_line[0].activeSite is copied_line and copied_line[0].offset == 5.0
+    assert n.activeSite is line
+
+
+def test_a_stream_picked_from_reaches_into_the_one_picked_from():
+    """`notes` and its kin stand in for music21's iterators: what is
+    reached through them is reached in the stream they were picked from."""
+    bar = m.Measure(number=4)
+    first = m.Note("C")
+    bar.append([first, m.Note("D")])
+    other = m.Stream()
+    other.insert(7, first)
+    assert (first.activeSite, first.measureNumber) == (other, 4)
+    for each in bar.notes:
+        assert (each.activeSite, each.measureNumber) == (bar, 4)
+    assert list(first.sites) == [bar, other]
+
+
+def _beats(names, meter, lengths, pickup=0.0):
+    part = names.Part()
+    for at, notes in enumerate(lengths):
+        bar = names.Measure(number=at + (0 if pickup else 1))
+        if at == 0:
+            bar.insert(0, names.TimeSignature(meter))
+            bar.paddingLeft = pickup
+        for length in notes:
+            bar.append(names.Note("C", quarterLength=length))
+        part.append(bar)
+    found = []
+    for n in part.recurse().notes:
+        found.append((
+            n.measureNumber, n.offset, n.beat, n.beatStr, n.beatStrength,
+            n.beatDuration.quarterLength, n.getContextByClass("TimeSignature").ratioString,
+            n.getOffsetInHierarchy(part),
+        ))
+    for n in part.flatten().notes:
+        found.append((n.measureNumber, n.offset, n.beat, n.beatStr, n.beatStrength))
+    return found
+
+
 @pytest.mark.parametrize(
-    "name",
+    "meter, lengths, pickup",
     [
-        "offset",
-        "activeSite",
-        "beat",
-        "beatStr",
-        "beatStrength",
-        "beatDuration",
-        "measureNumber",
+        ("4/4", [[1, 0.5, 0.5, 2], [4]], 0.0),
+        ("6/8", [[1.5, 0.5, 0.5, 0.5], [3]], 0.0),
+        ("3/4", [[1], [1, 1, 1], [3]], 2.0),
+        ("5/8", [[1, 0.5, 0.5, 0.5], [1.5, 1]], 0.0),
     ],
 )
-def test_an_element_says_why_it_cannot_say_where_it_stands(name):
-    """The package keeps no sites, so what an element would answer through
-    one is refused with the reason and where to ask instead."""
-    for element in (
-        m.Note("C4"),
-        m.Rest(),
-        m.Chord("C4 E4"),
-        m.TimeSignature("3/4"),
-        m.TrebleClef(),
-        m.Barline(),
-        m.Measure(),
-    ):
-        if name == "beatDuration" and isinstance(element, m.TimeSignature):
-            # A meter's own beat, which music21's meter answers too.
-            continue
-        with pytest.raises(AttributeError, match=r"elementOffset.*placed\(\).*install_into_music21"):
-            getattr(element, name)
-        assert not hasattr(element, name)
-    with pytest.raises(AttributeError, match=r"has no attribute 'nonesuch'$"):
-        m.Note().nonesuch
+def test_the_beat_is_music21s(meter, lengths, pickup):
+    """`beat`, `beatStr`, `beatStrength`, `beatDuration`, `measureNumber`
+    and the meter in force, read through the sites as music21 reads them,
+    in measures and in the stream flattening them."""
+    _on_both(lambda names: _beats(names, meter, lengths, pickup))
 
 
-def test_every_element_class_refuses_a_site():
+def test_the_beat_without_measures_or_meter_is_music21s():
+    """A meter carries on past its bar in a stream with no measures, and
+    an element with no meter in force has no beat."""
+
+    def scenario(names):
+        line = names.Stream()
+        line.append(names.TimeSignature("3/4"))
+        line.append([names.Note("D") for _ in range(7)])
+        found = [(n.beat, n.beatStrength, n.measureNumber) for n in line.notes]
+        alone = names.Note()
+        found.append((alone.offset, alone.activeSite, alone.beatStr, alone.measureNumber))
+        found.append(alone.beatDuration.quarterLength)
+        found.append(math.isnan(alone.beat) and math.isnan(alone.beatStrength))
+        return found
+
+    _on_both(scenario)
+
+
+def test_contexts_are_music21s():
+    """`getContextByClass`, `contextSites`, `next` and `previous` walk
+    outwards through measures, voices, parts and scores as music21's do."""
+
+    def scenario(names):
+        found = []
+        part = names.Part()
+        for number, lengths in ((1, [1, 1, 1, 1]), (2, [2, 2])):
+            bar = names.Measure(number=number)
+            if number == 1:
+                bar.insert(0, names.TimeSignature("4/4"))
+            bar.append([names.Note("C", quarterLength=length) for length in lengths])
+            part.append(bar)
+        notes = list(part.recurse().notes)
+        for n in notes:
+            found.append([type(each).__name__ for each in (n.next(), n.previous(), n.next("Note"), n.previous("Note"))])
+        second = part.getElementsByClass("Measure")[1]
+        found.append((second.offset, second.activeSite is part, second.measureNumber))
+
+        bar = names.Measure(number=3)
+        bar.insert(0, names.TimeSignature("2/4"))
+        upper, lower = names.Voice(), names.Voice()
+        upper.append([names.Note("C", quarterLength=length) for length in (0.5, 0.5, 1)])
+        lower.append(names.Note("E", quarterLength=2))
+        bar.insert(0, upper)
+        bar.insert(0, lower)
+        names.Part().append(bar)
+        found.append([(n.measureNumber, n.beat, n.beatStrength) for n in bar.recurse().notes])
+
+        score = names.Score()
+        for at in range(2):
+            line, held = names.Part(), names.Measure(number=1)
+            if at == 0:
+                held.insert(0, names.TimeSignature("3/8"))
+            held.append([names.Note("G", quarterLength=0.5) for _ in range(3)])
+            line.append(held)
+            score.insert(0, line)
+        # A part's meter is no context of another part's notes.
+        last = list(score.parts[1].recurse().notes)[-1]
+        found.append((last.getContextByClass("TimeSignature"), math.isnan(last.beat)))
+        found.append([(type(site).__name__, offset, str(kind)) for site, offset, kind in last.contextSites()])
+        return found
+
+    _on_both(scenario)
+
+
+def test_every_element_class_answers_through_sites():
     """Every class standing in for one of music21's `Music21Object`s
-    refuses what a site would answer, not only the few tried above."""
+    answers what music21 reads through sites, not only the few tried
+    above."""
     base = pytest.importorskip("music21.base")
     import importlib
 
-    unhooked = []
+    missing = []
     for name in dir(m.music21_rs):
         cls = getattr(m.music21_rs, name)
         if not isinstance(cls, type) or issubclass(cls, BaseException):
@@ -917,9 +1084,10 @@ def test_every_element_class_refuses_a_site():
             continue
         if not (isinstance(original, type) and issubclass(original, base.Music21Object)):
             continue
-        if cls.__getattribute__ is object.__getattribute__:
-            unhooked.append(name)
-    assert unhooked == []
+        for member in ("sites", "activeSite", "offset", "getContextByClass", "beat"):
+            if not hasattr(cls, member):
+                missing.append((name, member))
+    assert missing == []
 
 
 def test_an_installed_element_answers_where_it_stands():
@@ -7055,6 +7223,10 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     second = m.Chord("C4 E4 F4 B4")
     third = m.Chord("C4 E4 G4 C5")
     chords = [first, second, third]
+    # In a measure, so each has a beat strength to weigh by.
+    bar = m.Measure()
+    bar.insert(0, m.TimeSignature("4/4"))
+    bar.append(chords)
     weights = cr.computeMeasureChordWeights(chords)
     assert weights == {(0, 4, 7): 3.0, (0, 4, 5, 11): 1.0}
     # Consonance counts for a lot, and the last chord of the measure

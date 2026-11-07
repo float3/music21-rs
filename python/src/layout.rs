@@ -72,7 +72,8 @@ fn read_tenths(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Tenths>> {
     name = "LayoutBase",
     module = "music21.layout",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct LayoutBase;
 
@@ -101,7 +102,8 @@ impl LayoutBase {
     name = "ScoreLayout",
     module = "music21.layout",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct ScoreLayout {
     /// The scaling, which is what a score layout says of itself.
@@ -288,7 +290,8 @@ fn said(value: Option<Tenths>) -> String {
     name = "PageLayout",
     module = "music21.layout",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct PageLayout {
     pub(crate) inner: RsPageLayout,
@@ -464,7 +467,8 @@ impl PageLayout {
     name = "SystemLayout",
     module = "music21.layout",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct SystemLayout {
     pub(crate) inner: RsSystemLayout,
@@ -628,7 +632,8 @@ impl SystemLayout {
     name = "StaffLayout",
     module = "music21.layout",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct StaffLayout {
     pub(crate) inner: RsStaffLayout,

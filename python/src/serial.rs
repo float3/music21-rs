@@ -107,7 +107,8 @@ fn row_note(py: Python<'_>, pitch: music21::Pitch) -> PyResult<Py<PyAny>> {
     name = "ToneRow",
     module = "music21.serial",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct ToneRow {
     pub(crate) inner: RsToneRow,
@@ -501,7 +502,8 @@ impl HistoricalTwelveToneRow {
     name = "TwelveToneMatrix",
     module = "music21.serial",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TwelveToneMatrix {
     inner: RsMatrix,

@@ -86,7 +86,8 @@ error_into!(scale_error, ScaleException);
     name = "Scale",
     module = "music21.scale",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Scale;
 

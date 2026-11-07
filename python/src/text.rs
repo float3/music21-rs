@@ -102,7 +102,8 @@ fn said(error: &music21::Error) -> String {
     name = "TextBox",
     module = "music21.text",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TextBox {
     /// The words, or nothing where none were given -- which music21 keeps

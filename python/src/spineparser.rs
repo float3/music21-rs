@@ -21,7 +21,8 @@ use music21::humdrum::{GlobalComment as RsGlobalComment, MiscTandem as RsMiscTan
     name = "GlobalComment",
     module = "music21.humdrum.spineParser",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct GlobalComment {
     pub(crate) inner: RsGlobalComment,
@@ -109,7 +110,8 @@ impl GlobalComment {
     name = "MiscTandem",
     module = "music21.humdrum.spineParser",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MiscTandem {
     pub(crate) inner: RsMiscTandem,

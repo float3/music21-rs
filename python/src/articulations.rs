@@ -21,7 +21,8 @@ use music21::interval::ChromaticInterval as RsChromaticInterval;
     name = "Articulation",
     module = "music21.articulations",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Articulation {
     pub(crate) inner: RsArticulation,

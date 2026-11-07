@@ -42,7 +42,8 @@ error_into!(instrument_error, InstrumentException);
     name = "Instrument",
     module = "music21.instrument",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Instrument {
     pub(crate) inner: RsInstrument,

@@ -69,7 +69,8 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
     name = "MetronomeMark",
     module = "music21.tempo",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MetronomeMark {
     pub(crate) inner: RsMetronomeMark,
@@ -658,7 +659,8 @@ impl MetronomeMark {
     name = "TempoText",
     module = "music21.tempo",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TempoText {
     inner: RsTempoText,
@@ -1003,7 +1005,8 @@ fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
     name = "MetricModulation",
     module = "music21.tempo",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MetricModulation {
     old: Option<Py<PyAny>>,

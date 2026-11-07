@@ -176,7 +176,8 @@ fn empty_stream(py: Python<'_>) -> PyResult<Py<PyAny>> {
     name = "ContiguousSegmentOfNotes",
     module = "music21.search.serial",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct ContiguousSegmentOfNotes {
     /// The notes and chords of the run, in order.

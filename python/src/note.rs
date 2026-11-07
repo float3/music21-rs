@@ -342,7 +342,13 @@ pub(crate) fn deep_copied_objects(
 }
 
 /// music21's `note.Note`: a pitch with a duration.
-#[pyclass(name = "Note", module = "music21.note", subclass, skip_from_py_object)]
+#[pyclass(
+    name = "Note",
+    module = "music21.note",
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
 pub struct Note {
     pub(crate) inner: RsNote,
     /// The `Pitch` object music21 hands back from `.pitch`. It is the same

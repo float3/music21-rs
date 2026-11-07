@@ -391,7 +391,8 @@ impl Specifier {
     name = "GenericInterval",
     module = "music21.interval",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct GenericInterval {
     pub(crate) inner: RsGeneric,
@@ -692,7 +693,8 @@ impl GenericInterval {
     name = "DiatonicInterval",
     module = "music21.interval",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 #[derive(Clone)]
 pub struct DiatonicInterval {
@@ -923,7 +925,8 @@ impl DiatonicInterval {
     name = "ChromaticInterval",
     module = "music21.interval",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 #[derive(Clone)]
 pub struct ChromaticInterval {
@@ -1110,7 +1113,8 @@ impl ChromaticInterval {
     name = "Interval",
     module = "music21.interval",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Interval {
     pub(crate) inner: RsInterval,

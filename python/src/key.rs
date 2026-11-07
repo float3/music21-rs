@@ -52,7 +52,8 @@ error_into!(signature_error, KeySignatureException);
     name = "KeySignature",
     module = "music21.key",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct KeySignature {
     pub(crate) signature: RsKeySignature,

@@ -39,7 +39,8 @@ pyo3::create_exception!(
     module = "music21.spanner",
     subclass,
     skip_from_py_object,
-    dict
+    dict,
+    weakref
 )]
 pub struct Spanner {
     /// What the spanner says of itself besides the notes it joins: the

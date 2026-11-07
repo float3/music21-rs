@@ -34,7 +34,8 @@ error_into!(dynamic_error, DynamicException);
     name = "Dynamic",
     module = "music21.dynamics",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Dynamic {
     pub(crate) inner: RsDynamic,

@@ -33,7 +33,8 @@ pyo3::create_exception!(music21_rs_facade, BarException, crate::Music21Exception
     name = "Barline",
     module = "music21.bar",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Barline {
     pub(crate) inner: RsBarline,

@@ -138,7 +138,8 @@ fn checked_divisions(
     name = "TimeSignature",
     module = "music21.meter",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TimeSignature {
     pub(crate) inner: RsTimeSignature,

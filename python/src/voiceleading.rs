@@ -66,7 +66,8 @@ fn analytic_key(value: &Bound<'_, PyAny>) -> PyResult<RsKey> {
     name = "VoiceLeadingQuartet",
     module = "music21.voiceLeading",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct VoiceLeadingQuartet {
     pub(crate) inner: RsQuartet,

@@ -69,7 +69,8 @@ pyo3::create_exception!(
     module = "music21.metadata",
     subclass,
     dict,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Metadata {
     pub(crate) inner: RsMetadata,

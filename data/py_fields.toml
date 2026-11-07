@@ -332,6 +332,14 @@ reason = "a search over a stream; its matching is a setting, not a value"
 kind = "facade-only"
 reason = "a corrector's part of a score"
 
+[SiteMember]
+kind = "facade-only"
+reason = "a member put on the element classes, holding the function it binds"
+
+[Sites]
+kind = "facade-only"
+reason = "the element whose sites it reads, kept in the sites table"
+
 [SpannerBundle]
 kind = "facade-only"
 reason = "spanners"

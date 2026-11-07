@@ -23,7 +23,8 @@ pub const NAMES: &[&str] = &["PercussionChord"];
     name = "PercussionChord",
     module = "music21.percussion",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct PercussionChord {
     /// What is struck, in the order it was given.

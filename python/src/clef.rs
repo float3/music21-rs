@@ -24,7 +24,13 @@ error_into!(clef_error, ClefException);
 
 /// music21's `clef.Clef`: a clef, with the sign, line, octave change and
 /// lowest line of the class it was made as.
-#[pyclass(name = "Clef", module = "music21.clef", subclass, skip_from_py_object)]
+#[pyclass(
+    name = "Clef",
+    module = "music21.clef",
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
 pub struct Clef {
     pub(crate) inner: RsClef,
     /// Whether a lowest line was ever given to a clef whose class keeps

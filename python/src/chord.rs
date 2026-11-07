@@ -169,7 +169,8 @@ error_into!(pub(crate) chord_error, ChordException);
     name = "Chord",
     module = "music21.chord",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Chord {
     /// The pitches and the analysis read off them. Every method that asks a

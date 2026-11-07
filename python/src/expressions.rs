@@ -54,7 +54,8 @@ enum Shape {
     name = "Ornament",
     module = "music21.expressions",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Ornament {
     pub(crate) inner: RsOrnament,
@@ -1359,7 +1360,8 @@ impl Trill {
     name = "TextExpression",
     module = "music21.expressions",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TextExpression {
     pub(crate) inner: RsTextExpression,

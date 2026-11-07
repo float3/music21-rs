@@ -33,7 +33,8 @@ pyo3::create_exception!(
     name = "RepeatExpression",
     module = "music21.repeat",
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct RepeatExpression {
     pub(crate) inner: RsRepeatExpression,
