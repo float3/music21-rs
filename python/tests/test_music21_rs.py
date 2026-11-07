@@ -7213,6 +7213,26 @@ print("<score-partwise" in m.to_musicxml(part))
     ]
 
 
+def test_a_note_read_with_a_velocity_has_volume_information():
+    """A note a reader made with a velocity says it has volume information,
+    as music21's own reader's does, so music21's MusicXML writer writes how
+    loud it is."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import common, converter
+import music21_rs as m
+m.install_into_music21()
+path = common.getSourceFilePath() / 'midi' / 'testPrimitive' / 'test03.mid'
+for score in (converter.parse(path, forceSource=True, storePickle=False), m.from_midi(path.read_bytes())):
+    first = score.recurse().getElementsByClass('Note').first()
+    print(first.hasVolumeInformation(), first.volume.velocity)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["True 87", "True 87"]
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

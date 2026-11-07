@@ -5118,15 +5118,23 @@ fn element_object_as<'py>(
     };
     let made = match element {
         StreamElement::Stream(inner) => from_crate_as(py, inner, whose)?,
-        StreamElement::Note(note) => element_new(
-            py,
-            "music21.note",
-            "Note",
-            Note::wrap(py, note.clone())?,
-            holdable,
-        )?
-        .into_bound(py)
-        .into_any(),
+        StreamElement::Note(note) => {
+            let made = element_new(
+                py,
+                "music21.note",
+                "Note",
+                Note::wrap(py, note.clone())?,
+                holdable,
+            )?
+            .into_bound(py);
+            // music21 reads the volume object's mere existence as
+            // `hasVolumeInformation`, which its MusicXML writer asks before
+            // it writes how loud the note is.
+            if note.has_volume_information() {
+                Note::get_volume(&made, py)?;
+            }
+            made.into_any()
+        }
         StreamElement::Chord(chord) if chord.numeral().is_some() => {
             let numeral = chord.numeral().cloned().ok_or_else(|| {
                 pyo3::exceptions::PyRuntimeError::new_err("a numeral chord with no numeral")
