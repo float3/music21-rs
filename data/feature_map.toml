@@ -1532,18 +1532,10 @@ getTextExpression = "the words as a `TextExpression` for a renderer; `text` is w
 python = "repeat.py"
 name = "Expander"
 rust = ["src/stream/repeats.rs"]
-note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one."
+note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one and `repeat::Expander` a step at a time. Its steps take a stream of measures and hand back a new one, leaving the stream they were given as it was."
 
 [class.renames]
 process = "expand_repeats"
-
-[class.excluded]
-measureMap = "the measures of the expansion listed for a caller to read"
-repeatBarsAreCoherent = "a step of the expansion, which answers an error where the repeats make no sense"
-findInnermostRepeatIndices = "a step of the expansion"
-processInnermostRepeatBars = "a step of the expansion"
-getRepeatExpressionIndex = "a step of the expansion"
-isExpandable = "whether there is anything to play out, which expanding answers"
 
 [[class]]
 python = "variant.py"
