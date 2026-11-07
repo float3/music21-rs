@@ -54,6 +54,10 @@ serde = ["dep:serde"]
 name = "abc_to_musicxml"
 required-features = ["musicxml"]
 
+[[example]]
+name = "musicxml_analysis"
+required-features = ["musicxml"]
+
 [dependencies]
 fraction = "0.17.0"
 itertools = "0.15.0"
