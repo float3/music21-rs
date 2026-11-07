@@ -14,9 +14,9 @@
 //! moment the package was imported, which
 //! `test_importing_the_package_imports_no_music21` is there to stop.
 //!
-//! `LanguageDetector` and `Trigram` are not here: guessing which language
-//! a line of text is in is a table of letter triplets rather than
-//! anything musical, and the crate has none.
+//! `LanguageDetector` and `Trigram` are not here: the crate has them only
+//! behind its `language-detection` feature, whose excerpts the wheel does
+//! not carry.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]

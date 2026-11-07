@@ -1346,7 +1346,6 @@ rust = ["src/features/language.rs"]
 
 [class.renames]
 parseExcerpt = "from_text"
-makeWords = "from_words"
 
 [class.excluded]
 measure = "the step that counts the letter triples, which building one does"
