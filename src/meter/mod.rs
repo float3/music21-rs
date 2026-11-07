@@ -533,6 +533,11 @@ impl TimeSignature {
     /// meter this returns; how they are grouped is [`Self::parts`].
     pub fn from_ratio_string(ratio: &str) -> Result<Self> {
         let parts = Self::parts(ratio)?;
+        if parts.iter().any(|(_, part)| *part == 0) {
+            return Err(Error::Meter(format!(
+                "time signature denominator must be non-zero: {ratio}"
+            )));
+        }
         let word = division_word(ratio);
         let summed = ratio.split('+').any(|part| !part.contains('/'));
         let denominator = parts[0].1;
@@ -1899,6 +1904,14 @@ mod tests {
         assert!(TimeSignature::from_ratio_string("6000/4+6000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+4000000000/4").is_err());
         assert!(TimeSignature::from_ratio_string("4000000000/4+1/8").is_err());
+    }
+
+    #[test]
+    fn a_meter_with_a_part_over_nought_is_refused() {
+        use super::TimeSignature;
+
+        assert!(TimeSignature::from_ratio_string("3/8+2/0").is_err());
+        assert!(TimeSignature::from_ratio_string("3/0+2/8").is_err());
     }
 
     #[test]
