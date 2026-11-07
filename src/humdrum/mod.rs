@@ -550,11 +550,22 @@ fn tandem_of(tandem: &str) -> Result<Option<Thing>> {
 /// `KernSpine` state.
 #[derive(Default)]
 struct KernState {
-    in_tuplet: bool,
+    /// music21's `inTuplet`, with its `currentTupletQL` and
+    /// `desiredTupletQL`, which are both zero whenever it is false.
+    tuplet: Option<TupletRun>,
+    /// music21's `lastNote`, as an index into the stream.
     last_note: Option<usize>,
+    /// music21's `currentBeamNumbers`.
     beams: usize,
-    tuplet_length: FloatType,
-    wanted_length: FloatType,
+}
+
+/// A run of tuplet notes being read: how long it is so far and how long
+/// its bracket is.
+struct TupletRun {
+    /// music21's `currentTupletQL`.
+    length: FloatType,
+    /// music21's `desiredTupletQL`.
+    wanted: FloatType,
 }
 
 fn with_duration(element: &mut StreamElement, change: impl FnOnce(&mut Duration)) {
@@ -623,30 +634,30 @@ impl KernState {
             return;
         }
         let tuplets = duration.tuplets();
-        if !self.in_tuplet && !tuplets.is_empty() {
-            self.in_tuplet = true;
-            self.wanted_length = tuplets[0].total_tuplet_length();
-            self.tuplet_length = duration.quarter_length();
-            mark_first_tuplet(element, TupletType::Start);
-        } else if self.in_tuplet && tuplets.is_empty() {
-            self.in_tuplet = false;
-            self.wanted_length = 0.0;
-            self.tuplet_length = 0.0;
+        let Some(run) = &mut self.tuplet else {
+            if !tuplets.is_empty() {
+                self.tuplet = Some(TupletRun {
+                    length: duration.quarter_length(),
+                    wanted: tuplets[0].total_tuplet_length(),
+                });
+                mark_first_tuplet(element, TupletType::Start);
+            }
+            return;
+        };
+        if tuplets.is_empty() {
+            self.tuplet = None;
             if let Some(last) = self.last_note
                 && let Thing::Element(last) = &mut stream[last].thing
             {
                 mark_first_tuplet(last, TupletType::Stop);
             }
-        } else if self.in_tuplet {
-            self.tuplet_length = op_frac(self.tuplet_length + duration.quarter_length());
-            if self.tuplet_length >= self.wanted_length
-                && self.tuplet_length % self.wanted_length == 0.0
-            {
-                mark_first_tuplet(element, TupletType::Stop);
-                self.in_tuplet = false;
-                self.tuplet_length = 0.0;
-                self.wanted_length = 0.0;
-            }
+            return;
+        }
+
+        run.length = op_frac(run.length + duration.quarter_length());
+        if run.length >= run.wanted && run.length % run.wanted == 0.0 {
+            mark_first_tuplet(element, TupletType::Stop);
+            self.tuplet = None;
         }
     }
 }
