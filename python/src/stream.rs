@@ -37,7 +37,7 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
@@ -244,6 +244,9 @@ pub struct Stream {
     /// hears of changes to and none has changed: an append then costs one
     /// length rather than all of them.
     kept_end: Mutex<Option<KeptEnd>>,
+    /// The identity of each object held, for refusing a second insert;
+    /// built on first asking after anything but a `put`.
+    members: Option<HashSet<usize>>,
     next: u64,
     /// music21's `id`, where a caller gave one.
     id: Option<Py<PyAny>>,
@@ -435,6 +438,20 @@ fn heard_length(object: &Bound<'_, PyAny>) -> PyResult<Option<f64>> {
         && !class.hasattr(pyo3::intern!(py, "duration"))?
         && !class.hasattr(pyo3::intern!(py, "__getattr__"))?;
     Ok(fixed.then_some(0.0))
+}
+
+/// music21's refusal of an object a stream already holds, naming the
+/// stream where there is one to name.
+fn already_held(object: &Bound<'_, PyAny>, stream: Option<&str>) -> PyResult<PyErr> {
+    let mut message = format!(
+        "the object ({}, id()={} is already found in this Stream",
+        object.repr()?,
+        object.as_ptr() as usize
+    );
+    if let Some(stream) = stream {
+        message.push_str(&format!(" ({stream})"));
+    }
+    Ok(StreamException::new_err(message))
 }
 
 /// Whether an object is of a class, named or given: a name matches any
@@ -632,6 +649,7 @@ impl Stream {
             contents: Vec::new(),
             derived: Mutex::new(Arc::new(Derived::at(PRIORITIES.load(Ordering::Relaxed)))),
             kept_end: Mutex::new(None),
+            members: None,
             next: 0,
             id: None,
             sounding: None,
@@ -725,6 +743,10 @@ impl Stream {
             all_at_nought && !side_by_side
         };
         for element in &elements {
+            // Not yet a stream to name.
+            if stream.holds(element) {
+                return Err(already_held(element, None)?);
+            }
             let offset = if append {
                 stream.end(py)?
             } else {
@@ -768,6 +790,31 @@ impl Stream {
         self.next += 1;
         self.let_go();
         *locked(&self.kept_end) = kept;
+        if let Some(members) = &mut self.members {
+            members.insert(object.as_ptr() as usize);
+        }
+    }
+
+    /// Whether this very object is held, by identity.
+    fn holds(&mut self, object: &Bound<'_, PyAny>) -> bool {
+        let held = &self.contents;
+        self.members
+            .get_or_insert_with(|| {
+                held.iter()
+                    .map(|one| one.object.as_ptr() as usize)
+                    .collect()
+            })
+            .contains(&(object.as_ptr() as usize))
+    }
+
+    /// Refuses an object this stream already holds, as music21's
+    /// `coreGuardBeforeAddElement` does, naming the stream as music21 does.
+    fn refuse_held(slf: &Bound<'_, Self>, object: &Bound<'_, PyAny>) -> PyResult<()> {
+        if !slf.borrow_mut().holds(object) {
+            return Ok(());
+        }
+        let shown = format!("{}, id()={}", slf.repr()?, slf.as_ptr() as usize);
+        Err(already_held(object, Some(&shown))?)
     }
 
     /// Lets go of what was worked out from what is held.
@@ -787,6 +834,7 @@ impl Stream {
     fn held_mut(&mut self) -> &mut Vec<Held> {
         self.let_go();
         *locked(&self.kept_end) = None;
+        self.members = None;
         &mut self.contents
     }
 
@@ -1463,6 +1511,7 @@ impl Stream {
         // reads each held length once rather than once per item.
         let mut offset = slf.borrow().end(py)?;
         for other in &others {
+            Self::refuse_held(slf, other)?;
             slf.borrow_mut().put(offset, other);
             offset = offset.max(offset + length_of(other)?);
         }
@@ -1473,13 +1522,17 @@ impl Stream {
     /// at the item's own offset or nought, or `insert([offset, item, ...])`.
     #[pyo3(signature = (offsetOrItemOrList, itemOrNone = None))]
     fn insert(
-        &mut self,
+        slf: &Bound<'_, Self>,
         offsetOrItemOrList: &Bound<'_, PyAny>,
         itemOrNone: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        let put = |offset: f64, item: &Bound<'_, PyAny>| -> PyResult<()> {
+            Self::refuse_held(slf, item)?;
+            slf.borrow_mut().put(offset, item);
+            Ok(())
+        };
         if let Some(item) = itemOrNone.filter(|item| !item.is_none()) {
-            self.put(offsetOrItemOrList.extract()?, item);
-            return Ok(());
+            return put(offsetOrItemOrList.extract()?, item);
         }
         if offsetOrItemOrList.is_instance_of::<PyList>()
             || offsetOrItemOrList.is_instance_of::<PyTuple>()
@@ -1492,7 +1545,7 @@ impl Stream {
                 ));
             }
             for pair in items.chunks(2) {
-                self.put(pair[0].extract()?, &pair[1]);
+                put(pair[0].extract()?, &pair[1])?;
             }
             return Ok(());
         }
@@ -1500,8 +1553,7 @@ impl Stream {
             .getattr("offset")
             .and_then(|offset| offset.extract::<f64>())
             .unwrap_or(0.0);
-        self.put(offset, offsetOrItemOrList);
-        Ok(())
+        put(offset, offsetOrItemOrList)
     }
 
     /// Takes an object out, found by identity.
@@ -2356,6 +2408,7 @@ impl Stream {
                 }
             }
         }
+        Self::refuse_held(slf, &item)?;
         slf.borrow_mut().put(offset, &item);
         Ok(())
     }
@@ -2520,6 +2573,7 @@ impl Stream {
         }
         match targets.len() {
             0 => {
+                Self::refuse_held(slf, noteOrChord)?;
                 slf.borrow_mut().put(offset, noteOrChord);
                 Ok(())
             }

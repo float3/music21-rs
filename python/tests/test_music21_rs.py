@@ -8255,6 +8255,38 @@ for made in (m.Stream(), stream.Stream()):
     ]
 
 
+def test_a_stream_refuses_an_object_it_already_holds():
+    """music21 puts one object in a stream once: a second `insert`,
+    `append` or one given twice to the constructor is refused."""
+    n = m.Note("C4")
+    s = m.Stream()
+    s.insert(0, n)
+    message = (
+        f"the object ({n!r}, id()={id(n)} is already found in this "
+        f"Stream ({s!r}, id()={id(s)})"
+    )
+    for again in (
+        lambda: s.insert(1, n),
+        lambda: s.append(n),
+        lambda: s.append([n]),
+        lambda: s.insertAndShift(2, n),
+    ):
+        with pytest.raises(m.StreamException) as refused:
+            again()
+        assert str(refused.value) == message
+    assert len(s) == 1
+    with pytest.raises(m.StreamException, match="already found"):
+        m.Stream([n, n])
+
+    note = pytest.importorskip("music21.note")
+    stream = pytest.importorskip("music21.stream")
+    theirs = note.Note("C4")
+    s = stream.Stream()
+    s.insert(0, theirs)
+    with pytest.raises(stream.StreamException, match="already found in this Stream"):
+        s.append(theirs)
+
+
 def test_a_stream_hears_every_change_to_a_held_length():
     """A stream keeps its end between appends, so every way of changing
     the length of something it holds has to reach it."""
