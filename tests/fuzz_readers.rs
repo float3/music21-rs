@@ -11,6 +11,10 @@
 //! - `MUSIC21_FUZZ_RNG`: the seed of the generator (default 0x5eed).
 //! - `MUSIC21_FUZZ_CORPUS`: a directory whose files, matched by extension,
 //!   are added to the seeds, such as music21's own `music21/music21`.
+//! - `MUSIC21_FUZZ_KEEP_CURRENT`: when set, each input is written to
+//!   `<reader>-current` before it is read, to find one that aborts the
+//!   process -- running out of memory or stack -- which no test can catch.
+//!   Run such a search with `--test-threads=1` and under `ulimit -v`.
 //!
 //! ```text
 //! MUSIC21_FUZZ_ITERATIONS=200000 MUSIC21_FUZZ_CORPUS=music21/music21 \
@@ -381,6 +385,7 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
     let crashes = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("fuzz-crashes");
     let mut failures: Vec<String> = Vec::new();
     let mut places: Vec<String> = Vec::new();
+    let keep_current = variable("MUSIC21_FUZZ_KEEP_CURRENT").is_some();
     let started = Instant::now();
 
     let mutations = (0..iterations).map(|_| {
@@ -390,6 +395,10 @@ fn fuzz(name: &str, seeds: &[Vec<u8>], reader: &dyn Fn(&[u8])) {
     // Reading lazily keeps the generator's draws in one order either way.
     let inputs = seeds.iter().cloned().chain(mutations);
     for (index, input) in inputs.enumerate() {
+        if keep_current {
+            let _ = fs::create_dir_all(&crashes);
+            let _ = fs::write(crashes.join(format!("{name}-current")), &input);
+        }
         let began = Instant::now();
         let panicked = run(reader, &input);
         let slow = began.elapsed() > SLOWEST_INPUT;
