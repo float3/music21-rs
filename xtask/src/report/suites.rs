@@ -136,6 +136,42 @@ pub(super) fn start_coverage(
     Ok(env)
 }
 
+/// The name cargo gives the parity suite's one test binary, before its hash.
+const PARITY_BINARY: &str = "parity-";
+
+/// `-object` flags naming the parity suite's test binary to llvm-cov.
+///
+/// cargo-llvm-cov reads only binaries named after a workspace crate, and
+/// `python-parity` is outside the workspace, so its profiles map onto
+/// nothing without this. Until the crate was renamed `music21` they mapped
+/// onto the wheel's `libmusic21_rs.so` by a coincidence of names.
+fn parity_object_flags(build_dir: &Path) -> String {
+    let Ok(entries) = fs::read_dir(build_dir.join("debug/deps")) else {
+        return String::new();
+    };
+    let mut flags = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        // `parity-0123abcd` (`.exe` on Windows), not its `.d` file or
+        // another binary.
+        let Some(hash) = name.strip_prefix(PARITY_BINARY) else {
+            continue;
+        };
+        let hash = hash.strip_suffix(".exe").unwrap_or(hash);
+        if hash.is_empty() || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+            continue;
+        }
+        if path.is_file() {
+            flags.push(format!("-object {}", path.display()));
+        }
+    }
+    flags.sort();
+    flags.join(" ")
+}
+
 /// Merges what the suites left behind into one figure, and writes the
 /// file-by-file HTML beside the page.
 pub(super) fn collect_coverage(
@@ -144,6 +180,21 @@ pub(super) fn collect_coverage(
     env: &[(String, String)],
 ) -> Result<Coverage, Box<dyn Error>> {
     let html_dir = out.join("coverage");
+
+    // llvm-cov splits these on spaces, so a build directory with a space in
+    // its path would break them; CI's has none.
+    let mut env = env.to_vec();
+    let build_dir = env
+        .iter()
+        .find(|(key, _)| key == "CARGO_TARGET_DIR")
+        .map(|(_, value)| PathBuf::from(value));
+    if let Some(dir) = build_dir {
+        let objects = parity_object_flags(&dir);
+        if !objects.is_empty() {
+            env.push(("LLVM_COV_FLAGS".to_string(), objects));
+        }
+    }
+    let env = env.as_slice();
     let common = [
         "llvm-cov",
         "report",
@@ -782,5 +833,28 @@ mod tests {
 
         let mine = vec!["already red".to_string(), "unlisted".to_string()];
         assert_eq!(super::regressions(&theirs, &mine, &expected), 1);
+    }
+
+    /// The parity binary is outside the workspace, so cargo-llvm-cov does
+    /// not find it by name; the report names it to llvm-cov itself.
+    #[test]
+    fn the_parity_binary_is_named_to_llvm_cov() {
+        let root = std::env::temp_dir().join(format!("xtask-objects-{}", std::process::id()));
+        let deps = root.join("debug/deps");
+        std::fs::create_dir_all(&deps).unwrap();
+        for name in [
+            "parity-0123abcd",
+            "parity-0123abcd.d",
+            "music21-89ef",
+            "parityx-01",
+        ] {
+            std::fs::write(deps.join(name), b"").unwrap();
+        }
+
+        let flags = super::parity_object_flags(&root);
+        std::fs::remove_dir_all(&root).unwrap();
+
+        let binary = deps.join("parity-0123abcd");
+        assert_eq!(flags, format!("-object {}", binary.display()));
     }
 }
