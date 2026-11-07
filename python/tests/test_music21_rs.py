@@ -8401,3 +8401,19 @@ def test_find_consecutive_scale_hands_back_the_callers_notes():
     found = list(runs[0]["stream"].notes)
     assert found[0] is line.notes[0]
     assert [n.nameWithOctave for n in found] == ["A4", "B4", "C#5", "D5", "E5"]
+
+
+def test_transcribe_note_grouping_matches_music21s():
+    note_grouping = pytest.importorskip("music21.braille.noteGrouping")
+    segment = pytest.importorskip("music21.braille.segment")
+    note = pytest.importorskip("music21.note")
+    for show in (True, False):
+        ours = m.BrailleElementGrouping()
+        for name in ("C4", "D4", "E5"):
+            ours.append(m.Note(name))
+        theirs = segment.BrailleElementGrouping(
+            [note.Note(name) for name in ("C4", "D4", "E5")]
+        )
+        assert m.transcribeNoteGrouping(ours, showLeadingOctave=show) == (
+            note_grouping.transcribeNoteGrouping(theirs, showLeadingOctave=show)
+        )
