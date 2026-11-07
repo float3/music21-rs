@@ -297,6 +297,84 @@ impl TextBox {
     }
 }
 
+/// A crate text box as music21's own `TextBox`, for a score built into
+/// music21's streams: music21's reader makes its own.
+pub(crate) fn music21_object<'py>(
+    py: Python<'py>,
+    text_box: &rs::TextBox,
+) -> PyResult<Bound<'py, PyAny>> {
+    let made = py
+        .import("music21.text")?
+        .getattr("TextBox")?
+        .call1((text_box.content.as_str(),))?;
+    made.setattr("page", text_box.page)?;
+    let style = made.getattr("style")?;
+    music21_style(py, &style, &text_box.style)?;
+    // Whether it says them or not: music21's reader sets these over what
+    // the constructor starts with.
+    style.setattr("justify", text_box.style.justify())?;
+    style.setattr("alignHorizontal", text_box.style.align_horizontal())?;
+    style.setattr("alignVertical", text_box.style.align_vertical())?;
+    Ok(made)
+}
+
+/// Writes what a crate text style says into music21's style object,
+/// leaving what it does not say as the object has it.
+pub(crate) fn music21_style(
+    py: Python<'_>,
+    style: &Bound<'_, PyAny>,
+    read: &music21::style::TextStyle,
+) -> PyResult<()> {
+    let value = |said: &Option<music21::style::StyleValue>| -> PyResult<Option<Py<PyAny>>> {
+        Ok(match said {
+            None => None,
+            Some(music21::style::StyleValue::Whole(whole)) => {
+                Some(whole.into_pyobject(py)?.into_any().unbind())
+            }
+            Some(music21::style::StyleValue::Decimal(number)) => {
+                Some(number.into_pyobject(py)?.into_any().unbind())
+            }
+            Some(music21::style::StyleValue::Text(text)) => {
+                Some(text.into_pyobject(py)?.into_any().unbind())
+            }
+        })
+    };
+    let places = [
+        ("absoluteX", &read.absolute_x),
+        ("absoluteY", &read.absolute_y),
+        ("relativeX", &read.relative_x),
+        ("relativeY", &read.relative_y),
+        ("fontSize", &read.font_size),
+    ];
+    for (name, said) in places {
+        if let Some(given) = value(said)? {
+            style.setattr(name, given)?;
+        }
+    }
+    if let Some(family) = &read.font_family {
+        style.setattr("fontFamily", family.clone())?;
+    }
+    if let Some(font_style) = read.font_style() {
+        style.setattr("fontStyle", font_style)?;
+    }
+    if let Some(weight) = read.font_weight() {
+        style.setattr("fontWeight", weight)?;
+    }
+    if let Some(color) = &read.color {
+        style.setattr("color", color)?;
+    }
+    if let Some(justify) = read.justify() {
+        style.setattr("justify", justify)?;
+    }
+    if let Some(align) = read.align_horizontal() {
+        style.setattr("alignHorizontal", align)?;
+    }
+    if let Some(align) = read.align_vertical() {
+        style.setattr("alignVertical", align)?;
+    }
+    Ok(())
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<TextBox>()?;
     m.add_function(wrap_pyfunction!(assembleLyrics, m)?)?;

@@ -7331,6 +7331,43 @@ print(converter.Converter.getSubConverterFormats()['musicxml'] is subConverters.
     ]
 
 
+def _routed_differences(fmt, paths, classes=None):
+    """Where the crate's read of each of `paths` differs from music21's,
+    through `converter_parity`, in a fresh interpreter with the wheel
+    installed: the lines naming one of `classes` where they are given."""
+    code = f"""
+import sys
+import warnings
+sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
+warnings.simplefilter('ignore')
+import converter_parity
+import music21_rs
+from music21 import common
+music21_rs.install_into_music21()
+classes = {classes!r}
+for path in {[str(path) for path in paths]!r}:
+    diff, _, _ = converter_parity.differences(str(common.getSourceFilePath() / path), {fmt!r})
+    for line in diff[2:]:
+        if line.startswith(('+', '-')) and (
+            classes is None or any(name in line for name in classes)
+        ):
+            print(path, line[:200])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    return done.stdout.splitlines()
+
+
+def test_routed_musicxml_keeps_layouts_text_boxes_and_staff_groups():
+    """A score read through the crate keeps music21's layouts, text boxes,
+    staff groups and the software its metadata names."""
+    pytest.importorskip("music21.stream")
+    names = ("Layout", "TextBox", "StaffGroup", "software")
+    paths = ("corpus/bach/bwv69.6.xml", "corpus/demos/layoutTest.xml")
+    assert _routed_differences("musicxml", paths, names) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

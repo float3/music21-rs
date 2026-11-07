@@ -4948,6 +4948,8 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     };
     let mut objects = Vec::new();
     let mut leaves: Vec<Option<Py<PyAny>>> = Vec::new();
+    // The parts, in order, which a staff group names by place.
+    let mut parts = Vec::new();
     for event in stream.events() {
         // A nested stream's leaves are its own, in its order; anything else
         // is one leaf, built or left out.
@@ -4955,6 +4957,9 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             StreamElement::Stream(inner) => {
                 let built = build_as(py, inner, whose)?;
                 leaves.extend(built.leaves);
+                if matches!(inner.kind(), StreamKind::Part | StreamKind::PartStaff) {
+                    parts.push(built.made.clone());
+                }
                 Some(built.made)
             }
             element => {
@@ -5010,8 +5015,30 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         }
     }
+    // music21's own staff groups, which its reader puts in the score.
+    if whose == Whose::Music21 {
+        for group in stream.staff_groups() {
+            let grouped = group
+                .parts()
+                .iter()
+                .filter_map(|place| parts.get(*place).cloned())
+                .collect();
+            let made_group = crate::layout::music21_staff_group(py, group, grouped)?;
+            made.call_method1("insert", (0.0, made_group))?;
+        }
+    }
     // The metadata a reader found, which music21 keeps among the elements.
     if let Some(metadata) = stream.metadata() {
+        // music21's constructor signs its metadata with music21's version
+        // before its reader adds what the file names.
+        let signed;
+        let metadata = match whose {
+            Whose::Music21 => {
+                signed = signed_by_music21(py, metadata)?;
+                &signed
+            }
+            Whose::Wheel => metadata,
+        };
         // The installed class, so music21's own `metadata` setter can put
         // it into the stream: it inserts the object, and its streams hold
         // nothing that is not a `Music21Object`.
@@ -5049,6 +5076,26 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
         _ => {}
     }
     Ok(Built { made, leaves })
+}
+
+/// `metadata` with music21's version first under `software`, as music21's
+/// `Metadata()` starts.
+fn signed_by_music21(
+    py: Python<'_>,
+    metadata: &music21::metadata::Metadata,
+) -> PyResult<music21::metadata::Metadata> {
+    let line: String = py
+        .import("music21.defaults")?
+        .getattr("software")?
+        .extract()?;
+    let mut signed = metadata.clone();
+    let named = signed.get("software").to_vec();
+    signed.set("software", Vec::new());
+    signed.add_text("software", line);
+    for value in named {
+        signed.add("software", value);
+    }
+    Ok(signed)
 }
 
 /// The wheel's object for one element of a crate stream, where it has a
@@ -5281,6 +5328,14 @@ fn element_object_as<'py>(
         )?
         .into_bound(py)
         .into_any(),
+        // music21's own, which its reader makes and nothing installed
+        // stands in for.
+        StreamElement::Layout(layout) if whose == Whose::Music21 => {
+            crate::layout::music21_object(py, layout)?
+        }
+        StreamElement::TextBox(text_box) if whose == Whose::Music21 => {
+            crate::text::music21_object(py, text_box)?
+        }
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)

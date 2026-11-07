@@ -630,7 +630,7 @@ impl BarTogether {
 ///
 /// The parts are named by where they stand among the score's parts, first
 /// to last, in the order the group was given them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StaffGroup {
     parts: Vec<usize>,
@@ -639,6 +639,9 @@ pub struct StaffGroup {
     symbol: Option<String>,
     bar_together: Option<BarTogether>,
     name_hidden: bool,
+    /// Where the symbol is drawn and in what colour: music21's `style`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub style: crate::style::TextStyle,
 }
 
 impl StaffGroup {
@@ -652,6 +655,7 @@ impl StaffGroup {
             symbol: None,
             bar_together: Some(BarTogether::Yes),
             name_hidden: false,
+            style: crate::style::TextStyle::default(),
         }
     }
 
