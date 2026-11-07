@@ -1533,8 +1533,7 @@ impl Stream {
 
 #[pymethods]
 impl Stream {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -5026,16 +5025,21 @@ impl Stream {
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let py = slf.py();
         let me = slf.borrow();
-        // A measure is named by its number, as music21 names it; its
-        // offset, which music21 adds, is the part's to say.
+        // A measure is named by its number and where it stands in its
+        // `activeSite`, as music21 names it.
+        let measure = me.id.is_none() && me.kind == StreamKind::Measure;
         let label = match &me.id {
             Some(id) => id.bind(py).str()?.to_string(),
-            None if me.kind == StreamKind::Measure => {
+            None if measure => {
                 format!("{}{}", me.number, me.number_suffix.as_deref().unwrap_or(""))
             }
             None => format!("0x{:x}", slf.as_ptr() as usize),
         };
         drop(me);
+        let label = match measure {
+            true => format!("{label} offset={}", slf.getattr("offset")?.str()?),
+            false => label,
+        };
         Ok(format!(
             "<music21.stream.{} {label}>",
             Self::class_name(slf)?
@@ -8318,8 +8322,7 @@ pub struct Verticality {
 
 #[pymethods]
 impl Verticality {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }

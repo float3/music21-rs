@@ -855,12 +855,16 @@ def test_a_measures_barlines_are_found_where_they_are_listed():
 
 
 def test_a_measure_names_itself_by_its_number():
-    """A measure's repr names its number, suffix and all, as music21's
-    does; an id a caller gave still wins, and other streams keep theirs."""
+    """A measure's repr names its number, suffix and all, and where it
+    stands, as music21's does; an id a caller gave still wins, and other
+    streams keep theirs."""
     bar = m.Measure(number=3)
-    assert repr(bar) == "<music21.stream.Measure 3>"
+    assert repr(bar) == "<music21.stream.Measure 3 offset=0.0>"
     bar.numberSuffix = "a"
-    assert repr(bar) == "<music21.stream.Measure 3a>"
+    assert repr(bar) == "<music21.stream.Measure 3a offset=0.0>"
+    line = m.Part()
+    line.insert(4, bar)
+    assert repr(bar) == "<music21.stream.Measure 3a offset=4.0>"
     bar.id = "pickup"
     assert repr(bar) == "<music21.stream.Measure pickup>"
     assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
