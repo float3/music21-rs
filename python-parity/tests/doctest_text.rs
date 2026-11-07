@@ -2,11 +2,8 @@
 //! The lyrics a stream is read for, and the articles moved to the front of
 //! a title and back, are the crate's; a text box is drawn with music21's
 //! own `TextStyle`, as everything styled in this package is.
-//!
-//! `LanguageDetector` and `Trigram` stay music21's: guessing which
-//! language a line is in is a table of letter triplets rather than
-//! anything musical, and the crate has none, so their docstrings run
-//! music21's own code.
+//! `LanguageDetector` and `Trigram` read a line's language with the
+//! crate's trigrams and the excerpts the wheel carries.
 
 use music21_rs_python_parity::doctest;
 

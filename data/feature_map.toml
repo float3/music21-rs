@@ -1337,7 +1337,7 @@ mostLikelyLanguage = "most_likely_language"
 mostLikelyLanguageNumeric = "most_likely_language_numeric"
 
 [class.excluded]
-readExcerpts = "reads the excerpt files off the disk; the crate's excerpts are built in and the library does no file IO"
+readExcerpts = "reads the excerpt files off the disk; the crate's excerpts are built in and the library does no file IO. The wheel answers it from those built in"
 
 [[class]]
 python = "text.py"
@@ -1345,7 +1345,7 @@ name = "Trigram"
 rust = ["src/features/language.rs"]
 
 [class.renames]
-parseExcerpt = "from_text"
+parseExcerpt = "add_text"
 
 [class.excluded]
 measure = "the step that counts the letter triples, which building one does"
