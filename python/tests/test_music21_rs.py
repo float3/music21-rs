@@ -8237,3 +8237,47 @@ def test_a_glissandos_slide_type_matches_music21s():
         assert ours.slideType == theirs.slideType
 
 
+
+def _played(notes):
+    return [(n.nameWithOctave, float(n.quarterLength)) for n in notes]
+
+
+def test_realize_ornaments_plays_each_ornament_in_turn():
+    plain = m.Note("D5")
+    assert m.realizeOrnaments(plain) == [plain]
+    mordent = m.Note("D5")
+    mordent.expressions.append(m.WholeStepMordent())
+    assert _played(m.realizeOrnaments(mordent)) == [
+        ("D5", 0.125), ("C5", 0.125), ("D5", 0.75)
+    ]
+
+
+def test_realize_ornaments_matches_music21s():
+    expressions = pytest.importorskip("music21.expressions")
+    note = pytest.importorskip("music21.note")
+    for kinds in (("WholeStepMordent",), ("Turn",), ("Trill",), ("InvertedTurn", "Trill")):
+        ours, theirs = m.Note("E4"), note.Note("E4")
+        ours.quarterLength = theirs.quarterLength = 2
+        for kind in kinds:
+            ours.expressions.append(getattr(m, kind)())
+            theirs.expressions.append(getattr(expressions, kind)())
+        assert _played(m.realizeOrnaments(ours)) == _played(expressions.realizeOrnaments(theirs))
+
+
+def test_make_ornamental_accidentals_matches_music21s():
+    expressions = pytest.importorskip("music21.expressions")
+    makeNotation = pytest.importorskip("music21.stream.makeNotation")
+    note = pytest.importorskip("music21.note")
+    pitch = pytest.importorskip("music21.pitch")
+    ours, theirs = m.Note("E4"), note.Note("E4")
+    ours.expressions.append(m.Trill())
+    theirs.expressions.append(expressions.Trill())
+    our_past, their_past = [m.Pitch("F#4")], [pitch.Pitch("F#4")]
+    m.makeOrnamentalAccidentals(ours, pitchPast=our_past)
+    makeNotation.makeOrnamentalAccidentals(theirs, pitchPast=their_past)
+    shown = lambda n: [
+        (p.nameWithOctave, p.accidental is not None and p.accidental.displayStatus)
+        for p in n.expressions[0].ornamentalPitches
+    ]
+    assert shown(ours) == shown(theirs) == [("F4", True)]
+    assert [p.nameWithOctave for p in our_past] == [p.nameWithOctave for p in their_past]

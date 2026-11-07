@@ -1212,6 +1212,7 @@ macro_rules! ornament_kinds {
             "ExpressionException",
             "TremoloException",
             "Trill",
+            "realizeOrnaments",
             $($name),*
         ];
     };
@@ -1463,7 +1464,72 @@ impl TextExpression {
     }
 }
 
+/// How many ornaments `realizeOrnaments` plays out before it stops, as
+/// music21's `loopBuster` does.
+const MOST_ORNAMENTS: usize = 100;
+
+/// music21's `expressions.realizeOrnaments`: a note's ornaments played out
+/// in turn, each realizing what the one before left of it, as the list of
+/// notes performed. An expression that cannot be realized is dropped, and
+/// one that takes the whole note ends the walk.
+#[pyfunction]
+#[pyo3(signature = (srcObj, *, keySig = None))]
+fn realizeOrnaments<'py>(
+    srcObj: &Bound<'py, PyAny>,
+    keySig: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyList>> {
+    let py = srcObj.py();
+    let unplayed = || PyList::new(py, [srcObj]);
+    let Ok(expressions) = srcObj.getattr("expressions") else {
+        return unplayed();
+    };
+    if !expressions.is_truthy()? {
+        return unplayed();
+    }
+
+    let before = PyList::empty(py);
+    let after = PyList::empty(py);
+    let mut current = Some(srcObj.clone());
+    for _ in 0..MOST_ORNAMENTS {
+        let Some(source) = current.clone() else {
+            break;
+        };
+        let held = source.getattr("expressions")?;
+        let first = held.get_item(0)?;
+        let rest = held.get_item(pyo3::types::PySlice::new(py, 1, isize::MAX, 1))?;
+        if !first.hasattr("realize")? {
+            source.setattr("expressions", &rest)?;
+            if !rest.is_truthy()? {
+                break;
+            }
+            continue;
+        }
+        let keywords = PyDict::new(py);
+        keywords.set_item("keySig", keySig)?;
+        let played = first.call_method("realize", (&source,), Some(&keywords))?;
+        before.call_method1("extend", (played.get_item(0)?,))?;
+        after.call_method1("extend", (played.get_item(2)?,))?;
+        let main = played.get_item(1)?;
+        if main.is_none() {
+            current = None;
+            break;
+        }
+        main.setattr("expressions", &rest)?;
+        current = Some(main);
+        if !rest.is_truthy()? {
+            break;
+        }
+    }
+
+    if let Some(main) = current {
+        before.append(main)?;
+    }
+    before.call_method1("extend", (after,))?;
+    Ok(before)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(realizeOrnaments, m)?)?;
     m.add_class::<Ornament>()?;
     m.add_class::<TextExpression>()?;
     m.add_class::<Trill>()?;

@@ -18,7 +18,8 @@
 //!
 //! **Only the steps that write onto what they are given are here.**
 //! `makeBeams` and `makeTupletBrackets` decide something about each note
-//! and write it there, and `getTiePitchSet` and `iterateBeamGroups` only
+//! and write it there, `makeOrnamentalAccidentals` does the same for one
+//! note's ornaments, and `getTiePitchSet` and `iterateBeamGroups` only
 //! read. `makeMeasures`, `makeRests`, `makeTies`, `realizeOrnaments`,
 //! `splitElementsToCompleteTuplets` and `consolidateCompletedTuplets`
 //! change *which elements there are* -- they put notes in new measures,
@@ -50,6 +51,7 @@ pub const NAMES: &[&str] = &[
     "getTiePitchSet",
     "iterateBeamGroups",
     "setStemDirectionForBeamGroups",
+    "makeOrnamentalAccidentals",
 ];
 
 pyo3::create_exception!(
@@ -353,7 +355,75 @@ fn beam_groups_py<'py>(
     beam_groups(py, s, skipNoBeams, recurse)
 }
 
+/// music21's `makeOrnamentalAccidentals`: whether each ornament on a note
+/// or chord shows the accidentals of the notes it is played with, decided
+/// as a pitch's are but never tied, and those pitches added to `pitchPast`.
+///
+/// Each ornament resolves its own pitches and decides their display, both
+/// the crate's; this walks them in music21's order.
+#[pyfunction]
+#[pyo3(
+    name = "makeOrnamentalAccidentals",
+    signature = (
+        noteOrChord,
+        *,
+        pitchPast = None,
+        pitchPastMeasure = None,
+        otherSimultaneousPitches = None,
+        alteredPitches = None,
+        cautionaryPitchClass = true,
+        cautionaryAll = false,
+        overrideStatus = false,
+        cautionaryNotImmediateRepeat = true,
+    )
+)]
+#[allow(clippy::too_many_arguments)]
+fn make_ornamental_accidentals_py(
+    noteOrChord: &Bound<'_, PyAny>,
+    pitchPast: Option<&Bound<'_, PyAny>>,
+    pitchPastMeasure: Option<&Bound<'_, PyAny>>,
+    otherSimultaneousPitches: Option<&Bound<'_, PyAny>>,
+    alteredPitches: Option<&Bound<'_, PyAny>>,
+    #[pyo3(from_py_with = crate::truthy)] cautionaryPitchClass: bool,
+    #[pyo3(from_py_with = crate::truthy)] cautionaryAll: bool,
+    #[pyo3(from_py_with = crate::truthy)] overrideStatus: bool,
+    #[pyo3(from_py_with = crate::truthy)] cautionaryNotImmediateRepeat: bool,
+) -> PyResult<()> {
+    // music21 takes it and passes it on to nothing.
+    let _ = otherSimultaneousPitches;
+    let py = noteOrChord.py();
+    let ornament = PyString::new(py, "Ornament").into_any();
+    let pitchPast = pitchPast.filter(|given| !given.is_none());
+    for expression in noteOrChord.getattr("expressions")?.walk()? {
+        let expression = expression?;
+        if !crate::stream::answers_to_class(&expression, &ornament)? {
+            continue;
+        }
+        expression.call_method1("resolveOrnamentalPitches", (noteOrChord,))?;
+        let played = expression.getattr("ornamentalPitches")?;
+        if !played.is_truthy()? {
+            continue;
+        }
+
+        let keywords = pyo3::types::PyDict::new(py);
+        keywords.set_item("pitchPast", pitchPast)?;
+        keywords.set_item("pitchPastMeasure", pitchPastMeasure)?;
+        keywords.set_item("alteredPitches", alteredPitches)?;
+        keywords.set_item("cautionaryPitchClass", cautionaryPitchClass)?;
+        keywords.set_item("cautionaryAll", cautionaryAll)?;
+        keywords.set_item("overrideStatus", overrideStatus)?;
+        keywords.set_item("cautionaryNotImmediateRepeat", cautionaryNotImmediateRepeat)?;
+        expression.call_method("updateAccidentalDisplay", (), Some(&keywords))?;
+
+        if let Some(past) = pitchPast {
+            past.call_method1("extend", (expression.getattr("ornamentalPitches")?,))?;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(make_ornamental_accidentals_py, m)?)?;
     m.add_function(wrap_pyfunction!(make_beams_py, m)?)?;
     m.add_function(wrap_pyfunction!(make_tuplet_brackets_py, m)?)?;
     m.add_function(wrap_pyfunction!(set_stem_direction_py, m)?)?;
