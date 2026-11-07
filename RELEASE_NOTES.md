@@ -1,3 +1,25 @@
+# music21-rs 0.18.1
+
+`harte` 0.11.1 depends on this release.
+
+## added
+
+- `Chord::diatonic_ascending_order`, the note indices in the order
+  `sort_diatonic_ascending` puts them.
+
+## fixed
+
+- **The wheel's `RomanNumeral` re-reads a new figure in full**: setting
+  `figure` replaces the parsed fields a caller had overwritten
+  (`scaleDegree`, `frontAlterationAccidental`, `romanNumeralAlone`,
+  `impliedQuality`, the omitted, added and bracketed steps), where they
+  stayed as set. A figure with no slash also drops the secondary numeral,
+  which music21 keeps, giving `V/V`'s pitches for `V`. Setting `key` keeps
+  them, and a copy carries them.
+- **The wheel's `Stream` sorts what stands at one offset by each
+  element's own `priority`**, read when it is inserted; every element
+  counted as 0.
+
 # music21-rs 0.18.0
 
 `harte` 0.11.0 depends on this release.
