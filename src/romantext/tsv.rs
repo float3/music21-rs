@@ -27,7 +27,7 @@ use crate::duration::{Duration, limited_fraction};
 use crate::error::{Error, Result};
 use crate::expressions::python_float;
 use crate::key::Key;
-use crate::makenotation::op_frac;
+use crate::makenotation::{MAX_MEASURES, op_frac};
 use crate::meter::TimeSignature;
 use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
@@ -904,7 +904,9 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
     let mut said_timesig = first.timesig.clone();
     let mut measure_length = meter.bar_duration().quarter_length();
     let mut offset = 0.0;
-    let mut previous_measure = first.measure - 1;
+    // Counted wider than a measure number, which the first may be the
+    // least of.
+    let mut previous_measure = i64::from(first.measure) - 1;
     let mut previous_volta = String::new();
     // Where each measure of the part stands and what it is numbered, so
     // that a chord can be put in the measure it falls in.
@@ -923,18 +925,26 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
         let volta = row.volta.as_deref().filter(|volta| !volta.is_empty());
         if version == Version::Two && row.volta.as_deref().unwrap_or("") != previous_volta {
             previous_volta = row.volta.clone().unwrap_or_default();
-        } else if row.measure == previous_measure {
+        } else if i64::from(row.measure) == previous_measure {
             // Only a change of measure, or of the time through a repeat,
             // makes a measure.
             continue;
         }
-        if row.measure > previous_measure + 1 {
-            // Not every measure has a chord of its own.
-            for number in (previous_measure + 1)..=row.measure {
-                offset += measure_length;
-                measures.push(new_measure(number, None, offset));
-                previous_measure = number;
+        if i64::from(row.measure) > previous_measure + 1 {
+            let made = measures.len() as i64 + i64::from(row.measure) - previous_measure;
+            if made > MAX_MEASURES as i64 {
+                return Err(Error::RomanText(format!(
+                    "measure {} would make more than {MAX_MEASURES} measures",
+                    row.measure
+                )));
             }
+            // Not every measure has a chord of its own.
+            for number in (previous_measure + 1)..=i64::from(row.measure) {
+                offset += measure_length;
+                let number = IntegerType::try_from(number).unwrap_or(row.measure);
+                measures.push(new_measure(number, None, offset));
+            }
+            previous_measure = i64::from(row.measure);
             continue;
         }
         offset += measure_length;
@@ -955,7 +965,7 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
             meter = said;
         }
         measures.push((name, at, measure));
-        previous_measure = row.measure;
+        previous_measure = i64::from(row.measure);
     }
     let _ = &meter;
     // The key and the meter stand at the start of the first measure.
@@ -975,9 +985,13 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
         };
         measure.insert(offset_in_measure(row.beat), row.element()?);
     }
-    for (_, at, measure) in measures {
-        part.insert(at, measure);
-    }
+    // All at once: sorting the part again for each measure is quadratic.
+    part.insert_sorted(
+        measures
+            .into_iter()
+            .map(|(_, at, measure)| StreamEvent::new(at, measure))
+            .collect(),
+    );
     lengthen_harmonies(&mut part)?;
     let mut score = Stream::with_kind(StreamKind::Score);
     score.insert(0.0, part);
@@ -1537,5 +1551,29 @@ mod tests {
         assert!(Version::from_number(3).is_err());
         assert!(Version::One.columns().contains(&"global_key"));
         assert!(Version::Two.columns().contains(&"globalkey"));
+    }
+
+    /// A table skipping thousands of measures, each of which is made: put
+    /// in the part one at a time, they took minutes.
+    #[test]
+    fn a_table_skipping_many_measures_is_read_quickly() {
+        let table = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n\
+                     .C.I\t1\t1.0\t4/4\tC\tI\tI\n\
+                     V\t20000\t1.0\t4/4\tC\tI\tV\n";
+        let started = std::time::Instant::now();
+        let read = from_tsv(table, Version::One).unwrap();
+        assert_eq!(read.parts()[0].measures().len(), 20000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_table_of_more_measures_than_a_stream_takes_is_refused() {
+        let header = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n";
+        let gap = crate::makenotation::MAX_MEASURES + 2;
+        for (first, last) in [(1, gap as i64), (-2_147_483_648, 1), (1, 2_147_483_647)] {
+            let table =
+                format!("{header}.C.I\t{first}\t1.0\t4/4\tC\tI\tI\nV\t{last}\t1.0\t4/4\tC\tI\tV\n");
+            assert!(from_tsv(&table, Version::One).is_err(), "{first} {last}");
+        }
     }
 }
