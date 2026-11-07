@@ -102,6 +102,9 @@ pub enum StreamKind {
     Part,
     /// One staff of a part written on several.
     PartStaff,
+    /// One line of a page's staves: music21's `System`, which only its
+    /// optical recognition and Capella reader build.
+    System,
     /// A whole piece, holding parts.
     Score,
     /// A collection of scores.
@@ -110,12 +113,13 @@ pub enum StreamKind {
 
 impl StreamKind {
     /// Every kind, in music21's order of containment.
-    pub const ALL: [StreamKind; 7] = [
+    pub const ALL: [StreamKind; 8] = [
         StreamKind::Stream,
         StreamKind::Voice,
         StreamKind::Measure,
         StreamKind::Part,
         StreamKind::PartStaff,
+        StreamKind::System,
         StreamKind::Score,
         StreamKind::Opus,
     ];
@@ -128,6 +132,7 @@ impl StreamKind {
             StreamKind::Measure => "Measure",
             StreamKind::Part => "Part",
             StreamKind::PartStaff => "PartStaff",
+            StreamKind::System => "System",
             StreamKind::Score => "Score",
             StreamKind::Opus => "Opus",
         }
