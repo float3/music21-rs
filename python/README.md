@@ -91,6 +91,19 @@ answering for the first instrument it holds where nothing says them; a stream an
 slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
 
+`music21_rs.converter` chooses the reader as music21's `converter` does:
+`converter.parse(path_or_text_or_bytes, format=None, number=None)`, with
+`parseFile`, `parseData`, `parseURL` and `toData`, tells the format from a
+file's extension, from a header such as `tinyNotation:`, or from the
+document's first characters, and reads every format above (a `.mxl`, a
+`.mscz` and a MuseData zip or directory unpacked for it). `toData(score,
+fmt)` hands back what `score.write(fmt)` writes, and ABC. there is no
+cache, and a keyword the crate's reader cannot honour, such as MIDI's
+`quarterLengthDivisors`, raises `ConverterException`.
+
+once installed into music21 (below), it is music21's own `converter`,
+handing back music21's streams.
+
 the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,
 `sliceByGreatestDivisor`, `scaleOffsets`, `scaleDurations`,

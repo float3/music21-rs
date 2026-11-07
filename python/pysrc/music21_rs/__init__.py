@@ -21,7 +21,17 @@ __all__ = sorted(
 )
 
 
+# music21's modules the package has in Python, beside the extension: each is
+# imported on first asking, as `import music21` makes `music21.converter`
+# reachable, without the cost when nobody asks.
+_SUBMODULES = ("converter",)
+
+
 def __getattr__(name):
+    if name in _SUBMODULES:
+        import importlib
+
+        return importlib.import_module(f"{__name__}.{name}")
     if name in _exception_names:
         from . import music21_rs as _extension
 
