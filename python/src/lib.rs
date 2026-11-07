@@ -80,6 +80,7 @@ pub mod neoriemannian;
 pub mod notation;
 pub mod note;
 pub mod omrcorrectors;
+pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
@@ -1900,6 +1901,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     extractors::register(m)?;
     primitives::register(m)?;
     fixer::register(m)?;
+    ornamentrecognizer::register(m)?;
     harmparser::register(m)?;
     spineparser::register(m)?;
     hasher::register(m)?;

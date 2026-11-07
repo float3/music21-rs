@@ -1403,6 +1403,7 @@ _UNTRAVERSED = {
     "TabChordV2": "the text and numbers of a TSV row",
     "TempoText": "a text expression",
     "TextBox": "a style and a place",
+    "TurnRecognizer": "the intervals a turn may step by",
     # Braille's working parts, made and dropped inside one transcription.
     "BrailleElementGrouping": "a transcription's grouping",
     "BrailleText": "lines of braille",
@@ -8281,3 +8282,76 @@ def test_make_ornamental_accidentals_matches_music21s():
     ]
     assert shown(ours) == shown(theirs) == [("F4", True)]
     assert [p.nameWithOctave for p in our_past] == [p.nameWithOctave for p in their_past]
+
+
+def _busy(make_note, names, length=0.25):
+    notes = [make_note(name) for name in names]
+    for n in notes:
+        n.quarterLength = length
+    return notes
+
+
+def _ornament(found):
+    if found is False:
+        return False
+    pitches = [p.nameWithOctave for p in getattr(found, "ornamentalPitches", ())]
+    return (type(found).__name__, float(found.quarterLength),
+            getattr(found, "nachschlag", False), pitches)
+
+
+ORNAMENT_CASES = (
+    (["G4", "A4", "G4", "A4"], None),
+    (["A4", "G4", "A4", "G4"], None),
+    (["G4", "A-4", "G4", "A-4"], None),
+    (["G4", "A4", "G4", "A4"], "A4"),
+    (["G4", "C5", "G4", "C5"], None),
+    (["G4", "A4", "G4", "A4", "G4", "F4", "G4"], None),
+    (["B4", "A4", "G4", "A4"], None),
+    (["G4", "A4", "B4", "A4"], "A4"),
+    (["G4", "A4"], None),
+)
+
+
+def test_ornament_recognizers_recognize_as_music21s():
+    recognizer = pytest.importorskip("music21.alpha.analysis.ornamentRecognizer")
+    note = pytest.importorskip("music21.note")
+    duration = pytest.importorskip("music21.duration")
+    for busy_names, simple_name in ORNAMENT_CASES:
+        ours = _busy(m.Note, busy_names)
+        theirs = _busy(note.Note, busy_names)
+        our_simple = [m.Note(simple_name)] if simple_name else None
+        their_simple = [note.Note(simple_name)] if simple_name else None
+        for kind, keywords in (
+            ("TrillRecognizer", {}),
+            ("TrillRecognizer", {"checkNachschlag": True}),
+            ("TurnRecognizer", {}),
+        ):
+            mine = getattr(m, kind)(**keywords)
+            music21s = getattr(recognizer, kind)(**keywords)
+            assert _ornament(mine.recognize(ours, our_simple)) == _ornament(
+                music21s.recognize(theirs, their_simple)
+            ), (kind, keywords, busy_names, simple_name)
+        base, music21_base = m.OrnamentRecognizer(), recognizer.OrnamentRecognizer()
+        assert base.calculateOrnamentNoteQl(ours, our_simple) == (
+            music21_base.calculateOrnamentNoteQl(theirs, their_simple)
+        )
+        assert base.calculateOrnamentTotalQl(ours, our_simple) == (
+            music21_base.calculateOrnamentTotalQl(theirs, their_simple)
+        )
+    turns, music21_turns = m.TurnRecognizer(), recognizer.TurnRecognizer()
+    for name in ("M2", "m-2", "A2", "M3", "P1"):
+        assert turns.isAcceptableInterval(m.Interval(name)) == (
+            music21_turns.isAcceptableInterval(recognizer.interval.Interval(name))
+        )
+    assert m.calculateTrillNoteDuration(3, m.Duration(1.0)) == (
+        recognizer.calculateTrillNoteDuration(3, duration.Duration(1.0))
+    )
+
+
+def test_a_turn_recognizer_reads_its_intervals_as_they_stand():
+    turns = m.TurnRecognizer()
+    assert turns.isAcceptableInterval(m.Interval("M2"))
+    turns.acceptableIntervals = [m.Interval("M3")]
+    assert not turns.isAcceptableInterval(m.Interval("M2"))
+    assert turns.isAcceptableInterval(m.Interval("M3"))
+    assert m.TrillRecognizer().recognize([m.Note("C4")]) is False
