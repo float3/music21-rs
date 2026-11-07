@@ -1321,7 +1321,12 @@ def make_class(facade, original):
     def __copy__(self):
         return __deepcopy__(self)
 
-    _facades.add(facade)
+    # The wheel's own bases under the facade -- its `GeneralNote`, its
+    # `Music21Object` -- are that half too: music21's are what the class
+    # reports.
+    for ancestor in facade.__mro__:
+        if ancestor is not object:
+            _facades.add(ancestor)
     namespace = dict(unported_members(facade, original))
     namespace.update(style_and_editorial(original))
     namespace.update({

@@ -9917,3 +9917,79 @@ print(len(s.getElementsByClass(note.GeneralNote)))
         "True ['x']",
         "2",
     ]
+
+
+def test_an_installed_class_reports_music21s_class_set():
+    """Installed, a class's `classes` and `classSet` are music21's exactly:
+    the wheel's own base classes are not part of what it reports."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import chord, note, stream
+made = {
+    'Note': lambda: note.Note('C4'),
+    'Rest': note.Rest,
+    'Chord': lambda: chord.Chord('C E G'),
+    'Stream': stream.Stream,
+    'Measure': stream.Measure,
+}
+def described(found):
+    words = sorted(member for member in found if isinstance(member, str))
+    kinds = [member for member in found if not isinstance(member, str)]
+    # An installed class stands for music21's; anything else is itself.
+    kinds = sorted(
+        id(getattr(member, '_replaces', (member,))[0]) for member in kinds
+    )
+    return words, kinds, len(found)
+before = {name: (build().classes, described(build().classSet))
+          for name, build in made.items()}
+import music21_rs as m
+m.install_into_music21()
+from music21 import chord, note, stream
+made = {
+    'Note': lambda: note.Note('C4'),
+    'Rest': note.Rest,
+    'Chord': lambda: chord.Chord('C E G'),
+    'Stream': stream.Stream,
+    'Measure': stream.Measure,
+}
+for name, build in made.items():
+    built = build()
+    print(name, built.classes == before[name][0],
+          described(built.classSet) == before[name][1])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        f"{name} True True" for name in ("Note", "Rest", "Chord", "Stream", "Measure")
+    ]
+
+
+def test_an_installed_class_is_found_by_music21s_classes():
+    """Installed, a note is found by music21's `GeneralNote` and by name."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import base, note, stream
+s = stream.Stream([note.Note('C4'), note.Rest()])
+print(len(s.getElementsByClass(note.GeneralNote)),
+      len(s.getElementsByClass('GeneralNote')),
+      len(s.getElementsByClass(note.NotRest)),
+      len(s.getElementsByClass('Note')),
+      len(s.getElementsByClass(base.Music21Object)))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["2 2 1 1 2"]
+
+
+def test_a_wheel_note_reports_the_wheels_own_bases():
+    """Standalone, a wheel note is a kind of the wheel's own bases."""
+    note = m.Note("C4")
+    assert note.classes[:4] == ["Note", "NotRest", "GeneralNote", "Music21Object"]
+    line = m.Stream([note, m.Rest()])
+    assert len(line.getElementsByClass(m.GeneralNote)) == 2
+    assert len(line.getElementsByClass(m.NotRest)) == 1
+    assert len(line.getElementsByClass(m.Music21Object)) == 2
