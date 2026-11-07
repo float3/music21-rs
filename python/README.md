@@ -101,8 +101,14 @@ fmt)` hands back what `score.write(fmt)` writes, and ABC. there is no
 cache, and a keyword the crate's reader cannot honour, such as MIDI's
 `quarterLengthDivisors`, raises `ConverterException`.
 
-once installed into music21 (below), it is music21's own `converter`,
-handing back music21's streams.
+`music21_rs.corpus.parse("bach/bwv66.6")` and `corpus.getWork(name,
+movementNumber)` find music21's corpus files as music21 does: in the
+directory `MUSIC21_RS_CORPUS` names, else in an installed music21's
+`corpus` directory, found without importing music21. the wheel ships no
+scores, and there is no metadata to search.
+
+once installed into music21 (below), both modules are music21's own
+`converter` and `corpus`, handing back music21's streams.
 
 the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,

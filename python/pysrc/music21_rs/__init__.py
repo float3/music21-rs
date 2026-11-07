@@ -24,7 +24,7 @@ __all__ = sorted(
 # music21's modules the package has in Python, beside the extension: each is
 # imported on first asking, as `import music21` makes `music21.converter`
 # reachable, without the cost when nobody asks.
-_SUBMODULES = ("converter",)
+_SUBMODULES = ("converter", "corpus")
 
 
 def __getattr__(name):

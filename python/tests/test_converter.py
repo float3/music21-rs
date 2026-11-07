@@ -1,5 +1,5 @@
-"""`music21_rs.converter`: music21's `converter.parse` over the crate's
-readers.
+"""`music21_rs.converter` and `music21_rs.corpus`: music21's `converter.parse`
+and `corpus.parse` over the crate's readers.
 
 The readers themselves are held to music21 elsewhere (`converter_parity.py`,
 the parity suites); what is here is the choosing: that a file or a document
@@ -17,7 +17,7 @@ import sys
 import pytest
 
 import music21_rs as m
-from music21_rs import converter
+from music21_rs import converter, corpus
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "music21" / "music21"
@@ -193,23 +193,79 @@ def test_to_data_writes_a_stream_in_a_format():
 
 def test_the_package_hands_out_the_modules():
     assert m.converter is converter
+    assert m.corpus is corpus
 
 
-def test_installed_converter_is_music21s():
+def test_corpus_reads_from_the_directory_the_variable_names(fixtures):
+    """With no music21 to find, the corpus is the directory
+    `MUSIC21_RS_CORPUS` names; with neither, asking raises."""
+    code = WITHOUT_MUSIC21 + """
+from music21_rs import corpus
+try:
+    corpus.getWork('bach/bwv66.6')
+except corpus.CorpusException as error:
+    print('no corpus' if 'MUSIC21_RS_CORPUS' in str(error) else error)
+"""
+    assert _run(code) == ["no corpus"]
+    code = WITHOUT_MUSIC21 + """
+from music21_rs import corpus
+score = corpus.parse('bach/bwv66.6')
+print(type(score).__name__, len(score.parts), score.metadata.corpusFilePath)
+print(corpus.getWork('beethoven/opus59no1', 2).name)
+print(len(corpus.getWork('trecento')) > 100)
+print(corpus.getWork('bach/bwv66.6.xml').name)
+try:
+    corpus.parse('no/such/work')
+except corpus.CorpusException as error:
+    print(str(error).startswith('Could not find a work'))
+print('music21' in sys.modules)
+"""
+    assert _run(code, MUSIC21_RS_CORPUS=str(fixtures / "corpus")) == [
+        "Score 4 bach/bwv66.6.mxl",
+        "movement2.mxl",
+        "True",
+        "bwv66.6.mxl",
+        "True",
+        "False",
+    ]
+
+
+def test_corpus_finds_an_installed_music21s_corpus_without_importing_it():
+    spec = importlib.util.find_spec("music21")
+    locations = spec.submodule_search_locations if spec else None
+    if not any(pathlib.Path(each, "corpus").is_dir() for each in locations or ()):
+        pytest.skip("music21 is not installed")
+    code = """
+import sys
+from music21_rs import corpus
+score = corpus.parse('bach/bwv66.6')
+print(type(score).__name__, len(score.parts), score.metadata.corpusFilePath)
+print('music21' in sys.modules)
+"""
+    assert _run(code, PYTHONPATH=os.environ.get("PYTHONPATH", "")) == [
+        "Score 4 bach/bwv66.6.mxl",
+        "False",
+    ]
+
+
+def test_installed_converter_and_corpus_are_music21s():
     """Installed, the calls are music21's own and hand back its streams;
     MuseScore's files, which music21 does not read, are read by the crate
     into music21's streams."""
     pytest.importorskip("music21.stream")
     code = f"""
 import music21_rs as m
-from music21_rs import converter
+from music21_rs import converter, corpus
 m.install_into_music21()
 from music21 import converter as m21converter, stream
+score = corpus.parse('bach/bwv66.6')
+print(isinstance(score, stream.Score), score.metadata.corpusFilePath)
 print(isinstance(converter.parse({str(MSCX / "two-staves.mscx")!r}), stream.Score))
 print(isinstance(converter.parse('tinyNotation: c4 d', makeNotation=False), stream.Part))
 print(converter.ConverterException is m21converter.ConverterException)
 """
     assert _run(code, PYTHONPATH=os.environ.get("PYTHONPATH", "")) == [
+        "True bach/bwv66.6.mxl",
         "True",
         "True",
         "True",
