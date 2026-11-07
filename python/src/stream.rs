@@ -5460,6 +5460,15 @@ fn carry_notation(
         StreamElement::Rest(rest) => (rest.articulations(), rest.expressions()),
         _ => return Ok(()),
     };
+    // Left off the page, which music21 says on the object's style.
+    let hidden = match element {
+        StreamElement::Note(note) => note.hidden(),
+        StreamElement::Rest(rest) => rest.hidden(),
+        _ => false,
+    };
+    if hidden {
+        made.getattr("style")?.setattr("hideObjectOnPrint", true)?;
+    }
     if !articulations.is_empty() {
         let held = PyList::empty(py);
         for articulation in articulations {

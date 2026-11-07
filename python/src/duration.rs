@@ -1038,7 +1038,8 @@ impl Duration {
     }
 
     pub(crate) fn wrap(inner: RsDuration) -> Self {
-        Self {
+        let unlinked = !inner.linked();
+        let mut made = Self {
             inner,
             components: None,
             tuplets: None,
@@ -1047,7 +1048,18 @@ impl Duration {
             unlinked_type: None,
             expression_is_inferred: true,
             client: None,
+        };
+        // One a reader unlinked keeps the values it is written as, which
+        // its length no longer says.
+        if unlinked {
+            made.components = Some(made.component_list());
+            made.unlinked_type = made
+                .inner
+                .type_and_dots()
+                .map(|(kind, _)| kind.music21_name().to_string());
+            made.linked = false;
         }
+        made
     }
 
     /// The written values this length is made of: the ones set or already

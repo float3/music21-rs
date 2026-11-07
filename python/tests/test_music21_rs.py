@@ -7462,6 +7462,23 @@ def test_routed_musicxml_keeps_what_a_no_chord_says():
     assert _routed_differences("musicxml", paths, ("NoChord", "<kind")) == []
 
 
+def test_routed_musicxml_keeps_a_duration_unlinked():
+    """A rest written whole that lasts a bar of 3/4, read through the crate,
+    is unlinked from its written value as music21's reader makes it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml",)
+    names = ("duration.linked=False",)
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
+
+
+def test_routed_musicxml_keeps_a_rest_hidden():
+    """A rest written `print-object="no"` and read through the crate is
+    left off the page, as music21's reader leaves it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml",)
+    assert _routed_differences("musicxml", paths, ("print-object",), drawn=False) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""
