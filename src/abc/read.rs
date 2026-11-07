@@ -176,7 +176,10 @@ enum Token {
     Tie,
     /// A slur or a hairpin opening: the spanner it starts.
     SpannerStart(SpannerKind, Option<usize>),
-    ParenStop,
+    /// A closing `)`, or a hairpin's `!crescendo)!` or `!diminuendo)!`.
+    ParenStop {
+        hairpin: bool,
+    },
     Staccato,
     Upbow,
     Downbow,
@@ -844,7 +847,9 @@ impl Handler {
                             "!diminuendo(!" => self
                                 .tokens
                                 .push(Token::SpannerStart(SpannerKind::Diminuendo, None)),
-                            "!crescendo)!" | "!diminuendo)!" => self.tokens.push(Token::ParenStop),
+                            "!crescendo)!" | "!diminuendo)!" => {
+                                self.tokens.push(Token::ParenStop { hairpin: true });
+                            }
                             _ => {}
                         }
                         skip = j - pos;
@@ -863,7 +868,7 @@ impl Handler {
                 continue;
             }
             let simple = match c {
-                ')' => Some(Token::ParenStop),
+                ')' => Some(Token::ParenStop { hairpin: false }),
                 '-' => Some(Token::Tie),
                 _ => None,
             };
@@ -1058,7 +1063,6 @@ impl Handler {
                 Token::Tuplet { src } => {
                     let (made, count) = tuplet_of(&src, meter.as_ref())?;
                     tuplet = Some((made, count));
-                    active_parens.push("Tuplet");
                 }
                 Token::SpannerStart(kind, _) => {
                     spanners.push(Spanning {
@@ -1074,11 +1078,17 @@ impl Handler {
                         _ => "Slur",
                     });
                 }
-                Token::ParenStop => {
-                    if let Some(closed) = active_parens.pop()
-                        && closed != "Tuplet"
-                    {
-                        active_spanners.pop();
+                Token::ParenStop { hairpin } => {
+                    // Slurs and hairpins may overlap, so each stop ends the
+                    // latest of its own kind.
+                    let closes: &[&str] = if hairpin {
+                        &["Crescendo", "Diminuendo"]
+                    } else {
+                        &["Slur"]
+                    };
+                    if let Some(at) = active_parens.iter().rposition(|open| closes.contains(open)) {
+                        active_parens.remove(at);
+                        active_spanners.remove(at);
                     }
                 }
                 Token::Tie => {
@@ -2380,6 +2390,82 @@ mod tests {
                 "meta", "meta", "meta", "note", "note", "bar", "tuplet", "note", "note", "note",
                 "note", "bar"
             ]
+        );
+    }
+
+    /// Each note's source and the kinds of the spanners in force on it.
+    fn spanners_of(body: &str) -> Vec<(String, Vec<SpannerKind>)> {
+        let mut handler = Handler::new(DEFAULT_VERSION);
+        handler
+            .tokenize(&format!("X:1\nM:4/4\nL:1/8\nK:C\n{body}\n"))
+            .unwrap();
+        let spanners = handler.process().unwrap();
+        handler
+            .tokens
+            .iter()
+            .filter_map(|token| match token {
+                Token::Note(note) => Some((
+                    note.src.trim().to_string(),
+                    note.spanners
+                        .iter()
+                        .map(|index| spanners[*index].kind)
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_closing_mark_ends_the_latest_spanner_of_its_kind() {
+        // music21's `testSlurAroundTuplet` (cuthbertLab #1798).
+        use SpannerKind::{Crescendo, Diminuendo, Slur};
+        let expect = |pairs: &[(&str, &[SpannerKind])]| -> Vec<(String, Vec<SpannerKind>)> {
+            pairs
+                .iter()
+                .map(|(src, kinds)| (src.to_string(), kinds.to_vec()))
+                .collect()
+        };
+        // A tuplet has no closing parenthesis, so ')' ends the slur.
+        assert_eq!(
+            spanners_of("(a(3bcd e) f|"),
+            expect(&[
+                ("a", &[Slur]),
+                ("b", &[Slur]),
+                ("c", &[Slur]),
+                ("d", &[Slur]),
+                ("e", &[Slur]),
+                ("f", &[]),
+            ])
+        );
+        assert_eq!(
+            spanners_of("!crescendo(! (3abc d !crescendo)! e|"),
+            expect(&[
+                ("a", &[Crescendo]),
+                ("b", &[Crescendo]),
+                ("c", &[Crescendo]),
+                ("d", &[Crescendo]),
+                ("e", &[]),
+            ])
+        );
+        // A slur and a crescendo can overlap without nesting.
+        assert_eq!(
+            spanners_of("(a !crescendo(! b) c !crescendo)! d|"),
+            expect(&[
+                ("a", &[Slur]),
+                ("b", &[Slur, Crescendo]),
+                ("c", &[Crescendo]),
+                ("d", &[]),
+            ])
+        );
+        assert_eq!(
+            spanners_of("!diminuendo(! a (b !diminuendo)! c) d|"),
+            expect(&[
+                ("a", &[Diminuendo]),
+                ("b", &[Diminuendo, Slur]),
+                ("c", &[Slur]),
+                ("d", &[]),
+            ])
         );
     }
 
