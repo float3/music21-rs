@@ -1184,6 +1184,20 @@ impl Chord {
         self.sort_ascending()
     }
 
+    /// Where each note of [`Self::sort_diatonic_ascending`] comes from: the
+    /// index in this chord of the note it puts first, then second, and so
+    /// on, equal notes keeping their order.
+    ///
+    /// ```
+    /// use music21::Chord;
+    ///
+    /// assert_eq!(Chord::new("G4 C4 E-4 D#4")?.diatonic_ascending_order(), [1, 3, 2, 0]);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn diatonic_ascending_order(&self) -> Vec<usize> {
+        self.ascending_order()
+    }
+
     /// Whether the notes already stand in the order
     /// [`Self::sort_diatonic_ascending`] puts them in, lowest to highest on
     /// the staff: music21's `isSortedDiatonicAscending`.

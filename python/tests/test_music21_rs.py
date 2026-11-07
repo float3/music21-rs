@@ -8217,6 +8217,18 @@ def test_a_stream_sorts_by_the_priority_its_elements_carry():
     assert orders[0] == orders[1] == ["D", "C", "E"]
 
 
+def test_a_chord_sorted_in_place_moves_its_note_objects_with_it():
+    """The note objects a chord has handed out are reordered as its pitches
+    are, so each still carries the pitch at its place."""
+    c = m.Chord(["G4", "C", "E-4", "D#4", "B#3", "C4"])
+    held = list(c.notes)
+    c.sortDiatonicAscending(inPlace=True)
+    names = ["B#3", "C", "C4", "D#4", "E-4", "G4"]
+    assert [p.nameWithOctave for p in c.pitches] == names
+    assert [n.pitch.nameWithOctave for n in c.notes] == names
+    assert [held.index(n) for n in c.notes] == [4, 1, 5, 3, 2, 0]
+
+
 def test_a_pickled_tuplet_keeps_its_written_value():
     """A dotted half in a triplet sounds a half; pickled and read back it is
     still written as the dotted half, as music21's is."""
