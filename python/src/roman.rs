@@ -127,21 +127,17 @@ struct ParseState {
     /// `Some(None)` is a secondary numeral a step deliberately cleared.
     secondary: Option<Option<Py<PyAny>>>,
     secondary_key: Option<Option<Py<PyAny>>>,
+    /// music21's `_setImpliedScaleFromKey` has run since the figure was
+    /// read, so an augmented sixth's minor key is no longer implied.
+    implied_from_key: bool,
 }
 
 impl ParseState {
-    /// What is left once music21's figure setter has run its parsing steps
-    /// again: every field reads off the new figure, except the secondary
-    /// numeral and its key, which a step writes only when the figure has a
-    /// slash.
-    fn reparsed(&mut self, slashed: bool) {
-        let secondary = self.secondary.take();
-        let secondary_key = self.secondary_key.take();
+    /// What is left once music21's figure setter has cleared the secondary
+    /// numeral and its key and run its parsing steps again: every field
+    /// reads off the new figure.
+    fn reparsed(&mut self) {
         *self = Self::default();
-        if !slashed {
-            self.secondary = secondary;
-            self.secondary_key = secondary_key;
-        }
     }
 
     /// The same fields again, for a copy of the numeral.
@@ -161,6 +157,7 @@ impl ParseState {
             added: self.added.clone(),
             secondary: clone_slot(&self.secondary),
             secondary_key: clone_slot(&self.secondary_key),
+            implied_from_key: self.implied_from_key,
         }
     }
 }
@@ -180,6 +177,26 @@ impl RomanNumeral {
             follows_key_change: false,
             write_as_chord: true,
         }
+    }
+
+    /// The minor key music21 reads an augmented sixth in when the key it
+    /// stands in is major, which it keeps as the implied scale until
+    /// `_setImpliedScaleFromKey` runs.
+    fn augmented_sixth_minor(&self) -> Option<RsKey> {
+        if self.blank || self.state.implied_from_key {
+            return None;
+        }
+        if !matches!(
+            self.inner.roman_numeral().as_str(),
+            "It" | "Fr" | "Ger" | "Sw"
+        ) {
+            return None;
+        }
+        let key = self.inner.effective_key_of().ok()?;
+        if key.mode() != "major" {
+            return None;
+        }
+        RsKey::from_tonic_mode(&key.tonic().name(), Some("minor")).ok()
     }
 
     /// Replaces the figure this numeral reads, and the chord it stands on.
@@ -837,8 +854,7 @@ impl RomanNumeral {
     fn set_figure(slf: &Bound<'_, Self>, py: Python<'_>, value: &str) -> PyResult<()> {
         let key = slf.borrow().inner.key().clone();
         let rebuilt = RsRomanNumeral::new(value.to_string(), key).map_err(roman_error)?;
-        let slashed = rebuilt.secondary().is_some();
-        slf.borrow_mut().state.reparsed(slashed);
+        slf.borrow_mut().state.reparsed();
         Self::rebuild(slf, py, rebuilt)
     }
 
@@ -918,17 +934,22 @@ impl RomanNumeral {
     }
 
     /// music21's `useImpliedScale`: whether the numeral was left to guess
-    /// the key it is read in.
+    /// the key it is read in, or reads an augmented sixth in a major key's
+    /// minor.
     #[getter]
     fn useImpliedScale(&self) -> bool {
-        self.implied_key
+        self.implied_key || self.augmented_sixth_minor().is_some()
     }
 
     /// music21's `impliedScale`: the scale a numeral with no key reads in,
     /// which is a scale rather than a key, since a numeral given no key is
-    /// not in one.
+    /// not in one; for an augmented sixth in a major key, the minor key it
+    /// is read in.
     #[getter]
     fn impliedScale(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(minor) = self.augmented_sixth_minor() {
+            return crate::key::Key::object(py, minor);
+        }
         if !self.implied_key {
             return Ok(py.None());
         }
@@ -942,6 +963,13 @@ impl RomanNumeral {
             key.tonic(),
         );
         crate::scale::ConcreteScale::object(py, scale)
+    }
+
+    /// music21's `_setImpliedScaleFromKey`: the implied scale as the key
+    /// alone gives it, C major with no key, dropping an augmented sixth's
+    /// minor key.
+    fn _setImpliedScaleFromKey(&mut self) {
+        self.state.implied_from_key = true;
     }
 
     /// music21's `secondaryRomanNumeralKey`: the key a secondary numeral
@@ -1099,6 +1127,7 @@ impl RomanNumeral {
             me.implied_key = value.is_none();
             me.key_object = (!value.is_none() && value.extract::<String>().is_err())
                 .then(|| value.clone().unbind());
+            me.state.implied_from_key = true;
         }
         Self::rebuild(slf, py, rebuilt)
     }

@@ -454,11 +454,12 @@ def _numeral_overrides(roman, copy_it):
     rn.figure = "V"
     found.append((rn.scaleDegree, rn.romanNumeralAlone, rn.impliedQuality, rn.omittedSteps))
     found.append(rn.frontAlterationString)
-    # A figure with no slash leaves an overwritten secondary alone.
+    # A figure with no slash clears an overwritten secondary too.
     rn = roman.RomanNumeral("V/V", "C")
-    rn.secondaryRomanNumeral = None
+    rn.secondaryRomanNumeral = roman.RomanNumeral("IV", "C")
+    rn.secondaryRomanNumeralKey = roman.RomanNumeral("I", "F").key
     rn.figure = "V"
-    found.append(repr(rn.secondaryRomanNumeral))
+    found.append((repr(rn.secondaryRomanNumeral), repr(rn.secondaryRomanNumeralKey)))
     # A key is not a figure: what was written stays.
     rn = roman.RomanNumeral("bVI", "C")
     rn.scaleDegree = 2
@@ -483,7 +484,7 @@ def test_setting_a_figure_reparses_what_was_overwritten():
         "flat",
         (5, "V", "major", []),
         "",
-        "None",
+        ("None", "None"),
         2,
         (2, None),
     ]
@@ -491,6 +492,89 @@ def test_setting_a_figure_reparses_what_was_overwritten():
     assert _numeral_overrides(m, copy.copy) == expected
     roman = pytest.importorskip("music21.roman")
     assert _numeral_overrides(roman, copy.deepcopy) == expected
+
+
+def _refigured(roman):
+    """What a numeral given one figure and then another reports, beside a
+    numeral made with the second figure."""
+    found = []
+
+    def report(rn):
+        return (
+            [p.nameWithOctave for p in rn.pitches],
+            rn.root().name,
+            repr(rn.secondaryRomanNumeral),
+            repr(rn.secondaryRomanNumeralKey),
+            rn.useImpliedScale,
+            repr(rn.impliedScale),
+        )
+
+    for old, new in [
+        ("V/V", "V"),
+        ("V7/IV", "V7/ii"),
+        ("Ger65/V", "V"),
+        ("Ger65", "III"),
+        ("It6", "iii"),
+        ("Fr43", "bVI"),
+        ("V", "Ger65"),
+    ]:
+        for key in ("C", None):
+            rn = roman.RomanNumeral(old, key)
+            rn.figure = new
+            found.append((report(rn), report(roman.RomanNumeral(new, key))))
+    return found
+
+
+def test_setting_a_figure_starts_the_numeral_afresh():
+    """music21's figure setter clears the secondary numeral and key, the
+    implied scale an augmented sixth chose and a root found before, so a
+    numeral given a new figure is the numeral made with it."""
+    for refigured, fresh in _refigured(m):
+        assert refigured == fresh
+    roman = pytest.importorskip("music21.roman")
+    for refigured, fresh in _refigured(roman):
+        assert refigured == fresh
+
+
+def _implied_scales(roman):
+    """Whether a numeral reads in an implied scale, and which, as an
+    augmented sixth in a major key leaves it and as setting the key or
+    `_setImpliedScaleFromKey` puts it back."""
+    found = []
+
+    def report(rn):
+        found.append((rn.useImpliedScale, repr(rn.impliedScale)))
+
+    for figure, key in [("Ger65", None), ("Ger65", "C"), ("Ger65/V", "C"), ("It6", "d"), ("V", "C")]:
+        report(roman.RomanNumeral(figure, key))
+    rn = roman.RomanNumeral("Ger65")
+    rn._setImpliedScaleFromKey()
+    report(rn)
+    rn = roman.RomanNumeral("Ger65", "C")
+    rn.key = roman.RomanNumeral("I", "D").key
+    report(rn)
+    rn.figure = "Fr43"
+    report(rn)
+    return found
+
+
+def test_an_augmented_sixth_in_major_implies_the_minor_key():
+    """music21 reads an augmented sixth in a major key in the minor key on
+    its tonic and keeps that as the implied scale until the key is set
+    again; `_setImpliedScaleFromKey` is music21's way back."""
+    expected = [
+        (True, "<music21.key.Key of c minor>"),
+        (True, "<music21.key.Key of c minor>"),
+        (True, "<music21.key.Key of g minor>"),
+        (False, "None"),
+        (False, "None"),
+        (True, "<music21.scale.MajorScale C major>"),
+        (False, "None"),
+        (True, "<music21.key.Key of d minor>"),
+    ]
+    assert _implied_scales(m) == expected
+    roman = pytest.importorskip("music21.roman")
+    assert _implied_scales(roman) == expected
 
 
 class _Placed:
