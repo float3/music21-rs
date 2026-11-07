@@ -223,7 +223,9 @@ struck on.
 a score's words are read off its notes with `assembleLyrics` and
 `assembleAllLyrics`, a title's article is moved to the front of it and back
 with `prependArticle` and `postpendArticle`, and a `TextBox` stands words
-anywhere on a page, drawn with music21's own `TextStyle`.
+anywhere on a page, drawn with music21's own `TextStyle`. a
+`LanguageDetector` reads which of music21's seven languages a text is in,
+with the `Trigram`s of the excerpts the wheel carries.
 
 how a score, a page, a system and a staff are laid out is here as
 `ScoreLayout`, `PageLayout`, `SystemLayout` and `StaffLayout`, each

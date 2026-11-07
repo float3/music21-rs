@@ -14,16 +14,19 @@
 //! moment the package was imported, which
 //! `test_importing_the_package_imports_no_music21` is there to stop.
 //!
-//! `LanguageDetector` and `Trigram` are not here: the crate has them only
-//! behind its `language-detection` feature, whose excerpts the wheel does
-//! not carry.
+//! `LanguageDetector` and `Trigram` are the crate's too: the wheel carries
+//! the `language-detection` feature and its seven excerpts, so a text's
+//! language is read here without music21. `Trigram.makeWords` and
+//! `likely` are left to music21, since they draw letters at random, and so
+//! is a trigram's `lut`, the table those read.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 
+use music21::features::language;
 use music21::text as rs;
 
 pyo3::create_exception!(music21_rs_facade, TextException, crate::Music21Exception);
@@ -36,7 +39,14 @@ pub const NAMES: &[&str] = &[
     "postpendArticle",
     "TextBox",
     "TextException",
+    "LanguageDetector",
+    "Trigram",
 ];
+
+/// The names installed over music21's own: the two classes that read a
+/// text's language, which hold no music and so stand in wherever music21
+/// builds one.
+pub const INSTALLED_NAMES: &[&str] = &["LanguageDetector", "Trigram"];
 
 /// music21's `assembleLyrics`: one line of a stream's lyrics, read note by
 /// note, with a space between words and none inside a word a hyphen split.
@@ -297,7 +307,245 @@ impl TextBox {
     }
 }
 
+/// music21's `text.Trigram`: how often each letter follows each pair of
+/// letters in a text, which is what a language is told by.
+#[pyclass(
+    name = "Trigram",
+    module = "music21.text",
+    subclass,
+    skip_from_py_object
+)]
+pub struct Trigram {
+    /// The crate's counts.
+    held: language::Trigram,
+    /// Whether anything has been counted yet: music21's `length` is
+    /// `None` until something has.
+    measured: bool,
+}
+
+impl Trigram {
+    fn of(held: language::Trigram) -> Self {
+        Self {
+            held,
+            measured: true,
+        }
+    }
+}
+
+#[pymethods]
+impl Trigram {
+    /// music21's `Trigram(excerptList=None)`: a string read letter by
+    /// letter, or a list of words read each followed by a space.
+    #[new]
+    #[pyo3(signature = (excerptList = None))]
+    fn new(excerptList: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+        let mut made = Self {
+            held: language::Trigram::default(),
+            measured: false,
+        };
+        if let Some(excerpt) = excerptList.filter(|given| !given.is_none()) {
+            made.parseExcerpt(excerpt)?;
+        }
+        Ok(made)
+    }
+
+    /// The square root of the sum of every count squared, or `None` before
+    /// anything is counted: music21's `length`.
+    #[getter]
+    fn length(&self) -> Option<f64> {
+        self.measured.then(|| self.held.length())
+    }
+
+    /// Counts a text's trigrams into these: music21's `parseExcerpt`,
+    /// which reads a list as words and anything else letter by letter.
+    fn parseExcerpt(&mut self, excerpt: &Bound<'_, PyAny>) -> PyResult<()> {
+        if excerpt.is_instance_of::<PyList>() {
+            let words: Vec<String> = excerpt.extract()?;
+            self.held.add_words(words.iter().map(String::as_str));
+        } else {
+            self.held.add_text(&excerpt.extract::<String>()?);
+        }
+        self.measured = true;
+        Ok(())
+    }
+
+    /// music21's `measure`, which works out `length`. Counting does that
+    /// here, so all this does is say a trigram with nothing counted has a
+    /// length of nought.
+    fn measure(&mut self) {
+        self.measured = true;
+    }
+
+    /// How alike two texts' trigrams are, from nought to one: music21's
+    /// `similarity`.
+    fn similarity(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let Ok(other) = other.cast::<Self>() else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "can't compare Trigram with non-Trigram",
+            ));
+        };
+        let other = other.borrow();
+        let ours = self.length();
+        let theirs = other.length();
+        if ours.unwrap_or(0.0) == 0.0 || theirs.unwrap_or(0.0) == 0.0 {
+            // Nothing in common with an empty trigram, and music21 divides
+            // by its length anyway: Python's own refusal, word for word.
+            let product = ours.into_pyobject(py)?.mul(theirs.into_pyobject(py)?)?;
+            return Ok(0i64.into_pyobject(py)?.div(product)?.unbind());
+        }
+        Ok(self
+            .held
+            .similarity(&other.held)
+            .into_pyobject(py)?
+            .into_any()
+            .unbind())
+    }
+
+    /// One less [`Self::similarity`]: music21's `-`.
+    fn __sub__(&self, py: Python<'_>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let alike = self.similarity(py, other)?;
+        Ok(1.0f64.into_pyobject(py)?.sub(alike)?.unbind())
+    }
+
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.get_type().call0()?;
+        {
+            let me = slf.borrow();
+            let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
+            copy.held = me.held.clone();
+            copy.measured = me.measured;
+        }
+        Ok(copied)
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::__deepcopy__(slf, None)
+    }
+}
+
+/// music21's `text.LanguageDetector`: which of seven languages a text is
+/// most like, by its trigrams.
+#[pyclass(
+    name = "LanguageDetector",
+    module = "music21.text",
+    subclass,
+    skip_from_py_object
+)]
+pub struct LanguageDetector {
+    /// The text it was given, which music21 keeps and reads nothing of.
+    #[pyo3(get, set)]
+    text: Py<PyAny>,
+    /// The trigram of each language's excerpt, built the first time
+    /// anything asks.
+    trigrams: Option<Py<PyDict>>,
+}
+
+/// Each language's trigram by its code, in music21's order.
+fn excerpt_trigrams(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    let made = PyDict::new(py);
+    for code in language::LANGUAGE_CODES {
+        let Some(known) = language::known_trigram(code) else {
+            continue;
+        };
+        made.set_item(code, Py::new(py, Trigram::of(known.clone()))?)?;
+    }
+    Ok(made)
+}
+
+#[pymethods]
+impl LanguageDetector {
+    /// music21's `LanguageDetector(text=None)`.
+    #[new]
+    #[pyo3(signature = (text = None))]
+    fn new(py: Python<'_>, text: Option<Py<PyAny>>) -> Self {
+        Self {
+            text: text.unwrap_or_else(|| py.None()),
+            trigrams: None,
+        }
+    }
+
+    /// The languages known, by code, in music21's order: its
+    /// `languageCodes`.
+    #[classattr]
+    fn languageCodes() -> Vec<&'static str> {
+        language::LANGUAGE_CODES.to_vec()
+    }
+
+    /// Each language's name by its code: music21's `languageLong`.
+    #[classattr]
+    fn languageLong(py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let names = PyDict::new(py);
+        for code in language::LANGUAGE_CODES {
+            names.set_item(code, language::language_name(code))?;
+        }
+        Ok(names.unbind())
+    }
+
+    /// Each language's trigram by its code: music21's `readExcerpts`,
+    /// whose excerpts are built into the wheel rather than read off disk.
+    #[classmethod]
+    fn readExcerpts<'py>(
+        _cls: &Bound<'py, pyo3::types::PyType>,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        excerpt_trigrams(py)
+    }
+
+    /// The trigram of each language's excerpt: music21's `trigrams`.
+    #[getter]
+    fn trigrams(&mut self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        if let Some(held) = &self.trigrams {
+            return Ok(held.clone_ref(py));
+        }
+        let made = excerpt_trigrams(py)?.unbind();
+        self.trigrams = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_trigrams(&mut self, value: Py<PyDict>) {
+        self.trigrams = Some(value);
+    }
+
+    /// The code of the language a passage is most like, `None` for no
+    /// passage and an empty string for one like none of them: music21's
+    /// `mostLikelyLanguage`.
+    fn mostLikelyLanguage(&self, excerpt: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+        if !excerpt.is_truthy()? {
+            return Ok(None);
+        }
+        let text: String = excerpt.extract()?;
+        Ok(Some(language::most_likely_language(&text).unwrap_or("")))
+    }
+
+    /// One more than the place of that language among `languageCodes`, or
+    /// nought for no passage: music21's `mostLikelyLanguageNumeric`.
+    #[pyo3(signature = (excerpt = None))]
+    fn mostLikelyLanguageNumeric(&self, excerpt: Option<&str>) -> PyResult<usize> {
+        language::most_likely_language_numeric(excerpt.unwrap_or(""))
+            .map_err(|error| TextException::new_err(said(&error)))
+    }
+
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let copied = slf.get_type().call0()?;
+        copied.setattr("text", slf.borrow().text.clone_ref(slf.py()))?;
+        Ok(copied)
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        Self::__deepcopy__(slf, None)
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Trigram>()?;
+    m.add_class::<LanguageDetector>()?;
     m.add_class::<TextBox>()?;
     m.add_function(wrap_pyfunction!(assembleLyrics, m)?)?;
     m.add_function(wrap_pyfunction!(assembleAllLyrics, m)?)?;

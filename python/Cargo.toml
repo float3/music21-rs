@@ -16,7 +16,11 @@ crate-type = ["cdylib", "rlib"]
 name = "music21_rs"
 
 [dependencies]
+# `language-detection` brings the seven excerpts, about 1.9 MB, that
+# music21's `LanguageDetector` and its language feature read a text against:
+# the package stands on its own, so it answers those itself.
 music21 = { path = "..", default-features = false, features = [
+  "language-detection",
   "musicxml",
   "serde",
 ] }

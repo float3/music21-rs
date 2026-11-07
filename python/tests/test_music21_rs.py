@@ -7037,6 +7037,86 @@ def test_a_feature_extractor_is_a_class_of_its_own():
     assert isinstance(fe.extract(), m21features.base.Feature)
 
 
+# A line in each of the languages music21 knows, and some it does not.
+LANGUAGE_TEXTS = [
+    "Guten Morgen Frau Wieck. Ich bin Robert.",
+    "Hello there, how are you doing today? I haven't seen you in a while.",
+    "Ciao come stai? Sono molto lento oggi, ma non so perche.",
+    "Credo in unum deum. Patrem omnipotentem. Factorum celi",
+    "Je ne sais pas pourquoi, mais c'est très bien, mon ami.",
+    "Het is een mooie dag vandaag, ik ga fietsen met mijn broer.",
+    "长亭外古道边芳草碧连天",
+    "☃☃☃",
+    "",
+]
+
+
+def test_a_text_is_read_for_its_language():
+    """`LanguageDetector` and `Trigram` answer from the excerpts the wheel
+    carries, and answer as music21's own do, float for float."""
+    ld = m.LanguageDetector()
+    found = [ld.mostLikelyLanguage(each) for each in LANGUAGE_TEXTS]
+    # A line like none of the seven is the empty string, and no line at
+    # all is None, as music21 has them.
+    assert found == ["de", "en", "it", "la", "fr", "nl", "", "", None]
+    assert ld.mostLikelyLanguageNumeric(LANGUAGE_TEXTS[1]) == 1
+    assert ld.mostLikelyLanguageNumeric() == 0
+    with pytest.raises(m.TextException, match="not in the codes"):
+        ld.mostLikelyLanguageNumeric("☃☃☃")
+    assert m.LanguageDetector.languageCodes == ["en", "fr", "it", "de", "cn", "la", "nl"]
+    assert m.LanguageDetector.languageLong["la"] == "Latin"
+    assert 0.50 < ld.trigrams["fr"] - ld.trigrams["it"] < 0.55
+
+    # Nothing counted is no length at all; a list is read word by word.
+    trigram = m.Trigram()
+    assert trigram.length is None
+    trigram.parseExcerpt(["  hello ", "world"])
+    assert trigram.length == pytest.approx(math.sqrt(12))
+    assert trigram - m.Trigram("hello world ") == pytest.approx(0.0)
+    with pytest.raises(TypeError, match="non-Trigram"):
+        trigram.similarity("hello")
+    with pytest.raises(ZeroDivisionError):
+        m.Trigram("").similarity(trigram)
+
+    try:
+        from music21 import text
+    except ImportError:
+        return
+    theirs = text.LanguageDetector()
+    for each in LANGUAGE_TEXTS:
+        assert ld.mostLikelyLanguage(each) == theirs.mostLikelyLanguage(each), each
+    for code in theirs.languageCodes:
+        assert ld.trigrams[code].length == theirs.trigrams[code].length
+        for other in theirs.languageCodes:
+            ours = ld.trigrams[code] - ld.trigrams[other]
+            assert ours == theirs.trigrams[code] - theirs.trigrams[other], (code, other)
+    for each in LANGUAGE_TEXTS[:6]:
+        ours = m.Trigram(each)
+        ours.parseExcerpt(each.split())
+        reference = text.Trigram(each)
+        reference.parseExcerpt(each.split())
+        assert ours.length == reference.length
+        assert ours.similarity(m.Trigram(LANGUAGE_TEXTS[0])) == reference.similarity(
+            text.Trigram(LANGUAGE_TEXTS[0])
+        )
+
+
+def test_the_language_classes_install_over_music21s():
+    """Installed, music21's `text` builds the wheel's detector."""
+    pytest.importorskip("music21.stream")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import text\n"
+        "print(issubclass(text.LanguageDetector, music21_rs.LanguageDetector))\n"
+        "print(issubclass(text.Trigram, music21_rs.Trigram))\n"
+        "print(text.LanguageDetector().mostLikelyLanguage('Guten Morgen Frau Wieck. Ich bin Robert.'))\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["True", "True", "de"]
+
+
 def test_a_score_is_reduced_to_the_chords_that_carry_it():
     """A score thinned out to the few chords that carry each measure, as
     music21's `analysis.reduceChords` thins it.
