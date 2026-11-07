@@ -613,7 +613,8 @@ impl Translator {
             return Ok(());
         }
         let is_copy = data.starts_with('=');
-        if numbers[0] > self.last_measure_number + 1 && self.previous.is_some() {
+        let next = i64::from(self.last_measure_number) + 1;
+        if i64::from(numbers[0]) > next && self.previous.is_some() {
             // Measures the file leaves out hold the last chord still.
             for number in self.last_measure_number + 1..numbers[0] {
                 let mut fill = Measure {
@@ -1513,5 +1514,10 @@ mod tests {
     #[test]
     fn text_with_no_measure_is_refused() {
         assert!(from_roman_text("Composer: nobody\n").is_err());
+    }
+
+    #[test]
+    fn a_measure_after_the_largest_number_is_read() {
+        assert!(from_roman_text("m2147483647 C: I\nm1 I\n").is_ok());
     }
 }
