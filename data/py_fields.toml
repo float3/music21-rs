@@ -296,6 +296,10 @@ reason = "an analysis over a stream"
 kind = "facade-only"
 reason = "an analysis over a stream; its profile is a setting, not a value"
 
+[LanguageDetector]
+kind = "facade-only"
+reason = "the text music21 keeps and reads nothing of, and the trigrams of the excerpts built into the wheel"
+
 [LyricSearcher]
 kind = "facade-only"
 reason = "a search over a stream"

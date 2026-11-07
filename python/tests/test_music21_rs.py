@@ -1337,13 +1337,15 @@ def test_placed_without_a_meter_answers_as_music21_does():
     assert alone.measureNumber is None
 
 
-def test_placed_names_an_object_held_twice_once():
-    """An object held twice is placed once, where `elementOffset` puts it."""
+def test_placed_names_an_object_inserted_twice_once():
+    """A second insert of one object is refused, as music21 refuses it, so
+    the object is placed once, where it was put first."""
     line = m.Stream()
     twice = m.Note("C4")
     line.insert(0, twice)
-    line.insert(2, twice)
-    assert [float(each.offset) for each in line.placed()] == [float(line.elementOffset(twice))]
+    with pytest.raises(m.StreamException):
+        line.insert(2, twice)
+    assert [float(each.offset) for each in line.placed()] == [0.0]
 
 
 def test_the_flags_music21_takes_more_than_truth_for():
@@ -3885,21 +3887,22 @@ def test_a_streams_answers_after_edits_are_music21s():
     assert log == EDITED_STREAM_LOG
 
 
-def test_an_object_held_twice_is_found_where_it_was_put_first():
-    """An object held at two offsets answers `elementOffset` and `remove`
-    for the one put in first, and `index` for the one listed first."""
+def test_an_object_inserted_twice_stays_where_it_was_put_first():
+    """A second insert of one object raises music21's StreamException and
+    leaves the object where it was put first; removing it then removes
+    it."""
     s = m.Stream()
     twice, other = m.Note("C4"), m.Note("D4")
     s.insert(2.0, twice)
     s.insert(0.0, other)
-    s.insert(0.0, twice)
+    with pytest.raises(m.StreamException):
+        s.insert(0.0, twice)
     assert float(s.elementOffset(twice)) == 2.0
     assert s.index(twice) == 1
-    assert [each.name for each in s] == ["D", "C", "C"]
+    assert [each.name for each in s] == ["D", "C"]
 
     s.remove(twice)
-    assert float(s.elementOffset(twice)) == 0.0
-    assert s.index(twice) == 1
+    assert twice not in s and len(s) == 1
 
     replacement = m.Note("E4")
     s.replace(other, replacement)
@@ -3910,7 +3913,7 @@ def test_an_object_held_twice_is_found_where_it_was_put_first():
     s.metadata = first
     assert s[0] is first and s.index(first) == 0
     s.metadata = m.Metadata()
-    assert len(s) == 3 and first not in s
+    assert len(s) == 2 and first not in s
 
 
 def test_many_lookups_still_follow_edits():
@@ -3919,27 +3922,29 @@ def test_many_lookups_still_follow_edits():
     s = m.Stream()
     notes = [m.Note("C4") for _ in range(20)]
     s.append(notes)
-    twice = notes[5]
-    s.insert(0.5, twice)
+    extra = m.Note("D4")
+    s.insert(0.5, extra)
+    with pytest.raises(m.StreamException):
+        s.insert(0.5, notes[5])
     for _ in range(3):
-        assert [s.index(each) for each in notes][:7] == [0, 2, 3, 4, 5, 1, 7]
+        assert [s.index(each) for each in notes][:7] == [0, 2, 3, 4, 5, 6, 7]
         assert [float(s.elementOffset(each)) for each in notes][:6] == [
             0.0, 1.0, 2.0, 3.0, 4.0, 5.0,
         ]
 
-    s.remove(twice)
-    assert float(s.elementOffset(twice)) == 0.5
+    s.remove(extra)
+    assert extra not in s
     for each in notes:
         s.index(each)
     s.setElementOffset(notes[0], 30.0)
     assert s.index(notes[0]) == 19 and s[-1] is notes[0]
     s.remove(notes[1])
-    assert notes[1] not in s and s.index(notes[2]) == 1
+    assert notes[1] not in s and s.index(notes[2]) == 0
     with pytest.raises(m.StreamException):
         s.index(notes[1])
     replacement = m.Note("D4")
     s.replace(notes[2], replacement)
-    assert s.index(replacement) == 1 and notes[2] not in s
+    assert s.index(replacement) == 0 and notes[2] not in s
 
 
 def test_elements_are_taken_out_by_class_and_by_index():
@@ -9408,6 +9413,8 @@ _HIERARCHY_GAPS = {
     ("music21.articulations.Stress", "music21.articulations.LengthArticulation", True),
     ("music21.articulations.StringFingering", "music21.articulations.Fingering", True),
     ("music21.articulations.StringHarmonic", "music21.articulations.Harmonic", True),
+    ("music21.braille.segment.BrailleGrandSegment",
+     "music21.braille.text.BrailleKeyboard", True),
     ("music21.key.Key", "music21.scale.ConcreteScale", True),
     ("music21.key.Key", "music21.scale.DiatonicScale", True),
     ("music21.key.Key", "music21.scale.Scale", True),

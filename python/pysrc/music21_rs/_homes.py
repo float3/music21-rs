@@ -81,6 +81,16 @@ HOMES = {
     'music21.braille.noteGrouping': (
         'transcribeNoteGrouping',
     ),
+    'music21.braille.segment': (
+        'areGroupingsIdentical',
+        'extractBrailleElements',
+        'findSegments',
+        'getRawSegments',
+        'prepareBeamedNotes',
+        'prepareSlurredNotes',
+        'setAffinityCode',
+        'splitNoteGrouping',
+    ),
     'music21.braille.translate': (
         'keyboardPartsToBraille',
         'measureToBraille',

@@ -468,6 +468,16 @@ impl LanguageDetector {
         }
     }
 
+    fn __traverse__(&self, visit: pyo3::PyVisit<'_>) -> Result<(), pyo3::PyTraverseError> {
+        visit.call(&self.text)?;
+        visit.call(&self.trigrams)?;
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.trigrams = None;
+    }
+
     /// The languages known, by code, in music21's order: its
     /// `languageCodes`.
     #[classattr]
