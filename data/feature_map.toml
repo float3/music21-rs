@@ -272,6 +272,7 @@ note = "A string instrument's open strings, the only member music21 gives its st
 [[class]]
 python = "instrument.py"
 name = "MidiPercussionMapMixin"
+facade = "Instrument"
 rust = ["src/instrument/mod.rs"]
 note = "How an instrument in the General MIDI percussion map is played, and the drum that plays. v11 moved this out of `UnpitchedPercussion` into a mixin, the map being a synthesizer's layout rather than a family of instruments -- which is how a whistle, a flute, comes to be in it."
 
@@ -678,6 +679,7 @@ note = "A span of a bar written as a ratio, which is what a meter's partitions a
 [[class]]
 python = "meter/core.py"
 name = "MeterNode"
+facade = "MeterTerminal"
 rust = ["src/meter/sequence.rs"]
 note = "What a span and a divided span have in common: their length, comparing ratios, and dividing."
 

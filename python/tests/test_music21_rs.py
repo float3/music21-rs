@@ -8199,3 +8199,41 @@ def test_an_inversion_fixed_through_overrides_is_named():
     chord._overrides["inversion"] = 300
     with pytest.raises(m.ChordException, match="Not a normal inversion for a triad: 300"):
         chord.inversionName()
+
+
+def test_meter_nodes_answer_music21s_shared_members():
+    # MeterNode is music21's base of both spans; each facade carries its members.
+    core = pytest.importorskip("music21.meter.core")
+    for ours, theirs in (
+        (m.MeterTerminal("3/8"), core.MeterTerminal("3/8")),
+        (m.MeterSequence("3/8+2/8"), core.MeterSequence("3/8+2/8")),
+    ):
+        assert (ours.numerator, ours.denominator) == (theirs.numerator, theirs.denominator)
+        assert ours.weight == theirs.weight
+        assert ours.duration.quarterLength == theirs.duration.quarterLength
+        assert ours.ratioEqual(m.MeterTerminal("5/8")) == theirs.ratioEqual(core.MeterTerminal("5/8"))
+        assert str(ours.subdivideByCount(3)) == str(theirs.subdivideByCount(3))
+        split = [1, ours.numerator - 1]
+        assert str(ours.subdivideByList(split)) == str(theirs.subdivideByList(split))
+
+
+def test_a_glissandos_slide_type_is_read_and_refused_as_music21s():
+    gliss = m.Glissando(m.Note("C4"), m.Note("C5"))
+    assert gliss.slideType == "chromatic"
+    gliss.slideType = "Diatonic"
+    assert gliss.slideType == "diatonic"
+    with pytest.raises(m.SpannerException, match="not a valid value: purple"):
+        gliss.slideType = "purple"
+    with pytest.raises(AttributeError):
+        m.Slur().slideType
+
+
+def test_a_glissandos_slide_type_matches_music21s():
+    spanner = pytest.importorskip("music21.spanner")
+    ours, theirs = m.Glissando(), spanner.Glissando()
+    for kind in ("continuous", "WHITE", "black"):
+        ours.slideType = kind
+        theirs.slideType = kind
+        assert ours.slideType == theirs.slideType
+
+

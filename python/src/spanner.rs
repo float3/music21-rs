@@ -879,6 +879,30 @@ impl Spanner {
         Ok(())
     }
 
+    /// How a glissando is played: music21's `slideType`, `chromatic` until
+    /// told otherwise.
+    #[getter]
+    fn slideType(slf: &Bound<'_, Self>) -> PyResult<&'static str> {
+        only(slf, SpannerKind::Glissando, "slideType")?;
+        let me = slf.borrow();
+        let details = me.inner.glissando_details().cloned().unwrap_or_default();
+        Ok(details.slide_type.as_str())
+    }
+
+    /// Writes how it is played, in any case, refusing a name none of the
+    /// five has, as music21 refuses one.
+    #[setter]
+    fn set_slideType(slf: &Bound<'_, Self>, value: &str) -> PyResult<()> {
+        only(slf, SpannerKind::Glissando, "slideType")?;
+        let found = music21::SlideType::from_name(value)
+            .map_err(|error| SpannerException::new_err(crate::pitch::message(&error)))?;
+        let mut me = slf.borrow_mut();
+        let mut details = me.inner.glissando_details().cloned().unwrap_or_default();
+        details.slide_type = found;
+        me.inner.set_glissando_details(Some(details));
+        Ok(())
+    }
+
     /// Writes whether the notes under the line are written where they
     /// sound.
     #[setter]
