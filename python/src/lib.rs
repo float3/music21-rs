@@ -49,6 +49,7 @@ pub mod chord;
 pub mod chordtables;
 pub mod clef;
 pub mod clercqtemperley;
+pub mod converters;
 pub mod correlate;
 pub mod discrete;
 pub mod duration;
@@ -1418,6 +1419,7 @@ pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
             }
         }
     }
+    converters::install(py)?;
     Ok(replaced)
 }
 
@@ -1946,6 +1948,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;
+    converters::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --

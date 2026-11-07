@@ -7233,6 +7233,104 @@ for score in (converter.parse(path, forceSource=True, storePickle=False), m.from
     assert done.stdout.splitlines() == ["True 87", "True 87"]
 
 
+def test_converter_parse_reads_midi_through_the_crate_once_installed():
+    """Installed, `converter.parse` reads a MIDI file, or its bytes, through
+    the crate and hands back the score music21's own reader makes of it; a
+    keyword only music21's reader takes is read by music21's."""
+    pytest.importorskip("music21.stream")
+    code = """
+import io
+import contextlib
+import re
+from music21 import common, converter
+from music21.converter import subConverters
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+import music21_rs as m
+m.install_into_music21()
+print(converter.Converter.getSubConverterFormats()['midi'] is subConverters.ConverterMidi)
+path = common.getSourceFilePath() / 'midi' / 'testPrimitive' / 'test03.mid'
+
+def read(**keywords):
+    made = converter.Converter()
+    made.parseFile(path, forceSource=True, storePickle=False, **keywords)
+    return made.stream, getattr(made.subConverter, 'readByCrate', None)
+
+# What names an object by where it is in memory, which differs every read.
+ADDRESS = re.compile(r'0x[0-9a-f]+|[0-9]{9,}')
+
+def shown(score):
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        score.show('text', addEndTimes=True)
+    return ADDRESS.sub('', out.getvalue())
+
+def written(score):
+    text = GeneralObjectExporter(score).parse().decode().split('</identification>')[1]
+    return ADDRESS.sub('', re.sub(' id="[^"]*"', '', text))
+
+ours, crate = read()
+ours_read = converter.parse(path.read_bytes())
+print(crate, read(quarterLengthDivisors=(2,))[1])
+print(m.route_converters([]))
+theirs, crate = read()
+print(crate)
+print(shown(ours) == shown(theirs), written(ours) == written(theirs))
+print(shown(ours_read) == shown(converter.parse(path.read_bytes())))
+print(m.route_converters(['midi']))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "False",
+        "True False",
+        "[]",
+        "None",
+        "True True",
+        "True",
+        "['midi']",
+    ]
+
+
+def test_route_converters_routes_its_formats_and_no_others():
+    """Each format routed is music21's own subconverter class under the
+    same name, reading through the crate; a format it has no reader for is
+    refused."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import converter, corpus
+from music21.converter import subConverters
+import music21_rs as m
+m.install_into_music21()
+print(m.route_converters(['musicxml', 'abc', 'midi', 'humdrum', 'mei']))
+formats = converter.Converter.getSubConverterFormats()
+print(formats['musicxml'], issubclass(formats['musicxml'], subConverters.ConverterMusicXML))
+made = converter.Converter()
+made.parseFile(corpus.getWork('bach/bwv66.6'), forceSource=True, storePickle=False)
+print(made.subConverter.readByCrate, len(made.stream.parts), made.stream.metadata.movementName)
+pitches = [p.nameWithOctave for p in made.stream.parts[0].pitches[:4]]
+print(pitches)
+try:
+    m.route_converters(['lilypond'])
+except ValueError as error:
+    print(type(error).__name__)
+print(m.route_converters(['abc']))
+print(converter.Converter.getSubConverterFormats()['musicxml'] is subConverters.ConverterMusicXML)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "['musicxml', 'abc', 'midi', 'humdrum', 'mei']",
+        "<class 'music21.converter.subConverters.ConverterMusicXML'> True",
+        "True 4 bwv66.6.mxl",
+        "['C#5', 'B4', 'A4', 'B4']",
+        "ValueError",
+        "['abc']",
+        "True",
+    ]
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""
