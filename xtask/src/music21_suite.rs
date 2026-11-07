@@ -26,13 +26,15 @@
 //! ```
 //!
 //! `--only` takes a comma-separated list of parts of module names, and
-//! `--sides` the sides to run beside music21. `--profile` sums the timed
-//! tests per module on every side and runs each module's tests under
-//! cProfile, splitting the time into the crate's own calls, this package's
-//! Python glue, music21's Python, CPython's C and the rest: where an
-//! installed music21 spends what it spends. `--route-converters` says which
-//! formats `converter.parse` reads through the crate, `none` for music21's
-//! readers alone.
+//! `--sides` the sides to run beside music21. Every run that compares times
+//! sums the timed tests per module. `--profile` also runs each module's
+//! tests under cProfile, splitting the time into the crate's own calls,
+//! this package's Python glue, music21's Python, CPython's C and the rest:
+//! where an installed music21 spends what it spends. cProfile costs a
+//! Python call far more than a call into the crate, so a profiled run's
+//! times flatter the crate and only its split is worth reading.
+//! `--route-converters` says which formats `converter.parse` reads through
+//! the crate, `none` for music21's readers alone.
 //!
 //! The runs are separate processes, because installing over music21
 //! cannot be undone inside one: `install_into_music21` rebinds music21's own
@@ -478,9 +480,7 @@ pub fn run(
         report_timings(&timings);
         let path = out.join("timings.json");
         fs::write(&path, serde_json::to_string_pretty(&timings)?)?;
-        if options.profile {
-            report_modules(&timings, &plain, &sides);
-        }
+        report_modules(&timings, &plain, &sides);
     }
 
     // Every side that ran is held to music21's own result. The crate reaching
@@ -1223,7 +1223,8 @@ fn report_timings(timings: &Timings) {
 const CATEGORIES: [&str; 5] = ["crate", "glue", "music21", "builtin", "python"];
 
 /// Prints the timed tests summed per music21 module on every side, and,
-/// where the sides were profiled, where each module's time went.
+/// where the sides were profiled (`--profile`), where each module's time
+/// went.
 ///
 /// A property the crate implements is not a call cProfile sees, so its time
 /// counts under whichever function read it -- mostly `music21`. The `crate`
