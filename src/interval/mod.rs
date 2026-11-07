@@ -986,7 +986,15 @@ impl Interval {
         } else {
             p.microtone().map_or(0.0, crate::pitch::Microtone::cents)
         };
-        let new_dnn = p.diatonic_note_number() + self.diatonic.generic.staff_distance();
+        let new_dnn = p
+            .checked_diatonic_note_number()
+            .and_then(|dnn| dnn.checked_add(self.diatonic.generic.staff_distance()))
+            .ok_or_else(|| {
+                Error::Interval(format!(
+                    "cannot move {} past the last octave an integer counts",
+                    p.name_with_octave()
+                ))
+            })?;
         let (new_step, new_octave) = convert_diatonic_number_to_step(new_dnn);
         let mut pitch2 = crate::pitch::PitchOptions::new()
             .step(new_step)
@@ -1343,6 +1351,29 @@ mod tests {
         assert_eq!(
             [-3, -1, 0, 1, 2, 7].map(staff_distance_to_generic_number),
             [-4, -2, 1, 2, 3, 8]
+        );
+    }
+
+    #[test]
+    fn a_pitch_moved_past_the_highest_octave_is_refused() {
+        use super::Interval;
+        use crate::IntegerType;
+        use crate::pitch::Pitch;
+
+        let pitch = Pitch::from_name("D2147483647").unwrap();
+        assert!(
+            Interval::from_name("M2")
+                .unwrap()
+                .transpose_pitch(&pitch)
+                .is_err()
+        );
+        let mut pitch = Pitch::from_name("D").unwrap();
+        pitch.set_octave(Some(IntegerType::MIN));
+        assert!(
+            Interval::from_name("M-2")
+                .unwrap()
+                .transpose_pitch(&pitch)
+                .is_err()
         );
     }
 

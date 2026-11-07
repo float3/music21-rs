@@ -923,6 +923,15 @@ impl Pitch {
         self.step.step_to_dnn_offset() + 7 * octave
     }
 
+    /// [`Self::diatonic_note_number`], or nothing for an octave too far out
+    /// to count its steps in an integer.
+    pub(crate) fn checked_diatonic_note_number(&self) -> Option<IntegerType> {
+        let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
+        octave
+            .checked_mul(7)?
+            .checked_add(self.step.step_to_dnn_offset())
+    }
+
     /// The letter as a number of steps above C, nought to six.
     pub(crate) fn step_index(&self) -> IntegerType {
         self.step as IntegerType - 1
