@@ -5003,14 +5003,15 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 .filter_map(|place| place.and_then(|place| leaves.get(place)))
                 .filter_map(|leaf| leaf.as_ref().map(|object| object.clone_ref(py)))
                 .collect();
-            let built = crate::spanner::Spanner::object_as(py, spanner, joined, whose)?;
             match whose {
                 Whose::Wheel => {
+                    let built = crate::spanner::Spanner::object_as(py, spanner, joined, whose)?;
                     let cell = made.cast::<Stream>()?;
                     cell.borrow_mut().put(0.0, built.bind(py));
                 }
                 Whose::Music21 => {
-                    made.call_method1("insert", (0.0, built.bind(py)))?;
+                    let built = crate::spanner::music21_object(py, spanner, joined)?;
+                    made.call_method1("insert", (0.0, built))?;
                 }
             }
         }
@@ -5278,6 +5279,13 @@ fn element_object_as<'py>(
                 }
                 class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?
             }
+        }
+        StreamElement::TextExpression(text)
+            if whose == Whose::Music21
+                && crate::installed_class(py, "music21.expressions", "TextExpression")
+                    .is_none() =>
+        {
+            crate::expressions::music21_text_expression(py, text)?
         }
         StreamElement::TextExpression(text) => element_new(
             py,

@@ -7368,6 +7368,49 @@ def test_routed_musicxml_keeps_layouts_text_boxes_and_staff_groups():
     assert _routed_differences("musicxml", paths, names) == []
 
 
+def test_routed_musicxml_keeps_each_instruments_part_and_id():
+    """An instrument read through the crate names its part and its own id
+    as music21's reader names them."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv66.6.mxl", "corpus/schumann_robert/dichterliebe_no2.xml")
+    names = ("Instrument", "Piano")
+    assert _routed_differences("musicxml", paths, names) == []
+
+
+def test_routed_musicxml_text_expressions_copy_as_music21s():
+    """Words read through the crate are music21's own `TextExpression`, so a
+    score holding them copies, and writes, as music21's reader's does."""
+    pytest.importorskip("music21.stream")
+    code = """
+import copy
+from music21 import converter, corpus, expressions
+import music21_rs as m
+m.install_into_music21()
+m.route_converters(['musicxml'])
+score = converter.parse(corpus.getWork('schumann_robert/dichterliebe_no2'), forceSource=True, storePickle=False)
+words = score.recurse().getElementsByClass('TextExpression').first()
+print(type(words) is expressions.TextExpression, words.content, words.placement)
+print(len(copy.deepcopy(score).parts))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["True Nicht schnell above", "3"]
+
+
+def test_routed_musicxml_spanners_are_music21s():
+    """Slurs, wedges, lines and the other spanners read through the crate
+    are music21's own, complete, where its reader puts them, and write as
+    its reader's do."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/lilypondTestSuite/33a-Spanners.xml",)
+    names = (
+        "Slur", "Crescendo", "Diminuendo", "Line", "Glissando", "Ottava",
+        "PedalMark", "TrillExtension", "TremoloSpanner", "write failed",
+    )
+    assert _routed_differences("musicxml", paths, names) == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

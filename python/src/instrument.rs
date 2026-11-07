@@ -122,7 +122,13 @@ impl Instrument {
                 .getattr(inner.kind())?,
         };
         let made = class.call0()?;
-        made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
+        {
+            let mut held = made.extract::<PyRefMut<'_, Self>>()?;
+            // The ids a reader found, which music21 keeps as attributes.
+            held.partId = inner.part_id().map(str::to_string);
+            held.instrumentId = inner.instrument_id().map(str::to_string);
+            held.inner = inner;
+        }
         Ok(made.unbind())
     }
 }
