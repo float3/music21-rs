@@ -2392,7 +2392,7 @@ labelTransposedAndInvertedMultisets = "label"
 python = "analysis/reduceChords.py"
 name = "ChordReducer"
 rust = ["src/analysis/reduce_chords.rs"]
-note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The two steps music21 documents on their own are public here -- a measure's weights and its reduction -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
+note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The steps music21 documents on their own are public here -- a measure's weights and its reduction, and the slices a measure is cut into, their weights, the heaviest kept and what is consonant -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
 
 [class.renames]
 run = "reduce_chords"
