@@ -1011,8 +1011,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
             .find("part-abbreviation")
             .is_some_and(|name| name.get("print-object") == Some("no"));
 
-        let adjusted =
-            |text: &str| -> Option<u8> { parse_int(text).map(|value| (value - 1).max(0) as u8) };
+        let adjusted = |text: &str| -> Option<u8> {
+            parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
+        };
         let mut instrument: Option<Instrument> = None;
         let mut unpitched = false;
         if let Some(midi) = score_part.find("midi-instrument") {
@@ -4070,6 +4071,16 @@ mod tests {
                 "{depth}"
             );
         }
+    }
+
+    #[test]
+    fn a_midi_program_below_any_integer_reads_as_the_first() {
+        let document = score(&format!("<measure number=\"1\">{NOTE}</measure>")).replace(
+            "<part-name>Flute</part-name>",
+            "<part-name>Flute</part-name><midi-instrument id=\"P1-I1\">\
+             <midi-program>-2147483648</midi-program></midi-instrument>",
+        );
+        assert!(from_musicxml(&document).is_ok());
     }
 
     #[test]
