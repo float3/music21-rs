@@ -390,7 +390,7 @@ fn added_tones(written: &str) -> Vec<AddedTone<'_>> {
         if digits == 0 {
             // Nothing here is a tone; music21's own scan moves on a
             // character and tries again.
-            at = start + 1;
+            at = start + written[start..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
         found.push(AddedTone {
@@ -1002,7 +1002,7 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
 /// `a`, the second `b`, as music21 letters them.
 fn volta_suffix(volta: &str) -> Option<String> {
     let number: usize = volta.parse().ok()?;
-    let letter = char::from(b'a' + u8::try_from(number.checked_sub(1)?).ok()?);
+    let letter = char::from(b'a'.checked_add(u8::try_from(number.checked_sub(1)?).ok()?)?);
     letter.is_ascii_lowercase().then(|| letter.to_string())
 }
 
@@ -1482,6 +1482,8 @@ mod tests {
             ("i(v4)", "i[no3][add4]"),
             ("i(^4)", "i[no5][add4]"),
             ("V(13)", "V[add13]"),
+            // What is no tone is passed over a character at a time.
+            ("V(\u{f8}13)", "V[add13]"),
         ] {
             assert_eq!(handle_added_tones(label), written, "the label {label}");
         }
@@ -1575,5 +1577,13 @@ mod tests {
                 format!("{header}.C.I\t{first}\t1.0\t4/4\tC\tI\tI\nV\t{last}\t1.0\t4/4\tC\tI\tV\n");
             assert!(from_tsv(&table, Version::One).is_err(), "{first} {last}");
         }
+    }
+
+    #[test]
+    fn a_volta_past_z_has_no_letter() {
+        assert_eq!(volta_suffix("2").as_deref(), Some("b"));
+        assert_eq!(volta_suffix("26").as_deref(), Some("z"));
+        assert_eq!(volta_suffix("27"), None);
+        assert_eq!(volta_suffix("200"), None);
     }
 }
