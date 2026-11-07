@@ -6242,6 +6242,113 @@ def test_music21s_segment_division_divides_braille():
     )
 
 
+def test_a_part_is_cut_into_segments_of_its_own_objects():
+    """music21's `findSegments`: groupings of the part's own objects by
+    key, written onto as music21 writes them, and written out by the
+    segment."""
+    part = m.Part()
+    for number, names in enumerate([["C4", "D4", "E4", "F4"], ["G4", "A4", "B4", "C5"]], 1):
+        measure = m.Measure(number=number)
+        if number == 1:
+            measure.append(m.TimeSignature("4/4"))
+        for name in names:
+            measure.append(m.Note(name))
+        part.append(measure)
+    notes = list(part.recurse().notes)
+    (segment,) = m.findSegments(part)
+    assert repr(segment) == "<music21.braille.segment.BrailleSegment 1 line, 0 headings, 40 cols>"
+    keys = list(segment.keys())
+    assert [(key.measure, key.ordinal, int(key.affinity)) for key in keys] == [
+        (1, 0, 3),
+        (1, 0, 9),
+        (2, 0, 9),
+    ]
+    # The groupings hold the part's own notes, not copies of them.
+    assert all(held is note for held, note in zip(segment[keys[1]], notes[:4]))
+    assert notes[0].editorial.brailleEnglish == ["<music21.note.Note C>"]
+    assert str(segment).splitlines()[2:5] == [
+        "Measure 1, Signature Grouping 1:",
+        "<music21.meter.TimeSignature 4/4>",
+        "===",
+    ]
+    assert segment.transcribe() == "⠀⠀⠀⠀⠀⠼⠙⠲⠀⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠱⠫⠻⠀⠳⠪⠺⠹"
+    # Transcribing writes each sign's English onto its note.
+    assert notes[0].editorial.brailleEnglish == ["Octave 4 ⠐", "C quarter ⠹"]
+    assert segment.brailleText == "⠀⠀⠀⠀⠀⠼⠙⠲⠀⠀⠀⠀⠀\n⠼⠁⠀⠐⠹⠱⠫⠻⠀⠳⠪⠺⠹"
+
+    # A dictionary that makes a grouping for a key it lacks.
+    fresh = m.BrailleSegment()
+    key = type(keys[0])(4, 1, 9)
+    assert len(fresh[key]) == 0 and key in fresh and len(fresh) == 1
+    fresh.addRepeatSymbols(2)
+    assert fresh.brailleText == "⠶⠀⠶"
+
+    # Two hands' keys paired measure by measure.
+    grand = m.BrailleGrandSegment(lineLength=36)
+    assert grand.lineLength == 36
+    SegmentKey = type(keys[0])
+    grand[SegmentKey(1, 0, 9, "right")] = "r"
+    grand[SegmentKey(1, 0, 9, "left")] = "l"
+    grand[SegmentKey(2, 0, 9, "right")] = "r2"
+    assert [
+        (right.measure if right else None, left.measure if left else None)
+        for right, left in grand.yieldCombinedGroupingKeys()
+    ] == [(1, 1), (2, None)]
+
+
+def test_find_segments_answers_as_music21s_once_installed():
+    """Installed, `findSegments` cuts a part as music21's does, holds the
+    part's own objects and writes onto them what music21 writes: slurs,
+    beams, affinities, English, full-measure rests, doubled
+    articulations."""
+    pytest.importorskip("music21.braille.segment")
+    code = """
+import sys
+if sys.argv[1] == 'installed':
+    import music21_rs
+    music21_rs.install_into_music21()
+from music21 import articulations, converter, spanner, tie
+from music21.braille import segment, test
+part = converter.parse(
+    "tinynotation: 4/4 c8 c c c c c c c d16 d d d d d d d d4 e4 "
+    "e2 r2 r1 f1 f1 g2 r2"
+).makeNotation()
+notes = list(part.recurse().notes)
+for n in notes[:8]:
+    n.articulations.append(articulations.Staccato())
+notes[18].tie = tie.Tie('start')
+notes[19].tie = tie.Tie('stop')
+notes[19].articulations.append(articulations.Tenuto())
+part.insert(0, spanner.Slur(notes[0], notes[6]))
+part.insert(0, spanner.Slur(notes[8], notes[10]))
+for p, kw in [(part, {}), (test.example11_2(), {'maxLineLength': 14})]:
+    segments = segment.findSegments(p, **kw)
+    held = {id(x) for s in segments for g in s.values() for x in g}
+    print(all(id(x) in held for x in p.recurse().notesAndRests))
+    for s in segments:
+        print(s)
+        print(s.transcribe())
+    for x in p.recurse():
+        if 'BrailleSegmentDivision' in x.classes:
+            continue
+        d = getattr(x, '__dict__', {})
+        marks = sorted(a for a in ('shortSlur', 'beamStart', 'beamContinue',
+                                   'beginLongBracketSlur', 'endLongBracketSlur') if d.get(a))
+        e = getattr(x, 'editorial', {})
+        print(repr(x), marks, e.get('brailleEnglish'), repr(e.get('affinityCode')),
+              d.get('classSortOrder'), getattr(x, 'tie', None), getattr(x, 'fullMeasure', None),
+              [a.name for a in getattr(x, 'articulations', [])])
+"""
+    runs = [
+        subprocess.run(
+            [sys.executable, "-c", code, which], capture_output=True, text=True, check=True
+        ).stdout
+        for which in ("music21", "installed")
+    ]
+    assert runs[0].splitlines()[0] == "True"
+    assert runs[1] == runs[0]
+
+
 def test_a_grouping_of_elements_is_written_in_braille():
     """The elements braille writes together, and the transcriber that
     writes them one at a time."""
