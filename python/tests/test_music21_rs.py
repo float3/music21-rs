@@ -434,6 +434,65 @@ def test_roman_module_functions():
     assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")
 
 
+def _numeral_overrides(roman, copy_it):
+    """What a numeral reports after its parsed fields are overwritten and
+    its figure is set again, a key is set, or it is copied."""
+    found = []
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.secondaryRomanNumeral = None
+    rn.figure = "V/V"
+    found.append(repr(rn.secondaryRomanNumeral))
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.frontAlterationAccidental = None
+    rn.figure = "bVI"
+    found.append(rn.frontAlterationAccidental.name)
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.scaleDegree = 2
+    rn.romanNumeralAlone = "x"
+    rn.impliedQuality = "minor"
+    rn.omittedSteps = [3]
+    rn.figure = "V"
+    found.append((rn.scaleDegree, rn.romanNumeralAlone, rn.impliedQuality, rn.omittedSteps))
+    found.append(rn.frontAlterationString)
+    # A figure with no slash leaves an overwritten secondary alone.
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.secondaryRomanNumeral = None
+    rn.figure = "V"
+    found.append(repr(rn.secondaryRomanNumeral))
+    # A key is not a figure: what was written stays.
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.scaleDegree = 2
+    rn.key = "G"
+    found.append(rn.scaleDegree)
+    # Nor is a copy.
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.scaleDegree = 2
+    rn.secondaryRomanNumeral = None
+    rn.frontAlterationAccidental = None
+    copied = copy_it(rn)
+    found.append((copied.scaleDegree, copied.secondaryRomanNumeral))
+    return found
+
+
+def test_setting_a_figure_reparses_what_was_overwritten():
+    """music21's figure setter runs its parsing steps again, so a field a
+    caller overwrote is read off the new figure; its key setter and a copy
+    keep what was written."""
+    expected = [
+        "<music21.roman.RomanNumeral V in C major>",
+        "flat",
+        (5, "V", "major", []),
+        "",
+        "None",
+        2,
+        (2, None),
+    ]
+    assert _numeral_overrides(m, copy.deepcopy) == expected
+    assert _numeral_overrides(m, copy.copy) == expected
+    roman = pytest.importorskip("music21.roman")
+    assert _numeral_overrides(roman, copy.deepcopy) == expected
+
+
 class _Placed:
     """A note or chord at an offset, as a stream would hold it."""
 
