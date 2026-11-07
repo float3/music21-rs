@@ -190,7 +190,9 @@ fn track_events(mut data: &[u8]) -> Track {
         let (delta, after) = variable_length(data);
         match read_event(after, &mut status) {
             Some((event, rest)) => {
-                time += delta;
+                // Saturating, as a file this long is refused for its
+                // measures anyway.
+                time = time.saturating_add(delta);
                 events.push((time, event));
                 data = rest;
             }
@@ -752,5 +754,21 @@ mod tests {
             bytes.extend(track);
             assert!(from_midi(&bytes).is_err());
         }
+    }
+
+    /// Two waits each longer than u64 counts, which music21's unbounded
+    /// integers add up.
+    #[test]
+    fn waits_past_any_tick_are_refused() {
+        let mut track = Vec::new();
+        for key in [60, 62] {
+            track.extend([0xFF; 9]);
+            track.extend([0x7F, 0x90, key, 100, 0, 0x80, key, 0]);
+        }
+        track.extend([0, 0xFF, 0x2F, 0]);
+        let mut bytes = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk".to_vec();
+        bytes.extend((track.len() as u32).to_be_bytes());
+        bytes.extend(track);
+        assert!(from_midi(&bytes).is_err());
     }
 }
