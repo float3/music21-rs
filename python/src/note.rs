@@ -127,7 +127,7 @@ pub(crate) fn instrument_for_note<'py>(
         return Ok(Some(stored));
     }
     let py = note.py();
-    let Ok(instrument) = py.import("music21.instrument") else {
+    let Ok(instrument) = crate::real_music21(py, "music21.instrument") else {
         return Ok(None);
     };
     let mut found = py.None().into_bound(py);
@@ -342,7 +342,14 @@ pub(crate) fn deep_copied_objects(
 }
 
 /// music21's `note.Note`: a pitch with a duration.
-#[pyclass(name = "Note", module = "music21.note", subclass, skip_from_py_object)]
+#[pyclass(
+    name = "Note",
+    module = "music21.note",
+    extends = crate::base::NotRest,
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
 pub struct Note {
     pub(crate) inner: RsNote,
     /// The `Pitch` object music21 hands back from `.pitch`. It is the same
@@ -406,6 +413,9 @@ pub struct Note {
     /// already had, which is what music21 does too — nothing there reads the
     /// stored value except `.pitch`.
     unread_pitch: Option<Py<PyAny>>,
+    /// Whether a stream has read this note's length and keeps it: a
+    /// change to the length is then told to every stream.
+    pub(crate) watched: bool,
     /// music21's `style`, once something has asked for one: the object
     /// saying how this is drawn. It is music21's own object — the page is
     /// not something this crate models — and its mere existence is what
@@ -458,6 +468,7 @@ impl Note {
             beams: None,
             stored_instrument: None,
             unread_pitch: None,
+            watched: false,
         }
     }
 
@@ -504,6 +515,7 @@ impl Note {
                 beams: None,
                 stored_instrument: None,
                 unread_pitch: None,
+                watched: false,
             },
         )?;
         Self::claim_pitch(py, &note);
@@ -590,6 +602,24 @@ impl Note {
         }
     }
 
+    /// Marks this note and its duration as read by a stream, so that a
+    /// change to its length is told to every stream.
+    pub(crate) fn watch(&mut self, py: Python<'_>) {
+        self.watched = true;
+        if let Some(duration) = &self.duration {
+            crate::duration::watch(py, duration);
+        }
+    }
+
+    /// Tells every stream this note's length has changed, where one has
+    /// read it, and marks the duration it now holds.
+    fn tell_streams(&mut self, py: Python<'_>) {
+        if self.watched {
+            crate::stream::length_changed();
+            self.watch(py);
+        }
+    }
+
     /// How long the note lasts, read without making its `Duration` object:
     /// `None` when the one it holds is not the package's own.
     pub(crate) fn held_quarter_length(&self, py: Python<'_>) -> Option<f64> {
@@ -667,6 +697,7 @@ impl Note {
             self.inner.set_duration(value);
         }
         self.duration = Some(duration.clone_ref(py));
+        self.tell_streams(py);
     }
 
     fn quarter_length(&self, py: Python<'_>) -> f64 {
@@ -862,8 +893,7 @@ pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
 
 #[pymethods]
 impl Note {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -979,7 +1009,7 @@ impl Note {
         py: Python<'_>,
         pitch: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let inner = match pitch.filter(|value| !value.is_none()) {
             Some(value) => RsNote::from_pitch(crate::pitch::pitch_from_any_with_keywords(
                 py, value, keywords,
@@ -1020,7 +1050,7 @@ impl Note {
             };
             note.attach_duration(py, &duration)?;
         }
-        Ok(note)
+        Ok(crate::base::built(note))
     }
 
     // Setting it keeps the pitch object given, as music21 does: its own
@@ -1230,6 +1260,7 @@ impl Note {
         let had_one = slf.borrow().duration.is_some();
         let duration = slf.borrow_mut().attach_duration(py, value)?;
         adopt_duration(py, &duration, slf.as_any())?;
+        slf.borrow_mut().tell_streams(py);
         // Replacing the duration a note already had changes how long the
         // note is, and the streams holding it keep that length; music21
         // tells them so here, and a note whose length nobody has asked for
@@ -1260,6 +1291,7 @@ impl Note {
         // After the duration object, which refuses a new length where it is
         // a FrozenDuration, so the note keeps the length it has.
         self.inner.set_duration(inner);
+        self.tell_streams(py);
         Ok(())
     }
 
@@ -1860,4 +1892,43 @@ impl Note {
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Note>()?;
     Ok(())
+}
+
+/// How long a note, rest or chord of this package lasts, where it says
+/// when that changes: where it holds no duration object yet, or one of this
+/// package's. It is marked as read by a stream, so that it does.
+pub(crate) fn watched_length(object: &Bound<'_, PyAny>) -> Option<f64> {
+    let py = object.py();
+    if let Ok(note) = object.cast::<Note>() {
+        let length = note.try_borrow().ok()?.held_quarter_length(py)?;
+        note.try_borrow_mut().ok()?.watch(py);
+        return Some(length);
+    }
+    if let Ok(rest) = object.cast::<crate::rest::Rest>() {
+        let length = rest.try_borrow().ok()?.held_quarter_length(py)?;
+        rest.try_borrow_mut().ok()?.watch(py);
+        return Some(length);
+    }
+    if let Ok(chord) = object.cast::<crate::chord::Chord>() {
+        let length = chord.try_borrow().ok()?.held_quarter_length(py)?;
+        chord.try_borrow_mut().ok()?.watch(py);
+        return Some(length);
+    }
+    None
+}
+
+/// Whether what holds a duration may be read by a stream: a note, rest or
+/// chord of this package a stream has read, or anything else, which cannot
+/// say.
+pub(crate) fn may_be_watched(holder: &Bound<'_, PyAny>) -> bool {
+    if let Ok(note) = holder.cast::<Note>() {
+        return note.try_borrow().map_or(true, |note| note.watched);
+    }
+    if let Ok(rest) = holder.cast::<crate::rest::Rest>() {
+        return rest.try_borrow().map_or(true, |rest| rest.watched);
+    }
+    if let Ok(chord) = holder.cast::<crate::chord::Chord>() {
+        return chord.try_borrow().map_or(true, |chord| chord.watched);
+    }
+    true
 }

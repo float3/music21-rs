@@ -211,8 +211,7 @@ const REPLACEMENT_DURATION_DEPRECATED: &str = "addVariant()'s 'replacementDurati
 /// one of these needs: the answer is made of variants, and a stream built
 /// without the class would quietly have none.
 fn needs_variant_class(py: Python<'_>) -> PyResult<()> {
-    if py
-        .import("music21.variant")
+    if crate::real_music21(py, "music21.variant")
         .and_then(|module| module.getattr("Variant"))
         .is_err()
     {

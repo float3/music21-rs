@@ -119,9 +119,8 @@ fn metadata_class<'py>(py: Python<'py>, score: &Bound<'py, PyAny>) -> PyResult<B
     if let Some(installed) = crate::installed_class(py, "music21.metadata", "Metadata") {
         return Ok(installed);
     }
-    if let Ok(found) = py
-        .import("music21.metadata")
-        .and_then(|module| module.getattr("Metadata"))
+    if let Ok(found) =
+        crate::real_music21(py, "music21.metadata").and_then(|module| module.getattr("Metadata"))
     {
         return Ok(found);
     }

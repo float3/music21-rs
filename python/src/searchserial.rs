@@ -156,8 +156,7 @@ impl Searched {
 /// An empty stream of music21's where music21 can be asked, and of this
 /// package's otherwise: what a run with no container is given.
 fn empty_stream(py: Python<'_>) -> PyResult<Py<PyAny>> {
-    if let Ok(made) = py
-        .import("music21.stream")
+    if let Ok(made) = crate::real_music21(py, "music21.stream")
         .and_then(|module| module.getattr("Stream"))
         .and_then(|class| class.call0())
     {
@@ -175,8 +174,10 @@ fn empty_stream(py: Python<'_>) -> PyResult<Py<PyAny>> {
 #[pyclass(
     name = "ContiguousSegmentOfNotes",
     module = "music21.search.serial",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct ContiguousSegmentOfNotes {
     /// The notes and chords of the run, in order.
@@ -221,8 +222,7 @@ impl ContiguousSegmentOfNotes {
 
 #[pymethods]
 impl ContiguousSegmentOfNotes {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -236,7 +236,7 @@ impl ContiguousSegmentOfNotes {
         segment: Option<&Bound<'_, PyAny>>,
         containerStream: Option<&Bound<'_, PyAny>>,
         partNumber: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let held = PyList::empty(py);
         if let Some(segment) = segment.filter(|given| !given.is_none()) {
             for note in segment.walk()? {
@@ -249,7 +249,7 @@ impl ContiguousSegmentOfNotes {
             Some(given) => given.clone().unbind(),
             None => empty_stream(py)?,
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             segment: held.into_any().unbind(),
             containerStream,
             partNumber: match partNumber {
@@ -258,7 +258,7 @@ impl ContiguousSegmentOfNotes {
             },
             activeSegment: PyList::empty(py).into_any().unbind(),
             matchedSegment: py.None(),
-        })
+        }))
     }
 
     /// The measure the run starts in: music21's `startMeasureNumber`,
@@ -731,7 +731,7 @@ macro_rules! matchers {
                     #[pyo3(from_py_with = crate::truthy)] includeChords: bool,
                 ) -> PyResult<PyClassInitializer<Self>> {
                     Ok(
-                        PyClassInitializer::from(SegmentMatcher::of(
+                        crate::base::built(SegmentMatcher::of(
                             py,
                             $matching,
                             inputStream,
@@ -909,8 +909,7 @@ fn labelled<'py>(
         // iterable`; the notes are only music21's where something is
         // installed over music21.
         let holds = crate::stream::music21_holds(&first);
-        let line = match py
-            .import("music21.spanner")
+        let line = match crate::real_music21(py, "music21.spanner")
             .and_then(|module| module.getattr("Line"))
             .and_then(|class| {
                 if holds {

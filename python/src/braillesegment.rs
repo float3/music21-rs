@@ -112,7 +112,7 @@ fn grouping_globals(py: Python<'_>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
         .import("sys")?
         .getattr("modules")?
         .contains("music21.braille.segment")?;
-    if imported && let Ok(module) = py.import("music21.braille.segment") {
+    if imported && let Ok(module) = crate::real_music21(py, "music21.braille.segment") {
         module.call_method0("setGroupingGlobals")?;
         let globals = module.getattr("GROUPING_GLOBALS")?;
         let key = globals.get_item("keySignature")?;

@@ -85,23 +85,27 @@ error_into!(scale_error, ScaleException);
 #[pyclass(
     name = "Scale",
     module = "music21.scale",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Scale;
 
 #[pymethods]
 impl Scale {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (*_arguments, **_keywords))]
-    fn new(_arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+    fn new(
+        _arguments: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     /// music21's `isConcrete`: whether the scale stands on a tonic. A bare
@@ -289,7 +293,7 @@ impl AbstractScale {
     ) -> PyResult<Py<PyAny>> {
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self {
+            crate::base::built(Scale).add_subclass(Self {
                 scale_type,
                 numbered_mode,
                 octave_duplicating,
@@ -373,7 +377,7 @@ impl AbstractScale {
         let scale_type = mode
             .filter(|value| !value.is_none())
             .and_then(|value| Self::scale_type_of(value));
-        Ok(PyClassInitializer::from(Scale).add_subclass(Self {
+        Ok(crate::base::built(Scale).add_subclass(Self {
             scale_type,
             numbered_mode: mode.and_then(|value| value.extract::<i64>().ok()),
             // A pattern named by mode alone repeats at the octave.
@@ -405,8 +409,7 @@ impl AbstractScale {
         pitchList: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         let py = slf.py();
-        let music21_note = py
-            .import("music21.note")
+        let music21_note = crate::real_music21(py, "music21.note")
             .and_then(|module| module.getattr("Note"))
             .ok();
         let real = pyo3::types::PyList::empty(py);
@@ -497,7 +500,7 @@ impl AbstractScale {
     /// network to give.
     #[getter]
     fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let module = py.import("music21.scale.intervalNetwork")?;
+        let module = crate::real_music21(py, "music21.scale.intervalNetwork")?;
         let Some(scale_type) = self.scale_type else {
             // A pattern with no name is the network music21's own
             // `AbstractCyclicalScale` and `AbstractOctaveRepeatingScale`
@@ -796,8 +799,7 @@ impl ConcreteScale {
         // music21's own class where music21 is there to be asked, since its
         // own code and its own tests catch that one by name.
         let py = slf.py();
-        if let Ok(class) = py
-            .import("music21.scale.intervalNetwork")
+        if let Ok(class) = crate::real_music21(py, "music21.scale.intervalNetwork")
             .and_then(|module| module.getattr("IntervalNetworkException"))
         {
             return Err(PyErr::from_value(class.call1((said,))?));
@@ -899,9 +901,7 @@ impl ConcreteScale {
                 octatonic_mode: None,
             };
             built.named_pattern = false;
-            return Ok(
-                Py::new(py, PyClassInitializer::from(Scale).add_subclass(built))?.into_any(),
-            );
+            return Ok(Py::new(py, crate::base::built(Scale).add_subclass(built))?.into_any());
         }
         let name = scale.scale_type().music21_name();
         let module = py
@@ -915,7 +915,7 @@ impl ConcreteScale {
         }
         Ok(Py::new(
             py,
-            PyClassInitializer::from(Scale).add_subclass(Self {
+            crate::base::built(Scale).add_subclass(Self {
                 inner: scale,
                 family: "Concrete".to_string(),
                 named_pattern: true,
@@ -1025,7 +1025,7 @@ impl ConcreteScale {
             built.inner = RsScale::from_pitches(&pitch_list(&pitches)?).map_err(scale_error)?;
             built.has_tonic = true;
         }
-        Ok(PyClassInitializer::from(Scale).add_subclass(built))
+        Ok(crate::base::built(Scale).add_subclass(built))
     }
 
     /// The pattern of steps is only known once the class is, which is why it
@@ -1427,8 +1427,7 @@ impl ConcreteScale {
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let steps = slf.borrow().scala_steps(direction)?;
-        let data = py
-            .import("music21.scale.scala")?
+        let data = crate::real_music21(py, "music21.scale.scala")?
             .getattr("ScalaData")?
             .call0()?;
         data.call_method1("setIntervalSequence", (steps,))?;

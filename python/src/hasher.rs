@@ -80,8 +80,7 @@ fn hash_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     if let Some(installed) = crate::installed_class(py, "music21.alpha.analysis.hasher", name) {
         return Ok(installed);
     }
-    if let Ok(found) = py
-        .import("music21.alpha.analysis.hasher")
+    if let Ok(found) = crate::real_music21(py, "music21.alpha.analysis.hasher")
         .and_then(|module| module.getattr(name))
     {
         return Ok(found);
@@ -484,8 +483,7 @@ impl Hasher {
             let classes = slf.borrow().validTypes.bind(py).clone();
             let signature = match crate::installed_class(py, "music21.key", "KeySignature") {
                 Some(installed) => Some(installed),
-                None => py
-                    .import("music21.key")
+                None => crate::real_music21(py, "music21.key")
                     .and_then(|module| module.getattr("KeySignature"))
                     .ok()
                     .or_else(|| {

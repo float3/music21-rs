@@ -87,7 +87,7 @@ impl ChordEnharmonicScoreRules {
     #[new]
     fn new(py: Python<'_>) -> PyResult<PyClassInitializer<Self>> {
         Ok(
-            PyClassInitializer::from(EnharmonicScoreRules::of(py, EnharmonicRules::CHORDAL)?)
+            crate::base::built(EnharmonicScoreRules::of(py, EnharmonicRules::CHORDAL)?)
                 .add_subclass(Self),
         )
     }

@@ -39,6 +39,7 @@ pub mod analysis;
 pub mod articulations;
 pub mod audiosearch;
 pub mod bar;
+pub mod base;
 pub mod braillebasic;
 pub mod braillelookup;
 pub mod braillenotegrouping;
@@ -104,6 +105,7 @@ pub mod searchserial;
 pub mod segment;
 pub mod serial;
 pub mod sieve;
+pub mod sites;
 pub mod spanner;
 mod spelling;
 pub mod spineparser;
@@ -275,7 +277,8 @@ pub(crate) fn copy_as_same_type<'py, T>(
     value: T,
 ) -> PyResult<Bound<'py, PyAny>>
 where
-    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False, BaseType = PyAny>,
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+    T::BaseType: base::Footing,
 {
     let py = slf.py();
     let class = slf.as_any().get_type();
@@ -284,13 +287,16 @@ where
     // for one would import music21, and the wheel has to work for someone who
     // installed only the wheel.
     if class.is(T::type_object(py)) {
-        return Ok(Bound::new(py, value)?.into_any());
+        let copy = Bound::new(py, base::built(value))?.into_any();
+        base::carry_groups(slf.as_any(), &copy)?;
+        return Ok(copy);
     }
     // Through the helper, so that the copy gets the music21 half started as
     // a fresh object of that class would: `__new__` alone leaves an object
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
+    base::carry_groups(slf.as_any(), &copy)?;
     carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
 }
@@ -416,13 +422,45 @@ pub(crate) fn holdable_class<'py>(
         .ok()?
         .getattr(name)
         .ok()?;
-    let original = modules.get_item(module).ok()?.getattr(name).ok()?;
+    let module = modules.get_item(module).ok()?;
+    if is_provided(&module) {
+        return None;
+    }
+    let original = module.getattr(name).ok()?;
     install_helper(py)
         .ok()?
         .getattr("holdable_class")
         .ok()?
         .call1((facade, original))
         .ok()
+}
+
+/// music21's own module of this name, and an `ImportError` where music21
+/// has none to give.
+///
+/// Every member that asks music21 for something of its own -- `roman`'s
+/// cache of keys, `base`'s `Groups` -- asks through this. Where
+/// `provide_music21` answers `import music21`, the module that comes back
+/// is this package's classes and not music21's, and has none of what was
+/// asked for; it is passed over, so the member does what it does with no
+/// music21 at all.
+pub(crate) fn real_music21<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    let module = py.import(name)?;
+    if is_provided(&module) {
+        return Err(pyo3::exceptions::PyImportError::new_err(format!(
+            "{name} is music21-rs's own, provided for music21"
+        )));
+    }
+    Ok(module)
+}
+
+/// Whether a module is one `provide_music21` built rather than music21's.
+fn is_provided(module: &Bound<'_, PyAny>) -> bool {
+    module
+        .getattr("__spec__")
+        .and_then(|spec| spec.getattr("origin"))
+        .and_then(|origin| origin.extract::<String>())
+        .is_ok_and(|origin| origin == "music21-rs")
 }
 
 /// music21's own `editorial` for an object that really is one of its
@@ -441,7 +479,7 @@ pub(crate) fn music21_editorial<'py>(
     object: &Bound<'py, PyAny>,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = object.py();
-    let Ok(base) = py.import("music21.base") else {
+    let Ok(base) = crate::real_music21(py, "music21.base") else {
         return Ok(None);
     };
     let class = base.getattr("Music21Object")?;
@@ -772,10 +810,10 @@ pub(crate) fn installed_new<T>(
 ) -> PyResult<Py<T>>
 where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
-    T: Into<pyo3::PyClassInitializer<T>>,
+    T::BaseType: base::Footing,
 {
     let Some(class) = installed_class(py, module, name) else {
-        return Py::new(py, value);
+        return Py::new(py, base::built(value));
     };
     let object = blank_installed(&class)?;
     let cell = object.cast::<T>()?;
@@ -795,10 +833,10 @@ where
 pub(crate) fn holdable_new<T>(py: Python<'_>, module: &str, name: &str, value: T) -> PyResult<Py<T>>
 where
     T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
-    T: Into<pyo3::PyClassInitializer<T>>,
+    T::BaseType: base::Footing,
 {
     let Some(class) = holdable_class(py, module, name) else {
-        return Py::new(py, value);
+        return Py::new(py, base::built(value));
     };
     let object = blank_installed(&class)?;
     let cell = object.cast::<T>()?;
@@ -1118,6 +1156,14 @@ def unported_members(facade, original):
     return blocked
 
 
+class _OwnAttribute:
+    """A name each object keeps in its own dictionary: reading it off the
+    class finds nothing."""
+
+    def __get__(self, instance, owner=None):
+        raise AttributeError
+
+
 def make_class(facade, original):
     def __init__(self, *arguments, **keywords):
         # A class music21 derived from the one replaced, before it was
@@ -1202,6 +1248,36 @@ def make_class(facade, original):
         # A one-element tuple; see `lineage` for why it is not the class.
         '_replaces': (original,),
     })
+    if issubclass(original, _base.Music21Object):
+        # music21 tells an element's sites of a new priority or length
+        # through `informSites`, which reaches music21's streams alone. The
+        # package's streams are told first, and keep what they worked out
+        # until then.
+        inform = original.informSites
+
+        def informSites(self, changedInformation=None):
+            tell_streams(changedInformation)
+            return inform(self, changedInformation)
+
+        namespace['informSites'] = informSites
+        namespace['_tellsPackageStreams'] = True
+        # The package's own elements answer these through its own sites;
+        # an installed one stands in music21's streams, so music21's
+        # members answer, read off the class replaced.
+        # `sites` is no member of music21's class but of each object, kept
+        # in its dictionary, which the package's member must not stand in
+        # front of.
+        for name in site_members:
+            for ancestor in original.__mro__:
+                if name in vars(ancestor):
+                    namespace.setdefault(name, vars(ancestor)[name])
+                    break
+            else:
+                namespace.setdefault(name, _OwnAttribute())
+        # music21 keeps `groups` in each object's dictionary too, where the
+        # package keeps its own on its `Music21Object`; music21's copying and
+        # freezing carry the dictionary, so that is where it has to be.
+        namespace.setdefault('groups', _OwnAttribute())
     for name in ('isNote', 'isRest', 'isChord', 'classSortOrder', 'equalityAttributes',
                  # What music21 says about its own attributes, which its test
                  # runner reads off the class to build a doctest per entry.
@@ -1356,6 +1432,11 @@ fn install_helper<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyModule>> {
                 c"music21_rs_install.py",
                 c"music21_rs_install",
             )?;
+            // What an installed class's `informSites` calls first.
+            helper.add_function(wrap_pyfunction!(crate::stream::tell_streams, &helper)?)?;
+            // The members the package's own sites answer, which an
+            // installed class takes from music21 instead.
+            helper.add("site_members", crate::sites::MEMBERS)?;
             py.import("sys")?
                 .getattr("modules")?
                 .set_item("music21_rs_install", &helper)?;
@@ -1793,6 +1874,26 @@ exceptions![
     ),
     ("SieveException", sieve::SieveException, None),
     (
+        "SitesException",
+        sites::SitesException,
+        Some("music21.sites")
+    ),
+    (
+        "Music21ObjectException",
+        sites::Music21ObjectException,
+        Some("music21.base")
+    ),
+    (
+        "ElementException",
+        base::ElementException,
+        Some("music21.base")
+    ),
+    (
+        "GroupException",
+        base::GroupException,
+        Some("music21.exceptions21")
+    ),
+    (
         "StreamException",
         stream::StreamException,
         Some("music21.exceptions21")
@@ -1867,6 +1968,7 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    base::register(m)?;
     pitch::register(m)?;
     figuredbass::register(m)?;
     possibility::register(m)?;
@@ -1947,6 +2049,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;
+    // Last: it puts its members on classes the others registered.
+    sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
     // rather than on the wheel's module alone: `python-parity` builds its
     // own module out of this one, and a score frozen under that harness --
@@ -1994,6 +2098,10 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Not music21's: what the harte-rs package builds its `Harte` on.
     hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
+    // What `provide_music21` builds music21's modules from: the names each
+    // module of music21's is installed under, and the package's version.
+    m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.
     let mut names: Vec<String> = m

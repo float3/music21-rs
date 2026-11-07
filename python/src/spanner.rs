@@ -37,9 +37,11 @@ pyo3::create_exception!(
 #[pyclass(
     name = "Spanner",
     module = "music21.spanner",
+    extends = crate::base::Music21Object,
     subclass,
     skip_from_py_object,
-    dict
+    dict,
+    weakref
 )]
 pub struct Spanner {
     /// What the spanner says of itself besides the notes it joins: the
@@ -103,8 +105,7 @@ impl Spanner {
     /// whole of what `getSpannerSites` reads.
     pub(crate) fn refresh_storage(slf: &Bound<'_, Self>) -> PyResult<()> {
         let py = slf.py();
-        let Ok(class) = py
-            .import("music21.stream")
+        let Ok(class) = crate::real_music21(py, "music21.stream")
             .and_then(|module| module.getattr("SpannerStorage"))
         else {
             return Ok(());
@@ -186,8 +187,7 @@ impl Spanner {
 
 #[pymethods]
 impl Spanner {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -218,8 +218,8 @@ impl Spanner {
     fn new(
         _spannedElements: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Ok(Self::of_kind(SpannerKind::Slur))
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Self::of_kind(SpannerKind::Slur)))
     }
 
     /// The notes given are joined here, in `__init__` rather than in
@@ -526,8 +526,7 @@ impl Spanner {
                 .bind(py)
                 .call_method("purgeLocations", (), Some(&keywords))?;
         }
-        if let Ok(class) = py
-            .import("music21.base")
+        if let Ok(class) = crate::real_music21(py, "music21.base")
             .and_then(|module| module.getattr("Music21Object"))
         {
             class
@@ -549,8 +548,7 @@ impl Spanner {
                 .bind(py)
                 .call_method1("purgeOrphans", (excludeStorageStreams,))?;
         }
-        if let Ok(class) = py
-            .import("music21.base")
+        if let Ok(class) = crate::real_music21(py, "music21.base")
             .and_then(|module| module.getattr("Music21Object"))
         {
             class
@@ -1759,7 +1757,7 @@ macro_rules! spanner_kinds {
                     _spannedElements: &Bound<'_, PyTuple>,
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
-                    Ok(PyClassInitializer::from(Spanner::of_kind($kind)).add_subclass($class))
+                    Ok(crate::base::built(Spanner::of_kind($kind)).add_subclass($class))
                 }
             }
         )*

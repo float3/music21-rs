@@ -51,8 +51,10 @@ error_into!(signature_error, KeySignatureException);
 #[pyclass(
     name = "KeySignature",
     module = "music21.key",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct KeySignature {
     pub(crate) signature: RsKeySignature,
@@ -106,7 +108,7 @@ fn warn_sharps_none(py: Python<'_>) -> PyResult<()> {
 /// music21's warning that a tonic given beside a mode says nothing: the mode
 /// alone decides the key, so the tonic is dropped.
 fn warn_ignored_tonic(py: Python<'_>, tonic: &str) -> PyResult<()> {
-    let Ok(module) = py.import("music21.key") else {
+    let Ok(module) = crate::real_music21(py, "music21.key") else {
         return Ok(());
     };
     let Ok(category) = module.getattr("KeyWarning") else {
@@ -140,8 +142,7 @@ fn given_pitch(value: &Bound<'_, PyAny>) -> Option<Py<Pitch>> {
 
 #[pymethods]
 impl KeySignature {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -179,7 +180,7 @@ impl KeySignature {
         py: Python<'_>,
         sharps: crate::Given<'_>,
         kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = kwargs;
         // `sharps=None` asks for a non-traditional signature, with music21's
         // deprecation warning, rather than for a count of nought.
@@ -187,7 +188,7 @@ impl KeySignature {
             warn_sharps_none(py)?;
             let mut signature = Self::of(0);
             signature.signature.set_non_traditional(true);
-            return Ok(signature);
+            return Ok(crate::base::built(signature));
         }
         let sharps = match sharps.value() {
             None => 0,
@@ -203,7 +204,7 @@ impl KeySignature {
                 }
             },
         };
-        Ok(Self::of(sharps))
+        Ok(crate::base::built(Self::of(sharps)))
     }
 
     /// The number of sharps, negative for flats. Always an `int`, a
@@ -331,9 +332,9 @@ impl KeySignature {
             Ok(Some(
                 Py::new(
                     py,
-                    KeySignature {
+                    crate::base::built(KeySignature {
                         signature: transposed,
-                    },
+                    }),
                 )?
                 .into_any(),
             ))
@@ -508,7 +509,7 @@ impl Key {
             }
             return Ok(object.unbind());
         }
-        let init = PyClassInitializer::from(signature).add_subclass(key);
+        let init = crate::base::built(signature).add_subclass(key);
         Ok(Py::new(py, init)?.into_any())
     }
 
@@ -727,7 +728,7 @@ impl Key {
         let mode = mode_of(mode)?;
         let stored = RsKey::from_tonic_mode(&tonic, mode.as_deref()).map_err(key_error)?;
         Ok(
-            PyClassInitializer::from(KeySignature::of(stored.sharps())).add_subclass(Key {
+            crate::base::built(KeySignature::of(stored.sharps())).add_subclass(Key {
                 stored,
                 correlation_coefficient: 0.0,
                 alternate_interpretations: None,
@@ -1356,7 +1357,7 @@ fn sharps_to_pitch_facade<'py>(py: Python<'py>, sharpCount: i32) -> PyResult<Bou
 fn sharps_to_pitch_cache<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
     // Where music21 keeps it once these are installed, since that is the
     // dictionary its own doctest reads back; the facade module's otherwise.
-    if let Ok(key) = py.import("music21.key")
+    if let Ok(key) = crate::real_music21(py, "music21.key")
         && let Ok(cache) = key.getattr("_sharpsToPitchCache")
         && let Ok(cache) = cache.cast_into::<PyDict>()
     {

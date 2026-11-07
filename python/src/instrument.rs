@@ -41,8 +41,10 @@ error_into!(instrument_error, InstrumentException);
 #[pyclass(
     name = "Instrument",
     module = "music21.instrument",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Instrument {
     pub(crate) inner: RsInstrument,
@@ -81,7 +83,7 @@ impl Instrument {
         if name.is_some() {
             inner.set_name(name);
         }
-        Ok(PyClassInitializer::from(Self::wrap(inner)))
+        Ok(crate::base::built(Self::wrap(inner)))
     }
 
     fn wrap(inner: RsInstrument) -> Self {
@@ -166,8 +168,7 @@ fn language(value: Option<&str>) -> PyResult<SearchLanguage> {
 
 #[pymethods]
 impl Instrument {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }

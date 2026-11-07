@@ -991,58 +991,229 @@ def test_a_measures_barlines_are_found_where_they_are_listed():
 
 
 def test_a_measure_names_itself_by_its_number():
-    """A measure's repr names its number, suffix and all, as music21's
-    does; an id a caller gave still wins, and other streams keep theirs."""
+    """A measure's repr names its number, suffix and all, and where it
+    stands, as music21's does; an id a caller gave still wins, and other
+    streams keep theirs."""
     bar = m.Measure(number=3)
-    assert repr(bar) == "<music21.stream.Measure 3>"
+    assert repr(bar) == "<music21.stream.Measure 3 offset=0.0>"
     bar.numberSuffix = "a"
-    assert repr(bar) == "<music21.stream.Measure 3a>"
+    assert repr(bar) == "<music21.stream.Measure 3a offset=0.0>"
+    line = m.Part()
+    line.insert(4, bar)
+    assert repr(bar) == "<music21.stream.Measure 3a offset=4.0>"
     bar.id = "pickup"
     assert repr(bar) == "<music21.stream.Measure pickup>"
     assert re.fullmatch(r"<music21\.stream\.Part 0x[0-9a-f]+>", repr(m.Part()))
 
 
+def _site_namespaces():
+    """The wheel's classes and music21's, under the same names, for running
+    one scenario on both."""
+    note = pytest.importorskip("music21.note")
+    from music21 import meter, sites, stream
+
+    ours = dict(
+        Note=m.Note, Stream=m.Stream, Measure=m.Measure, Part=m.Part, Score=m.Score,
+        Voice=m.Voice, TimeSignature=m.TimeSignature, SitesException=m.SitesException,
+    )
+    theirs = dict(
+        Note=note.Note, Stream=stream.Stream, Measure=stream.Measure, Part=stream.Part,
+        Score=stream.Score, Voice=stream.Voice, TimeSignature=meter.TimeSignature,
+        SitesException=sites.SitesException,
+    )
+    return [type("Names", (), ours), type("Names", (), theirs)]
+
+
+def _on_both(scenario):
+    """What a scenario answers on the wheel and on music21, which must agree."""
+    ours, theirs = (scenario(names) for names in _site_namespaces())
+    assert ours == theirs
+    return ours
+
+
+def test_an_element_knows_the_streams_holding_it():
+    """music21's `sites`, `activeSite` and `offset`: each stream an element
+    is put in becomes a site, the last one reached is the active one, and
+    the offset is the one there."""
+    n = m.Note("C")
+    first, second = m.Stream(id="first"), m.Stream(id="second")
+    first.insert(10, n)
+    second.insert(20, n)
+    assert [site.id for site in n.sites] == ["first", "second"]
+    assert n.sites.get()[0] is None
+    assert (n.activeSite, n.offset) == (second, 20.0)
+    for _ in first:
+        pass
+    assert (n.activeSite, n.offset) == (first, 10.0)
+    assert (n.getOffsetBySite(second), n.getOffsetBySite(None)) == (20.0, 0.0)
+    assert (len(n.sites), n.sites.getSiteCount()) == (3, 2)
+    assert None in n.sites and first in n.sites and m.Stream() not in n.sites
+
+    first.remove(n)
+    assert (n.activeSite, n.offset, list(n.sites)) == (None, 0.0, [second])
+    with pytest.raises(m.SitesException, match="is not stored in stream"):
+        n.getOffsetBySite(first)
+    with pytest.raises(m.SitesException, match="activeSite cannot be set"):
+        n.activeSite = first
+
+
+def test_an_element_offset_is_written_where_it_stands():
+    """Writing `offset` moves an element in its `activeSite`, and sets its
+    own where no stream holds it, which `insert` with no offset reads."""
+    n, line = m.Note("C"), m.Stream()
+    line.insert(2, n)
+    n.offset = 3
+    assert line.elementOffset(n) == 3.0
+    free = m.Note("D")
+    free.offset = 4.5
+    assert (free.offset, free.activeSite) == (4.5, None)
+    held = m.Stream()
+    held.insert(free)
+    assert held.elementOffset(free) == 4.5
+    # Where the stream it stood in is gone, it answers where it stood.
+    held.insert(1, m.Note("E"))
+    held.setElementOffset(free, 6)
+    del held
+    gc.collect()
+    assert (free.offset, free.activeSite) == (6.0, None)
+
+
+def test_a_copied_element_has_no_sites():
+    """music21's deepcopy leaves the sites behind: the copy stands nowhere."""
+    n, line = m.Note("C"), m.Stream()
+    line.insert(5, n)
+    copied = copy.deepcopy(n)
+    assert (copied.activeSite, copied.offset, copied.sites.getSiteCount()) == (None, 0.0, 0)
+    assert n.sites.getSiteCount() == 1
+    copied_line = copy.deepcopy(line)
+    assert copied_line[0].activeSite is copied_line and copied_line[0].offset == 5.0
+    assert n.activeSite is line
+
+
+def test_a_stream_picked_from_reaches_into_the_one_picked_from():
+    """`notes` and its kin stand in for music21's iterators: what is
+    reached through them is reached in the stream they were picked from."""
+    bar = m.Measure(number=4)
+    first = m.Note("C")
+    bar.append([first, m.Note("D")])
+    other = m.Stream()
+    other.insert(7, first)
+    assert (first.activeSite, first.measureNumber) == (other, 4)
+    for each in bar.notes:
+        assert (each.activeSite, each.measureNumber) == (bar, 4)
+    assert list(first.sites) == [bar, other]
+
+
+def _beats(names, meter, lengths, pickup=0.0):
+    part = names.Part()
+    for at, notes in enumerate(lengths):
+        bar = names.Measure(number=at + (0 if pickup else 1))
+        if at == 0:
+            bar.insert(0, names.TimeSignature(meter))
+            bar.paddingLeft = pickup
+        for length in notes:
+            bar.append(names.Note("C", quarterLength=length))
+        part.append(bar)
+    found = []
+    for n in part.recurse().notes:
+        found.append((
+            n.measureNumber, n.offset, n.beat, n.beatStr, n.beatStrength,
+            n.beatDuration.quarterLength, n.getContextByClass("TimeSignature").ratioString,
+            n.getOffsetInHierarchy(part),
+        ))
+    for n in part.flatten().notes:
+        found.append((n.measureNumber, n.offset, n.beat, n.beatStr, n.beatStrength))
+    return found
+
+
 @pytest.mark.parametrize(
-    "name",
+    "meter, lengths, pickup",
     [
-        "offset",
-        "activeSite",
-        "beat",
-        "beatStr",
-        "beatStrength",
-        "beatDuration",
-        "measureNumber",
+        ("4/4", [[1, 0.5, 0.5, 2], [4]], 0.0),
+        ("6/8", [[1.5, 0.5, 0.5, 0.5], [3]], 0.0),
+        ("3/4", [[1], [1, 1, 1], [3]], 2.0),
+        ("5/8", [[1, 0.5, 0.5, 0.5], [1.5, 1]], 0.0),
     ],
 )
-def test_an_element_says_why_it_cannot_say_where_it_stands(name):
-    """The package keeps no sites, so what an element would answer through
-    one is refused with the reason and where to ask instead."""
-    for element in (
-        m.Note("C4"),
-        m.Rest(),
-        m.Chord("C4 E4"),
-        m.TimeSignature("3/4"),
-        m.TrebleClef(),
-        m.Barline(),
-        m.Measure(),
-    ):
-        if name == "beatDuration" and isinstance(element, m.TimeSignature):
-            # A meter's own beat, which music21's meter answers too.
-            continue
-        with pytest.raises(AttributeError, match=r"elementOffset.*placed\(\).*install_into_music21"):
-            getattr(element, name)
-        assert not hasattr(element, name)
-    with pytest.raises(AttributeError, match=r"has no attribute 'nonesuch'$"):
-        m.Note().nonesuch
+def test_the_beat_is_music21s(meter, lengths, pickup):
+    """`beat`, `beatStr`, `beatStrength`, `beatDuration`, `measureNumber`
+    and the meter in force, read through the sites as music21 reads them,
+    in measures and in the stream flattening them."""
+    _on_both(lambda names: _beats(names, meter, lengths, pickup))
 
 
-def test_every_element_class_refuses_a_site():
+def test_the_beat_without_measures_or_meter_is_music21s():
+    """A meter carries on past its bar in a stream with no measures, and
+    an element with no meter in force has no beat."""
+
+    def scenario(names):
+        line = names.Stream()
+        line.append(names.TimeSignature("3/4"))
+        line.append([names.Note("D") for _ in range(7)])
+        found = [(n.beat, n.beatStrength, n.measureNumber) for n in line.notes]
+        alone = names.Note()
+        found.append((alone.offset, alone.activeSite, alone.beatStr, alone.measureNumber))
+        found.append(alone.beatDuration.quarterLength)
+        found.append(math.isnan(alone.beat) and math.isnan(alone.beatStrength))
+        return found
+
+    _on_both(scenario)
+
+
+def test_contexts_are_music21s():
+    """`getContextByClass`, `contextSites`, `next` and `previous` walk
+    outwards through measures, voices, parts and scores as music21's do."""
+
+    def scenario(names):
+        found = []
+        part = names.Part()
+        for number, lengths in ((1, [1, 1, 1, 1]), (2, [2, 2])):
+            bar = names.Measure(number=number)
+            if number == 1:
+                bar.insert(0, names.TimeSignature("4/4"))
+            bar.append([names.Note("C", quarterLength=length) for length in lengths])
+            part.append(bar)
+        notes = list(part.recurse().notes)
+        for n in notes:
+            found.append([type(each).__name__ for each in (n.next(), n.previous(), n.next("Note"), n.previous("Note"))])
+        second = part.getElementsByClass("Measure")[1]
+        found.append((second.offset, second.activeSite is part, second.measureNumber))
+
+        bar = names.Measure(number=3)
+        bar.insert(0, names.TimeSignature("2/4"))
+        upper, lower = names.Voice(), names.Voice()
+        upper.append([names.Note("C", quarterLength=length) for length in (0.5, 0.5, 1)])
+        lower.append(names.Note("E", quarterLength=2))
+        bar.insert(0, upper)
+        bar.insert(0, lower)
+        names.Part().append(bar)
+        found.append([(n.measureNumber, n.beat, n.beatStrength) for n in bar.recurse().notes])
+
+        score = names.Score()
+        for at in range(2):
+            line, held = names.Part(), names.Measure(number=1)
+            if at == 0:
+                held.insert(0, names.TimeSignature("3/8"))
+            held.append([names.Note("G", quarterLength=0.5) for _ in range(3)])
+            line.append(held)
+            score.insert(0, line)
+        # A part's meter is no context of another part's notes.
+        last = list(score.parts[1].recurse().notes)[-1]
+        found.append((last.getContextByClass("TimeSignature"), math.isnan(last.beat)))
+        found.append([(type(site).__name__, offset, str(kind)) for site, offset, kind in last.contextSites()])
+        return found
+
+    _on_both(scenario)
+
+
+def test_every_element_class_answers_through_sites():
     """Every class standing in for one of music21's `Music21Object`s
-    refuses what a site would answer, not only the few tried above."""
+    answers what music21 reads through sites, not only the few tried
+    above."""
     base = pytest.importorskip("music21.base")
     import importlib
 
-    unhooked = []
+    missing = []
     for name in dir(m.music21_rs):
         cls = getattr(m.music21_rs, name)
         if not isinstance(cls, type) or issubclass(cls, BaseException):
@@ -1053,9 +1224,10 @@ def test_every_element_class_refuses_a_site():
             continue
         if not (isinstance(original, type) and issubclass(original, base.Music21Object)):
             continue
-        if cls.__getattribute__ is object.__getattribute__:
-            unhooked.append(name)
-    assert unhooked == []
+        for member in ("sites", "activeSite", "offset", "getContextByClass", "beat"):
+            if not hasattr(cls, member):
+                missing.append((name, member))
+    assert missing == []
 
 
 def test_an_installed_element_answers_where_it_stands():
@@ -7381,6 +7553,10 @@ def test_a_score_is_reduced_to_the_chords_that_carry_it():
     second = m.Chord("C4 E4 F4 B4")
     third = m.Chord("C4 E4 G4 C5")
     chords = [first, second, third]
+    # In a measure, so each has a beat strength to weigh by.
+    bar = m.Measure()
+    bar.insert(0, m.TimeSignature("4/4"))
+    bar.append(chords)
     weights = cr.computeMeasureChordWeights(chords)
     assert weights == {(0, 4, 7): 3.0, (0, 4, 5, 11): 1.0}
     # Consonance counts for a lot, and the last chord of the measure
@@ -8552,6 +8728,135 @@ def test_a_stream_sorts_by_the_priority_its_elements_carry():
     assert orders[0] == orders[1] == ["D", "C", "E"]
 
 
+def test_a_priority_changed_after_insertion_resorts_the_stream():
+    """music21 hears of a `priority` set on an element it holds, and lists
+    what stands at that offset again by it."""
+    first, second = m.GlobalComment("first"), m.GlobalComment("second")
+    s = m.Stream()
+    s.insert(0, first)
+    s.insert(0, second)
+    assert [c.comment for c in s] == ["first", "second"]
+    second.priority = -1
+    assert [c.comment for c in s] == ["second", "first"]
+    assert s.index(second) == 0
+
+
+def test_an_installed_priority_changed_after_insertion_resorts_the_stream():
+    """Once installed, an element's `priority` is music21's own, which tells
+    its sites; the package's stream hears of it too."""
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs as m
+m.install_into_music21()
+from music21 import note, stream
+for made in (m.Stream(), stream.Stream()):
+    notes = [note.Note(name) for name in 'CDE']
+    for n in notes:
+        made.insert(0, n)
+    names = [n.name for n in made]
+    notes[2].priority = -1
+    print(names, [n.name for n in made])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "['C', 'D', 'E'] ['E', 'C', 'D']",
+        "['C', 'D', 'E'] ['E', 'C', 'D']",
+    ]
+
+
+def test_a_stream_refuses_an_object_it_already_holds():
+    """music21 puts one object in a stream once: a second `insert`,
+    `append` or one given twice to the constructor is refused."""
+    n = m.Note("C4")
+    s = m.Stream()
+    s.insert(0, n)
+    message = (
+        f"the object ({n!r}, id()={id(n)} is already found in this "
+        f"Stream ({s!r}, id()={id(s)})"
+    )
+    for again in (
+        lambda: s.insert(1, n),
+        lambda: s.append(n),
+        lambda: s.append([n]),
+        lambda: s.insertAndShift(2, n),
+    ):
+        with pytest.raises(m.StreamException) as refused:
+            again()
+        assert str(refused.value) == message
+    assert len(s) == 1
+    with pytest.raises(m.StreamException, match="already found"):
+        m.Stream([n, n])
+
+    note = pytest.importorskip("music21.note")
+    stream = pytest.importorskip("music21.stream")
+    theirs = note.Note("C4")
+    s = stream.Stream()
+    s.insert(0, theirs)
+    with pytest.raises(stream.StreamException, match="already found in this Stream"):
+        s.append(theirs)
+
+
+def test_a_replacement_stands_after_what_else_is_at_its_offset():
+    """music21's `replace` puts the replacement in as newly inserted, so it
+    is listed after what else stands at its offset."""
+    orders = []
+    makers = [(m.Stream, m.Note)]
+    try:
+        from music21 import note, stream
+
+        makers.append((stream.Stream, note.Note))
+    except ImportError:
+        pass
+    for made, note_class in makers:
+        a, b, c = (note_class(name) for name in "CDE")
+        s = made()
+        s.insert(0, a)
+        s.insert(0, b)
+        s.replace(a, c)
+        orders.append([n.name for n in s])
+    assert orders[0] == ["D", "E"]
+    assert all(order == orders[0] for order in orders)
+
+
+def test_a_stream_hears_every_change_to_a_held_length():
+    """A stream keeps its end between appends, so every way of changing
+    the length of something it holds has to reach it."""
+    s = m.Stream()
+    n, r, c = m.Note("C4"), m.Rest(), m.Chord("C4 E4 G4")
+    s.append([n, r, c])
+    assert s.highestTime == 3.0
+    n.quarterLength = 4
+    assert s.highestTime == 4.0
+    n.duration.quarterLength = 5
+    assert s.highestTime == 5.0
+    n.duration = m.Duration(6.0)
+    assert s.highestTime == 6.0
+    n.duration.type = "quarter"
+    assert s.highestTime == 3.0
+    r.duration.type = "whole"
+    assert s.highestTime == 5.0
+    r.duration.dots = 1
+    assert s.highestTime == 7.0
+    c.quarterLength = 8
+    assert s.highestTime == 10.0
+    c.duration.appendTuplet(m.Tuplet(3, 2))
+    assert s.highestTime == pytest.approx(2 + 16 / 3)
+    shared = c.notes[0]
+    held = m.Stream()
+    held.append(shared)
+    c.duration.quarterLength = 2
+    assert held.highestTime == 2.0
+    assert s.highestTime == 7.0
+    later = m.Note("D4")
+    s.append(later)
+    assert s.elementOffset(later) == 7.0
+    later.quarterLength = 0.5
+    s.append(m.Note("E4"))
+    assert s.highestTime == 8.5
+
+
 def test_a_chord_sorted_in_place_moves_its_note_objects_with_it():
     """The note objects a chord has handed out are reordered as its pitches
     are, so each still carries the pitch at its place."""
@@ -8861,3 +9166,353 @@ def test_transcribe_note_grouping_matches_music21s():
         assert m.transcribeNoteGrouping(ours, showLeadingOctave=show) == (
             note_grouping.transcribeNoteGrouping(theirs, showLeadingOctave=show)
         )
+
+
+def _run_without_music21(code, cwd, **environment):
+    """Runs `code` in an interpreter that can import this package and not
+    music21: no site-packages, and only the directory the package is in on
+    its path."""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    if (package_root / "music21").exists():
+        pytest.skip("music21 is installed beside this package")
+    env = dict(os.environ, PYTHONPATH=str(package_root), **environment)
+    return subprocess.run(
+        [sys.executable, "-S", "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def test_provide_music21_answers_import_music21(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import music21
+print(music21.pitch.Pitch('C#4'))
+from music21 import note, chord, stream
+from music21.chord import Chord, ChordException
+s = stream.Stream([note.Note('C'), chord.Chord('E4 G4')])
+print(len(s), s.highestOffset, Chord('C4 E4 G4').commonName)
+print(issubclass(ChordException, music21.exceptions21.Music21Exception))
+print(music21.__version__ == music21_rs.__version__, music21.__music21_rs__)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "C#4",
+        "2 1.0 major triad",
+        "True",
+        "True True",
+    ]
+
+
+def test_provide_music21_is_switched_on_by_the_environment(tmp_path):
+    code = "import music21_rs, music21; print(music21.note.Note('D'))"
+    done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "<music21.note.Note D>"
+
+    # And nothing answers for music21 unless asked.
+    done = _run_without_music21(code, tmp_path)
+    assert "ModuleNotFoundError: No module named 'music21'" in done.stderr
+
+
+def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import music21
+for statement in ('import music21.corpus', 'from music21 import converter'):
+    try:
+        exec(statement)
+    except ModuleNotFoundError as error:
+        print(str(error).split(';')[0])
+print(hasattr(music21, 'corpus'), 'chord' in music21.__dir__())
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "music21-rs does not provide music21.corpus",
+        "music21-rs does not provide music21.converter",
+        "False True",
+    ]
+
+
+def test_provided_music21_runs_the_packages_own_lookups(tmp_path):
+    """The package asks music21's modules for what music21 keeps in them,
+    such as `roman`'s cache of keys; a provided module is not music21's,
+    and has to be passed over as if music21 were not there."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import key, roman
+print(roman.RomanNumeral('V7', key.Key('G')).pitches)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == (
+        "(<music21.pitch.Pitch D5>, <music21.pitch.Pitch F#5>, "
+        "<music21.pitch.Pitch A5>, <music21.pitch.Pitch C6>)"
+    )
+
+
+def test_provide_music21_refuses_where_music21_is_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs
+try:
+    music21_rs.provide_music21()
+except ImportError as error:
+    print(str(error).split(',')[0])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.startswith("music21 is installed")
+
+
+def test_provided_music21_places_functions_where_music21_has_them(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import chord, duration, instrument, meter, metadata, roman, search, stream
+print(duration.quarterLengthToClosestType(0.75))
+print(roman.romanNumeralFromChord(chord.Chord('G3 B3 D4'), 'C').figure)
+print(chord.fromForteClass('3-11').commonName)
+print(meter.bestTimeSignature is meter.base.bestTimeSignature)
+print(search.noteNameSearch is search.base.noteNameSearch)
+print(callable(instrument.partitionByInstrument), metadata.Contributor.__name__)
+print(stream.StreamException is music21_rs.StreamException)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "('eighth', False)",
+        "V",
+        "minor triad",
+        "True",
+        "True",
+        "True Contributor",
+        "True",
+    ]
+
+
+def test_every_exported_name_has_a_music21_home_or_none(tmp_path):
+    """A name the package exports is placed in a module of music21's, or
+    listed as one music21 has nowhere: a new function with neither means
+    `tests/generate_homes.py` has to be run again."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21_rs import _homes, _provide
+from music21_rs import music21_rs as extension
+placed = {name for names in _provide._contents().values() for name in names}
+exported = {*extension.__all__, *extension.__exception_names__}
+print(sorted(exported - placed - set(_homes.NO_HOME)))
+print(sorted(placed & set(_homes.NO_HOME)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["[]", "[]"]
+
+
+def test_music21_homes_are_where_music21_keeps_them():
+    """`_homes.py` is what `generate_homes.py` works out from music21 now:
+    every home is a module of music21's that defines the name."""
+    pytest.importorskip("music21.stream")
+    script = pathlib.Path(__file__).with_name("generate_homes.py")
+    done = subprocess.run(
+        [sys.executable, str(script), "--check"], capture_output=True, text=True
+    )
+    assert done.returncode == 0, done.stderr
+
+
+def test_pth_file_provides_music21_without_importing_the_package(tmp_path):
+    """The `.pth` file the wheel puts in site-packages, read as Python
+    reads one at start-up: it answers `import music21` only when the
+    environment asks."""
+    pth = pathlib.Path(__file__).parents[1] / "music21_rs_provide.pth"
+    site_packages = tmp_path / "site-packages"
+    site_packages.mkdir()
+    (site_packages / pth.name).write_text(pth.read_text())
+    code = f"""
+import site, sys
+site.addsitedir({str(site_packages)!r})
+print('music21_rs' in sys.modules)
+import music21
+print(music21.note.Note('E'))
+"""
+    done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["True", "<music21.note.Note E>"]
+
+    done = _run_without_music21(code, tmp_path)
+    assert done.stdout.splitlines()[0] == "False"
+    assert "No module named 'music21'" in done.stderr
+
+
+def test_notes_rests_and_chords_are_music21s_general_notes():
+    """The package's elements stand on its `Music21Object`, `GeneralNote`
+    and `NotRest` as music21's do, so `isinstance` asks what music21 asks."""
+    note, rest, chord = m.Note("C4"), m.Rest(), m.Chord("C4 E4 G4")
+    for each in (note, rest, chord, m.Measure(), m.System(), m.TimeSignature("3/4")):
+        assert isinstance(each, m.Music21Object)
+    assert all(isinstance(each, m.GeneralNote) for each in (note, rest, chord))
+    assert isinstance(note, m.NotRest) and isinstance(chord, m.NotRest)
+    assert not isinstance(rest, m.NotRest)
+    assert issubclass(m.PercussionChord, m.NotRest)
+    assert issubclass(m.ChordSymbol, m.NotRest)
+    assert not issubclass(m.Clef, m.GeneralNote)
+    assert m.System().classes[:2] == ["System", "Stream"]
+
+
+def test_a_python_subclass_of_general_note_is_one():
+    """Code written for music21 subclasses its base classes."""
+
+    class Mark(m.GeneralNote):
+        pass
+
+    made = Mark(groups=None)
+    assert isinstance(made, m.GeneralNote) and isinstance(made, m.Music21Object)
+    assert list(made.groups) == []
+
+
+def test_groups_are_music21s_groups():
+    """`groups` is a list of distinct names, compared ignoring case and
+    order, carried by a copy and refusing a name that is not a string."""
+    note = m.Note("C4")
+    note.groups.append("flute")
+    note.groups.append("flute")
+    assert list(note.groups) == ["flute"]
+    copied = copy.deepcopy(note)
+    assert list(copied.groups) == ["flute"]
+    assert copied.groups is not note.groups
+    other = m.Rest()
+    other.groups.append("FLUTE")
+    assert note.groups == other.groups
+    assert not note.groups == ["flute"]
+    with pytest.raises(Exception, match="Only strings can be used as group names"):
+        note.groups.append(5)
+
+
+# Where the package's classes still stand apart from music21's: classes it
+# defines with one base where music21 gives two, or with a base music21's
+# class does not have. Each is (class, the other class, whether music21's
+# class is a subclass of the other).
+_HIERARCHY_GAPS = {
+    ("music21.articulations.FrettedPluck", "music21.articulations.Fingering", True),
+    ("music21.articulations.Spiccato", "music21.articulations.Accent", True),
+    ("music21.articulations.Spiccato", "music21.articulations.DynamicArticulation", True),
+    ("music21.articulations.Stress", "music21.articulations.LengthArticulation", True),
+    ("music21.articulations.StringFingering", "music21.articulations.Fingering", True),
+    ("music21.articulations.StringHarmonic", "music21.articulations.Harmonic", True),
+    ("music21.key.Key", "music21.scale.ConcreteScale", True),
+    ("music21.key.Key", "music21.scale.DiatonicScale", True),
+    ("music21.key.Key", "music21.scale.Scale", True),
+    ("music21.layout.PageLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.ScoreLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.StaffLayout", "music21.layout.LayoutBase", True),
+    ("music21.layout.SystemLayout", "music21.layout.LayoutBase", True),
+    ("music21.scale.RagMarwa", "music21.scale.DiatonicScale", False),
+    ("music21.search.serial.TransposedInvertedMultisetMatcher",
+     "music21.search.serial.TransposedMultisetMatcher", True),
+    ("music21.serial.HistoricalTwelveToneRow", "music21.stream.Stream", True),
+    ("music21.serial.ToneRow", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneMatrix", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneRow", "music21.stream.Stream", True),
+    ("music21.stream.PartStaff", "music21.stream.Part", True),
+}
+
+
+def test_every_class_is_a_kind_of_what_music21s_is():
+    """For every class with a music21 counterpart, `issubclass` against
+    every other such class answers as it does between music21's two,
+    apart from the gaps listed above."""
+    pytest.importorskip("music21.base")
+    import importlib
+
+    pairs = {}
+    for name in m.music21_rs.__all__:
+        ours = getattr(m.music21_rs, name)
+        if not isinstance(ours, type) or not ours.__module__.startswith("music21."):
+            continue
+        # Exceptions are built on whichever `Music21Exception` was there
+        # first, and are checked where they are built.
+        if issubclass(ours, BaseException):
+            continue
+        try:
+            theirs = getattr(importlib.import_module(ours.__module__), ours.__name__)
+        except (ImportError, AttributeError):
+            continue
+        if isinstance(theirs, type):
+            pairs[ours] = theirs
+    assert len(pairs) > 400
+
+    def named(cls):
+        return f"{cls.__module__}.{cls.__name__}"
+
+    found = set()
+    for ours, theirs in pairs.items():
+        for other, their_other in pairs.items():
+            expected = issubclass(theirs, their_other)
+            if issubclass(ours, other) != expected:
+                found.add((named(ours), named(other), expected))
+    assert sorted(found - _HIERARCHY_GAPS) == [], "new gaps"
+    assert sorted(_HIERARCHY_GAPS - found) == [], "these match now; drop them"
+
+
+def test_provide_music21_answers_for_music21s_base_classes(tmp_path):
+    """Provided, music21's base classes are the package's, so code checking
+    `isinstance` against them or subclassing them runs unchanged."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import base, note, stream, chord
+from music21.base import Music21Object, Groups, ElementException
+n = note.Note('C4')
+print(isinstance(n, note.GeneralNote), isinstance(n, note.NotRest), isinstance(n, Music21Object))
+print(isinstance(note.Rest(), note.NotRest), issubclass(chord.Chord, note.NotRest))
+print(isinstance(n.groups, Groups), issubclass(ElementException, base.Music21ObjectException.__base__))
+class Mine(note.GeneralNote):
+    pass
+print(isinstance(Mine(), base.Music21Object), stream.System().classes[0])
+print(issubclass(stream.Opus, stream.Stream), issubclass(stream.Voice, base.Music21Object))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "False True",
+        "True True",
+        "True System",
+        "True True",
+    ]
+
+
+def test_an_installed_note_is_still_music21s_general_note():
+    """Installed, a note is an instance of music21's own base classes and
+    of the package's, and keeps music21's `groups`."""
+    pytest.importorskip("music21.stream")
+    code = """
+import copy
+import music21_rs as m
+m.install_into_music21()
+from music21 import base, note, chord, stream
+n = note.Note('C4')
+print(isinstance(n, note.GeneralNote), isinstance(n, base.Music21Object), isinstance(n, m.NotRest))
+print(isinstance(chord.Chord('C E G'), note.NotRest), isinstance(note.Rest(), note.NotRest))
+n.groups.append('x')
+print(type(n.groups) is base.Groups, list(copy.deepcopy(n).groups))
+s = stream.Stream([n, note.Rest()])
+print(len(s.getElementsByClass(note.GeneralNote)))
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "True False",
+        "True ['x']",
+        "2",
+    ]

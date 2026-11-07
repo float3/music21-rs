@@ -22,8 +22,10 @@ pub const NAMES: &[&str] = &["PercussionChord"];
 #[pyclass(
     name = "PercussionChord",
     module = "music21.percussion",
+    extends = crate::base::NotRest,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct PercussionChord {
     /// What is struck, in the order it was given.
@@ -111,8 +113,7 @@ fn struck(object: &Bound<'_, PyAny>) -> bool {
 
 #[pymethods]
 impl PercussionChord {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -123,10 +124,10 @@ impl PercussionChord {
     fn new(
         notes: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, pyo3::types::PyDict>>,
-    ) -> PyResult<Self> {
-        Ok(Self {
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Self {
             notes: Self::read(notes)?,
-        })
+        }))
     }
 
     /// Nothing here is a chord, whatever it holds: music21's `isChord`,

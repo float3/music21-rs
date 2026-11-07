@@ -93,7 +93,7 @@ fn needed(module: &str, name: &str) -> PyErr {
 /// Says what music21's own `process` says of an extractor that failed:
 /// quietly where the set is quiet, as a warning otherwise.
 fn said(py: Python<'_>, quiet: bool, message: &str) -> PyResult<()> {
-    if let Ok(environment) = py.import("music21.environment") {
+    if let Ok(environment) = crate::real_music21(py, "music21.environment") {
         let said = environment
             .getattr("Environment")?
             .call1(("features.base",))?;
@@ -253,7 +253,7 @@ fn is_stream(source: &Bound<'_, PyAny>) -> bool {
 /// `DataInstance` takes: anything else it reads as a path to parse.
 fn music21_stream(source: &Bound<'_, PyAny>) -> bool {
     let py = source.py();
-    py.import("music21.stream")
+    crate::real_music21(py, "music21.stream")
         .and_then(|module| module.getattr("Stream"))
         .and_then(|class| source.is_instance(&class))
         .unwrap_or(false)

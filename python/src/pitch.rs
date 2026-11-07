@@ -196,7 +196,7 @@ error_into!(pub(crate) accidental_error, AccidentalException);
 /// music21 to ask, which is how the wheel answers on its own.
 pub(crate) fn default_octave() -> i32 {
     Python::attach(|py| {
-        py.import("music21.defaults")
+        crate::real_music21(py, "music21.defaults")
             .and_then(|module| module.getattr("pitchOctave"))
             .and_then(|value| value.extract::<i32>())
             .unwrap_or(4)
@@ -2057,7 +2057,7 @@ impl Pitch {
             .extract::<PyRef<crate::chord::Chord>>()
             .map_err(|_| PitchException::new_err("getStringHarmonic needs a chord.Chord"))?;
         match chord.getStringHarmonic(py)? {
-            Some(sounded) => Ok(Bound::new(py, sounded)?.into_any()),
+            Some(sounded) => Ok(Bound::new(py, crate::base::built(sounded))?.into_any()),
             None => Ok(false.into_pyobject(py)?.to_owned().into_any()),
         }
     }
@@ -2207,8 +2207,7 @@ impl Pitch {
         // music21's own `Groups`, which is a list that refuses a name it
         // already has — `chordify` labels the same pitch once per bar and
         // expects to see the part named once.
-        let groups = match py
-            .import("music21.base")
+        let groups = match crate::real_music21(py, "music21.base")
             .and_then(|base| base.getattr("Groups"))
             .and_then(|class| class.call0())
         {

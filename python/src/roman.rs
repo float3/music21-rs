@@ -257,7 +257,7 @@ impl RomanNumeral {
     /// The numeral, standing on the chord it names.
     pub(crate) fn initializer(py: Python<'_>, numeral: Self) -> PyResult<PyClassInitializer<Self>> {
         let chord = Chord::from_inner(py, numeral.chord()?)?;
-        Ok(PyClassInitializer::from(chord).add_subclass(numeral))
+        Ok(crate::base::built(chord).add_subclass(numeral))
     }
 
     /// The same as an object, and as the class music21 now has under that
@@ -294,7 +294,7 @@ impl RomanNumeral {
         };
         let Some(class) = found else {
             let chord = Chord::from_inner(py, chord)?;
-            return Py::new(py, PyClassInitializer::from(chord).add_subclass(numeral));
+            return Py::new(py, crate::base::built(chord).add_subclass(numeral));
         };
         let chord = Chord::from_inner(py, chord)?;
         let object = crate::blank_installed(&class)?;
@@ -496,7 +496,7 @@ fn key_and_octave(value: Option<&Bound<'_, PyAny>>) -> PyResult<(RsKey, Option<i
 /// which is its own machinery and not a key.
 fn cache_key_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
     let py = value.py();
-    let Ok(roman) = py.import("music21.roman") else {
+    let Ok(roman) = crate::real_music21(py, "music21.roman") else {
         return Ok(());
     };
     let is_key = value
@@ -516,7 +516,7 @@ fn cache_key_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
 
 /// The reading, as music21's own `Minor67Default` member.
 fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny>> {
-    let Ok(roman) = py.import("music21.roman") else {
+    let Ok(roman) = crate::real_music21(py, "music21.roman") else {
         return Ok(py.None());
     };
     let name = match reading {

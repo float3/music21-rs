@@ -24,7 +24,14 @@ error_into!(clef_error, ClefException);
 
 /// music21's `clef.Clef`: a clef, with the sign, line, octave change and
 /// lowest line of the class it was made as.
-#[pyclass(name = "Clef", module = "music21.clef", subclass, skip_from_py_object)]
+#[pyclass(
+    name = "Clef",
+    module = "music21.clef",
+    extends = crate::base::Music21Object,
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
 pub struct Clef {
     pub(crate) inner: RsClef,
     /// Whether a lowest line was ever given to a clef whose class keeps
@@ -36,7 +43,7 @@ impl Clef {
     fn initializer(class: &str) -> PyResult<PyClassInitializer<Self>> {
         let kind = ClefKind::from_class_name(class)
             .ok_or_else(|| ClefException::new_err(format!("no clef class {class}")))?;
-        Ok(PyClassInitializer::from(Self {
+        Ok(crate::base::built(Self {
             inner: RsClef::of_kind(kind),
             lowest_line_given: false,
         }))
@@ -87,8 +94,7 @@ impl Clef {
 
 #[pymethods]
 impl Clef {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }

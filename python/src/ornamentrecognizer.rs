@@ -169,7 +169,7 @@ impl TrillRecognizer {
             check_nachschlag: checkNachschlag,
             ..RsTrillRecognizer::default()
         };
-        PyClassInitializer::from(OrnamentRecognizer).add_subclass(Self {
+        crate::base::built(OrnamentRecognizer).add_subclass(Self {
             checkNachschlag: made.check_nachschlag,
             acceptableInterval: made.acceptable_interval,
             minimumLengthForNachschlag: made.minimum_length_for_nachschlag,
@@ -264,13 +264,11 @@ impl TurnRecognizer {
         for step in RsTurnRecognizer::default().acceptable_intervals {
             steps.append(crate::interval::interval_object(py, step)?)?;
         }
-        Ok(
-            PyClassInitializer::from(OrnamentRecognizer).add_subclass(Self {
-                acceptableInterval: 3,
-                minimumLengthForNachschlag: 6,
-                acceptableIntervals: steps.into_any().unbind(),
-            }),
-        )
+        Ok(crate::base::built(OrnamentRecognizer).add_subclass(Self {
+            acceptableInterval: 3,
+            minimumLengthForNachschlag: 6,
+            acceptableIntervals: steps.into_any().unbind(),
+        }))
     }
 
     /// Whether a turn may take this step: music21's

@@ -68,8 +68,10 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
 #[pyclass(
     name = "MetronomeMark",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MetronomeMark {
     pub(crate) inner: RsMetronomeMark,
@@ -184,8 +186,7 @@ impl MetronomeMark {
 
 #[pymethods]
 impl MetronomeMark {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -264,8 +265,8 @@ impl MetronomeMark {
         number: Option<f64>,
         referent: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::build(text, number, referent, keywords)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::build(text, number, referent, keywords).map(crate::base::built)
     }
 
     /// Built again here, since a Python subclass hands `__new__` its own
@@ -552,8 +553,7 @@ impl MetronomeMark {
             }
             (text.to_string(), mark.number_implicit())
         };
-        let expression = py
-            .import("music21.expressions")?
+        let expression = crate::real_music21(py, "music21.expressions")?
             .getattr("TextExpression")?
             .call1((text,))?;
         // music21's `applyTextFormatting`: a tempo word is written in bold,
@@ -657,8 +657,10 @@ impl MetronomeMark {
 #[pyclass(
     name = "TempoText",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TempoText {
     inner: RsTempoText,
@@ -693,8 +695,7 @@ impl TempoText {
         if let Some(expression) = existing {
             return expression.bind(py).setattr("content", text);
         }
-        let Ok(class) = py
-            .import("music21.expressions")
+        let Ok(class) = crate::real_music21(py, "music21.expressions")
             .and_then(|module| module.getattr("TextExpression"))
         else {
             return Ok(());
@@ -722,8 +723,7 @@ impl TempoText {
 
 #[pymethods]
 impl TempoText {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -733,16 +733,16 @@ impl TempoText {
     fn new(
         text: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let written = match text.filter(|text| !text.is_none()) {
             Some(text) => Some(text.str()?.extract::<String>()?),
             None => None,
         };
-        Ok(Self {
+        Ok(crate::base::built(Self {
             said: written.is_some(),
             inner: RsTempoText::new(written.unwrap_or_default()),
             text_expression: None,
-        })
+        }))
     }
 
     /// Built again here, where the music21 half exists to share a style
@@ -1002,8 +1002,10 @@ fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
 #[pyclass(
     name = "MetricModulation",
     module = "music21.tempo",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MetricModulation {
     old: Option<Py<PyAny>>,
@@ -1150,8 +1152,7 @@ impl MetricModulation {
 
 #[pymethods]
 impl MetricModulation {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -1167,8 +1168,8 @@ impl MetricModulation {
     fn new(
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
-        Self::blank()
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self::blank())
     }
 
     fn __traverse__(
@@ -1497,8 +1498,7 @@ fn sounding_mark(found: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 /// sits in, or `None` where there is none.
 fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = holder.py();
-    let search = py
-        .import("music21.common.enums")?
+    let search = crate::real_music21(py, "music21.common.enums")?
         .getattr("ElementSearch")?
         .getattr("BEFORE_OFFSET")?;
     let arguments = PyDict::new(py);

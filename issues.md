@@ -89,8 +89,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21's half. not sites: the crate keeps its stream a tree of plain
    values and answers where an element sits with `Stream::placed`, the
    composite "Music21's Mistakes" (point 2) recommends over storing sites
-   on objects. the wheel still keeps music21's sites for compatibility. this is what would let the facade stop building
-   `Music21Object`s.
+   on objects. the wheel keeps sites of its own, as music21's are kept
+   (DECISIONS.md, reversed 2026-11-07), which is what music21 code reads;
+   the crate's streams keep none. this is what would let the facade stop
+   building `Music21Object`s.
 
    **measure-relative offsets and the beat are in.** a `Placed` now answers
    music21's `getMeasureOffsetOrMeterModulusOffset` (`bar_offset`, a
@@ -98,8 +100,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
    members music21 hangs on every object through its sites -- `beat`,
    `beatStr`, `beatDuration`, `beatStrength` -- from the meter in force,
    with no site anywhere. music21's own examples for them are its tests.
-   the wheel does not read them yet: its elements still answer through
-   music21's half, which is the step left. derivations are not started.
+   the wheel's elements answer them through the wheel's own sites, with
+   music21's context search (`getContextByClass`, `contextSites`, `next`,
+   `previous`) and meters; `Placed` stays the crate's answer. derivations
+   are not started, so neither side follows one.
 
    It is also what the wheel waits on to carry `FiguredBassLine` and
    `Realization`, which build their bass line and realizations as music21
@@ -210,7 +214,8 @@ two rules, set 2026-09-12, that most of the open work now serves:
    hand back music21's streams once installed; flags are read for their
    truth; negative lengths stay refused. Settled on 2026-10-31: a key
    follows its tonic edited in place and keeps its signature, as music21's
-   does; members that need a site say why they are refused.
+   does; members that need a site say why they are refused (reversed on
+   2026-11-07: the package keeps sites, and they answer).
 
 9. **edits through a handed-out object that may still miss the crate.**
    `data/py_fields.toml` lists them as *value*.

@@ -53,8 +53,10 @@ enum Shape {
 #[pyclass(
     name = "Ornament",
     module = "music21.expressions",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Ornament {
     pub(crate) inner: RsOrnament,
@@ -130,7 +132,7 @@ impl Ornament {
                 }
             }
         }
-        Ok(PyClassInitializer::from(made))
+        Ok(crate::base::built(made))
     }
 
     fn shape(&self) -> Shape {
@@ -346,7 +348,7 @@ fn delay_from_any(value: &Bound<'_, PyAny>) -> PyResult<OrnamentDelay> {
 /// One of music21's `OrnamentDelay` members, or the text it stands for
 /// where music21 is not there to ask.
 fn delay_member<'py>(py: Python<'py>, member: &str, value: &str) -> PyResult<Bound<'py, PyAny>> {
-    match py.import("music21.common.enums") {
+    match crate::real_music21(py, "music21.common.enums") {
         Ok(enums) => enums.getattr("OrnamentDelay")?.getattr(member),
         Err(_) => Ok(PyString::new(py, value).into_any()),
     }
@@ -401,8 +403,7 @@ fn appoggiatura_size(value: &Bound<'_, PyAny>) -> PyResult<Option<RsInterval>> {
 
 #[pymethods]
 impl Ornament {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -1335,8 +1336,7 @@ impl Trill {
                 .len()?
                 == 0
         {
-            let extension = py
-                .import("music21.expressions")?
+            let extension = crate::real_music21(py, "music21.expressions")?
                 .getattr("TrillExtension")?
                 .call1((noteList,))?;
             spanners.append(extension)?;
@@ -1358,8 +1358,10 @@ impl Trill {
 #[pyclass(
     name = "TextExpression",
     module = "music21.expressions",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TextExpression {
     pub(crate) inner: RsTextExpression,
@@ -1389,8 +1391,7 @@ impl TextExpression {
 
 #[pymethods]
 impl TextExpression {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -1398,8 +1399,13 @@ impl TextExpression {
     /// music21's `TextExpression(content=None)`.
     #[new]
     #[pyo3(signature = (content = None, **_keywords))]
-    fn new(content: Option<String>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::wrap(RsTextExpression::new(content.unwrap_or_default()))
+    fn new(
+        content: Option<String>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self::wrap(RsTextExpression::new(
+            content.unwrap_or_default(),
+        )))
     }
 
     /// What music21 says this is, as its `classes` answers.

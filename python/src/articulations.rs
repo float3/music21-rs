@@ -20,8 +20,10 @@ use music21::interval::ChromaticInterval as RsChromaticInterval;
 #[pyclass(
     name = "Articulation",
     module = "music21.articulations",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Articulation {
     pub(crate) inner: RsArticulation,
@@ -98,7 +100,7 @@ impl Articulation {
                 made.set_bend(&value)?;
             }
         }
-        Ok(PyClassInitializer::from(made))
+        Ok(crate::base::built(made))
     }
 
     fn set_bend(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -148,8 +150,7 @@ fn bend_semitones(value: &Bound<'_, PyAny>) -> Option<RsChromaticInterval> {
 
 #[pymethods]
 impl Articulation {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
