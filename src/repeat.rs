@@ -7,6 +7,8 @@
 use crate::display::Drawn;
 use crate::notation::Placement;
 
+pub use crate::stream::Expander;
+
 /// Which of music21's repeat expressions a mark is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

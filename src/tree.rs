@@ -413,6 +413,68 @@ impl<'a> TimespanTree<'a> {
         self.source
     }
 
+    /// Takes out the timespan at a place in [`timespans`](Self::timespans)
+    /// and hands it back: music21's `removeTimespan`. Nothing is taken
+    /// out past the last.
+    pub fn remove_timespan(&mut self, index: usize) -> Option<ElementTimespan<'a>> {
+        (index < self.timespans.len()).then(|| self.timespans.remove(index))
+    }
+
+    /// Takes out the timespans at these places, each read as the tree
+    /// stood before any was taken out: music21's `removeTimespanList`.
+    pub fn remove_timespan_list(&mut self, indices: &[usize]) {
+        let mut index = 0;
+        self.timespans.retain(|_| {
+            let kept = !indices.contains(&index);
+            index += 1;
+            kept
+        });
+    }
+
+    /// The parts the timespans are in, each once: music21's `allParts`.
+    /// Those of the stream the tree was read from come first, in its
+    /// order, and any other after them by id, those with none last. A
+    /// timespan in no part is passed over.
+    pub fn all_parts(&self) -> Vec<&'a Stream> {
+        let mut parts: Vec<&'a Stream> = Vec::new();
+        for part in self.timespans.iter().filter_map(ElementTimespan::part) {
+            if !parts.iter().any(|known| std::ptr::eq(*known, part)) {
+                parts.push(part);
+            }
+        }
+        let order = self.source.parts();
+        parts.sort_by_key(|part| {
+            let place = order
+                .iter()
+                .position(|known| std::ptr::eq(*known, *part))
+                .unwrap_or(order.len());
+            (
+                place,
+                part.id().is_none(),
+                part.id().unwrap_or_default().to_string(),
+            )
+        });
+        parts
+    }
+
+    /// A tree for each part the timespans are in, holding that part's
+    /// timespans and read from it, in the order of
+    /// [`all_parts`](Self::all_parts): music21's `toPartwiseTimespanTrees`.
+    pub fn to_partwise_timespan_trees(&self) -> Vec<TimespanTree<'a>> {
+        self.all_parts()
+            .into_iter()
+            .map(|part| TimespanTree {
+                source: part,
+                timespans: self
+                    .timespans
+                    .iter()
+                    .filter(|span| span.part().is_some_and(|own| std::ptr::eq(own, part)))
+                    .cloned()
+                    .collect(),
+            })
+            .collect()
+    }
+
     /// Cuts every timespan sounding across one of these offsets in two
     /// there: music21's `splitAt`. The pieces come after what already
     /// starts and ends where each does.
@@ -1031,6 +1093,58 @@ mod tests {
             Some(3.0)
         );
         assert_eq!(tree.verticality_at(3.0).time_to_next_event(), Some(1.0));
+        Ok(())
+    }
+
+    /// A score of two parts read from tiny notation.
+    fn two_parts() -> Result<Stream> {
+        let mut score = Stream::with_kind(StreamKind::Score);
+        for (id, line) in [("upper", "4/4 c'2 e'2"), ("lower", "4/4 c1")] {
+            let mut part = from_tiny_notation(line)?;
+            part.set_kind(StreamKind::Part);
+            part.set_id(Some(id.to_string()));
+            score.insert(0.0, part);
+        }
+        Ok(score)
+    }
+
+    #[test]
+    fn the_parts_come_in_the_score_order() -> Result<()> {
+        let score = two_parts()?;
+        let notes = as_timespans(
+            &score,
+            Flatten::Flat,
+            Some(|element| matches!(element, StreamElement::Note(_))),
+        );
+        let ids: Vec<Option<&str>> = notes.all_parts().iter().map(|part| part.id()).collect();
+        assert_eq!(ids, [Some("upper"), Some("lower")]);
+
+        let partwise = notes.to_partwise_timespan_trees();
+        let counts: Vec<usize> = partwise.iter().map(TimespanTree::len).collect();
+        assert_eq!(counts, [2, 1]);
+        assert_eq!(partwise[1].source().id(), Some("lower"));
+        assert_eq!(partwise[1].timespans()[0].end_time(), 4.0);
+        Ok(())
+    }
+
+    #[test]
+    fn timespans_are_taken_out_by_place() -> Result<()> {
+        let line = from_tiny_notation("4/4 c4 d e f")?;
+        let mut tree = as_timespans(
+            &line,
+            Flatten::Flat,
+            Some(|element| matches!(element, StreamElement::Note(_))),
+        );
+        let taken = tree.remove_timespan(1).map(|span| span.offset());
+        assert_eq!(taken, Some(1.0));
+        assert!(tree.remove_timespan(7).is_none());
+        tree.remove_timespan_list(&[0, 2]);
+        let left: Vec<FloatType> = tree
+            .timespans()
+            .iter()
+            .map(ElementTimespan::offset)
+            .collect();
+        assert_eq!(left, [2.0]);
         Ok(())
     }
 }

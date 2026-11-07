@@ -34,7 +34,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 
 use music21::analysis::reduce_chords::{
-    ChordWeight, ReductionOptions, SliceWeigher, WeighedChord, measure_chord_weights,
+    ChordWeight, ReductionOptions, SliceWeigher, WeighedChord, is_consonant, measure_chord_weights,
     reduce_chords, reduced_measure_places, slice_weight,
 };
 use music21::chord::Chord as RsChord;
@@ -125,6 +125,22 @@ fn weight_named(value: Option<&Bound<'_, PyAny>>) -> PyResult<ChordWeight> {
              algorithms, and {name:?} is none of them"
         ))
     })
+}
+
+/// Sets of interval classes as a caller hands them over, none for `None`.
+fn interval_class_sets(given: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<Vec<u8>>> {
+    let Some(given) = given.filter(|given| !given.is_none()) else {
+        return Ok(Vec::new());
+    };
+    let mut sets = Vec::new();
+    for classes in given.walk()? {
+        let mut set = Vec::new();
+        for class in classes?.walk()? {
+            set.push(class?.extract::<u8>()?);
+        }
+        sets.push(set);
+    }
+    Ok(sets)
 }
 
 /// music21's `analysis.reduceChords.ChordReducer`.
@@ -248,6 +264,27 @@ impl ChordReducer {
     #[staticmethod]
     fn sliceWeight(quarterLength: f64, accent: f64, isLast: bool, isConsonant: bool) -> f64 {
         slice_weight(quarterLength, accent, isLast, isConsonant)
+    }
+
+    /// Whether the pitches sound consonant: music21's `isConsonant`, which
+    /// reads `allowableChords` and `forbiddenChords` as sets of
+    /// interval-class sets, as `run` makes them.
+    #[pyo3(signature = (pitches, allowableChords = None, forbiddenChords = None))]
+    fn isConsonant(
+        &self,
+        pitches: &Bound<'_, PyAny>,
+        allowableChords: Option<&Bound<'_, PyAny>>,
+        forbiddenChords: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<bool> {
+        let mut held = Vec::new();
+        for pitch in pitches.walk()? {
+            held.push(crate::pitch::pitch_from_any(&pitch?)?);
+        }
+        Ok(is_consonant(
+            &held,
+            &interval_class_sets(allowableChords)?,
+            &interval_class_sets(forbiddenChords)?,
+        ))
     }
 
     /// How much each chord of a measure weighs: music21's

@@ -826,6 +826,64 @@ impl Spanner {
         self.spanned.last() == Some(&Some(position))
     }
 
+    /// Whether the element at a position is among those it joins:
+    /// music21's `hasSpannedElement`.
+    pub fn has_spanned_element(&self, position: usize) -> bool {
+        self.spanned.contains(&Some(position))
+    }
+
+    /// Joins the elements at these positions too, after those it joins
+    /// already, in the order given: music21's `addSpannedElements`, which
+    /// joins an element once however often it is added.
+    ///
+    /// ```
+    /// use music21::Spanner;
+    ///
+    /// let mut slur = Spanner::slur(vec![1]);
+    /// slur.add_spanned_elements([2, 3, 1]);
+    /// assert_eq!(slur.spanned(), [Some(1), Some(2), Some(3)]);
+    /// ```
+    pub fn add_spanned_elements(&mut self, positions: impl IntoIterator<Item = usize>) {
+        for position in positions {
+            if !self.has_spanned_element(position) {
+                self.spanned.push(Some(position));
+            }
+        }
+    }
+
+    /// Joins the element at a position first, before the rest: music21's
+    /// `insertFirstSpannedElement`. One it joins already stays where it
+    /// is.
+    pub fn insert_first_spanned_element(&mut self, position: usize) {
+        if !self.has_spanned_element(position) {
+            self.spanned.insert(0, Some(position));
+        }
+    }
+
+    /// Joins the element at `new` where it joined the one at `old`:
+    /// music21's `replaceSpannedElement`. Where it joins `new` already it
+    /// just lets `old` go, and where it does not join `old` nothing
+    /// changes.
+    ///
+    /// ```
+    /// use music21::Spanner;
+    ///
+    /// let mut slur = Spanner::slur(vec![1, 2, 3]);
+    /// slur.replace_spanned_element(3, 4);
+    /// assert_eq!(slur.spanned(), [Some(1), Some(2), Some(4)]);
+    /// ```
+    pub fn replace_spanned_element(&mut self, old: usize, new: usize) {
+        if self.has_spanned_element(new) {
+            self.spanned.retain(|place| *place != Some(old));
+            return;
+        }
+        for place in &mut self.spanned {
+            if *place == Some(old) {
+                *place = Some(new);
+            }
+        }
+    }
+
     /// Which side of the notes it is drawn on, where the score says.
     pub fn placement(&self) -> Option<Placement> {
         self.placement.0
@@ -859,6 +917,54 @@ mod tests {
         assert!(slur.is_last(5));
         assert!(!slur.is_first(4) && !slur.is_last(4));
         assert_eq!(slur.kind().class_name(), "Slur");
+    }
+
+    #[test]
+    fn an_element_is_joined_once_in_the_order_added() {
+        // music21's own example: g, then f# and e, then d- and c.
+        let mut line = Spanner::new(SpannerKind::Line, vec![]);
+        line.add_spanned_elements([1]);
+        line.add_spanned_elements([2, 3]);
+        line.add_spanned_elements([4, 5, 2]);
+        assert_eq!(
+            line.spanned(),
+            [Some(1), Some(2), Some(3), Some(4), Some(5)]
+        );
+        assert!(line.has_spanned_element(4));
+        assert!(!line.has_spanned_element(6));
+    }
+
+    #[test]
+    fn an_element_inserted_first_goes_before_the_rest() {
+        let mut line = Spanner::new(SpannerKind::Line, vec![2, 3, 4, 5]);
+        line.insert_first_spanned_element(1);
+        assert_eq!(
+            line.spanned(),
+            [Some(1), Some(2), Some(3), Some(4), Some(5)]
+        );
+        // One joined already is neither added again nor moved.
+        line.insert_first_spanned_element(4);
+        assert_eq!(
+            line.spanned(),
+            [Some(1), Some(2), Some(3), Some(4), Some(5)]
+        );
+
+        let mut empty = Spanner::new(SpannerKind::Line, vec![]);
+        empty.insert_first_spanned_element(7);
+        assert_eq!(empty.spanned(), [Some(7)]);
+    }
+
+    #[test]
+    fn a_replaced_element_keeps_its_place() {
+        let mut slur = Spanner::slur(vec![1, 2, 3]);
+        slur.replace_spanned_element(1, 9);
+        assert_eq!(slur.spanned(), [Some(9), Some(2), Some(3)]);
+        // Nothing joined at the old place changes nothing.
+        slur.replace_spanned_element(6, 7);
+        assert_eq!(slur.spanned(), [Some(9), Some(2), Some(3)]);
+        // A replacement it joins already lets the old one go.
+        slur.replace_spanned_element(2, 3);
+        assert_eq!(slur.spanned(), [Some(9), Some(3)]);
     }
 
     #[test]

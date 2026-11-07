@@ -1430,7 +1430,7 @@ SpannerBundle = "the collection music21 keeps a stream's spanners in; a crate st
 python = "spanner.py"
 name = "Spanner"
 rust = ["src/spanner.rs"]
-note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back."
+note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back, and it is edited by position: an element is joined once, as music21 joins an object once."
 
 [class.renames]
 getSpannedElements = "spanned"
@@ -1440,10 +1440,6 @@ purgeOrphans = "drops the elements no stream holds any more, which only a spanne
 purgeLocations = "drops the sites it remembers, and it remembers none"
 getSpannedElementsByClass = "the elements of a class among them, which the stream holding them answers"
 getSpannedElementIds = "Python object ids"
-addSpannedElements = "adds elements by object; `Spanner::new` takes the positions it joins"
-insertFirstSpannedElement = "puts an element first by object"
-hasSpannedElement = "whether an element is among them, which is `spanned().contains`"
-replaceSpannedElement = "swaps one element for another by object"
 fill = "fills in every element between the first and the last, which asks the stream what stands between them"
 getFirst = "the first element itself; `spanned` gives its position and the stream hands back what stands there"
 getLast = "the last element itself, likewise"
@@ -1532,18 +1528,10 @@ getTextExpression = "the words as a `TextExpression` for a renderer; `text` is w
 python = "repeat.py"
 name = "Expander"
 rust = ["src/stream/repeats.rs"]
-note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one."
+note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one and `repeat::Expander` a step at a time. Its steps take a stream of measures and hand back a new one, leaving the stream they were given as it was."
 
 [class.renames]
 process = "expand_repeats"
-
-[class.excluded]
-measureMap = "the measures of the expansion listed for a caller to read"
-repeatBarsAreCoherent = "a step of the expansion, which answers an error where the repeats make no sense"
-findInnermostRepeatIndices = "a step of the expansion"
-processInnermostRepeatBars = "a step of the expansion"
-getRepeatExpressionIndex = "a step of the expansion"
-isExpandable = "whether there is anything to play out, which expanding answers"
 
 [[class]]
 python = "variant.py"
@@ -1814,10 +1802,6 @@ offset = "lowest_position"
 
 [class.excluded]
 index = "where a timespan sits in the tree, which is its place in the list here"
-removeTimespan = "takes a timespan out of the tree; the crate reads a stream into timespans and does not edit them"
-removeTimespanList = "takes several out, likewise"
-toPartwiseTimespanTrees = "a tree for each part of the score; `as_timespans` reads whichever stream it is given, a part included"
-allParts = "every part the timespans came from, which the caller has in the score it read"
 element = "the element a timespan holds, which `ElementTimespan::element` answers"
 
 [[class]]
@@ -2408,7 +2392,7 @@ labelTransposedAndInvertedMultisets = "label"
 python = "analysis/reduceChords.py"
 name = "ChordReducer"
 rust = ["src/analysis/reduce_chords.rs"]
-note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The two steps music21 documents on their own are public here -- a measure's weights and its reduction -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
+note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The steps music21 documents on their own are public here -- a measure's weights and its reduction, and the slices a measure is cut into, their weights, the heaviest kept and what is consonant -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
 
 [class.renames]
 run = "reduce_chords"

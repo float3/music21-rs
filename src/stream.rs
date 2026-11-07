@@ -53,6 +53,7 @@ pub use editing::Anchor;
 pub use lyrics::{LyricsOptions, SungAt, SungLyric, SungPlace};
 pub use placed::Placed;
 pub use queries::OffsetMapEntry;
+pub use repeats::Expander;
 pub use seconds::TempoSpan;
 pub use span::OffsetSpan;
 pub use splitting::InForce;
