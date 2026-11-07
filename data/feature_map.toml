@@ -1802,10 +1802,6 @@ offset = "lowest_position"
 
 [class.excluded]
 index = "where a timespan sits in the tree, which is its place in the list here"
-removeTimespan = "takes a timespan out of the tree; the crate reads a stream into timespans and does not edit them"
-removeTimespanList = "takes several out, likewise"
-toPartwiseTimespanTrees = "a tree for each part of the score; `as_timespans` reads whichever stream it is given, a part included"
-allParts = "every part the timespans came from, which the caller has in the score it read"
 element = "the element a timespan holds, which `ElementTimespan::element` answers"
 
 [[class]]
