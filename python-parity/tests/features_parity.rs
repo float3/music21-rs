@@ -117,8 +117,33 @@ const TABLE_SCORES: [(&str, &str); 2] =
     [("bwv66.6", "Bach"), ("corelli/opus3no1/1grave", "Corelli")];
 const TABLE_IDS: [&str; 4] = ["P20", "R31", "R35", "K1"];
 
+/// How many tests the scores are dealt between
+/// (`musicxml_common::dealt`), so that nextest can run them on different
+/// runners.
+const PARTS: usize = 4;
+
 #[test]
-fn the_crate_extracts_features_as_music21_does() {
+fn the_crate_extracts_features_as_music21_does_0() {
+    the_crate_extracts_features_as_music21_does(0);
+}
+
+#[test]
+fn the_crate_extracts_features_as_music21_does_1() {
+    the_crate_extracts_features_as_music21_does(1);
+}
+
+#[test]
+fn the_crate_extracts_features_as_music21_does_2() {
+    the_crate_extracts_features_as_music21_does(2);
+}
+
+#[test]
+fn the_crate_extracts_features_as_music21_does_3() {
+    the_crate_extracts_features_as_music21_does(3);
+}
+
+/// Compares the scores of the `part`th of `PARTS` tests.
+fn the_crate_extracts_features_as_music21_does(part: usize) {
     let root = repo_root();
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
@@ -167,7 +192,7 @@ fn the_crate_extracts_features_as_music21_does() {
                 .collect(),
         };
         let mut compared = 0;
-        for name in &chosen {
+        for name in musicxml_common::dealt(&chosen, part, PARTS) {
             let Some(text): Option<String> =
                 music21.getattr("source_text")?.call1((name,))?.extract()?
             else {

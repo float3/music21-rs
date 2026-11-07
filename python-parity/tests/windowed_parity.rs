@@ -250,8 +250,8 @@ fn first_difference(ours: &str, theirs: &str) -> Option<String> {
 }
 
 /// How many tests the scores are dealt between, so that each runs in its
-/// own process beside the others. Score `i` goes to test `i % PARTS`, which
-/// puts the largest scores, the Beethoven quartets, in different tests.
+/// own process beside the others, each heavy score in a test of its own
+/// (`musicxml_common::dealt`).
 const PARTS: usize = 10;
 
 macro_rules! parts {
@@ -310,7 +310,7 @@ fn windows_and_floats_keys(part: usize) {
 
         let mut failures = Vec::new();
         let mut compared = 0;
-        for name in chosen.iter().skip(part).step_by(PARTS) {
+        for name in musicxml_common::dealt(&chosen, part, PARTS) {
             let Some(text): Option<String> =
                 music21.getattr("source_text")?.call1((name,))?.extract()?
             else {
