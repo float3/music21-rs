@@ -146,8 +146,6 @@ const PARITY_BINARY: &str = "parity-";
 /// nothing without this. Until the crate was renamed `music21` they mapped
 /// onto the wheel's `libmusic21_rs.so` by a coincidence of names.
 fn parity_object_flags(build_dir: &Path) -> String {
-    use std::os::unix::fs::PermissionsExt;
-
     let Ok(entries) = fs::read_dir(build_dir.join("debug/deps")) else {
         return String::new();
     };
@@ -157,17 +155,16 @@ fn parity_object_flags(build_dir: &Path) -> String {
         let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        // `parity-0123abcd`, not its `.d` file or another binary.
+        // `parity-0123abcd` (`.exe` on Windows), not its `.d` file or
+        // another binary.
         let Some(hash) = name.strip_prefix(PARITY_BINARY) else {
             continue;
         };
+        let hash = hash.strip_suffix(".exe").unwrap_or(hash);
         if hash.is_empty() || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
             continue;
         }
-        let executable = entry
-            .metadata()
-            .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0);
-        if executable {
+        if path.is_file() {
             flags.push(format!("-object {}", path.display()));
         }
     }
@@ -842,8 +839,6 @@ mod tests {
     /// not find it by name; the report names it to llvm-cov itself.
     #[test]
     fn the_parity_binary_is_named_to_llvm_cov() {
-        use std::os::unix::fs::PermissionsExt;
-
         let root = std::env::temp_dir().join(format!("xtask-objects-{}", std::process::id()));
         let deps = root.join("debug/deps");
         std::fs::create_dir_all(&deps).unwrap();
@@ -853,9 +848,7 @@ mod tests {
             "music21-89ef",
             "parityx-01",
         ] {
-            let path = deps.join(name);
-            std::fs::write(&path, b"").unwrap();
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::write(deps.join(name), b"").unwrap();
         }
 
         let flags = super::parity_object_flags(&root);
