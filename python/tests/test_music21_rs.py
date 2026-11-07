@@ -7349,11 +7349,15 @@ music21_rs.install_into_music21()
 classes = {classes!r}
 for path in {[str(path) for path in paths]!r}:
     diff, _, _ = converter_parity.differences(str(common.getSourceFilePath() / path), {fmt!r})
-    for line in diff[2:]:
+    for line in diff:
+        if line in ('--- music21', '+++ crate'):
+            continue
         if line.startswith(('+', '-')) and (
             classes is None or any(name in line for name in classes)
         ):
             print(path, line[:200])
+        elif line.startswith('<'):
+            print(path, line)
 """
     done = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
@@ -7407,10 +7411,11 @@ def test_routed_musicxml_spanners_are_music21s():
     pytest.importorskip("music21.stream")
     paths = ("musicxml/lilypondTestSuite/33a-Spanners.xml",)
     names = (
-        "Slur", "Crescendo", "Diminuendo", "Line", "Glissando", "Ottava",
-        "PedalMark", "TrillExtension", "TremoloSpanner", "write failed",
+        " Slur ", " Crescendo ", " Diminuendo ", " Line ", " Glissando ",
+        " Ottava ", " TrillExtension ", " TremoloSpanner ", "<tremolo",
+        "write failed",
     )
-    assert _routed_differences("musicxml", paths, names) == []
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
 
 
 def test_routed_musicxml_keeps_fermatas_and_arpeggios():

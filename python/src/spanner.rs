@@ -1746,12 +1746,25 @@ pub(crate) fn music21_object<'py>(
     let facade = facade.bind(py);
     let made = class.call1((PyTuple::new(py, spanned)?,))?;
     for name in MUSIC21_MEMBERS {
+        // What it does not say is left as music21's constructor has it,
+        // some of whose setters refuse `None`.
         let Ok(value) = facade.getattr(*name) else {
             continue;
         };
-        if made.hasattr(*name)? {
+        if !value.is_none() && made.hasattr(*name)? {
             made.setattr(*name, value)?;
         }
+    }
+    // Two this package's object says only for some kinds of spanner.
+    if let Some(line_type) = inner.line_type()
+        && made.hasattr("lineType")?
+    {
+        made.setattr("lineType", line_type)?;
+    }
+    if let Some(marks) = inner.number_of_marks()
+        && made.hasattr("numberOfMarks")?
+    {
+        made.setattr("numberOfMarks", marks)?;
     }
     if let Some(id_local) = inner.id_local() {
         made.setattr("idLocal", id_local)?;

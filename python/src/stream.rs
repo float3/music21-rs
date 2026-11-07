@@ -5014,7 +5014,12 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                     let built = crate::spanner::music21_object(py, spanner, joined)?;
                     let home = home_part(spanner, &parts, stream.staff_groups())
                         .map_or(&made, |place| &parts[place].0);
-                    home.call_method1("insert", (0.0, built))?;
+                    home.call_method1("insert", (0.0, &built))?;
+                    // An octave line joins every note under it, which
+                    // music21's reader fills in once it stands in its part.
+                    if spanner.kind() == music21::spanner::SpannerKind::Ottava {
+                        built.call_method1("fill", (home,))?;
+                    }
                 }
             }
         }

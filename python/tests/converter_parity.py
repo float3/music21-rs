@@ -230,15 +230,15 @@ def main(arguments):
 
     warnings.simplefilter('ignore')
     music21_rs.install_into_music21()
-    fmt, paths = arguments[0], arguments[1:]
+    fmt, paths = arguments[0], list(arguments[1:])
     global IGNORE_STYLE
     shown = 40
-    if paths and paths[0] == '--no-style':
-        IGNORE_STYLE = True
-        paths = paths[1:]
-    if paths and paths[0].startswith('--lines='):
-        shown = int(paths[0].split('=', 1)[1])
-        paths = paths[1:]
+    while paths and paths[0].startswith('--'):
+        flag = paths.pop(0)
+        if flag == '--no-style':
+            IGNORE_STYLE = True
+        elif flag.startswith('--lines='):
+            shown = int(flag.split('=', 1)[1])
     matched = 0
     for path in paths:
         try:
