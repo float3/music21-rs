@@ -182,6 +182,15 @@ far off that is.
 `.so`, the price of not asking music21 for it. `Trigram.makeWords` and
 `likely` stay unported, since they answer at random.
 
+**converter and corpus are pure Python over the readers.**
+`music21_rs.converter` tells a format by extension or content as music21
+does and hands the file to the crate's reader for it; `music21_rs.corpus`
+finds a work in the directory `MUSIC21_RS_CORPUS` names, or in an
+installed music21's, without importing it. neither keeps a pickle cache or
+metadata bundles, and a keyword a reader cannot honour is refused rather
+than ignored. *costs:* no `corpus.search`, and a repeated parse reads the
+file again.
+
 **goal: anything built on music21 can run on music21-rs.** a library that
 depends on music21 is written against music21, and its users should be able
 to put music21-rs underneath it without changing it: one switch on their
@@ -268,8 +277,8 @@ every musical question is answered in Rust.
 
 *costs:* a Python `__init__` on the hot path. an installed `Chord('C4 E4 G4')`
 builds only itself (3.3µs against music21's 21.2µs), and its pitches on
-their own (8.9µs); asking for its notes costs about what music21's chord
-does (25.8µs), each note starting music21's half.
+their own (8.9µs); a chord and its notes take 11.9µs against music21's
+15.2µs, each note built around its value and starting music21's half.
 
 **the facade shows two classes where the crate has one.** music21 calls a
 span of a bar that nothing divides a `MeterTerminal` and one that is divided a
@@ -404,6 +413,16 @@ for a caller who has no music21 at all.
 importable, and a class of the package's that music21's own suite never
 exercises. the gain is that nothing quietly worse than music21 stands in
 music21's place.
+
+**what music21's readers make with classes nothing installs over is built
+as music21's own.** a score `converter.parse` reads through the crate is
+built into music21's streams; its layouts, text boxes, spanners, text
+expressions, fermatas and metadata are music21's objects, made and placed
+as music21's readers make and place them, since the package has no class
+installed over them for music21's exporters to read. *costs:* building them
+asks music21 per object, and a field the crate does not read (positions,
+fonts, colours) is missing from them, which keeps MusicXML, ABC, Humdrum
+and MEI from being routed by default.
 
 **some setters take whatever they are given.** `pitch._client`, `key.tonic`
 and `scale.tonic` keep a facade object where the value is one and record
@@ -625,6 +644,11 @@ stood:
 asked `issubclass` on every object it built; deciding it when the class is
 installed measured 30.05µs against 29.45µs — nothing — so it was reverted.
 The cost is the number of objects a chord builds, not the branching on each.
+
+**sites made on first asking.** an installed note builds a `Sites` as
+music21's `__init__` does; making it only when asked for would save about
+4% of a chord's notes, but the attribute is visible in `__dict__`, which
+music21's own code and its users read, so it was weighed and not built.
 
 **refusing a client that is not our note.** see above: it broke 29 docstrings.
 The permissive setter is deliberate and now says so.

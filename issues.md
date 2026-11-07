@@ -190,6 +190,13 @@ two rules, set 2026-09-12, that most of the open work now serves:
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
 
+   a chord and its notes together (`Chord('C E G').notes`) went from
+   16.3µs to 11.9µs, against music21's 15.2µs: an installed class is
+   looked up once per name and its hash asked once, and a note is built
+   around its value rather than over a default C4. music21's own suite
+   runs about as fast installed as not (~1.0x): profiled, the crate is
+   about 0.4% of the time and music21's stream machinery the rest.
+
 8. **older mismatches the drift audit turned up.** music21's 346
    non-owner commits since porting began (7e77707) were checked against
    the port on 2026-10-30; the drifts found are fixed. These differ from
@@ -288,6 +295,22 @@ two rules, set 2026-09-12, that most of the open work now serves:
 17. **`Trigram.makeWords`, `likely` and `lut` are unported in the
     wheel.** They answer at random, and porting them needs the counts kept
     in insertion order.
+
+18. **what keeps `converter.parse` from routing more than MIDI through
+    the crate.** compared with music21's readers by
+    `python/tests/converter_parity.py`: MIDI 20 of 21 (`test04.mid`'s
+    closing tempo is 560 against 558.5); MusicXML 5 of 21 strictly, 7
+    ignoring drawing (positions, fonts and colours need crate fields;
+    part names' `print-object`, `HammerOn`/`PullOff`, `PedalBounce`,
+    dashed slurs, bend-alter); ABC 5 of 8 (rests lack the empty beams
+    `makeBeams` gives them; slurs lack notes that are in no stream);
+    Humdrum 0 of 10 (part ids `spine_N`, element priorities, spine
+    comments); MEI 2 of 3 (slurs appended at the end with `idLocal`;
+    chord and rest ids). `route_converters` opts any of them in anyway.
+
+19. **`add_dependency_venv` misses a `maturin develop` install.** it does
+    not read the `.pth` maturin writes under `lib/python3.x`, so the
+    parity harness needs `PYTHONPATH` set to find the wheel there.
 
 ## closed
 

@@ -28,8 +28,10 @@
 # the crate ports where it uses it rather than as a module of its own; and
 # for what the crate does not model at all: the page (`graph`), the
 # environment and the corpus cache (`environment.py`, `configure.py`,
-# `metadata/bundles.py`, `metadata/caching.py`), file conversion
-# (`converter`), and music21's own object machinery (`base.py`,
+# `metadata/bundles.py`, `metadata/caching.py`), music21's subconverters
+# (`converter/subConverters.py`; `converter` and `corpus` themselves are
+# tracked, the wheel having them in Python), and music21's own object
+# machinery (`base.py`,
 # `prebase.py`, `sites.py`, `derivation.py`, `freezeThaw.py`,
 # `stream/iterator.py`, `stream/filters.py`).
 #
@@ -2454,6 +2456,32 @@ toPitch = "from_language_name"
 toNote = "a note built on what `from_language_name` read, which is `Note::new(pitch)` here and is music21's own one-liner"
 toChord = "a chord built on what it read, as `toNote`"
 
+[[class]]
+python = "converter/__init__.py"
+rust = []
+note = "Not the crate's: each reader and writer is a function on the stream it reads or writes. The wheel's `converter` is Python over them (`python/pysrc/music21_rs/converter.py`): it tells a format by extension or content as music21 does and hands the file to the crate's reader for it, MuseScore included."
+
+[class.excluded]
+resetSubConverters = "the subconverter machinery: the readers are the crate's own, chosen by format"
+registerSubConverter = "the subconverter machinery, as `resetSubConverters`"
+unregisterSubConverter = "the subconverter machinery, as `resetSubConverters`"
+freeze = "music21's pickle cache, which the wheel does not keep: every parse reads the file"
+thaw = "music21's pickle cache, as `freeze`"
+freezeStr = "music21's pickle cache, as `freeze`"
+thawStr = "music21's pickle cache, as `freeze`"
+
+[[class]]
+python = "corpus/__init__.py"
+rust = []
+note = "Not the crate's, which reads no files of its own choosing. The wheel's `corpus` (`python/pysrc/music21_rs/corpus.py`) finds a work in the directory `MUSIC21_RS_CORPUS` names, or in an installed music21's, and reads it with the wheel's `converter`."
+
+[class.excluded]
+getLocalPaths = "the local corpus, a setting of music21's environment"
+addPath = "the local corpus, as `getLocalPaths`"
+cacheMetadata = "the corpus's metadata bundles, which the wheel does not keep"
+getComposer = "a search of the metadata bundles, as `cacheMetadata`"
+noCorpus = "music21's installation without its corpus, which the wheel answers by `MUSIC21_RS_CORPUS`"
+
 # The other half of the map: every module of music21 no entry above reads,
 # with the reason. A file nothing names is invisible to the report, which
 # is how `search/serial.py`, `analysis/elements.py` and
@@ -2563,10 +2591,9 @@ python = [
 ]
 
 [[unlisted]]
-reason = "the environment, the corpus cache and file conversion: settings, paths, pickles and the readers music21 chooses between, none of which a library that does no file IO has"
+reason = "the environment, the corpus cache, settings and the subconverter machinery: paths, pickles and the readers music21 chooses between, none of which a library that does no file IO has"
 python = [
   "configure.py",
-  "converter/__init__.py",
   "converter/museScore.py",
   "converter/qmConverter.py",
   "converter/subConverters.py",

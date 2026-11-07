@@ -23,10 +23,31 @@
   music21 runs on music21-rs where music21 is not installed. It places the
   package's classes, functions and constants in the music21 modules that
   keep them, and the names music21 imports into a module
-  (`stream.StreamException`, `metadata.Contributor`); 1,059 of music21's
-  1,902 public names in those modules are answered. harte-library's suite
+  (`stream.StreamException`, `metadata.Contributor`), and answers
+  `converter` and `corpus` from the package's own; 1,073 of music21's
+  1,938 public names in those modules are answered. harte-library's suite
   gives the same results this way as on music21. The packages expose
   `__version__`.
+- **`music21_rs.converter` and `music21_rs.corpus` need no music21**:
+  `converter.parse`, `parseFile`, `parseData`, `parseURL` and `toData`,
+  and `corpus.parse`, `getWork`, `getPaths`, `getCorePaths` and
+  `getCorpusFilePath`. The format is told by extension or content as
+  music21 tells it and read by the crate's reader for it, MuseScore's
+  `.mscx` and `.mscz` included (new `from_mscx`); the corpus is the
+  directory `MUSIC21_RS_CORPUS` names, or an installed music21's. Once
+  installed into music21 they are music21's own, MuseScore still read by
+  the crate. There is no pickle cache, and a keyword a reader cannot
+  honour raises `ConverterException`.
+- **`install_into_music21()` reads MIDI through the crate** in
+  `converter.parse`, about 4.5 times as fast, into the same score; new
+  `route_converters(formats)` routes MusicXML, ABC, Humdrum or MEI too,
+  or none. A score the crate builds into music21's streams carries
+  music21's own layouts, text boxes, staff groups, spanners (placed and
+  completed as music21's readers do), fermatas and metadata; a MIDI read
+  keeps `midiTickStart` and quantization errors in each note's editorial
+  and hides copied tempo marks.
+- `xtask music21-suite` takes `--only a,b`, `--sides`, `--profile` and
+  `--route-converters`, and sums music21's suite per module on every run.
 - **`braille.segment` is ported**: `findSegments` and the segment classes
   hold the caller's own objects and write onto them what music21 writes.
   The crate's `SegmentTranscriber` writes a segment step by step, with new
@@ -63,6 +84,10 @@
 - A wheel stream keeps its end until a length it holds changes: 2,000
   appends take 3.1ms, where music21's take 17.7ms.
 - A wheel `Measure`'s repr names its offset, as music21's does.
+- Installed objects are cheaper to build: an installed class is looked up
+  once per name, its hash asked once, and a note built around its value
+  rather than over a default one. A chord and its notes take 11.9us,
+  where they took 16.3us and music21's take 15.2us.
 - Readers refuse key signatures past 1,000 sharps, MuseScore notes with
   more than 16 dots, and RomanText, DCML and Clercq-Temperley files that
   would make more than `MAX_MEASURES` measures. DCML and Clercq-Temperley
@@ -105,6 +130,13 @@
 - The wheel's `RomanNumeral` for an augmented sixth over a secondary
   numeral reports the secondary key in minor: `Ger65/V` in C has
   `secondaryRomanNumeralKey` g minor, where it said G major.
+- A MIDI instrument named by a track name has `midiChannel` 0, as in
+  music21, and a MIDI meta event on channel 1 is read.
+- A note read with a velocity has volume information, and MusicXML
+  dynamics are kept beside it.
+- A crate-built score with words can be deep-copied and written; a
+  `Crescendo` with no type and a `Line` with `startHeight=None` no longer
+  crash.
 - The web example's Harte page labels the chord symbol "from the pitches"
   and shows it beside the label's prettified form.
 

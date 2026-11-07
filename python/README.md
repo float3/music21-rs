@@ -11,10 +11,10 @@ and packaged for Python. the classes have music21's names, arguments,
 properties and `repr`, and give music21's answers. the rust half is the
 [music21](https://crates.io/crates/music21) crate; the wheel needs no
 Rust toolchain and no music21 to run on its own. music21's stream
-machinery, its `converter` and the corpus are not included; those remain
-music21's. the package does read scores in seven formats into streams of its
-own, and writes MusicXML: see [Reading and writing
-scores](#reading-and-writing-scores).
+machinery and the corpus's scores are not included; those remain music21's.
+the package does read scores in every format the crate reads into streams
+of its own, through a `converter` and a `corpus` of its own, and writes
+MusicXML: see [Reading and writing scores](#reading-and-writing-scores).
 
 the [reports page](https://hilll.dev/music21-rs/reports/) has the full
 numbers: every music21 method and whether it is ported, the doctest and test
@@ -108,7 +108,8 @@ directory `MUSIC21_RS_CORPUS` names, else in an installed music21's
 scores, and there is no metadata to search.
 
 once installed into music21 (below), both modules are music21's own
-`converter` and `corpus`, handing back music21's streams.
+`converter` and `corpus`, handing back music21's streams; under
+`provide_music21()` they answer `music21.converter` and `music21.corpus`.
 
 the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,

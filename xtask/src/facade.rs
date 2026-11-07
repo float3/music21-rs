@@ -28,18 +28,27 @@ pub struct Facade {
 }
 
 impl Facade {
-    /// Reads `python/src`. An empty set is not an error: a checkout without
-    /// it simply has nothing to say about the wheel.
+    /// Reads `python/src`, and the package's modules written in Python
+    /// (`converter`, `corpus`) under `pysrc/`. An empty set is not an
+    /// error: a checkout without it simply has nothing to say about the
+    /// wheel.
     pub fn read(workspace_root: &Path) -> Self {
         let mut files = BTreeMap::new();
-        if let Ok(entries) = fs::read_dir(workspace_root.join("python/src")) {
+        let places = [
+            ("python/src", "rs", ""),
+            ("python/pysrc/music21_rs", "py", "pysrc/"),
+        ];
+        for (directory, extension, prefix) in places {
+            let Ok(entries) = fs::read_dir(workspace_root.join(directory)) else {
+                continue;
+            };
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().is_some_and(|e| e == "rs")
+                if path.extension().is_some_and(|e| e == extension)
                     && let Ok(text) = fs::read_to_string(&path)
                     && let Some(name) = path.file_stem().and_then(|n| n.to_str())
                 {
-                    files.insert(name.to_string(), text);
+                    files.insert(format!("{prefix}{name}"), text);
                 }
             }
         }
@@ -107,14 +116,27 @@ impl Facade {
     /// keep true.
     ///
     /// A function a macro writes, or one built in Python and added by name,
-    /// is found by the module's `NAMES` or by its `m.add("name", ...)`.
+    /// is found by the module's `NAMES` or by its `m.add("name", ...)`; one
+    /// a Python module of the package defines, by its `def` or by a name
+    /// bound at its top level.
     pub fn has_function(&self, name: &str) -> bool {
-        self.files.values().any(|text| {
+        self.files.iter().any(|(file, text)| {
+            if file.starts_with("pysrc/") {
+                return python_defines(text, name);
+            }
             defines_member(text, name)
                 || names_list(text, name)
                 || text.contains(&format!("m.add(\"{name}\""))
         })
     }
+}
+
+/// Whether a Python module defines `name` at its top level: a `def` or an
+/// assignment, as `getCorePaths = getPaths`.
+fn python_defines(text: &str, name: &str) -> bool {
+    text.lines().any(|line| {
+        line.starts_with(&format!("def {name}(")) || line.starts_with(&format!("{name} = "))
+    })
 }
 
 /// Whether a file declares a `#[pyclass]` of this name.
@@ -445,6 +467,30 @@ fn register(m: &Bound<'_, PyModule>) {
         assert!(facade.has_function("streamToBraille"));
         assert!(facade.has_function("iterateBeamGroups"));
         assert!(!facade.has_function("partToBraille"));
+    }
+
+    /// A function one of the package's Python modules defines at its top
+    /// level is the wheel's; a method of a class there is not a function.
+    #[test]
+    fn a_python_module_s_functions_are_found() {
+        let source = "\
+def parse(value):
+    return value
+
+
+parseData = parse
+
+
+class Reader:
+    def parseFile(self, fp):
+        pass
+";
+        let facade = Facade {
+            files: BTreeMap::from([("pysrc/converter".to_string(), source.to_string())]),
+        };
+        assert!(facade.has_function("parse"));
+        assert!(facade.has_function("parseData"));
+        assert!(!facade.has_function("parseFile"));
     }
 
     /// A field pyo3 exposes with `#[pyo3(get, set)]` is a member Python
