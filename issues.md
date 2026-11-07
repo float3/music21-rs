@@ -224,15 +224,12 @@ two rules, set 2026-09-12, that most of the open work now serves:
    fixed (below, under closed), and the other rows listed as *value* were
    made to read the object as it stands; none is left.
 
-10. **appending to a wheel stream still reads every held note's length.**
-    2,000 appends take 47.8ms where music21 takes 28ms: a note's duration
-    can be edited from Python without the stream hearing of it, and the
-    package keeps no sites to tell it, so the stream's end is worked out
-    afresh each time. An edit counter shared by `Note` and `Duration`
-    would let it keep its end. Two smaller differences found on the way:
-    `replace` keeps the old element's insertion order where music21 puts
-    the replacement after what else stands at its offset, and the wheel
-    lets one object be inserted twice, which music21 refuses.
+10. **an uninstalled music21 object's length or priority is read only
+    when it goes into a wheel stream.** An edit to it tells only
+    music21's own sites, so a wheel stream holding it reads its lengths
+    afresh on every append and does not re-sort when its priority
+    changes. The package's elements and installed classes tell the
+    wheel's streams (DECISIONS.md, "streams hear of element edits").
 
 11. **music21 bugs the seeded fuzzers step around**, not yet fixed on the
     fork:
@@ -254,11 +251,51 @@ two rules, set 2026-09-12, that most of the open work now serves:
     written files agree; `spannerBundle` does not. The reader also takes a
     count written `3.0`, which music21 refuses.
 
-13. **a priority changed after insertion does not re-sort a wheel
-    stream.** music21 re-sorts through `informSites`; the wheel's stream
-    keeps no sites, so it reads `priority` once, when the element goes in.
+13. **what the wheel's sites do not keep yet.** derivations are not kept,
+    so no context search follows one; a spanner is not a site of the
+    notes it spans; the context search's sort leaves out music21's
+    `isNotGrace`; `getContextByClass` costs about 100µs a note; a stream
+    unpickled may not be a site of what it holds until it is written to;
+    `returnSpecial` is ignored.
+
+14. **classes music21 has between the wheel's and its base classes.**
+    `Unpitched` is missing, and so are `ChordBase`, `StreamCore`,
+    `TempoIndication`, `IntervalBase`, `Expression`, `RepeatMark` and
+    others music21 puts between an element and `Music21Object`. The 21
+    pairs of classes `issubclass` answers otherwise than music21 for are
+    listed in the wheel tests' `_HIERARCHY_GAPS`.
+
+15. **what `provide_music21()` cannot provide yet.** `converter`,
+    `corpus`, `common`, `environment`, `musicxml` and `tinyNotation` are
+    not provided at all. Partial, in music21's public names: `stream` 11
+    of 21, `note` 10 of 18, `metadata` 12 of 20, `layout` 6 of 22,
+    `voiceLeading` 8 of 20, `sieve` 8 of 26 (`generate_homes.py
+    --coverage`, 1,059 of 1,902 in all). Five names are placed where
+    music21 lacks them: `metadata.MetadataException`,
+    `omr.correctors.OmrException`, `tsvConverter.TsvException`,
+    `makeNotation.MakeNotationException` and `sieve.Primes`. A provided score's metadata names its software as
+    `music21_rs` and its version.
+
+16. **braille segments: what is still music21's or differs.**
+    `splitMeasure` is music21's; a grouping split in two does not rebeam
+    the objects' `beams`; a standalone object's braille marks go on its
+    editorial; on one piano score the parts iterate in another order than
+    music21's at equal offsets after transcribing.
+
+17. **`Trigram.makeWords`, `likely` and `lut` are unported in the
+    wheel.** They answer at random, and porting them needs the counts kept
+    in insertion order.
 
 ## closed
+
+- **appending to a wheel stream keeps its end** (was 10). 2,000 appends
+  take 3.1ms where music21's take 17.7ms, from 47.8ms: two counts stand
+  in for music21's `informSites`. `replace` now puts the replacement
+  after what stands at its offset, and a second insert of one object is
+  refused with music21's `StreamException`.
+- **a priority changed after insertion re-sorts a wheel stream** (was
+  13), through the same count; installed classes tell the package's
+  streams first.
 
 - **edits through a handed-out object now reach the crate** for an
   accidental's style colour, a scale's tonic, a metronome mark's

@@ -96,6 +96,17 @@ often is not. it also means a value nobody can answer is refused rather than
 answered wrongly — which is why `ChromaticInterval::new` became fallible and
 why non-finite pitch space, frequencies and tempi are errors.
 
+**untrusted input is fuzzed, and refused with the reader's own error.**
+arithmetic on a number a file gives is checked or saturated, and what
+overflows ends in the error the reader already returns, never a new
+kind. sizes are bounded by `MAX_MEASURES`, which a reader already had,
+plus `MOST_SHARPS` (1000) and `MOST_DOTS` (16), the most a key
+signature and a MuseScore note may carry. `tests/fuzz_readers.rs` runs
+on stable Rust in about nine seconds in CI; deeper runs set
+`MUSIC21_FUZZ_*`. *costs:* a key signature past a thousand sharps is
+refused here, and every reader carries checks a well-formed file
+never needs.
+
 **`#![forbid(unsafe_code)]`.** the crate contains no unsafe Rust, and cannot
 grow any without the attribute coming off. the wheel denies rather than
 forbids it, with exactly one allow, because a pyo3 exception type standing on
@@ -165,6 +176,12 @@ lacks; taking music21's import name before that would break everyone who
 uses both. the reports page's count of ported members is the measure of how
 far off that is.
 
+**language detection ships in the wheel.** `text.LanguageDetector` and
+`Trigram` are the crate's, so the wheel is built with the crate's
+`language-detection` feature: about 0.8 MB more compressed, 1.96 MB more
+`.so`, the price of not asking music21 for it. `Trigram.makeWords` and
+`likely` stay unported, since they answer at random.
+
 **goal: anything built on music21 can run on music21-rs.** a library that
 depends on music21 is written against music21, and its users should be able
 to put music21-rs underneath it without changing it: one switch on their
@@ -175,6 +192,18 @@ music21 installed, for code that never heard of music21-rs. this is what
 `xtask downstream` measures, with harte-library's own suite. *costs:* every
 name kept where music21 keeps it, with music21's signatures, rather than
 where it would sit best in a package of its own.
+
+**without music21 installed, the switch is `provide_music21()`.** an
+import hook answers `music21` and each module of music21's the package
+has classes for, with the package's classes, functions and constants
+under music21's names (`_homes.py`, generated from music21's own
+modules, says where each lives), and refuses any other module by name
+rather than faking it. `MUSIC21_RS_PROVIDE_MUSIC21=1` turns it on for
+code that never imports `music21_rs`. every lookup of music21's own
+state goes through `real_music21()`, which passes a provided module
+over, so the package then does what it does with no music21 at all.
+*costs:* a provided module lacks whatever the package does not port,
+and says so only when the name is asked for.
 
 **the package keeps music21's sites; the crate keeps none.** an element of
 the package's put into one of its streams answers `sites`, `activeSite`,
@@ -208,6 +237,28 @@ references back to what holds an element, though weak ones, and one
 object can stand in two streams at two offsets. derivations are still not
 kept, so a search does not follow one, a spanner is no site of what it
 spans, and the search's sort leaves out music21's `isNotGrace`.
+
+**streams hear of element edits through two global counts.** music21
+tells a stream through `informSites` when a held element's length or
+priority changes; the package keeps two counts instead, one for lengths
+and one for priorities, which an edit to a held note, rest, chord or
+duration bumps. a stream keeps its end and order while the counts it
+read stand, rather than keeping a version on each element or telling
+each of its sites. held notes and durations are marked
+`watched`, so an edit to one no stream holds bumps nothing. *costs:* an
+edit to any held element anywhere makes every stream read its lengths
+again once; music21's own uninstalled objects and Python-written classes
+tell only music21's sites, so they are read afresh each time.
+
+**elements stand on real base classes.** `base.Music21Object`,
+`note.GeneralNote` and `note.NotRest` are pyo3 classes (`base.rs`) that
+the element classes extend as music21's do, not abstract classes they are
+registered with, so subclassing them in Python works and the sites
+members are defined once. installed classes put these before music21's
+own bases, and music21's `groups` and sites members win there. *costs:*
+every element is built through `base::built`, a class with two music21
+bases (`BrailleGrandSegment`) keeps one, and music21's classes in
+between (`ChordBase`, `StreamCore`, `TempoIndication`, ...) are missing.
 
 **installed classes are Python subclasses of the facade and of the class they
 replace.** `install_into_music21()` builds, for each name, a class deriving
@@ -430,6 +481,13 @@ column means "nobody wrote this" and nothing else.
 **the report distinguishes the crate from the wheel.** 29 members answer in
 the wheel with no crate function, and the page counts them, so that "the
 crate is a superset of the wheel" is not assumed from a single ported figure.
+
+**corpus sweeps are cut into several tests, the heaviest scores one to a
+test.** nextest shares tests out among CI's runners by a hash of their
+names, which balances only tests of about one size, and one sweep over a
+corpus was ten minutes of one runner. `musicxml_common::dealt` deals the
+scores out and `HEAVY` gives the slowest each a test of its own. *costs:*
+more test names, and a score's place in the deal is a list kept by hand.
 
 ## packaging and tooling
 

@@ -2,6 +2,75 @@
 
 `harte` 0.12.0 depends on this release.
 
+## added
+
+- **The wheel's elements keep music21's sites.** Put into one of the
+  package's streams, an element answers `offset`, `activeSite`, `sites`,
+  `getOffsetBySite`, `setOffsetBySite`, `getOffsetInHierarchy`,
+  `getContextByClass`, `contextSites`, `next`, `previous`, `beat`,
+  `beatStr`, `beatStrength`, `beatDuration` and `measureNumber` as
+  music21's does, where each raised `AttributeError`. New `Sites`,
+  `SitesException` and `Music21ObjectException`. Derivations are not kept
+  yet, and a spanner is not a site of its notes.
+- **The wheel's elements stand on music21's base classes**:
+  `base.Music21Object`, and `note.GeneralNote` and `note.NotRest` beneath
+  notes, rests and chords, as in music21, so `isinstance`, `issubclass`
+  and subclassing them work. Elements carry music21's `groups`. New
+  `Groups`, `ElementException`, `GroupException` and `stream.System`; the
+  crate gains `StreamKind::System`.
+- **`provide_music21()`** (or `MUSIC21_RS_PROVIDE_MUSIC21=1`, which the
+  wheel's `music21_rs_provide.pth` reads at start-up): code that imports
+  music21 runs on music21-rs where music21 is not installed. It places the
+  package's classes, functions and constants in the music21 modules that
+  keep them, and the names music21 imports into a module
+  (`stream.StreamException`, `metadata.Contributor`); 1,059 of music21's
+  1,902 public names in those modules are answered. harte-library's suite
+  gives the same results this way as on music21. The packages expose
+  `__version__`.
+- **`braille.segment` is ported**: `findSegments` and the segment classes
+  hold the caller's own objects and write onto them what music21 writes.
+  The crate's `SegmentTranscriber` writes a segment step by step, with new
+  `KeyPair`, `affinity_code` and `needs_split_for`.
+- **The wheel detects languages**: it carries the crate's
+  `language-detection` feature (0.8 MB more wheel), and `LanguageDetector`
+  and `Trigram` are the crate's, installed over music21's `text` module;
+  the `LanguageFeature` extractor (TX1) is answered by the crate. In the
+  crate `Trigram` no longer needs the feature, and gains `add_text`,
+  `add_words` and `known_trigram`.
+- `repeat::Expander` plays a part's repeats out step by step and maps each
+  played measure to its source.
+- Spanners are editable by position: `add_spanned_elements`,
+  `insert_first_spanned_element`, `has_spanned_element` and
+  `replace_spanned_element`.
+- `TimespanTree::all_parts`, `to_partwise_timespan_trees`,
+  `remove_timespan` and `remove_timespan_list`.
+- The chord reducer's steps are public: `MeasureSlice`, `measure_slices`,
+  `slice_weights`, `keep_heaviest_slices`, `is_consonant` and
+  `interval_class_set`; the wheel's `ChordReducer` gains `isConsonant`.
+- `music21::guide`, music21's idioms and the crate's way of writing each;
+  examples `musicxml_analysis` and `midi_transpose`; criterion benchmarks
+  in `benches/scores.rs` (`cargo bench --features musicxml`).
+- A fuzz harness on stable Rust, `tests/fuzz_readers.rs`, runs 17 readers
+  on mutated seeds in about nine seconds in CI and further through
+  `MUSIC21_FUZZ_*`.
+
+## changed
+
+- **A wheel stream refuses a second insert of one object** with music21's
+  `StreamException`, from `insert`, `append`, `insertAndShift`,
+  `insertIntoNoteOrChord` and its constructor; it let the object stand
+  twice.
+- A wheel stream keeps its end until a length it holds changes: 2,000
+  appends take 3.1ms, where music21's take 17.7ms.
+- A wheel `Measure`'s repr names its offset, as music21's does.
+- Readers refuse key signatures past 1,000 sharps, MuseScore notes with
+  more than 16 dots, and RomanText, DCML and Clercq-Temperley files that
+  would make more than `MAX_MEASURES` measures. DCML and Clercq-Temperley
+  parts are built in one pass: 20,000 measures took 175s and take under
+  0.2s.
+- The parity suite's corpus sweeps are cut into balanced tests, so no CI
+  shard waits on one long sweep.
+
 ## fixed
 
 - **The music21 submodule follows the fork's master 26cfcc18**
@@ -23,6 +92,21 @@
     reports music21's implied scale, the minor key on that tonic
     (`useImpliedScale` is true), until its key is set again;
     `_setImpliedScaleFromKey` is new.
+- **Readers no longer panic, hang or run out of memory on malformed
+  input.** The fuzz harness found 26 crashes, all fixed: MusicXML 7, DCML
+  4, Clercq-Temperley 3, ABC 2, MEI 2, MuseScore 2, RomanText 2, MIDI 1,
+  Capella 1 and MuseData 1. Arithmetic on what a file says is checked or
+  saturated and ends in the reader's own error.
+- **A priority changed after insertion re-sorts a wheel stream**, as
+  music21's `informSites` does; installed classes tell the package's
+  streams first.
+- A wheel stream's `replace` puts the replacement after what else stands
+  at its offset, as newly inserted, where it kept the old element's place.
+- The wheel's `RomanNumeral` for an augmented sixth over a secondary
+  numeral reports the secondary key in minor: `Ger65/V` in C has
+  `secondaryRomanNumeralKey` g minor, where it said G major.
+- The web example's Harte page labels the chord symbol "from the pitches"
+  and shows it beside the label's prettified form.
 
 # music21-rs 0.18.1
 
