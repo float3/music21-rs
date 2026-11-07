@@ -1430,7 +1430,7 @@ SpannerBundle = "the collection music21 keeps a stream's spanners in; a crate st
 python = "spanner.py"
 name = "Spanner"
 rust = ["src/spanner.rs"]
-note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back."
+note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back, and it is edited by position: an element is joined once, as music21 joins an object once."
 
 [class.renames]
 getSpannedElements = "spanned"
@@ -1440,10 +1440,6 @@ purgeOrphans = "drops the elements no stream holds any more, which only a spanne
 purgeLocations = "drops the sites it remembers, and it remembers none"
 getSpannedElementsByClass = "the elements of a class among them, which the stream holding them answers"
 getSpannedElementIds = "Python object ids"
-addSpannedElements = "adds elements by object; `Spanner::new` takes the positions it joins"
-insertFirstSpannedElement = "puts an element first by object"
-hasSpannedElement = "whether an element is among them, which is `spanned().contains`"
-replaceSpannedElement = "swaps one element for another by object"
 fill = "fills in every element between the first and the last, which asks the stream what stands between them"
 getFirst = "the first element itself; `spanned` gives its position and the stream hands back what stands there"
 getLast = "the last element itself, likewise"
