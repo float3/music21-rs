@@ -2045,6 +2045,10 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Not music21's: what the harte-rs package builds its `Harte` on.
     hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
+    // What `provide_music21` builds music21's modules from: the names each
+    // module of music21's is installed under, and the package's version.
+    m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.
     let mut names: Vec<String> = m

@@ -8831,3 +8831,90 @@ def test_transcribe_note_grouping_matches_music21s():
         assert m.transcribeNoteGrouping(ours, showLeadingOctave=show) == (
             note_grouping.transcribeNoteGrouping(theirs, showLeadingOctave=show)
         )
+
+
+def _run_without_music21(code, cwd, **environment):
+    """Runs `code` in an interpreter that can import this package and not
+    music21: no site-packages, and only the directory the package is in on
+    its path."""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    if (package_root / "music21").exists():
+        pytest.skip("music21 is installed beside this package")
+    env = dict(os.environ, PYTHONPATH=str(package_root), **environment)
+    return subprocess.run(
+        [sys.executable, "-S", "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def test_provide_music21_answers_import_music21(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import music21
+print(music21.pitch.Pitch('C#4'))
+from music21 import note, chord, stream
+from music21.chord import Chord, ChordException
+s = stream.Stream([note.Note('C'), chord.Chord('E4 G4')])
+print(len(s), s.highestOffset, Chord('C4 E4 G4').commonName)
+print(issubclass(ChordException, music21.exceptions21.Music21Exception))
+print(music21.__version__ == music21_rs.__version__, music21.__music21_rs__)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "C#4",
+        "2 1.0 major triad",
+        "True",
+        "True True",
+    ]
+
+
+def test_provide_music21_is_switched_on_by_the_environment(tmp_path):
+    code = "import music21_rs, music21; print(music21.note.Note('D'))"
+    done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "<music21.note.Note D>"
+
+    # And nothing answers for music21 unless asked.
+    done = _run_without_music21(code, tmp_path)
+    assert "ModuleNotFoundError: No module named 'music21'" in done.stderr
+
+
+def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import music21
+for statement in ('import music21.corpus', 'from music21 import converter'):
+    try:
+        exec(statement)
+    except ModuleNotFoundError as error:
+        print(str(error).split(';')[0])
+print(hasattr(music21, 'corpus'), 'chord' in music21.__dir__())
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "music21-rs does not provide music21.corpus",
+        "music21-rs does not provide music21.converter",
+        "False True",
+    ]
+
+
+def test_provide_music21_refuses_where_music21_is_installed():
+    pytest.importorskip("music21.stream")
+    code = """
+import music21_rs
+try:
+    music21_rs.provide_music21()
+except ImportError as error:
+    print(str(error).split(',')[0])
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.startswith("music21 is installed")
