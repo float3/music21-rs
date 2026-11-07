@@ -24,7 +24,7 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::{Error, Result};
 use crate::key::{Key, KeySignature, convert_key_string_to_music21_key_string};
-use crate::makenotation::{make_accidentals, make_beams, op_frac, sorted_events};
+use crate::makenotation::{MAX_MEASURES, make_accidentals, make_beams, op_frac, sorted_events};
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
 use crate::notation::{Tie, TieType};
@@ -615,6 +615,13 @@ impl Translator {
         let is_copy = data.starts_with('=');
         let next = i64::from(self.last_measure_number) + 1;
         if i64::from(numbers[0]) > next && self.previous.is_some() {
+            let left_out = i64::from(numbers[0]) - next;
+            if left_out + self.measures.len() as i64 > MAX_MEASURES as i64 {
+                return Err(roman_text_error(format!(
+                    "measure {} would make more than {MAX_MEASURES} measures",
+                    numbers[0]
+                )));
+            }
             // Measures the file leaves out hold the last chord still.
             for number in self.last_measure_number + 1..numbers[0] {
                 let mut fill = Measure {
@@ -1519,5 +1526,12 @@ mod tests {
     #[test]
     fn a_measure_after_the_largest_number_is_read() {
         assert!(from_roman_text("m2147483647 C: I\nm1 I\n").is_ok());
+    }
+
+    #[test]
+    fn a_gap_of_more_measures_than_a_stream_takes_is_refused() {
+        let gap = crate::makenotation::MAX_MEASURES + 2;
+        assert!(from_roman_text(&format!("m1 C: I\nm{gap} V\n")).is_err());
+        assert!(from_roman_text("m1 C: I\nm1000 V\n").is_ok());
     }
 }
