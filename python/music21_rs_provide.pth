@@ -1,0 +1,4 @@
+# music21-rs puts this in site-packages, and Python runs the line below at
+# every start-up. It does nothing unless MUSIC21_RS_PROVIDE_MUSIC21=1, which
+# answers `import music21` from music21-rs in code that never imports it.
+import os; os.environ.get("MUSIC21_RS_PROVIDE_MUSIC21") == "1" and __import__("music21_rs")

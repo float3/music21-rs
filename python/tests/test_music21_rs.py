@@ -8992,3 +8992,27 @@ def test_music21_homes_are_where_music21_keeps_them():
         [sys.executable, str(script), "--check"], capture_output=True, text=True
     )
     assert done.returncode == 0, done.stderr
+
+
+def test_pth_file_provides_music21_without_importing_the_package(tmp_path):
+    """The `.pth` file the wheel puts in site-packages, read as Python
+    reads one at start-up: it answers `import music21` only when the
+    environment asks."""
+    pth = pathlib.Path(__file__).parents[1] / "music21_rs_provide.pth"
+    site_packages = tmp_path / "site-packages"
+    site_packages.mkdir()
+    (site_packages / pth.name).write_text(pth.read_text())
+    code = f"""
+import site, sys
+site.addsitedir({str(site_packages)!r})
+print('music21_rs' in sys.modules)
+import music21
+print(music21.note.Note('E'))
+"""
+    done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["True", "<music21.note.Note E>"]
+
+    done = _run_without_music21(code, tmp_path)
+    assert done.stdout.splitlines()[0] == "False"
+    assert "No module named 'music21'" in done.stderr

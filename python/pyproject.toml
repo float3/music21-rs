@@ -31,3 +31,8 @@ features = ["extension-module"]
 # exceptions are the names this package hands out lazily instead.
 module-name = "music21_rs.music21_rs"
 python-source = "pysrc"
+# Lands in site-packages, where Python reads it at start-up: with
+# MUSIC21_RS_PROVIDE_MUSIC21=1 it answers `import music21` from this package
+# for code that never imports music21_rs. `maturin develop` installs an
+# editable package and leaves it out.
+include = [{ path = "music21_rs_provide.pth", format = "wheel" }]

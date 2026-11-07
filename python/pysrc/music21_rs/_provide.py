@@ -6,7 +6,8 @@ Without it, `provide_music21()` stands in for it: it adds an import hook that
 answers `music21` and each of music21's modules this package has classes or
 functions for with a module built from them, under music21's names. Nothing
 happens until it is called, or until `music21_rs` is imported with
-`MUSIC21_RS_PROVIDE_MUSIC21=1` in the environment.
+`MUSIC21_RS_PROVIDE_MUSIC21=1` in the environment; the `.pth` file the wheel
+puts in site-packages imports it then.
 
 Only what the package has is answered. A module of music21's it has nothing
 for raises `ModuleNotFoundError` saying so, rather than being faked, and a
