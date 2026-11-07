@@ -1609,7 +1609,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             self.measure.suffix = Some(rest);
         }
         let last = self.part.last_measure_number;
-        if self.measure.suffix.as_deref() == Some("X") && self.measure.number != last + 1 {
+        if self.measure.suffix.as_deref() == Some("X")
+            && Some(self.measure.number) != last.checked_add(1)
+        {
             let mut suffix = format!("X{}", self.measure.number);
             if let Some(before) = &self.part.last_number_suffix {
                 suffix = format!("{before}{suffix}");
@@ -2156,8 +2158,12 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 .iter()
                 .find(|(held, _)| *held == staff)
                 .and_then(|(_, clef)| clef.lowest_line().filter(|_| clef.places_pitches()))
-                .map_or(35, |lowest| lowest + 4);
-            rest.set_step_shift(displayed.diatonic_note_number() - middle);
+                .map_or(35, |lowest| lowest.saturating_add(4));
+            let shift = displayed
+                .checked_diatonic_note_number()
+                .and_then(|position| position.checked_sub(middle))
+                .ok_or_else(|| import_error(format!("a rest shown at {name} is too far off")))?;
+            rest.set_step_shift(shift);
         }
         let mut general = General::default();
         let uid = 0;
@@ -4081,6 +4087,22 @@ mod tests {
              <midi-program>-2147483648</midi-program></midi-instrument>",
         );
         assert!(from_musicxml(&document).is_ok());
+    }
+
+    #[test]
+    fn a_rest_shown_past_the_last_octave_is_refused() {
+        let rest = "<note><rest><display-step>C</display-step>\
+                    <display-octave>2147483647</display-octave></rest>\
+                    <duration>1</duration><type>quarter</type></note>";
+        assert!(from_musicxml(&score(&format!("<measure number=\"1\">{rest}</measure>"))).is_err());
+    }
+
+    #[test]
+    fn a_measure_after_the_largest_number_is_read() {
+        let measures = format!(
+            "<measure number=\"2147483647\">{NOTE}</measure><measure number=\"5X\">{NOTE}</measure>"
+        );
+        assert!(from_musicxml(&score(&measures)).is_ok());
     }
 
     #[test]
