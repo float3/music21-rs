@@ -347,7 +347,7 @@ fn delay_from_any(value: &Bound<'_, PyAny>) -> PyResult<OrnamentDelay> {
 /// One of music21's `OrnamentDelay` members, or the text it stands for
 /// where music21 is not there to ask.
 fn delay_member<'py>(py: Python<'py>, member: &str, value: &str) -> PyResult<Bound<'py, PyAny>> {
-    match py.import("music21.common.enums") {
+    match crate::real_music21(py, "music21.common.enums") {
         Ok(enums) => enums.getattr("OrnamentDelay")?.getattr(member),
         Err(_) => Ok(PyString::new(py, value).into_any()),
     }
@@ -1335,8 +1335,7 @@ impl Trill {
                 .len()?
                 == 0
         {
-            let extension = py
-                .import("music21.expressions")?
+            let extension = crate::real_music21(py, "music21.expressions")?
                 .getattr("TrillExtension")?
                 .call1((noteList,))?;
             spanners.append(extension)?;

@@ -405,8 +405,7 @@ impl AbstractScale {
         pitchList: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         let py = slf.py();
-        let music21_note = py
-            .import("music21.note")
+        let music21_note = crate::real_music21(py, "music21.note")
             .and_then(|module| module.getattr("Note"))
             .ok();
         let real = pyo3::types::PyList::empty(py);
@@ -497,7 +496,7 @@ impl AbstractScale {
     /// network to give.
     #[getter]
     fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let module = py.import("music21.scale.intervalNetwork")?;
+        let module = crate::real_music21(py, "music21.scale.intervalNetwork")?;
         let Some(scale_type) = self.scale_type else {
             // A pattern with no name is the network music21's own
             // `AbstractCyclicalScale` and `AbstractOctaveRepeatingScale`
@@ -796,8 +795,7 @@ impl ConcreteScale {
         // music21's own class where music21 is there to be asked, since its
         // own code and its own tests catch that one by name.
         let py = slf.py();
-        if let Ok(class) = py
-            .import("music21.scale.intervalNetwork")
+        if let Ok(class) = crate::real_music21(py, "music21.scale.intervalNetwork")
             .and_then(|module| module.getattr("IntervalNetworkException"))
         {
             return Err(PyErr::from_value(class.call1((said,))?));
@@ -1427,8 +1425,7 @@ impl ConcreteScale {
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         let steps = slf.borrow().scala_steps(direction)?;
-        let data = py
-            .import("music21.scale.scala")?
+        let data = crate::real_music21(py, "music21.scale.scala")?
             .getattr("ScalaData")?
             .call0()?;
         data.call_method1("setIntervalSequence", (steps,))?;

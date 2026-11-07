@@ -5337,9 +5337,8 @@ fn edited<'py>(
 /// The class a stream of this shape is built as: music21's own where
 /// music21 can be asked, and this package's where it cannot.
 pub(crate) fn stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyAny>> {
-    if let Ok(found) = py
-        .import("music21.stream")
-        .and_then(|module| module.getattr(name))
+    if let Ok(found) =
+        crate::real_music21(py, "music21.stream").and_then(|module| module.getattr(name))
     {
         return Ok(found);
     }
@@ -5362,7 +5361,7 @@ fn wheel_stream_class<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, P
 /// may hand over objects of either kind whatever has been installed.
 pub(crate) fn music21_holds(object: &Bound<'_, PyAny>) -> bool {
     let py = object.py();
-    py.import("music21.base")
+    crate::real_music21(py, "music21.base")
         .and_then(|module| module.getattr("Music21Object"))
         .and_then(|class| object.is_instance(&class))
         .unwrap_or(false)
@@ -5429,7 +5428,7 @@ fn barline_object<'py>(
     whose: Whose,
 ) -> PyResult<Bound<'py, PyAny>> {
     if whose == Whose::Music21
-        && let Ok(module) = py.import("music21.bar")
+        && let Ok(module) = crate::real_music21(py, "music21.bar")
     {
         return match barline.repeat_direction() {
             Some(direction) => {
@@ -5523,7 +5522,9 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 StreamKind::Opus => "Opus",
                 _ => "Stream",
             };
-            py.import("music21.stream")?.getattr(name)?.call0()?
+            crate::real_music21(py, "music21.stream")?
+                .getattr(name)?
+                .call0()?
         }
     };
     let mut objects = Vec::new();
@@ -5820,16 +5821,14 @@ fn element_object_as<'py>(
         // music21's own on music21's streams, which install nothing over
         // it; the package's own on the package's.
         StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
-            let made = py
-                .import("music21.humdrum.spineParser")?
+            let made = crate::real_music21(py, "music21.humdrum.spineParser")?
                 .getattr("GlobalComment")?
                 .call1((said.comment(),))?;
             made.setattr("priority", said.priority())?;
             made
         }
         StreamElement::MiscTandem(tandem) if whose == Whose::Music21 => {
-            let made = py
-                .import("music21.humdrum.spineParser")?
+            let made = crate::real_music21(py, "music21.humdrum.spineParser")?
                 .getattr("MiscTandem")?
                 .call1((tandem.tandem(),))?;
             made.setattr("priority", tandem.priority())?;
@@ -6091,9 +6090,8 @@ pub(crate) fn variant_object<'py>(
     variant: &music21::variant::Variant,
     whose: Whose,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
-    let Ok(class) = py
-        .import("music21.variant")
-        .and_then(|module| module.getattr("Variant"))
+    let Ok(class) =
+        crate::real_music21(py, "music21.variant").and_then(|module| module.getattr("Variant"))
     else {
         return Ok(None);
     };

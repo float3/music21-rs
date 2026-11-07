@@ -69,7 +69,7 @@ fn direction_object<'py>(
         Some(RunDirection::Ascending) => ("ASCENDING", "ascending"),
         Some(RunDirection::Descending) => ("DESCENDING", "descending"),
     };
-    match py.import("music21.scale.intervalNetwork") {
+    match crate::real_music21(py, "music21.scale.intervalNetwork") {
         Ok(network) => network.getattr("Direction")?.getattr(member),
         Err(_) => Ok(PyString::new(py, text).into_any()),
     }

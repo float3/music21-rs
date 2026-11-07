@@ -187,8 +187,7 @@ pub(crate) fn change_ops(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     {
         return Ok(installed);
     }
-    if let Ok(found) = py
-        .import("music21.alpha.analysis.aligner")
+    if let Ok(found) = crate::real_music21(py, "music21.alpha.analysis.aligner")
         .and_then(|module| module.getattr("ChangeOps"))
     {
         return Ok(found);
@@ -766,9 +765,8 @@ fn metadata_class(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     if let Some(installed) = crate::installed_class(py, "music21.metadata", "Metadata") {
         return Ok(installed);
     }
-    if let Ok(found) = py
-        .import("music21.metadata")
-        .and_then(|module| module.getattr("Metadata"))
+    if let Ok(found) =
+        crate::real_music21(py, "music21.metadata").and_then(|module| module.getattr("Metadata"))
     {
         return Ok(found);
     }

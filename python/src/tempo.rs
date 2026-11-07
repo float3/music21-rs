@@ -552,8 +552,7 @@ impl MetronomeMark {
             }
             (text.to_string(), mark.number_implicit())
         };
-        let expression = py
-            .import("music21.expressions")?
+        let expression = crate::real_music21(py, "music21.expressions")?
             .getattr("TextExpression")?
             .call1((text,))?;
         // music21's `applyTextFormatting`: a tempo word is written in bold,
@@ -694,8 +693,7 @@ impl TempoText {
         if let Some(expression) = existing {
             return expression.bind(py).setattr("content", text);
         }
-        let Ok(class) = py
-            .import("music21.expressions")
+        let Ok(class) = crate::real_music21(py, "music21.expressions")
             .and_then(|module| module.getattr("TextExpression"))
         else {
             return Ok(());
@@ -1497,8 +1495,7 @@ fn sounding_mark(found: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 /// sits in, or `None` where there is none.
 fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = holder.py();
-    let search = py
-        .import("music21.common.enums")?
+    let search = crate::real_music21(py, "music21.common.enums")?
         .getattr("ElementSearch")?
         .getattr("BEFORE_OFFSET")?;
     let arguments = PyDict::new(py);

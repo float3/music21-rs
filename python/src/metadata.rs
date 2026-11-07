@@ -757,8 +757,7 @@ fn unknown_name(name: &str) -> PyErr {
 /// version of anybody else's -- so the facade adds it, and where there is
 /// no music21 to ask, this package's own version stands there instead.
 fn software_line(py: Python<'_>) -> String {
-    match py
-        .import("music21")
+    match crate::real_music21(py, "music21")
         .and_then(|module| module.getattr("__version__"))
         .and_then(|version| Ok(version.str()?.to_string()))
     {

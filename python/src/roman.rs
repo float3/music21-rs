@@ -472,7 +472,7 @@ fn key_and_octave(value: Option<&Bound<'_, PyAny>>) -> PyResult<(RsKey, Option<i
 /// which is its own machinery and not a key.
 fn cache_key_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
     let py = value.py();
-    let Ok(roman) = py.import("music21.roman") else {
+    let Ok(roman) = crate::real_music21(py, "music21.roman") else {
         return Ok(());
     };
     let is_key = value
@@ -492,7 +492,7 @@ fn cache_key_object(value: &Bound<'_, PyAny>) -> PyResult<()> {
 
 /// The reading, as music21's own `Minor67Default` member.
 fn minor_default(py: Python<'_>, reading: RsMinor67Default) -> PyResult<Py<PyAny>> {
-    let Ok(roman) = py.import("music21.roman") else {
+    let Ok(roman) = crate::real_music21(py, "music21.roman") else {
         return Ok(py.None());
     };
     let name = match reading {

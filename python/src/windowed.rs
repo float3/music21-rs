@@ -276,7 +276,7 @@ fn is_discrete(py: Python<'_>, error: &PyErr) -> bool {
     if error.is_instance_of::<crate::discrete::DiscreteAnalysisException>(py) {
         return true;
     }
-    py.import("music21.analysis.discrete")
+    crate::real_music21(py, "music21.analysis.discrete")
         .and_then(|module| module.getattr("DiscreteAnalysisException"))
         .is_ok_and(|class| error.is_instance(py, &class))
 }

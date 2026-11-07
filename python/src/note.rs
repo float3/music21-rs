@@ -127,7 +127,7 @@ pub(crate) fn instrument_for_note<'py>(
         return Ok(Some(stored));
     }
     let py = note.py();
-    let Ok(instrument) = py.import("music21.instrument") else {
+    let Ok(instrument) = crate::real_music21(py, "music21.instrument") else {
         return Ok(None);
     };
     let mut found = py.None().into_bound(py);

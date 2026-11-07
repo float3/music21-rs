@@ -107,7 +107,7 @@ fn warn_sharps_none(py: Python<'_>) -> PyResult<()> {
 /// music21's warning that a tonic given beside a mode says nothing: the mode
 /// alone decides the key, so the tonic is dropped.
 fn warn_ignored_tonic(py: Python<'_>, tonic: &str) -> PyResult<()> {
-    let Ok(module) = py.import("music21.key") else {
+    let Ok(module) = crate::real_music21(py, "music21.key") else {
         return Ok(());
     };
     let Ok(category) = module.getattr("KeyWarning") else {
@@ -1356,7 +1356,7 @@ fn sharps_to_pitch_facade<'py>(py: Python<'py>, sharpCount: i32) -> PyResult<Bou
 fn sharps_to_pitch_cache<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
     // Where music21 keeps it once these are installed, since that is the
     // dictionary its own doctest reads back; the facade module's otherwise.
-    if let Ok(key) = py.import("music21.key")
+    if let Ok(key) = crate::real_music21(py, "music21.key")
         && let Ok(cache) = key.getattr("_sharpsToPitchCache")
         && let Ok(cache) = cache.cast_into::<PyDict>()
     {

@@ -416,13 +416,45 @@ pub(crate) fn holdable_class<'py>(
         .ok()?
         .getattr(name)
         .ok()?;
-    let original = modules.get_item(module).ok()?.getattr(name).ok()?;
+    let module = modules.get_item(module).ok()?;
+    if is_provided(&module) {
+        return None;
+    }
+    let original = module.getattr(name).ok()?;
     install_helper(py)
         .ok()?
         .getattr("holdable_class")
         .ok()?
         .call1((facade, original))
         .ok()
+}
+
+/// music21's own module of this name, and an `ImportError` where music21
+/// has none to give.
+///
+/// Every member that asks music21 for something of its own -- `roman`'s
+/// cache of keys, `base`'s `Groups` -- asks through this. Where
+/// `provide_music21` answers `import music21`, the module that comes back
+/// is this package's classes and not music21's, and has none of what was
+/// asked for; it is passed over, so the member does what it does with no
+/// music21 at all.
+pub(crate) fn real_music21<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    let module = py.import(name)?;
+    if is_provided(&module) {
+        return Err(pyo3::exceptions::PyImportError::new_err(format!(
+            "{name} is music21-rs's own, provided for music21"
+        )));
+    }
+    Ok(module)
+}
+
+/// Whether a module is one `provide_music21` built rather than music21's.
+fn is_provided(module: &Bound<'_, PyAny>) -> bool {
+    module
+        .getattr("__spec__")
+        .and_then(|spec| spec.getattr("origin"))
+        .and_then(|origin| origin.extract::<String>())
+        .is_ok_and(|origin| origin == "music21-rs")
 }
 
 /// music21's own `editorial` for an object that really is one of its
@@ -441,7 +473,7 @@ pub(crate) fn music21_editorial<'py>(
     object: &Bound<'py, PyAny>,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = object.py();
-    let Ok(base) = py.import("music21.base") else {
+    let Ok(base) = crate::real_music21(py, "music21.base") else {
         return Ok(None);
     };
     let class = base.getattr("Music21Object")?;

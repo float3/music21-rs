@@ -8905,6 +8905,24 @@ print(hasattr(music21, 'corpus'), 'chord' in music21.__dir__())
     ]
 
 
+def test_provided_music21_runs_the_packages_own_lookups(tmp_path):
+    """The package asks music21's modules for what music21 keeps in them,
+    such as `roman`'s cache of keys; a provided module is not music21's,
+    and has to be passed over as if music21 were not there."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import key, roman
+print(roman.RomanNumeral('V7', key.Key('G')).pitches)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == (
+        "(<music21.pitch.Pitch D5>, <music21.pitch.Pitch F#5>, "
+        "<music21.pitch.Pitch A5>, <music21.pitch.Pitch C6>)"
+    )
+
+
 def test_provide_music21_refuses_where_music21_is_installed():
     pytest.importorskip("music21.stream")
     code = """

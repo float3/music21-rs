@@ -270,8 +270,7 @@ impl Tuplet {
             return Ok(None);
         };
         let ours = DurationTuple::of(kind, dots);
-        let theirs = py
-            .import("music21.duration")
+        let theirs = crate::real_music21(py, "music21.duration")
             .and_then(|module| module.getattr("DurationTuple"))
             .ok()
             .filter(|class| !class.is(py.get_type::<DurationTuple>()));

@@ -404,8 +404,7 @@ impl VoiceLeadingQuartet {
         #[pyo3(from_py_with = crate::truthy)] allowAntiParallel: bool,
     ) -> PyResult<Py<PyAny>> {
         let motion = self.inner.motion_type(allowAntiParallel);
-        Ok(py
-            .import("music21.voiceLeading")?
+        Ok(crate::real_music21(py, "music21.voiceLeading")?
             .getattr("MotionType")?
             .call1((motion.as_str(),))?
             .unbind())

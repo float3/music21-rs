@@ -115,8 +115,7 @@ fn figure_and_kind(py: Python<'_>, inChord: &Bound<'_, PyAny>) -> PyResult<(Stri
     }
     // music21's live table where there is a music21 to ask, since
     // `changeAbbreviationFor` edits it; the crate's own where there is not.
-    let abbreviation = py
-        .import("music21.harmony")
+    let abbreviation = crate::real_music21(py, "music21.harmony")
         .and_then(|harmony| harmony.getattr("getAbbreviationListGivenChordType"))
         .and_then(|lookup| lookup.call1((figure.kind,)))
         .and_then(|list| list.get_item(0))
@@ -1332,8 +1331,7 @@ pub(crate) fn crate_value(slf: &Bound<'_, ChordSymbol>) -> PyResult<RsChordSymbo
 /// have added to with `addNewChordSymbol`: a root and exactly one of the
 /// abbreviations music21 now holds for a kind the crate's table has not got.
 fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
-    let Ok(table) = py
-        .import("music21.harmony")
+    let Ok(table) = crate::real_music21(py, "music21.harmony")
         .and_then(|harmony| harmony.getattr("CHORD_TYPES"))
     else {
         return Ok(None);
@@ -1375,8 +1373,7 @@ fn live_kind(py: Python<'_>, figure: &str) -> PyResult<Option<RsChordSymbol>> {
 /// crate's own where not.
 fn live_notation(py: Python<'_>, kind: &str) -> Option<String> {
     let resolved = music21::chordsymbol::resolve_kind_alias(kind);
-    match py
-        .import("music21.harmony")
+    match crate::real_music21(py, "music21.harmony")
         .and_then(|harmony| harmony.getattr("CHORD_TYPES"))
     {
         Ok(table) => table
@@ -1500,7 +1497,7 @@ impl NoChord {
 /// gives, since `changeAbbreviationFor` edits it, or the crate's own where
 /// there is no music21 to ask.
 fn abbreviation_for(py: Python<'_>, kind: &str) -> String {
-    py.import("music21.harmony")
+    crate::real_music21(py, "music21.harmony")
         .and_then(|harmony| harmony.getattr("getAbbreviationListGivenChordType"))
         .and_then(|lookup| lookup.call1((kind,)))
         .and_then(|list| list.get_item(0))

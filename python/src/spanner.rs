@@ -104,8 +104,7 @@ impl Spanner {
     /// whole of what `getSpannerSites` reads.
     pub(crate) fn refresh_storage(slf: &Bound<'_, Self>) -> PyResult<()> {
         let py = slf.py();
-        let Ok(class) = py
-            .import("music21.stream")
+        let Ok(class) = crate::real_music21(py, "music21.stream")
             .and_then(|module| module.getattr("SpannerStorage"))
         else {
             return Ok(());
@@ -526,8 +525,7 @@ impl Spanner {
                 .bind(py)
                 .call_method("purgeLocations", (), Some(&keywords))?;
         }
-        if let Ok(class) = py
-            .import("music21.base")
+        if let Ok(class) = crate::real_music21(py, "music21.base")
             .and_then(|module| module.getattr("Music21Object"))
         {
             class
@@ -549,8 +547,7 @@ impl Spanner {
                 .bind(py)
                 .call_method1("purgeOrphans", (excludeStorageStreams,))?;
         }
-        if let Ok(class) = py
-            .import("music21.base")
+        if let Ok(class) = crate::real_music21(py, "music21.base")
             .and_then(|module| module.getattr("Music21Object"))
         {
             class

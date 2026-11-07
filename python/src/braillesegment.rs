@@ -78,7 +78,7 @@ pub struct BrailleElementGrouping {
 /// which it builds on first use and shares between groupings, and this
 /// package's own key and meter where music21 cannot be asked.
 fn grouping_globals(py: Python<'_>) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
-    if let Ok(module) = py.import("music21.braille.segment") {
+    if let Ok(module) = crate::real_music21(py, "music21.braille.segment") {
         module.call_method0("setGroupingGlobals")?;
         let globals = module.getattr("GROUPING_GLOBALS")?;
         let key = globals.get_item("keySignature")?;

@@ -156,8 +156,7 @@ impl Searched {
 /// An empty stream of music21's where music21 can be asked, and of this
 /// package's otherwise: what a run with no container is given.
 fn empty_stream(py: Python<'_>) -> PyResult<Py<PyAny>> {
-    if let Ok(made) = py
-        .import("music21.stream")
+    if let Ok(made) = crate::real_music21(py, "music21.stream")
         .and_then(|module| module.getattr("Stream"))
         .and_then(|class| class.call0())
     {
@@ -909,8 +908,7 @@ fn labelled<'py>(
         // iterable`; the notes are only music21's where something is
         // installed over music21.
         let holds = crate::stream::music21_holds(&first);
-        let line = match py
-            .import("music21.spanner")
+        let line = match crate::real_music21(py, "music21.spanner")
             .and_then(|module| module.getattr("Line"))
             .and_then(|class| {
                 if holds {
