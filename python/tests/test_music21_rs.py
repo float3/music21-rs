@@ -434,6 +434,65 @@ def test_roman_module_functions():
     assert m.correctRNAlterationForMinor((7, 1.0, "#"), m.Key("a")) == (7, 0.0, "")
 
 
+def _numeral_overrides(roman, copy_it):
+    """What a numeral reports after its parsed fields are overwritten and
+    its figure is set again, a key is set, or it is copied."""
+    found = []
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.secondaryRomanNumeral = None
+    rn.figure = "V/V"
+    found.append(repr(rn.secondaryRomanNumeral))
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.frontAlterationAccidental = None
+    rn.figure = "bVI"
+    found.append(rn.frontAlterationAccidental.name)
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.scaleDegree = 2
+    rn.romanNumeralAlone = "x"
+    rn.impliedQuality = "minor"
+    rn.omittedSteps = [3]
+    rn.figure = "V"
+    found.append((rn.scaleDegree, rn.romanNumeralAlone, rn.impliedQuality, rn.omittedSteps))
+    found.append(rn.frontAlterationString)
+    # A figure with no slash leaves an overwritten secondary alone.
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.secondaryRomanNumeral = None
+    rn.figure = "V"
+    found.append(repr(rn.secondaryRomanNumeral))
+    # A key is not a figure: what was written stays.
+    rn = roman.RomanNumeral("bVI", "C")
+    rn.scaleDegree = 2
+    rn.key = "G"
+    found.append(rn.scaleDegree)
+    # Nor is a copy.
+    rn = roman.RomanNumeral("V/V", "C")
+    rn.scaleDegree = 2
+    rn.secondaryRomanNumeral = None
+    rn.frontAlterationAccidental = None
+    copied = copy_it(rn)
+    found.append((copied.scaleDegree, copied.secondaryRomanNumeral))
+    return found
+
+
+def test_setting_a_figure_reparses_what_was_overwritten():
+    """music21's figure setter runs its parsing steps again, so a field a
+    caller overwrote is read off the new figure; its key setter and a copy
+    keep what was written."""
+    expected = [
+        "<music21.roman.RomanNumeral V in C major>",
+        "flat",
+        (5, "V", "major", []),
+        "",
+        "None",
+        2,
+        (2, None),
+    ]
+    assert _numeral_overrides(m, copy.deepcopy) == expected
+    assert _numeral_overrides(m, copy.copy) == expected
+    roman = pytest.importorskip("music21.roman")
+    assert _numeral_overrides(roman, copy.deepcopy) == expected
+
+
 class _Placed:
     """A note or chord at an offset, as a stream would hold it."""
 
@@ -8133,6 +8192,56 @@ def test_a_chord_added_to_sorts_by_staff_position():
     c = m.Chord(["G--3"])
     c.add("F#3")
     assert [p.nameWithOctave for p in c.pitches] == ["F#3", "G--3"]
+
+
+def test_a_stream_sorts_by_the_priority_its_elements_carry():
+    """music21 sorts what stands at one offset by each element's own
+    `priority` before its `classSortOrder`."""
+    first, second = m.GlobalComment("first"), m.GlobalComment("second")
+    second.priority = -1
+    s = m.Stream()
+    s.insert(0, first)
+    s.insert(0, second)
+    assert [c.comment for c in s] == ["second", "first"]
+
+    note = pytest.importorskip("music21.note")
+    stream = pytest.importorskip("music21.stream")
+    orders = []
+    for made in (m.Stream(), stream.Stream()):
+        notes = [note.Note(name) for name in "CDE"]
+        notes[1].priority = -1
+        notes[2].priority = 1
+        for n in notes:
+            made.insert(0, n)
+        orders.append([n.name for n in made])
+    assert orders[0] == orders[1] == ["D", "C", "E"]
+
+
+def test_a_chord_sorted_in_place_moves_its_note_objects_with_it():
+    """The note objects a chord has handed out are reordered as its pitches
+    are, so each still carries the pitch at its place."""
+    c = m.Chord(["G4", "C", "E-4", "D#4", "B#3", "C4"])
+    held = list(c.notes)
+    c.sortDiatonicAscending(inPlace=True)
+    names = ["B#3", "C", "C4", "D#4", "E-4", "G4"]
+    assert [p.nameWithOctave for p in c.pitches] == names
+    assert [n.pitch.nameWithOctave for n in c.notes] == names
+    assert [held.index(n) for n in c.notes] == [4, 1, 5, 3, 2, 0]
+
+
+def test_a_pitch_a_chord_and_a_note_share_reaches_both():
+    """A note built on a pitch a chord handed out keeps that object, as
+    music21's does, so an edit through it reaches the note and the chord,
+    whether or not the note has handed it out since."""
+    for ask in (False, True):
+        c = m.Chord("C4 E4")
+        p = c.pitches[0]
+        n = m.Note(p)
+        if ask:
+            assert n.pitch is p
+        p.octave = 5
+        assert n.nameWithOctave == "C5"
+        assert [x.nameWithOctave for x in c.pitches] == ["C5", "E4"]
 
 
 def test_a_pickled_tuplet_keeps_its_written_value():

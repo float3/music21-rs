@@ -249,6 +249,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
     written files agree; `spannerBundle` does not. The reader also takes a
     count written `3.0`, which music21 refuses.
 
+13. **a priority changed after insertion does not re-sort a wheel
+    stream.** music21 re-sorts through `informSites`; the wheel's stream
+    keeps no sites, so it reads `priority` once, when the element goes in.
+
 ## closed
 
 - **edits through a handed-out object now reach the crate** for an

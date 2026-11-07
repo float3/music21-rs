@@ -912,6 +912,11 @@ pub struct Pitch {
     /// was built, and that note's place in the chord: a chord answers
     /// `pitches` without building notes, so an edit through the pitch is
     /// written into the chord directly until the note exists.
+    ///
+    /// It can stand beside `owner`: `Note(chord.pitches[0])` keeps the
+    /// pitch object, as music21's does, so the one object is the chord's and
+    /// the new note's at once. [`Pitch::write_back`] then writes to the
+    /// note, and the chord reads the object's value back itself.
     pub(crate) loose_in: Option<(Py<PyAny>, usize)>,
     /// The pitch's own `Accidental` object, once something has asked for it.
     ///

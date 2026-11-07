@@ -527,17 +527,8 @@ impl Chord {
     /// already in order is left alone, its cache and all.
     fn sort_in_place(&mut self, py: Python<'_>) {
         let synced = self.synced_inner(py);
-        let keys: Vec<(music21::IntegerType, f64)> = synced
-            .notes()
-            .iter()
-            .map(|note| (note.pitch().diatonic_note_number(), note.pitch().ps()))
-            .collect();
-        let mut order: Vec<usize> = (0..keys.len()).collect();
-        order.sort_by(|left, right| {
-            keys[*left]
-                .partial_cmp(&keys[*right])
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // The crate's own order, so the note objects move as its notes do.
+        let order = synced.diatonic_ascending_order();
         if order
             .iter()
             .enumerate()

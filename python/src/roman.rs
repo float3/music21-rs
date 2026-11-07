@@ -129,6 +129,42 @@ struct ParseState {
     secondary_key: Option<Option<Py<PyAny>>>,
 }
 
+impl ParseState {
+    /// What is left once music21's figure setter has run its parsing steps
+    /// again: every field reads off the new figure, except the secondary
+    /// numeral and its key, which a step writes only when the figure has a
+    /// slash.
+    fn reparsed(&mut self, slashed: bool) {
+        let secondary = self.secondary.take();
+        let secondary_key = self.secondary_key.take();
+        *self = Self::default();
+        if !slashed {
+            self.secondary = secondary;
+            self.secondary_key = secondary_key;
+        }
+    }
+
+    /// The same fields again, for a copy of the numeral.
+    fn clone_ref(&self, py: Python<'_>) -> Self {
+        let clone_slot = |slot: &Option<Option<Py<PyAny>>>| {
+            slot.as_ref()
+                .map(|value| value.as_ref().map(|value| value.clone_ref(py)))
+        };
+        Self {
+            degree: self.degree,
+            implied_quality: self.implied_quality,
+            alteration: self.alteration,
+            alteration_string: self.alteration_string.clone(),
+            numeral_alone: self.numeral_alone.clone(),
+            bracketed: self.bracketed.clone(),
+            omitted: self.omitted.clone(),
+            added: self.added.clone(),
+            secondary: clone_slot(&self.secondary),
+            secondary_key: clone_slot(&self.secondary_key),
+        }
+    }
+}
+
 impl RomanNumeral {
     pub(crate) fn wrap(inner: RsRomanNumeral, octave: Option<i32>) -> Self {
         Self {
@@ -175,6 +211,7 @@ impl RomanNumeral {
             numeral.write_as_chord = me.write_as_chord;
             numeral.key_object = me.key_object.as_ref().map(|key| key.clone_ref(py));
             numeral.pivot = me.pivot.as_ref().map(|pivot| pivot.clone_ref(py));
+            numeral.state = me.state.clone_ref(py);
             numeral
         };
         // The chord half is copied rather than built afresh from the
@@ -800,6 +837,8 @@ impl RomanNumeral {
     fn set_figure(slf: &Bound<'_, Self>, py: Python<'_>, value: &str) -> PyResult<()> {
         let key = slf.borrow().inner.key().clone();
         let rebuilt = RsRomanNumeral::new(value.to_string(), key).map_err(roman_error)?;
+        let slashed = rebuilt.secondary().is_some();
+        slf.borrow_mut().state.reparsed(slashed);
         Self::rebuild(slf, py, rebuilt)
     }
 
