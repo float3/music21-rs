@@ -50,6 +50,7 @@ pub mod chord;
 pub mod chordtables;
 pub mod clef;
 pub mod clercqtemperley;
+pub mod converters;
 pub mod correlate;
 pub mod discrete;
 pub mod duration;
@@ -391,8 +392,50 @@ pub(crate) fn installed_class<'py>(
     module: &str,
     name: &str,
 ) -> Option<Bound<'py, PyAny>> {
-    let installed = built_helper(py)?.getattr("installed").ok()?;
-    installed.get_item((module, name)).ok()
+    let helper = built_helper(py)?;
+    if let Some(found) = known_installed()
+        .get(module)
+        .and_then(|names| names.get(name))
+    {
+        return found.as_ref().map(|class| class.bind(py).clone());
+    }
+    let found = helper
+        .getattr("installed")
+        .ok()?
+        .get_item((module, name))
+        .ok();
+    known_installed()
+        .entry(module.to_owned())
+        .or_default()
+        .insert(
+            name.to_owned(),
+            found.as_ref().map(|class| class.clone().unbind()),
+        );
+    found
+}
+
+/// What [`installed_class`] has found, by module and name, absent ones
+/// included.
+///
+/// Every object a facade hands out asks, and asking the helper's dictionary
+/// builds two strings, hashes them and a tuple of them each time: a tenth of
+/// what a chord's notes cost. Installing a class forgets all of it.
+static INSTALLED_BY_NAME: std::sync::LazyLock<std::sync::Mutex<InstalledByName>> =
+    std::sync::LazyLock::new(Default::default);
+
+type InstalledByName =
+    std::collections::HashMap<String, std::collections::HashMap<String, Option<Py<PyAny>>>>;
+
+/// The table [`INSTALLED_BY_NAME`] holds, locked.
+fn known_installed() -> std::sync::MutexGuard<'static, InstalledByName> {
+    INSTALLED_BY_NAME
+        .lock()
+        .unwrap_or_else(|held| held.into_inner())
+}
+
+/// Forgets what [`installed_class`] found, since a class has been installed.
+fn forget_installed() {
+    known_installed().clear();
 }
 
 /// A class music21's own streams will hold for this name, where nothing
@@ -815,10 +858,51 @@ where
     let Some(class) = installed_class(py, module, name) else {
         return Py::new(py, base::built(value));
     };
-    let object = blank_installed(&class)?;
+    filled_blank(&class, value)
+}
+
+/// A blank of `class` holding `value`.
+///
+/// The facade's `__new__` builds a default object for the blank, which is
+/// then thrown away: for a note, a pitch parsed and a second installed
+/// object built around it. So `value` waits in [`PENDING`] for a `__new__`
+/// that knows to take it, and is written in afterwards only where nothing
+/// took it.
+fn filled_blank<T>(class: &Bound<'_, PyAny>, value: T) -> PyResult<Py<T>>
+where
+    T: pyo3::PyClass<Frozen = pyo3::pyclass::boolean_struct::False>,
+{
+    // Whatever an outer blank left waiting is put back: a `__new__` that
+    // does not take its value may build objects of its own.
+    let outer = PENDING.replace(Some(Box::new(value)));
+    let object = blank_installed(class);
+    let left = PENDING.replace(outer);
+    let object = object?;
     let cell = object.cast::<T>()?;
-    *cell.borrow_mut() = value;
+    if let Some(Ok(value)) = left.map(|left| left.downcast::<T>()) {
+        *cell.borrow_mut() = *value;
+    }
     Ok(cell.clone().unbind())
+}
+
+thread_local! {
+    /// The value [`filled_blank`] is building an object around.
+    static PENDING: std::cell::Cell<Option<Box<dyn std::any::Any>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// The value an installed object is being built around, for a facade's
+/// `__new__` to take instead of building a default one; `None` when it is
+/// called for anything else.
+pub(crate) fn take_pending<T: 'static>() -> Option<T> {
+    let held = PENDING.take()?;
+    match held.downcast::<T>() {
+        Ok(value) => Some(*value),
+        Err(other) => {
+            PENDING.set(Some(other));
+            None
+        }
+    }
 }
 
 /// The same as [`installed_new`], but building a class music21's own
@@ -838,10 +922,7 @@ where
     let Some(class) = holdable_class(py, module, name) else {
         return Py::new(py, base::built(value));
     };
-    let object = blank_installed(&class)?;
-    let cell = object.cast::<T>()?;
-    *cell.borrow_mut() = value;
-    Ok(cell.clone().unbind())
+    filled_blank(&class, value)
 }
 
 /// A blank instance of an installed class, with its music21 half started.
@@ -856,8 +937,14 @@ pub(crate) fn blank_installed<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<
     let Some(helper) = built_helper(py) else {
         return class.getattr("__new__")?.call1((class,));
     };
-    helper.getattr("blank")?.call1((class,))
+    BLANK
+        .get_or_try_init(py, || helper.getattr("blank").map(Bound::unbind))?
+        .bind(py)
+        .call1((class,))
 }
+
+/// The helper's `blank`, looked up once rather than on every object built.
+static BLANK: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
 
 /// The Python half of installing a facade class into music21.
 ///
@@ -1017,9 +1104,12 @@ def lineage(cls):
     anything reading `classes` is concerned, and a `ChordSymbol` built on an
     installed `Chord` is still a `Chord`.
     """
-    known = _lineages.get(cls)
-    if known is not None:
-        return known
+    # Keyed by the class's id, with the class kept beside what it is: an
+    # installed class hashes in Python, through its metaclass, and this is
+    # asked every time anything reads `classes` or `classSet`.
+    held = _lineages.get(id(cls))
+    if held is not None and held[0] is cls:
+        return held[1]
     walked = []
     for ancestor in (cls,) + cls.__mro__:
         # Kept in a tuple rather than as the class itself: `DocTestFinder`
@@ -1060,7 +1150,7 @@ def lineage(cls):
         if member in replaced:
             members.add(replaced[member])
     known = (tuple(names), frozenset(members), tuple(walked))
-    _lineages[cls] = known
+    _lineages[id(cls)] = (cls, known)
     return known
 
 
@@ -1312,16 +1402,23 @@ def make_class(facade, original):
         # `original == installed` answers here too.
         # Only the installed class itself: a subclass shares this metaclass
         # and is a kind of thing of its own.
+        # Which class that is is known once it is built; the hash it takes
+        # is worked out once, since anything keyed by class asks for it.
+        # While it is being built, it is told by what it holds, as before.
         def __eq__(cls, other):
-            return other is cls or ('_replaces' in cls.__dict__ and other is original)
+            return other is cls or (other is original and stands_in(cls))
 
         def __ne__(cls, other):
             return not cls.__eq__(other)
 
-        def __hash__(cls):
-            if '_replaces' in cls.__dict__:
-                return hash(original)
-            return type.__hash__(cls)
+        def __hash__(cls, _hash=hash(original), _identity=type.__hash__):
+            return _hash if stands_in(cls) else _identity(cls)
+
+    def stands_in(cls):
+        built = standing[0]
+        if built is not None:
+            return cls is built
+        return '_replaces' in cls.__dict__
 
     if issubclass(original, _base.Music21Object):
         bases = (facade, original)
@@ -1333,6 +1430,8 @@ def make_class(facade, original):
         # machinery live, and none of it says anything musical.
         bases = machinery_of(original, facade)
         fallback = (facade,)
+    # The class this one stands for, filled in once it is built.
+    standing = [None]
     try:
         installed = Stands(original.__name__, bases, namespace)
     except TypeError:
@@ -1343,6 +1442,7 @@ def make_class(facade, original):
         except TypeError:
             # A facade nothing can be built on at all stands as it is.
             return facade
+    standing[0] = installed
     replaced[original] = installed
     return installed
 
@@ -1391,6 +1491,7 @@ pub fn class_to_install<'py>(
     helper
         .getattr("installed")?
         .set_item((module.name()?, name), &built)?;
+    forget_installed();
     // Each class installed makes every other one a little more itself: what
     // `getElementsByClass` matches on has to name the installed classes, not
     // only the ones they replaced.
@@ -1500,6 +1601,7 @@ pub fn install_into_music21(py: Python<'_>) -> PyResult<usize> {
             }
         }
     }
+    converters::install(py)?;
     Ok(replaced)
 }
 
@@ -2049,6 +2151,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;
+    converters::register(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here

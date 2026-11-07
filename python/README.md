@@ -72,6 +72,7 @@ it, into this package's own streams:
 | `from_capella(data)` | a Capella `.capx`'s `bytes`, or its `score.xml` | `Score` |
 | `from_nwc(data)` | a NoteWorthy Composer `.nwc` file's `bytes`, compressed or not | `Score` |
 | `from_volpiano(text)` | Volpiano, the chant font's notation | `Part` |
+| `from_mscx(text)` | MuseScore's `.mscx`, which music21 does not read | `Score` |
 
 the streams hold measures of notes, chords, rests, clefs, keys, meters,
 tempo marks, dynamics, chord symbols and instruments, and a voice apiece
@@ -89,6 +90,25 @@ answering for the first instrument it holds where nothing says them; a stream an
 `spannerBundle` and plays its repeats out with `expandRepeats`; and a
 slur names the score's own notes. input a reader cannot read raises `StreamException`. a
 compressed `.mxl` is a zip holding the document: unpack it first.
+
+`music21_rs.converter` chooses the reader as music21's `converter` does:
+`converter.parse(path_or_text_or_bytes, format=None, number=None)`, with
+`parseFile`, `parseData`, `parseURL` and `toData`, tells the format from a
+file's extension, from a header such as `tinyNotation:`, or from the
+document's first characters, and reads every format above (a `.mxl`, a
+`.mscz` and a MuseData zip or directory unpacked for it). `toData(score,
+fmt)` hands back what `score.write(fmt)` writes, and ABC. there is no
+cache, and a keyword the crate's reader cannot honour, such as MIDI's
+`quarterLengthDivisors`, raises `ConverterException`.
+
+`music21_rs.corpus.parse("bach/bwv66.6")` and `corpus.getWork(name,
+movementNumber)` find music21's corpus files as music21 does: in the
+directory `MUSIC21_RS_CORPUS` names, else in an installed music21's
+`corpus` directory, found without importing music21. the wheel ships no
+scores, and there is no metadata to search.
+
+once installed into music21 (below), both modules are music21's own
+`converter` and `corpus`, handing back music21's streams.
 
 the package's streams slice, scale, invert and regroup themselves as
 music21's do -- `sliceByQuarterLengths`, `sliceAtOffsets`, `sliceByBeat`,

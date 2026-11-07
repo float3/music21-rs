@@ -1389,6 +1389,24 @@ impl TextExpression {
     }
 }
 
+/// A crate text expression as music21's own `TextExpression`, for a
+/// score built into music21's streams where nothing is installed over it:
+/// music21's reader makes its own, and a class built to hold the crate's
+/// value cannot be copied as music21 copies a score.
+pub(crate) fn music21_text_expression<'py>(
+    py: Python<'py>,
+    inner: &RsTextExpression,
+) -> PyResult<Bound<'py, PyAny>> {
+    let made = py
+        .import("music21.expressions")?
+        .getattr("TextExpression")?
+        .call1((inner.content(),))?;
+    if let Some(placement) = inner.placement() {
+        made.setattr("placement", placement.as_str())?;
+    }
+    Ok(made)
+}
+
 #[pymethods]
 impl TextExpression {
     /// Refuses a member nothing here defines, as Python refuses it.

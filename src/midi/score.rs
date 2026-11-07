@@ -105,9 +105,11 @@ fn variable_length(bytes: &[u8]) -> (u64, &[u8]) {
 /// before. Nothing is answered for a byte that starts no event music21
 /// knows.
 fn read_event<'a>(bytes: &'a [u8], status: &mut Option<u8>) -> Option<(Event, &'a [u8])> {
+    // music21's `MidiEvent` is on channel 1 until it reads a channel, and
+    // a meta event, which names none, stays there.
     let mut event = Event {
         kind: Kind::Nothing,
-        channel: 0,
+        channel: 1,
         first: 0,
         second: 0,
         data: Vec::new(),
@@ -310,8 +312,7 @@ fn instrument_of(event: &Event) -> Instrument {
             Err(_) => Instrument::new(),
         },
     };
-    // A meta event is on no channel, which music21 counts as the one before
-    // the first.
+    // Counted from nought, as music21 counts it.
     instrument.set_midi_channel(event.channel.checked_sub(1));
     if !decoded.is_empty() {
         let lower = decoded.to_lowercase();
@@ -516,6 +517,7 @@ fn track_to_part(
                     pitched.push(note);
                 }
                 let mut chord = Chord::new(pitched)?.with_duration(duration);
+                chord.set_midi_tick_start(Some(start));
                 // A chord's lyrics are kept on its first note.
                 if let (Some(lyric), Some(singer)) = (lyric, chord.notes_mut().first_mut()) {
                     singer.set_lyric(Some(lyric))?;
@@ -538,6 +540,7 @@ fn track_to_part(
                 let mut note = Note::from_pitch(Pitch::from_midi(IntegerType::from(event.first))?)
                     .with_duration(duration);
                 note.set_volume(Some(volume_of(event.second)));
+                note.set_midi_tick_start(Some(start));
                 if let Some(lyric) = lyric {
                     note.set_lyric(Some(lyric))?;
                 }
@@ -571,6 +574,7 @@ fn track_to_part(
                 let mut mark = mark.clone();
                 if !is_first {
                     mark.set_number_implicit(true);
+                    mark.set_hidden(true);
                 }
                 events.push(StreamEvent::new(event.offset(), mark));
             }
@@ -730,6 +734,26 @@ mod tests {
                 crate::notation::TieType::Stop
             ]
         );
+    }
+
+    /// A track named by a meta event, as most files name one: music21
+    /// reads its instrument on channel 0, the channel a meta event keeps
+    /// since it says none.
+    #[test]
+    fn an_instrument_named_by_a_meta_event_is_on_the_first_channel() {
+        let mut track: Vec<u8> = vec![0, 0xFF, 0x03, 5];
+        track.extend(b"Piano");
+        track.extend([0, 0x90, 60, 80, 96, 0x80, 60, 0, 0, 0xFF, 0x2F, 0]);
+        let mut bytes = b"MThd\0\0\0\x06\0\0\0\x01\0\x60MTrk".to_vec();
+        bytes.extend((track.len() as u32).to_be_bytes());
+        bytes.extend(track);
+        let score = from_midi(&bytes).unwrap();
+        let channels: Vec<Option<u8>> = score.parts()[0]
+            .instruments(true, false)
+            .iter()
+            .map(Instrument::midi_channel)
+            .collect();
+        assert_eq!(channels, [Some(0)]);
     }
 
     #[test]

@@ -1010,6 +1010,10 @@ impl Note {
         pitch: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
+        // An installed note being built around a value already has it.
+        if let Some(value) = crate::take_pending::<Self>() {
+            return Ok(crate::base::built(value));
+        }
         let inner = match pitch.filter(|value| !value.is_none()) {
             Some(value) => RsNote::from_pitch(crate::pitch::pitch_from_any_with_keywords(
                 py, value, keywords,

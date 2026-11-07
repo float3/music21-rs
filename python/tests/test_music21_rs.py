@@ -7729,6 +7729,372 @@ print("<score-partwise" in m.to_musicxml(part))
     ]
 
 
+def test_a_note_read_with_a_velocity_has_volume_information():
+    """A note a reader made with a velocity says it has volume information,
+    as music21's own reader's does, so music21's MusicXML writer writes how
+    loud it is."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import common, converter
+import music21_rs as m
+m.install_into_music21()
+path = common.getSourceFilePath() / 'midi' / 'testPrimitive' / 'test03.mid'
+for score in (converter.parse(path, forceSource=True, storePickle=False), m.from_midi(path.read_bytes())):
+    first = score.recurse().getElementsByClass('Note').first()
+    print(first.hasVolumeInformation(), first.volume.velocity)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["True 87", "True 87"]
+
+
+def test_converter_parse_reads_midi_through_the_crate_once_installed():
+    """Installed, `converter.parse` reads a MIDI file, or its bytes, through
+    the crate and hands back the score music21's own reader makes of it; a
+    keyword only music21's reader takes is read by music21's."""
+    pytest.importorskip("music21.stream")
+    code = """
+import io
+import contextlib
+import re
+from music21 import common, converter
+from music21.converter import subConverters
+from music21.musicxml.m21ToXml import GeneralObjectExporter
+import music21_rs as m
+m.install_into_music21()
+print(converter.Converter.getSubConverterFormats()['midi'] is subConverters.ConverterMidi)
+path = common.getSourceFilePath() / 'midi' / 'testPrimitive' / 'test03.mid'
+
+def read(**keywords):
+    made = converter.Converter()
+    made.parseFile(path, forceSource=True, storePickle=False, **keywords)
+    return made.stream, getattr(made.subConverter, 'readByCrate', None)
+
+# What names an object by where it is in memory, which differs every read.
+ADDRESS = re.compile(r'0x[0-9a-f]+|[0-9]{9,}')
+
+def shown(score):
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        score.show('text', addEndTimes=True)
+    return ADDRESS.sub('', out.getvalue())
+
+def written(score):
+    text = GeneralObjectExporter(score).parse().decode().split('</identification>')[1]
+    return ADDRESS.sub('', re.sub(' id="[^"]*"', '', text))
+
+ours, crate = read()
+ours_read = converter.parse(path.read_bytes())
+print(crate, read(quarterLengthDivisors=(2,))[1])
+print(m.route_converters([]))
+theirs, crate = read()
+print(crate)
+print(shown(ours) == shown(theirs), written(ours) == written(theirs))
+print(shown(ours_read) == shown(converter.parse(path.read_bytes())))
+print(m.route_converters(['midi']))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "False",
+        "True False",
+        "[]",
+        "None",
+        "True True",
+        "True",
+        "['midi']",
+    ]
+
+
+def test_route_converters_routes_its_formats_and_no_others():
+    """Each format routed is music21's own subconverter class under the
+    same name, reading through the crate; a format it has no reader for is
+    refused."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import converter, corpus
+from music21.converter import subConverters
+import music21_rs as m
+m.install_into_music21()
+print(m.route_converters(['musicxml', 'abc', 'midi', 'humdrum', 'mei']))
+formats = converter.Converter.getSubConverterFormats()
+print(formats['musicxml'], issubclass(formats['musicxml'], subConverters.ConverterMusicXML))
+made = converter.Converter()
+made.parseFile(corpus.getWork('bach/bwv66.6'), forceSource=True, storePickle=False)
+print(made.subConverter.readByCrate, len(made.stream.parts), made.stream.metadata.movementName)
+pitches = [p.nameWithOctave for p in made.stream.parts[0].pitches[:4]]
+print(pitches)
+try:
+    m.route_converters(['lilypond'])
+except ValueError as error:
+    print(type(error).__name__)
+print(m.route_converters(['abc']))
+print(converter.Converter.getSubConverterFormats()['musicxml'] is subConverters.ConverterMusicXML)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "['musicxml', 'abc', 'midi', 'humdrum', 'mei']",
+        "<class 'music21.converter.subConverters.ConverterMusicXML'> True",
+        "True 4 bwv66.6.mxl",
+        "['C#5', 'B4', 'A4', 'B4']",
+        "ValueError",
+        "['abc']",
+        "True",
+    ]
+
+
+def _routed_differences(fmt, paths, classes=None, drawn=True):
+    """Where the crate's read of each of `paths` differs from music21's,
+    through `converter_parity`, in a fresh interpreter with the wheel
+    installed: the lines naming one of `classes` where they are given, and
+    passing over where things are drawn unless `drawn`."""
+    code = f"""
+import sys
+import warnings
+sys.path.insert(0, {str(pathlib.Path(__file__).parent)!r})
+warnings.simplefilter('ignore')
+import converter_parity
+converter_parity.IGNORE_STYLE = {not drawn!r}
+import music21_rs
+from music21 import common
+music21_rs.install_into_music21()
+classes = {classes!r}
+for path in {[str(path) for path in paths]!r}:
+    diff, _, _ = converter_parity.differences(str(common.getSourceFilePath() / path), {fmt!r})
+    for line in diff:
+        if line in ('--- music21', '+++ crate'):
+            continue
+        if line.startswith(('+', '-')) and (
+            classes is None or any(name in line for name in classes)
+        ):
+            print(path, line[:200])
+        elif line.startswith('<'):
+            print(path, line)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    return done.stdout.splitlines()
+
+
+def test_routed_musicxml_keeps_layouts_text_boxes_and_staff_groups():
+    """A score read through the crate keeps music21's layouts, text boxes,
+    staff groups and the software its metadata names."""
+    pytest.importorskip("music21.stream")
+    names = ("Layout", "TextBox", "StaffGroup", "software")
+    paths = ("corpus/bach/bwv69.6.xml", "corpus/demos/layoutTest.xml")
+    assert _routed_differences("musicxml", paths, names) == []
+
+
+def test_routed_musicxml_keeps_each_instruments_part_and_id():
+    """An instrument read through the crate names its part and its own id
+    as music21's reader names them."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv66.6.mxl", "corpus/schumann_robert/dichterliebe_no2.xml")
+    names = ("Instrument", "Piano")
+    assert _routed_differences("musicxml", paths, names) == []
+
+
+def test_routed_musicxml_text_expressions_copy_as_music21s():
+    """Words read through the crate are music21's own `TextExpression`, so a
+    score holding them copies, and writes, as music21's reader's does."""
+    pytest.importorskip("music21.stream")
+    code = """
+import copy
+from music21 import converter, corpus, expressions
+import music21_rs as m
+m.install_into_music21()
+m.route_converters(['musicxml'])
+score = converter.parse(corpus.getWork('schumann_robert/dichterliebe_no2'), forceSource=True, storePickle=False)
+words = score.recurse().getElementsByClass('TextExpression').first()
+print(type(words) is expressions.TextExpression, words.content, words.placement)
+print(len(copy.deepcopy(score).parts))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["True Nicht schnell above", "3"]
+
+
+def test_routed_musicxml_spanners_are_music21s():
+    """Slurs, wedges, lines and the other spanners read through the crate
+    are music21's own, complete, where its reader puts them, and write as
+    its reader's do."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/lilypondTestSuite/33a-Spanners.xml",)
+    names = (
+        " Slur ", " Crescendo ", " Diminuendo ", " Line ", " Glissando ",
+        " Ottava ", " TrillExtension ", " TremoloSpanner ", "<tremolo",
+        "write failed",
+    )
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
+
+
+def test_routed_musicxml_keeps_fermatas_and_arpeggios():
+    """A fermata or an arpeggio read through the crate is music21's own,
+    among the note's expressions where music21's reader puts it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv66.6.mxl", "musicxml/lilypondTestSuite/32d-Arpeggio.xml")
+    assert _routed_differences("musicxml", paths, ("expressions=",)) == []
+
+
+def test_routed_musicxml_keeps_a_meters_symbol():
+    """A meter read through the crate keeps the symbol it is drawn with."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/lilypondTestSuite/11f-TimeSignatures-SymbolMeaning.xml",)
+    assert _routed_differences("musicxml", paths, ("TimeSignature", "<time")) == []
+
+
+def test_routed_musicxml_keeps_an_implicit_measures_number_hidden():
+    """A measure written `implicit` and read through the crate shows no
+    number, as music21's reader has it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/bach/bwv69.6.xml",)
+    assert _routed_differences("musicxml", paths, (" Measure ", "<measure")) == []
+
+
+def test_routed_musicxml_puts_spanners_in_their_parts():
+    """A spanner read through the crate stands in the part music21's
+    reader puts it in: the part it was finished in, the first staff of a
+    part written on several."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml", "corpus/schumann_robert/dichterliebe_no2.xml")
+    names = (" Slur ", " Crescendo ", " Diminuendo ", " PedalMark ", " Ottava ")
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
+
+
+def test_routed_musicxml_keeps_where_a_dynamic_is_placed():
+    """A dynamic read through the crate says which side of the staff it is
+    placed on, as the direction holding it does."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schumann_robert/dichterliebe_no2.xml",)
+    assert _routed_differences("musicxml", paths, (" Dynamic ",), drawn=False) == []
+
+
+def test_routed_musicxml_keeps_what_a_no_chord_says():
+    """A no-chord read through the crate keeps the words it is written
+    with."""
+    pytest.importorskip("music21.stream")
+    paths = ("musicxml/testNC.xml",)
+    assert _routed_differences("musicxml", paths, ("NoChord", "<kind")) == []
+
+
+def test_routed_musicxml_keeps_a_duration_unlinked():
+    """A rest written whole that lasts a bar of 3/4, read through the crate,
+    is unlinked from its written value as music21's reader makes it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml",)
+    names = ("duration.linked=False",)
+    assert _routed_differences("musicxml", paths, names, drawn=False) == []
+
+
+def test_routed_musicxml_keeps_a_rest_hidden():
+    """A rest written `print-object="no"` and read through the crate is
+    left off the page, as music21's reader leaves it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/schubert/Lindenbaum.xml",)
+    assert _routed_differences("musicxml", paths, ("print-object",), drawn=False) == []
+
+
+def test_routed_scores_carry_music21s_own_metadata():
+    """A score read through the crate carries music21's own `Metadata`, as
+    its readers make it, saying what the file says."""
+    pytest.importorskip("music21.stream")
+    assert _routed_differences("musicxml", ("corpus/demos/two-parts.xml",), ("Metadata",)) == []
+    assert _routed_differences("abc", ("corpus/ryansMammoth/AcaciaReel.abc",), ("Metadata",)) == []
+
+
+def test_routed_abc_slurs_are_left_incomplete():
+    """music21's ABC reader leaves its slurs incomplete, where its MusicXML
+    reader marks them complete; one read through the crate says the same."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/AbithaMugginsFavoriteReel.abc",)
+    assert _routed_differences("abc", paths, ("Slur",)) == []
+
+
+def test_routed_abc_slurs_stand_where_they_start():
+    """music21's ABC reader puts a slur into its part where the part had
+    got to when the slur opened; one read through the crate stands there
+    too."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/7thRegimentReel.abc",)
+    assert _routed_differences("abc", paths, (" Slur ",)) == []
+
+
+def test_routed_mei_notes_keep_their_ids():
+    """A note read from MEI through the crate keeps its `xml:id` as its
+    `id`, as music21's reader gives it."""
+    pytest.importorskip("music21.stream")
+    paths = ("mei/test/test_file.mei",)
+    found = _routed_differences("mei", paths, (" Note ",))
+    assert [line for line in found if "Slur" not in line] == []
+
+
+def test_routed_midi_notes_keep_their_tick():
+    """A note or chord read from MIDI through the crate says in its
+    editorial at which tick it started, as music21's reader writes it."""
+    pytest.importorskip("music21.stream")
+    paths = ("midi/testPrimitive/test05.mid", "midi/testPrimitive/test16.mid")
+    assert _routed_differences("midi", paths, ("editorial=",)) == []
+
+
+def test_routed_midi_hides_the_tempo_copied_to_later_parts():
+    """music21's MIDI reader copies the tempo onto every part and hides the
+    copies after the first; a score read through the crate hides them
+    too."""
+    pytest.importorskip("music21.stream")
+    paths = ("midi/testPrimitive/test02.mid", "midi/testPrimitive/test11.mid")
+    assert _routed_differences("midi", paths, ("MetronomeMark",)) == []
+
+
+def test_an_installed_class_hashes_and_equals_the_class_it_replaces():
+    """An installed class is equal to music21's class it replaces and hashes
+    as it does, so a set or dict built before installing finds it; a Python
+    subclass of it is a class of its own; and looking up what a class is
+    asks no class for its hash in Python, which music21 does millions of
+    times in a suite."""
+    pytest.importorskip("music21.stream")
+    code = """
+import sys
+from music21 import note
+original = note.Note
+import music21_rs as m
+m.install_into_music21()
+from music21 import note
+installed = note.Note
+print(installed == original, original == installed, hash(installed) == hash(original))
+print({original: 1}.get(installed), installed in {original})
+class Mine(installed):
+    pass
+print(Mine == installed, Mine == original, hash(Mine) == hash(original))
+calls = []
+def counting(frame, event, arg):
+    if event == 'call' and frame.f_code.co_name in ('__hash__', '__eq__'):
+        calls.append(frame.f_code.co_name)
+n = note.Note('C4')
+n.classes
+sys.setprofile(counting)
+for _ in range(10):
+    n.classes
+    n.classSet
+sys.setprofile(None)
+print(len(calls))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == [
+        "True True True",
+        "1 True",
+        "False False False",
+        "0",
+    ]
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""

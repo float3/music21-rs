@@ -114,6 +114,14 @@ pub struct Spanner {
     offset: Drawn<FloatType>,
     #[cfg_attr(feature = "serde", serde(default))]
     multi_rest: Option<MultiRest>,
+    /// The number a score tells it from others of its kind by: music21's
+    /// `idLocal`, MusicXML's `number`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    id_local: Drawn<Option<String>>,
+    /// Whether the reader that made it saw it to its end: music21's
+    /// `completeStatus`, which only some of its readers set.
+    #[cfg_attr(feature = "serde", serde(default))]
+    complete: Drawn<bool>,
 }
 
 /// How a rest of several measures is drawn and counted: music21's
@@ -536,6 +544,8 @@ impl Spanner {
             marks: None,
             offset: Drawn(0.0),
             multi_rest: None,
+            id_local: Drawn(None),
+            complete: Drawn(false),
         }
     }
 
@@ -892,6 +902,28 @@ impl Spanner {
     /// Says which side of the notes it is drawn on.
     pub fn set_placement(&mut self, placement: Option<Placement>) {
         self.placement.0 = placement;
+    }
+
+    /// The number a score tells it from others of its kind by: music21's
+    /// `idLocal`.
+    pub fn id_local(&self) -> Option<&str> {
+        self.id_local.0.as_deref()
+    }
+
+    /// Sets the number it is told apart by, or clears it.
+    pub fn set_id_local(&mut self, id_local: Option<String>) {
+        self.id_local.0 = id_local;
+    }
+
+    /// Whether the reader that made it saw it to its end: music21's
+    /// `completeStatus`.
+    pub fn complete(&self) -> bool {
+        self.complete.0
+    }
+
+    /// Says whether it was seen to its end.
+    pub fn set_complete(&mut self, complete: bool) {
+        self.complete.0 = complete;
     }
 
     /// How its line is drawn where that is not solid, `dashed` or `dotted`:

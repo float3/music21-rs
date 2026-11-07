@@ -636,7 +636,7 @@ impl BarTogether {
 ///
 /// The parts are named by where they stand among the score's parts, first
 /// to last, in the order the group was given them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StaffGroup {
     parts: Vec<usize>,
@@ -645,6 +645,9 @@ pub struct StaffGroup {
     symbol: Option<String>,
     bar_together: Option<BarTogether>,
     name_hidden: bool,
+    /// Where the symbol is drawn and in what colour: music21's `style`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub style: crate::style::TextStyle,
 }
 
 impl StaffGroup {
@@ -658,6 +661,7 @@ impl StaffGroup {
             symbol: None,
             bar_together: Some(BarTogether::Yes),
             name_hidden: false,
+            style: crate::style::TextStyle::default(),
         }
     }
 
@@ -757,6 +761,9 @@ struct Labels {
     padding_left: FloatType,
     #[cfg_attr(feature = "serde", serde(default))]
     padding_right: FloatType,
+    /// How wide a measure is drawn: music21's `layoutWidth`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    layout_width: Option<crate::style::StyleValue>,
     /// music21's `atSoundingPitch`, `None` for its `'unknown'`.
     #[cfg_attr(feature = "serde", serde(default))]
     at_sounding_pitch: Option<bool>,
@@ -838,6 +845,17 @@ impl Stream {
     /// Says whether the measure's number is left unshown.
     pub fn set_number_hidden(&mut self, hidden: bool) {
         self.labels.number_hidden = hidden;
+    }
+
+    /// How wide the measure is drawn, in tenths, where the score says:
+    /// music21's `layoutWidth`.
+    pub fn layout_width(&self) -> Option<&crate::style::StyleValue> {
+        self.labels.layout_width.as_ref()
+    }
+
+    /// Says how wide the measure is drawn.
+    pub fn set_layout_width(&mut self, width: Option<crate::style::StyleValue>) {
+        self.labels.layout_width = width;
     }
 
     /// Which measures' numbers are shown from this measure on, as MusicXML's

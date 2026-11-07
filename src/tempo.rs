@@ -126,6 +126,10 @@ pub struct MetronomeMark {
     parentheses: Drawn<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
     placement: Drawn<Option<Placement>>,
+    /// Whether it is left off the page: music21's
+    /// `style.hideObjectOnPrint`.
+    #[cfg_attr(feature = "serde", serde(default))]
+    hidden: Drawn<bool>,
 }
 
 impl Default for MetronomeMark {
@@ -176,7 +180,19 @@ impl MetronomeMark {
             number_sounding: None,
             parentheses: Drawn(false),
             placement: Drawn(None),
+            hidden: Drawn(false),
         }
+    }
+
+    /// Whether the mark is left off the page: music21's
+    /// `style.hideObjectOnPrint`.
+    pub fn hidden(&self) -> bool {
+        self.hidden.0
+    }
+
+    /// Leaves the mark off the page, or puts it back.
+    pub fn set_hidden(&mut self, hidden: bool) {
+        self.hidden.0 = hidden;
     }
 
     /// Whether the mark is written in parentheses: music21's

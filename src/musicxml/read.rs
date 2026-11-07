@@ -265,6 +265,7 @@ struct MeasureIr {
     ending: Option<Ending>,
     padding_left: FloatType,
     padding_right: FloatType,
+    width: Option<StyleValue>,
     measure_numbering: Option<String>,
     items: Vec<Item>,
     voices: Vec<VoiceIr>,
@@ -368,6 +369,8 @@ impl Building {
             _ => Spanner::with_unplaced(self.kind, positions),
         };
         spanner.set_placement(self.placement);
+        spanner.set_id_local(self.id_local.clone());
+        spanner.set_complete(true);
         if self.kind != SpannerKind::Crescendo && self.kind != SpannerKind::Diminuendo {
             spanner.set_line_type(self.line_type.clone());
         }
@@ -559,10 +562,11 @@ impl Importer {
             read.set_name(text("group-name"));
             read.set_abbreviation(text("group-abbreviation"));
             match group.element.find("group-symbol") {
-                Some(_) => {
+                Some(symbol_element) => {
                     if let Some(symbol) = text("group-symbol") {
                         read.set_symbol(Some(&symbol))?;
                     }
+                    read_position(symbol_element, &mut read.style);
                 }
                 None => read.set_symbol(Some("brace"))?,
             }
@@ -1321,6 +1325,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     ending: measure.ending.clone(),
                     padding_left: measure.padding_left,
                     padding_right: measure.padding_right,
+                    width: measure.width.clone(),
                     // music21 makes the staff's measures from a template,
                     // which keeps nothing of how the measure is drawn.
                     measure_numbering: None,
@@ -1447,6 +1452,7 @@ fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
     stream.set_ending(measure.ending);
     stream.set_padding_left(measure.padding_left);
     stream.set_padding_right(measure.padding_right);
+    stream.set_layout_width(measure.width);
     stream.set_measure_numbering(measure.measure_numbering);
     (stream, uids)
 }
@@ -1598,6 +1604,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `parseMeasureAttributes` and `parseMeasureNumbers`.
     fn measure_attributes(&mut self) {
         self.measure.hidden = yes(self.element.get("implicit"));
+        self.measure.width = self.element.get("width").map(StyleValue::read);
         let raw = self.element.get("number").unwrap_or("");
         // music21's `getNumFromStr`: the digits, and whatever is left.
         let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
@@ -3412,6 +3419,27 @@ fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
     }
 }
 
+/// music21's `setPosition` and `setColor`: where a mark stands and its
+/// colour, read into a style.
+fn read_position(written: &Xml, style: &mut TextStyle) {
+    let value = |name: &str| written.get(name).map(StyleValue::read);
+    if let Some(read) = value("default-x") {
+        style.absolute_x = Some(read);
+    }
+    if let Some(read) = value("default-y") {
+        style.absolute_y = Some(read);
+    }
+    if let Some(read) = value("relative-x") {
+        style.relative_x = Some(read);
+    }
+    if let Some(read) = value("relative-y") {
+        style.relative_y = Some(read);
+    }
+    if let Some(color) = written.get("color") {
+        style.color = Some(color.to_string());
+    }
+}
+
 /// music21's `setPrintStyleAlign`: where text stands, its font and colour,
 /// and how it is aligned, read into a style.
 pub(crate) fn read_print_style_align(written: &Xml, style: &mut TextStyle) -> Result<()> {
@@ -4709,6 +4737,24 @@ mod tests {
     fn a_document_that_is_not_a_score_is_refused() {
         assert!(from_musicxml("<opus/>").is_err());
         assert!(from_musicxml("not xml at all").is_err());
+    }
+
+    #[test]
+    fn a_group_symbol_keeps_where_it_is_drawn() {
+        let document = format!(
+            "<?xml version=\"1.0\"?><score-partwise version=\"4.0\"><part-list>\
+             <part-group number=\"1\" type=\"start\"><group-symbol default-x=\"-8\" \
+             color=\"#FF0000\">bracket</group-symbol></part-group>\
+             <score-part id=\"P1\"><part-name>Flute</part-name></score-part>\
+             <part-group number=\"1\" type=\"stop\"/></part-list>\
+             <part id=\"P1\"><measure number=\"1\"><attributes><divisions>1\
+             </divisions></attributes>{NOTE}</measure></part></score-partwise>"
+        );
+        let read = from_musicxml(&document).unwrap();
+        let group = &read.staff_groups()[0];
+        assert_eq!(group.symbol(), Some("bracket"));
+        assert_eq!(group.style.absolute_x, Some(StyleValue::Whole(-8)));
+        assert_eq!(group.style.color.as_deref(), Some("#FF0000"));
     }
 
     #[test]

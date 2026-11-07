@@ -1700,6 +1700,80 @@ fn fill_element_types(kind: SpannerKind) -> &'static [&'static str] {
 }
 
 /// Which of music21's modules a kind of spanner lives in.
+/// What music21's spanners carry besides what they join, each on the
+/// classes that have it.
+const MUSIC21_MEMBERS: &[&str] = &[
+    "type",
+    "transposing",
+    "placement",
+    "lineType",
+    "tick",
+    "startTick",
+    "endTick",
+    "startHeight",
+    "endHeight",
+    "label",
+    "slideType",
+    "numberOfMarks",
+    "pedalType",
+    "pedalForm",
+    "numRests",
+    "useSymbols",
+    "maxSymbols",
+    "spread",
+];
+
+/// A crate spanner as music21's own, joining `spanned`, for a score built
+/// into music21's streams: music21's readers make their own spanners, which
+/// nothing installed stands in for, and some mark each they finished
+/// complete.
+/// What it carries is read off this package's object for it, which says it
+/// as music21 does; a kind music21 has no class of that name for is this
+/// package's object, as before.
+pub(crate) fn music21_object<'py>(
+    py: Python<'py>,
+    inner: &RsSpanner,
+    spanned: Vec<Py<PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let kind = inner.kind();
+    let Ok(class) = py.import(module_of(kind))?.getattr(kind.class_name()) else {
+        return Ok(
+            Spanner::object_as(py, inner, spanned, crate::stream::Whose::Music21)?.into_bound(py),
+        );
+    };
+    let facade = Spanner::object_as(py, inner, Vec::new(), crate::stream::Whose::Wheel)?;
+    let facade = facade.bind(py);
+    let made = class.call1((PyTuple::new(py, spanned)?,))?;
+    for name in MUSIC21_MEMBERS {
+        // What it does not say is left as music21's constructor has it,
+        // some of whose setters refuse `None`.
+        let Ok(value) = facade.getattr(*name) else {
+            continue;
+        };
+        if !value.is_none() && made.hasattr(*name)? {
+            made.setattr(*name, value)?;
+        }
+    }
+    // Two this package's object says only for some kinds of spanner.
+    if let Some(line_type) = inner.line_type()
+        && made.hasattr("lineType")?
+    {
+        made.setattr("lineType", line_type)?;
+    }
+    if let Some(marks) = inner.number_of_marks()
+        && made.hasattr("numberOfMarks")?
+    {
+        made.setattr("numberOfMarks", marks)?;
+    }
+    if let Some(id_local) = inner.id_local() {
+        made.setattr("idLocal", id_local)?;
+    }
+    if inner.complete() {
+        made.setattr("completeStatus", true)?;
+    }
+    Ok(made)
+}
+
 fn module_of(kind: SpannerKind) -> &'static str {
     match kind {
         SpannerKind::Crescendo | SpannerKind::Diminuendo => "music21.dynamics",

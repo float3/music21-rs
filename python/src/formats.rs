@@ -1,7 +1,8 @@
 //! The score formats the crate reads, and MusicXML, which it also writes:
 //! `from_musicxml`, `from_abc`, `from_abc_number`, `from_midi`,
 //! `from_tiny_notation`, `from_humdrum`, `from_mei`, `from_roman_text`,
-//! `from_tsv`, `to_tsv`, `from_clercq_temperley` and `to_musicxml`.
+//! `from_tsv`, `to_tsv`, `from_clercq_temperley`, `from_mscx` and
+//! `to_musicxml`.
 //!
 //! These are the wheel's own rather than names music21 has: music21 reaches
 //! its readers through `converter.parse` and its writer through an exporter
@@ -252,6 +253,17 @@ fn from_capella<'py>(py: Python<'py>, data: &Bound<'py, PyAny>) -> PyResult<Boun
     handed_back(py, music21::capella::from_capella(&text))
 }
 
+/// Reads the text of a MuseScore `.mscx` document, as a `Score` of a part
+/// for each of its parts.
+///
+/// music21 has no reader of its own for MuseScore's files; this is the
+/// crate's, and needs no MuseScore installed. A compressed `.mscz` is a zip
+/// holding the document; unpack it first.
+#[pyfunction]
+fn from_mscx<'py>(py: Python<'py>, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    handed_back(py, music21::musescore::from_mscx(text))
+}
+
 /// Reads a MuseData work as music21's `converter.parse` reads one, as a
 /// `Score` of a part for each part the files hold.
 ///
@@ -431,6 +443,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(from_noteworthy, m)?)?;
     m.add_function(wrap_pyfunction!(from_musedata, m)?)?;
     m.add_function(wrap_pyfunction!(from_capella, m)?)?;
+    m.add_function(wrap_pyfunction!(from_mscx, m)?)?;
     m.add_function(wrap_pyfunction!(to_roman_text, m)?)?;
     m.add_function(wrap_pyfunction!(from_nwc, m)?)?;
     m.add_function(wrap_pyfunction!(from_volpiano, m)?)?;
