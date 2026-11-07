@@ -437,8 +437,7 @@ fn generic_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsGeneric> {
 
 #[pymethods]
 impl GenericInterval {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -709,8 +708,7 @@ impl DiatonicInterval {
 
 #[pymethods]
 impl DiatonicInterval {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -964,8 +962,7 @@ fn semitone_object(py: Python<'_>, semitones: f64) -> PyResult<Py<PyAny>> {
 
 #[pymethods]
 impl ChromaticInterval {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -1363,8 +1360,7 @@ pub(crate) fn transpose_pitch_by_any(
 
 #[pymethods]
 impl Interval {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }

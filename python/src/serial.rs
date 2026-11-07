@@ -146,8 +146,7 @@ fn other_row(value: &Bound<'_, PyAny>) -> PyResult<RsToneRow> {
 
 #[pymethods]
 impl ToneRow {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -513,8 +512,7 @@ pub struct TwelveToneMatrix {
 
 #[pymethods]
 impl TwelveToneMatrix {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }

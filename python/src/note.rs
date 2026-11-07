@@ -892,8 +892,7 @@ pub(crate) fn note_from_any(value: &Bound<'_, PyAny>) -> PyResult<RsNote> {
 
 #[pymethods]
 impl Note {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
