@@ -5181,7 +5181,13 @@ fn music21_metadata<'py>(
             }
             _ => pyo3::types::PyString::new(py, value.text()).into_any(),
         };
-        made.call_method1("add", (name, given))?;
+        // A name music21 has no property for is one of its custom names.
+        if let Err(error) = made.call_method1("add", (name, &given)) {
+            if !error.is_instance_of::<pyo3::exceptions::PyKeyError>(py) {
+                return Err(error);
+            }
+            made.call_method1("addCustom", (name, given))?;
+        }
     }
     Ok(made)
 }
@@ -5267,6 +5273,13 @@ fn element_object_as<'py>(
             // it writes how loud the note is.
             if note.has_volume_information() {
                 Note::get_volume(&made, py)?;
+            }
+            // The id a reader found, `xml:id` in MEI, which music21 keeps
+            // as the object's own.
+            if whose == Whose::Music21
+                && let Some(id) = note.id()
+            {
+                made.setattr("id", id)?;
             }
             made.into_any()
         }

@@ -7509,6 +7509,15 @@ def test_routed_abc_slurs_stand_where_they_start():
     assert _routed_differences("abc", paths, (" Slur ",)) == []
 
 
+def test_routed_mei_notes_keep_their_ids():
+    """A note read from MEI through the crate keeps its `xml:id` as its
+    `id`, as music21's reader gives it."""
+    pytest.importorskip("music21.stream")
+    paths = ("mei/test/test_file.mei",)
+    found = _routed_differences("mei", paths, (" Note ",))
+    assert [line for line in found if "Slur" not in line] == []
+
+
 def test_a_blocked_member_says_it_is_not_ported():
     """A member music21 has and the wheel has not ported stays absent once
     installed, and says why, so it is not taken for a typo."""
