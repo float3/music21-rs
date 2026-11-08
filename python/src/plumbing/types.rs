@@ -17,13 +17,24 @@ const STREAM: &str = "music21.stream.Stream";
 /// The class music21's object type variables are bound by.
 const MUSIC21_OBJECT: &str = "music21.base.Music21Object";
 
-/// The union of these types, as `a | b | c` makes it.
+/// The union of these types, as `a | b | c` makes it. Python before 3.10
+/// cannot `|` two classes, and there it is `typing.Union` of them.
 fn union<'py>(types: &[Bound<'py, PyAny>]) -> PyResult<Bound<'py, PyAny>> {
     let mut made = types[0].clone();
     for next in &types[1..] {
-        made = made.bitor(next)?;
+        match made.bitor(next) {
+            Ok(joined) => made = joined,
+            Err(_) => return typing_union(types),
+        }
     }
     Ok(made)
+}
+
+/// `typing.Union` of these types.
+fn typing_union<'py>(types: &[Bound<'py, PyAny>]) -> PyResult<Bound<'py, PyAny>> {
+    let py = types[0].py();
+    let members = PyTuple::new(py, types)?;
+    py.import("typing")?.getattr("Union")?.get_item(members)
 }
 
 /// A `TypeVar` named `name`, bound by the class `bound` names. One in a

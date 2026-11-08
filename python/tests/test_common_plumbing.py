@@ -6,6 +6,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import weakref
 
 import pytest
 
@@ -137,7 +138,9 @@ import enum
 from music21.common import enums
 print(repr(enums.OffsetSpecial.AT_END), str(enums.OffsetSpecial.AT_END))
 print('highestTime' == enums.OffsetSpecial.AT_END, 'lowestOffset' in enums.OffsetSpecial, 6.0 in enums.OffsetSpecial)
-print(issubclass(enums.ElementSearch, enums.StrEnum), issubclass(enums.StrEnum, enum.StrEnum))
+# Python before 3.11 has no enum.StrEnum, and a str enum stands in for it.
+standard = getattr(enum, 'StrEnum', str)
+print(issubclass(enums.ElementSearch, enums.StrEnum), issubclass(enums.StrEnum, standard))
 print([m.value for m in enums.MeterDivision], enums.OrnamentDelay.DEFAULT_DELAY.value)
 print(repr(enums.GatherSpanners.ALL), bool(enums.GatherSpanners.NONE), bool(enums.GatherSpanners.COMPLETE_ONLY))
 print(enums.AppendSpanners.RELATED_ONLY == 'related_only', enums.ContainsEnum is enums.HexEnum)
@@ -251,13 +254,30 @@ print(filled[4], list(filled), caught[0].category.__name__)
 
 def test_types_and_weakrefs(tmp_path):
     code = """
+import sys
 import typing
-from music21.common import types, weakrefTools
-print(types.OffsetQL.__value__, types.OffsetQLIn.__value__)
-print(types.OffsetQLSpecial.__value__)
-print(types.StepName.__value__, types.StreamType.__bound__, types.M21ObjType.__name__)
-print(types.ClassListType.__value__, types.ClassListType.__type_params__)
-print(types.DocOrder.__value__)
+from collections.abc import Callable, Iterable
+from fractions import Fraction
+from music21.common import enums, types, weakrefTools
+
+if sys.version_info >= (3, 12):
+    print(types.OffsetQL.__value__, types.OffsetQLIn.__value__)
+    print(types.OffsetQLSpecial.__value__)
+    print(types.StepName.__value__, types.StreamType.__bound__, types.M21ObjType.__name__)
+    print(types.ClassListType.__value__, types.ClassListType.__type_params__)
+    print(types.DocOrder.__value__)
+else:
+    # Before 3.12 there is no TypeAliasType, and an alias is its value.
+    # ClassListType has a type variable of its own, as in its statement.
+    (M,) = types.ClassListType.__parameters__
+    print(types.OffsetQL == typing.Union[float, Fraction],
+          types.OffsetQLIn == typing.Union[int, float, Fraction])
+    print(types.OffsetQLSpecial == typing.Union[float, Fraction, enums.OffsetSpecial])
+    print(types.StepName == typing.Literal['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+          types.StreamType.__bound__, types.M21ObjType.__name__)
+    print(types.ClassListType == typing.Union[str, Iterable[str], type[M], Iterable[type[M]]],
+          M is not types.M21ObjType, M.__name__)
+    print(types.DocOrder == list[typing.Union[str, Callable]])
 
 class Mock:
     pass
@@ -267,15 +287,28 @@ ref = weakrefTools.wrapWeakref(a)
 print(type(ref).__name__, weakrefTools.wrapWeakref(ref) is ref, weakrefTools.wrapWeakref(5))
 print(weakrefTools.unwrapWeakref(ref) is a, weakrefTools.unwrapWeakref(a) is a)
 """
+    if sys.version_info >= (3, 12):
+        aliases = [
+            "float | fractions.Fraction int | float | fractions.Fraction",
+            "float | fractions.Fraction | music21.common.enums.OffsetSpecial",
+            "typing.Literal['C', 'D', 'E', 'F', 'G', 'A', 'B'] "
+            "ForwardRef('music21.stream.Stream') M21ObjType",
+            "str | collections.abc.Iterable[str] | type[M21ObjType] | "
+            "collections.abc.Iterable[type[M21ObjType]] (M21ObjType,)",
+            "list[str | collections.abc.Callable]",
+        ]
+    else:
+        aliases = [
+            "True True",
+            "True",
+            "True ForwardRef('music21.stream.Stream') M21ObjType",
+            "True True M21ObjType",
+            "True",
+        ]
     assert _run_provided(code, tmp_path) == [
-        "float | fractions.Fraction int | float | fractions.Fraction",
-        "float | fractions.Fraction | music21.common.enums.OffsetSpecial",
-        "typing.Literal['C', 'D', 'E', 'F', 'G', 'A', 'B'] "
-        "ForwardRef('music21.stream.Stream') M21ObjType",
-        "str | collections.abc.Iterable[str] | type[M21ObjType] | "
-        "collections.abc.Iterable[type[M21ObjType]] (M21ObjType,)",
-        "list[str | collections.abc.Callable]",
-        "ReferenceType True 5",
+        *aliases,
+        # `weakref.ref` is named `weakref` before Python 3.11.
+        f"{weakref.ref.__name__} True 5",
         "True True",
     ]
 

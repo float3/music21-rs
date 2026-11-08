@@ -230,6 +230,31 @@ pub(crate) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
     Ok(())
 }
 
+/// Writes an attribute as `object.__setattr__` does: through the first
+/// data descriptor the class chain has under the name, else into the
+/// object's dictionary. Python 3.9 and 3.10 refuse `object.__setattr__`
+/// itself on an object whose class sets attributes in Rust.
+pub(crate) fn plain_setattr(
+    object: &Bound<'_, PyAny>,
+    name: &str,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let classes = object.get_type().getattr("__mro__")?;
+    for class in classes.try_iter()? {
+        let members = class?.getattr("__dict__")?;
+        if !members.contains(name)? {
+            continue;
+        }
+        let found = members.get_item(name)?;
+        if let Some(setter) = found.get_type().getattr_opt("__set__")? {
+            setter.call1((found, object, value))?;
+            return Ok(());
+        }
+        break;
+    }
+    object.getattr("__dict__")?.set_item(name, value)
+}
+
 /// A flag read for its truth, as music21 reads one with `if inPlace:`, so
 /// `1`, `0` and `None` do for `True` and `False`. A string is refused:
 /// `'False'` is true in Python, and taking it would hide the mistake.

@@ -132,9 +132,7 @@ impl Unpitched {
             let written = slf.borrow().written.clone_ref(py);
             return written.bind(py).setattr(name, value);
         }
-        py.get_type::<pyo3::types::PyAny>()
-            .call_method1("__setattr__", (slf, name, value))?;
-        Ok(())
+        crate::plain_setattr(slf, name, value)
     }
 
     /// How long it lasts, the note's duration, which a stream reads off

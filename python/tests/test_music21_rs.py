@@ -10509,8 +10509,11 @@ print(correctors.MeasureRelationship._fields[:2])
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
+    # Before Python 3.12 there is no `type` alias, and `Possibility` is
+    # the plain `tuple[Pitch, ...]` it stands for.
+    name = "Possibility" if sys.version_info >= (3, 12) else "tuple"
     assert done.stdout.splitlines() == [
-        "Possibility B5 0.0",
+        f"{name} B5 0.0",
         "['voiceCrossing', 'isIncomplete', 'upperPartsWithinLimit', 'pitchesWithinLimit']",
         "True",
         "('flaggedMeasurePart', 'flaggedMeasureIndex')",

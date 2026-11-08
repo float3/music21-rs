@@ -273,12 +273,7 @@ impl ElementWrapper {
     /// where that has the attribute and `Music21Object` has not.
     fn __setattr__(slf: &Bound<'_, Self>, name: &str, value: Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
-        let own = |value: &Bound<'_, PyAny>| -> PyResult<()> {
-            py.import("builtins")?
-                .getattr("object")?
-                .call_method1("__setattr__", (slf, name, value))?;
-            Ok(())
-        };
+        let own = |value: &Bound<'_, PyAny>| crate::plain_setattr(slf, name, value);
         if name == "obj" {
             slf.borrow_mut().obj = value.unbind();
             return Ok(());

@@ -131,6 +131,19 @@ pub(crate) fn new_class<'py>(
     bases: Vec<Bound<'py, PyAny>>,
     members: Vec<(&str, Bound<'py, PyAny>)>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    new_class_of(py, module, name, doc, bases, members, None)
+}
+
+/// [`new_class`] with a metaclass of its own, as `metaclass=` names one.
+pub(crate) fn new_class_of<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+    doc: &str,
+    bases: Vec<Bound<'py, PyAny>>,
+    members: Vec<(&str, Bound<'py, PyAny>)>,
+    metaclass: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
     let mut filled: Vec<(String, Py<PyAny>)> = vec![
         (
             "__module__".to_string(),
@@ -161,10 +174,14 @@ pub(crate) fn new_class<'py>(
             Ok(())
         },
     )?;
+    let keywords = PyDict::new(py);
+    if let Some(metaclass) = metaclass {
+        keywords.set_item("metaclass", metaclass)?;
+    }
     py.import("types")?.getattr("new_class")?.call1((
         name,
         PyTuple::new(py, bases)?,
-        py.None(),
+        keywords,
         body,
     ))
 }

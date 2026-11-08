@@ -283,17 +283,17 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 static BUILT: pyo3::sync::PyOnceLock<Py<PyModule>> = pyo3::sync::PyOnceLock::new();
 
-/// A `type` statement's alias, `typing.TypeAliasType(name, value)`.
+/// A `type` statement's alias, `typing.TypeAliasType(name, value)`; before
+/// Python 3.12, which has no such type, the value it stands for.
 fn type_alias<'py>(
     py: Python<'py>,
     name: &str,
     value: Bound<'py, PyAny>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let alias = py
-        .import("typing")?
-        .getattr("TypeAliasType")?
-        .call1((name, value))?;
-    Ok(alias)
+    let Ok(alias_type) = py.import("typing")?.getattr("TypeAliasType") else {
+        return Ok(value);
+    };
+    alias_type.call1((name, value))
 }
 
 /// `tuple[Pitch, ...]` and the like: a generic alias of a builtin.

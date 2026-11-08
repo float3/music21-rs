@@ -17,7 +17,7 @@ use music21::common::enums::{
     OFFSET_SPECIAL, ORNAMENT_DELAY, hex_numbers,
 };
 
-use super::built::{class_method, method, new_class, static_method, super_of};
+use super::built::{class_method, method, new_class, new_class_of, static_method, super_of};
 
 /// The module music21 keeps these in.
 pub(crate) const MODULE: &str = "music21.common.enums";
@@ -103,6 +103,58 @@ fn boolean_bool(slf: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         .unbind())
 }
 
+/// `item in cls` as Python 3.12 answers it: a member of the enum, or a
+/// value one of its members has, where an older Python refuses anything
+/// but a member.
+#[pyfunction]
+#[pyo3(name = "__contains__")]
+fn enum_contains(cls: &Bound<'_, PyAny>, item: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if item.is_instance(cls)? {
+        return Ok(true);
+    }
+    match cls.getattr("_value2member_map_")?.contains(item) {
+        Ok(found) => return Ok(found),
+        Err(error) if !error.is_instance_of::<pyo3::exceptions::PyTypeError>(cls.py()) => {
+            return Err(error);
+        }
+        Err(_) => {}
+    }
+
+    // An unhashable value is looked for among the members' own.
+    for member in cls.try_iter()? {
+        if member?.getattr("_value_")?.eq(item)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The metaclass music21's enums answer `in` with: the enum module's own
+/// from Python 3.12, and before that one whose `__contains__` answers as
+/// 3.12's does.
+fn enum_type<'py>(m: &Bound<'py, PyModule>) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let py = m.py();
+    if py.version_info() >= (3, 12) {
+        return Ok(None);
+    }
+    let standard = py.import("enum")?.getattr("EnumMeta")?;
+    let contains = method(
+        wrap_pyfunction!(enum_contains, m)?.into_any(),
+        "enum",
+        "EnumType",
+        "__contains__",
+    )?;
+    let made = new_class(
+        py,
+        "enum",
+        "EnumType",
+        "The enum metaclass, with Python 3.12's `in`.",
+        vec![standard],
+        vec![("__contains__", contains)],
+    )?;
+    Ok(Some(made))
+}
+
 /// A class built once and kept.
 fn stored<'py>(py: Python<'py>, cell: &PyOnceLock<Py<PyAny>>) -> PyResult<Bound<'py, PyAny>> {
     cell.get(py)
@@ -154,6 +206,7 @@ fn enum_of<'py>(
 pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     let m = PyModule::new(py, MODULE)?;
     let enum_module = py.import("enum")?;
+    let metaclass = enum_type(&m)?;
     let repr = |class: &str| {
         method(
             wrap_pyfunction!(member_repr, &m)?.into_any(),
@@ -163,15 +216,16 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         )
     };
 
-    let str_enum = new_class(
+    let str_enum = new_class_of(
         py,
         MODULE,
         "StrEnum",
         "A string enum whose repr leaves the value out, as music21's always has.",
         vec![standard_str_enum(py)?],
         vec![("__repr__", repr("StrEnum")?)],
+        metaclass.as_ref(),
     )?;
-    let hex_enum = new_class(
+    let hex_enum = new_class_of(
         py,
         MODULE,
         "HexEnum",
@@ -197,9 +251,10 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
                 )?,
             ),
         ],
+        metaclass.as_ref(),
     )?;
     let _ = HEX_ENUM.set(py, hex_enum.clone().unbind());
-    let boolean_enum = new_class(
+    let boolean_enum = new_class_of(
         py,
         MODULE,
         "BooleanEnum",
@@ -236,6 +291,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
             ),
             ("__repr__", repr("BooleanEnum")?),
         ],
+        metaclass.as_ref(),
     )?;
     let _ = BOOLEAN_ENUM.set(py, boolean_enum.clone().unbind());
 
