@@ -171,6 +171,10 @@ pub enum Error {
     /// two separately, so the crate keeps them apart too.
     #[error("Value error: {0}")]
     Value(String),
+    /// A preference that cannot be set or read as asked, or a settings
+    /// file that cannot be read: music21's `EnvironmentException`.
+    #[error("Environment error: {0}")]
+    Environment(String),
 }
 
 /// A document of one format that cannot be read or written: what kind of
