@@ -262,6 +262,12 @@ ALSO = {
         'Music21ObjectException',
         'SitesException',
     ),
+    'music21.alpha.analysis.ornamentRecognizer': (
+        'opFrac',
+    ),
+    'music21.analysis.reduceChords': (
+        'opFrac',
+    ),
     'music21.analysis.windowed': (
         'DiscreteAnalysisException',
     ),
@@ -274,6 +280,10 @@ ALSO = {
         'Sites',
         'SitesException',
         'Style',
+        'opFrac',
+    ),
+    'music21.braille.segment': (
+        'opFrac',
     ),
     'music21.braille.text': (
         'numberToBraille',
@@ -284,6 +294,13 @@ ALSO = {
     ),
     'music21.chord': (
         'Duration',
+    ),
+    'music21.duration': (
+        'DENOM_LIMIT',
+        'opFrac',
+    ),
+    'music21.expressions': (
+        'opFrac',
     ),
     'music21.features': (
         'DataSet',
@@ -299,11 +316,15 @@ ALSO = {
     'music21.features.jSymbolic': (
         'Instrument',
     ),
+    'music21.figuredBass.realizer': (
+        'opFrac',
+    ),
     'music21.figuredBass.realizerScale': (
         'convertToPitch',
     ),
     'music21.humdrum.spineParser': (
         'GraceDuration',
+        'opFrac',
     ),
     'music21.metadata': (
         'Contributor',
@@ -327,9 +348,11 @@ ALSO = {
     ),
     'music21.meter.base': (
         'MeterSequence',
+        'opFrac',
     ),
     'music21.meter.core': (
         'MeterException',
+        'opFrac',
     ),
     'music21.note': (
         'Duration',
@@ -371,6 +394,9 @@ ALSO = {
         'ToneRow',
         'pcToToneRow',
     ),
+    'music21.spanner': (
+        'opFrac',
+    ),
     'music21.stream': (
         'StreamException',
     ),
@@ -384,6 +410,7 @@ ALSO = {
     ),
     'music21.stream.makeNotation': (
         'StreamException',
+        'opFrac',
     ),
     'music21.voiceLeading': (
         'Key',

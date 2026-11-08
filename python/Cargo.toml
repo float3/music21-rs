@@ -26,7 +26,10 @@ music21 = { path = "..", default-features = false, features = [
 ] }
 # `HarteLabel`, which the harte-rs package builds its `Harte` on.
 harte = { path = "../harte" }
-pyo3 = "0.29.0"
+# `num-bigint`: a Python int of any size is a `BigInt`, as music21's
+# `common.numberTools` reads and writes them.
+pyo3 = { version = "0.29.0", features = ["num-bigint"] }
+num-bigint = "0.4"
 # A facade object is pickled by writing its musical half out as text, which
 # is what music21 does to freeze a score.
 serde = "1"

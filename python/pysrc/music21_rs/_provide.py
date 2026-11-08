@@ -169,6 +169,16 @@ def _contents(homes=True, children=False):
         if not isinstance(module, str) or not module.startswith("music21."):
             continue
         contents.setdefault(module, {}).setdefault(name, value)
+    # Modules built whole in Rust, `music21.common` among them: every name
+    # each has, its private ones too, since music21's examples reach for
+    # some, and its `__all__`, which a star import of it follows.
+    built_names = {}
+    for module, built in getattr(_extension, "__music21_rust_modules__", ()):
+        names = contents.setdefault(module, {})
+        for name, value in vars(built).items():
+            if name == "__all__" or not name.startswith("__"):
+                names[name] = value
+                built_names.setdefault(name, value)
     for module, own in _PYTHON_MODULES.items():
         written = importlib.import_module(f"{__package__}.{own}")
         for name in written.__all__:
@@ -189,11 +199,11 @@ def _contents(homes=True, children=False):
         "CorpusException"
     ]
     if homes:
-        known = {"Music21Exception": Music21Exception}
+        known = {**built_names, "Music21Exception": Music21Exception}
         for table in (_homes.HOMES, _homes.ALSO):
             for module, names in table.items():
                 for name in names:
-                    value = known.get(name) or getattr(_extension, name)
+                    value = known[name] if name in known else getattr(_extension, name)
                     contents.setdefault(module, {}).setdefault(name, value)
     for child, parent in _CHILDREN_OF_PACKAGE.items():
         for name, value in contents.get(parent, {}).items():
@@ -278,7 +288,9 @@ class _Provider(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         names = self.contents[fullname]
         module.__doc__ = f"music21's {fullname}, as far as music21-rs provides it."
         module.__dict__.update(names)
-        module.__all__ = sorted(name for name in names if not name.startswith("_"))
+        module.__all__ = list(names["__all__"]) if "__all__" in names else sorted(
+            name for name in names if not name.startswith("_")
+        )
         if fullname == "music21":
             version = _extension.__version__
             module.__doc__ = (
