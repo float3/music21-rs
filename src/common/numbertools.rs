@@ -705,7 +705,8 @@ pub fn nearest_multiple(value: FloatType, unit: FloatType) -> Result<NearestMult
             float_repr(unit)
         )));
     }
-    let multiple = (value / unit).floor();
+    // Python's `math.floor` gives a whole number, which has no sign.
+    let multiple = (value / unit).floor() + 0.0;
     let low = unit * multiple;
     let high = unit * (multiple + 1.0);
     if low >= value && value >= high {
@@ -1203,6 +1204,15 @@ mod tests {
             "Value error: n (-0.5) is less than zero. Thus, cannot find the nearest multiple \
              for a value less than the unit, 0.125"
         );
+    }
+
+    /// Python's `math.floor` gives an int, which has no sign, so music21's
+    /// multiple of nought is a positive nought even for a negative one.
+    #[test]
+    fn the_multiple_of_negative_nought_is_unsigned() {
+        let found = nearest_multiple(-0.0, 0.125).unwrap();
+        assert!(found.multiple.is_sign_positive());
+        assert!(found.error.is_sign_negative());
     }
 
     #[test]
