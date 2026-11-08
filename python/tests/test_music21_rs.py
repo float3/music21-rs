@@ -9955,6 +9955,40 @@ def test_the_context_search_follows_derivations():
     assert [context.site for context in again.contextSites(followDerivation=False)] == [again]
 
 
+def test_a_spanner_is_a_site_of_what_it_joins():
+    """What a spanner joins stands in its `spannerStorage`, which is one of
+    their sites but never their `activeSite` or a context, and each finds
+    the spanners it is in through `getSpannerSites`, as in music21."""
+    c, d, e = m.Note("C4"), m.Note("D4"), m.Note("E4")
+    slur = m.Slur(c, d)
+    assert c.getSpannerSites() == [slur]
+    cresc = m.Crescendo(d, c)
+    assert d.getSpannerSites() == [slur, cresc]
+    dim = m.Diminuendo(c, d)
+    assert d.getSpannerSites(m.Diminuendo) == [dim]
+    assert d.getSpannerSites(m.DynamicWedge) == [cresc, dim]
+    assert d.getSpannerSites(["Slur", "Diminuendo"]) == [slur, dim]
+    assert e.getSpannerSites() == []
+
+    storage = slur.spannerStorage
+    assert repr(storage) == "<music21.stream.SpannerStorage for music21.spanner.Slur>"
+    assert storage.client is slur and storage.classes[0] == "SpannerStorage"
+    assert storage in c.sites and c.sites.getSitesByClass("SpannerStorage")[0] is storage
+    assert c.activeSite is None
+
+    held = m.Stream()
+    held.append(c)
+    held.append(d)
+    held.insert(0, slur)
+    assert c.activeSite is held
+    assert [context.site for context in c.contextSites()] == [held]
+    slur.replaceSpannedElement(d, e)
+    assert d.getSpannerSites() == [cresc, dim] and e.getSpannerSites() == [slur]
+    assert repr(m.SpannerStorage(client=m.Slur())) == (
+        "<music21.stream.SpannerStorage for music21.spanner.Slur>"
+    )
+
+
 def test_music21s_middle_classes_are_the_packages():
     """The classes music21 puts between an element's class and
     `Music21Object` are the package's too, in music21's modules, so

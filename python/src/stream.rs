@@ -6293,6 +6293,7 @@ macro_rules! stream_kinds {
 
         fn register_kinds(m: &Bound<'_, PyModule>) -> PyResult<()> {
             $(m.add_class::<$class>()?;)*
+            m.add_class::<SpannerStorage>()?;
             Ok(())
         }
     };
@@ -6363,6 +6364,104 @@ stream_kinds!(
         "music21's `Opus`: a collection of scores."
     ),
 );
+
+/// music21's `stream.SpannerStorage`: the stream a spanner keeps what it
+/// joins in. Holding them makes it one of their sites, through which each
+/// finds its spanners (`getSpannerSites`); it is never their `activeSite`
+/// and never one of their contexts, as music21's is not.
+#[pyclass(name = "SpannerStorage", module = "music21.stream", extends = Stream, subclass)]
+pub struct SpannerStorage {
+    /// The spanner whose storage this is: music21's `client`.
+    #[pyo3(get, set)]
+    client: Py<PyAny>,
+}
+
+impl SpannerStorage {
+    /// A storage for `client` holding these, one after another, as
+    /// music21's spanner appends them.
+    pub(crate) fn holding<'py>(
+        client: &Bound<'py, PyAny>,
+        held: &[Py<PyAny>],
+    ) -> PyResult<Bound<'py, SpannerStorage>> {
+        let py = client.py();
+        let mut stream = Stream::empty(StreamKind::Stream);
+        let mut end = 0.0;
+        for object in held {
+            let object = object.bind(py);
+            stream.put(end, object);
+            end += length_of(object)?;
+        }
+        let made = Bound::new(
+            py,
+            crate::base::built(stream).add_subclass(Self {
+                client: client.clone().unbind(),
+            }),
+        )?;
+        Stream::birth(made.as_super())?;
+        Ok(made)
+    }
+
+    /// Holds these instead of what it held, as music21 edits its storage in
+    /// place: what is let go no longer finds the spanner.
+    pub(crate) fn refill(storage: &Bound<'_, SpannerStorage>, held: &[Py<PyAny>]) -> PyResult<()> {
+        let py = storage.py();
+        let mut stream = storage.as_super().borrow_mut();
+        stream.held_mut().clear();
+        let mut end = 0.0;
+        for object in held {
+            let object = object.bind(py);
+            stream.put(end, object);
+            end += length_of(object)?;
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl SpannerStorage {
+    /// music21's `SpannerStorage(givenElements=None, *, client=None)`; with
+    /// no client, a bare `Spanner`'s, as music21 makes one for testing.
+    #[new]
+    #[pyo3(signature = (givenElements = None, *, client = None, **keywords))]
+    fn new(
+        py: Python<'_>,
+        givenElements: Option<&Bound<'_, PyAny>>,
+        client: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let client = match client.filter(|client| !client.is_none()) {
+            Some(client) => client.clone().unbind(),
+            None => py.get_type::<crate::spanner::Spanner>().call0()?.unbind(),
+        };
+        let stream = Stream::filled(py, StreamKind::Stream, givenElements, keywords)?;
+        Ok(crate::base::built(stream).add_subclass(Self { client }))
+    }
+
+    /// What music21 says this is.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        let mut names = vec!["SpannerStorage".to_string()];
+        names.extend(lineage_of(slf.as_any())?);
+        Ok(names)
+    }
+
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let client = slf.borrow().client.bind(slf.py()).get_type();
+        Ok(format!(
+            "<music21.stream.{} for {}.{}>",
+            slf.get_type().qualname()?,
+            client.getattr("__module__")?,
+            client.qualname()?
+        ))
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.client)
+    }
+}
 
 impl Stream {
     /// The first stream this one holds, in its order.

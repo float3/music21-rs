@@ -31,7 +31,7 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use pyo3::exceptions::{PyAttributeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PySet, PyWeakrefMethods, PyWeakrefReference};
+use pyo3::types::{PyDict, PyList, PySet, PyTuple, PyWeakrefMethods, PyWeakrefReference};
 
 use music21::StreamKind;
 
@@ -58,6 +58,9 @@ pub(crate) fn next_index() -> u64 {
 pub(crate) struct Here {
     reference: Py<PyWeakrefReference>,
     key: usize,
+    /// Whether the stream is a spanner's storage, which is never an
+    /// element's `activeSite`.
+    storage: bool,
 }
 
 impl Here {
@@ -66,6 +69,7 @@ impl Here {
         Ok(Self {
             reference: PyWeakrefReference::new(stream)?.unbind(),
             key: stream.as_ptr() as usize,
+            storage: is_storage(stream),
         })
     }
 
@@ -73,6 +77,7 @@ impl Here {
         Self {
             reference: self.reference.clone_ref(py),
             key: self.key,
+            storage: self.storage,
         }
     }
 
@@ -244,8 +249,14 @@ fn with_row<T>(element: &Bound<'_, PyAny>, change: impl FnOnce(&mut Record) -> T
     table.records.get_mut(&key).map(change)
 }
 
+/// Whether a stream is a spanner's storage: music21's `SpannerStorage`.
+fn is_storage(stream: &Bound<'_, PyAny>) -> bool {
+    stream.cast::<crate::stream::SpannerStorage>().is_ok()
+}
+
 /// Writes a stream into the sites of an element it has just put in, and
-/// makes it the element's `activeSite`, as music21's `coreInsert` does.
+/// makes it the element's `activeSite`, as music21's `coreInsert` does --
+/// but for a spanner's storage, which music21 never makes one.
 pub(crate) fn entered(element: &Bound<'_, PyAny>, here: &Here, index: u64, offset: f64) {
     let py = element.py();
     with_row(element, |record| {
@@ -256,6 +267,9 @@ pub(crate) fn entered(element: &Bound<'_, PyAny>, here: &Here, index: u64, offse
             here: here.clone_ref(py),
             index,
         });
+        if here.storage {
+            return;
+        }
         record.active = Some(here.clone_ref(py));
         record.stored = Some(offset);
     });
@@ -264,6 +278,9 @@ pub(crate) fn entered(element: &Bound<'_, PyAny>, here: &Here, index: u64, offse
 /// Makes a stream the `activeSite` of an element reached through it.
 pub(crate) fn reached(element: &Bound<'_, PyAny>, here: &Here, offset: f64) {
     let py = element.py();
+    if here.storage {
+        return;
+    }
     with_row(element, |record| {
         record.active = Some(here.clone_ref(py));
         record.stored = Some(offset);
@@ -553,7 +570,9 @@ fn contexts_from<'py>(
     // derivations are followed once the sites are done.
     let mut top = element.clone();
     for site in ordered_sites(element, walk.by_creation, target.as_ref()) {
-        if memo.contains(&(site.as_ptr() as usize)) {
+        // A spanner's storage is no context, as music21 passes over its
+        // `SpannerStorage`.
+        if memo.contains(&(site.as_ptr() as usize)) || is_storage(&site) {
             continue;
         }
         let Some(placed) = sort_key_in(element, &site) else {
@@ -1172,6 +1191,67 @@ fn sort_tuple<'py>(py: Python<'py>, key: &SortKey) -> PyResult<Bound<'py, PyAny>
     ))
 }
 
+/// Where a spanner stands, for putting spanners in order: in its
+/// `activeSite`, or at its own offset.
+fn spanner_place(spanner: &Bound<'_, PyAny>) -> SortKey {
+    if let Some(site) = active_site(spanner)
+        && let Some(placed) = sort_key_in(spanner, &site)
+    {
+        return placed;
+    }
+    let priority = spanner
+        .getattr("priority")
+        .and_then(|priority| priority.extract::<f64>())
+        .unwrap_or(0.0);
+    SortKey {
+        at_end: 0.0,
+        offset: offset_of(spanner),
+        priority,
+        order: crate::stream::sort_order_of(spanner) as f64,
+        not_grace: 1.0,
+        index: 0.0,
+    }
+}
+
+/// music21's `getSpannerSites`: the spanners whose storage holds the
+/// element, of these classes where any are given, in the order they
+/// stand.
+#[pyfunction]
+#[pyo3(signature = (element, spannerClassList = None))]
+fn getSpannerSites<'py>(
+    element: &Bound<'py, PyAny>,
+    spannerClassList: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let classes: Option<Vec<Bound<'py, PyAny>>> = match spannerClassList
+        .filter(|given| !given.is_none())
+    {
+        None => None,
+        Some(given) if given.is_instance_of::<PyList>() || given.is_instance_of::<PyTuple>() => {
+            Some(given.try_iter()?.collect::<PyResult<_>>()?)
+        }
+        Some(given) => Some(vec![given.clone()]),
+    };
+    let mut found = Vec::new();
+    for (site, _) in live_sites(element) {
+        let Ok(storage) = site.cast::<crate::stream::SpannerStorage>() else {
+            continue;
+        };
+        let client = storage.getattr("client")?;
+        if let Some(classes) = &classes {
+            let mut kept = false;
+            for class in classes {
+                kept = kept || crate::stream::answers_to_class(&client, class)?;
+            }
+            if !kept {
+                continue;
+            }
+        }
+        found.push((spanner_place(&client), client));
+    }
+    found.sort_by(|(mine, _), (theirs, _)| mine.compare(theirs));
+    Ok(found.into_iter().map(|(_, spanner)| spanner).collect())
+}
+
 /// music21's `getContextByClass`: the nearest element of a class in the
 /// element's streams and theirs, outwards.
 #[pyfunction]
@@ -1479,7 +1559,7 @@ fn element_classes(py: Python<'_>) -> Vec<Bound<'_, pyo3::types::PyType>> {
 
 /// Every member put on the classes, which installing replaces with
 /// music21's own.
-pub(crate) const MEMBERS: [&str; 18] = [
+pub(crate) const MEMBERS: [&str; 19] = [
     "sites",
     "activeSite",
     "offset",
@@ -1498,6 +1578,7 @@ pub(crate) const MEMBERS: [&str; 18] = [
     "_getMeasureOffset",
     "_getTimeSignatureForBeat",
     "derivation",
+    "getSpannerSites",
 ];
 
 /// Puts the members on every element class that does not define them
@@ -1542,6 +1623,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
             wrap_pyfunction!(_getTimeSignatureForBeat, m)?
                 .into_any()
                 .unbind(),
+        ),
+        (
+            "getSpannerSites",
+            wrap_pyfunction!(getSpannerSites, m)?.into_any().unbind(),
         ),
     ];
     for class in element_classes(py) {

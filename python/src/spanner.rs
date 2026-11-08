@@ -68,8 +68,8 @@ pub struct Spanner {
     /// asked for `getSpannerSites` finds this spanner, which it can only do
     /// where it has really been put into such a stream. Nothing of the
     /// crate is in it; it is rebuilt from the list whenever the list
-    /// changes, and there is none at all where music21 cannot be asked for
-    /// the class.
+    /// changes, and is the package's own `SpannerStorage` where music21
+    /// cannot be asked for the class or will not hold the objects.
     storage: Option<Py<PyAny>>,
 }
 
@@ -97,25 +97,26 @@ impl Spanner {
         }
     }
 
-    /// Builds music21's own `SpannerStorage` afresh over the notes this
-    /// joins, where music21 is there to ask for the class.
+    /// Builds the `SpannerStorage` afresh over the notes this joins:
+    /// music21's own where music21 is there and will hold them, and the
+    /// package's otherwise.
     ///
     /// Rebuilt rather than edited, since putting the objects in is what
     /// registers this spanner as a site on each of them -- which is the
     /// whole of what `getSpannerSites` reads.
     pub(crate) fn refresh_storage(slf: &Bound<'_, Self>) -> PyResult<()> {
         let py = slf.py();
-        let Ok(class) = crate::real_music21(py, "music21.stream")
-            .and_then(|module| module.getattr("SpannerStorage"))
-        else {
-            return Ok(());
-        };
         let held: Vec<Py<PyAny>> = slf
             .borrow()
             .spanned
             .iter()
             .map(|object| object.clone_ref(py))
             .collect();
+        let Ok(class) = crate::real_music21(py, "music21.stream")
+            .and_then(|module| module.getattr("SpannerStorage"))
+        else {
+            return Self::own_storage(slf, &held);
+        };
         let elements = pyo3::types::PyList::empty(py);
         for object in &held {
             elements.append(object.bind(py))?;
@@ -136,9 +137,33 @@ impl Spanner {
         // cannot hold are none it could have read.
         match class.call((elements,), Some(&keywords)) {
             Ok(made) => slf.borrow_mut().storage = Some(made.unbind()),
-            Err(_) => slf.borrow_mut().storage = None,
+            Err(_) => return Self::own_storage(slf, &held),
         }
         Ok(())
+    }
+
+    /// The package's own `SpannerStorage` over these: the one it has,
+    /// refilled, or a new one.
+    fn own_storage(slf: &Bound<'_, Self>, held: &[Py<PyAny>]) -> PyResult<()> {
+        let py = slf.py();
+        let kept = slf.borrow().storage.as_ref().map(|held| held.clone_ref(py));
+        if let Some(kept) = kept
+            && let Ok(kept) = kept.bind(py).cast::<crate::stream::SpannerStorage>()
+        {
+            return crate::stream::SpannerStorage::refill(kept, held);
+        }
+        let made = crate::stream::SpannerStorage::holding(slf.as_any(), held)?;
+        slf.borrow_mut().storage = Some(made.into_any().unbind());
+        Ok(())
+    }
+
+    /// The storage, where it is music21's own: the one whose members
+    /// music21 asks of it.
+    fn music21_storage(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.storage
+            .as_ref()
+            .filter(|held| held.bind(py).cast::<crate::stream::Stream>().is_err())
+            .map(|held| held.clone_ref(py))
     }
 
     /// The object for a spanner of the crate's, joining these objects:
@@ -259,13 +284,9 @@ impl Spanner {
         Ok(())
     }
 
-    /// The stream music21 keeps a spanner's joined objects in: its own
-    /// `stream.SpannerStorage`, holding the very notes this joins.
-    ///
-    /// There is no such class without music21, and nothing of this package
-    /// stands in for a stream of music21's, so a wheel on its own says as
-    /// much rather than answering a stream that music21's own code would
-    /// not accept.
+    /// The stream a spanner's joined objects are kept in: a
+    /// `stream.SpannerStorage` holding the very notes this joins, music21's
+    /// own where music21 will hold them and the package's otherwise.
     #[getter]
     fn spannerStorage(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
@@ -273,12 +294,7 @@ impl Spanner {
             Self::refresh_storage(slf)?;
         }
         slf.borrow().storage.as_ref().map_or_else(
-            || {
-                Err(SpannerException::new_err(
-                    "stream.SpannerStorage is music21's own, which this package does not \
-                     stand in for, so this member needs music21 beside it",
-                ))
-            },
+            || Err(SpannerException::new_err("this spanner has no storage")),
             |held| Ok(held.clone_ref(py)),
         )
     }
@@ -520,7 +536,8 @@ impl Spanner {
         #[pyo3(from_py_with = crate::truthy)] rescanIsDead: bool,
     ) -> PyResult<()> {
         let py = slf.py();
-        if let Some(storage) = slf.borrow().storage.as_ref().map(|held| held.clone_ref(py)) {
+        let storage = slf.borrow().music21_storage(py);
+        if let Some(storage) = storage {
             let keywords = PyDict::new(py);
             keywords.set_item("rescanIsDead", rescanIsDead)?;
             storage
@@ -544,7 +561,8 @@ impl Spanner {
         #[pyo3(from_py_with = crate::truthy)] excludeStorageStreams: bool,
     ) -> PyResult<()> {
         let py = slf.py();
-        if let Some(storage) = slf.borrow().storage.as_ref().map(|held| held.clone_ref(py)) {
+        let storage = slf.borrow().music21_storage(py);
+        if let Some(storage) = storage {
             storage
                 .bind(py)
                 .call_method1("purgeOrphans", (excludeStorageStreams,))?;

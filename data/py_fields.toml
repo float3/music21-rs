@@ -360,6 +360,10 @@ reason = "a member put on the element classes, holding the function it binds"
 kind = "facade-only"
 reason = "the element whose sites it reads, kept in the sites table"
 
+[SpannerStorage]
+kind = "facade-only"
+reason = "the spanner it is the storage of"
+
 [SpannerBundle]
 kind = "facade-only"
 reason = "spanners"
