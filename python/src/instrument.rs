@@ -541,6 +541,7 @@ impl Instrument {
             copy.printPartName = me.printPartName;
             copy.printPartAbbreviation = me.printPartAbbreviation;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

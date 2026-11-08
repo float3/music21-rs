@@ -256,6 +256,10 @@ reason = "a search result over a stream"
 kind = "facade-only"
 reason = "a search over a stream"
 
+[Derivation]
+kind = "facade-only"
+reason = "what an element was made from and how, which no crate value carries"
+
 [Editorial]
 kind = "facade-only"
 reason = "a dictionary of what an analysis wrote"
@@ -322,7 +326,7 @@ reason = "two marks and how the change is drawn"
 
 [Music21Object]
 kind = "facade-only"
-reason = "music21's groups, a list of names no crate value carries"
+reason = "music21's groups and derivation, which no crate value carries"
 
 [PercussionChord]
 kind = "facade-only"

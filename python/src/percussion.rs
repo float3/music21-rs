@@ -289,6 +289,7 @@ impl PercussionChord {
         copied
             .extract::<PyRefMut<'_, Self>>()?
             .set_notes(Some(copies.as_any()))?;
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

@@ -83,6 +83,7 @@ pub mod clef;
 pub mod clercqtemperley;
 pub mod converters;
 pub mod correlate;
+pub mod derivation;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
@@ -321,7 +322,7 @@ where
     // installed only the wheel.
     if class.is(T::type_object(py)) {
         let copy = Bound::new(py, base::built(value))?.into_any();
-        base::carry_groups(slf.as_any(), &copy)?;
+        base::copied_from(slf.as_any(), &copy)?;
         return Ok(copy);
     }
     // Through the helper, so that the copy gets the music21 half started as
@@ -329,7 +330,7 @@ where
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
-    base::carry_groups(slf.as_any(), &copy)?;
+    base::copied_from(slf.as_any(), &copy)?;
     carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
 }
@@ -363,8 +364,9 @@ fn carry_attributes(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyRes
 ///
 /// `n.transpose('P5')` hands back a copy, and music21 writes on the copy
 /// what it was made from and how; its own streams read that back — a
-/// deepcopy of a stream moves its spanners onto the copies by it. A thing no
-/// stream holds keeps no derivation, and nothing is written on one.
+/// deepcopy of a stream moves its spanners onto the copies by it — and the
+/// context search follows it. A thing no stream holds keeps no derivation,
+/// and nothing is written on one.
 pub(crate) fn derived_from(
     made: &Bound<'_, PyAny>,
     origin: &Bound<'_, PyAny>,
@@ -2190,6 +2192,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tree::register(m)?;
     formats::register(m)?;
     converters::register(m)?;
+    derivation::register(m)?;
     // Once every class is made: it gives some a second base.
     base::add_bases(m)?;
     // Last: it puts its members on classes the others registered.

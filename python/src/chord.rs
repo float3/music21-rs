@@ -2826,41 +2826,45 @@ impl Chord {
     // ---- reshaping -------------------------------------------------------
 
     #[pyo3(signature = (forceOctave = None, *, inPlace = false, leaveRedundantPitches = false))]
-    fn closedPosition(
-        &mut self,
-        py: Python<'_>,
+    fn closedPosition<'py>(
+        slf: &Bound<'py, Self>,
         forceOctave: Option<i32>,
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         #[pyo3(from_py_with = crate::truthy)] leaveRedundantPitches: bool,
-    ) -> PyResult<Option<Chord>> {
-        let closed = self
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let closed = slf
+            .borrow()
             .inner
             .closed_position(forceOctave, leaveRedundantPitches);
         if inPlace {
-            self.replace_inner(py, closed)?;
-            Ok(None)
-        } else {
-            Ok(Some(Self::from_inner(py, closed)?))
+            slf.borrow_mut().replace_inner(py, closed)?;
+            return Ok(None);
         }
+        let made = Bound::new(py, crate::base::built(Self::from_inner(py, closed)?))?.into_any();
+        crate::derived_from(&made, slf.as_any(), "closedPosition")?;
+        Ok(Some(made))
     }
 
     #[pyo3(signature = (forceOctave = None, *, inPlace = false, leaveRedundantPitches = false))]
-    fn semiClosedPosition(
-        &mut self,
-        py: Python<'_>,
+    fn semiClosedPosition<'py>(
+        slf: &Bound<'py, Self>,
         forceOctave: Option<i32>,
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
         #[pyo3(from_py_with = crate::truthy)] leaveRedundantPitches: bool,
-    ) -> PyResult<Option<Chord>> {
-        let moved = self
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let moved = slf
+            .borrow()
             .inner
             .semi_closed_position(forceOctave, leaveRedundantPitches);
         if inPlace {
-            self.replace_inner(py, moved)?;
-            Ok(None)
-        } else {
-            Ok(Some(Self::from_inner(py, moved)?))
+            slf.borrow_mut().replace_inner(py, moved)?;
+            return Ok(None);
         }
+        let made = Bound::new(py, crate::base::built(Self::from_inner(py, moved)?))?.into_any();
+        crate::derived_from(&made, slf.as_any(), "closedPosition")?;
+        Ok(Some(made))
     }
 
     #[pyo3(signature = (*, inPlace = false))]
@@ -3024,8 +3028,8 @@ impl Chord {
         }
         let mut built = Self::from_inner(py, moved)?;
         built.overrides = overrides;
+        // A copy, as music21's own is, and so derived via `__deepcopy__`.
         let copy = crate::copy_as_same_type(slf, built)?;
-        crate::derived_from(&copy, slf.as_any(), "transpose")?;
         Ok(Some(copy.unbind()))
     }
 

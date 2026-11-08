@@ -441,6 +441,7 @@ impl KeySignature {
         if let Ok(target) = copy.cast::<Self>() {
             target.borrow_mut().signature = slf.borrow().signature.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copy)?;
         Ok(copy)
     }
 }

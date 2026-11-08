@@ -468,35 +468,73 @@ struct Context<'py> {
 struct Walk {
     by_creation: bool,
     target_only: bool,
+    /// Whether what an element was derived from is searched after its own
+    /// streams: music21's `followDerivation`.
+    follow: bool,
 }
 
 /// music21's `contextSites`: each stream an element stands in, and each
 /// stream those stand in, outwards, with where the element would stand in
-/// each and how a search looks inside it. Derivations are not followed:
-/// the package keeps none.
+/// each and how a search looks inside it; then, where `walk.follow` says,
+/// the same of what the outermost of them was derived from.
 fn context_sites<'py>(element: &Bound<'py, PyAny>, walk: Walk) -> Vec<Context<'py>> {
     let mut memo = HashSet::new();
     let mut out = Vec::new();
-    if element.cast::<Stream>().is_ok() {
-        // A stream is its own first context, ahead of everything at its
-        // start.
-        let own = SortKey {
-            at_end: 0.0,
-            offset: 0.0,
-            priority: f64::NEG_INFINITY,
-            order: crate::stream::sort_order_of(element) as f64,
-            not_grace: 1.0,
-            index: 0.0,
-        };
-        out.push(Context {
-            site: element.clone(),
-            at: own,
-            recursion: recursion_of(element),
-        });
-        memo.insert(element.as_ptr() as usize);
-    }
+    own_context(element, &mut memo, &mut out);
     contexts_from(element, &mut memo, 0.0, walk, None, &mut out);
     out
+}
+
+/// A stream is its own first context, ahead of everything at its start.
+fn own_context<'py>(
+    element: &Bound<'py, PyAny>,
+    memo: &mut HashSet<usize>,
+    out: &mut Vec<Context<'py>>,
+) {
+    if element.cast::<Stream>().is_err() || !memo.insert(element.as_ptr() as usize) {
+        return;
+    }
+    let own = SortKey {
+        at_end: 0.0,
+        offset: 0.0,
+        priority: f64::NEG_INFINITY,
+        order: crate::stream::sort_order_of(element) as f64,
+        not_grace: 1.0,
+        index: 0.0,
+    };
+    out.push(Context {
+        site: element.clone(),
+        at: own,
+        recursion: recursion_of(element),
+    });
+}
+
+/// The contexts of what `top` was derived from, and what that was derived
+/// from, back, as music21's `contextSites` searches them once an element's
+/// own are done: each where it would stand, `offset_append` on.
+fn derived_contexts<'py>(
+    top: &Bound<'py, PyAny>,
+    memo: &mut HashSet<usize>,
+    offset_append: f64,
+    walk: Walk,
+    out: &mut Vec<Context<'py>>,
+) {
+    let inner = Walk {
+        target_only: false,
+        follow: true,
+        ..walk
+    };
+    for derived in crate::derivation::chain_of(top) {
+        let mut found = Vec::new();
+        own_context(&derived, memo, &mut found);
+        contexts_from(&derived, memo, 0.0, inner, None, &mut found);
+        for context in found {
+            out.push(Context {
+                at: context.at.at(context.at.offset + offset_append),
+                ..context
+            });
+        }
+    }
 }
 
 fn contexts_from<'py>(
@@ -511,6 +549,9 @@ fn contexts_from<'py>(
         None if !walk.by_creation => active_site(element),
         given => given,
     };
+    // music21's `topLevel`: the outermost stream reached, whose
+    // derivations are followed once the sites are done.
+    let mut top = element.clone();
     for site in ordered_sites(element, walk.by_creation, target.as_ref()) {
         if memo.contains(&(site.as_ptr() as usize)) {
             continue;
@@ -527,12 +568,16 @@ fn contexts_from<'py>(
         memo.insert(site.as_ptr() as usize);
 
         let mut outer = Vec::new();
+        // music21 asks the stream's own contexts with its defaults, which
+        // follow derivations whatever this walk says.
         let inner = Walk {
             target_only: false,
+            follow: true,
             ..walk
         };
         contexts_from(&site, memo, position.offset, inner, None, &mut outer);
         for context in outer {
+            top = context.site.clone();
             if walk.target_only
                 && !target
                     .as_ref()
@@ -548,6 +593,9 @@ fn contexts_from<'py>(
         if walk.target_only {
             break;
         }
+    }
+    if walk.follow {
+        derived_contexts(&top, memo, offset_append, walk, out);
     }
 }
 
@@ -740,6 +788,7 @@ fn meter_for_beat<'py>(element: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py
         Walk {
             by_creation: false,
             target_only: false,
+            follow: true,
         },
     )
 }
@@ -776,6 +825,7 @@ fn measure_offset(element: &Bound<'_, PyAny>, padded: bool) -> PyResult<f64> {
     let walk = Walk {
         by_creation: true,
         target_only: false,
+        follow: true,
     };
     if let Some(measure) = context_by_class(element, Some("Measure"), Search::AtOrBefore, walk)?
         && let Holding::At(offset) = holding(&measure, element)
@@ -845,6 +895,7 @@ fn measure_number<'py>(element: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py
     let walk = Walk {
         by_creation: false,
         target_only: false,
+        follow: true,
     };
     let mut number = None;
     for context in context_sites(element, walk) {
@@ -985,7 +1036,14 @@ fn getOffsetBySite<'py>(
     let Some(site) = site.filter(|site| !site.is_none()) else {
         return crate::duration::op_frac(py, read(element).naive);
     };
-    site.call_method1("elementOffset", (element,)).map_err(|_| {
+    let found = site.call_method1("elementOffset", (element,));
+    // Where the stream does not hold it, music21 asks after what it was
+    // derived from.
+    let found = match (found, crate::derivation::origin_of(element)) {
+        (Err(_), Some(origin)) => site.call_method1("elementOffset", (origin,)),
+        (found, _) => found,
+    };
+    found.map_err(|_| {
         SitesException::new_err(format!(
             "an entry for this object {} is not stored in stream {}",
             element
@@ -1029,6 +1087,7 @@ fn getOffsetInHierarchy<'py>(
     let walk = Walk {
         by_creation: false,
         target_only: false,
+        follow: true,
     };
     for context in context_sites(element, walk) {
         if context.site.is(site) {
@@ -1061,11 +1120,12 @@ fn contextSites<'py>(
     #[pyo3(from_py_with = crate::truthy)] followDerivation: bool,
     #[pyo3(from_py_with = crate::truthy)] priorityTargetOnly: bool,
 ) -> PyResult<Bound<'py, PyList>> {
-    let _ = (callerFirst, memo, priorityTarget, followDerivation);
+    let _ = (callerFirst, memo, priorityTarget);
     let py = element.py();
     let walk = Walk {
         by_creation: sortByCreationTime,
         target_only: priorityTargetOnly,
+        follow: followDerivation,
     };
     let (name, fields) = if returnSortTuples {
         ("ContextSortTuple", "site offset recurseType")
@@ -1134,6 +1194,7 @@ fn getContextByClass<'py>(
     let walk = Walk {
         by_creation: sortByCreationTime,
         target_only: priorityTargetOnly,
+        follow: followDerivation,
     };
     context_by_class(element, class.as_deref(), search, walk)
 }
@@ -1151,6 +1212,7 @@ fn next<'py>(
     let walk = Walk {
         by_creation: false,
         target_only: activeSiteOnly,
+        follow: true,
     };
     let contexts: Vec<Bound<'py, PyAny>> = context_sites(element, walk)
         .into_iter()
@@ -1194,6 +1256,7 @@ fn previous<'py>(
     let walk = Walk {
         by_creation: false,
         target_only: activeSiteOnly,
+        follow: !activeSiteOnly,
     };
     let found = context_by_class(element, class.as_deref(), Search::BeforeNotSelf, walk)?;
     let mut in_element = false;
@@ -1203,6 +1266,7 @@ fn previous<'py>(
         let all = Walk {
             by_creation: false,
             target_only: false,
+            follow: true,
         };
         in_element = context_sites(found, all)
             .iter()
@@ -1415,7 +1479,7 @@ fn element_classes(py: Python<'_>) -> Vec<Bound<'_, pyo3::types::PyType>> {
 
 /// Every member put on the classes, which installing replaces with
 /// music21's own.
-pub(crate) const MEMBERS: [&str; 17] = [
+pub(crate) const MEMBERS: [&str; 18] = [
     "sites",
     "activeSite",
     "offset",
@@ -1433,6 +1497,7 @@ pub(crate) const MEMBERS: [&str; 17] = [
     "previous",
     "_getMeasureOffset",
     "_getTimeSignatureForBeat",
+    "derivation",
 ];
 
 /// Puts the members on every element class that does not define them

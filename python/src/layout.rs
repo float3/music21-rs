@@ -243,6 +243,7 @@ impl ScoreLayout {
             copy.systemLayout = system;
             copy.staffLayoutList = staves;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -451,6 +452,7 @@ impl PageLayout {
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -616,6 +618,7 @@ impl SystemLayout {
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -822,6 +825,7 @@ impl StaffLayout {
             // one of those copies.
             copy.given_size = me.given_size.as_ref().map(|given| given.clone_ref(py));
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

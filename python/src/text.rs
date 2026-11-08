@@ -300,6 +300,7 @@ impl TextBox {
             copy.style = style;
             copy.placed = placed;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

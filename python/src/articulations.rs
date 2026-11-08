@@ -435,6 +435,7 @@ impl Articulation {
             copy.inner = me.inner.clone();
             copy.bend_alter = bend;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

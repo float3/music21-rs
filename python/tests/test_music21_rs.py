@@ -9889,6 +9889,72 @@ def test_an_unpitched_stroke_is_music21s():
     assert repr(m.PercussionChord([unp])) == "<music21.percussion.PercussionChord [Woodblock]>"
 
 
+def test_a_copy_says_what_it_was_derived_from():
+    """An element's `derivation` names what it was copied or made from and
+    how, as music21's does, and the chain runs back to the first."""
+    note = m.Note("C4")
+    assert repr(note.derivation) == "<Derivation of <music21.note.Note C> from None>"
+    copied = copy.deepcopy(note)
+    assert copied.derivation.origin is note and copied.derivation.client is copied
+    assert copied.derivation.method == "__deepcopy__"
+    assert m.Note("C4").transpose("M2").derivation.method == "transpose"
+    chord = m.Chord("C4 E4 G4")
+    assert chord.transpose(2).derivation.method == "__deepcopy__"
+    assert chord.closedPosition().derivation.origin is chord
+
+    part = m.Part()
+    part.append(m.Note("C4"))
+    flat = part.flatten()
+    assert (flat.derivation.origin, flat.derivation.method) == (part, "flatten")
+    moved = flat.transpose(2)
+    assert (moved.derivation.origin, moved.derivation.method) == (flat, "transpose")
+    assert list(moved.derivation.chain()) == [flat, part]
+    assert moved.derivation.rootDerivation is part
+    assert moved.derivation.originId == id(flat)
+    assert part.makeMeasures().derivation.method == "makeMeasures"
+    assert part.chordify().derivation.method == "template"
+    assert copy.deepcopy(part).derivation.origin is part
+
+    first, second = m.Stream(id="DerivedStream"), m.Stream(id="OriginalStream")
+    made = m.Derivation(first)
+    made.method, made.origin = "manual", second
+    assert repr(made) == (
+        "<Derivation of <music21.stream.Stream DerivedStream> from "
+        "<music21.stream.Stream OriginalStream> via 'manual'>"
+    )
+    assert copy.deepcopy(made).origin is second
+    del first
+    gc.collect()
+    assert repr(made) == "<Derivation of None from None via 'manual'>"
+
+
+def test_the_context_search_follows_derivations():
+    """A copy finds its contexts through what it was copied from, as
+    music21's `contextSites` and `getContextByClass` do, unless asked not
+    to."""
+    part = m.Part()
+    measure = m.Measure(number=1)
+    part.insert(0, measure)
+    note = m.Note("D")
+    measure.insert(2.0, note)
+    copied = copy.deepcopy(note)
+    assert copied.getContextByClass(m.Measure) is measure
+    assert copied.getContextByClass(m.Measure, followDerivation=False) is None
+    assert copied.getOffsetBySite(measure) == 2.0
+
+    score = m.Score(id="bach")
+    alto = m.Part(id="Alto")
+    third = m.Measure(number=3)
+    score.insert(0, alto)
+    alto.insert(9.0, third)
+    third.insert(1.0, m.Note("E"))
+    again = copy.deepcopy(third)
+    again.number = 3333
+    found = [(context.site, context.offset) for context in again.contextSites()]
+    assert found == [(again, 0.0), (third, 0.0), (alto, 9.0), (score, 9.0)]
+    assert [context.site for context in again.contextSites(followDerivation=False)] == [again]
+
+
 def test_music21s_middle_classes_are_the_packages():
     """The classes music21 puts between an element's class and
     `Music21Object` are the package's too, in music21's modules, so

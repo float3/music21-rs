@@ -1125,6 +1125,7 @@ impl Ornament {
             copy.ornamental = ornamental;
             copy.connected_to_previous = me.connected_to_previous;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

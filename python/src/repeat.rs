@@ -220,6 +220,7 @@ impl RepeatExpression {
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

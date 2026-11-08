@@ -996,6 +996,7 @@ impl ChordSymbol {
             .getattr("__deepcopy__")?
             .call1((slf, memo))?;
         Self::fill(&copy, slf.borrow().copied_state(py)?)?;
+        crate::base::copied_from(slf.as_any(), &copy)?;
         Ok(copy)
     }
 

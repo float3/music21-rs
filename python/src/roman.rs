@@ -254,6 +254,7 @@ impl RomanNumeral {
             std::mem::swap(&mut *me, &mut numeral);
             *me.into_super().into_super() = chord;
         }
+        crate::base::copied_from(slf.as_any(), &copy)?;
         Ok(copy)
     }
 

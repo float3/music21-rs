@@ -1426,6 +1426,7 @@ impl MetricModulation {
         };
         drop(me);
         *copied.extract::<PyRefMut<'_, Self>>()? = fresh;
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

@@ -448,6 +448,7 @@ impl Spanner {
             }
         }
         Self::refresh_storage(copied.cast::<Self>()?)?;
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
