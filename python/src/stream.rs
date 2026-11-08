@@ -1993,7 +1993,10 @@ impl Stream {
             .iter()
             .map(|_| slf.clone().into_any().unbind())
             .collect();
-        Bound::new(py, Walked::of(found, slf.borrow().kind).held_by(holders))
+        let walked = Walked::of(found, slf.borrow().kind)
+            .held_by(holders)
+            .walking(slf.as_any());
+        Bound::new(py, walked)
     }
 
     /// The stream holding `el`, this one or one held at any depth below
@@ -4190,7 +4193,10 @@ impl Stream {
         let mut found = Vec::new();
         let mut holders = Vec::new();
         Self::recurse_into(slf, 0.0, &mut found, &mut holders)?;
-        Bound::new(py, Walked::of(found, slf.borrow().kind).held_by(holders))
+        let walked = Walked::of(found, slf.borrow().kind)
+            .held_by(holders)
+            .walking(slf.as_any());
+        Bound::new(py, walked)
     }
 
     /// The notes and chords this stream holds directly.
@@ -8994,6 +9000,10 @@ pub struct Walked {
     /// The kind of stream `stream()` gathers them back into, which is the
     /// kind of the one walked.
     kind: StreamKind,
+    /// The stream walked: music21's `srcStream`, where it is known.
+    source: Option<Py<PyAny>>,
+    /// The filters put on with `addFilter`, each already applied.
+    filters: Vec<Py<PyAny>>,
 }
 
 impl Walked {
@@ -9003,12 +9013,52 @@ impl Walked {
             found,
             holders: Vec::new(),
             kind,
+            source: None,
+            filters: Vec::new(),
         }
     }
 
     /// The same, knowing the stream holding each.
     fn held_by(self, holders: Vec<Py<PyAny>>) -> Self {
         Self { holders, ..self }
+    }
+
+    /// The same, knowing the stream walked.
+    fn walking(self, source: &Bound<'_, PyAny>) -> Self {
+        Self {
+            source: Some(source.clone().unbind()),
+            ..self
+        }
+    }
+
+    /// Those a filter takes, in order, it having been reset first, and
+    /// none after it raises `StopIteration`. The filter is called as
+    /// music21's iterator calls it, with the element and the iterator.
+    fn filtered(slf: &Bound<'_, Self>, filter: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let py = slf.py();
+        if filter.hasattr("reset")? {
+            filter.call_method0("reset")?;
+        }
+        let me = slf.borrow();
+        let mut kept = Self::of(Vec::new(), me.kind);
+        kept.source = me.source.as_ref().map(|source| source.clone_ref(py));
+        for (at, (offset, object)) in me.found.iter().enumerate() {
+            let element = object.bind(py);
+            match filter.call1((element, slf)) {
+                Ok(wanted) if wanted.is_truthy()? => {
+                    kept.found.push((*offset, object.clone_ref(py)));
+                    if let Some(holder) = me.holders.get(at) {
+                        kept.holders.push(holder.clone_ref(py));
+                    }
+                }
+                Ok(_) => {}
+                Err(error) if error.is_instance_of::<pyo3::exceptions::PyStopIteration>(py) => {
+                    break;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(kept)
     }
 
     /// Hands out the one found at `at`, made the `activeSite`'s element of
@@ -9041,12 +9091,58 @@ impl Walked {
                 }
             }
         }
-        Ok(Self::of(found, self.kind).held_by(holders))
+        let mut picked = Self::of(found, self.kind).held_by(holders);
+        picked.source = self.source.as_ref().map(|source| source.clone_ref(py));
+        Ok(picked)
     }
 }
 
 #[pymethods]
 impl Walked {
+    /// The stream walked: music21's `srcStream`.
+    #[getter]
+    fn srcStream(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.source.as_ref().map(|source| source.clone_ref(py))
+    }
+
+    /// The filters put on so far, in order: music21's `filters`. Each
+    /// was applied when it was put on, so adding to this list filters
+    /// nothing; `addFilter` does.
+    #[getter]
+    fn filters<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyList>> {
+        pyo3::types::PyList::new(py, self.filters.iter().map(|filter| filter.bind(py)))
+    }
+
+    /// Those of them a filter takes -- one of `stream.filters`, or any
+    /// callable taking an element and the iterator -- as a new iterator,
+    /// as music21's `addFilter` hands one back. The filter is applied at
+    /// once rather than as the iterator is walked.
+    #[pyo3(signature = (newFilter, *, returnClone = true))]
+    fn addFilter<'py>(
+        slf: &Bound<'py, Self>,
+        newFilter: &Bound<'py, PyAny>,
+        returnClone: bool,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        let mut kept = Self::filtered(slf, newFilter)?;
+        kept.filters = slf
+            .borrow()
+            .filters
+            .iter()
+            .map(|filter| filter.clone_ref(py))
+            .collect();
+        kept.filters.push(newFilter.clone().unbind());
+        if returnClone {
+            return Bound::new(py, kept);
+        }
+        let mut me = slf.borrow_mut();
+        me.found = kept.found;
+        me.holders = kept.holders;
+        me.filters = kept.filters;
+        drop(me);
+        Ok(slf.clone())
+    }
+
     /// How many were found.
     fn __len__(&self) -> usize {
         self.found.len()
@@ -9076,12 +9172,17 @@ impl Walked {
         for holder in &self.holders {
             visit.call(holder)?;
         }
-        Ok(())
+        for filter in &self.filters {
+            visit.call(filter)?;
+        }
+        visit.call(&self.source)
     }
 
     fn __clear__(&mut self) {
         self.found.clear();
         self.holders.clear();
+        self.filters.clear();
+        self.source = None;
     }
 
     /// The one at an index, counting from the end for a negative one, or

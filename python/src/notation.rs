@@ -1873,25 +1873,6 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-/// The enclosures music21's `style.Enclosure` names.
-const ENCLOSURES: [&str; 15] = [
-    "rectangle",
-    "square",
-    "oval",
-    "circle",
-    "bracket",
-    "triangle",
-    "diamond",
-    "pentagon",
-    "hexagon",
-    "heptagon",
-    "octagon",
-    "nonagon",
-    "decagon",
-    "inverted-bracket",
-    "none",
-];
-
 /// music21's `style.Style`, for the wheel on its own: how something is drawn
 /// on the page, which the crate does not model beyond its colour.
 ///
@@ -1900,7 +1881,7 @@ const ENCLOSURES: [&str; 15] = [
 /// does. `absoluteY` and `enclosure` check what they are given, as music21's
 /// do. Where music21 is present its own class is used instead, so none of
 /// this is installed over it.
-#[pyclass(name = "Style", module = "music21.style", subclass, dict)]
+#[pyclass(name = "Style", module = "music21.style", extends = crate::prebase::ProtoM21Object, subclass, dict)]
 pub struct Style;
 
 impl Style {
@@ -1923,8 +1904,8 @@ impl Style {
     fn new(
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
-        Self
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     #[classattr]
@@ -2021,8 +2002,9 @@ impl Style {
         Self::store(slf.as_any(), "_absoluteY", stored)
     }
 
-    /// What the object is drawn inside, by music21's name for the shape;
-    /// `None` leaves it unsaid and `'none'` says there is nothing.
+    /// What the object is drawn inside, as a member of `Enclosure`, which
+    /// may be given by its name; `None` leaves it unsaid and
+    /// `Enclosure.NO_ENCLOSURE` says there is nothing.
     #[getter]
     fn get_enclosure<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         Self::stored(slf.as_any(), "_enclosure")
@@ -2034,13 +2016,12 @@ impl Style {
         let stored = match value.filter(|value| !value.is_none()) {
             None => py.None().into_bound(py),
             Some(value) => {
-                let named = value
-                    .extract::<String>()
-                    .ok()
-                    .map(|text| text.to_lowercase())
-                    .filter(|text| ENCLOSURES.contains(&text.as_str()));
+                let named = match value.extract::<String>() {
+                    Ok(text) => crate::style::enclosure_named(py, &text)?,
+                    Err(_) => None,
+                };
                 match named {
-                    Some(name) => name.into_pyobject(py)?.into_any(),
+                    Some(member) => member,
                     None => {
                         return Err(TextFormatException::new_err(format!(
                             "Not a supported enclosure: {}",

@@ -10287,3 +10287,214 @@ print(Direction.DESCENDING, Direction('bi'))
         "<music21.base.ElementWrapper id=w1 offset=2.0 obj=\"['a', 'b']\"> 1 True",
         "Direction.DESCENDING Direction.BI",
     ]
+
+
+def test_provided_style_has_music21s_text_styles(tmp_path):
+    """Provided, `style` has music21's text, line and stream styles, which
+    check what they are given as music21's do, and its `Enclosure`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import style
+ts = style.TextStyle()
+print(ts.classes)
+ts.fontStyle = 'BOLD'
+ts.fontSize = '12.0'
+ts.letterSpacing = 20
+ts.fontFamily = 'Helvetica, sans-serif'
+print(ts.fontStyle, ts.fontSize, ts.letterSpacing, ts.fontFamily)
+for name, value in [('alignVertical', 'hello'), ('justify', 'hello'), ('enclosure', 4)]:
+    try:
+        setattr(ts, name, value)
+    except style.TextFormatException as error:
+        print(error)
+ts.enclosure = 'Octagon'
+print(repr(ts.enclosure), str(style.Enclosure.SQUARE), 'square' in style.Enclosure)
+ss = style.StreamStyle()
+ss.lineWidths.append(('beam', 5))
+print(ss.lineWidths, style.StreamStyle().lineWidths, ss.printPartName)
+print(style.TextStylePlacement().placement, style.LineStyle().lineShape)
+class Holder(style.StyleMixin):
+    pass
+h = Holder()
+print(h.hasStyleInformation, type(h.style).__name__, h.hasStyleInformation)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "('TextStyle', 'Style', 'ProtoM21Object', 'object')",
+        "bold 12 20.0 ['Helvetica', 'sans-serif']",
+        "Invalid vertical align: 'hello'",
+        "Not a supported justification: 'hello'",
+        "Not a supported enclosure: 4",
+        "<Enclosure.OCTAGON> square True",
+        "[('beam', 5)] [] True",
+        "None None",
+        "False Style True",
+    ]
+
+
+def test_provided_tables_answer_as_music21s(tmp_path):
+    """Provided, music21's table modules -- braille signs, Humdrum
+    instruments, base 40 -- answer from the crate."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21.braille import lookup
+from music21.braille import objects
+from music21.humdrum import instruments
+from music21.musedata import base40, base12_26
+print(lookup.alphabet['a'], lookup.symbols['tie'], lookup.keySignatures[0] == '')
+print(lookup.binary_dots[lookup.brailleDotDict[14]], len(lookup.ascii_chars))
+print(objects.BrailleSegmentDivision().classSortOrder,
+      objects.BrailleOptionalSegmentDivision().classes[:3])
+print(instruments.fromHumdrumInstrument('calto'))
+try:
+    instruments.fromHumdrumClass('nope')
+except instruments.HumdrumInstrumentException as error:
+    print(error)
+print(base40.base40ToPitch(186), base40.pitchToBase40('F##4'), base40.base40Interval(186, 174))
+print(base40.quickEnharmonicString('C'), base12_26.base26Representation['F-'])
+try:
+    base40.base40DeltaToInterval(77)
+except base40.Base40Exception as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "⠁ ⠈⠉ True",
+        "('11', '00', '00') 64",
+        "-100 ('BrailleOptionalSegmentDivision', 'BrailleSegmentDivision', "
+        "'BrailleTranscriptionHelper')",
+        "Alto",
+        "Cannot get an instrument from this Humdrum class *ICnope",
+        "G5 142 <music21.interval.Interval M-3>",
+        "['B#', 'D--'] 11",
+        "Interval not handled by Base40 37",
+    ]
+
+
+def test_provided_possibility_and_omr_carry_music21s_module_names(tmp_path):
+    """Provided, `figuredBass.possibility` has its `Possibility` type and
+    rule lists, and `omr.correctors` the paths of the K525 scores."""
+    code = """
+import os
+os.environ['MUSIC21_RS_CORPUS'] = os.path.join(os.getcwd(), 'corpus')
+import music21_rs
+music21_rs.provide_music21()
+from music21.figuredBass import possibility
+from music21.figuredBass.possibility import Possibility
+from music21.omr import correctors
+print(Possibility.__name__, possibility.DEFAULT_MAX_PITCH, possibility.POSSIBILITY_REST_PS)
+print([f.__name__ for f in possibility.singlePossibilityMethods])
+print(correctors.K525omrShortPath == os.path.join(os.getcwd(), 'omr', 'k525OMRshort.xml'))
+print(correctors.MeasureRelationship._fields[:2])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Possibility B5 0.0",
+        "['voiceCrossing', 'isIncomplete', 'upperPartsWithinLimit', 'pitchesWithinLimit']",
+        "True",
+        "('flaggedMeasurePart', 'flaggedMeasureIndex')",
+    ]
+
+
+def test_provided_filters_pick_what_music21s_pick(tmp_path):
+    """Provided, `stream.filters` has music21's filters, and an iterator
+    takes them with `addFilter`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import key, note, stream
+from music21.stream import filters
+s = stream.Stream()
+s.insert(0, key.KeySignature(-3))
+n = note.Note('C#')
+s.append(n)
+s.append(note.Rest())
+is_n = filters.IsFilter(n)
+print(is_n.derivationStr, is_n.target, is_n.numToFind)
+print([el is n for el in s.iter().addFilter(is_n)])
+print(list(s.iter().addFilter(filters.IsNotFilter(n))))
+print(filters.ClassFilter('Note'), filters.ClassFilter('Note') == filters.ClassFilter('Note'))
+print(list(s.iter().addFilter(filters.ClassNotFilter('Note'))))
+n.groups.append('tuba')
+print(list(s.iter().addFilter(filters.GroupFilter('tuba'))))
+of = filters.OffsetFilter(0, 1)
+print(of, of.zeroLengthSearch, list(s.iter().addFilter(of)))
+print(list(s.iter().addFilter(filters.OffsetFilter(1))))
+from music21 import base
+w = base.ElementWrapper(1)
+w.id = 'Mine'
+print(filters.IdFilter('mine')(w), filters.StreamFilter()(n), filters.StreamFilter().classes)
+try:
+    filters.OffsetHierarchyFilter(0)(n)
+except TypeError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "is (<music21.note.Note C#>,) 1",
+        "[True]",
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Rest quarter>]",
+        "<music21.stream.filters.ClassFilter Note> True",
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Rest quarter>]",
+        "[<music21.note.Note C#>]",
+        "<music21.stream.filters.OffsetFilter 0.0-1.0> False "
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Note C#>, "
+        "<music21.note.Rest quarter>]",
+        "[<music21.note.Rest quarter>]",
+        "True True ('StreamFilter', 'ProtoM21Object', 'object')",
+        "Cannot call OffsetHierarchyFilter without an iterator",
+    ]
+
+
+def test_provided_subconverters_read_and_write_through_the_wheel(tmp_path):
+    """Provided, `converter.subConverters` has music21's classes, each
+    registering music21's formats and reading through the wheel's
+    converter, and its base takes a subclass of one's own."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21.converter import subConverters
+abc = subConverters.ConverterABC()
+print(abc.parseData('X:1\\nT:t\\nM:4/4\\nK:C\\nCDEF|'))
+s = abc.stream
+print(type(s).__name__, len(s.recurse().notes))
+print(subConverters.ConverterMidi.registerInputExtensions,
+      subConverters.ConverterMidi().getExtensionForSubformats())
+print(issubclass(subConverters.ConverterMusicXML, subConverters.SubConverter))
+class QM(subConverters.SubConverter):
+    registerFormats = ('qm',)
+    registerOutputExtensions = ('qm',)
+    def __init__(self, **keywords):
+        super().__init__(**keywords)
+qm = QM(a=1)
+print(qm.keywords, qm.getTemporaryFile().suffix)
+try:
+    qm.parseData('C D')
+except NotImplementedError:
+    print('not implemented')
+try:
+    subConverters.SubConverter().getExtensionForSubformats()
+except subConverters.SubConverterException as error:
+    print(error)
+data = subConverters.ConverterVolpiano().toData(s, 'volpiano')
+print(type(data).__name__)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "None",
+        "Score 4",
+        "('mid', 'midi') .mid",
+        "True",
+        "{'a': 1} .qm",
+        "not implemented",
+        "This subConverter cannot show or write: no output extensions are "
+        "registered for it",
+        "str",
+    ]

@@ -280,3 +280,101 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(partPairs, m)?)?;
     Ok(())
 }
+
+static BUILT: pyo3::sync::PyOnceLock<Py<PyModule>> = pyo3::sync::PyOnceLock::new();
+
+/// A `type` statement's alias, `typing.TypeAliasType(name, value)`.
+fn type_alias<'py>(
+    py: Python<'py>,
+    name: &str,
+    value: Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let alias = py
+        .import("typing")?
+        .getattr("TypeAliasType")?
+        .call1((name, value))?;
+    Ok(alias)
+}
+
+/// `tuple[Pitch, ...]` and the like: a generic alias of a builtin.
+fn generic<'py>(
+    origin: Bound<'py, PyAny>,
+    arguments: Bound<'py, PyTuple>,
+) -> PyResult<Bound<'py, PyAny>> {
+    origin.get_item(arguments)
+}
+
+/// music21's `figuredBass.possibility`, built: the functions, the
+/// `Possibility` type, the tables music21 caches its answers in, and its
+/// lists of the rules a segment applies.
+pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let held = BUILT.get_or_try_init(py, || {
+        let m = PyModule::new(py, "music21.figuredBass.possibility")?;
+        register(&m)?;
+        let pitch = py.get_type::<crate::pitch::Pitch>().into_any();
+        let tuple = py.get_type::<PyTuple>().into_any();
+        let any_length = PyTuple::new(py, [pitch.clone(), py.Ellipsis().into_bound(py)])?;
+        m.add(
+            "Possibility",
+            type_alias(py, "Possibility", generic(tuple.clone(), any_length)?)?,
+        )?;
+        let quartet = PyTuple::new(py, [pitch.clone(), pitch.clone(), pitch.clone(), pitch])?;
+        let key = generic(tuple, quartet)?;
+        let flag = py.get_type::<pyo3::types::PyBool>().into_any();
+        let table = generic(
+            py.get_type::<PyDict>().into_any(),
+            PyTuple::new(py, [key, flag])?,
+        )?;
+        m.add(
+            "PitchQuartetToBool",
+            type_alias(py, "PitchQuartetToBool", table)?,
+        )?;
+        for name in [
+            "parallelFifthsTable",
+            "parallelOctavesTable",
+            "hiddenFifthsTable",
+            "hiddenOctavesTable",
+        ] {
+            m.add(name, PyDict::new(py))?;
+        }
+        m.add("POSSIBILITY_REST_PS", 0.0)?;
+        let highest = crate::installed_new(
+            py,
+            "music21.pitch",
+            "Pitch",
+            crate::pitch::Pitch::wrap(rs::DEFAULT_MAX_PITCH.clone(), false),
+        )?;
+        m.add("DEFAULT_MAX_PITCH", highest)?;
+        let rules = |names: &[&str]| -> PyResult<Bound<'_, PyList>> {
+            let out = PyList::empty(py);
+            for name in names {
+                out.append(m.getattr(*name)?)?;
+            }
+            Ok(out)
+        };
+        m.add(
+            "singlePossibilityMethods",
+            rules(&[
+                "voiceCrossing",
+                "isIncomplete",
+                "upperPartsWithinLimit",
+                "pitchesWithinLimit",
+            ])?,
+        )?;
+        m.add(
+            "consequentPossibilityMethods",
+            rules(&[
+                "parallelFifths",
+                "parallelOctaves",
+                "hiddenFifths",
+                "hiddenOctaves",
+                "voiceOverlap",
+                "partMovementsWithinLimits",
+                "upperPartsSame",
+                "couldBeItalianA6Resolution",
+            ])?,
+        )?;
+        Ok::<_, PyErr>(m.unbind())
+    })?;
+    Ok(held.bind(py).clone())
+}

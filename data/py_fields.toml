@@ -248,6 +248,10 @@ reason = "a rule's text and what it parsed into"
 kind = "facade-only"
 reason = "a song's text and what it parsed into"
 
+[ClassFilter]
+kind = "facade-only"
+reason = "the classes looked for, read off each element's classSet"
+
 [ContiguousSegmentOfNotes]
 kind = "facade-only"
 reason = "a search result over a stream"
@@ -292,6 +296,10 @@ reason = "the name of the module it speaks for"
 kind = "facade-only"
 reason = "the preferences, held as music21 holds them; the crate reads none back"
 
+[GroupFilter]
+kind = "facade-only"
+reason = "the groups looked for, read off each element's groups"
+
 [Hasher]
 kind = "facade-only"
 reason = "settings and the hashes it made"
@@ -300,9 +308,17 @@ reason = "settings and the hashes it made"
 kind = "facade-only"
 reason = "timespans"
 
+[IdFilter]
+kind = "facade-only"
+reason = "the id looked for, compared as Python compares it"
+
 [IndexedLyric]
 kind = "facade-only"
 reason = "a search result; its measure number is a crate integer, not a value"
+
+[IsFilter]
+kind = "facade-only"
+reason = "music21's filter attributes, the objects looked for and the count left; the crate keeps nothing of them"
 
 [KeyAnalyzer]
 kind = "facade-only"
@@ -339,6 +355,10 @@ reason = "two marks and how the change is drawn"
 [Music21Object]
 kind = "facade-only"
 reason = "music21's groups and derivation, which no crate value carries"
+
+[OffsetFilter]
+kind = "facade-only"
+reason = "the span's two offsets as music21 holds them; each call builds the crate's OffsetSpan from them"
 
 [PercussionChord]
 kind = "facade-only"
@@ -392,6 +412,10 @@ reason = "an alignment over two streams"
 kind = "facade-only"
 reason = "a search over a stream"
 
+[SubConverter]
+kind = "facade-only"
+reason = "the stream read and the keywords given; the wheel's converter does the reading"
+
 [TabChord]
 kind = "facade-only"
 reason = "the text and numbers of a TSV row"
@@ -434,4 +458,4 @@ reason = "verticalities"
 
 [Walked]
 kind = "facade-only"
-reason = "elements and their offsets; its kind is a tag"
+reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"

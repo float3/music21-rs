@@ -37,6 +37,12 @@ pub(crate) fn modules(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(all)
 }
 
+/// The built `common.StrEnum`, never music21's: the wheel's classes are
+/// built on it as the wheel is imported, and that must not import music21.
+pub(crate) fn str_enum(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    crate::common::module(py, enums::MODULE)?.getattr("StrEnum")
+}
+
 /// A member of one of music21's `common.enums`: music21's own where it is
 /// installed, so it is the member music21 compares against, and the built
 /// one where `provide_music21` answers for it.

@@ -74,10 +74,6 @@ HOMES = {
         'yieldBrailleArticulations',
         'yieldDots',
     ),
-    'music21.braille.lookup': (
-        'dotsAdd',
-        'makeBrailleDictionary',
-    ),
     'music21.braille.noteGrouping': (
         'transcribeNoteGrouping',
     ),
@@ -305,15 +301,30 @@ ALSO = {
     'music21.beam': (
         'EqualSlottedObjectMixin',
     ),
+    'music21.braille.basic': (
+        'alphabet',
+        'ascii_chars',
+        'symbols',
+    ),
+    'music21.braille.noteGrouping': (
+        'symbols',
+    ),
+    'music21.braille.objects': (
+        'Music21Object',
+    ),
     'music21.braille.segment': (
+        'BrailleTranscriptionHelper',
         'ProtoM21Object',
         'opFrac',
+        'symbols',
     ),
     'music21.braille.text': (
         'numberToBraille',
+        'symbols',
         'yieldDots',
     ),
     'music21.braille.translate': (
+        'alphabet',
         'wordToBraille',
     ),
     'music21.chord': (
@@ -371,13 +382,18 @@ ALSO = {
     ),
     'music21.figuredBass.realizer': (
         'OffsetQL',
+        'Possibility',
         'opFrac',
     ),
     'music21.figuredBass.realizerScale': (
         'convertToPitch',
     ),
+    'music21.figuredBass.resolution': (
+        'Possibility',
+    ),
     'music21.figuredBass.segment': (
         'OffsetQL',
+        'Possibility',
     ),
     'music21.humdrum.spineParser': (
         'GraceDuration',
@@ -428,6 +444,13 @@ ALSO = {
         'OffsetQL',
         'OffsetQLIn',
         'opFrac',
+    ),
+    'music21.musedata': (
+        'OffsetQL',
+    ),
+    'music21.musedata.base40': (
+        'Interval',
+        'IntervalException',
     ),
     'music21.note': (
         'Duration',
@@ -511,6 +534,10 @@ ALSO = {
         'OffsetSpecial',
         'StreamException',
         'StreamIterator',
+        'opFrac',
+    ),
+    'music21.stream.filters': (
+        'Music21Exception',
         'opFrac',
     ),
     'music21.stream.iterator': (
