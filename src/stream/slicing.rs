@@ -34,53 +34,24 @@ fn total(lengths: &[FloatType]) -> FloatType {
     op_frac(lengths.iter().sum())
 }
 
-/// Python's `math.isclose(a, b, abs_tol=grain)`.
-fn is_close(a: FloatType, b: FloatType, grain: FloatType) -> bool {
-    (a - b).abs() <= (1e-9 * a.abs().max(b.abs())).max(grain)
-}
-
 /// The greatest length that goes a whole number of times into every one of
-/// `values`, to within a ten-thousandth: music21's `approximateGCD`, which
-/// tries the smallest value and then each value divided by one to sixteen.
+/// `values`, to within a ten-thousandth: music21's `approximateGCD`.
 ///
 /// # Errors
 ///
 /// No values, a value of nought, which music21 divides by, or no length
 /// that goes into them all.
 pub(crate) fn approximate_gcd(values: &[FloatType]) -> Result<FloatType> {
-    const GRAIN: FloatType = 0.0001;
-    let lowest = values
-        .iter()
-        .copied()
-        .reduce(FloatType::min)
-        .ok_or_else(|| stream_error("no values to find a common length for"))?;
-    if lowest == 0.0 {
+    if values.is_empty() {
+        return Err(stream_error("no values to find a common length for"));
+    }
+    if values.iter().copied().reduce(FloatType::min) == Some(0.0) {
         return Err(stream_error(
             "a value of nought has no common length with others",
         ));
     }
-    let whole = values.iter().all(|value| {
-        let adjusted = value / lowest;
-        is_close(adjusted - adjusted.trunc(), 0.0, GRAIN)
-    });
-    if whole {
-        return Ok(lowest);
-    }
-    let divisions: Vec<Vec<FloatType>> = values
-        .iter()
-        .map(|value| (1..=16).map(|d| value / FloatType::from(d)).collect())
-        .collect();
-    let common = divisions
-        .iter()
-        .flatten()
-        .copied()
-        .filter(|candidate| {
-            divisions
-                .iter()
-                .all(|row| row.iter().any(|x| is_close(*x, *candidate, GRAIN)))
-        })
-        .reduce(FloatType::max);
-    common.ok_or_else(|| stream_error("cannot find a common divisor"))
+    crate::common::numbertools::approximate_gcd(values, 0.0001)
+        .map_err(|_| stream_error("cannot find a common divisor"))
 }
 
 /// Where each leaf of a stream went: nowhere moved.
