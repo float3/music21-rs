@@ -379,25 +379,22 @@ pub(crate) fn add_dependency_venv(py: Python<'_>, workspace_root: &Path) -> PyRe
         if !venv.is_dir() {
             continue;
         }
-        for site in [
+        let mut sites = vec![
             venv.join("Lib/site-packages"),
             venv.join("lib/site-packages"),
-        ] {
-            if site.is_dir() {
-                path.insert(0, site.to_string_lossy().to_string())?;
-                // Its `.pth` files too: `maturin develop` installs the wheel
-                // as one, and without reading it the wheel is not there.
-                py.import("site")?
-                    .call_method1("addsitedir", (site.to_string_lossy().to_string(),))?;
-            }
-        }
+        ];
+        // A POSIX virtualenv keeps it under `lib/python3.x`.
         if let Ok(entries) = std::fs::read_dir(venv.join("lib")) {
             for entry in entries.flatten() {
-                let site = entry.path().join("site-packages");
-                if site.is_dir() {
-                    path.insert(0, site.to_string_lossy().to_string())?;
-                }
+                sites.push(entry.path().join("site-packages"));
             }
+        }
+        for site in sites.into_iter().filter(|site| site.is_dir()) {
+            path.insert(0, site.to_string_lossy().to_string())?;
+            // Its `.pth` files too: `maturin develop` installs the wheel as
+            // one, and without reading it the wheel is not there.
+            py.import("site")?
+                .call_method1("addsitedir", (site.to_string_lossy().to_string(),))?;
         }
     }
     Ok(())
@@ -1343,5 +1340,30 @@ mod tests {
         assert_eq!(humanise(450.0), "450 ns");
         assert_eq!(humanise(1_500.0), "1.5 us");
         assert_eq!(humanise(2_700_000.0), "2.70 ms");
+    }
+
+    #[test]
+    fn a_maturin_develop_install_is_found() {
+        // `maturin develop` installs the wheel as a `.pth` naming its source
+        // directory, under the `lib/python3.x` a POSIX virtualenv has.
+        let root = std::env::temp_dir().join(format!("xtask-venv-{}", std::process::id()));
+        let site = root.join("venv/lib/python3.99/site-packages");
+        let package = root.join("pysrc");
+        std::fs::create_dir_all(&site).unwrap();
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(
+            site.join("music21_rs.pth"),
+            format!("{}\n", package.display()),
+        )
+        .unwrap();
+
+        let found = Python::attach(|py| -> PyResult<bool> {
+            add_dependency_venv(py, &root)?;
+            let path: Vec<String> = py.import("sys")?.getattr("path")?.extract()?;
+            Ok(path.contains(&package.to_string_lossy().to_string()))
+        })
+        .unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(found, "the .pth's directory is not on sys.path");
     }
 }
