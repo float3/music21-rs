@@ -225,7 +225,7 @@ impl RepeatExpression {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        Self::__deepcopy__(slf, None)
+        Self::__deepcopy__(slf, None).map(crate::base::shallow)
     }
 
     /// music21 freezes a score by pickling it, and what this object is

@@ -285,7 +285,7 @@ impl Dynamic {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().copied();
-        crate::copy_as_same_type(slf, copied)
+        crate::copy_as_same_type(slf, copied).map(crate::base::shallow)
     }
 }
 

@@ -273,7 +273,7 @@ impl Unpitched {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        Self::__deepcopy__(slf, None)
+        Self::__deepcopy__(slf, None).map(crate::base::shallow)
     }
 
     /// Pickled as the note it keeps, which pickles itself.

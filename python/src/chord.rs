@@ -3753,7 +3753,7 @@ impl Chord {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow_mut().copied_value(py)?;
-        crate::copy_as_same_type(slf, copied)
+        crate::copy_as_same_type(slf, copied).map(crate::base::shallow)
     }
 }
 

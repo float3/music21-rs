@@ -469,7 +469,7 @@ impl Spanner {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        Self::__deepcopy__(slf, None)
+        Self::__deepcopy__(slf, None).map(crate::base::shallow)
     }
 
     /// What music21 compares two spanners by: its own

@@ -1670,7 +1670,7 @@ impl RomanNumeral {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        Self::copied(slf, py)
+        Self::copied(slf, py).map(crate::base::shallow)
     }
 }
 

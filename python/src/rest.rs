@@ -739,7 +739,7 @@ impl Rest {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        crate::copy_as_same_type(slf, slf.borrow().copied(py)?)
+        crate::copy_as_same_type(slf, slf.borrow().copied(py)?).map(crate::base::shallow)
     }
 }
 

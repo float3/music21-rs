@@ -405,6 +405,15 @@ pub(crate) fn copied_from(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) ->
     crate::derived_from(copy, source, "__deepcopy__")
 }
 
+/// A copy as `copy.copy` leaves it: music21 records a derivation only on
+/// `deepcopy`, so this forgets the one the copy was given.
+pub(crate) fn shallow(copy: Bound<'_, PyAny>) -> Bound<'_, PyAny> {
+    if let Ok(ours) = copy.cast::<Music21Object>() {
+        ours.borrow_mut().derivation = None;
+    }
+    copy
+}
+
 /// What a class of the package's is built on, and how to build one on it.
 pub(crate) trait Footing: PyTypeInfo {
     /// `value` as a whole object, its bases built bare beneath it.

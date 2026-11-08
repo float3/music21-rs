@@ -9928,6 +9928,31 @@ def test_a_copy_says_what_it_was_derived_from():
     assert repr(made) == "<Derivation of None from None via 'manual'>"
 
 
+def test_a_shallow_copy_records_no_derivation():
+    """`copy.copy` of an element says nothing of where it came from, as in
+    music21, whose `__deepcopy__` alone records one."""
+    made = [
+        m.Note("C4"),
+        m.Note("C4").transpose(2),
+        m.Rest(),
+        m.Chord("C4 E4 G4"),
+        m.Unpitched(),
+        m.TrebleClef(),
+        m.Key("G"),
+        m.KeySignature(2),
+        m.TimeSignature("3/4"),
+        m.Dynamic("p"),
+        m.MetronomeMark(number=60),
+        m.Stream(),
+        m.Part(),
+        m.Measure(),
+    ]
+    for element in made:
+        copied = copy.copy(element)
+        assert copied.derivation.origin is None, element
+        assert copied.derivation.method is None, element
+
+
 def test_the_context_search_follows_derivations():
     """A copy finds its contexts through what it was copied from, as
     music21's `contextSites` and `getContextByClass` do, unless asked not
