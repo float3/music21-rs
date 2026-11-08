@@ -1851,6 +1851,13 @@ impl Chord {
     ) -> PyResult<()> {
         let built = Self::build(slf.py(), notes, keywords)?;
         *slf.borrow_mut() = built;
+        // music21's `NotRest` keeps the beams it is built with.
+        if let Some(keywords) = keywords
+            && let Some(beams) = keywords.get_item("beams")?
+            && !beams.is_none()
+        {
+            slf.setattr("beams", beams)?;
+        }
         Ok(())
     }
 

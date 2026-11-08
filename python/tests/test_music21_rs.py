@@ -395,6 +395,16 @@ def test_harmony_module_functions():
         m.getCurrentAbbreviationFor("nonsense")
 
 
+def test_chord_keeps_the_beams_it_is_given():
+    """`Chord(notes, beams=b)` holds `b`, as music21's `NotRest` keeps the
+    beams it is built with; music21's Humdrum reader beams its chords so."""
+    b = m.Beams()
+    b.append("start")
+    made = m.Chord(["C4", "E4"], beams=b)
+    assert made.beams is b
+    assert [beam.type for beam in made.beams.beamsList] == ["start"]
+
+
 def test_chord_module_functions():
     assert [p.name for p in m.fromForteClass("3-11").pitches] == ["C", "E-", "G"]
     assert [p.name for p in m.fromForteClass([3, 11]).pitches] == ["C", "E-", "G"]

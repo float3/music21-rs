@@ -5437,7 +5437,14 @@ fn barline_object<'py>(
                 let given = PyDict::new(py);
                 given.set_item("direction", direction.as_str())?;
                 given.set_item("times", barline.repeat_times())?;
-                module.getattr("Repeat")?.call((), Some(&given))
+                let made = module.getattr("Repeat")?.call((), Some(&given))?;
+                // A type of its own, which a Humdrum `=:|!` gives a repeat
+                // over the one its direction implies.
+                let implied = made.getattr("type")?.extract::<String>()?;
+                if implied != barline.bar_type().as_str() {
+                    made.setattr("type", barline.bar_type().as_str())?;
+                }
+                Ok(made)
             }
             None => module
                 .getattr("Barline")?
@@ -5575,14 +5582,14 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         };
         if let Some(object) = object {
-            objects.push((event.offset(), object));
+            objects.push((event.offset(), event.priority(), object));
         }
     }
     match whose {
         Whose::Wheel => {
             let cell = made.cast::<Stream>()?;
             let mut held = cell.borrow_mut();
-            for (offset, object) in &objects {
+            for (offset, _, object) in &objects {
                 held.put(*offset, object);
             }
             if let Some(id) = stream.id() {
@@ -5590,7 +5597,12 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         }
         Whose::Music21 => {
-            for (offset, object) in &objects {
+            for (offset, priority, object) in &objects {
+                // The priority a reader gave it, which sorts it as music21's
+                // reader sorted it.
+                if *priority != 0 {
+                    object.setattr("priority", *priority)?;
+                }
                 made.call_method1("insert", (*offset, object))?;
             }
             if let Some(id) = stream.id() {
@@ -6061,15 +6073,25 @@ fn element_object_as<'py>(
         StreamElement::Barline(barline) => {
             crate::bar::Barline::object(py, barline.clone())?.into_bound(py)
         }
-        StreamElement::Dynamic(dynamic) => element_new(
-            py,
-            "music21.dynamics",
-            "Dynamic",
-            Dynamic::wrap(dynamic.clone()),
-            holdable,
-        )?
-        .into_bound(py)
-        .into_any(),
+        StreamElement::Dynamic(dynamic) => {
+            let made = element_new(
+                py,
+                "music21.dynamics",
+                "Dynamic",
+                Dynamic::wrap(dynamic.clone()),
+                holdable,
+            )?
+            .into_bound(py)
+            .into_any();
+            // Where music21's constructor puts every dynamic, a little left
+            // and below the top line, which building it here passes over.
+            if whose == Whose::Music21 {
+                let style = made.getattr("style")?;
+                style.setattr("absoluteX", -36)?;
+                style.setattr("absoluteY", -80)?;
+            }
+            made
+        }
         StreamElement::ChordSymbol(symbol) => {
             if symbol.is_no_chord() {
                 let keywords = PyDict::new(py);
@@ -6132,6 +6154,15 @@ fn element_object_as<'py>(
                 .getattr("GlobalComment")?
                 .call1((said.comment(),))?;
             made.setattr("priority", said.priority())?;
+            made
+        }
+        // music21's own, set to say what the crate read: its constructor
+        // would strip a second space.
+        StreamElement::SpineComment(said) if whose == Whose::Music21 => {
+            let made = crate::real_music21(py, "music21.humdrum.spineParser")?
+                .getattr("SpineComment")?
+                .call0()?;
+            made.setattr("comment", said.comment())?;
             made
         }
         StreamElement::MiscTandem(tandem) if whose == Whose::Music21 => {

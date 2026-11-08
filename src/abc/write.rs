@@ -1657,6 +1657,7 @@ impl<'a> Tune<'a> {
                 | StreamElement::Variant(_)
                 | StreamElement::GlobalComment(_)
                 | StreamElement::MiscTandem(_)
+                | StreamElement::SpineComment(_)
                 | StreamElement::BrailleSegmentDivision(_) => {}
                 StreamElement::Clef(clef) => {
                     if !header {
