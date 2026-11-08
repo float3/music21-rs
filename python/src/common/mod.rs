@@ -16,6 +16,8 @@ mod misc;
 mod numbertools;
 mod stringtools;
 
+pub(crate) use numbertools::offset_ql;
+
 /// The attribute of the extension listing the modules built whole here.
 const PROVIDED: &str = "__music21_rust_modules__";
 
