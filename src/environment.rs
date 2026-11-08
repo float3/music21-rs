@@ -22,6 +22,9 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::common::formats::{VALID_AUTO_DOWNLOAD, VALID_SHOW_FORMATS, VALID_WRITE_FORMATS};
+use crate::common::pathtools::{clean_path, expand_user};
+use crate::common::{DEBUG_ALL, DEBUG_DEVEL, DEBUG_OFF, DEBUG_USER};
 use crate::error::{Error, Result};
 
 /// The three kinds of system music21 tells apart, by the names it gives
@@ -83,15 +86,6 @@ impl Platform {
     }
 }
 
-/// music21's `common.DEBUG_OFF`: no debugging output.
-pub const DEBUG_OFF: i64 = 0;
-/// music21's `common.DEBUG_USER`: what a user would want to see.
-pub const DEBUG_USER: i64 = 1;
-/// music21's `common.DEBUG_DEVEL`: what a developer would.
-pub const DEBUG_DEVEL: i64 = 63;
-/// music21's `common.DEBUG_ALL`: everything.
-pub const DEBUG_ALL: i64 = 255;
-
 /// The preferences that name a file or an application, in music21's order.
 pub const PATH_KEYS: [&str; 10] = [
     "braillePath",
@@ -105,52 +99,6 @@ pub const PATH_KEYS: [&str; 10] = [
     "pdfPath",
     "vectorPath",
 ];
-
-/// What `showFormat` may be: music21's `common.VALID_SHOW_FORMATS`.
-pub const SHOW_FORMATS: [&str; 17] = [
-    "musicxml",
-    "lilypond",
-    "text",
-    "textline",
-    "midi",
-    "png",
-    "pdf",
-    "svg",
-    "lily.pdf",
-    "lily.png",
-    "lily.svg",
-    "braille",
-    "ipython",
-    "ipython.png",
-    "ipython.midi",
-    "musicxml.png",
-    "musicxml.pdf",
-];
-
-/// What `writeFormat` may be: music21's `common.VALID_WRITE_FORMATS`.
-pub const WRITE_FORMATS: [&str; 18] = [
-    "musicxml",
-    "lilypond",
-    "text",
-    "textline",
-    "midi",
-    "png",
-    "pdf",
-    "svg",
-    "lily.pdf",
-    "lily.png",
-    "lily.svg",
-    "braille",
-    "ipython",
-    "ipython.png",
-    "ipython.midi",
-    "musicxml.png",
-    "musicxml.pdf",
-    "rntxt",
-];
-
-/// What `autoDownload` may be: music21's `common.VALID_AUTO_DOWNLOAD`.
-pub const AUTO_DOWNLOAD: [&str; 3] = ["ask", "deny", "allow"];
 
 /// A local corpus's settings: the directories it reads, the file its
 /// metadata is cached in, and its name, which the unnamed corpus has none
@@ -306,9 +254,9 @@ pub fn is_path_key(key: &str) -> bool {
 /// ```
 pub fn accepted(key: &str, value: &str) -> Result<String> {
     let allowed: &[&str] = match key {
-        "showFormat" => &SHOW_FORMATS,
-        "writeFormat" => &WRITE_FORMATS,
-        "autoDownload" => &AUTO_DOWNLOAD,
+        "showFormat" => &VALID_SHOW_FORMATS,
+        "writeFormat" => &VALID_WRITE_FORMATS,
+        "autoDownload" => &VALID_AUTO_DOWNLOAD,
         _ => return Ok(value.to_owned()),
     };
     let lowered = value.to_lowercase();
@@ -400,170 +348,6 @@ pub fn xml_reader_type(path: &str) -> Option<&'static str> {
         return Some("Musescore");
     }
     Some("unknown")
-}
-
-/// A path as music21's `common.cleanpath` leaves it: `~` expanded, made
-/// absolute against the working directory and normalized, and environment
-/// variables expanded.
-///
-/// A `..` is collapsed only where the directories before it exist, as the
-/// system would; otherwise the path is joined to the working directory as
-/// written.
-///
-/// ```
-/// use music21::environment::clean_path;
-///
-/// assert_eq!(clean_path("/usr//bin/./lilypond"), "/usr/bin/lilypond");
-/// assert!(clean_path("relative/file.xml").ends_with("/relative/file.xml"));
-/// ```
-pub fn clean_path(path: &str) -> String {
-    let expanded = expand_user(path);
-    let parts: Vec<&str> = expanded.split('/').collect();
-    let normalizable = match parts.iter().rposition(|part| *part == "..") {
-        Some(last) => {
-            let through = parts[..=last].join("/");
-            let through = if through.is_empty() {
-                "/".to_owned()
-            } else {
-                through
-            };
-            Path::new(&through).is_dir()
-        }
-        None => true,
-    };
-    let cleaned = if normalizable {
-        absolute(&normalized(&expanded))
-    } else {
-        join(&working_directory(), &expanded)
-    };
-    expand_variables(&cleaned)
-}
-
-/// `~` and `~user` at the start expanded, as `os.path.expanduser` does on
-/// a POSIX system: `~` from `HOME`.
-fn expand_user(path: &str) -> String {
-    if !path.starts_with('~') {
-        return path.to_owned();
-    }
-    let end = path.find('/').unwrap_or(path.len());
-    let home = if end == 1 {
-        std::env::var("HOME").ok()
-    } else {
-        // Another user's home: where it would be beside this user's.
-        std::env::var("HOME").ok().and_then(|home| {
-            Path::new(&home)
-                .parent()
-                .map(|parent| parent.join(&path[1..end]).to_string_lossy().into_owned())
-        })
-    };
-    let Some(home) = home else {
-        return path.to_owned();
-    };
-    let home = home.trim_end_matches('/');
-    let home = if home.is_empty() { "/" } else { home };
-    let rest = &path[end..];
-    if home == "/" && rest.starts_with('/') {
-        return rest.to_owned();
-    }
-    format!("{home}{rest}")
-}
-
-/// A path with `.`, doubled slashes and `name/..` taken out, as
-/// `os.path.normpath` takes them out on a POSIX system.
-fn normalized(path: &str) -> String {
-    if path.is_empty() {
-        return ".".to_owned();
-    }
-    let leading = if path.starts_with("//") && !path.starts_with("///") {
-        "//"
-    } else if path.starts_with('/') {
-        "/"
-    } else {
-        ""
-    };
-    let mut kept: Vec<&str> = Vec::new();
-    for part in path.split('/') {
-        if part.is_empty() || part == "." {
-            continue;
-        }
-        let climbs = part == "..";
-        if climbs && kept.last().is_some_and(|last| *last != "..") {
-            kept.pop();
-            continue;
-        }
-        if climbs && !leading.is_empty() {
-            continue;
-        }
-        kept.push(part);
-    }
-    let joined = format!("{leading}{}", kept.join("/"));
-    if joined.is_empty() {
-        return ".".to_owned();
-    }
-    joined
-}
-
-/// The working directory, as text.
-fn working_directory() -> String {
-    std::env::current_dir()
-        .map(|directory| directory.to_string_lossy().into_owned())
-        .unwrap_or_else(|_| "/".to_owned())
-}
-
-/// `os.path.join` of two paths: the second alone where it is absolute.
-fn join(first: &str, second: &str) -> String {
-    if second.starts_with('/') || first.is_empty() {
-        return second.to_owned();
-    }
-    if first.ends_with('/') {
-        return format!("{first}{second}");
-    }
-    format!("{first}/{second}")
-}
-
-/// `os.path.abspath` of a path already normalized.
-fn absolute(path: &str) -> String {
-    if path.starts_with('/') {
-        return path.to_owned();
-    }
-    normalized(&join(&working_directory(), path))
-}
-
-/// `$name` and `${name}` replaced by the variable's value, as
-/// `os.path.expandvars` does on a POSIX system; one that is not set is
-/// left as written.
-fn expand_variables(path: &str) -> String {
-    if !path.contains('$') {
-        return path.to_owned();
-    }
-    let is_name = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    let mut expanded = String::new();
-    let mut rest = path;
-    while let Some(dollar) = rest.find('$') {
-        expanded.push_str(&rest[..dollar]);
-        let after = &rest[dollar + 1..];
-        let (name, written_length) = if let Some(braced) = after.strip_prefix('{') {
-            match braced.find('}') {
-                Some(close) => (&braced[..close], close + 2),
-                None => ("", 0),
-            }
-        } else {
-            let length = after.find(|c: char| !is_name(c)).unwrap_or(after.len());
-            (&after[..length], length)
-        };
-        let value = if name.is_empty() {
-            None
-        } else {
-            std::env::var(name).ok()
-        };
-        match value {
-            Some(value) => expanded.push_str(&value),
-            None => expanded.push_str(&rest[dollar..=dollar + written_length]),
-        }
-        rest = &after[written_length..];
-    }
-    expanded.push_str(rest);
-    expanded
 }
 
 /// The settings as music21 writes them out, sorted by name: a
@@ -941,17 +725,6 @@ fn fresh_temp_dir(system_temp: &Path) -> std::io::Result<PathBuf> {
     ))
 }
 
-/// A debugging or warning message as music21's `common.formatStr` makes
-/// one: the parts joined by spaces, ending in a newline.
-///
-/// ```
-/// assert_eq!(music21::environment::format_message(&["test", "1", "2"]), "test 1 2\n");
-/// ```
-pub fn format_message<S: AsRef<str>>(parts: &[S]) -> String {
-    let joined: Vec<&str> = parts.iter().map(AsRef::as_ref).collect();
-    format!("{}\n", joined.join(" "))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1015,32 +788,6 @@ mod tests {
             read_settings("<settings>"),
             Err(Error::Environment(_))
         ));
-    }
-
-    #[test]
-    fn dot_dot_after_a_missing_directory_is_kept() {
-        let cleaned = clean_path("tinyNotation: /../../x.xml");
-        assert!(
-            cleaned.ends_with("/tinyNotation: /../../x.xml"),
-            "{cleaned}"
-        );
-    }
-
-    #[test]
-    fn normalizing_matches_posix_normpath() {
-        assert_eq!(normalized("//a/b"), "//a/b");
-        assert_eq!(normalized("///a/../b"), "/b");
-        assert_eq!(normalized("../a/./b/"), "../a/b");
-        assert_eq!(normalized("/.."), "/");
-        assert_eq!(normalized("a/.."), ".");
-    }
-
-    #[test]
-    fn unset_variables_are_left_as_written() {
-        assert_eq!(
-            expand_variables("/x/$MUSIC21_RS_SURELY_UNSET/${ALSO_UNSET_HERE}"),
-            "/x/$MUSIC21_RS_SURELY_UNSET/${ALSO_UNSET_HERE}"
-        );
     }
 
     #[cfg(unix)]

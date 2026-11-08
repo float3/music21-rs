@@ -1508,9 +1508,7 @@ fn sounding_mark(found: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 /// sits in, or `None` where there is none.
 fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = holder.py();
-    let search = crate::real_music21(py, "music21.common.enums")?
-        .getattr("ElementSearch")?
-        .getattr("BEFORE_OFFSET")?;
+    let search = crate::plumbing::enum_member(py, "ElementSearch", "BEFORE_OFFSET")?;
     let arguments = PyDict::new(py);
     arguments.set_item("getElementMethod", search)?;
     let found = holder.call_method("getContextByClass", ("TempoIndication",), Some(&arguments))?;

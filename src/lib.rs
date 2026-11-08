@@ -71,7 +71,7 @@ pub mod chord;
 pub mod chordsymbol;
 /// Clefs: which line a note is written on.
 pub mod clef;
-/// music21's `common`: number, string and format plumbing that knows no
+/// music21's `common`: the plumbing its modules share, which knows no
 /// music.
 pub mod common;
 pub(crate) mod defaults;

@@ -128,7 +128,7 @@ _EXCEPTIONS21_NAMES = (
 # What every module object has of its own, which a built module's names
 # must not put over the provided module's.
 _MODULE_SPECIALS = frozenset(
-    ("__name__", "__doc__", "__loader__", "__spec__", "__package__", "__all__")
+    ("__name__", "__doc__", "__loader__", "__spec__", "__package__")
 )
 
 # A module of music21's whose names the package keeps on its package: the
@@ -169,27 +169,23 @@ def _contents(homes=True, children=False):
         if not isinstance(module, str) or not module.startswith("music21."):
             continue
         contents.setdefault(module, {}).setdefault(name, value)
-    # Modules built whole in Rust, `music21.common` among them: every name
-    # each has, its private ones too, since music21's examples reach for
-    # some, and its `__all__`, which a star import of it follows.
+    # Modules built whole in Rust, `music21.common` among them, each on
+    # first asking: every name each has, its private ones too, since
+    # music21's examples reach for some, and its `__all__`, which a star
+    # import of it follows.
     built_names = {}
-    for module, built in getattr(_extension, "__music21_rust_modules__", ()):
-        names = contents.setdefault(module, {})
-        for name, value in vars(built).items():
-            if name == "__all__" or not name.startswith("__"):
-                names[name] = value
-                built_names.setdefault(name, value)
-    for module, own in _PYTHON_MODULES.items():
-        written = importlib.import_module(f"{__package__}.{own}")
-        for name in written.__all__:
-            contents.setdefault(module, {})[name] = getattr(written, name)
-    # Built whole by the extension, as modules of their own.
-    for module in getattr(_extension, "__music21_built_modules__", ()):
+    for module in _extension.__music21_built_modules__:
         built = _extension._music21_module(module)
         names = contents.setdefault(module, {})
         for name, value in vars(built).items():
             if name not in _MODULE_SPECIALS:
                 names[name] = value
+            if not name.startswith("__"):
+                built_names.setdefault(name, value)
+    for module, own in _PYTHON_MODULES.items():
+        written = importlib.import_module(f"{__package__}.{own}")
+        for name in written.__all__:
+            contents.setdefault(module, {})[name] = getattr(written, name)
     for name in _EXCEPTIONS21_NAMES:
         exception = getattr(_extension, name, None)
         if exception is not None:

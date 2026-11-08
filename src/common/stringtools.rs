@@ -482,6 +482,17 @@ pub fn parentheses_match(text: &str, open: &str, close: &str) -> Result<Vec<Pare
     Ok(stack.pop().map(|outer| outer.nested).unwrap_or_default())
 }
 
+/// A debugging or warning message as music21's `common.formatStr` makes
+/// one: the parts joined by spaces, ending in a newline.
+///
+/// ```
+/// assert_eq!(music21::common::stringtools::format_str(&["test", "1", "2"]), "test 1 2\n");
+/// ```
+pub fn format_str<S: AsRef<str>>(parts: &[S]) -> String {
+    let joined: Vec<&str> = parts.iter().map(AsRef::as_ref).collect();
+    format!("{}\n", joined.join(" "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

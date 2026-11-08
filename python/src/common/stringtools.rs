@@ -143,7 +143,7 @@ fn format_str(
             Err(error) => return Err(error),
         }
     }
-    Ok(written.join(" ") + "\n")
+    Ok(tools::format_str(&written))
 }
 
 /// Text with its accents taken off; `ß` becomes `ss` and curly quotes

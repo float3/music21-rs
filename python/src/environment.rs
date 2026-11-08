@@ -456,7 +456,7 @@ impl EnvironmentCore {
         let reference = slf.borrow().reference.clone_ref(py).into_bound(py);
         let mut value = value;
         if key.to_lowercase().contains("path") && !value.is_none() {
-            let cleaned = settings::clean_path(&path_text(&value)?);
+            let cleaned = music21::common::pathtools::clean_path(&path_text(&value)?);
             value = PyString::new(py, &cleaned).into_any();
         }
         if !reference.contains(key)? && key != "localCorpusPath" {
@@ -954,7 +954,7 @@ impl Environment {
 
     /// Writes a message to standard error where the `debug` preference is
     /// at `statusLevel` or more, after the module's name.
-    #[pyo3(signature = (msg, statusLevel=settings::DEBUG_USER))]
+    #[pyo3(signature = (msg, statusLevel=music21::common::DEBUG_USER))]
     fn printDebug(&self, py: Python<'_>, msg: &Bound<'_, PyAny>, statusLevel: i64) -> PyResult<()> {
         let level: i64 = envSingleton(py)?.get_item("debug")?.extract()?;
         if level < statusLevel {
@@ -966,7 +966,7 @@ impl Environment {
             message_parts(msg)?
         };
         self.prefixed(py, &mut parts, ":")?;
-        write_stderr(py, &settings::format_message(&parts))
+        write_stderr(py, &music21::common::stringtools::format_str(&parts))
     }
 
     #[pyo3(signature = (filePath=None))]
@@ -1003,7 +1003,7 @@ impl Environment {
             Some(header) => parts.insert(0, header),
             None => self.prefixed(py, &mut parts, ": WARNING:")?,
         }
-        write_stderr(py, &settings::format_message(&parts))
+        write_stderr(py, &music21::common::stringtools::format_str(&parts))
     }
 
     #[pyo3(signature = (filePath=None))]
@@ -1105,7 +1105,7 @@ impl UserSettings {
         if paths.contains(key)? {
             let skipped = value.is_none() || value.str()?.to_string().starts_with("/skip");
             if !skipped {
-                let cleaned = settings::clean_path(&path_text(&value)?);
+                let cleaned = music21::common::pathtools::clean_path(&path_text(&value)?);
                 if !Path::new(&cleaned).exists() {
                     return Err(user_settings_error(format!(
                         "attempting to set a value to a path that does not exist: {cleaned}"

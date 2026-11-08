@@ -123,6 +123,7 @@ pub mod omrcorrectors;
 pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
+mod plumbing;
 pub mod possibility;
 pub mod prebase;
 pub mod primitives;
@@ -2241,16 +2242,22 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `_thawed` on whichever of the two modules is present.
     m.add_function(wrap_pyfunction!(thawed, m)?)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
-    m.add("__music21_built_modules__", BUILT_MODULES.to_vec())?;
+    // `common` first: where two of these have a name, `provide_music21`
+    // places `common`'s wherever music21 imports it.
+    let built: Vec<String> = common::names()
+        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
+        .collect();
+    m.add("__music21_built_modules__", built)?;
     m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
 }
 
 /// music21's modules that are built here whole, as modules, rather than
-/// put together from the classes on this one: what they hold (`set`,
-/// `get`, `keys`) would shadow Python's own in a flat namespace, and their
-/// exceptions must wait for music21's `Music21Exception`.
+/// put together from the classes on this one, besides `common` and its
+/// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
+/// own in a flat namespace, and their exceptions must wait for music21's
+/// `Music21Exception`. Each is built on first asking, and once.
 const BUILT_MODULES: [&str; 3] = [
     "music21.environment",
     "music21.defaults",
@@ -2258,7 +2265,7 @@ const BUILT_MODULES: [&str; 3] = [
 ];
 
 /// The module of music21's named, built on first asking: one of
-/// [`BUILT_MODULES`].
+/// [`BUILT_MODULES`], `music21.common` or one of its modules.
 #[pyfunction]
 #[pyo3(name = "_music21_module")]
 fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
@@ -2266,6 +2273,7 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.environment" => environment::module(py),
         "music21.defaults" => defaults::defaults_module(py),
         "music21._version" => defaults::version_module(py),
+        _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
 }
@@ -2306,9 +2314,6 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Not music21's: what the harte-rs package builds its `Harte` on.
     hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
-    // music21's modules built whole here, which `provide_music21` answers
-    // for and nothing installs into a real music21.
-    common::register(m)?;
     // What `provide_music21` builds music21's modules from: the names each
     // module of music21's is installed under, and the package's version.
     m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
