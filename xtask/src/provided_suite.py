@@ -186,10 +186,21 @@ def gather(module):
     if isinstance(case, type) and issubclass(case, unittest.TestCase):
         suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(case))
     finder = doctest.DocTestFinder(exclude_empty=True)
+    # The finder keeps what `inspect.getmodule` says comes from the module,
+    # which asks `sys.modules`: where the provider's module of that name was
+    # imported first, every class here would read as the provider's, and
+    # none of their docstrings would be found.
+    previous = sys.modules.get(module.__name__)
+    sys.modules[module.__name__] = module
     try:
         examples = finder.find(module, module.__name__)
     except Exception:
         examples = []
+    finally:
+        if previous is None:
+            sys.modules.pop(module.__name__, None)
+        else:
+            sys.modules[module.__name__] = previous
     flags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
     for example in sorted(examples, key=lambda found: found.name):
         if example.examples:
