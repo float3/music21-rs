@@ -131,6 +131,7 @@ fn subjects() -> Vec<(&'static str, StreamElement)> {
         ("stream.Measure()", stream(StreamKind::Measure)),
         ("stream.Part()", stream(StreamKind::Part)),
         ("stream.PartStaff()", stream(StreamKind::PartStaff)),
+        ("stream.System()", stream(StreamKind::System)),
         ("stream.Voice()", stream(StreamKind::Voice)),
         ("stream.Score()", stream(StreamKind::Score)),
         ("stream.Opus()", stream(StreamKind::Opus)),

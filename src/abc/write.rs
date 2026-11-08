@@ -31,7 +31,7 @@ use crate::stream::{Stream, StreamElement, StreamKind};
 use crate::tempo::MetronomeMark;
 
 fn abc_error(message: impl Into<String>) -> Error {
-    Error::Abc(message.into())
+    Error::abc(message.into())
 }
 
 /// How [`to_abc`] writes a score.

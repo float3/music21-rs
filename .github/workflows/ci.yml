@@ -237,7 +237,10 @@ jobs:
   # each of five runners, which share the tests out by a hash of their
   # names, so a test stays on the same runner from run to run. Five, not
   # three, since a shard no longer compiles anything: what is left is the
-  # tests, and the slowest of them alone runs nearly four minutes.
+  # tests. A hash balances only tests of about one size, so the corpus
+  # sweeps are cut into several tests each, the heaviest scores dealt one
+  # to a test (`musicxml_common::dealt`), and no test runs much past four
+  # minutes.
   python-parity:
     name: Python Parity (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest

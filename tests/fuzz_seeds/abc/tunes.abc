@@ -1,0 +1,26 @@
+%abc-2.1
+X:1
+T:Seed Reel
+C:Trad.
+M:4/4
+L:1/8
+Q:1/4=120
+K:G
+|:"G"GABc dedB|"D7"dedB dedB|"C"c2ec B2dB|"Am"c2A2 A2BA|
+"G"(3GAB cd e2 {f}g2|"D"f>e d^c =c_B AG|[1"G"G4 z4:|[2"G"G2B2 [GBd]4||
+w:la la la la la-la la_ la
+P:B
+M:6/8
+K:Dm
+V:1 clef=treble name="Upper"
+A,B,C D2E | F2G A3- | A6 :|
+V:2 clef=bass
+D,,3 F,,3 | A,,6 | !fermata!D,,6 |]
+
+X:2
+T:Second
+M:C|
+L:1/4
+K:Bb mix
+B,/2C/2 D E F | (5:4:5ccccc z2 | .a~b Hc Td | "^text"e8 |
+y [K:A] a' b'' c,,|]

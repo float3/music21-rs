@@ -20,6 +20,7 @@
 //!
 //! The main types are re-exported at the crate root; each module holds the
 //! rest of its area. Every fallible call returns the crate-wide [`Result`].
+//! Coming from music21's Python, start with the [`guide`].
 //!
 //! # Features
 //!
@@ -29,8 +30,9 @@
 //! - `scala-archive` bundles the Scala scale archive (about 4,000 `.scl`
 //!   files, roughly 1 MB) and enables `ScalaArchive::bundled()`.
 //! - `language-detection` bundles music21's excerpts in seven languages
-//!   (about 1.9 MB) and enables `features::language` and music21's language
-//!   feature, `TX1`, among the native extractors.
+//!   (about 1.9 MB) and enables `features::language`'s detector, which reads
+//!   a text against them, and music21's language feature, `TX1`, among the
+//!   native extractors. Its `Trigram` needs no excerpt and is always there.
 //! - `musicxml` reads and writes MusicXML (`musicxml::from_musicxml`,
 //!   `musicxml::to_musicxml`).
 //! - `musescore` runs an installed MuseScore to read and write the formats it
@@ -85,6 +87,8 @@ pub mod features;
 
 /// Figured bass: the numbers written under a bass note.
 pub mod figuredbass;
+#[doc = include_str!("guide.md")]
+pub mod guide {}
 /// Humdrum `**kern` scores.
 pub mod humdrum;
 /// Instruments: music21's `instrument` module.

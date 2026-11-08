@@ -71,23 +71,24 @@ fn read_tenths(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Tenths>> {
 #[pyclass(
     name = "LayoutBase",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct LayoutBase;
 
 #[pymethods]
 impl LayoutBase {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (**_keywords))]
-    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     fn __repr__(&self) -> &'static str {
@@ -100,8 +101,10 @@ impl LayoutBase {
 #[pyclass(
     name = "ScoreLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct ScoreLayout {
     /// The scaling, which is what a score layout says of itself.
@@ -123,15 +126,17 @@ pub struct ScoreLayout {
 
 #[pymethods]
 impl ScoreLayout {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(py: Python<'_>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(
+        py: Python<'_>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsScoreLayout::default(),
             pageLayout: None,
@@ -154,7 +159,7 @@ impl ScoreLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// How many millimetres the tenths below are.
@@ -287,8 +292,10 @@ fn said(value: Option<Tenths>) -> String {
 #[pyclass(
     name = "PageLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct PageLayout {
     pub(crate) inner: RsPageLayout,
@@ -296,15 +303,14 @@ pub struct PageLayout {
 
 #[pymethods]
 impl PageLayout {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsPageLayout::default(),
         };
@@ -328,7 +334,7 @@ impl PageLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// `leftMargin`, where the score says.
@@ -463,8 +469,10 @@ impl PageLayout {
 #[pyclass(
     name = "SystemLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct SystemLayout {
     pub(crate) inner: RsSystemLayout,
@@ -472,15 +480,14 @@ pub struct SystemLayout {
 
 #[pymethods]
 impl SystemLayout {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsSystemLayout::default(),
         };
@@ -503,7 +510,7 @@ impl SystemLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// `leftMargin`, where the score says.
@@ -627,8 +634,10 @@ impl SystemLayout {
 #[pyclass(
     name = "StaffLayout",
     module = "music21.layout",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct StaffLayout {
     pub(crate) inner: RsStaffLayout,
@@ -645,15 +654,14 @@ pub struct StaffLayout {
 
 #[pymethods]
 impl StaffLayout {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
 
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    fn new(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<PyClassInitializer<Self>> {
         let mut made = Self {
             inner: RsStaffLayout::default(),
             given_size: None,
@@ -688,7 +696,7 @@ impl StaffLayout {
                 }
             }
         }
-        Ok(made)
+        Ok(crate::base::built(made))
     }
 
     /// How far the staff stands from the one above.
@@ -850,6 +858,139 @@ fn read_staff_type(value: &Bound<'_, PyAny>) -> PyResult<StaffType> {
         .or_else(|_| value.extract::<String>())?;
     StaffType::from_name(&said)
         .ok_or_else(|| LayoutException::new_err(format!("no staff is of the type {said}")))
+}
+
+/// A crate layout as music21's own object, for a score built into
+/// music21's streams: music21's reader makes its own, which nothing
+/// installed stands in for. A measurement nobody gave stays `None`.
+pub(crate) fn music21_object<'py>(
+    py: Python<'py>,
+    layout: &music21::layout::Layout,
+) -> PyResult<Bound<'py, PyAny>> {
+    use music21::layout::Layout;
+
+    let module = py.import("music21.layout")?;
+    let keywords = PyDict::new(py);
+    let made = match layout {
+        Layout::Score(score) => {
+            keywords.set_item("scalingMillimeters", tenths(score.scaling_millimeters, py))?;
+            keywords.set_item("scalingTenths", tenths(score.scaling_tenths, py))?;
+            if let Some(page) = &score.page_layout {
+                keywords.set_item("pageLayout", page_object(py, &module, page)?)?;
+            }
+            if let Some(system) = &score.system_layout {
+                keywords.set_item("systemLayout", system_object(py, &module, system)?)?;
+            }
+            let staves = score
+                .staff_layouts
+                .iter()
+                .map(|staff| staff_object(py, &module, staff))
+                .collect::<PyResult<Vec<_>>>()?;
+            keywords.set_item("staffLayoutList", staves)?;
+            module.getattr("ScoreLayout")?.call((), Some(&keywords))?
+        }
+        Layout::Page(page) => page_object(py, &module, page)?,
+        Layout::System(system) => system_object(py, &module, system)?,
+        Layout::Staff(staff) => staff_object(py, &module, staff)?,
+    };
+    Ok(made)
+}
+
+fn page_object<'py>(
+    py: Python<'py>,
+    module: &Bound<'py, PyModule>,
+    page: &RsPageLayout,
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords = PyDict::new(py);
+    keywords.set_item("pageNumber", page.page_number)?;
+    keywords.set_item("leftMargin", tenths(page.left_margin, py))?;
+    keywords.set_item("rightMargin", tenths(page.right_margin, py))?;
+    keywords.set_item("topMargin", tenths(page.top_margin, py))?;
+    keywords.set_item("bottomMargin", tenths(page.bottom_margin, py))?;
+    keywords.set_item("pageHeight", tenths(page.page_height, py))?;
+    keywords.set_item("pageWidth", tenths(page.page_width, py))?;
+    keywords.set_item("isNew", page.is_new)?;
+    module.getattr("PageLayout")?.call((), Some(&keywords))
+}
+
+fn system_object<'py>(
+    py: Python<'py>,
+    module: &Bound<'py, PyModule>,
+    system: &RsSystemLayout,
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords = PyDict::new(py);
+    keywords.set_item("leftMargin", tenths(system.left_margin, py))?;
+    keywords.set_item("rightMargin", tenths(system.right_margin, py))?;
+    keywords.set_item("distance", tenths(system.distance, py))?;
+    keywords.set_item("topDistance", tenths(system.top_distance, py))?;
+    keywords.set_item("isNew", system.is_new)?;
+    let made = module.getattr("SystemLayout")?.call((), Some(&keywords))?;
+    // music21's constructor takes neither margin; its reader sets them.
+    if system.top_margin.is_some() {
+        made.setattr("topMargin", tenths(system.top_margin, py))?;
+    }
+    if system.bottom_margin.is_some() {
+        made.setattr("bottomMargin", tenths(system.bottom_margin, py))?;
+    }
+    Ok(made)
+}
+
+fn staff_object<'py>(
+    py: Python<'py>,
+    module: &Bound<'py, PyModule>,
+    staff: &RsStaffLayout,
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords = PyDict::new(py);
+    keywords.set_item("distance", tenths(staff.distance, py))?;
+    keywords.set_item("staffNumber", staff.staff_number)?;
+    keywords.set_item("staffLines", staff.staff_lines)?;
+    keywords.set_item("hidden", staff.hidden)?;
+    let kind = module
+        .getattr("StaffType")?
+        .call1((staff.staff_type.as_str(),))?;
+    keywords.set_item("staffType", kind)?;
+    let made = module.getattr("StaffLayout")?.call((), Some(&keywords))?;
+    // As music21's reader sets it, past the constructor's `float`: a
+    // whole size stays an `int`.
+    if let Some(size) = staff.staff_size {
+        let size = match size.fract() == 0.0 && size.is_finite() {
+            true => Tenths::Whole(size as i64),
+            false => Tenths::Fraction(size),
+        };
+        made.setattr("staffSize", tenths(Some(size), py))?;
+    }
+    Ok(made)
+}
+
+/// A crate staff group as music21's own `StaffGroup` over `parts`, the
+/// parts it groups as already built.
+pub(crate) fn music21_staff_group<'py>(
+    py: Python<'py>,
+    group: &music21::stream::StaffGroup,
+    parts: Vec<Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let keywords = PyDict::new(py);
+    keywords.set_item("name", group.name())?;
+    keywords.set_item("abbreviation", group.abbreviation())?;
+    keywords.set_item("symbol", group.symbol())?;
+    let made = py
+        .import("music21.layout")?
+        .getattr("StaffGroup")?
+        .call((pyo3::types::PyTuple::new(py, parts)?,), Some(&keywords))?;
+    // Not through the constructor, which keeps what it is given as given.
+    let together = group.bar_together().map(|together| together.as_str());
+    made.setattr("barTogether", together)?;
+    let style = made.getattr("style")?;
+    crate::text::music21_style(py, &style, &group.style)?;
+    // A group of a part's own staves is the one whose name is hidden, and
+    // the one music21's reader leaves incomplete; one from a
+    // `<part-group>` it marks complete.
+    if group.name_hidden() {
+        style.setattr("hideObjectOnPrint", true)?;
+    } else {
+        made.setattr("completeStatus", true)?;
+    }
+    Ok(made)
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

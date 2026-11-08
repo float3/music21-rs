@@ -33,6 +33,7 @@ mod doctest_audiosearch;
 mod doctest_bar;
 mod doctest_beam;
 mod doctest_braillebasic;
+mod doctest_brailleexamples;
 mod doctest_braillelookup;
 mod doctest_braillenotegrouping;
 mod doctest_braillesegment;

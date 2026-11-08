@@ -28,8 +28,10 @@
 # the crate ports where it uses it rather than as a module of its own; and
 # for what the crate does not model at all: the page (`graph`), the
 # environment and the corpus cache (`environment.py`, `configure.py`,
-# `metadata/bundles.py`, `metadata/caching.py`), file conversion
-# (`converter`), and music21's own object machinery (`base.py`,
+# `metadata/bundles.py`, `metadata/caching.py`), music21's subconverters
+# (`converter/subConverters.py`; `converter` and `corpus` themselves are
+# tracked, the wheel having them in Python), and music21's own object
+# machinery (`base.py`,
 # `prebase.py`, `sites.py`, `derivation.py`, `freezeThaw.py`,
 # `stream/iterator.py`, `stream/filters.py`).
 #
@@ -1337,7 +1339,7 @@ mostLikelyLanguage = "most_likely_language"
 mostLikelyLanguageNumeric = "most_likely_language_numeric"
 
 [class.excluded]
-readExcerpts = "reads the excerpt files off the disk; the crate's excerpts are built in and the library does no file IO"
+readExcerpts = "reads the excerpt files off the disk; the crate's excerpts are built in and the library does no file IO. The wheel answers it from those built in"
 
 [[class]]
 python = "text.py"
@@ -1345,7 +1347,7 @@ name = "Trigram"
 rust = ["src/features/language.rs"]
 
 [class.renames]
-parseExcerpt = "from_text"
+parseExcerpt = "add_text"
 
 [class.excluded]
 measure = "the step that counts the letter triples, which building one does"
@@ -1430,7 +1432,7 @@ SpannerBundle = "the collection music21 keeps a stream's spanners in; a crate st
 python = "spanner.py"
 name = "Spanner"
 rust = ["src/spanner.rs"]
-note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back."
+note = "The leaves a spanner joins are positions in `Stream::leaves`, so what it holds is the stream's to hand back, and it is edited by position: an element is joined once, as music21 joins an object once."
 
 [class.renames]
 getSpannedElements = "spanned"
@@ -1440,10 +1442,6 @@ purgeOrphans = "drops the elements no stream holds any more, which only a spanne
 purgeLocations = "drops the sites it remembers, and it remembers none"
 getSpannedElementsByClass = "the elements of a class among them, which the stream holding them answers"
 getSpannedElementIds = "Python object ids"
-addSpannedElements = "adds elements by object; `Spanner::new` takes the positions it joins"
-insertFirstSpannedElement = "puts an element first by object"
-hasSpannedElement = "whether an element is among them, which is `spanned().contains`"
-replaceSpannedElement = "swaps one element for another by object"
 fill = "fills in every element between the first and the last, which asks the stream what stands between them"
 getFirst = "the first element itself; `spanned` gives its position and the stream hands back what stands there"
 getLast = "the last element itself, likewise"
@@ -1532,18 +1530,10 @@ getTextExpression = "the words as a `TextExpression` for a renderer; `text` is w
 python = "repeat.py"
 name = "Expander"
 rust = ["src/stream/repeats.rs"]
-note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one."
+note = "Playing a score's repeats out, which `Stream::expand_repeats` does in one and `repeat::Expander` a step at a time. Its steps take a stream of measures and hand back a new one, leaving the stream they were given as it was."
 
 [class.renames]
 process = "expand_repeats"
-
-[class.excluded]
-measureMap = "the measures of the expansion listed for a caller to read"
-repeatBarsAreCoherent = "a step of the expansion, which answers an error where the repeats make no sense"
-findInnermostRepeatIndices = "a step of the expansion"
-processInnermostRepeatBars = "a step of the expansion"
-getRepeatExpressionIndex = "a step of the expansion"
-isExpandable = "whether there is anything to play out, which expanding answers"
 
 [[class]]
 python = "variant.py"
@@ -1814,10 +1804,6 @@ offset = "lowest_position"
 
 [class.excluded]
 index = "where a timespan sits in the tree, which is its place in the list here"
-removeTimespan = "takes a timespan out of the tree; the crate reads a stream into timespans and does not edit them"
-removeTimespanList = "takes several out, likewise"
-toPartwiseTimespanTrees = "a tree for each part of the score; `as_timespans` reads whichever stream it is given, a part included"
-allParts = "every part the timespans came from, which the caller has in the score it read"
 element = "the element a timespan holds, which `ElementTimespan::element` answers"
 
 [[class]]
@@ -2408,7 +2394,7 @@ labelTransposedAndInvertedMultisets = "label"
 python = "analysis/reduceChords.py"
 name = "ChordReducer"
 rust = ["src/analysis/reduce_chords.rs"]
-note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The two steps music21 documents on their own are public here -- a measure's weights and its reduction -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
+note = "A score reduced to the chords it is made of: `reduce_chords` is music21's `run`, which reads the notes as spans of time, thins them out step by step, chordifies what is left against the score and reduces each measure to the few chords weighing most in it. The whole is held to music21 by `reduce_chords_parity` on twelve corpus scores. The steps music21 documents on their own are public here -- a measure's weights and its reduction, and the slices a measure is cut into, their weights, the heaviest kept and what is consonant -- and `reduced_measure_places` is the latter read as places, which is what lets a facade edit music21's own measure."
 
 [class.renames]
 run = "reduce_chords"
@@ -2469,6 +2455,32 @@ toPitch = "from_language_name"
 [class.excluded]
 toNote = "a note built on what `from_language_name` read, which is `Note::new(pitch)` here and is music21's own one-liner"
 toChord = "a chord built on what it read, as `toNote`"
+
+[[class]]
+python = "converter/__init__.py"
+rust = []
+note = "Not the crate's: each reader and writer is a function on the stream it reads or writes. The wheel's `converter` is Python over them (`python/pysrc/music21_rs/converter.py`): it tells a format by extension or content as music21 does and hands the file to the crate's reader for it, MuseScore included."
+
+[class.excluded]
+resetSubConverters = "the subconverter machinery: the readers are the crate's own, chosen by format"
+registerSubConverter = "the subconverter machinery, as `resetSubConverters`"
+unregisterSubConverter = "the subconverter machinery, as `resetSubConverters`"
+freeze = "music21's pickle cache, which the wheel does not keep: every parse reads the file"
+thaw = "music21's pickle cache, as `freeze`"
+freezeStr = "music21's pickle cache, as `freeze`"
+thawStr = "music21's pickle cache, as `freeze`"
+
+[[class]]
+python = "corpus/__init__.py"
+rust = []
+note = "Not the crate's, which reads no files of its own choosing. The wheel's `corpus` (`python/pysrc/music21_rs/corpus.py`) finds a work in the directory `MUSIC21_RS_CORPUS` names, or in an installed music21's, and reads it with the wheel's `converter`."
+
+[class.excluded]
+getLocalPaths = "the local corpus, a setting of music21's environment"
+addPath = "the local corpus, as `getLocalPaths`"
+cacheMetadata = "the corpus's metadata bundles, which the wheel does not keep"
+getComposer = "a search of the metadata bundles, as `cacheMetadata`"
+noCorpus = "music21's installation without its corpus, which the wheel answers by `MUSIC21_RS_CORPUS`"
 
 # The other half of the map: every module of music21 no entry above reads,
 # with the reason. A file nothing names is invisible to the report, which
@@ -2579,10 +2591,9 @@ python = [
 ]
 
 [[unlisted]]
-reason = "the environment, the corpus cache and file conversion: settings, paths, pickles and the readers music21 chooses between, none of which a library that does no file IO has"
+reason = "the environment, the corpus cache, settings and the subconverter machinery: paths, pickles and the readers music21 chooses between, none of which a library that does no file IO has"
 python = [
   "configure.py",
-  "converter/__init__.py",
   "converter/museScore.py",
   "converter/qmConverter.py",
   "converter/subConverters.py",

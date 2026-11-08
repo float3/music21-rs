@@ -22,9 +22,9 @@ use crate::chord::Chord;
 use crate::chordsymbol::ChordSymbol;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::key::{Key, KeySignature, convert_key_string_to_music21_key_string};
-use crate::makenotation::{make_accidentals, make_beams, op_frac, sorted_events};
+use crate::makenotation::{MAX_MEASURES, make_accidentals, make_beams, op_frac, sorted_events};
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
 use crate::notation::{Tie, TieType};
@@ -33,7 +33,7 @@ use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 fn roman_text_error(message: impl Into<String>) -> Error {
-    Error::RomanText(message.into())
+    Error::roman_text(message.into())
 }
 
 /// One word of a measure line: music21's `RTAtom` and its kinds.
@@ -613,7 +613,17 @@ impl Translator {
             return Ok(());
         }
         let is_copy = data.starts_with('=');
-        if numbers[0] > self.last_measure_number + 1 && self.previous.is_some() {
+        let next = i64::from(self.last_measure_number) + 1;
+        if i64::from(numbers[0]) > next && self.previous.is_some() {
+            let left_out = i64::from(numbers[0]) - next;
+            if left_out + self.measures.len() as i64 > MAX_MEASURES as i64 {
+                return Err(roman_text_error(format!(
+                    "measure {} would make more than {MAX_MEASURES} measures",
+                    numbers[0]
+                ))
+                .of_kind(FormatErrorKind::TooLarge)
+                .placed(|| Position::measure(numbers[0].to_string())));
+            }
             // Measures the file leaves out hold the last chord still.
             for number in self.last_measure_number + 1..numbers[0] {
                 let mut fill = Measure {
@@ -1513,5 +1523,20 @@ mod tests {
     #[test]
     fn text_with_no_measure_is_refused() {
         assert!(from_roman_text("Composer: nobody\n").is_err());
+    }
+
+    #[test]
+    fn a_measure_after_the_largest_number_is_read() {
+        assert!(from_roman_text("m2147483647 C: I\nm1 I\n").is_ok());
+    }
+
+    #[test]
+    fn a_gap_of_more_measures_than_a_stream_takes_is_refused() {
+        let gap = crate::makenotation::MAX_MEASURES + 2;
+        let refused = from_roman_text(&format!("m1 C: I\nm{gap} V\n")).unwrap_err();
+        let said = refused.format_error().unwrap();
+        assert_eq!(said.kind, FormatErrorKind::TooLarge);
+        assert_eq!(said.position, Some(Position::measure(gap.to_string())));
+        assert!(from_roman_text("m1 C: I\nm1000 V\n").is_ok());
     }
 }

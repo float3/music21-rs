@@ -53,6 +53,7 @@ function render(info) {
         fact("As written", info.label),
         fact("Canonical", info.canonical),
         fact("Prettified", info.pretty),
+        fact("Chord symbol (from the pitches)", info.chord_symbol ?? "none"),
         fact("Root", info.root ?? "none"),
         fact("Bass degree", info.bass ?? "none"),
         fact("Shorthand", info.shorthand ?? "none"),
@@ -61,7 +62,6 @@ function render(info) {
         fact("Common name", info.common_name),
         fact("Pitched name", info.pitched_common_name),
         fact("Forte class", info.forte_class ?? "none"),
-        fact("Chord symbol", info.chord_symbol ?? "none"),
     );
     pitches.replaceChildren();
     info.pitches.forEach((pitch, index) => {

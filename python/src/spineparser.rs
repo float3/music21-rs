@@ -20,8 +20,10 @@ use music21::humdrum::{GlobalComment as RsGlobalComment, MiscTandem as RsMiscTan
 #[pyclass(
     name = "GlobalComment",
     module = "music21.humdrum.spineParser",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct GlobalComment {
     pub(crate) inner: RsGlobalComment,
@@ -45,8 +47,7 @@ fn said_of(comment: &str) -> &str {
 
 #[pymethods]
 impl GlobalComment {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -54,8 +55,8 @@ impl GlobalComment {
     /// music21's `GlobalComment(comment='')`.
     #[new]
     #[pyo3(signature = (comment = "", **_keywords))]
-    fn new(comment: &str, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::wrap(RsGlobalComment::new(said_of(comment), 0))
+    fn new(comment: &str, _keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Self::wrap(RsGlobalComment::new(said_of(comment), 0)))
     }
 
     /// What music21 says this is, as its `classes` answers.
@@ -85,6 +86,7 @@ impl GlobalComment {
     #[setter]
     fn set_priority(&mut self, value: i32) {
         self.inner = RsGlobalComment::new(self.inner.comment(), value);
+        crate::stream::priority_changed();
     }
 
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
@@ -107,8 +109,10 @@ impl GlobalComment {
 #[pyclass(
     name = "MiscTandem",
     module = "music21.humdrum.spineParser",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct MiscTandem {
     pub(crate) inner: RsMiscTandem,
@@ -123,8 +127,7 @@ impl MiscTandem {
 
 #[pymethods]
 impl MiscTandem {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -132,8 +135,8 @@ impl MiscTandem {
     /// music21's `MiscTandem(tandem='')`.
     #[new]
     #[pyo3(signature = (tandem = "", **_keywords))]
-    fn new(tandem: &str, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::wrap(RsMiscTandem::new(tandem, 0))
+    fn new(tandem: &str, _keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Self::wrap(RsMiscTandem::new(tandem, 0)))
     }
 
     /// What music21 says this is, as its `classes` answers.
@@ -162,6 +165,7 @@ impl MiscTandem {
     #[setter]
     fn set_priority(&mut self, value: i32) {
         self.inner = RsMiscTandem::new(self.inner.tandem(), value);
+        crate::stream::priority_changed();
     }
 
     fn __repr__(&self) -> String {

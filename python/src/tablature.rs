@@ -435,7 +435,7 @@ macro_rules! fret_boards {
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
                     let board = RsFretBoard::$made(notes_of(fretNotes)?, displayFrets);
-                    Ok(PyClassInitializer::from(FretBoard::wrap(board))
+                    Ok(crate::base::built(FretBoard::wrap(board))
                         .add_subclass($class))
                 }
             }

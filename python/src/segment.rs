@@ -245,7 +245,7 @@ impl Segment {
     /// The function of music21's `possibility` module named `name`, as
     /// music21's rule tables hold it.
     fn rule(py: Python<'_>, name: &str) -> PyResult<Py<PyAny>> {
-        match py.import("music21.figuredBass.possibility") {
+        match crate::real_music21(py, "music21.figuredBass.possibility") {
             Ok(module) => Ok(module.getattr(name)?.unbind()),
             Err(_) => Ok(py.import("music21_rs")?.getattr(name)?.unbind()),
         }
@@ -318,7 +318,7 @@ pub(crate) fn segment_object<'py>(
 /// Says what music21's segment warns, where music21's environment is there
 /// to say it through.
 fn warn(py: Python<'_>, message: &str) -> PyResult<()> {
-    if let Ok(environment) = py.import("music21.environment") {
+    if let Ok(environment) = crate::real_music21(py, "music21.environment") {
         environment
             .getattr("Environment")?
             .call1(("figuredBass.segment",))?
@@ -667,7 +667,7 @@ impl OverlaidSegment {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Segment).add_subclass(OverlaidSegment)
+        crate::base::built(Segment).add_subclass(OverlaidSegment)
     }
 }
 

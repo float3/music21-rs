@@ -275,6 +275,12 @@ impl GenericInterval {
         if value == 0 {
             return Err(Error::Interval("The Zeroth is not an interval".to_owned()));
         }
+        // Its undirected size would be one past the largest integer.
+        if value == IntegerType::MIN {
+            return Err(Error::Interval(format!(
+                "a generic interval of {value} is too large"
+            )));
+        }
         self.value = value;
         Ok(())
     }
@@ -383,6 +389,12 @@ mod tests {
     fn a_zeroth_is_not_an_interval() {
         assert!(GenericInterval::new(0).is_err());
         assert_eq!(GenericInterval::new(-3).unwrap().value(), -3);
+    }
+
+    #[test]
+    fn a_size_with_no_undirected_size_is_refused() {
+        assert!(GenericInterval::new(IntegerType::MIN).is_err());
+        assert!(GenericInterval::new(IntegerType::MIN + 1).is_ok());
     }
 
     #[test]

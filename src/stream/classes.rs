@@ -43,6 +43,7 @@ impl StreamElement {
                 StreamKind::Voice => vec!["Voice", "Stream", "StreamCore"],
                 StreamKind::Part => vec!["Part", "Stream", "StreamCore"],
                 StreamKind::PartStaff => vec!["PartStaff", "Part", "Stream", "StreamCore"],
+                StreamKind::System => vec!["System", "Stream", "StreamCore"],
                 StreamKind::Score => vec!["Score", "Stream", "StreamCore"],
                 StreamKind::Opus => vec!["Opus", "Stream", "StreamCore"],
                 StreamKind::Stream => vec!["Stream", "StreamCore"],

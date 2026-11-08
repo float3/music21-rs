@@ -7,6 +7,7 @@
 
 passing = [
     "music21.analysis.reduceChords.ChordReducer.computeMeasureChordWeights",
+    "music21.analysis.reduceChords.ChordReducer.isConsonant",
     "music21.analysis.reduceChords.ChordReducer.reduceMeasureToNChords",
     "music21.analysis.reduceChords.ChordReducer.run",
     "music21.analysis.reduceChords.ChordReducer.sliceWeight",
@@ -15,7 +16,6 @@ passing = [
 
 [not_passing]
 "music21.analysis.reduceChords.ChordReducer.collapseArpeggios" = "refused by design: it walks music21's mutable timespan tree while editing it"
-"music21.analysis.reduceChords.ChordReducer.isConsonant" = "not ported: run weighs consonance inside the crate, and the facade has no member for it yet"
 "music21.analysis.reduceChords.ChordReducer.keepHeaviestSlices" = "refused by design: its slices hold music21's Verticality objects from the mutable timespan tree"
 "music21.analysis.reduceChords.ChordReducer.measureSlices" = "refused by design: it answers music21's Verticality objects from the mutable timespan tree"
 "music21.analysis.reduceChords.ChordReducer.sliceWeights" = "refused by design: its slices hold music21's Verticality objects from the mutable timespan tree"

@@ -2131,6 +2131,8 @@ struct HarteInfo {
     common_name: String,
     pitched_common_name: String,
     forte_class: Option<String>,
+    /// music21's chord symbol for the pitches, figured on the label's root,
+    /// which may name the chord otherwise than the label does.
     chord_symbol: Option<String>,
 }
 

@@ -136,8 +136,32 @@ fn ours(names: &[String], scale: &Scale, options: &ScaleRunOptions) -> Vec<Strin
     }
 }
 
+/// How many tests the melodies are dealt between, so that nextest can run
+/// them on different runners.
+const PARTS: usize = 4;
+
 #[test]
-fn scale_runs_are_found_as_music21_finds_them() {
+fn scale_runs_are_found_as_music21_finds_them_0() {
+    scale_runs_are_found_as_music21_finds_them(0);
+}
+
+#[test]
+fn scale_runs_are_found_as_music21_finds_them_1() {
+    scale_runs_are_found_as_music21_finds_them(1);
+}
+
+#[test]
+fn scale_runs_are_found_as_music21_finds_them_2() {
+    scale_runs_are_found_as_music21_finds_them(2);
+}
+
+#[test]
+fn scale_runs_are_found_as_music21_finds_them_3() {
+    scale_runs_are_found_as_music21_finds_them(3);
+}
+
+/// Compares every `PARTS`th melody, from the `part`th.
+fn scale_runs_are_found_as_music21_finds_them(part: usize) {
     let root = repo_root();
     std::env::set_current_dir(&root).expect("chdir to the repository root");
     prepare().expect("prepare the music21 reference checkout");
@@ -171,7 +195,7 @@ fn scale_runs_are_found_as_music21_finds_them() {
         let mut failures = Vec::new();
         let mut compared = 0;
         let mut found = 0;
-        for names in &melodies {
+        for names in melodies.iter().skip(part).step_by(PARTS) {
             for (class, kind, tonic) in SCALES {
                 let scale = Scale::new(kind, Pitch::from_name(tonic).expect("a tonic"));
                 for &(comparison, attribute, required, step, repeats) in &asked {

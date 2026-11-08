@@ -21,7 +21,20 @@
 //!
 //! ```text
 //! cargo run --release -p xtask --features python -- music21-suite [--parallel]
+//!     [--only musicxml,stream] [--sides music21_rs_wheel] [--profile]
+//!     [--route-converters midi|none]
 //! ```
+//!
+//! `--only` takes a comma-separated list of parts of module names, and
+//! `--sides` the sides to run beside music21. Every run that compares times
+//! sums the timed tests per module. `--profile` also runs each module's
+//! tests under cProfile, splitting the time into the crate's own calls,
+//! this package's Python glue, music21's Python, CPython's C and the rest:
+//! where an installed music21 spends what it spends. cProfile costs a
+//! Python call far more than a call into the crate, so a profiled run's
+//! times flatter the crate and only its split is worth reading.
+//! `--route-converters` says which formats `converter.parse` reads through
+//! the crate, `none` for music21's readers alone.
 //!
 //! The runs are separate processes, because installing over music21
 //! cannot be undone inside one: `install_into_music21` rebinds music21's own
@@ -141,17 +154,80 @@ pub struct ModuleTests {
 /// parity. What the collector took is recorded against the test it landed on
 /// and taken off before anything is compared.
 const GC_TIMING_RESULT: &str = r#"
+import cProfile
 import gc
+import pstats
+import re
+import sys
 import time
 import unittest
 
 
+def module_of(test):
+    """The music21 module a test belongs to: a `Test` class's own module, or
+    the longest module name a docstring's name starts with."""
+    found = getattr(test, '_dt_test', None)
+    if found is None:
+        return type(test).__module__
+    name = found.name
+    while name:
+        if name in sys.modules:
+            return name
+        name = name.rpartition('.')[0]
+    return 'unknown'
+
+
+def crate_types():
+    """The names cProfile gives the classes the extension defines, as in
+    `<method 'add' of 'music21.chord.Chord' objects>`."""
+    names = set()
+    for module_name in ('music21_rs.music21_rs', 'music21_rs'):
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        for value in vars(module).values():
+            if isinstance(value, type):
+                names.add(f'{value.__module__}.{value.__name__}')
+    return names
+
+
+_METHOD = re.compile(r"<method '[^']*' of '([^']*)' objects>")
+
+
+def category(filename, function, crate):
+    """Where a profiled function's own time goes: `crate` for a call into
+    the extension, `glue` for this package's own Python, `music21`, `builtin`
+    for CPython's C, `python` for the rest. None for a Python function seen
+    from C, whose time its own frame already counts."""
+    if filename == '~':
+        if function.startswith('<function '):
+            return None
+        if 'music21_rs' in function:
+            return 'crate'
+        method = _METHOD.match(function)
+        if method is not None and method.group(1) in crate:
+            return 'crate'
+        return 'builtin'
+    if 'music21_rs' in filename:
+        return 'glue'
+    if '/music21/' in filename.replace('\\', '/'):
+        return 'music21'
+    return 'python'
+
+
 class Result(unittest.TextTestResult):
-    """A result that also records the full collections inside each test."""
+    """A result that also records the full collections inside each test,
+    which module each test belongs to, and, where `profiling` is set, a
+    profile of each module's tests."""
+
+    profiling = False
 
     def __init__(self, *arguments, **keywords):
         super().__init__(*arguments, **keywords)
         self.gcDurations = {}
+        self.moduleOf = {}
+        self.profiles = {}
+        self._profiler = None
         self._running = None
         self._started = 0.0
         gc.callbacks.append(self._collected)
@@ -169,11 +245,48 @@ class Result(unittest.TextTestResult):
 
     def startTest(self, test):
         self._running = str(test)
+        module = module_of(test)
+        self.moduleOf[self._running] = module
+        if self.profiling:
+            profiler = self.profiles.setdefault(module, cProfile.Profile())
+            try:
+                profiler.enable()
+                self._profiler = profiler
+            except ValueError:
+                # Another profiler is running, which a test may do itself.
+                self._profiler = None
         super().startTest(test)
 
     def stopTest(self, test):
         super().stopTest(test)
+        if self._profiler is not None:
+            self._profiler.disable()
+            self._profiler = None
         self._running = None
+
+    def profileSplit(self, top=25):
+        """Each module's profiled time by category, and the functions that
+        took the most time of their own across every module."""
+        crate = crate_types()
+        split = {}
+        functions = {}
+        for module, profiler in self.profiles.items():
+            totals = split.setdefault(module, {})
+            for (filename, line, function), held in pstats.Stats(profiler).stats.items():
+                calls, seconds = held[1], held[2]
+                kind = category(filename, function, crate)
+                if kind is None:
+                    continue
+                totals[kind] = totals.get(kind, 0.0) + seconds
+                key = (f'{filename}:{line}({function})', kind)
+                known = functions.get(key, (0, 0.0))
+                functions[key] = (known[0] + calls, known[1] + seconds)
+        ranked = sorted(functions.items(), key=lambda item: -item[1][1])[:top]
+        heaviest = [
+            {'name': name, 'category': kind, 'calls': calls, 'seconds': seconds}
+            for (name, kind), (calls, seconds) in ranked
+        ]
+        return split, heaviest
 "#;
 
 /// What one run writes, and what the comparison — and `xtask report` — read.
@@ -197,6 +310,80 @@ struct Report {
     /// Empty on the music21 side, which nothing reads per module.
     #[serde(default)]
     modules: Vec<ModuleTests>,
+    /// The music21 module each test belongs to, by the name `durations`
+    /// uses, so that time can be summed per module.
+    #[serde(default)]
+    test_modules: BTreeMap<String, String>,
+    /// With `--profile`: each module's profiled time by category (`crate`,
+    /// `glue`, `music21`, `builtin`, `python`).
+    #[serde(default)]
+    profile: BTreeMap<String, BTreeMap<String, f64>>,
+    /// With `--profile`: the functions that took the most time of their own.
+    #[serde(default)]
+    heaviest: Vec<ProfiledFunction>,
+}
+
+/// One function out of a profile, with the category its time counts under.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ProfiledFunction {
+    name: String,
+    category: String,
+    calls: u64,
+    seconds: f64,
+}
+
+/// What a `music21-suite` run is asked for beyond which side and modules.
+#[derive(Debug, Clone)]
+pub struct Options {
+    /// The sides to run, music21 always among them.
+    pub sides: Vec<Which>,
+    /// Profile each module's tests with cProfile, and say where their time
+    /// went: into the crate, this package's Python glue, or music21.
+    pub profile: bool,
+    /// The formats whose `converter.parse` is routed through the crate on
+    /// the sides that install it, as `route_converters` takes them: `none`
+    /// for none, where `install_into_music21` would route some itself.
+    pub route: Option<String>,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            sides: SIDES.to_vec(),
+            profile: false,
+            route: None,
+        }
+    }
+}
+
+impl Options {
+    /// The options a `music21-suite` argument list gives.
+    pub fn parse(args: &[String]) -> Result<Self, String> {
+        let mut options = Self {
+            profile: args.iter().any(|arg| arg == "--profile"),
+            ..Self::default()
+        };
+        if let Some(position) = args.iter().position(|arg| arg == "--sides")
+            && let Some(listed) = args.get(position + 1)
+        {
+            let mut sides = vec![Which::Music21];
+            for name in listed.split(',') {
+                let side = Which::parse(name.trim())
+                    .ok_or_else(|| format!("--sides takes side names, not {name:?}"))?;
+                if !sides.contains(&side) {
+                    sides.push(side);
+                }
+            }
+            options.sides = SIDES
+                .into_iter()
+                .filter(|side| sides.contains(side))
+                .collect();
+        }
+        if let Some(position) = args.iter().position(|arg| arg == "--route-converters") {
+            options.route = args.get(position + 1).cloned();
+        }
+        Ok(options)
+    }
 }
 
 impl Report {
@@ -229,6 +416,7 @@ pub fn run(
     out: Option<PathBuf>,
     one: Option<Which>,
     parallel: bool,
+    options: &Options,
 ) -> Result<i32, Box<dyn Error>> {
     let out = out.unwrap_or_else(|| workspace_root.join("target/music21-suite"));
     fs::create_dir_all(&out)?;
@@ -239,6 +427,7 @@ pub fn run(
             &out.join(which.file()),
             which,
             only.as_deref(),
+            options,
         )
         .map_err(Into::into);
     }
@@ -249,12 +438,13 @@ pub fn run(
     }
 
     let statuses = if parallel {
-        run_sides_at_once(workspace_root, &out, only.as_deref())?
+        run_sides_at_once(workspace_root, &out, only.as_deref(), options)?
     } else {
         let mut statuses = Vec::new();
-        for which in SIDES {
+        for &which in &options.sides {
             println!("$ running music21's suite on {}", which.name());
-            let status = side_command(workspace_root, &out, which, only.as_deref())?.status()?;
+            let status =
+                side_command(workspace_root, &out, which, only.as_deref(), options)?.status()?;
             statuses.push((which, status));
         }
         statuses
@@ -290,6 +480,7 @@ pub fn run(
         report_timings(&timings);
         let path = out.join("timings.json");
         fs::write(&path, serde_json::to_string_pretty(&timings)?)?;
+        report_modules(&timings, &plain, &sides);
     }
 
     // Every side that ran is held to music21's own result. The crate reaching
@@ -319,6 +510,7 @@ fn side_command(
     out: &Path,
     which: Which,
     only: Option<&str>,
+    options: &Options,
 ) -> Result<Command, Box<dyn Error>> {
     let mut command = Command::new(std::env::current_exe()?);
     command
@@ -330,6 +522,12 @@ fn side_command(
         .current_dir(workspace_root);
     if let Some(only) = only {
         command.arg("--only").arg(only);
+    }
+    if options.profile {
+        command.arg("--profile");
+    }
+    if let Some(route) = &options.route {
+        command.arg("--route-converters").arg(route);
     }
     Ok(command)
 }
@@ -346,16 +544,17 @@ fn run_sides_at_once(
     workspace_root: &Path,
     out: &Path,
     only: Option<&str>,
+    options: &Options,
 ) -> Result<Vec<(Which, std::process::ExitStatus)>, Box<dyn Error>> {
     let mut running = Vec::new();
-    for which in SIDES {
+    for &which in &options.sides {
         println!("$ running music21's suite on {}", which.name());
         let temp = out.join(format!("tmp-{}", which.name()));
         let _ = fs::remove_dir_all(&temp);
         fs::create_dir_all(&temp)?;
         let log_path = out.join(format!("{}.log", which.name()));
         let log = fs::File::create(&log_path)?;
-        let child = side_command(workspace_root, out, which, only)?
+        let child = side_command(workspace_root, out, which, only, options)?
             .env("TMPDIR", &temp)
             .env("TEMP", &temp)
             .env("TMP", &temp)
@@ -383,7 +582,13 @@ fn read(path: &Path) -> Result<Report, Box<dyn Error>> {
 }
 
 /// One run of the suite, writing what failed to `out`.
-fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) -> PyResult<i32> {
+fn run_one(
+    workspace_root: &Path,
+    out: &Path,
+    which: Which,
+    only: Option<&str>,
+    options: &Options,
+) -> PyResult<i32> {
     Python::attach(|py| {
         // music21's suite prints test names, and some of them are not
         // spellable in the console's own encoding.
@@ -435,6 +640,7 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
                 sys.getattr("modules")?.set_item("music21_rs", &ours)?;
                 let names = music21_rs_python::install_into_music21(py)?;
                 println!("music21_rs (linked in) over {names} names");
+                route_converters(&ours, options)?;
             }
             // The wheel `pip install` put in site-packages, which is the
             // artifact that ships. Absent is a skip, not a failure.
@@ -446,6 +652,7 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
                         .and_then(|file| file.extract())
                         .unwrap_or_else(|_| "an unnamed place".to_string());
                     println!("music21_rs {file} over {names} names");
+                    route_converters(&ours, options)?;
                 }
                 Err(error) if error.is_instance_of::<pyo3::exceptions::PyImportError>(py) => {
                     println!("the music21_rs wheel is not installed: {error}");
@@ -486,6 +693,9 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
             c"music21_rs_gc_timing.py",
             c"music21_rs_gc_timing",
         )?;
+        timing
+            .getattr("Result")?
+            .setattr("profiling", options.profile)?;
         kwargs.set_item("resultclass", timing.getattr("Result")?)?;
         let result = unittest
             .getattr("TextTestRunner")?
@@ -536,6 +746,22 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
         {
             report.gc_durations = collected;
         }
+        report.test_modules = result.getattr("moduleOf")?.extract()?;
+        if options.profile {
+            let (split, heaviest) = result
+                .call_method0("profileSplit")?
+                .extract::<(BTreeMap<String, BTreeMap<String, f64>>, Bound<'_, PyAny>)>()?;
+            report.profile = split;
+            for function in heaviest.try_iter()? {
+                let function = function?;
+                report.heaviest.push(ProfiledFunction {
+                    name: function.get_item("name")?.extract()?,
+                    category: function.get_item("category")?.extract()?,
+                    calls: function.get_item("calls")?.extract()?,
+                    seconds: function.get_item("seconds")?.extract()?,
+                });
+            }
+        }
 
         let text = serde_json::to_string_pretty(&report)
             .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(err.to_string()))?;
@@ -548,6 +774,22 @@ fn run_one(workspace_root: &Path, out: &Path, which: Which, only: Option<&str>) 
         );
         Ok(0)
     })
+}
+
+/// Routes `converter.parse` through the crate for the formats asked for,
+/// on a side that has installed it.
+fn route_converters(ours: &Bound<'_, PyModule>, options: &Options) -> PyResult<()> {
+    let Some(route) = &options.route else {
+        return Ok(());
+    };
+    // `none` routes nothing, as music21 alone reads.
+    let formats: Vec<&str> = route
+        .split(',')
+        .filter(|format| !format.is_empty() && *format != "none")
+        .collect();
+    let routed = ours.call_method1("route_converters", (formats,))?;
+    println!("converter.parse routed through the crate for {routed}");
+    Ok(())
 }
 
 /// How each module the crate ports fared in the run that just happened.
@@ -711,7 +953,7 @@ fn build_suite<'py>(
     for module in modules.try_iter()? {
         let module = module?;
         let name: String = module.getattr("__name__")?.extract()?;
-        if only.is_some_and(|only| !name.contains(only)) {
+        if only.is_some_and(|only| !only.split(',').any(|part| name.contains(part))) {
             continue;
         }
         if module.hasattr("Test")? {
@@ -977,6 +1219,107 @@ fn report_timings(timings: &Timings) {
     }
 }
 
+/// The categories a profile splits time into, in the order they print.
+const CATEGORIES: [&str; 5] = ["crate", "glue", "music21", "builtin", "python"];
+
+/// Prints the timed tests summed per music21 module on every side, and,
+/// where the sides were profiled (`--profile`), where each module's time
+/// went.
+///
+/// A property the crate implements is not a call cProfile sees, so its time
+/// counts under whichever function read it -- mostly `music21`. The `crate`
+/// column is the methods and functions called, and is a floor.
+fn report_modules(timings: &Timings, plain: &Report, others: &[(Which, Report)]) {
+    let mut modules: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
+    for row in &timings.rows {
+        let module = plain
+            .test_modules
+            .get(&row.name)
+            .map_or("unknown", String::as_str);
+        let sums = modules
+            .entry(module)
+            .or_insert_with(|| vec![0.0; row.seconds.len()]);
+        for (sum, taken) in sums.iter_mut().zip(&row.seconds) {
+            *sum += taken;
+        }
+    }
+    let mut ranked: Vec<(&str, Vec<f64>)> = modules.into_iter().collect();
+    ranked.sort_by(|a, b| {
+        b.1[0]
+            .partial_cmp(&a.1[0])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    println!();
+    println!("  timed tests by module, slowest on music21 first:");
+    let names = timings
+        .sides
+        .iter()
+        .map(|side| format!("{:>18}", side.name))
+        .collect::<String>();
+    println!("    {:<44}{names}", "module");
+    for (module, sums) in ranked.iter().take(30) {
+        let mut line = format!("    {module:<44}{:>17.2}s", sums[0]);
+        for taken in &sums[1..] {
+            line.push_str(&format!(
+                "{:>9.2}s {:>6.2}x",
+                taken,
+                sums[0] / taken.max(f64::MIN_POSITIVE)
+            ));
+        }
+        println!("{line}");
+    }
+
+    for (which, report) in std::iter::once((Which::Music21, plain))
+        .chain(others.iter().map(|(which, report)| (*which, report)))
+    {
+        if report.profile.is_empty() {
+            continue;
+        }
+        println!();
+        println!(
+            "  profiled time on {} by category (seconds of own time):",
+            which.label()
+        );
+        println!(
+            "    {:<44}{}",
+            "module",
+            CATEGORIES
+                .iter()
+                .map(|kind| format!("{kind:>10}"))
+                .collect::<String>()
+        );
+        let mut whole: BTreeMap<&str, f64> = BTreeMap::new();
+        for split in report.profile.values() {
+            for (kind, seconds) in split {
+                *whole.entry(kind.as_str()).or_default() += seconds;
+            }
+        }
+        let row = |label: &str, split: &dyn Fn(&str) -> f64| {
+            let cells = CATEGORIES
+                .iter()
+                .map(|kind| format!("{:>10.2}", split(kind)))
+                .collect::<String>();
+            println!("    {label:<44}{cells}");
+        };
+        for (module, _) in ranked.iter().take(15) {
+            if let Some(split) = report.profile.get(*module) {
+                row(module, &|kind| split.get(kind).copied().unwrap_or(0.0));
+            }
+        }
+        row("(every module)", &|kind| {
+            whole.get(kind).copied().unwrap_or(0.0)
+        });
+        println!("    heaviest functions:");
+        for function in report.heaviest.iter().take(12) {
+            println!(
+                "      {:>8.2}s {:>9} calls  {:<8} {}",
+                function.seconds, function.calls, function.category, function.name
+            );
+        }
+    }
+}
+
 /// What fails under `music21_rs` and not under music21, with the
 /// divergences `listed` as expected excused.
 fn compare(
@@ -1070,6 +1413,7 @@ mod tests {
             modules: Vec::new(),
             durations: BTreeMap::new(),
             gc_durations: BTreeMap::new(),
+            ..Report::default()
         }
     }
 
@@ -1179,6 +1523,22 @@ mod tests {
         assert!((timings.rows[0].speedup - 2.0).abs() < 1e-9);
         assert_eq!(timings.rows[0].speedup_of(0), None);
         assert_eq!(timings.rows[0].speedup_of(2), Some(4.0));
+    }
+
+    #[test]
+    fn the_options_name_the_sides_in_running_order() {
+        let args = |text: &str| -> Vec<String> { text.split(' ').map(String::from).collect() };
+        let options = Options::parse(&args(
+            "--sides music21_rs_wheel --profile --route-converters midi,abc",
+        ))
+        .expect("options");
+        assert_eq!(options.sides, [Which::Music21, Which::Music21RsWheel]);
+        assert!(options.profile);
+        assert_eq!(options.route.as_deref(), Some("midi,abc"));
+        let defaults = Options::parse(&[]).expect("options");
+        assert_eq!(defaults.sides, SIDES);
+        assert!(!defaults.profile);
+        assert!(Options::parse(&args("--sides neither")).is_err());
     }
 
     #[test]

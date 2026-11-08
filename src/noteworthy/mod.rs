@@ -34,7 +34,7 @@ use crate::stream::{Stream, StreamElement, StreamKind};
 use crate::tempo::MetronomeMark;
 
 fn error(message: impl Into<String>) -> Error {
-    Error::Noteworthy(message.into())
+    Error::noteworthy(message.into())
 }
 
 /// Reads the text of a NoteWorthy Composer `.nwctxt` file into a score, as

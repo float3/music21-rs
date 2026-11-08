@@ -232,6 +232,14 @@ reason = "an analysis over a stream it holds"
 kind = "facade-only"
 reason = "music21's attributes, read into a crate grouping by whoever transcribes it"
 
+[BrailleGrandSegment]
+kind = "facade-only"
+reason = "a segment of both hands' groupings and the pairs of keys it writes, read into the crate's segment at each step"
+
+[BrailleSegment]
+kind = "facade-only"
+reason = "music21's dictionary of groupings and the keys and last note it keeps while writing, read into the crate's segment at each step"
+
 [CTRule]
 kind = "facade-only"
 reason = "a rule's text and what it parsed into"
@@ -288,6 +296,10 @@ reason = "an analysis over a stream"
 kind = "facade-only"
 reason = "an analysis over a stream; its profile is a setting, not a value"
 
+[LanguageDetector]
+kind = "facade-only"
+reason = "the text music21 keeps and reads nothing of, and the trigrams of the excerpts built into the wheel"
+
 [LyricSearcher]
 kind = "facade-only"
 reason = "a search over a stream"
@@ -307,6 +319,10 @@ reason = "an analysis over a stream"
 [MetricModulation]
 kind = "facade-only"
 reason = "two marks and how the change is drawn"
+
+[Music21Object]
+kind = "facade-only"
+reason = "music21's groups, a list of names no crate value carries"
 
 [PercussionChord]
 kind = "facade-only"
@@ -331,6 +347,14 @@ reason = "a search over a stream; its matching is a setting, not a value"
 [SinglePart]
 kind = "facade-only"
 reason = "a corrector's part of a score"
+
+[SiteMember]
+kind = "facade-only"
+reason = "a member put on the element classes, holding the function it binds"
+
+[Sites]
+kind = "facade-only"
+reason = "the element whose sites it reads, kept in the sites table"
 
 [SpannerBundle]
 kind = "facade-only"

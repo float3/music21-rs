@@ -398,7 +398,7 @@ which is CC BY-SA. only the numbers are used.
 detector compares lyrics with (`music21/languageExcerpts/trainingData`),
 public-domain texts from [Project Gutenberg](https://www.gutenberg.org) as
 music21 ships them. they are compiled in only with the `language-detection`
-feature.
+feature, which the Python wheel always turns on.
 
 ### contributed back
 

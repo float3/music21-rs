@@ -1,0 +1,2977 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<score xmlns="http://www.capella.de/CapXML/2.0">
+	<info>
+		<encodingSoftware>capella 7 7.0 - 00</encodingSoftware>
+	</info>
+	<layout>
+		<pages landscape="true" left="18" top="20" right="18" bottom="20" paperSize="A4"/>
+		<distances>
+			<staffLines small="1.2" normal="1.52" pageObj="1.8"/>
+			<systems top="8" between="9"/>
+		</distances>
+		<instrumentNames>
+			<font face="Times New Roman" height="12" charSet="1"/>
+		</instrumentNames>
+		<staves>
+			<staffLayout description="unbenannt1">
+				<notation defaultClef="G2-">
+					<barlines mode="internal" from="3" to="7"/>
+				</notation>
+				<distances top="4" bottom="13"/>
+				<instrument name="" abbrev="">
+					<name></name>
+					<abbrev></abbrev>
+				</instrument>
+				<sound instr="0" volume="80"/>
+			</staffLayout>
+			<staffLayout description="unbenannt2">
+				<notation defaultClef="G2-">
+					<barlines mode="internal" from="3" to="7"/>
+				</notation>
+				<distances top="4" bottom="13"/>
+				<instrument name="" abbrev="">
+					<name></name>
+					<abbrev></abbrev>
+				</instrument>
+				<sound instr="0" volume="80"/>
+			</staffLayout>
+			<staffLayout description="unbenannt3">
+				<notation defaultClef="G2-">
+					<barlines mode="internal" from="3" to="7"/>
+				</notation>
+				<distances top="4" bottom="6"/>
+				<instrument name="" abbrev="">
+					<name></name>
+					<abbrev></abbrev>
+				</instrument>
+				<sound instr="0" volume="80"/>
+			</staffLayout>
+		</staves>
+		<brackets>
+			<bracket from="0" to="2"/>
+		</brackets>
+		<spacing rel="75" abs="16"/>
+		<beamFlattening from="49" to="29" fromMax="148" toMax="55"/>
+	</layout>
+	<gallery>
+		<drawObj name="unbenannt">
+			<text x="4" y="1">
+				<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+				<content>l</content>
+			</text>
+		</drawObj>
+		<drawObj name="unbenannt">
+			<text x="-8" y="0">
+				<font face="Times New Roman" height="12" weight="0" charSet="1" pitchAndFamily="0"/>
+				<content>[ ]</content>
+			</text>
+		</drawObj>
+	</gallery>
+	<barCount frame="1" x="0" y="4.5" atSystems="false" barInterval="5">
+		<font face="Times New Roman" height="8" charSet="1"/>
+	</barCount>
+	<systems>
+		<system beamGrouping="2" justified="true" instrNotation="long">
+			<staves>
+				<staff layout="unbenannt1" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<timeSign time="4/4"/>
+								<barline type="repBegin"/>
+								<rest>
+									<duration base="1/4"/>
+								</rest>
+								<rest>
+									<duration base="1/8"/>
+								</rest>
+								<chord>
+									<duration base="1/8"/>
+									<lyric>
+										<verse i="0" verseNumber="1.">&quot;Nu</verse>
+										<verse i="1" verseNumber="2.">&quot;Frau,</verse>
+										<verse i="2" verseNumber="3.">&quot;Der</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="-20.53125" y="-7.78125">
+												<font face="Times New Roman" height="15" weight="700" charSet="1" pitchAndFamily="0"/>
+												<content>Nu rue mit sorgen</content>
+											</text>
+										</drawObj>
+										<drawObj>
+											<text x="146.90625" y="-13" align="right">
+												<font face="Times New Roman" height="8" weight="0" charSet="1" pitchAndFamily="0"/>
+												<content>Oswald von Wolkenstein,
+Hs. A, fol. 19r
+Übertragung: Marc Lewon</content>
+											</text>
+										</drawObj>
+										<drawObj>
+											<text x="-17.3125" y="0.3125">
+												<font face="Times New Roman" height="12" weight="0" charSet="1" pitchAndFamily="0"/>
+												<content>[ ]</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">rue</verse>
+										<verse i="1">thu</verse>
+										<verse i="2">glanz</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mit</verse>
+										<verse i="1">mich</verse>
+										<verse i="2">durch</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">sor</verse>
+										<verse i="1" hyphen="true">straf</verse>
+										<verse i="2" hyphen="true">greu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen,</verse>
+										<verse i="1">fen!</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein</verse>
+										<verse i="1">ich</verse>
+										<verse i="2">von</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ver</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">bor</verse>
+										<verse i="1" hyphen="true">slaf</verse>
+										<verse i="2" hyphen="true">pleu</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">gen</verse>
+										<verse i="1">fen</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">li</verse>
+										<verse i="1">hab</verse>
+										<verse i="2">ist</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">cher</verse>
+										<verse i="1">die</verse>
+										<verse i="2" hyphen="true">ent</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">schacz!</verse>
+										<verse i="1">stund.</verse>
+										<verse i="2">rant,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4">
+										<tuplet count="3"/>
+									</duration>
+									<lyric>
+										<verse i="0">sleus</verse>
+										<verse i="1" hyphen="true">lu</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<bracket x1="0.15625" y1="-3" x2="1.15625" y2="-3.5" orientation="up" number="3"/>
+											<basic noteRange="1"/>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/8">
+										<tuplet count="3"/>
+									</duration>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1" hyphen="true">ci</verse>
+										<verse i="2">hor</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">au</verse>
+										<verse i="1">fer</verse>
+										<verse i="2" hyphen="true">vog</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">lin</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">schrick</verse>
+										<verse i="1" hyphen="true">swun</verse>
+										<verse i="2" hyphen="true">dö</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lich</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ne</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0" align="left" extender="true">zu</verse>
+										<verse i="1" align="left" extender="true">ist.</verse>
+										<verse i="2" align="left" extender="true">vil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt2" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<timeSign time="4/4"/>
+								<rest>
+									<duration base="1/1"/>
+									<drawObjects>
+										<drawObj>
+											<text x="-17.5" y="0.5">
+												<font face="Times New Roman" height="12" weight="0" charSet="1" pitchAndFamily="0"/>
+												<content>[ ]</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+								</rest>
+								<barline/>
+								<rest>
+									<duration base="1/1"/>
+								</rest>
+								<barline type="repBegin"/>
+								<rest>
+									<duration base="1/4"/>
+								</rest>
+								<rest>
+									<duration base="1/8"/>
+								</rest>
+								<chord>
+									<duration base="1/8"/>
+									<lyric>
+										<verse i="0" verseNumber="1.">&quot;Nu</verse>
+										<verse i="1" verseNumber="2.">&quot;Frau,</verse>
+										<verse i="2" verseNumber="3.">&quot;Der</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">rue</verse>
+										<verse i="1">thu</verse>
+										<verse i="2">glanz</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mit</verse>
+										<verse i="1">mich</verse>
+										<verse i="2">durch</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">sor</verse>
+										<verse i="1" hyphen="true">straf</verse>
+										<verse i="2" hyphen="true">greu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen,</verse>
+										<verse i="1">fen!</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein</verse>
+										<verse i="1">ich</verse>
+										<verse i="2">von</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ver</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">bor</verse>
+										<verse i="1" hyphen="true">slaf</verse>
+										<verse i="2" hyphen="true">pleu</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">gen</verse>
+										<verse i="1">fen</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">li</verse>
+										<verse i="1">hab</verse>
+										<verse i="2">ist</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">cher</verse>
+										<verse i="1">die</verse>
+										<verse i="2" hyphen="true">ent</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">schacz!</verse>
+										<verse i="1">stund.</verse>
+										<verse i="2">rant,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4">
+										<tuplet count="3"/>
+									</duration>
+									<lyric>
+										<verse i="0">sleus</verse>
+										<verse i="1" hyphen="true">lu</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<bracket x1="-0.34375" y1="-3" x2="0.65625" y2="-3.5" orientation="up" number="3"/>
+											<basic noteRange="1"/>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/8">
+										<tuplet count="3"/>
+									</duration>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1" hyphen="true">ci</verse>
+										<verse i="2">hor</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt3" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<timeSign time="4/4"/>
+								<rest>
+									<duration base="1/1"/>
+									<drawObjects>
+										<drawObj>
+											<text x="-17.4375" y="0.5">
+												<font face="Times New Roman" height="12" weight="0" charSet="1" pitchAndFamily="0"/>
+												<content>[ ]</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+								</rest>
+								<barline/>
+								<rest>
+									<duration base="1/1"/>
+								</rest>
+								<rest>
+									<duration base="1/1"/>
+								</rest>
+								<rest>
+									<duration base="1/1"/>
+								</rest>
+								<barline type="repBegin"/>
+								<rest>
+									<duration base="1/4"/>
+								</rest>
+								<rest>
+									<duration base="1/8"/>
+								</rest>
+								<chord>
+									<duration base="1/8"/>
+									<lyric>
+										<verse i="0" verseNumber="1.">&quot;Nu</verse>
+										<verse i="1" verseNumber="2.">&quot;Frau,</verse>
+										<verse i="2" verseNumber="3.">&quot;Der</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">rue</verse>
+										<verse i="1">thu</verse>
+										<verse i="2">glanz</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mit</verse>
+										<verse i="1">mich</verse>
+										<verse i="2">durch</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">sor</verse>
+										<verse i="1" hyphen="true">straf</verse>
+										<verse i="2" hyphen="true">greu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen,</verse>
+										<verse i="1">fen!</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein</verse>
+										<verse i="1">ich</verse>
+										<verse i="2">von</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ver</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+			</staves>
+		</system>
+		<system beamGrouping="2" justified="true" instrNotation="short">
+			<staves>
+				<staff layout="unbenannt1" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/2"/>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1">ei</verse>
+										<verse i="2">tag,</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">des</verse>
+										<verse i="1">du</verse>
+										<verse i="2">wer</verse>
+									</lyric>
+									<heads>
+										<head pitch="E5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lich</verse>
+										<verse i="1" hyphen="true">ro</verse>
+										<verse i="2">hat</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ten</verse>
+										<verse i="1" hyphen="true">se</verse>
+										<verse i="2">nach</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ta</verse>
+										<verse i="1" hyphen="true">lach</verse>
+										<verse i="2">dir</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ges</verse>
+										<verse i="1">ter</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="A5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">hacz,</verse>
+										<verse i="1">mund,</verse>
+										<verse i="2">sant?</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">im</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ze</verse>
+										<verse i="1" hyphen="true">ge</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">tracz!</verse>
+										<verse i="1">sund,</verse>
+										<verse i="2">want</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">her</verse>
+										<verse i="1">ber</verse>
+										<verse i="2" hyphen="true">un</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">zen</verse>
+										<verse i="1">dort,</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lieb,</verse>
+										<verse i="1">hie,</verse>
+										<verse i="2">scham</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">es</verse>
+										<verse i="1">wo</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ist</verse>
+										<verse i="1">mir</verse>
+										<verse i="2" hyphen="true">te</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">noch</verse>
+										<verse i="1" hyphen="true">en</verse>
+										<verse i="2">ken</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">fru.</verse>
+										<verse i="1">prisst!</verse>
+										<verse i="2">wil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">all</verse>
+										<verse i="1">dein</verse>
+										<verse i="2">zwar</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1">haubt</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">trau</verse>
+										<verse i="1">naig,</verse>
+										<verse i="2">greis</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">saig</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lau</verse>
+										<verse i="1">auff</verse>
+										<verse i="2">preis</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">mein</verse>
+										<verse i="2">doch</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt2" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">au</verse>
+										<verse i="1">fer</verse>
+										<verse i="2" hyphen="true">vog</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">lin</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">schrick</verse>
+										<verse i="1" hyphen="true">-swun</verse>
+										<verse i="2" hyphen="true">dö</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lich</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ne</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0" align="left" extender="true">zu</verse>
+										<verse i="1" align="left" extender="true">ist.</verse>
+										<verse i="2" align="left" extender="true">vil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1">ei</verse>
+										<verse i="2">tag,</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">des</verse>
+										<verse i="1">du</verse>
+										<verse i="2">wer</verse>
+									</lyric>
+									<heads>
+										<head pitch="E5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lich</verse>
+										<verse i="1" hyphen="true">ro</verse>
+										<verse i="2">hat</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ten</verse>
+										<verse i="1" hyphen="true">se</verse>
+										<verse i="2">nach</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ta</verse>
+										<verse i="1" hyphen="true">lach</verse>
+										<verse i="2">dir</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ges</verse>
+										<verse i="1">ter</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="A5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">hacz,</verse>
+										<verse i="1">mund,</verse>
+										<verse i="2">sant?</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">im</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ze</verse>
+										<verse i="1" hyphen="true">ge</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">tracz!</verse>
+										<verse i="1">sund,</verse>
+										<verse i="2">want</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">her</verse>
+										<verse i="1">ber</verse>
+										<verse i="2" hyphen="true">un</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">zen</verse>
+										<verse i="1">dort,</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lieb,</verse>
+										<verse i="1">hie,</verse>
+										<verse i="2">scham</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">es</verse>
+										<verse i="1">wo</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ist</verse>
+										<verse i="1">mir</verse>
+										<verse i="2" hyphen="true">te</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">noch</verse>
+										<verse i="1" hyphen="true">en</verse>
+										<verse i="2">ken</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt3" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">bor</verse>
+										<verse i="1" hyphen="true">slaf</verse>
+										<verse i="2" hyphen="true">pleu</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">gen</verse>
+										<verse i="1">fen</verse>
+										<verse i="2">e</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">li</verse>
+										<verse i="1">hab</verse>
+										<verse i="2">ist</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">cher</verse>
+										<verse i="1">die</verse>
+										<verse i="2" hyphen="true">ent</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">schacz!</verse>
+										<verse i="1">stund.</verse>
+										<verse i="2">rant,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4">
+										<tuplet count="3"/>
+									</duration>
+									<lyric>
+										<verse i="0">sleus</verse>
+										<verse i="1" hyphen="true">lu</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<bracket x1="0.15625" y1="-3" x2="1.15625" y2="-3.5" orientation="up" number="3"/>
+											<basic noteRange="1"/>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/8">
+										<tuplet count="3"/>
+									</duration>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1" hyphen="true">ci</verse>
+										<verse i="2">hor</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">au</verse>
+										<verse i="1">fer</verse>
+										<verse i="2" hyphen="true">vog</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1" hyphen="true">ver</verse>
+										<verse i="2">lin</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">schrick</verse>
+										<verse i="1" hyphen="true">swun</verse>
+										<verse i="2" hyphen="true">dö</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lich</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ne</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0" align="left" extender="true">zu</verse>
+										<verse i="1" align="left" extender="true">ist.</verse>
+										<verse i="2" align="left" extender="true">vil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">gen</verse>
+										<verse i="1">ei</verse>
+										<verse i="2">tag,</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">des</verse>
+										<verse i="1">du</verse>
+										<verse i="2">wer</verse>
+									</lyric>
+									<heads>
+										<head pitch="E5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lich</verse>
+										<verse i="1" hyphen="true">ro</verse>
+										<verse i="2">hat</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ten</verse>
+										<verse i="1" hyphen="true">se</verse>
+										<verse i="2">nach</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">ta</verse>
+										<verse i="1" hyphen="true">lach</verse>
+										<verse i="2">dir</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ges</verse>
+										<verse i="1">ter</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="A5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">hacz,</verse>
+										<verse i="1">mund,</verse>
+										<verse i="2">sant?</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">im</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ze</verse>
+										<verse i="1" hyphen="true">ge</verse>
+										<verse i="2" hyphen="true">ge</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+			</staves>
+		</system>
+		<system beamGrouping="2" justified="true" instrNotation="short">
+			<staves>
+				<staff layout="unbenannt1" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">las,</verse>
+										<verse i="1">herz,</verse>
+										<verse i="2">klain.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">freu</verse>
+										<verse i="1" hyphen="true">erm</verse>
+										<verse i="2" hyphen="true">&quot;gu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">den</verse>
+										<verse i="1">lein</verse>
+										<verse i="2">ten</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">hoff</verse>
+										<verse i="1" hyphen="true">schren</verse>
+										<verse i="2" hyphen="true">mor</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">und</verse>
+										<verse i="1">cke</verse>
+										<verse i="2">gen,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">halt</verse>
+										<verse i="1" hyphen="true">sun</verse>
+										<verse i="2" hyphen="true">lieb</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">die</verse>
+										<verse i="1">der</verse>
+										<verse i="2">stes</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">mass!</verse>
+										<verse i="1">smerz,</verse>
+										<verse i="2">ain.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">tus</verse>
+										<verse i="1">treib</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">tu</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">das,</verse>
+										<verse i="1">scherz,</verse>
+										<verse i="2">wain,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">so</verse>
+										<verse i="1">der</verse>
+										<verse i="2">meiner</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0" hyphen="true">bis</verse>
+										<verse i="1">uns,</verse>
+										<verse i="2">kunft,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">tu</verse>
+										<verse i="1">frau,</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">wol</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">wart</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein.&quot;</verse>
+										<verse i="1">gail!&quot;</verse>
+										<verse i="2">schir.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">&quot;ach</verse>
+										<verse i="1">&quot;zart</verse>
+										<verse i="2">mit</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lie</verse>
+										<verse i="1" hyphen="true">lie</verse>
+										<verse i="2" hyphen="true">ur</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">be</verse>
+										<verse i="1">ber</verse>
+										<verse i="2">laub,</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">di</verse>
+										<verse i="1">man,</verse>
+										<verse i="2">frau,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren,</verse>
+										<verse i="1">das</verse>
+										<verse i="2">hail</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">das</verse>
+										<verse i="1">sei</verse>
+										<verse i="2">wunsch</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">sol</verse>
+										<verse i="1">mit</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt2" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">fru.</verse>
+										<verse i="1">prisst!</verse>
+										<verse i="2">wil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">all</verse>
+										<verse i="1">dein</verse>
+										<verse i="2">zwar</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1">haubt</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">trau</verse>
+										<verse i="1">naig,</verse>
+										<verse i="2">greis</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">saig</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lau</verse>
+										<verse i="1">auff</verse>
+										<verse i="2">preis</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">mein</verse>
+										<verse i="2">doch</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">las,</verse>
+										<verse i="1">herz,</verse>
+										<verse i="2">klain.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">freu</verse>
+										<verse i="1" hyphen="true">erm</verse>
+										<verse i="2" hyphen="true">&quot;gu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">den</verse>
+										<verse i="1">lein</verse>
+										<verse i="2">ten</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">hoff</verse>
+										<verse i="1" hyphen="true">schren</verse>
+										<verse i="2" hyphen="true">mor</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">und</verse>
+										<verse i="1">cke</verse>
+										<verse i="2">gen,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">halt</verse>
+										<verse i="1" hyphen="true">sun</verse>
+										<verse i="2" hyphen="true">lieb</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">die</verse>
+										<verse i="1">der</verse>
+										<verse i="2">stes</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">mass!</verse>
+										<verse i="1">smerz,</verse>
+										<verse i="2">ain.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">tus</verse>
+										<verse i="1">treib</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">tu</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">das,</verse>
+										<verse i="1">scherz,</verse>
+										<verse i="2">wain,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">so</verse>
+										<verse i="1">der</verse>
+										<verse i="2">meiner</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0" hyphen="true">bis</verse>
+										<verse i="1">uns,</verse>
+										<verse i="2">kunft,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">-tu</verse>
+										<verse i="1">frau,</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">wol</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">wart</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt3" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">tracz!</verse>
+										<verse i="1">sund,</verse>
+										<verse i="2">want</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">her</verse>
+										<verse i="1">ber</verse>
+										<verse i="2" hyphen="true">un</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">zen</verse>
+										<verse i="1">dort,</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">lieb,</verse>
+										<verse i="1">hie,</verse>
+										<verse i="2">scham</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">es</verse>
+										<verse i="1">wo</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ist</verse>
+										<verse i="1">mir</verse>
+										<verse i="2" hyphen="true">te</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">noch</verse>
+										<verse i="1" hyphen="true">en</verse>
+										<verse i="2">ken</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">fru.</verse>
+										<verse i="1">prisst!</verse>
+										<verse i="2">wil.</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">all</verse>
+										<verse i="1">dein</verse>
+										<verse i="2">zwar</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">dein</verse>
+										<verse i="1">haubt</verse>
+										<verse i="2">dein</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">trau</verse>
+										<verse i="1">naig,</verse>
+										<verse i="2">greis</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">saig</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lau</verse>
+										<verse i="1">auff</verse>
+										<verse i="2">preis</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren</verse>
+										<verse i="1">mein</verse>
+										<verse i="2">doch</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">las,</verse>
+										<verse i="1">herz,</verse>
+										<verse i="2">klain.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">freu</verse>
+										<verse i="1" hyphen="true">erm</verse>
+										<verse i="2" hyphen="true">&quot;gu</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">den</verse>
+										<verse i="1">lein</verse>
+										<verse i="2">ten</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">hoff</verse>
+										<verse i="1" hyphen="true">schren</verse>
+										<verse i="2" hyphen="true">mor</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">und</verse>
+										<verse i="1">cke</verse>
+										<verse i="2">gen,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">halt</verse>
+										<verse i="1" hyphen="true">sun</verse>
+										<verse i="2" hyphen="true">lieb</verse>
+									</lyric>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">die</verse>
+										<verse i="1">der</verse>
+										<verse i="2">stes</verse>
+									</lyric>
+									<drawObjects>
+										<drawObj>
+											<text x="0" y="-3.5">
+												<font face="capella3" height="18" charSet="2" pitchAndFamily="2"/>
+												<content>Q</content>
+											</text>
+										</drawObj>
+									</drawObjects>
+									<heads>
+										<head pitch="E5">
+											<alter step="-1" display="suppress"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">mass!</verse>
+										<verse i="1">smerz,</verse>
+										<verse i="2">ain.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">tus</verse>
+										<verse i="1">treib</verse>
+										<verse i="2">nicht</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">tu</verse>
+										<verse i="1">den</verse>
+										<verse i="2">ser</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+			</staves>
+		</system>
+		<system beamGrouping="2" instrNotation="short">
+			<staves>
+				<staff layout="unbenannt1" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0">sein.&quot;</verse>
+										<verse i="1">hail.&quot;</verse>
+										<verse i="2">dir.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4">
+											<tie begin="true"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<heads>
+										<head pitch="G4">
+											<tie end="true"/>
+										</head>
+									</heads>
+								</chord>
+								<barline type="double"/>
+								<rest>
+									<duration base="1/4"/>
+									<display small="true"/>
+								</rest>
+								<rest>
+									<duration base="1/8"/>
+									<display small="true"/>
+								</rest>
+								<chord>
+									<duration base="1/8"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4">
+										<tuplet count="3"/>
+									</duration>
+									<display small="true"/>
+									<drawObjects/>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/8">
+										<tuplet count="3"/>
+									</duration>
+									<display small="true"/>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt2" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein.&quot;</verse>
+										<verse i="1">gail!&quot;</verse>
+										<verse i="2">schir.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">&quot;ach</verse>
+										<verse i="1">&quot;zart</verse>
+										<verse i="2">mit</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lie</verse>
+										<verse i="1" hyphen="true">lie</verse>
+										<verse i="2" hyphen="true">ur</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">be</verse>
+										<verse i="1">ber</verse>
+										<verse i="2">laub,</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">di</verse>
+										<verse i="1">man,</verse>
+										<verse i="2">frau,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren,</verse>
+										<verse i="1">das</verse>
+										<verse i="2">hail</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">das</verse>
+										<verse i="1">sei</verse>
+										<verse i="2">wunsch</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">sol</verse>
+										<verse i="1">mit</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0">sein.&quot;</verse>
+										<verse i="1">hail.&quot;</verse>
+										<verse i="2">dir.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4">
+											<tie begin="true"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<heads>
+										<head pitch="G4">
+											<tie end="true"/>
+										</head>
+									</heads>
+								</chord>
+								<barline type="double"/>
+								<rest>
+									<duration base="1/4"/>
+									<display small="true"/>
+								</rest>
+								<rest>
+									<duration base="1/8"/>
+									<display small="true"/>
+								</rest>
+								<chord>
+									<duration base="1/8"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="F5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="G5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<display small="true"/>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+				<staff layout="unbenannt3" defaultTime="4/4">
+					<voices>
+						<voice>
+							<lyricsSettings firstLine="6" lineDist="2.5">
+								<font face="Times New Roman" height="11" charSet="1"/>
+							</lyricsSettings>
+							<noteObjects>
+								<clefSign clef="G2-"/>
+								<keySign fifths="-1"/>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">das,</verse>
+										<verse i="1">scherz,</verse>
+										<verse i="2">wain,</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0">so</verse>
+										<verse i="1">der</verse>
+										<verse i="2">meiner</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/2"/>
+									<lyric>
+										<verse i="0" hyphen="true">bis</verse>
+										<verse i="1">uns,</verse>
+										<verse i="2">kunft,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">tu</verse>
+										<verse i="1">frau,</verse>
+										<verse i="2">der</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">wol</verse>
+										<verse i="1">mach</verse>
+										<verse i="2">wart</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">mein.&quot;</verse>
+										<verse i="1">gail!&quot;</verse>
+										<verse i="2">schir.</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">&quot;ach</verse>
+										<verse i="1">&quot;zart</verse>
+										<verse i="2">mit</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">lie</verse>
+										<verse i="1" hyphen="true">lie</verse>
+										<verse i="2" hyphen="true">ur</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">be</verse>
+										<verse i="1">ber</verse>
+										<verse i="2">laub,</verse>
+									</lyric>
+									<heads>
+										<head pitch="C5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0" hyphen="true">di</verse>
+										<verse i="1">man,</verse>
+										<verse i="2">frau,</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">ren,</verse>
+										<verse i="1">das</verse>
+										<verse i="2">hail</verse>
+									</lyric>
+									<heads>
+										<head pitch="D5"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">das</verse>
+										<verse i="1">sei</verse>
+										<verse i="2">wunsch</verse>
+									</lyric>
+									<heads>
+										<head pitch="B4">
+											<alter step="-1"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/4"/>
+									<lyric>
+										<verse i="0">sol</verse>
+										<verse i="1">mit</verse>
+										<verse i="2">ich</verse>
+									</lyric>
+									<heads>
+										<head pitch="A4"/>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<lyric>
+										<verse i="0">sein.&quot;</verse>
+										<verse i="1">hail.&quot;</verse>
+										<verse i="2">dir.&quot;</verse>
+									</lyric>
+									<heads>
+										<head pitch="G4">
+											<tie begin="true"/>
+										</head>
+									</heads>
+								</chord>
+								<chord>
+									<duration base="1/1"/>
+									<heads>
+										<head pitch="G4">
+											<tie end="true"/>
+										</head>
+									</heads>
+								</chord>
+								<barline type="double"/>
+							</noteObjects>
+						</voice>
+					</voices>
+				</staff>
+			</staves>
+		</system>
+	</systems>
+</score>

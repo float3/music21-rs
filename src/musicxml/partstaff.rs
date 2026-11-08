@@ -11,7 +11,7 @@ use super::tree::{Element, Node};
 use crate::error::{Error, Result};
 
 fn export_error(message: impl Into<String>) -> Error {
-    Error::MusicXml(message.into())
+    Error::music_xml(message.into())
 }
 
 /// music21's `addStaffTags`, over every measure of a part: a `<staff>` in

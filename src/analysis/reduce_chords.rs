@@ -26,7 +26,7 @@ use crate::meter::TimeSignature;
 use crate::notation::{Tie, TieType};
 use crate::pitch::Pitch;
 use crate::stream::{Stream, StreamElement, StreamKind};
-use crate::tree::{Flatten, as_timespans};
+use crate::tree::{Flatten, TimespanTree, as_timespans};
 
 /// What a reduction is asked for: music21's arguments to `ChordReducer.run`.
 #[derive(Clone, Debug)]
@@ -189,14 +189,14 @@ pub fn reduce_chords(score: &Stream, options: &ReductionOptions) -> Result<Strea
             length => length,
         };
         let slices = reduction.measure_slices(start, op_frac(start + length), &points);
-        let weights = slice_weights(
+        let weights = weigh_slices(
             &slices,
             &meter,
             measure.padding_left(),
             &consonance,
             &options.weight_algorithm,
         )?;
-        let kept = keep_heaviest_slices(&slices, &weights, options.maximum_number_of_chords);
+        let kept = keep_heaviest_slices(&slices, &weights, options.maximum_number_of_chords, 0.25);
         let mut made = Vec::new();
         if kept.is_empty() {
             made.push((
@@ -307,6 +307,10 @@ struct Consonance {
 
 impl Consonance {
     fn of(options: &ReductionOptions) -> Self {
+        Self::from_chords(&options.allowable_chords, &options.forbidden_chords)
+    }
+
+    fn from_chords(allowable: &[Chord], forbidden: &[Chord]) -> Self {
         let classes = |chords: &[Chord]| {
             chords
                 .iter()
@@ -314,8 +318,27 @@ impl Consonance {
                 .collect()
         };
         Self {
-            allowable: classes(&options.allowable_chords),
-            forbidden: classes(&options.forbidden_chords),
+            allowable: classes(allowable),
+            forbidden: classes(forbidden),
+        }
+    }
+
+    /// Interval-class sets as a caller writes them, each read as a set.
+    fn from_sets(allowable: &[Vec<u8>], forbidden: &[Vec<u8>]) -> Self {
+        let sets = |given: &[Vec<u8>]| {
+            given
+                .iter()
+                .map(|classes| {
+                    let mut classes = classes.clone();
+                    classes.sort_unstable();
+                    classes.dedup();
+                    classes
+                })
+                .collect()
+        };
+        Self {
+            allowable: sets(allowable),
+            forbidden: sets(forbidden),
         }
     }
 
@@ -335,20 +358,23 @@ impl Consonance {
 }
 
 /// One stretch of a measure between two places where a note starts or
-/// stops: music21's `MeasureSlice`.
-#[derive(Clone, Debug)]
-struct Slice {
-    /// Where it stands in the measure.
-    offset: FloatType,
-    quarter_length: FloatType,
+/// stops: music21's `MeasureSlice`, its verticality read as where it
+/// stands and what sounds there.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct MeasureSlice {
+    /// Where it starts, from the start of the measure.
+    pub offset: FloatType,
+    /// How long it lasts.
+    pub quarter_length: FloatType,
     /// Where its verticality stands in the score, which is where it
     /// started before a kept slice was stretched or moved.
-    at: FloatType,
+    pub at: FloatType,
     /// The notes sounding at its start: the verticality's `pitchSet`.
-    pitches: Vec<Pitch>,
+    pub pitches: Vec<Pitch>,
 }
 
-impl Slice {
+impl MeasureSlice {
     /// Its sorted pitch classes, or none where nothing sounds.
     fn key(&self) -> Option<Vec<u8>> {
         if self.pitches.is_empty() {
@@ -356,6 +382,64 @@ impl Slice {
         }
         Some(sorted_classes(&self.pitches))
     }
+}
+
+/// The stretch from `start` to `end` cut at every one of `points` inside
+/// it, each slice holding what `pitches_at` says sounds where it starts.
+fn cut(
+    start: FloatType,
+    end: FloatType,
+    points: &[FloatType],
+    pitches_at: impl Fn(FloatType) -> Vec<Pitch>,
+) -> Vec<MeasureSlice> {
+    let mut cuts = vec![start];
+    cuts.extend(points.iter().copied().filter(|at| start < *at && *at < end));
+    cuts.push(end);
+    cuts.windows(2)
+        .map(|pair| MeasureSlice {
+            offset: op_frac(pair[0] - start),
+            quarter_length: op_frac(pair[1] - pair[0]),
+            at: pair[0],
+            pitches: pitches_at(pair[0]),
+        })
+        .collect()
+}
+
+/// The stretch of `tree` from `start` to `end` cut wherever a timespan
+/// starts or stops, each slice with where it starts from `start`, how
+/// long it lasts, and what sounds there: music21's `measureSlices`.
+/// `time_points` hands over the tree's `all_time_points` where many
+/// measures are cut from one tree.
+///
+/// ```
+/// use music21::analysis::reduce_chords::measure_slices;
+/// use music21::tinynotation::from_tiny_notation;
+/// use music21::tree::{Flatten, as_timespans};
+///
+/// let line = from_tiny_notation("4/4 c2 e4 g")?;
+/// let tree = as_timespans(&line, Flatten::Flat, None);
+/// let slices = measure_slices(&tree, 1.0, 4.0, None);
+/// let cuts: Vec<(f64, f64)> = slices
+///     .iter()
+///     .map(|slice| (slice.offset, slice.quarter_length))
+///     .collect();
+/// assert_eq!(cuts, [(0.0, 1.0), (1.0, 1.0), (2.0, 1.0)]);
+/// assert_eq!(slices[1].pitches[0].name_with_octave(), "E4");
+/// # Ok::<(), music21::Error>(())
+/// ```
+pub fn measure_slices(
+    tree: &TimespanTree<'_>,
+    start: FloatType,
+    end: FloatType,
+    time_points: Option<&[FloatType]>,
+) -> Vec<MeasureSlice> {
+    let points = match time_points {
+        Some(points) => Cow::Borrowed(points),
+        None => Cow::Owned(tree.all_time_points()),
+    };
+    cut(start, end, &points, |at| {
+        tree.verticality_at(at).pitch_set()
+    })
 }
 
 /// The spans of a score, and the steps that read them.
@@ -516,23 +600,18 @@ impl<'a> Reduction<'a> {
 
     /// A measure from `start` to `end` cut wherever a span starts or
     /// stops: music21's `measureSlices`, given the score's time points.
-    fn measure_slices(&self, start: FloatType, end: FloatType, points: &[FloatType]) -> Vec<Slice> {
-        let mut cuts = vec![start];
-        cuts.extend(points.iter().copied().filter(|at| start < *at && *at < end));
-        cuts.push(end);
-        cuts.windows(2)
-            .map(|pair| Slice {
-                offset: op_frac(pair[0] - start),
-                quarter_length: op_frac(pair[1] - pair[0]),
-                at: pair[0],
-                pitches: self.pitch_set(pair[0]),
-            })
-            .collect()
+    fn measure_slices(
+        &self,
+        start: FloatType,
+        end: FloatType,
+        points: &[FloatType],
+    ) -> Vec<MeasureSlice> {
+        cut(start, end, points, |at| self.pitch_set(at))
     }
 
     /// The chord a kept slice is written as: music21's
     /// `Verticality.makeElement` with no ties added.
-    fn element_at(&self, slice: &Slice) -> Result<StreamElement> {
+    fn element_at(&self, slice: &MeasureSlice) -> Result<StreamElement> {
         let spans: Vec<crate::stream::chordify::Span<'_>> = self
             .sounding_at(slice.at)
             .into_iter()
@@ -551,14 +630,63 @@ impl<'a> Reduction<'a> {
     }
 }
 
-/// What each set of sorted pitch classes sounding in a measure weighs, in
-/// the order they were met: music21's `sliceWeights`.
+/// What each set of sorted pitch classes sounding among `slices` weighs,
+/// in the order they are met: music21's `sliceWeights`.
 ///
-/// Each slice is weighed by `weigher`, given the meter's accent where it
-/// starts, read past the measure's `padding` so that a pickup is accented
-/// as the end of a bar.
-fn slice_weights(
-    slices: &[Slice],
+/// Each slice is weighed by `weigher`, given its length, the meter's accent
+/// where it starts -- read past the measure's `padding_left`, so that a
+/// pickup is accented as the end of a bar -- whether it is the last that
+/// sounds, and whether it is consonant as [`is_consonant`] reads it with
+/// the `allowable` and `forbidden` interval-class sets.
+///
+/// # Errors
+///
+/// A meter that cannot weigh where a slice starts.
+pub fn slice_weights(
+    slices: &[MeasureSlice],
+    meter: &TimeSignature,
+    padding_left: FloatType,
+    weigher: &SliceWeigher,
+    allowable: &[Vec<u8>],
+    forbidden: &[Vec<u8>],
+) -> Result<Vec<(Vec<u8>, FloatType)>> {
+    let consonance = Consonance::from_sets(allowable, forbidden);
+    weigh_slices(slices, meter, padding_left, &consonance, weigher)
+}
+
+/// Whether notes sound consonant: music21's `isConsonant`. Notes whose
+/// [`interval_class_set`] is one of the `forbidden` sets are dissonant,
+/// and those whose set is one of the `allowable` consonant; any others are
+/// as consonant as their chord is. Each set is read as a set, in any
+/// order.
+///
+/// ```
+/// use music21::Pitch;
+/// use music21::analysis::reduce_chords::is_consonant;
+///
+/// let pitches = |names: &[&str]| -> Vec<Pitch> {
+///     names.iter().map(|name| Pitch::from_name(*name).unwrap()).collect()
+/// };
+/// assert!(is_consonant(&pitches(&["C4", "E4", "G4"]), &[], &[]));
+/// assert!(!is_consonant(&pitches(&["C4", "D4"]), &[], &[]));
+/// // A major second allowed.
+/// assert!(is_consonant(&pitches(&["C4", "D4"]), &[vec![2]], &[]));
+/// ```
+pub fn is_consonant(pitches: &[Pitch], allowable: &[Vec<u8>], forbidden: &[Vec<u8>]) -> bool {
+    Consonance::from_sets(allowable, forbidden).holds(pitches)
+}
+
+/// Every interval class between two of the notes, 1 to 6, each once and
+/// in order: music21's `_getIntervalClassSet`, which is how
+/// [`is_consonant`] reads the notes and the chords a reduction allows or
+/// forbids.
+pub fn interval_class_set(pitches: &[Pitch]) -> Vec<u8> {
+    interval_classes(pitches)
+}
+
+/// [`slice_weights`], with what is consonant already read.
+fn weigh_slices(
+    slices: &[MeasureSlice],
     meter: &TimeSignature,
     padding: FloatType,
     consonance: &Consonance,
@@ -586,19 +714,20 @@ fn slice_weights(
     Ok(weights)
 }
 
-/// The slices a measure keeps, lengthened: music21's
-/// `keepHeaviestSlices` with its `trimBelow` of a quarter.
+/// The slices to keep of a measure's, lengthened: music21's
+/// `keepHeaviestSlices`.
 ///
-/// The `maximum` heaviest sets of classes are kept that weigh at least a
-/// quarter of the heaviest. A kept slice lasts until the next kept slice
-/// of other classes, the first starting the measure; one starting a
-/// sixteenth, thirty-second, sixty-fourth or triplet eighth past a beat
-/// is moved onto the beat.
-fn keep_heaviest_slices(
-    slices: &[Slice],
+/// The `maximum` heaviest sets of classes in `weights` are kept that weigh
+/// at least `trim_below` times the heaviest. A kept slice lasts until the
+/// next kept slice of other classes, the first starting the measure and
+/// the last lasting to its end; one starting a sixteenth, thirty-second,
+/// sixty-fourth or triplet eighth past a beat is moved onto the beat.
+pub fn keep_heaviest_slices(
+    slices: &[MeasureSlice],
     weights: &[(Vec<u8>, FloatType)],
     maximum: usize,
-) -> Vec<Slice> {
+    trim_below: FloatType,
+) -> Vec<MeasureSlice> {
     let mut sorted: Vec<&(Vec<u8>, FloatType)> = weights.iter().collect();
     sorted.sort_by(|left, right| right.1.total_cmp(&left.1));
     sorted.truncate(maximum);
@@ -607,11 +736,11 @@ fn keep_heaviest_slices(
     };
     let kept_keys: Vec<&Vec<u8>> = sorted
         .iter()
-        .filter(|(_, weight)| *weight >= heaviest * 0.25)
+        .filter(|(_, weight)| *weight >= heaviest * trim_below)
         .map(|(classes, _)| classes)
         .collect();
 
-    let mut kept: Vec<Slice> = Vec::new();
+    let mut kept: Vec<MeasureSlice> = Vec::new();
     let mut current: Option<Vec<u8>> = None;
     for slice in slices {
         let key = slice.key();
@@ -621,7 +750,7 @@ fn keep_heaviest_slices(
             && key != current
         {
             let offset = if kept.is_empty() { 0.0 } else { slice.offset };
-            kept.push(Slice {
+            kept.push(MeasureSlice {
                 offset,
                 quarter_length: op_frac(end - offset),
                 ..slice.clone()
@@ -1129,6 +1258,105 @@ mod tests {
                     .collect()
             })
             .collect()
+    }
+
+    /// music21's `testMeasureStream1`: a measure of C major, a dissonant
+    /// chord on the third beat, and C major again.
+    fn test_measure() -> Stream {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.insert(0.0, TimeSignature::new(4, 4).unwrap());
+        for (offset, notes, length) in [
+            (0.0, "C4 E4 G4 C5", 2.0),
+            (2.0, "C4 E4 F4 B4", 1.0),
+            (3.0, "C4 E4 G4 C5", 1.0),
+        ] {
+            let chord = Chord::new(notes)
+                .unwrap()
+                .with_duration(Duration::new(length).unwrap());
+            measure.insert(offset, chord);
+        }
+        measure
+    }
+
+    fn chords_only(element: &StreamElement) -> bool {
+        matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
+    }
+
+    #[test]
+    fn a_measure_is_cut_where_its_chords_change() {
+        let measure = test_measure();
+        let tree = as_timespans(&measure, Flatten::Flat, Some(chords_only));
+        let slices = measure_slices(&tree, 0.0, 4.0, None);
+        let cuts: Vec<(FloatType, FloatType, usize)> = slices
+            .iter()
+            .map(|slice| (slice.offset, slice.quarter_length, slice.pitches.len()))
+            .collect();
+        assert_eq!(cuts, [(0.0, 2.0, 4), (2.0, 1.0, 4), (3.0, 1.0, 4)]);
+        // Read from the middle, offsets count from where it was asked.
+        let later = measure_slices(&tree, 1.0, 4.0, Some(&tree.all_time_points()));
+        assert_eq!(later[0].offset, 0.0);
+        assert_eq!(later[0].at, 1.0);
+        assert_eq!(later[0].quarter_length, 1.0);
+    }
+
+    #[test]
+    fn slices_are_weighed_by_length_beat_and_consonance() {
+        let measure = test_measure();
+        let tree = as_timespans(&measure, Flatten::Flat, Some(chords_only));
+        let slices = measure_slices(&tree, 0.0, 4.0, None);
+        let meter = TimeSignature::new(4, 4).unwrap();
+        let weights =
+            slice_weights(&slices, &meter, 0.0, &SliceWeigher::default(), &[], &[]).unwrap();
+        assert_eq!(weights.len(), 2);
+        assert_eq!(weights[0].0, [0, 4, 7]);
+        assert!((weights[0].1 - 3.0).abs() < 1e-9);
+        assert_eq!(weights[1].0, [0, 4, 5, 11]);
+        assert!((weights[1].1 - 0.05).abs() < 1e-9);
+
+        let by_length = SliceWeigher::new(|quarter_length, _, _, _| quarter_length);
+        let weights = slice_weights(&slices, &meter, 0.0, &by_length, &[], &[]).unwrap();
+        assert_eq!(weights[1].1, 1.0);
+
+        // A chord allowed is consonant, and so weighs in full.
+        let allowed = interval_class_set(&Chord::new("C4 E4 F4 B4").unwrap().pitches());
+        let weights = slice_weights(
+            &slices,
+            &meter,
+            0.0,
+            &SliceWeigher::default(),
+            &[allowed],
+            &[],
+        )
+        .unwrap();
+        assert!((weights[1].1 - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_heaviest_slices_are_kept_and_lengthened() {
+        let measure = test_measure();
+        let tree = as_timespans(&measure, Flatten::Flat, Some(chords_only));
+        let slices = measure_slices(&tree, 0.0, 4.0, None);
+        let weights = vec![(vec![0, 4, 7], 3.0), (vec![0, 4, 5, 11], 1.0)];
+        let kept: Vec<(FloatType, FloatType)> = keep_heaviest_slices(&slices, &weights, 3, 0.25)
+            .iter()
+            .map(|slice| (slice.offset, slice.quarter_length))
+            .collect();
+        assert_eq!(kept, [(0.0, 2.0), (2.0, 1.0), (3.0, 1.0)]);
+        // With a higher floor the lighter chord goes, and the first lasts
+        // through it.
+        let kept = keep_heaviest_slices(&slices, &weights, 3, 0.5);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].quarter_length, 4.0);
+        assert!(keep_heaviest_slices(&slices, &[], 3, 0.25).is_empty());
+    }
+
+    #[test]
+    fn a_forbidden_chord_is_dissonant() {
+        let triad = Chord::new("C4 E4 G4").unwrap().pitches();
+        assert!(is_consonant(&triad, &[], &[]));
+        assert_eq!(interval_class_set(&triad), [3, 4, 5]);
+        // Read as a set, whatever order it is written in.
+        assert!(!is_consonant(&triad, &[], &[vec![5, 3, 4, 4]]));
     }
 
     #[test]

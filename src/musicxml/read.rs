@@ -19,7 +19,7 @@ use crate::duration::{
     Duration, DurationType, Grace, Tuplet, TupletBracket, TupletShow, TupletType,
 };
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::expressions::{
     ArpeggioType, Expression, Fermata, FermataType, Ornament, OrnamentDelay, OrnamentKind,
     RehearsalMark, TextExpression,
@@ -76,7 +76,7 @@ const ENCLOSURES: [&str; 15] = [
 const NO_STAFF: i32 = 0;
 
 fn import_error(message: impl Into<String>) -> Error {
-    Error::MusicXml(message.into())
+    Error::music_xml(message.into())
 }
 
 /// Reads a MusicXML document -- the text of a `.musicxml` file, or of the
@@ -104,7 +104,8 @@ pub fn from_musicxml(document: &str) -> Result<Stream> {
         return Err(import_error(format!(
             "only a score-partwise document can be read, not <{}>",
             root.tag
-        )));
+        ))
+        .of_kind(FormatErrorKind::Unsupported));
     }
     Importer::default().score(&root)
 }
@@ -265,6 +266,7 @@ struct MeasureIr {
     ending: Option<Ending>,
     padding_left: FloatType,
     padding_right: FloatType,
+    width: Option<StyleValue>,
     measure_numbering: Option<String>,
     items: Vec<Item>,
     voices: Vec<VoiceIr>,
@@ -368,6 +370,8 @@ impl Building {
             _ => Spanner::with_unplaced(self.kind, positions),
         };
         spanner.set_placement(self.placement);
+        spanner.set_id_local(self.id_local.clone());
+        spanner.set_complete(true);
         if self.kind != SpannerKind::Crescendo && self.kind != SpannerKind::Diminuendo {
             spanner.set_line_type(self.line_type.clone());
         }
@@ -559,10 +563,11 @@ impl Importer {
             read.set_name(text("group-name"));
             read.set_abbreviation(text("group-abbreviation"));
             match group.element.find("group-symbol") {
-                Some(_) => {
+                Some(symbol_element) => {
                     if let Some(symbol) = text("group-symbol") {
                         read.set_symbol(Some(&symbol))?;
                     }
+                    read_position(symbol_element, &mut read.style);
                 }
                 None => read.set_symbol(Some("brace"))?,
             }
@@ -869,7 +874,13 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let part = self.part;
         let mut last_forward: Option<(usize, bool)> = None;
         for measure in part.find_all("measure") {
-            last_forward = self.measure(measure)?;
+            // What goes wrong inside a measure says which one, by the number
+            // the document gives it, and in which part.
+            last_forward = self.measure(measure).map_err(|error| {
+                error.placed(|| {
+                    Position::measure(measure.get("number").unwrap_or("")).in_part(&self.id)
+                })
+            })?;
         }
         self.remove_finale_ending_rest(last_forward);
         self.end_multi_rest();
@@ -1011,8 +1022,9 @@ impl<'a, 'x> PartParser<'a, 'x> {
             .find("part-abbreviation")
             .is_some_and(|name| name.get("print-object") == Some("no"));
 
-        let adjusted =
-            |text: &str| -> Option<u8> { parse_int(text).map(|value| (value - 1).max(0) as u8) };
+        let adjusted = |text: &str| -> Option<u8> {
+            parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
+        };
         let mut instrument: Option<Instrument> = None;
         let mut unpitched = false;
         if let Some(midi) = score_part.find("midi-instrument") {
@@ -1320,6 +1332,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     ending: measure.ending.clone(),
                     padding_left: measure.padding_left,
                     padding_right: measure.padding_right,
+                    width: measure.width.clone(),
                     // music21 makes the staff's measures from a template,
                     // which keeps nothing of how the measure is drawn.
                     measure_numbering: None,
@@ -1446,6 +1459,7 @@ fn build_measure(measure: MeasureIr) -> (Stream, Vec<Option<usize>>) {
     stream.set_ending(measure.ending);
     stream.set_padding_left(measure.padding_left);
     stream.set_padding_right(measure.padding_right);
+    stream.set_layout_width(measure.width);
     stream.set_measure_numbering(measure.measure_numbering);
     (stream, uids)
 }
@@ -1597,6 +1611,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `parseMeasureAttributes` and `parseMeasureNumbers`.
     fn measure_attributes(&mut self) {
         self.measure.hidden = yes(self.element.get("implicit"));
+        self.measure.width = self.element.get("width").map(StyleValue::read);
         let raw = self.element.get("number").unwrap_or("");
         // music21's `getNumFromStr`: the digits, and whatever is left.
         let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
@@ -1608,7 +1623,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             self.measure.suffix = Some(rest);
         }
         let last = self.part.last_measure_number;
-        if self.measure.suffix.as_deref() == Some("X") && self.measure.number != last + 1 {
+        if self.measure.suffix.as_deref() == Some("X")
+            && Some(self.measure.number) != last.checked_add(1)
+        {
             let mut suffix = format!("X{}", self.measure.number);
             if let Some(before) = &self.part.last_number_suffix {
                 suffix = format!("{before}{suffix}");
@@ -2155,8 +2172,12 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 .iter()
                 .find(|(held, _)| *held == staff)
                 .and_then(|(_, clef)| clef.lowest_line().filter(|_| clef.places_pitches()))
-                .map_or(35, |lowest| lowest + 4);
-            rest.set_step_shift(displayed.diatonic_note_number() - middle);
+                .map_or(35, |lowest| lowest.saturating_add(4));
+            let shift = displayed
+                .checked_diatonic_note_number()
+                .and_then(|position| position.checked_sub(middle))
+                .ok_or_else(|| import_error(format!("a rest shown at {name} is too far off")))?;
+            rest.set_step_shift(shift);
         }
         let mut general = General::default();
         let uid = 0;
@@ -3405,6 +3426,27 @@ fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
     }
 }
 
+/// music21's `setPosition` and `setColor`: where a mark stands and its
+/// colour, read into a style.
+fn read_position(written: &Xml, style: &mut TextStyle) {
+    let value = |name: &str| written.get(name).map(StyleValue::read);
+    if let Some(read) = value("default-x") {
+        style.absolute_x = Some(read);
+    }
+    if let Some(read) = value("default-y") {
+        style.absolute_y = Some(read);
+    }
+    if let Some(read) = value("relative-x") {
+        style.relative_x = Some(read);
+    }
+    if let Some(read) = value("relative-y") {
+        style.relative_y = Some(read);
+    }
+    if let Some(color) = written.get("color") {
+        style.color = Some(color.to_string());
+    }
+}
+
 /// music21's `setPrintStyleAlign`: where text stands, its font and colour,
 /// and how it is aligned, read into a style.
 pub(crate) fn read_print_style_align(written: &Xml, style: &mut TextStyle) -> Result<()> {
@@ -4004,26 +4046,39 @@ fn transpose_interval(written: &Xml) -> Result<Interval> {
     let chromatic = written
         .find("chromatic")
         .and_then(|c| parse_int(c.stripped()));
+    let too_far = || import_error("a <transpose> too far for an interval");
     let mut octave_change = 0;
     if let Some(octaves) = written
         .find("octave-change")
         .and_then(|o| parse_int(o.stripped()))
     {
-        octave_change = octaves * 12;
+        octave_change = octaves.checked_mul(12).ok_or_else(too_far)?;
         if let Some(diatonic) = &mut diatonic {
-            *diatonic += 7 * octaves;
+            *diatonic = octaves
+                .checked_mul(7)
+                .and_then(|steps| diatonic.checked_add(steps))
+                .ok_or_else(too_far)?;
         }
     }
+    let semitones =
+        |chromatic: IntegerType| chromatic.checked_add(octave_change).ok_or_else(too_far);
     match (diatonic, chromatic) {
         (Some(diatonic), Some(chromatic)) => {
-            let actual = |steps: IntegerType| if steps < 0 { steps - 1 } else { steps + 1 };
-            Interval::from_generic_and_chromatic(actual(diatonic), chromatic + octave_change)
-                .or_else(|_| {
-                    let steps = diatonic - octave_change * 7 / 12;
-                    Interval::from_generic_and_chromatic(actual(steps), chromatic + octave_change)
-                })
+            let actual = |steps: IntegerType| {
+                let generic = if steps < 0 {
+                    steps.checked_sub(1)
+                } else {
+                    steps.checked_add(1)
+                };
+                generic.ok_or_else(too_far)
+            };
+            let semitones = semitones(chromatic)?;
+            Interval::from_generic_and_chromatic(actual(diatonic)?, semitones).or_else(|_| {
+                let steps = diatonic - octave_change / 12 * 7;
+                Interval::from_generic_and_chromatic(actual(steps)?, semitones)
+            })
         }
-        (None, Some(chromatic)) => Interval::from_semitones(chromatic + octave_change),
+        (None, Some(chromatic)) => Interval::from_semitones(semitones(chromatic)?),
         _ => Interval::from_name("P1"),
     }
 }
@@ -4056,6 +4111,66 @@ mod tests {
                 depth > crate::xml::MAX_DEPTH - 2,
                 "{depth}"
             );
+        }
+    }
+
+    #[test]
+    fn a_midi_program_below_any_integer_reads_as_the_first() {
+        let document = score(&format!("<measure number=\"1\">{NOTE}</measure>")).replace(
+            "<part-name>Flute</part-name>",
+            "<part-name>Flute</part-name><midi-instrument id=\"P1-I1\">\
+             <midi-program>-2147483648</midi-program></midi-instrument>",
+        );
+        assert!(from_musicxml(&document).is_ok());
+    }
+
+    #[test]
+    fn a_rest_shown_past_the_last_octave_is_refused() {
+        let rest = "<note><rest><display-step>C</display-step>\
+                    <display-octave>2147483647</display-octave></rest>\
+                    <duration>1</duration><type>quarter</type></note>";
+        assert!(from_musicxml(&score(&format!("<measure number=\"1\">{rest}</measure>"))).is_err());
+    }
+
+    #[test]
+    fn a_refusal_names_its_measure_and_part() {
+        let rest = "<note><rest><display-step>C</display-step>\
+                    <display-octave>2147483647</display-octave></rest>\
+                    <duration>1</duration><type>quarter</type></note>";
+        let measures = format!(
+            "<measure number=\"1\">{NOTE}</measure><measure number=\"2a\">{rest}</measure>"
+        );
+        let error = from_musicxml(&score(&measures)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .starts_with("MusicXML export error: a rest shown at")
+        );
+        assert_eq!(
+            error.position(),
+            Some(&Position::measure("2a").in_part("P1"))
+        );
+    }
+
+    #[test]
+    fn a_measure_after_the_largest_number_is_read() {
+        let measures = format!(
+            "<measure number=\"2147483647\">{NOTE}</measure><measure number=\"5X\">{NOTE}</measure>"
+        );
+        assert!(from_musicxml(&score(&measures)).is_ok());
+    }
+
+    #[test]
+    fn a_transposition_of_too_many_octaves_is_refused() {
+        for change in [
+            "<diatonic>1</diatonic><chromatic>2</chromatic>",
+            "<chromatic>2</chromatic>",
+        ] {
+            let transpose = Xml::parse(&format!(
+                "<transpose>{change}<octave-change>2147483647</octave-change></transpose>"
+            ))
+            .unwrap();
+            assert!(transpose_interval(&transpose).is_err(), "{change}");
         }
     }
 
@@ -4649,6 +4764,24 @@ mod tests {
     fn a_document_that_is_not_a_score_is_refused() {
         assert!(from_musicxml("<opus/>").is_err());
         assert!(from_musicxml("not xml at all").is_err());
+    }
+
+    #[test]
+    fn a_group_symbol_keeps_where_it_is_drawn() {
+        let document = format!(
+            "<?xml version=\"1.0\"?><score-partwise version=\"4.0\"><part-list>\
+             <part-group number=\"1\" type=\"start\"><group-symbol default-x=\"-8\" \
+             color=\"#FF0000\">bracket</group-symbol></part-group>\
+             <score-part id=\"P1\"><part-name>Flute</part-name></score-part>\
+             <part-group number=\"1\" type=\"stop\"/></part-list>\
+             <part id=\"P1\"><measure number=\"1\"><attributes><divisions>1\
+             </divisions></attributes>{NOTE}</measure></part></score-partwise>"
+        );
+        let read = from_musicxml(&document).unwrap();
+        let group = &read.staff_groups()[0];
+        assert_eq!(group.symbol(), Some("bracket"));
+        assert_eq!(group.style.absolute_x, Some(StyleValue::Whole(-8)));
+        assert_eq!(group.style.color.as_deref(), Some("#FF0000"));
     }
 
     #[test]

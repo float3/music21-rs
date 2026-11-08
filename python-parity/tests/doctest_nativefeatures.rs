@@ -1,11 +1,8 @@
 //! music21's `features/native.py` doctests against the crate. See
 //! `src/doctest.rs`. Every one of these extractors is a row of
 //! `features::native::NATIVE`, which `features_parity` holds to music21
-//! vector for vector.
-//!
-//! `LanguageFeature` is not swapped: it reads which language a text is in,
-//! which the crate answers only behind its `language-detection` feature and
-//! which the wheel does not turn on, so there is no row to stand behind it.
+//! vector for vector -- `LanguageFeature` among them, since the wheel
+//! carries the crate's `language-detection` feature.
 
 use music21_rs_python_parity::doctest;
 

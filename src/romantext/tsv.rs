@@ -24,10 +24,10 @@ use crate::bar::Ending;
 use crate::chordsymbol::ChordSymbol;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, limited_fraction};
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::expressions::python_float;
 use crate::key::Key;
-use crate::makenotation::op_frac;
+use crate::makenotation::{MAX_MEASURES, op_frac};
 use crate::meter::TimeSignature;
 use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
@@ -56,7 +56,7 @@ impl Version {
         match number {
             1 => Ok(Self::One),
             2 => Ok(Self::Two),
-            other => Err(Error::RomanText(format!(
+            other => Err(Error::roman_text(format!(
                 "dcml_version {other} is not in (1, 2)"
             ))),
         }
@@ -241,7 +241,7 @@ pub fn local_key(degree: &str, global_key: &str, from_dcml: bool) -> Result<Stri
     let chord = numeral.to_chord()?;
     let root = chord
         .root()
-        .ok_or_else(|| Error::RomanText("a local key with no root".to_string()))?
+        .ok_or_else(|| Error::roman_text("a local key with no root".to_string()))?
         .name();
     // Only the letter takes the case, the accidental having none: a major
     // key on E double flat is `Ebb` and a minor one `ebb`. music21 writes
@@ -262,7 +262,7 @@ pub fn local_key(degree: &str, global_key: &str, from_dcml: bool) -> Result<Stri
     if chord.is_minor_triad() {
         return Ok(cased(false));
     }
-    Err(Error::RomanText(
+    Err(Error::roman_text(
         "local key must be major or minor".to_string(),
     ))
 }
@@ -283,7 +283,7 @@ pub fn local_key_as_roman(local: &Key, global: &Key) -> Result<String> {
     };
     let tonic = RomanNumeral::new(figure, local.clone())?.to_chord()?;
     let found = crate::roman::roman_numeral_from_chord(&tonic, Some(global))?.ok_or_else(|| {
-        Error::RomanText(format!(
+        Error::roman_text(format!(
             "{letter} names no degree of {}",
             global.tonic_pitch_name_with_case()
         ))
@@ -390,7 +390,7 @@ fn added_tones(written: &str) -> Vec<AddedTone<'_>> {
         if digits == 0 {
             // Nothing here is a tone; music21's own scan moves on a
             // character and tries again.
-            at = start + 1;
+            at = start + written[start..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
         found.push(AddedTone {
@@ -638,13 +638,13 @@ impl TabChord {
                 "global_key" | "globalkey" => read.global_key = text,
                 "measure" | "mn" => {
                     read.measure = text.parse().map_err(|_| {
-                        Error::RomanText(format!("{name} is not a measure number: {text}"))
+                        Error::roman_text(format!("{name} is not a measure number: {text}"))
                     })?;
                 }
                 "beat" => {
                     read.beat = text
                         .parse()
-                        .map_err(|_| Error::RomanText(format!("beat is not a number: {text}")))?;
+                        .map_err(|_| Error::roman_text(format!("beat is not a number: {text}")))?;
                 }
                 // The lab's version 2 counts the onset in whole notes from
                 // the start of the measure, sometimes as a fraction.
@@ -653,7 +653,7 @@ impl TabChord {
                 // cell saying nothing rather than reading it as no length.
                 "length" => {
                     read.length = Some(text.parse().map_err(|_| {
-                        Error::RomanText(format!("length is not a number: {text}"))
+                        Error::roman_text(format!("length is not a number: {text}"))
                     })?);
                 }
                 // `altchord` and `totbeat` music21 reads onto attributes of
@@ -822,15 +822,15 @@ fn float_or_fraction(text: &str) -> Result<FloatType> {
     }
     let (numerator, denominator) = text
         .split_once('/')
-        .ok_or_else(|| Error::RomanText(format!("not a number: {text}")))?;
+        .ok_or_else(|| Error::roman_text(format!("not a number: {text}")))?;
     let numerator: FloatType = numerator
         .parse()
-        .map_err(|_| Error::RomanText(format!("not a number: {text}")))?;
+        .map_err(|_| Error::roman_text(format!("not a number: {text}")))?;
     let denominator: FloatType = denominator
         .parse()
-        .map_err(|_| Error::RomanText(format!("not a number: {text}")))?;
+        .map_err(|_| Error::roman_text(format!("not a number: {text}")))?;
     if denominator == 0.0 {
-        return Err(Error::RomanText(format!("not a number: {text}")));
+        return Err(Error::roman_text(format!("not a number: {text}")));
     }
     Ok(numerator / denominator)
 }
@@ -844,7 +844,7 @@ pub fn tsv_to_chords(text: &str, version: Version) -> Result<Vec<TabChord>> {
     let mut lines = text.lines().filter(|line| !line.trim().is_empty());
     let header: Vec<String> = match lines.next() {
         Some(line) => cells(line),
-        None => return Err(Error::RomanText("a table with no header".to_string())),
+        None => return Err(Error::roman_text("a table with no header".to_string())),
     };
     lines
         .map(|line| TabChord::from_row(&header, &cells(line), version))
@@ -896,7 +896,7 @@ fn cells(line: &str) -> Vec<String> {
 pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
     let rows = tsv_to_chords(text, version)?;
     let Some(first) = rows.first() else {
-        return Err(Error::RomanText("a table with no rows".to_string()));
+        return Err(Error::roman_text("a table with no rows".to_string()));
     };
     let mut part = Stream::with_kind(StreamKind::Part);
     let key = Key::from_tonic(&character_swaps(&first.global_key, Direction::IntoMusic21))?;
@@ -904,7 +904,9 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
     let mut said_timesig = first.timesig.clone();
     let mut measure_length = meter.bar_duration().quarter_length();
     let mut offset = 0.0;
-    let mut previous_measure = first.measure - 1;
+    // Counted wider than a measure number, which the first may be the
+    // least of.
+    let mut previous_measure = i64::from(first.measure) - 1;
     let mut previous_volta = String::new();
     // Where each measure of the part stands and what it is numbered, so
     // that a chord can be put in the measure it falls in.
@@ -923,18 +925,28 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
         let volta = row.volta.as_deref().filter(|volta| !volta.is_empty());
         if version == Version::Two && row.volta.as_deref().unwrap_or("") != previous_volta {
             previous_volta = row.volta.clone().unwrap_or_default();
-        } else if row.measure == previous_measure {
+        } else if i64::from(row.measure) == previous_measure {
             // Only a change of measure, or of the time through a repeat,
             // makes a measure.
             continue;
         }
-        if row.measure > previous_measure + 1 {
-            // Not every measure has a chord of its own.
-            for number in (previous_measure + 1)..=row.measure {
-                offset += measure_length;
-                measures.push(new_measure(number, None, offset));
-                previous_measure = number;
+        if i64::from(row.measure) > previous_measure + 1 {
+            let made = measures.len() as i64 + i64::from(row.measure) - previous_measure;
+            if made > MAX_MEASURES as i64 {
+                return Err(Error::roman_text(format!(
+                    "measure {} would make more than {MAX_MEASURES} measures",
+                    row.measure
+                ))
+                .of_kind(FormatErrorKind::TooLarge)
+                .placed(|| Position::measure(row.measure.to_string())));
             }
+            // Not every measure has a chord of its own.
+            for number in (previous_measure + 1)..=i64::from(row.measure) {
+                offset += measure_length;
+                let number = IntegerType::try_from(number).unwrap_or(row.measure);
+                measures.push(new_measure(number, None, offset));
+            }
+            previous_measure = i64::from(row.measure);
             continue;
         }
         offset += measure_length;
@@ -955,7 +967,7 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
             meter = said;
         }
         measures.push((name, at, measure));
-        previous_measure = row.measure;
+        previous_measure = i64::from(row.measure);
     }
     let _ = &meter;
     // The key and the meter stand at the start of the first measure.
@@ -971,13 +983,17 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
             volta.and_then(volta_suffix).unwrap_or_default()
         );
         let Some((_, _, measure)) = measures.iter_mut().find(|(known, _, _)| *known == name) else {
-            return Err(Error::RomanText(format!("no measure {name} to analyse")));
+            return Err(Error::roman_text(format!("no measure {name} to analyse")));
         };
         measure.insert(offset_in_measure(row.beat), row.element()?);
     }
-    for (_, at, measure) in measures {
-        part.insert(at, measure);
-    }
+    // All at once: sorting the part again for each measure is quadratic.
+    part.insert_sorted(
+        measures
+            .into_iter()
+            .map(|(_, at, measure)| StreamEvent::new(at, measure))
+            .collect(),
+    );
     lengthen_harmonies(&mut part)?;
     let mut score = Stream::with_kind(StreamKind::Score);
     score.insert(0.0, part);
@@ -988,7 +1004,7 @@ pub fn from_tsv(text: &str, version: Version) -> Result<Stream> {
 /// `a`, the second `b`, as music21 letters them.
 fn volta_suffix(volta: &str) -> Option<String> {
     let number: usize = volta.parse().ok()?;
-    let letter = char::from(b'a' + u8::try_from(number.checked_sub(1)?).ok()?);
+    let letter = char::from(b'a'.checked_add(u8::try_from(number.checked_sub(1)?).ok()?)?);
     letter.is_ascii_lowercase().then(|| letter.to_string())
 }
 
@@ -1125,7 +1141,7 @@ pub fn to_tsv_with_extra(
         if version == Version::One {
             // music21 asks its walk for the next numeral and is answered
             // with a raise.
-            return Err(Error::RomanText(
+            return Err(Error::roman_text(
                 "a score with no roman numeral to write".to_string(),
             ));
         }
@@ -1165,7 +1181,7 @@ fn cell_of<Name: AsRef<str>>(cells: &[(Name, String)], name: &str) -> Option<Str
 fn v1_attributes(written: &Written<'_>, global_key: &str) -> Result<Vec<(&'static str, String)>> {
     let numeral = written
         .numeral
-        .ok_or_else(|| Error::RomanText("a chord of no harmony has no row here".to_string()))?;
+        .ok_or_else(|| Error::roman_text("a chord of no harmony has no row here".to_string()))?;
     // music21 writes the degree again as the `altchord` where the numeral
     // standing for it was built in the chord's own key, which a secondary
     // numeral always is.
@@ -1280,7 +1296,7 @@ impl Written<'_> {
     /// raises for.
     fn beat(&self) -> Result<FloatType> {
         let meter = self.meter.as_ref().ok_or_else(|| {
-            Error::RomanText("a chord with no meter in force does not have a beat".to_string())
+            Error::roman_text("a chord with no meter in force does not have a beat".to_string())
         })?;
         meter.beat_proportion(op_frac(self.offset + self.padding))
     }
@@ -1468,6 +1484,8 @@ mod tests {
             ("i(v4)", "i[no3][add4]"),
             ("i(^4)", "i[no5][add4]"),
             ("V(13)", "V[add13]"),
+            // What is no tone is passed over a character at a time.
+            ("V(\u{f8}13)", "V[add13]"),
         ] {
             assert_eq!(handle_added_tones(label), written, "the label {label}");
         }
@@ -1537,5 +1555,37 @@ mod tests {
         assert!(Version::from_number(3).is_err());
         assert!(Version::One.columns().contains(&"global_key"));
         assert!(Version::Two.columns().contains(&"globalkey"));
+    }
+
+    /// A table skipping thousands of measures, each of which is made: put
+    /// in the part one at a time, they took minutes.
+    #[test]
+    fn a_table_skipping_many_measures_is_read_quickly() {
+        let table = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n\
+                     .C.I\t1\t1.0\t4/4\tC\tI\tI\n\
+                     V\t20000\t1.0\t4/4\tC\tI\tV\n";
+        let started = std::time::Instant::now();
+        let read = from_tsv(table, Version::One).unwrap();
+        assert_eq!(read.parts()[0].measures().len(), 20000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_table_of_more_measures_than_a_stream_takes_is_refused() {
+        let header = "chord\tmeasure\tbeat\ttimesig\tglobal_key\tlocal_key\tnumeral\n";
+        let gap = crate::makenotation::MAX_MEASURES + 2;
+        for (first, last) in [(1, gap as i64), (-2_147_483_648, 1), (1, 2_147_483_647)] {
+            let table =
+                format!("{header}.C.I\t{first}\t1.0\t4/4\tC\tI\tI\nV\t{last}\t1.0\t4/4\tC\tI\tV\n");
+            assert!(from_tsv(&table, Version::One).is_err(), "{first} {last}");
+        }
+    }
+
+    #[test]
+    fn a_volta_past_z_has_no_letter() {
+        assert_eq!(volta_suffix("2").as_deref(), Some("b"));
+        assert_eq!(volta_suffix("26").as_deref(), Some("z"));
+        assert_eq!(volta_suffix("27"), None);
+        assert_eq!(volta_suffix("200"), None);
     }
 }

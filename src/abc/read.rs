@@ -14,7 +14,7 @@ use crate::chordsymbol::ChordSymbol;
 use crate::clef::Clef;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, Tuplet};
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::interval::Interval;
 use crate::key::KeySignature;
 use crate::makenotation::split_element;
@@ -29,7 +29,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
 fn abc_error(message: impl Into<String>) -> Error {
-    Error::Abc(message.into())
+    Error::abc(message.into())
 }
 
 /// The ABC version a file is read as where it names none: music21's
@@ -176,7 +176,10 @@ enum Token {
     Tie,
     /// A slur or a hairpin opening: the spanner it starts.
     SpannerStart(SpannerKind, Option<usize>),
-    ParenStop,
+    /// A closing `)`, or a hairpin's `!crescendo)!` or `!diminuendo)!`.
+    ParenStop {
+        hairpin: bool,
+    },
     Staccato,
     Upbow,
     Downbow,
@@ -627,7 +630,7 @@ impl AbcNote {
         // A note music21 can find no pitch in is read as a C.
         let (name, display) = match self.pitch_name(&rest, forced_key) {
             Ok(read) => read,
-            Err(Error::Abc(message)) if message.starts_with("cannot find any pitch") => {
+            Err(Error::Abc(read)) if read.message.starts_with("cannot find any pitch") => {
                 (Some("C".to_string()), Some(false))
             }
             Err(error) => return Err(error),
@@ -647,6 +650,9 @@ impl AbcNote {
 struct Spanning {
     kind: SpannerKind,
     uids: Vec<usize>,
+    /// Where its part had got to when it opened, which is where music21
+    /// appends it to the part.
+    offset: FloatType,
 }
 
 /// music21's `ABCHandler`.
@@ -844,7 +850,9 @@ impl Handler {
                             "!diminuendo(!" => self
                                 .tokens
                                 .push(Token::SpannerStart(SpannerKind::Diminuendo, None)),
-                            "!crescendo)!" | "!diminuendo)!" => self.tokens.push(Token::ParenStop),
+                            "!crescendo)!" | "!diminuendo)!" => {
+                                self.tokens.push(Token::ParenStop { hairpin: true });
+                            }
                             _ => {}
                         }
                         skip = j - pos;
@@ -863,7 +871,7 @@ impl Handler {
                 continue;
             }
             let simple = match c {
-                ')' => Some(Token::ParenStop),
+                ')' => Some(Token::ParenStop { hairpin: false }),
                 '-' => Some(Token::Tie),
                 _ => None,
             };
@@ -1058,12 +1066,12 @@ impl Handler {
                 Token::Tuplet { src } => {
                     let (made, count) = tuplet_of(&src, meter.as_ref())?;
                     tuplet = Some((made, count));
-                    active_parens.push("Tuplet");
                 }
                 Token::SpannerStart(kind, _) => {
                     spanners.push(Spanning {
                         kind,
                         uids: Vec::new(),
+                        offset: 0.0,
                     });
                     let made = spanners.len() - 1;
                     self.tokens[index] = Token::SpannerStart(kind, Some(made));
@@ -1074,11 +1082,17 @@ impl Handler {
                         _ => "Slur",
                     });
                 }
-                Token::ParenStop => {
-                    if let Some(closed) = active_parens.pop()
-                        && closed != "Tuplet"
-                    {
-                        active_spanners.pop();
+                Token::ParenStop { hairpin } => {
+                    // Slurs and hairpins may overlap, so each stop ends the
+                    // latest of its own kind.
+                    let closes: &[&str] = if hairpin {
+                        &["Crescendo", "Diminuendo"]
+                    } else {
+                        &["Slur"]
+                    };
+                    if let Some(at) = active_parens.iter().rposition(|open| closes.contains(open)) {
+                        active_parens.remove(at);
+                        active_spanners.remove(at);
                     }
                 }
                 Token::Tie => {
@@ -1729,8 +1743,10 @@ fn part_of(
         lyric_targets: Vec::new(),
         post_transposition: 0,
     };
-    // Which of the handler's spanners this voice starts, in order.
-    let mut started: Vec<usize> = Vec::new();
+    // Which of the handler's spanners this voice starts, in order, each
+    // with where the part had got to: the measure it opened in, or the
+    // length of the part's own line.
+    let mut started: Vec<(usize, Option<usize>, FloatType)> = Vec::new();
     let mut part = Line::default();
     let mut measures: Vec<MeasureIr> = Vec::new();
     let mut brackets: Vec<Bracket> = Vec::new();
@@ -1865,7 +1881,9 @@ fn part_of(
                             }
                         }
                     }
-                    Token::SpannerStart(_, Some(index)) => started.push(*index),
+                    Token::SpannerStart(_, Some(index)) => {
+                        started.push((*index, place, line.end));
+                    }
                     _ => {}
                 }
             }
@@ -1889,6 +1907,15 @@ fn part_of(
             // Lyric targets name a measure by its place among them.
             measures.push(measure);
         }
+    }
+
+    // Where each measure stood as music21 appended it, before `reBar`
+    // cut any in two: where a spanner opening in it was appended.
+    let mut appended_at: Vec<FloatType> = Vec::new();
+    let mut reached = 0.0;
+    for measure in &measures {
+        appended_at.push(reached);
+        reached = op_frac(reached + measure.line.end);
     }
 
     re_bar(&mut measures, &mut brackets);
@@ -2000,9 +2027,18 @@ fn part_of(
         let _ = crate::makenotation::make_beams(&mut stream);
     }
 
+    // A measure's spanner stands where the measure did when music21
+    // appended the spanner to the part.
     let held: Vec<Spanning> = started
         .into_iter()
-        .map(|index| reader.spanners[index].clone())
+        .map(|(index, measure, end)| {
+            let mut held = reader.spanners[index].clone();
+            held.offset = match measure {
+                Some(measure) => appended_at.get(measure).copied().unwrap_or(reached),
+                None => end,
+            };
+            held
+        })
         .collect();
     Ok((stream, uids, held))
 }
@@ -2244,7 +2280,7 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             .iter()
             .map(|uid| uids.iter().position(|held| *held == Some((part, *uid))))
             .collect();
-        let made = match spanner.kind {
+        let mut made = match spanner.kind {
             SpannerKind::Crescendo | SpannerKind::Diminuendo => {
                 let template = Spanner::wedge(spanner.kind, Vec::new());
                 let mut wedge = Spanner::with_unplaced(spanner.kind, positions);
@@ -2254,6 +2290,7 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             }
             kind => Spanner::with_unplaced(kind, positions),
         };
+        made.set_offset(spanner.offset);
         score.add_spanner(made);
     }
     Ok(score)
@@ -2281,7 +2318,8 @@ fn extract_reference_number(text: &str, number: IntegerType) -> Result<String> {
     if collected.is_empty() {
         return Err(abc_error(format!(
             "cannot find requested reference number in source file: {number}"
-        )));
+        ))
+        .of_kind(FormatErrorKind::NotFound));
     }
     Ok(collected.join("\n"))
 }
@@ -2380,6 +2418,82 @@ mod tests {
                 "meta", "meta", "meta", "note", "note", "bar", "tuplet", "note", "note", "note",
                 "note", "bar"
             ]
+        );
+    }
+
+    /// Each note's source and the kinds of the spanners in force on it.
+    fn spanners_of(body: &str) -> Vec<(String, Vec<SpannerKind>)> {
+        let mut handler = Handler::new(DEFAULT_VERSION);
+        handler
+            .tokenize(&format!("X:1\nM:4/4\nL:1/8\nK:C\n{body}\n"))
+            .unwrap();
+        let spanners = handler.process().unwrap();
+        handler
+            .tokens
+            .iter()
+            .filter_map(|token| match token {
+                Token::Note(note) => Some((
+                    note.src.trim().to_string(),
+                    note.spanners
+                        .iter()
+                        .map(|index| spanners[*index].kind)
+                        .collect(),
+                )),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_closing_mark_ends_the_latest_spanner_of_its_kind() {
+        // music21's `testSlurAroundTuplet` (cuthbertLab #1798).
+        use SpannerKind::{Crescendo, Diminuendo, Slur};
+        let expect = |pairs: &[(&str, &[SpannerKind])]| -> Vec<(String, Vec<SpannerKind>)> {
+            pairs
+                .iter()
+                .map(|(src, kinds)| (src.to_string(), kinds.to_vec()))
+                .collect()
+        };
+        // A tuplet has no closing parenthesis, so ')' ends the slur.
+        assert_eq!(
+            spanners_of("(a(3bcd e) f|"),
+            expect(&[
+                ("a", &[Slur]),
+                ("b", &[Slur]),
+                ("c", &[Slur]),
+                ("d", &[Slur]),
+                ("e", &[Slur]),
+                ("f", &[]),
+            ])
+        );
+        assert_eq!(
+            spanners_of("!crescendo(! (3abc d !crescendo)! e|"),
+            expect(&[
+                ("a", &[Crescendo]),
+                ("b", &[Crescendo]),
+                ("c", &[Crescendo]),
+                ("d", &[Crescendo]),
+                ("e", &[]),
+            ])
+        );
+        // A slur and a crescendo can overlap without nesting.
+        assert_eq!(
+            spanners_of("(a !crescendo(! b) c !crescendo)! d|"),
+            expect(&[
+                ("a", &[Slur]),
+                ("b", &[Slur, Crescendo]),
+                ("c", &[Crescendo]),
+                ("d", &[]),
+            ])
+        );
+        assert_eq!(
+            spanners_of("!diminuendo(! a (b !diminuendo)! c) d|"),
+            expect(&[
+                ("a", &[Diminuendo]),
+                ("b", &[Diminuendo, Slur]),
+                ("c", &[Slur]),
+                ("d", &[]),
+            ])
         );
     }
 

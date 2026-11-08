@@ -33,8 +33,10 @@ error_into!(dynamic_error, DynamicException);
 #[pyclass(
     name = "Dynamic",
     module = "music21.dynamics",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Dynamic {
     pub(crate) inner: RsDynamic,
@@ -48,11 +50,15 @@ pub struct Dynamic {
 impl Dynamic {
     /// The facade around a dynamic of the crate's.
     pub(crate) fn wrap(inner: RsDynamic) -> Self {
+        // Where a reader found it placed, which music21 keeps beside it.
+        let placement = inner
+            .placement()
+            .map(|placement| placement.as_str().to_string());
         let mut made = Self {
             inner,
             long_name: None,
             english_name: None,
-            placement: None,
+            placement,
         };
         made.name_from_value();
         made
@@ -78,8 +84,7 @@ impl Dynamic {
 
 #[pymethods]
 impl Dynamic {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -138,20 +143,20 @@ impl Dynamic {
     fn new(
         value: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = keywords;
         let Some(value) = value.filter(|value| !value.is_none()) else {
             // music21 reads a dynamic given nothing as the loudness `None`,
             // which names niente.
-            return Ok(Self::wrap(RsDynamic::new("n")));
+            return Ok(crate::base::built(Self::wrap(RsDynamic::new("n"))));
         };
         if let Ok(mark) = value.extract::<String>() {
-            return Ok(Self::wrap(RsDynamic::new(mark)));
+            return Ok(crate::base::built(Self::wrap(RsDynamic::new(mark))));
         }
         let scalar: FloatType = value.extract()?;
-        Ok(Self::wrap(
+        Ok(crate::base::built(Self::wrap(
             RsDynamic::from_scalar(scalar).map_err(dynamic_error)?,
-        ))
+        )))
     }
 
     /// music21 writes a dynamic a little to the left of where it stands and

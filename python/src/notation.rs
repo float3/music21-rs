@@ -1849,7 +1849,7 @@ pub(crate) fn new_style<'py>(
     let drawn_as_a_note = owner.is_instance_of::<crate::note::Note>()
         || owner.is_instance_of::<crate::chord::Chord>()
         || owner.is_instance_of::<crate::rest::Rest>();
-    let class = match py.import("music21.style") {
+    let class = match crate::real_music21(py, "music21.style") {
         Ok(module) => match owner.get_type().getattr("_styleClass") {
             Ok(class) => class,
             Err(_) if drawn_as_a_note => module
@@ -2088,7 +2088,7 @@ impl NoteStyle {
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(Style).add_subclass(NoteStyle)
+        crate::base::built(Style).add_subclass(NoteStyle)
     }
 
     #[classattr]

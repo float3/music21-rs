@@ -492,7 +492,8 @@ impl Clef {
         if self.places_pitches()
             && let Some(lowest) = &mut self.lowest_line
         {
-            *lowest += (octave_change - self.octave_change) * 7;
+            let moved = octave_change.saturating_sub(self.octave_change);
+            *lowest = lowest.saturating_add(moved.saturating_mul(7));
         }
         self.octave_change = octave_change;
     }
@@ -743,6 +744,18 @@ mod tests {
             .iter()
             .map(|name| Pitch::from_name(name).unwrap())
             .collect()
+    }
+
+    /// A clef moved more octaves than its lines can be counted in keeps
+    /// its lowest line as far off as an integer holds.
+    #[test]
+    fn a_clef_moved_past_the_last_octave_stops_there() {
+        for octaves in [IntegerType::MAX, IntegerType::MIN] {
+            let mut treble = Clef::treble();
+            treble.set_octave_change(octaves);
+            let lowest = treble.lowest_line().unwrap();
+            assert_eq!(lowest.signum(), octaves.signum(), "{octaves}");
+        }
     }
 
     /// Every answer here is music21's own, from its clef docstrings.

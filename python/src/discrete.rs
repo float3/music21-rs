@@ -269,7 +269,7 @@ macro_rules! weightings {
                 fn make(
                     referenceStream: Option<&Bound<'_, PyAny>>,
                 ) -> PyClassInitializer<Self> {
-                    PyClassInitializer::from(KeyWeightKeyAnalysis::of(
+                    crate::base::built(KeyWeightKeyAnalysis::of(
                         KeyProfile::$profile,
                         referenceStream,
                     ))

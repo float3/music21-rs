@@ -1,7 +1,9 @@
 # Docstrings of music21.roman whose every example passes against the
 # music21-rs facades. Written by `UPDATE_DOCTEST_EXPECTATIONS=1 cargo test
 # --manifest-path python-parity/Cargo.toml --test parity doctest_roman::`; the test
-# fails when one of these stops passing.
+# fails when one of these stops passing or one passes that is not listed.
+# `[not_passing]`, kept by the rewrite, names deliberate failures and why;
+# `[optional]` names those that need a package the harness may lack.
 
 passing = [
     "music21.roman.FigureTuple",
@@ -19,6 +21,7 @@ passing = [
     "music21.roman.RomanNumeral._parseFrontAlterations",
     "music21.roman.RomanNumeral._parseOmittedSteps",
     "music21.roman.RomanNumeral._parseRNAloneAmidstAug6",
+    "music21.roman.RomanNumeral._setImpliedScaleFromKey",
     "music21.roman.RomanNumeral.adjustMinorVIandVIIByQuality",
     "music21.roman.RomanNumeral.bassScaleDegreeFromNotation",
     "music21.roman.RomanNumeral.figure",

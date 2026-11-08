@@ -1,0 +1,1 @@
+tinyNotation: 3/4 E4 r f# g=lastG trip{b-8 a g} c'2. 4/4 C~ C D8. E16 quad{f g a b} c''4 d,4 e-- f## r1 6/8 a8 b c'4. g4.

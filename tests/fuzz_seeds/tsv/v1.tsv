@@ -1,0 +1,5 @@
+chord	measure	beat	timesig	global_key	local_key	numeral
+.C.I	1	1.0	4/4	C	I	I
+V	2	1.0	4/4	C	I	V
+V7/IV	2	3.0	4/4	C	I	V
+ii%65	3	1.5	3/4	C	vi	ii

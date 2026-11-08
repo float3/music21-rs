@@ -168,8 +168,10 @@ error_into!(pub(crate) chord_error, ChordException);
 #[pyclass(
     name = "Chord",
     module = "music21.chord",
+    extends = crate::base::NotRest,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct Chord {
     /// The pitches and the analysis read off them. Every method that asks a
@@ -244,6 +246,9 @@ pub struct Chord {
     /// time — and a lock it never waits on costs nothing beside the work it
     /// saves.
     cache: Mutex<ChordCache>,
+    /// Whether a stream has read this chord's length and keeps it: a
+    /// change to the length is then told to every stream.
+    pub(crate) watched: bool,
 }
 
 /// music21's `_cache`: the answers a chord has already worked out.
@@ -372,6 +377,7 @@ impl Chord {
             editorial: None,
             beams: None,
             cache: Mutex::default(),
+            watched: false,
         };
         Ok(chord)
     }
@@ -457,6 +463,7 @@ impl Chord {
             editorial: None,
             beams: None,
             cache: Mutex::default(),
+            watched: false,
         }
     }
 
@@ -485,6 +492,7 @@ impl Chord {
             editorial: None,
             beams: None,
             cache: Mutex::default(),
+            watched: false,
         })
     }
 
@@ -1088,6 +1096,43 @@ impl Chord {
         Ok(created)
     }
 
+    /// How long the chord lasts, read without making its `Duration`
+    /// object: `None` when the one it holds is not the package's own.
+    pub(crate) fn held_quarter_length(&self, py: Python<'_>) -> Option<f64> {
+        let Some(object) = &self.duration else {
+            return Some(
+                self.inner
+                    .duration()
+                    .map_or(1.0, music21::Duration::quarter_length),
+            );
+        };
+        let ours = object
+            .bind(py)
+            .cast::<crate::duration::Duration>()
+            .ok()?
+            .try_borrow()
+            .ok()?;
+        Some(ours.inner.quarter_length())
+    }
+
+    /// Marks this chord and its duration as read by a stream, so that a
+    /// change to its length is told to every stream.
+    pub(crate) fn watch(&mut self, py: Python<'_>) {
+        self.watched = true;
+        if let Some(duration) = &self.duration {
+            crate::duration::watch(py, duration);
+        }
+    }
+
+    /// Tells every stream this chord's length has changed, where one has
+    /// read it, and marks the duration it now holds.
+    fn tell_streams(&mut self, py: Python<'_>) {
+        if self.watched {
+            crate::stream::length_changed();
+            self.watch(py);
+        }
+    }
+
     pub(crate) fn quarter_length(&self, py: Python<'_>) -> f64 {
         match &self.duration {
             Some(duration) => crate::duration::duration_value_of(py, duration)
@@ -1665,8 +1710,7 @@ fn key_value(value: &Bound<'_, PyAny>) -> Option<RsKey> {
 
 #[pymethods]
 impl Chord {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -1791,9 +1835,9 @@ impl Chord {
         py: Python<'_>,
         notes: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = (notes, keywords);
-        Self::build(py, None, None)
+        Self::build(py, None, None).map(crate::base::built)
     }
 
     /// music21's construction proper, which a direct caller reaches through
@@ -2077,6 +2121,7 @@ impl Chord {
             let mut chord = slf.borrow_mut();
             chord.inner.set_duration(inner);
             chord.duration = Some(duration.clone_ref(py));
+            chord.tell_streams(py);
         }
         // As on a note: a chord already timed that is timed again is a
         // change the streams holding it have to hear about.
@@ -2109,6 +2154,7 @@ impl Chord {
         // After the duration object, which refuses a new length where it is
         // a FrozenDuration, so the note keeps the length it has.
         self.inner.set_duration(inner);
+        self.tell_streams(py);
         Ok(())
     }
 
@@ -3611,7 +3657,7 @@ impl Chord {
             let text = name.into_pyobject(py)?;
             annotated.addLyric(py, text.as_any(), None, false, None)?;
         }
-        Ok(Some(Py::new(py, annotated)?.into_any()))
+        Ok(Some(Py::new(py, crate::base::built(annotated))?.into_any()))
     }
 
     /// music21's `Pitch.getStringHarmonic`, which reads the notehead off the

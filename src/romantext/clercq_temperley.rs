@@ -25,15 +25,15 @@
 use crate::chord::Chord;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
-use crate::error::{Error, Result};
+use crate::error::{Error, FormatErrorKind, Result};
 use crate::key::{Key, convert_key_string_to_music21_key_string};
-use crate::makenotation::op_frac;
+use crate::makenotation::{MAX_MEASURES, op_frac};
 use crate::metadata::{Metadata, MetadataValue};
 use crate::meter::TimeSignature;
 use crate::notation::Tie;
 use crate::rest::Rest;
 use crate::roman::RomanNumeral;
-use crate::stream::{Stream, StreamElement, StreamKind};
+use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 
 /// What is written under the chords as a song is read: music21's
 /// `labelRomanNumerals` and `labelSubsectionsOnScore`, both on.
@@ -278,13 +278,16 @@ impl CtSong {
         let places = expansion.expand(song, None, None)?;
         let mut part = Stream::with_kind(StreamKind::Part);
         let mut at = 0.0;
+        let mut measures = Vec::with_capacity(places.len());
         for (index, place) in places.iter().enumerate() {
             let measure = expansion.built[*place]
                 .as_measure(IntegerType::try_from(index + 1).unwrap_or(IntegerType::MAX))?;
             let length = measure.end_offset();
-            part.insert(at, measure);
+            measures.push(StreamEvent::new(at, measure));
             at = op_frac(at + length);
         }
+        // All at once: sorting the part again for each measure is quadratic.
+        part.insert_sorted(measures);
         let mut metadata = Metadata::new();
         metadata.add("title", MetadataValue::new(self.title()));
         part.set_metadata(Some(metadata));
@@ -585,7 +588,7 @@ fn bracketed(atom: &str) -> &str {
 /// An error in a song, which music21 raises as a `CTSongException` or a
 /// `CTRuleException`.
 fn ct_error(said: impl Into<String>) -> Error {
-    Error::RomanText(said.into())
+    Error::roman_text(said.into())
 }
 
 /// The rule's text split at every barline, the barlines kept: music21's
@@ -762,9 +765,10 @@ impl<'a> Expansion<'a> {
             )));
         }
         if self.expanding.len() >= MAX_DEPTH {
-            return Err(ct_error(format!(
-                "rules are nested more than {MAX_DEPTH} deep"
-            )));
+            return Err(
+                ct_error(format!("rules are nested more than {MAX_DEPTH} deep"))
+                    .of_kind(FormatErrorKind::TooLarge),
+            );
         }
         self.expanding.push(rule);
         let expanded = self.expand_groups(rule, meter, key);
@@ -827,7 +831,10 @@ impl<'a> Expansion<'a> {
                     self.rules[rule].text()
                 ))
             })?;
-        for _ in 0..repeats {
+        // Every time through makes a measure at least, and after the first
+        // as many as the first made.
+        self.make_room(repeats)?;
+        for time in 0..repeats {
             let meter = self.states[rule].meter.clone();
             let key = self.states[rule].key.clone();
             let returned = self.expand(named, Some(meter.clone()), Some(key.clone()))?;
@@ -836,6 +843,9 @@ impl<'a> Expansion<'a> {
                     "rule {content} expands to no measure at all"
                 )));
             };
+            if time == 0 {
+                self.make_room(returned.len().saturating_mul(repeats - 1))?;
+            }
             self.insert_key_and_meter(*first, &meter, &key);
             places.extend(returned);
         }
@@ -884,6 +894,7 @@ impl<'a> Expansion<'a> {
             // The group said nothing but a key or a meter.
             return Ok(());
         }
+        self.make_room(1)?;
         let measure = self.built.len();
         self.built.push(Built::default());
         let meter = self.states[rule].meter.clone();
@@ -930,6 +941,7 @@ impl<'a> Expansion<'a> {
         places.push(measure);
         // A measure played more than once is copied, the copies saying
         // nothing about the key or the meter.
+        self.make_room(repeats.saturating_sub(1))?;
         for _ in 1..repeats {
             let mut copy = self.built[measure].clone();
             copy.meter = None;
@@ -988,6 +1000,18 @@ impl<'a> Expansion<'a> {
         {
             held.set_tie(tie);
         }
+    }
+
+    /// An error once the song has made [`MAX_MEASURES`] measures, the most
+    /// the crate makes for a stream, or would with `more` to come.
+    fn make_room(&self, more: usize) -> Result<()> {
+        if self.built.len().saturating_add(more) > MAX_MEASURES {
+            return Err(ct_error(format!(
+                "the song would make more than {MAX_MEASURES} measures"
+            ))
+            .of_kind(FormatErrorKind::TooLarge));
+        }
+        Ok(())
     }
 
     /// The key and the meter written into a measure where they have not
@@ -1228,5 +1252,23 @@ mod tests {
         assert!(from_clercq_temperley(&song(MAX_DEPTH - 1)).is_ok());
         assert!(from_clercq_temperley(&song(MAX_DEPTH)).is_err());
         assert!(from_clercq_temperley(&song(10_000)).is_err());
+    }
+
+    #[test]
+    fn a_song_of_more_measures_than_a_stream_takes_is_refused() {
+        assert!(from_clercq_temperley("S: I |*200000\n").is_err());
+        assert!(from_clercq_temperley("Vr: I |*1000\nS: $Vr*1000\n").is_err());
+        assert!(from_clercq_temperley("Vr: I |*100\nS: $Vr*100\n").is_ok());
+    }
+
+    /// Repeats too many for the limit are refused before any is made, as
+    /// making the first hundred thousand took seconds.
+    #[test]
+    fn repeats_past_the_measure_limit_are_refused_at_once() {
+        let started = std::time::Instant::now();
+        assert!(from_clercq_temperley("Vr: I | V |\nS: $Vr*9223372036854775807\n").is_err());
+        assert!(from_clercq_temperley("S: I |*9223372036854775807\n").is_err());
+        assert!(from_clercq_temperley("Vr: I | V |\nS: $Vr*65535\n").is_err());
+        assert!(started.elapsed() < std::time::Duration::from_millis(500));
     }
 }

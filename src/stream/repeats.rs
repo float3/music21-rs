@@ -115,7 +115,7 @@ impl Stream {
                 "cannot process repeats on Stream that does not contain measures".to_string(),
             ));
         }
-        let expander = Expander::new(&measures);
+        let expander = Expander::from_measures(measures.iter().map(|(_, measure)| *measure));
         // Nothing to play out leaves every measure where it stood.
         let Some(played) = expander.process()? else {
             return Ok((self.clone(), (0..self.leaves().len()).map(Some).collect()));
@@ -243,6 +243,17 @@ struct Working {
 }
 
 impl Working {
+    /// The measure at `index` of the part, as it stands there.
+    fn of(measure: &Stream, index: usize) -> Self {
+        Self {
+            measure: measure.clone(),
+            original: Some(index),
+            source: index,
+            stripped: false,
+            appended_length: None,
+        }
+    }
+
     /// A copy, which no ending names.
     fn copy(&self) -> Self {
         Self {
@@ -334,7 +345,37 @@ struct Group {
     indices: Vec<usize>,
 }
 
-struct Expander {
+/// music21's `repeat.Expander`: a part's repeats read once, to be played
+/// out whole -- which is [`Stream::expand_repeats`] -- or a step at a time.
+///
+/// The steps work on a stream of measures given them and hand back a new
+/// one; where music21 strips the repeat barline off a measure of the
+/// stream it was given, the crate leaves that stream as it was.
+///
+/// ```
+/// use music21::bar::{Barline, RepeatDirection};
+/// use music21::repeat::Expander;
+/// use music21::{Duration, Note, Stream, StreamKind};
+///
+/// let mut part = Stream::with_kind(StreamKind::Part);
+/// for number in 1..=3 {
+///     let mut measure = Stream::with_kind(StreamKind::Measure);
+///     measure.set_number(number);
+///     measure.push(Note::from_name("C4")?.with_duration(Duration::whole()));
+///     if number == 2 {
+///         measure.set_left_barline(Some(Barline::repeat(RepeatDirection::Start, None)));
+///         measure.set_right_barline(Some(Barline::repeat(RepeatDirection::End, Some(3))));
+///     }
+///     part.insert(f64::from(number - 1) * 4.0, measure);
+/// }
+/// let expander = Expander::new(&part)?;
+/// assert!(expander.repeat_bars_are_coherent()?);
+/// assert_eq!(expander.measure_map()?, [0, 1, 1, 1, 2]);
+/// assert_eq!(expander.measure_map_numbers()?, ["1", "2", "2a", "2b", "3"]);
+/// # Ok::<(), music21::Error>(())
+/// ```
+#[derive(Clone, Debug)]
+pub struct Expander {
     source: Vec<Working>,
     brackets: Vec<Bracket>,
     counts: std::collections::HashMap<RepeatExpressionKind, usize>,
@@ -348,17 +389,23 @@ enum Jump {
 }
 
 impl Expander {
-    fn new(measures: &[(FloatType, &Stream)]) -> Self {
+    /// The repeats of `part`'s measures, read: music21's `Expander(part)`,
+    /// which is refused where the part has no measures.
+    pub fn new(part: &Stream) -> Result<Self> {
+        let measures = part.measures();
+        if measures.is_empty() {
+            return Err(Error::Stream(
+                "no measures found in the source stream to be expanded".to_string(),
+            ));
+        }
+        Ok(Self::from_measures(measures))
+    }
+
+    fn from_measures<'a>(measures: impl IntoIterator<Item = &'a Stream>) -> Self {
         let source: Vec<Working> = measures
-            .iter()
+            .into_iter()
             .enumerate()
-            .map(|(index, (_, measure))| Working {
-                measure: (*measure).clone(),
-                original: Some(index),
-                source: index,
-                stripped: false,
-                appended_length: None,
-            })
+            .map(|(index, measure)| Working::of(measure, index))
             .collect();
         // A bracket opens on a measure whose ending starts and closes on one
         // whose ending stops; music21's spanner spans those measures, and
@@ -416,6 +463,120 @@ impl Expander {
         }
     }
 
+    /// The measures played, as `process` leaves them: the source measures
+    /// themselves where there is nothing to play out.
+    fn played_measures(&self) -> Result<Vec<Working>> {
+        Ok(self.process()?.unwrap_or_else(|| self.source.clone()))
+    }
+
+    /// For each measure played, which measure of the part it plays, by its
+    /// place among them: music21's `measureMap`.
+    ///
+    /// A measure is found by its number and suffix, and by its number
+    /// alone where no measure of the part has both, as music21 finds it;
+    /// one renumbered after a jump past the part's last number has neither,
+    /// and is refused.
+    pub fn measure_map(&self) -> Result<Vec<usize>> {
+        let mut with_suffix = std::collections::HashMap::new();
+        let mut without = std::collections::HashMap::new();
+        for (index, working) in self.source.iter().enumerate() {
+            with_suffix.insert(working.measure.number_with_suffix(), index);
+            without.insert(working.measure.number(), index);
+        }
+        self.played_measures()?
+            .iter()
+            .map(|working| {
+                let measure = &working.measure;
+                with_suffix
+                    .get(&measure.number_with_suffix())
+                    .or_else(|| without.get(&measure.number()))
+                    .copied()
+                    .ok_or_else(|| {
+                        Error::Stream(format!(
+                            "no measure {} in the source stream",
+                            measure.number()
+                        ))
+                    })
+            })
+            .collect()
+    }
+
+    /// The number and suffix of each measure played: music21's
+    /// `measureMap(returnType='measureNumber')`.
+    pub fn measure_map_numbers(&self) -> Result<Vec<String>> {
+        Ok(self
+            .played_measures()?
+            .iter()
+            .map(|working| working.measure.number_with_suffix())
+            .collect())
+    }
+
+    /// The places among `measures`' measures of the first passage closed
+    /// by a repeat barline, from the last start before it, or from the
+    /// first measure where there is none: music21's
+    /// `findInnermostRepeatIndices`. Empty where no repeat closes.
+    pub fn find_innermost_repeat_indices(measures: &Stream) -> Vec<usize> {
+        Self::innermost_of(&Self::measures_of(measures))
+    }
+
+    /// `measures` with its innermost repeated passage played out, every
+    /// other measure kept as it stands: music21's
+    /// `processInnermostRepeatBars`. Called again on what it gives, it
+    /// plays out the next passage.
+    ///
+    /// `repeat_indices` plays out exactly those measures instead, and
+    /// `repeat_times` plays them that many times rather than as often as
+    /// the closing barline says; `expansion_only` hands back the measures
+    /// played out and nothing else. The measures are laid end to end in a
+    /// stream of `measures`' own kind; one played again is numbered with
+    /// `a`, `b` and on.
+    pub fn process_innermost_repeat_bars(
+        measures: &Stream,
+        repeat_indices: Option<&[usize]>,
+        repeat_times: Option<u32>,
+        expansion_only: bool,
+    ) -> Result<Stream> {
+        let mut source = Self::measures_of(measures);
+        let played =
+            Self::play_innermost(&mut source, repeat_indices, repeat_times, expansion_only)?;
+
+        let mut out = Stream::with_kind(measures.kind());
+        let mut end: FloatType = 0.0;
+        for working in played {
+            let length = working.measure.end_offset();
+            out.insert(end, working.measure);
+            end = crate::makenotation::op_frac(end + length);
+        }
+        Ok(out)
+    }
+
+    /// The places among `measures`' measures of those holding a mark of
+    /// `kind`, once for each such mark: music21's `getRepeatExpressionIndex`
+    /// asked for one class of mark. Empty where there is none.
+    pub fn repeat_expression_index(measures: &Stream, kind: RepeatExpressionKind) -> Vec<usize> {
+        Self::measures_of(measures)
+            .iter()
+            .enumerate()
+            .flat_map(|(index, working)| {
+                working
+                    .expressions()
+                    .into_iter()
+                    .filter(move |found| *found == kind)
+                    .map(move |_| index)
+            })
+            .collect()
+    }
+
+    /// The measures of a stream, each as itself.
+    fn measures_of(measures: &Stream) -> Vec<Working> {
+        measures
+            .measures()
+            .into_iter()
+            .enumerate()
+            .map(|(index, measure)| Working::of(measure, index))
+            .collect()
+    }
+
     fn da_capo_or_segno(&self) -> Option<Jump> {
         use RepeatExpressionKind::*;
         let da_capo = self.count(DaCapo) + self.count(DaCapoAlFine) + self.count(DaCapoAlCoda);
@@ -430,8 +591,12 @@ impl Expander {
         }
     }
 
-    /// music21's `isExpandable`: `None` where there is nothing to play out.
-    fn is_expandable(&self) -> Result<Option<bool>> {
+    /// Whether the repeats can be played out: music21's `isExpandable`,
+    /// which is `None` where there is nothing to play out, and `false`
+    /// where the repeat barlines do not pair up, the endings do not follow
+    /// on from each other, or a *da capo* or *dal segno* lacks the *fine*,
+    /// coda or segno it names.
+    pub fn is_expandable(&self) -> Result<Option<bool>> {
         let jump = self.da_capo_or_segno();
         if jump.is_none() && !has_repeat(&self.source) {
             return Ok(None);
@@ -446,7 +611,11 @@ impl Expander {
         }))
     }
 
-    fn repeat_bars_are_coherent(&self) -> Result<bool> {
+    /// Whether every repeat barline pairs up with another: music21's
+    /// `repeatBarsAreCoherent`. An end with no start before it is taken to
+    /// go back to the beginning; a right barline marking a start is
+    /// refused.
+    pub fn repeat_bars_are_coherent(&self) -> Result<bool> {
         let (mut starts, mut ends, mut balance) = (0, 0, 0);
         for working in &self.source {
             match working.left_repeat() {
@@ -586,7 +755,7 @@ impl Expander {
     }
 
     /// music21's `findInnermostRepeatIndices`.
-    fn innermost_repeat_indices(measures: &[Working]) -> Vec<usize> {
+    fn innermost_of(measures: &[Working]) -> Vec<usize> {
         let mut starts: Vec<usize> = Vec::new();
         for (index, working) in measures.iter().enumerate() {
             match working.left_repeat() {
@@ -626,18 +795,25 @@ impl Expander {
     }
 
     /// music21's `processInnermostRepeatBars`.
-    fn process_innermost_repeat_bars(
+    fn play_innermost(
         measures: &mut [Working],
-        forced: Option<(&[usize], u32)>,
+        forced: Option<&[usize]>,
+        times: Option<u32>,
         expansion_only: bool,
     ) -> Result<Vec<Working>> {
         let indices: Vec<usize> = match forced {
-            Some((indices, _)) => indices.to_vec(),
-            None => Self::innermost_repeat_indices(measures),
+            Some(indices) => indices.to_vec(),
+            None => Self::innermost_of(measures),
         };
+        if indices.iter().any(|index| *index >= measures.len()) {
+            return Err(Error::Stream(format!(
+                "a repeat index is past the last of {} measures",
+                measures.len()
+            )));
+        }
         let mut out = Vec::new();
         let mut strip_next = false;
-        let mut times_given = forced.map(|(_, times)| times);
+        let mut times_given = times;
         let mut index = 0;
         while index < measures.len() {
             let (Some(&first), Some(&last)) = (indices.first(), indices.last()) else {
@@ -649,8 +825,9 @@ impl Expander {
                     Err(error) if forced.is_none() => return Err(error),
                     // A forced run with no repeat bar at its end: music21
                     // leaves its last and its end-barline measure as `None`,
-                    // which counts as the same measure.
-                    Err(_) => (true, 2),
+                    // which counts as the same measure, and finds it played
+                    // no times.
+                    Err(_) => (true, 0),
                 };
                 let times = *times_given.get_or_insert(times_found);
                 for time in 0..times {
@@ -694,7 +871,7 @@ impl Expander {
         done: &mut Vec<usize>,
     ) -> Result<Vec<Working>> {
         let groups = self.group_bracket_indices(&measures);
-        let innermost = Self::innermost_repeat_indices(&measures);
+        let innermost = Self::innermost_of(&measures);
         let mut focus: Option<Group> = None;
         if let (Some(&first), Some(&last)) = (innermost.first(), innermost.last()) {
             for group in &groups {
@@ -714,7 +891,7 @@ impl Expander {
             }
         }
         let Some(focus) = focus else {
-            return Self::process_innermost_repeat_bars(&mut measures, None, false);
+            return Self::play_innermost(&mut measures, None, None, false);
         };
         let start = innermost[0];
         let mut boundaries: Vec<(usize, Vec<usize>, Vec<usize>)> = Vec::new();
@@ -746,9 +923,10 @@ impl Expander {
         let mut highest = None;
         for (bracket_index, indices, _) in &boundaries {
             let times = self.brackets[*bracket_index].numbers.len() as u32;
-            repeats.push(Self::process_innermost_repeat_bars(
+            repeats.push(Self::play_innermost(
                 &mut measures,
-                Some((indices, times)),
+                Some(indices),
+                Some(times),
                 true,
             )?);
             highest = indices.iter().copied().max();
@@ -881,7 +1059,7 @@ fn has_repeat(measures: &[Working]) -> bool {
 mod tests {
     use crate::bar::{Barline, Ending, RepeatDirection};
     use crate::repeat::{RepeatExpression, RepeatExpressionKind};
-    use crate::stream::{Stream, StreamElement, StreamKind};
+    use crate::stream::{Expander, Stream, StreamElement, StreamKind};
     use crate::{Duration, Note};
 
     /// A part of whole-note measures numbered from one, each shaped by
@@ -978,6 +1156,167 @@ mod tests {
             }
         });
         assert!(part.expand_repeats().is_err());
+    }
+
+    /// music21's own example for the expander's steps: a passage of one
+    /// measure played three times, then one played twice.
+    fn two_passages() -> Stream {
+        part(5, |number, measure| match number {
+            2 => {
+                measure.set_left_barline(Some(Barline::repeat(RepeatDirection::Start, None)));
+                measure.set_right_barline(Some(Barline::repeat(RepeatDirection::End, Some(3))));
+            }
+            4 => {
+                measure.set_left_barline(Some(Barline::repeat(RepeatDirection::Start, None)));
+                measure.set_right_barline(Some(Barline::repeat(RepeatDirection::End, Some(2))));
+            }
+            _ => {}
+        })
+    }
+
+    fn numbers(stream: &Stream) -> Vec<String> {
+        stream
+            .measures()
+            .iter()
+            .map(|measure| measure.number_with_suffix())
+            .collect()
+    }
+
+    #[test]
+    fn the_measure_map_names_the_measure_each_one_plays() {
+        let expander = Expander::new(&two_passages()).unwrap();
+        assert_eq!(expander.measure_map().unwrap(), [0, 1, 1, 1, 2, 3, 3, 4]);
+        assert_eq!(
+            expander.measure_map_numbers().unwrap(),
+            ["1", "2", "2a", "2b", "3", "4", "4a", "5"]
+        );
+    }
+
+    #[test]
+    fn a_part_with_nothing_to_play_out_maps_to_itself() {
+        let expander = Expander::new(&part(3, |_, _| {})).unwrap();
+        assert_eq!(expander.is_expandable().unwrap(), None);
+        assert_eq!(expander.measure_map().unwrap(), [0, 1, 2]);
+    }
+
+    #[test]
+    fn repeats_that_do_not_pair_up_are_not_expandable() {
+        let part = part(3, |number, measure| {
+            if number != 2 {
+                measure.set_left_barline(Some(Barline::repeat(RepeatDirection::Start, None)));
+            }
+        });
+        let expander = Expander::new(&part).unwrap();
+        assert!(!expander.repeat_bars_are_coherent().unwrap());
+        assert_eq!(expander.is_expandable().unwrap(), Some(false));
+        assert!(expander.measure_map().is_err());
+        assert!(
+            Expander::new(&two_passages())
+                .unwrap()
+                .repeat_bars_are_coherent()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn a_right_barline_starting_a_repeat_is_refused() {
+        let part = part(2, |number, measure| {
+            if number == 1 {
+                measure.set_right_barline(Some(Barline::repeat(RepeatDirection::Start, None)));
+            }
+        });
+        assert!(
+            Expander::new(&part)
+                .unwrap()
+                .repeat_bars_are_coherent()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn the_innermost_repeat_runs_from_the_last_start() {
+        let mut written = two_passages();
+        assert_eq!(Expander::find_innermost_repeat_indices(&written), [1]);
+        let StreamElement::Stream(second) = written.events_mut()[1].element_mut() else {
+            unreachable!()
+        };
+        second.set_right_barline(None);
+        let StreamElement::Stream(fourth) = written.events_mut()[3].element_mut() else {
+            unreachable!()
+        };
+        fourth.set_left_barline(None);
+        assert_eq!(Expander::find_innermost_repeat_indices(&written), [1, 2, 3]);
+        assert!(Expander::find_innermost_repeat_indices(&part(2, |_, _| {})).is_empty());
+    }
+
+    #[test]
+    fn the_innermost_repeat_is_played_out_one_at_a_time() {
+        let part = two_passages();
+        let once = Expander::process_innermost_repeat_bars(&part, None, None, false).unwrap();
+        assert_eq!(numbers(&once), ["1", "2", "2a", "2b", "3", "4", "5"]);
+        assert_eq!(once.kind(), StreamKind::Part);
+        assert_eq!(once.events()[4].offset(), 16.0);
+        // The next passage is still to be played.
+        assert!(
+            once.measures()[5]
+                .left_barline()
+                .unwrap()
+                .repeat_direction()
+                .is_some()
+        );
+
+        let twice = Expander::process_innermost_repeat_bars(&once, None, None, false).unwrap();
+        assert_eq!(numbers(&twice), ["1", "2", "2a", "2b", "3", "4", "4a", "5"]);
+        assert_eq!(twice.end_offset(), 32.0);
+        // The stream it was given is left as it was.
+        assert_eq!(numbers(&part), ["1", "2", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn an_end_with_no_start_repeats_from_the_beginning() {
+        let part = part(5, |number, measure| {
+            if number == 2 {
+                measure.set_right_barline(Some(Barline::repeat(RepeatDirection::End, None)));
+            }
+        });
+        let played = Expander::process_innermost_repeat_bars(&part, None, None, false).unwrap();
+        assert_eq!(numbers(&played), ["1", "2", "1a", "2a", "3", "4", "5"]);
+    }
+
+    #[test]
+    fn given_measures_are_played_as_often_as_asked() {
+        let part = part(3, |_, _| {});
+        let played =
+            Expander::process_innermost_repeat_bars(&part, Some(&[1]), Some(2), false).unwrap();
+        assert_eq!(numbers(&played), ["1", "2", "2a", "3"]);
+        let only =
+            Expander::process_innermost_repeat_bars(&part, Some(&[1]), Some(2), true).unwrap();
+        assert_eq!(numbers(&only), ["2", "2a"]);
+        // With no repeat barline to say how often, music21 plays them none.
+        let none = Expander::process_innermost_repeat_bars(&part, Some(&[1]), None, false).unwrap();
+        assert_eq!(numbers(&none), ["1", "3"]);
+        assert!(Expander::process_innermost_repeat_bars(&part, Some(&[7]), None, false).is_err());
+    }
+
+    #[test]
+    fn a_repeat_expression_is_found_by_its_measure() {
+        let part = part(3, |number, measure| {
+            if number == 3 {
+                measure.push(StreamElement::RepeatExpression(RepeatExpression::new(
+                    RepeatExpressionKind::Segno,
+                )));
+            }
+        });
+        assert_eq!(
+            Expander::repeat_expression_index(&part, RepeatExpressionKind::Segno),
+            [2]
+        );
+        assert!(Expander::repeat_expression_index(&part, RepeatExpressionKind::Coda).is_empty());
+    }
+
+    #[test]
+    fn an_expander_needs_measures() {
+        assert!(Expander::new(&Stream::with_kind(StreamKind::Part)).is_err());
     }
 
     #[test]

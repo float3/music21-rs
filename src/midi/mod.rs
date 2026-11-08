@@ -9,7 +9,7 @@ pub use write::{ExportOptions, to_midi};
 use crate::{
     defaults::{FloatType, IntegerType},
     duration::Duration,
-    error::{Error, Result},
+    error::{Error, FormatErrorKind, Position, Result},
     note::Note,
     pitch::Pitch,
     stream::{Stream, StreamElement},
@@ -50,21 +50,21 @@ impl MidiNote {
         channel: u8,
     ) -> Result<Self> {
         if pitch > 127 {
-            return Err(Error::Midi(format!("MIDI pitch out of range: {pitch}")));
+            return Err(Error::midi(format!("MIDI pitch out of range: {pitch}")));
         }
         if velocity > 127 {
-            return Err(Error::Midi(format!(
+            return Err(Error::midi(format!(
                 "MIDI velocity out of range: {velocity}"
             )));
         }
         if channel > 15 {
-            return Err(Error::Midi(format!("MIDI channel out of range: {channel}")));
+            return Err(Error::midi(format!("MIDI channel out of range: {channel}")));
         }
         if !start.is_finite() || start < 0.0 {
-            return Err(Error::Midi(format!("invalid MIDI note start: {start}")));
+            return Err(Error::midi(format!("invalid MIDI note start: {start}")));
         }
         if !duration.is_finite() || duration < 0.0 {
-            return Err(Error::Midi(format!(
+            return Err(Error::midi(format!(
                 "invalid MIDI note duration: {duration}"
             )));
         }
@@ -143,7 +143,7 @@ pub fn stream_from_midi_notes(notes: &[MidiNote]) -> Result<Stream> {
 /// Writes a minimal format-0 Standard MIDI File.
 pub fn write_midi_bytes(notes: &[MidiNote], tempo_bpm: FloatType) -> Result<Vec<u8>> {
     if !tempo_bpm.is_finite() || tempo_bpm <= 0.0 {
-        return Err(Error::Midi(format!("invalid tempo: {tempo_bpm}")));
+        return Err(Error::midi(format!("invalid tempo: {tempo_bpm}")));
     }
 
     let mut events = Vec::new();
@@ -202,7 +202,7 @@ pub fn read_midi_bytes_with_tempo(bytes: &[u8]) -> Result<(Vec<MidiNote>, Option
     expect(bytes, &mut pos, b"MThd")?;
     let header_len = read_u32(bytes, &mut pos)?;
     if header_len < 6 {
-        return Err(Error::Midi("MIDI header is too short".to_string()));
+        return Err(Error::midi("MIDI header is too short".to_string()));
     }
     let _format = read_u16(bytes, &mut pos)?;
     let tracks = read_u16(bytes, &mut pos)?;
@@ -210,23 +210,25 @@ pub fn read_midi_bytes_with_tempo(bytes: &[u8]) -> Result<(Vec<MidiNote>, Option
     pos += (header_len - 6) as usize;
 
     if division & 0x8000 != 0 {
-        return Err(Error::Midi(
-            "SMPTE MIDI time division is not supported".to_string(),
-        ));
+        return Err(Error::midi("SMPTE MIDI time division is not supported")
+            .of_kind(FormatErrorKind::Unsupported));
     }
 
     let mut all_notes = Vec::new();
     let mut first_tempo = None;
-    for _ in 0..tracks {
-        expect(bytes, &mut pos, b"MTrk")?;
-        let len = read_u32(bytes, &mut pos)? as usize;
+    for index in 0..usize::from(tracks) {
+        let here = |error: Error| error.placed(|| Position::track(index));
+        expect(bytes, &mut pos, b"MTrk").map_err(here)?;
+        let len = read_u32(bytes, &mut pos).map_err(here)? as usize;
         let end = pos
             .checked_add(len)
-            .ok_or_else(|| Error::Midi("MIDI track length overflow".to_string()))?;
+            .ok_or_else(|| here(Error::midi("MIDI track length overflow")))?;
         if end > bytes.len() {
-            return Err(Error::Midi("MIDI track exceeds file length".to_string()));
+            return Err(here(
+                Error::midi("MIDI track exceeds file length").of_kind(FormatErrorKind::Malformed),
+            ));
         }
-        let (mut notes, tempo) = read_track(&bytes[pos..end], division)?;
+        let (mut notes, tempo) = read_track(&bytes[pos..end], division).map_err(here)?;
         if first_tempo.is_none() {
             first_tempo = tempo;
         }
@@ -244,7 +246,7 @@ pub fn read_midi_bytes_with_tempo(bytes: &[u8]) -> Result<(Vec<MidiNote>, Option
 fn note_to_midi_note(note: &Note, start: FloatType, duration: FloatType) -> Result<MidiNote> {
     let pitch = note.pitch().ps().round() as IntegerType;
     if !(0..=127).contains(&pitch) {
-        return Err(Error::Midi(format!("pitch {pitch} is outside MIDI range")));
+        return Err(Error::midi(format!("pitch {pitch} is outside MIDI range")));
     }
     MidiNote::new(pitch as u8, start, duration, 64)
 }
@@ -262,7 +264,7 @@ fn validate_note(note: MidiNote) -> Result<()> {
 
 fn quarter_to_tick(value: FloatType) -> Result<u32> {
     if !value.is_finite() || value < 0.0 {
-        return Err(Error::Midi(format!("invalid quarter offset: {value}")));
+        return Err(Error::midi(format!("invalid quarter offset: {value}")));
     }
     Ok((value * DEFAULT_TICKS_PER_QUARTER as FloatType).round() as u32)
 }
@@ -289,14 +291,14 @@ fn read_vlq(bytes: &[u8], pos: &mut usize) -> Result<u32> {
     for _ in 0..4 {
         let byte = *bytes
             .get(*pos)
-            .ok_or_else(|| Error::Midi("unexpected end of VLQ".to_string()))?;
+            .ok_or_else(|| Error::midi("unexpected end of VLQ".to_string()))?;
         *pos += 1;
         value = (value << 7) | (byte & 0x7F) as u32;
         if byte & 0x80 == 0 {
             return Ok(value);
         }
     }
-    Err(Error::Midi("VLQ is too long".to_string()))
+    Err(Error::midi("VLQ is too long".to_string()))
 }
 
 fn read_track(track: &[u8], division: u16) -> Result<(Vec<MidiNote>, Option<FloatType>)> {
@@ -311,14 +313,14 @@ fn read_track(track: &[u8], division: u16) -> Result<(Vec<MidiNote>, Option<Floa
         tick = tick.saturating_add(read_vlq(track, &mut pos)?);
         let byte = *track
             .get(pos)
-            .ok_or_else(|| Error::Midi("unexpected end of MIDI event".to_string()))?;
+            .ok_or_else(|| Error::midi("unexpected end of MIDI event".to_string()))?;
         let status = if byte & 0x80 != 0 {
             pos += 1;
             running_status = Some(byte);
             byte
         } else {
             running_status
-                .ok_or_else(|| Error::Midi("running status without status byte".to_string()))?
+                .ok_or_else(|| Error::midi("running status without status byte".to_string()))?
         };
 
         match status {
@@ -326,7 +328,7 @@ fn read_track(track: &[u8], division: u16) -> Result<(Vec<MidiNote>, Option<Floa
                 let meta_type = read_byte(track, &mut pos)?;
                 let len = read_vlq(track, &mut pos)? as usize;
                 if pos + len > track.len() {
-                    return Err(Error::Midi("meta event exceeds track length".to_string()));
+                    return Err(Error::midi("meta event exceeds track length".to_string()));
                 }
                 if meta_type == 0x51 && len == 3 {
                     let micros = ((track[pos] as u32) << 16)
@@ -342,9 +344,9 @@ fn read_track(track: &[u8], division: u16) -> Result<(Vec<MidiNote>, Option<Floa
                 let len = read_vlq(track, &mut pos)? as usize;
                 pos = pos
                     .checked_add(len)
-                    .ok_or_else(|| Error::Midi("sysex length overflow".to_string()))?;
+                    .ok_or_else(|| Error::midi("sysex length overflow".to_string()))?;
                 if pos > track.len() {
-                    return Err(Error::Midi("sysex event exceeds track length".to_string()));
+                    return Err(Error::midi("sysex event exceeds track length".to_string()));
                 }
             }
             _ => {
@@ -353,7 +355,10 @@ fn read_track(track: &[u8], division: u16) -> Result<(Vec<MidiNote>, Option<Floa
                 let data_len = match event_type {
                     0xC0 | 0xD0 => 1,
                     0x80 | 0x90 | 0xA0 | 0xB0 | 0xE0 => 2,
-                    _ => return Err(Error::Midi(format!("unsupported MIDI status {status:#X}"))),
+                    _ => {
+                        return Err(Error::midi(format!("unsupported MIDI status {status:#X}"))
+                            .of_kind(FormatErrorKind::Unsupported));
+                    }
                 };
                 let data1 = read_byte(track, &mut pos)?;
                 let data2 = if data_len == 2 {
@@ -391,7 +396,7 @@ fn expect(bytes: &[u8], pos: &mut usize, expected: &[u8]) -> Result<()> {
         *pos += expected.len();
         Ok(())
     } else {
-        Err(Error::Midi(format!(
+        Err(Error::midi(format!(
             "expected MIDI chunk {:?}",
             String::from_utf8_lossy(expected)
         )))
@@ -401,7 +406,7 @@ fn expect(bytes: &[u8], pos: &mut usize, expected: &[u8]) -> Result<()> {
 fn read_byte(bytes: &[u8], pos: &mut usize) -> Result<u8> {
     let byte = *bytes
         .get(*pos)
-        .ok_or_else(|| Error::Midi("unexpected end of MIDI data".to_string()))?;
+        .ok_or_else(|| Error::midi("unexpected end of MIDI data".to_string()))?;
     *pos += 1;
     Ok(byte)
 }
@@ -411,7 +416,7 @@ fn read_u16(bytes: &[u8], pos: &mut usize) -> Result<u16> {
     *pos += 2;
     let data = bytes
         .get(start..*pos)
-        .ok_or_else(|| Error::Midi("unexpected end of MIDI u16".to_string()))?;
+        .ok_or_else(|| Error::midi("unexpected end of MIDI u16".to_string()))?;
     Ok(u16::from_be_bytes([data[0], data[1]]))
 }
 
@@ -420,7 +425,7 @@ fn read_u32(bytes: &[u8], pos: &mut usize) -> Result<u32> {
     *pos += 4;
     let data = bytes
         .get(start..*pos)
-        .ok_or_else(|| Error::Midi("unexpected end of MIDI u32".to_string()))?;
+        .ok_or_else(|| Error::midi("unexpected end of MIDI u32".to_string()))?;
     Ok(u32::from_be_bytes([data[0], data[1], data[2], data[3]]))
 }
 
@@ -502,6 +507,27 @@ mod tests {
         smpte.extend(0_u16.to_be_bytes());
         smpte.extend(0_u16.to_be_bytes());
         smpte.extend(0x8000_u16.to_be_bytes());
-        assert!(read_midi_bytes(&smpte).is_err());
+        let refused = read_midi_bytes(&smpte).unwrap_err();
+        assert_eq!(
+            refused.format_error().unwrap().kind,
+            FormatErrorKind::Unsupported
+        );
+
+        // A second track promised and cut short.
+        let mut cut = Vec::new();
+        cut.extend(b"MThd");
+        cut.extend(6_u32.to_be_bytes());
+        cut.extend([0, 1, 0, 2, 0, 96]);
+        cut.extend(b"MTrk");
+        cut.extend(4_u32.to_be_bytes());
+        cut.extend([0, 0xFF, 0x2F, 0]);
+        cut.extend(b"MTrk");
+        cut.extend(9_u32.to_be_bytes());
+        let refused = read_midi_bytes(&cut).unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "Midi error: MIDI track exceeds file length"
+        );
+        assert_eq!(refused.position(), Some(&Position::track(1)));
     }
 }

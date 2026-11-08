@@ -7,6 +7,8 @@
 //! read: stage 2, with its `$` attribute records and its columns for beams,
 //! accidentals, notations and lyrics, and the older stage 1.
 
+use std::collections::HashMap;
+
 use crate::articulations::{Articulation, ArticulationKind};
 use crate::bar::{Barline, BarlineType, RepeatDirection};
 use crate::chord::Chord;
@@ -31,7 +33,7 @@ use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::TempoText;
 
 fn error(message: impl Into<String>) -> Error {
-    Error::MuseData(message.into())
+    Error::muse_data(message.into())
 }
 
 /// Reads the files of a MuseData work, in order, into a score, as music21's
@@ -189,10 +191,18 @@ fn digits(text: &str) -> String {
     text.chars().filter(char::is_ascii_digit).collect()
 }
 
+/// The stage of the encoding a part is written in: stage 2 has `$`
+/// attribute records and columns stage 1 lacks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    One,
+    Two,
+}
+
 /// A part's lines and the stage they are written in.
 struct Part {
     lines: Vec<String>,
-    stage: u8,
+    stage: Stage,
 }
 
 impl Part {
@@ -200,7 +210,10 @@ impl Part {
     /// record, stage 1 otherwise, whose leading blank lines are dropped.
     fn new(lines: Vec<String>) -> Result<Self> {
         if lines.iter().any(|line| line.starts_with('$')) {
-            return Ok(Self { lines, stage: 2 });
+            return Ok(Self {
+                lines,
+                stage: Stage::Two,
+            });
         }
         if lines.len() <= 1 {
             return Err(error("cannot scrub empty source"));
@@ -209,7 +222,10 @@ impl Part {
             .into_iter()
             .skip_while(|line| line.trim().is_empty())
             .collect();
-        Ok(Self { lines, stage: 1 })
+        Ok(Self {
+            lines,
+            stage: Stage::One,
+        })
     }
 
     fn line(&self, index: usize) -> Result<&str> {
@@ -249,7 +265,7 @@ impl Part {
     }
 
     fn work_number(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             let data: String = self.lines.get(1)?.chars().take(6).collect();
             let data = data.trim();
             Some(if data.contains(',') {
@@ -263,7 +279,7 @@ impl Part {
     }
 
     fn movement_number(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             Some(
                 self.lines
                     .get(1)?
@@ -279,7 +295,7 @@ impl Part {
     }
 
     fn work_title(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             Some(self.lines.first()?.trim().to_string())
         } else {
             self.lines.get(6).cloned()
@@ -287,7 +303,7 @@ impl Part {
     }
 
     fn movement_title(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             None
         } else {
             self.lines.get(7).cloned()
@@ -295,7 +311,7 @@ impl Part {
     }
 
     fn part_name(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             None
         } else {
             self.lines.get(8).map(|name| name.trim().to_string())
@@ -304,7 +320,7 @@ impl Part {
 
     /// `_getAttributesRecord`.
     fn attributes(&self) -> Result<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return Ok(format!("{} {}", self.line(6)?.trim(), self.line(7)?.trim()));
         }
         self.lines
@@ -331,7 +347,7 @@ impl Part {
     }
 
     fn key_signature(&self) -> Result<KeySignature> {
-        let sharps = if self.stage == 1 {
+        let sharps = if self.stage == Stage::One {
             Self::integer(&self.stage_one_field(1)?)?
         } else {
             Self::integer(&Self::digits_after(&self.attributes()?, "K:"))?
@@ -340,7 +356,7 @@ impl Part {
     }
 
     fn time_signature(&self) -> Result<TimeSignature> {
-        let (numerator, denominator) = if self.stage == 1 {
+        let (numerator, denominator) = if self.stage == Stage::One {
             (
                 Self::integer(&self.stage_one_field(4)?)?,
                 Self::integer(&self.stage_one_field(5)?)?,
@@ -362,7 +378,7 @@ impl Part {
     }
 
     fn clef(&self) -> Result<Option<Clef>> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return Ok(None);
         }
         let line = self.attributes()?;
@@ -398,7 +414,7 @@ impl Part {
     }
 
     fn directive(&self) -> Result<Option<String>> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return Ok(None);
         }
         let words = Self::words_after(&self.attributes()?, "D:");
@@ -407,7 +423,7 @@ impl Part {
 
     /// The interval a transposing part is written at, in base 40 (`X:`).
     fn transposition(&self) -> Result<Option<Interval>> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return Ok(None);
         }
         match Self::digits_after(&self.attributes()?, "X:").as_str() {
@@ -419,7 +435,7 @@ impl Part {
     /// Divisions of a quarter note: `Q:`, or in stage 1 the divisions of a
     /// bar over the bar's length in quarters.
     fn divisions(&self) -> Result<FloatType> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             let bar = Self::integer(&self.stage_one_field(2)?)?;
             Ok(FloatType::from(bar) / self.time_signature()?.bar_duration().quarter_length())
         } else {
@@ -439,7 +455,7 @@ impl Part {
         let mut first_after: Option<usize> = None;
         let mut attributes = 0;
         for (index, line) in lines.iter().enumerate() {
-            if self.stage == 2 {
+            if self.stage == Stage::Two {
                 if line.starts_with('$') {
                     attributes += 1;
                     continue;
@@ -455,7 +471,7 @@ impl Part {
         let first_mark = *marks
             .first()
             .ok_or_else(|| error("a part with no measure records"))?;
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             first_after = Some(first_mark);
         }
         let mut bounds = Vec::new();
@@ -493,7 +509,9 @@ impl Part {
             .iter()
             .map(|(start, end)| self.lines.get(*start..*end).unwrap_or(&[]))
             .collect();
-        let mut previous: Option<Option<TieType>> = None;
+        // The last note, chord or rest of each voice, by its number, for the
+        // ties across measures; a measure without voices continues voice 0.
+        let mut last_by_voice: HashMap<usize, Option<Option<TieType>>> = HashMap::new();
         let mut slurs = Slurs::default();
         let mut bars = 0;
         for (index, lines) in measures.iter().enumerate() {
@@ -531,7 +549,13 @@ impl Part {
                     }
                 }
             }
-            self.fill(&mut measure, lines, divisions, &mut previous, &mut slurs)?;
+            self.fill(
+                &mut measure,
+                lines,
+                divisions,
+                &mut last_by_voice,
+                &mut slurs,
+            )?;
             if bars == 0 {
                 let bar = self.time_signature()?.bar_duration().quarter_length();
                 let length = measure.end_offset();
@@ -565,7 +589,7 @@ impl Part {
             }
             make_accidentals(&mut part);
         }
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             // A stage-1 part states no clef for this to replace.
             let clef = Clef::best_for(&part.pitches(), false);
             if let Some(StreamElement::Stream(first)) = part
@@ -586,18 +610,22 @@ impl Part {
     }
 
     /// The notes, chords and rests of one measure's records, in voices where
-    /// a `back` record says to start another.
+    /// a `back` record says to start another. Each voice ties on from the
+    /// voice of its number in the measure before.
     fn fill(
         &self,
         measure: &mut Stream,
         lines: &[String],
         divisions: FloatType,
-        previous: &mut Option<Option<TieType>>,
+        last_by_voice: &mut HashMap<usize, Option<Option<TieType>>>,
         slurs: &mut Slurs,
     ) -> Result<()> {
         let voices = lines.iter().any(|line| line.starts_with("back"));
         let mut voice = voices.then(|| Stream::with_kind(StreamKind::Voice));
         let mut pending: Vec<Record<'_>> = Vec::new();
+        let mut number = 0;
+        let mut last = last_by_voice.get(&number).copied().flatten();
+        let previous = &mut last;
         for line in lines {
             let record = Record {
                 line,
@@ -615,6 +643,9 @@ impl Part {
                 if let Some(done) = voice.replace(Stream::with_kind(StreamKind::Voice)) {
                     append_at(measure, 0.0, StreamElement::Stream(Box::new(done)));
                 }
+                last_by_voice.insert(number, *previous);
+                number += 1;
+                *previous = last_by_voice.get(&number).copied().flatten();
             }
             if record.is_rest() {
                 self.flush(
@@ -651,6 +682,7 @@ impl Part {
             previous,
             slurs,
         )?;
+        last_by_voice.insert(number, *previous);
         if let Some(voice) = voice
             && !voice.is_empty()
         {
@@ -792,7 +824,7 @@ fn measure_object(lines: &[String]) -> Result<Stream> {
 #[derive(Clone, Copy)]
 struct Record<'a> {
     line: &'a str,
-    stage: u8,
+    stage: Stage,
 }
 
 impl Record<'_> {
@@ -831,7 +863,7 @@ impl Record<'_> {
     }
 
     fn is_tied(&self) -> bool {
-        let column = if self.stage == 1 { 7 } else { 8 };
+        let column = if self.stage == Stage::One { 7 } else { 8 };
         self.at(column) == Some('-')
     }
 
@@ -856,7 +888,7 @@ impl Record<'_> {
             ""
         };
         let mut pitch = Pitch::from_name(format!("{step}{accidental}{}", digits(data)))?;
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return Ok(pitch);
         }
         if let Some(accidental) = pitch.written_accidental_mut() {
@@ -897,7 +929,7 @@ impl Record<'_> {
 
     /// `getQuarterLength`.
     fn quarter_length(&self, divisions: FloatType) -> Result<FloatType> {
-        let mut count = if self.stage == 1 {
+        let mut count = if self.stage == Stage::One {
             Part::integer(&self.columns(5, 7))?
         } else {
             Part::integer(&self.columns(5, 8))?
@@ -917,7 +949,7 @@ impl Record<'_> {
     }
 
     fn lyrics(&self) -> Option<Vec<String>> {
-        if self.stage == 1 || self.line.chars().count() < 44 {
+        if self.stage == Stage::One || self.line.chars().count() < 44 {
             return None;
         }
         Some(
@@ -932,7 +964,7 @@ impl Record<'_> {
     }
 
     fn beams(&self) -> Option<String> {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return None;
         }
         let data = self.columns(25, 31);
@@ -942,7 +974,7 @@ impl Record<'_> {
     /// `getSlurSymbols`: the slur marks among the notations, in the order
     /// they are written; a stage-1 record has none.
     fn slur_marks(&self) -> String {
-        if self.stage == 1 {
+        if self.stage == Stage::One {
             return String::new();
         }
         self.notations()
@@ -1178,7 +1210,7 @@ mod tests {
     fn a_dynamic_is_taken_out_before_the_next_is_looked_for() {
         let record = Record {
             line: "C5     3        e     d  [     pp.",
-            stage: 2,
+            stage: Stage::Two,
         };
         let values: Vec<String> = record
             .dynamics()
@@ -1186,6 +1218,38 @@ mod tests {
             .map(|dynamic| dynamic.value().to_string())
             .collect();
         assert_eq!(values, ["pp"]);
+    }
+
+    #[test]
+    fn ties_stay_in_their_voice_across_a_back() {
+        let part = "\n\n\n04/16/93 E. Correia\nWK#:581       MV#:3c\n\
+            Breitkopf & Hartel, Vol. 13\nClarinet Quintet\nTrio II\nPiano\n1 0\n\
+            Group memberships: score\nscore: part 1 of 1\n\
+            $  K:0   Q:1   T:2/4   C:4\nmeasure 1\nC5     1        q     u\n\
+            E5     1-       q     u\nback   2\nC4     1        q     d\n\
+            G3     1-       q     d\nmeasure 2\nE5     2        h     u\n\
+            back   2\nG3     1        q     d\nA3     1        q     d\n\
+            measure 3\nF5     2        h\n/END\n";
+        let score = from_musedata(&[part]).expect("the part is read");
+        let ties = |stream: &Stream| -> Vec<Option<&'static str>> {
+            stream
+                .notes()
+                .iter()
+                .map(|(_, element)| match element {
+                    StreamElement::Note(note) => note.tie().map(|tie| tie.tie_type().as_str()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let parts = score.parts();
+        let measures = parts[0].measures();
+        let first = measures[0].voices();
+        let second = measures[1].voices();
+        assert_eq!(ties(first[0]), [None, Some("start")]);
+        assert_eq!(ties(first[1]), [None, Some("start")]);
+        assert_eq!(ties(second[0]), [Some("stop")]);
+        assert_eq!(ties(second[1]), [Some("stop"), None]);
+        assert_eq!(ties(measures[2]), [None]);
     }
 
     #[test]

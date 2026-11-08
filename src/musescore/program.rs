@@ -44,7 +44,7 @@ pub struct MuseScore {
 }
 
 fn failed(message: impl Into<String>) -> Error {
-    Error::MuseScore(message.into())
+    Error::muse_score(message.into()).of_kind(crate::error::FormatErrorKind::External)
 }
 
 /// A directory in the system's temporary directory that this call made and
@@ -222,7 +222,7 @@ mod tests {
         std::fs::write(&here, "<score-partwise/>").unwrap();
         let ran = nowhere.convert(&here, &scratch.file("score.mscz"));
         assert!(
-            matches!(ran, Err(Error::MuseScore(message)) if message.contains("could not be run"))
+            matches!(ran, Err(Error::MuseScore(read)) if read.message.contains("could not be run"))
         );
     }
 

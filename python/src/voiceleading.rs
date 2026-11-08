@@ -65,8 +65,10 @@ fn analytic_key(value: &Bound<'_, PyAny>) -> PyResult<RsKey> {
 #[pyclass(
     name = "VoiceLeadingQuartet",
     module = "music21.voiceLeading",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct VoiceLeadingQuartet {
     pub(crate) inner: RsQuartet,
@@ -217,8 +219,7 @@ impl VoiceLeadingQuartet {
 
 #[pymethods]
 impl VoiceLeadingQuartet {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -276,8 +277,8 @@ impl VoiceLeadingQuartet {
         v2n2: &Bound<'_, PyAny>,
         key: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        Self::build(py, v1n1, v1n2, v2n1, v2n2, key, keywords)
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::build(py, v1n1, v1n2, v2n1, v2n2, key, keywords).map(crate::base::built)
     }
 
     /// Built again here, since a Python subclass hands `__new__` its own
@@ -404,8 +405,7 @@ impl VoiceLeadingQuartet {
         #[pyo3(from_py_with = crate::truthy)] allowAntiParallel: bool,
     ) -> PyResult<Py<PyAny>> {
         let motion = self.inner.motion_type(allowAntiParallel);
-        Ok(py
-            .import("music21.voiceLeading")?
+        Ok(crate::real_music21(py, "music21.voiceLeading")?
             .getattr("MotionType")?
             .call1((motion.as_str(),))?
             .unbind())

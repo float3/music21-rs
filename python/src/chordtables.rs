@@ -92,9 +92,7 @@ fn address_object(
     inversion: Option<i8>,
     pitch_class_original: Option<u8>,
 ) -> PyResult<Py<PyAny>> {
-    let class = py
-        .import("music21.chord.tables")?
-        .getattr("ChordTableAddress")?;
+    let class = crate::real_music21(py, "music21.chord.tables")?.getattr("ChordTableAddress")?;
     Ok(class
         .call1((cardinality, forte_class, inversion, pitch_class_original))?
         .unbind())

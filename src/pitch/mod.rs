@@ -624,7 +624,8 @@ impl Pitch {
     /// Returns the pitch-space value for this pitch.
     pub fn pitch_space(&self) -> FloatType {
         let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
-        ((octave + 1) * 12) as FloatType + self.step.step_ref() as FloatType + self.alter()
+        // In floats, where the last octave an integer holds has a next.
+        (FloatType::from(octave) + 1.0) * 12.0 + self.step.step_ref() as FloatType + self.alter()
     }
 
     /// Returns the MIDI note number the way music21's `midi` reports it: the
@@ -923,6 +924,15 @@ impl Pitch {
         self.step.step_to_dnn_offset() + 7 * octave
     }
 
+    /// [`Self::diatonic_note_number`], or nothing for an octave too far out
+    /// to count its steps in an integer.
+    pub(crate) fn checked_diatonic_note_number(&self) -> Option<IntegerType> {
+        let octave = self.octave.unwrap_or(PITCH_OCTAVE as IntegerType);
+        octave
+            .checked_mul(7)?
+            .checked_add(self.step.step_to_dnn_offset())
+    }
+
     /// The letter as a number of steps above C, nought to six.
     pub(crate) fn step_index(&self) -> IntegerType {
         self.step as IntegerType - 1
@@ -1094,6 +1104,21 @@ mod tests {
             assert!(Pitch::builder().ps(number).build().is_err());
         }
         assert_eq!(Pitch::from_pitch_space(61.0).unwrap().name(), "C#");
+    }
+
+    /// The highest and lowest octaves an integer holds are a long way off,
+    /// but a pitch there still has a place in pitch space.
+    #[test]
+    fn a_pitch_in_the_last_octave_has_a_pitch_space() {
+        use crate::IntegerType;
+        use crate::pitch::Pitch;
+
+        let mut pitch = Pitch::from_name("C").unwrap();
+        for octave in [IntegerType::MAX, IntegerType::MIN] {
+            pitch.set_octave(Some(octave));
+            let expected = (f64::from(octave) + 1.0) * 12.0;
+            assert_eq!(pitch.ps(), expected, "{octave}");
+        }
     }
 
     /// Pitches compare and hash by value, so a set holds each spelling once.

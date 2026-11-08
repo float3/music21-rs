@@ -137,8 +137,10 @@ fn checked_divisions(
 #[pyclass(
     name = "TimeSignature",
     module = "music21.meter",
+    extends = crate::base::Music21Object,
     subclass,
-    skip_from_py_object
+    skip_from_py_object,
+    weakref
 )]
 pub struct TimeSignature {
     pub(crate) inner: RsTimeSignature,
@@ -289,8 +291,7 @@ impl TimeSignature {
 
 #[pymethods]
 impl TimeSignature {
-    /// Refuses what music21 answers through a site, which the package
-    /// keeps none of.
+    /// Refuses a member nothing here defines, as Python refuses it.
     fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
         crate::stream::no_site(slf.as_any(), name)
     }
@@ -317,10 +318,10 @@ impl TimeSignature {
         value: Option<String>,
         divisions: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let _ = keywords;
         let divisions = divisions.filter(|divisions| !divisions.is_none());
-        Self::read(py, value.as_deref().unwrap_or("4/4"), divisions)
+        Self::read(py, value.as_deref().unwrap_or("4/4"), divisions).map(crate::base::built)
     }
 
     /// music21 builds in `__init__`, and a Python subclass of this one hands
@@ -332,9 +333,10 @@ impl TimeSignature {
         divisions: Option<&Bound<'_, PyAny>>,
         keywords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
+        let _ = keywords;
         let py = slf.py();
-        let built = Self::new(py, value, divisions, keywords)?;
-        *slf = built;
+        let divisions = divisions.filter(|divisions| !divisions.is_none());
+        *slf = Self::read(py, value.as_deref().unwrap_or("4/4"), divisions)?;
         Ok(())
     }
 

@@ -476,7 +476,7 @@ fn midi_tracks(stream: &Stream, options: &ExportOptions) -> Result<Vec<Vec<u8>>>
         for packet in packets.iter().filter(|packet| packet.track == id) {
             let delta = packet.offset - last;
             if delta < 0 {
-                return Err(Error::Midi("got a negative delta time".to_string()));
+                return Err(Error::midi("got a negative delta time".to_string()));
             }
             put_variable_length(&mut out, delta);
             events[packet.event].write(&mut out);
@@ -1024,7 +1024,7 @@ fn assign_channels(
                 .copied()
                 .find(|channel| !exclude.contains(channel))
                 .ok_or_else(|| {
-                    Error::Midi(
+                    Error::midi(
                         "no unused channels available for microtone/instrument assignment"
                             .to_string(),
                     )

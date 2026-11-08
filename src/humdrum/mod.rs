@@ -22,7 +22,7 @@ use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Grace, Tuplet, TupletType};
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::expressions::{Expression, Fermata, Ornament, OrnamentKind};
 use crate::instrument::Instrument;
 use crate::key::{Key, KeySignature};
@@ -44,7 +44,7 @@ pub use tandem::MiscTandem;
 use tables::REFERENCE_NAMES;
 
 fn humdrum_error(message: impl Into<String>) -> Error {
-    Error::Humdrum(message.into())
+    Error::humdrum(message.into())
 }
 
 /// The tokens that say where a spine goes rather than what it holds.
@@ -550,11 +550,22 @@ fn tandem_of(tandem: &str) -> Result<Option<Thing>> {
 /// `KernSpine` state.
 #[derive(Default)]
 struct KernState {
-    in_tuplet: bool,
+    /// music21's `inTuplet`, with its `currentTupletQL` and
+    /// `desiredTupletQL`, which are both zero whenever it is false.
+    tuplet: Option<TupletRun>,
+    /// music21's `lastNote`, as an index into the stream.
     last_note: Option<usize>,
+    /// music21's `currentBeamNumbers`.
     beams: usize,
-    tuplet_length: FloatType,
-    wanted_length: FloatType,
+}
+
+/// A run of tuplet notes being read: how long it is so far and how long
+/// its bracket is.
+struct TupletRun {
+    /// music21's `currentTupletQL`.
+    length: FloatType,
+    /// music21's `desiredTupletQL`.
+    wanted: FloatType,
 }
 
 fn with_duration(element: &mut StreamElement, change: impl FnOnce(&mut Duration)) {
@@ -613,36 +624,40 @@ impl KernState {
     }
 
     /// music21's `setTupletTypeForNote`: where a run of tuplet notes starts
-    /// and where it has filled its bracket.
+    /// and where it has filled its bracket. A grace note neither counts
+    /// toward a tuplet nor ends one.
     fn tuplet(&mut self, stream: &mut [Placed], element: &mut StreamElement) {
         let Some(duration) = element.duration().cloned() else {
             return;
         };
+        if duration.is_grace() {
+            return;
+        }
         let tuplets = duration.tuplets();
-        if !self.in_tuplet && !tuplets.is_empty() {
-            self.in_tuplet = true;
-            self.wanted_length = tuplets[0].total_tuplet_length();
-            self.tuplet_length = duration.quarter_length();
-            mark_first_tuplet(element, TupletType::Start);
-        } else if self.in_tuplet && tuplets.is_empty() {
-            self.in_tuplet = false;
-            self.wanted_length = 0.0;
-            self.tuplet_length = 0.0;
+        let Some(run) = &mut self.tuplet else {
+            if !tuplets.is_empty() {
+                self.tuplet = Some(TupletRun {
+                    length: duration.quarter_length(),
+                    wanted: tuplets[0].total_tuplet_length(),
+                });
+                mark_first_tuplet(element, TupletType::Start);
+            }
+            return;
+        };
+        if tuplets.is_empty() {
+            self.tuplet = None;
             if let Some(last) = self.last_note
                 && let Thing::Element(last) = &mut stream[last].thing
             {
                 mark_first_tuplet(last, TupletType::Stop);
             }
-        } else if self.in_tuplet {
-            self.tuplet_length = op_frac(self.tuplet_length + duration.quarter_length());
-            if self.tuplet_length >= self.wanted_length
-                && self.tuplet_length % self.wanted_length == 0.0
-            {
-                mark_first_tuplet(element, TupletType::Stop);
-                self.in_tuplet = false;
-                self.tuplet_length = 0.0;
-                self.wanted_length = 0.0;
-            }
+            return;
+        }
+
+        run.length = op_frac(run.length + duration.quarter_length());
+        if run.length >= run.wanted && run.length % run.wanted == 0.0 {
+            mark_first_tuplet(element, TupletType::Stop);
+            self.tuplet = None;
         }
     }
 }
@@ -747,8 +762,8 @@ fn parse_kern(events: &[(String, usize)]) -> Vec<Placed> {
         let sounds = matches!(
             &thing,
             Thing::Element(
-                StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_)
-            )
+                element @ (StreamElement::Note(_) | StreamElement::Chord(_) | StreamElement::Rest(_))
+            ) if !element.duration().is_some_and(Duration::is_grace)
         );
         let index = append(&mut stream, *line, *line, thing);
         if is_measure {
@@ -877,7 +892,8 @@ fn spines_of(lines: &[(usize, Vec<String>)], width: usize) -> Result<Vec<Spine>>
             let Some(spine) = spine else {
                 return Err(humdrum_error(format!(
                     "spine-path token at line {line} has no active spine"
-                )));
+                ))
+                .placed(|| Position::line(*line)));
             };
             match cell.as_str() {
                 "*-" => {}
@@ -924,7 +940,8 @@ fn spines_of(lines: &[(usize, Vec<String>)], width: usize) -> Result<Vec<Spine>>
         if exchange.is_some() {
             return Err(humdrum_error(format!(
                 "ProtoSpine found with unpaired exchange instruction at line {line}"
-            )));
+            ))
+            .placed(|| Position::line(*line)));
         }
         current = next;
     }
@@ -1293,7 +1310,8 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
             run = 0;
         }
         if line.starts_with("!!!") {
-            reference(&mut metadata, line)?;
+            reference(&mut metadata, line)
+                .map_err(|error| error.placed(|| Position::line(index + 1)))?;
         } else if line.starts_with("!!") {
             globals.push(GlobalLine {
                 line: index + 1,
@@ -1594,7 +1612,8 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
     if ends.last().copied().unwrap_or(0) <= starts[starts.len() - 1] {
         ends.push(lines.len());
     }
-    let mut pieces: Vec<&[&str]> = Vec::new();
+    // Each piece, with how many lines of the document stand before it.
+    let mut pieces: Vec<(usize, &[&str])> = Vec::new();
     for (index, end) in ends.iter().enumerate() {
         let start = if index == 0 { 0 } else { ends[index - 1] + 1 };
         let stop = if index + 1 == ends.len() {
@@ -1602,7 +1621,7 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
         } else {
             (*end + 1).min(lines.len())
         };
-        pieces.push(&lines[start.min(stop)..stop]);
+        pieces.push((start.min(stop), &lines[start.min(stop)..stop]));
     }
     if pieces.len() < 2 {
         return Err(humdrum_error(
@@ -1611,8 +1630,8 @@ pub fn from_humdrum(text: &str) -> Result<Stream> {
     }
     let mut events = Vec::new();
     let mut offset = 0.0;
-    for (index, piece) in pieces.iter().enumerate() {
-        let mut score = score_of(piece)?;
+    for (index, (before, piece)) in pieces.iter().enumerate() {
+        let mut score = score_of(piece).map_err(|error| error.lines_down(*before))?;
         let mut metadata = score.metadata().cloned().unwrap_or_default();
         metadata.set(
             "number",
@@ -1773,6 +1792,21 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_names_its_line_in_the_whole_document() {
+        let unpaired = "**kern\t**kern\n*x\t*\n4c\t4d\n*-\t*-\n";
+        let error = from_humdrum(unpaired).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Humdrum error: ProtoSpine found with unpaired exchange instruction at line 2"
+        );
+        assert_eq!(error.position(), Some(&Position::line(2)));
+
+        let opus = format!("**kern\n4c\n*-\n{unpaired}");
+        let error = from_humdrum(&opus).unwrap_err();
+        assert_eq!(error.position(), Some(&Position::line(5)));
+    }
+
+    #[test]
     fn letters_say_the_octave() {
         let name = |token: &str| match note_of(token, None).unwrap() {
             StreamElement::Note(note) => note.pitch().name_with_octave(),
@@ -1783,6 +1817,45 @@ mod tests {
         assert_eq!(name("4C"), "C3");
         assert_eq!(name("4BB-"), "Bb2");
         assert_eq!(name("4r"), "rest");
+    }
+
+    #[test]
+    fn a_grace_note_leaves_a_tuplet_whole() {
+        // music21's `testGraceNoteInsideTuplet`.
+        let types = |cells: &[&str]| -> Vec<Option<&'static str>> {
+            let events: Vec<(String, usize)> = cells
+                .iter()
+                .enumerate()
+                .map(|(line, cell)| (cell.to_string(), line))
+                .collect();
+            parse_kern(&events)
+                .iter()
+                .filter_map(|placed| match &placed.thing {
+                    Thing::Element(element) => Some(
+                        element
+                            .duration()?
+                            .tuplets()
+                            .first()
+                            .and_then(|tuplet| tuplet.tuplet_type())
+                            .map(TupletType::as_str),
+                    ),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(
+            types(&["12c", "12qd", "12e", "12f", "4g"]),
+            [Some("start"), None, None, Some("stop"), None]
+        );
+        assert_eq!(
+            types(&["12c", "12e", "12qd", "12f", "4g"]),
+            [Some("start"), None, None, Some("stop"), None]
+        );
+        // A grace note after an unfinished tuplet: it still stops on its last note.
+        assert_eq!(
+            types(&["12c", "12e", "16qd", "4g"]),
+            [Some("start"), Some("stop"), None, None]
+        );
     }
 
     #[test]

@@ -270,8 +270,7 @@ impl Tuplet {
             return Ok(None);
         };
         let ours = DurationTuple::of(kind, dots);
-        let theirs = py
-            .import("music21.duration")
+        let theirs = crate::real_music21(py, "music21.duration")
             .and_then(|module| module.getattr("DurationTuple"))
             .ok()
             .filter(|class| !class.is(py.get_type::<DurationTuple>()));
@@ -888,6 +887,19 @@ pub struct Duration {
     /// Duration at all", so keeping the slot is what lets music21's own
     /// classes take one of ours.
     pub(crate) client: Option<Py<PyAny>>,
+    /// Whether a stream reads this duration through a note it holds, so a
+    /// change to the length has to be told to every stream.
+    watched: bool,
+}
+
+/// Marks a duration of this package as read by a stream, so that a change
+/// to its length is told to every stream.
+pub(crate) fn watch(py: Python<'_>, duration: &Py<PyAny>) {
+    if let Ok(ours) = duration.bind(py).cast::<Duration>()
+        && let Ok(mut ours) = ours.try_borrow_mut()
+    {
+        ours.watched = true;
+    }
 }
 
 /// music21's `informSites`, called on whatever holds a duration that has
@@ -953,6 +965,7 @@ impl Clone for Duration {
             unlinked_type: self.unlinked_type.clone(),
             expression_is_inferred: self.expression_is_inferred,
             client: None,
+            watched: false,
         })
     }
 }
@@ -1038,7 +1051,8 @@ impl Duration {
     }
 
     pub(crate) fn wrap(inner: RsDuration) -> Self {
-        Self {
+        let unlinked = !inner.linked();
+        let mut made = Self {
             inner,
             components: None,
             tuplets: None,
@@ -1047,7 +1061,19 @@ impl Duration {
             unlinked_type: None,
             expression_is_inferred: true,
             client: None,
+            watched: false,
+        };
+        // One a reader unlinked keeps the values it is written as, which
+        // its length no longer says.
+        if unlinked {
+            made.components = Some(made.component_list());
+            made.unlinked_type = made
+                .inner
+                .type_and_dots()
+                .map(|(kind, _)| kind.music21_name().to_string());
+            made.linked = false;
         }
+        made
     }
 
     /// The written values this length is made of: the ones set or already
@@ -1277,7 +1303,22 @@ impl Duration {
             Some(client) if !client.is_none() => Some(client.unbind()),
             _ => None,
         };
+        self.tell_streams(slots.py());
         Ok(())
+    }
+
+    /// Tells every stream this duration's length has changed, where one
+    /// may be reading it: through a note it holds, or through whatever
+    /// holds the duration, unless that is a note no stream has read.
+    fn tell_streams(&self, py: Python<'_>) {
+        let read = self.watched
+            || self
+                .client
+                .as_ref()
+                .is_some_and(|client| crate::note::may_be_watched(client.bind(py)));
+        if read {
+            crate::stream::length_changed();
+        }
     }
 
     pub(crate) fn from_keywords(keywords: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -2228,6 +2269,7 @@ impl Duration {
     /// duration that its length has changed, so that the streams holding it
     /// can update. Answers `False` when the duration has no owner.
     fn informClient(&self, py: Python<'_>) -> PyResult<bool> {
+        self.tell_streams(py);
         let Some(client) = &self.client else {
             return Ok(false);
         };
@@ -2433,7 +2475,7 @@ fn grace_object(
             }
             return Ok(object.unbind());
         }
-        let made = PyClassInitializer::from(base)
+        let made = crate::base::built(base)
             .add_subclass(marks)
             .add_subclass(AppoggiaturaDuration);
         return Ok(Py::new(py, made)?.into_any());
@@ -2448,7 +2490,7 @@ fn grace_object(
         }
         return Ok(object.unbind());
     }
-    let made = PyClassInitializer::from(base).add_subclass(marks);
+    let made = crate::base::built(base).add_subclass(marks);
     Ok(Py::new(py, made)?.into_any())
 }
 
@@ -2503,7 +2545,7 @@ impl GraceDuration {
         base.linked = false;
         base.unlinked_type = Some(written);
         base.inner = RsDuration::new(0.0).map_err(duration_error)?;
-        Ok(PyClassInitializer::from(base).add_subclass(Self {
+        Ok(crate::base::built(base).add_subclass(Self {
             slash: true,
             steal_previous: None,
             steal_following: None,

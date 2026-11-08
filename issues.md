@@ -89,8 +89,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21's half. not sites: the crate keeps its stream a tree of plain
    values and answers where an element sits with `Stream::placed`, the
    composite "Music21's Mistakes" (point 2) recommends over storing sites
-   on objects. the wheel still keeps music21's sites for compatibility. this is what would let the facade stop building
-   `Music21Object`s.
+   on objects. the wheel keeps sites of its own, as music21's are kept
+   (DECISIONS.md, reversed 2026-11-07), which is what music21 code reads;
+   the crate's streams keep none. this is what would let the facade stop
+   building `Music21Object`s.
 
    **measure-relative offsets and the beat are in.** a `Placed` now answers
    music21's `getMeasureOffsetOrMeterModulusOffset` (`bar_offset`, a
@@ -98,8 +100,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
    members music21 hangs on every object through its sites -- `beat`,
    `beatStr`, `beatDuration`, `beatStrength` -- from the meter in force,
    with no site anywhere. music21's own examples for them are its tests.
-   the wheel does not read them yet: its elements still answer through
-   music21's half, which is the step left. derivations are not started.
+   the wheel's elements answer them through the wheel's own sites, with
+   music21's context search (`getContextByClass`, `contextSites`, `next`,
+   `previous`) and meters; `Placed` stays the crate's answer. derivations
+   are not started, so neither side follows one.
 
    It is also what the wheel waits on to carry `FiguredBassLine` and
    `Realization`, which build their bass line and realizations as music21
@@ -186,6 +190,13 @@ two rules, set 2026-09-12, that most of the open work now serves:
    One thing was tried here and measured as no help: deciding the object half
    once per class rather than per object, 30.05µs against 29.45µs, reverted.
 
+   a chord and its notes together (`Chord('C E G').notes`) went from
+   16.3µs to 11.9µs, against music21's 15.2µs: an installed class is
+   looked up once per name and its hash asked once, and a note is built
+   around its value rather than over a default C4. music21's own suite
+   runs about as fast installed as not (~1.0x): profiled, the crate is
+   about 0.4% of the time and music21's stream machinery the rest.
+
 8. **older mismatches the drift audit turned up.** music21's 346
    non-owner commits since porting began (7e77707) were checked against
    the port on 2026-10-30; the drifts found are fixed. These differ from
@@ -210,7 +221,8 @@ two rules, set 2026-09-12, that most of the open work now serves:
    hand back music21's streams once installed; flags are read for their
    truth; negative lengths stay refused. Settled on 2026-10-31: a key
    follows its tonic edited in place and keeps its signature, as music21's
-   does; members that need a site say why they are refused.
+   does; members that need a site say why they are refused (reversed on
+   2026-11-07: the package keeps sites, and they answer).
 
 9. **edits through a handed-out object that may still miss the crate.**
    `data/py_fields.toml` lists them as *value*.
@@ -219,15 +231,12 @@ two rules, set 2026-09-12, that most of the open work now serves:
    fixed (below, under closed), and the other rows listed as *value* were
    made to read the object as it stands; none is left.
 
-10. **appending to a wheel stream still reads every held note's length.**
-    2,000 appends take 47.8ms where music21 takes 28ms: a note's duration
-    can be edited from Python without the stream hearing of it, and the
-    package keeps no sites to tell it, so the stream's end is worked out
-    afresh each time. An edit counter shared by `Note` and `Duration`
-    would let it keep its end. Two smaller differences found on the way:
-    `replace` keeps the old element's insertion order where music21 puts
-    the replacement after what else stands at its offset, and the wheel
-    lets one object be inserted twice, which music21 refuses.
+10. **an uninstalled music21 object's length or priority is read only
+    when it goes into a wheel stream.** An edit to it tells only
+    music21's own sites, so a wheel stream holding it reads its lengths
+    afresh on every append and does not re-sort when its priority
+    changes. The package's elements and installed classes tell the
+    wheel's streams (DECISIONS.md, "streams hear of element edits").
 
 11. **music21 bugs the seeded fuzzers step around**, not yet fixed on the
     fork:
@@ -249,11 +258,70 @@ two rules, set 2026-09-12, that most of the open work now serves:
     written files agree; `spannerBundle` does not. The reader also takes a
     count written `3.0`, which music21 refuses.
 
-13. **a priority changed after insertion does not re-sort a wheel
-    stream.** music21 re-sorts through `informSites`; the wheel's stream
-    keeps no sites, so it reads `priority` once, when the element goes in.
+13. **what the wheel's sites do not keep yet.** derivations are not kept,
+    so no context search follows one; a spanner is not a site of the
+    notes it spans; the context search's sort leaves out music21's
+    `isNotGrace`; `getContextByClass` costs about 100µs a note; a stream
+    unpickled may not be a site of what it holds until it is written to;
+    `returnSpecial` is ignored.
+
+14. **classes music21 has between the wheel's and its base classes.**
+    `Unpitched` is missing, and so are `ChordBase`, `StreamCore`,
+    `TempoIndication`, `IntervalBase`, `Expression`, `RepeatMark` and
+    others music21 puts between an element and `Music21Object`. The 21
+    pairs of classes `issubclass` answers otherwise than music21 for are
+    listed in the wheel tests' `_HIERARCHY_GAPS`.
+
+15. **what `provide_music21()` cannot provide yet.** `common`,
+    `environment`, `musicxml` and `tinyNotation` are not provided at all.
+    Partial, in music21's public names: `converter` 6 of 20 (`parse`,
+    `parseFile`, `parseData`, `parseURL`, `toData` and the exceptions; no
+    subconverters or archive manager), `corpus` 5 of 16 (no search, no
+    `Corpus` classes), `stream` 11 of 21, `note` 10 of 18, `metadata` 12
+    of 20, `layout` 6 of 22, `voiceLeading` 8 of 20, `sieve` 8 of 26
+    (`generate_homes.py --coverage`, 1,073 of 1,938 in all). A provided
+    corpus is read from `MUSIC21_RS_CORPUS`. Five names are placed where
+    music21 lacks them: `metadata.MetadataException`,
+    `omr.correctors.OmrException`, `tsvConverter.TsvException`,
+    `makeNotation.MakeNotationException` and `sieve.Primes`. A provided score's metadata names its software as
+    `music21_rs` and its version.
+
+16. **braille segments: what is still music21's or differs.**
+    `splitMeasure` is music21's; a grouping split in two does not rebeam
+    the objects' `beams`; a standalone object's braille marks go on its
+    editorial; on one piano score the parts iterate in another order than
+    music21's at equal offsets after transcribing.
+
+17. **`Trigram.makeWords`, `likely` and `lut` are unported in the
+    wheel.** They answer at random, and porting them needs the counts kept
+    in insertion order.
+
+18. **what keeps `converter.parse` from routing more than MIDI through
+    the crate.** compared with music21's readers by
+    `python/tests/converter_parity.py`: MIDI 20 of 21 (`test04.mid`'s
+    closing tempo is 560 against 558.5); MusicXML 5 of 21 strictly, 7
+    ignoring drawing (positions, fonts and colours need crate fields;
+    part names' `print-object`, `HammerOn`/`PullOff`, `PedalBounce`,
+    dashed slurs, bend-alter); ABC 5 of 8 (rests lack the empty beams
+    `makeBeams` gives them; slurs lack notes that are in no stream);
+    Humdrum 0 of 10 (part ids `spine_N`, element priorities, spine
+    comments); MEI 2 of 3 (slurs appended at the end with `idLocal`;
+    chord and rest ids). `route_converters` opts any of them in anyway.
+
+19. **`add_dependency_venv` misses a `maturin develop` install.** it does
+    not read the `.pth` maturin writes under `lib/python3.x`, so the
+    parity harness needs `PYTHONPATH` set to find the wheel there.
 
 ## closed
+
+- **appending to a wheel stream keeps its end** (was 10). 2,000 appends
+  take 3.1ms where music21's take 17.7ms, from 47.8ms: two counts stand
+  in for music21's `informSites`. `replace` now puts the replacement
+  after what stands at its offset, and a second insert of one object is
+  refused with music21's `StreamException`.
+- **a priority changed after insertion re-sorts a wheel stream** (was
+  13), through the same count; installed classes tell the package's
+  streams first.
 
 - **edits through a handed-out object now reach the crate** for an
   accidental's style colour, a scale's tonic, a metronome mark's

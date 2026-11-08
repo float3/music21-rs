@@ -3,8 +3,8 @@
 //!
 //! music21 hangs `offset`, `beat`, `beatStr`, `beatDuration`,
 //! `beatStrength` and `measureNumber` on every element and works each out
-//! from the streams holding it. The package keeps no sites, so its streams
-//! answer all six for every element at once; each music below is built
+//! from the streams holding it. The package's streams also answer all six
+//! for every element at once, from the crate; each music below is built
 //! twice, once of music21's classes and once of the package's, and every
 //! element has to come out the same. Beside the cases written out, a
 //! thousand pieces are made up from seeds.

@@ -709,7 +709,7 @@ impl DateSingle {
         };
         let inner =
             RsDatePrimitive::of_dates(dates, found, DateKind::Single).map_err(primitive_error)?;
-        Ok(PyClassInitializer::from(DatePrimitive::wrap(inner)).add_subclass(DateSingle))
+        Ok(crate::base::built(DatePrimitive::wrap(inner)).add_subclass(DateSingle))
     }
 }
 
@@ -738,7 +738,7 @@ impl DateRelative {
         };
         let inner =
             RsDatePrimitive::of_dates(dates, found, DateKind::Relative).map_err(primitive_error)?;
-        Ok(PyClassInitializer::from(DatePrimitive::wrap(inner)).add_subclass(DateRelative))
+        Ok(crate::base::built(DatePrimitive::wrap(inner)).add_subclass(DateRelative))
     }
 }
 
@@ -767,7 +767,7 @@ impl DateBetween {
         };
         let inner =
             RsDatePrimitive::of_dates(dates, found, DateKind::Between).map_err(primitive_error)?;
-        Ok(PyClassInitializer::from(DatePrimitive::wrap(inner)).add_subclass(DateBetween))
+        Ok(crate::base::built(DatePrimitive::wrap(inner)).add_subclass(DateBetween))
     }
 }
 
@@ -796,7 +796,7 @@ impl DateSelection {
         };
         let inner = RsDatePrimitive::of_dates(dates, found, DateKind::Selection)
             .map_err(primitive_error)?;
-        Ok(PyClassInitializer::from(DatePrimitive::wrap(inner)).add_subclass(DateSelection))
+        Ok(crate::base::built(DatePrimitive::wrap(inner)).add_subclass(DateSelection))
     }
 
     /// Whether the class holds one date, which this one does not.
@@ -1002,7 +1002,7 @@ impl Copyright {
     ) -> PyResult<PyClassInitializer<Self>> {
         let mut base = Text::new(data, language, isTranslated, None)?;
         base.inner.set_role(role);
-        Ok(PyClassInitializer::from(base).add_subclass(Copyright))
+        Ok(crate::base::built(base).add_subclass(Copyright))
     }
 
     /// What part the copyright plays: music21's `role`.
@@ -1506,7 +1506,7 @@ impl Creator {
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
         let base = Contributor::new(py, name, names, role, birth, death, None)?;
-        Ok(PyClassInitializer::from(base).add_subclass(Creator))
+        Ok(crate::base::built(base).add_subclass(Creator))
     }
 
     /// What music21 calls this kind of value.
