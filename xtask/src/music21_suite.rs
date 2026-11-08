@@ -7,6 +7,13 @@
 //! wheel out of site-packages installed over it — with each of the two sets of
 //! failures compared against music21's own.
 //!
+//! A fourth side, `music21_rs_provided`, runs the same modules where music21
+//! is not importable at all and `provide_music21()` answers `import music21`
+//! from the wheel. Most of music21 is not there to import, so that side is a
+//! figure rather than a comparison: how many tests pass on music21-rs alone,
+//! and which missing module or name blocks the most of the rest, written to
+//! `provided.json`.
+//!
 //! Two subjects rather than one because they are two artifacts. The linked
 //! crate is the working tree; the wheel is what ships and what a user runs. A
 //! difference between them is a stale wheel or a packaging fault, and it is
@@ -76,10 +83,18 @@ pub enum Which {
     Music21,
     Music21Rs,
     Music21RsWheel,
+    /// The wheel answering `import music21` through `provide_music21()`,
+    /// music21 itself not importable: the suite run on music21-rs alone.
+    Music21RsProvided,
 }
 
 /// Every side, in the order they are run and reported in.
-pub const SIDES: [Which; 3] = [Which::Music21, Which::Music21Rs, Which::Music21RsWheel];
+pub const SIDES: [Which; 4] = [
+    Which::Music21,
+    Which::Music21Rs,
+    Which::Music21RsWheel,
+    Which::Music21RsProvided,
+];
 
 impl Which {
     pub fn parse(text: &str) -> Option<Self> {
@@ -91,6 +106,7 @@ impl Which {
             Which::Music21 => "music21",
             Which::Music21Rs => "music21_rs",
             Which::Music21RsWheel => "music21_rs_wheel",
+            Which::Music21RsProvided => "music21_rs_provided",
         }
     }
 
@@ -100,6 +116,7 @@ impl Which {
             Which::Music21 => "music21",
             Which::Music21Rs => "music21-rs",
             Which::Music21RsWheel => "music21-rs-wheel",
+            Which::Music21RsProvided => "music21-rs-provided",
         }
     }
 
@@ -108,14 +125,22 @@ impl Which {
             Which::Music21 => "music21.json",
             Which::Music21Rs => "music21_rs.json",
             Which::Music21RsWheel => "music21_rs_wheel.json",
+            Which::Music21RsProvided => "music21_rs_provided.json",
         }
+    }
+
+    /// Whether the side runs the same suite music21 does, and so is held to
+    /// music21's result. The provided side cannot: most of music21 is not
+    /// there to import, so its count is a figure and not a comparison.
+    fn compared(self) -> bool {
+        self != Which::Music21RsProvided
     }
 }
 
 /// What a `--run` answers when the side it was asked for is not there to run.
 ///
-/// Only the wheel can be missing: the other two are the submodule and this
-/// binary. It is a skip and not a failure, so that the command still works on
+/// Only the wheel can be missing, and the provided side, which is the wheel
+/// too: the other two are the submodule and this binary. It is a skip and not a failure, so that the command still works on
 /// a machine with no wheel built — the comparison then has one fewer column
 /// and says so.
 const EXIT_SIDE_ABSENT: i32 = 2;
@@ -321,6 +346,67 @@ struct Report {
     /// With `--profile`: the functions that took the most time of their own.
     #[serde(default)]
     heaviest: Vec<ProfiledFunction>,
+    /// On the provided side: how each of music21's modules fared, blocked
+    /// at its import or run.
+    #[serde(default)]
+    provided: Vec<ProvidedModule>,
+}
+
+/// One of music21's modules, run from its source with `import music21`
+/// answered by `provide_music21()`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ProvidedModule {
+    module: String,
+    /// Whether its own imports went through. A module that did not has run
+    /// none of its tests.
+    imported: bool,
+    /// Whether music21-rs answers for it, or it only holds tests of modules
+    /// that are answered for. One that is neither ran music21's own code.
+    #[serde(default)]
+    provided: bool,
+    /// The module or name its import stopped at.
+    blocker: Option<String>,
+    /// The error its import, or its run, stopped with.
+    error: Option<String>,
+    run: usize,
+    passed: Vec<String>,
+    /// Each test that failed on a missing module or name, and which.
+    blockers: BTreeMap<String, String>,
+}
+
+/// music21's suite on music21-rs alone: what passes with `import music21`
+/// answered by `provide_music21()`, beside what music21 passes itself, and
+/// what blocks the rest.
+///
+/// `xtask music21-suite` writes it into `target/music21-suite/provided.json`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Provided {
+    /// Tests music21's own run ran, and passed.
+    pub music21_run: usize,
+    pub music21_passing: usize,
+    /// Tests the provided side ran, and passed in modules music21-rs
+    /// answers for.
+    pub run: usize,
+    pub passing: usize,
+    /// Tests that passed in modules music21-rs has nothing for, which ran
+    /// music21's own code once their imports were answered.
+    #[serde(default)]
+    pub passing_in_music21: usize,
+    /// music21's modules with tests in them, and how many of those imported.
+    pub modules: usize,
+    pub modules_imported: usize,
+    /// What blocks the most tests music21 passes, most first.
+    pub blockers: Vec<Blocker>,
+}
+
+/// A module or name of music21's that music21-rs does not provide, and how
+/// many tests music21 passes that stop at it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Blocker {
+    pub name: String,
+    pub tests: usize,
+    /// The modules whose import stops at it.
+    pub modules: usize,
 }
 
 /// One function out of a profile, with the category its time counts under.
@@ -468,8 +554,21 @@ pub fn run(
 
     let plain = read(&out.join(Which::Music21.file()))?;
     let mut sides: Vec<(Which, Report)> = Vec::new();
-    for which in ran.into_iter().filter(|side| *side != Which::Music21) {
+    for which in ran.iter().copied().filter(|side| *side != Which::Music21) {
         sides.push((which, read(&out.join(which.file()))?));
+    }
+
+    // A stale summary would be read back as this run's.
+    let summary = out.join("provided.json");
+    let _ = fs::remove_file(&summary);
+    if let Some(at) = sides.iter().position(|(which, _)| !which.compared()) {
+        let (_, report) = sides.remove(at);
+        let provided = summarise_provided(&plain, &report);
+        report_provided(&provided);
+        fs::write(&summary, serde_json::to_string_pretty(&provided)?)?;
+        if sides.is_empty() {
+            return Ok(0);
+        }
     }
 
     if parallel {
@@ -603,6 +702,9 @@ fn run_one(
         }
         point_workers_at_python(py, &sys)?;
         add_dependency_venv(py, workspace_root)?;
+        if which == Which::Music21RsProvided {
+            return run_provided(py, workspace_root, out, only);
+        }
         sys.getattr("path")?.cast_into::<PyList>()?.insert(
             0,
             workspace_root.join("music21").to_string_lossy().to_string(),
@@ -623,7 +725,8 @@ fn run_one(
         // same tests under the same names.
         let suite = build_suite(py, &music21, only)?;
         match which {
-            Which::Music21 => {}
+            // Run by `run_provided`, which has returned by now.
+            Which::Music21 | Which::Music21RsProvided => {}
             // The crate compiled into this binary. `install_into_music21`
             // never needed the wheel — it builds its module in process out of
             // `register_all` — so calling it here installs the working tree.
@@ -774,6 +877,186 @@ fn run_one(
         );
         Ok(0)
     })
+}
+
+/// The Python that runs music21's modules from their source on the provided
+/// side.
+const PROVIDED_SUITE: &str = include_str!("provided_suite.py");
+
+/// The provided side: every module of music21's with a test in it, run
+/// from its source with `import music21` answered by `provide_music21()`
+/// and music21 itself nowhere on the path.
+///
+/// music21's tests live inside music21's package, so importing them would
+/// import music21; reading each module by path is what keeps it out. The
+/// corpus is music21's data rather than its code, so where nothing names
+/// one the submodule's is read.
+fn run_provided(
+    py: Python<'_>,
+    workspace_root: &Path,
+    out: &Path,
+    only: Option<&str>,
+) -> PyResult<i32> {
+    if let Err(error) = py.import("music21_rs") {
+        if error.is_instance_of::<pyo3::exceptions::PyImportError>(py) {
+            println!("the music21_rs wheel is not installed: {error}");
+            return Ok(EXIT_SIDE_ABSENT);
+        }
+        return Err(error);
+    }
+    let submodule = workspace_root.join("music21");
+    if std::env::var_os("MUSIC21_RS_CORPUS").is_none() {
+        py.import("os")?.getattr("environ")?.set_item(
+            "MUSIC21_RS_CORPUS",
+            submodule
+                .join("music21/corpus")
+                .to_string_lossy()
+                .to_string(),
+        )?;
+    }
+    let runner = PyModule::from_code(
+        py,
+        &std::ffi::CString::new(PROVIDED_SUITE)?,
+        c"music21_rs_provided_suite.py",
+        c"music21_rs_provided_suite",
+    )?;
+    let records = runner.call_method1(
+        "run",
+        (submodule.to_string_lossy().to_string(), only.unwrap_or("")),
+    )?;
+
+    let mut report = Report::default();
+    for record in records.try_iter()? {
+        let record = record?;
+        let module = ProvidedModule {
+            module: record.get_item("module")?.extract()?,
+            imported: record.get_item("imported")?.extract()?,
+            provided: record.get_item("provided")?.extract()?,
+            blocker: record.get_item("blocker")?.extract()?,
+            error: record.get_item("error")?.extract()?,
+            run: record.get_item("run")?.extract()?,
+            passed: record.get_item("passed")?.extract()?,
+            blockers: record.get_item("blockers")?.extract()?,
+        };
+        report.run += module.run;
+        report
+            .failures
+            .extend(record.get_item("failures")?.extract::<Vec<String>>()?);
+        report
+            .errors
+            .extend(record.get_item("errors")?.extract::<Vec<String>>()?);
+        report.detail.extend(
+            record
+                .get_item("detail")?
+                .extract::<BTreeMap<String, String>>()?,
+        );
+        report.provided.push(module);
+    }
+    report.failures.sort();
+    report.errors.sort();
+
+    let text = serde_json::to_string_pretty(&report)
+        .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(err.to_string()))?;
+    fs::write(out, text)?;
+    let imported = report.provided.iter().filter(|m| m.imported).count();
+    println!(
+        "{imported} of {} modules imported; ran {}, {} failures, {} errors",
+        report.provided.len(),
+        report.run,
+        report.failures.len(),
+        report.errors.len()
+    );
+    Ok(0)
+}
+
+/// What the provided side's run says beside music21's: how many tests pass
+/// on each, and what blocks the most of those music21 passes.
+///
+/// A module whose import stopped blocks every test music21 passes in it,
+/// counted from music21's own run of it; a test that ran and stopped at a
+/// missing name blocks itself. Tests music21 fails are not counted against
+/// anything.
+fn summarise_provided(plain: &Report, provided: &Report) -> Provided {
+    let bad = plain.bad();
+    let mut passing_in: BTreeMap<&str, usize> = BTreeMap::new();
+    for (test, module) in &plain.test_modules {
+        if !bad.contains(test.as_str()) {
+            *passing_in.entry(module.as_str()).or_default() += 1;
+        }
+    }
+
+    let mut tally: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for module in &provided.provided {
+        if let Some(blocker) = module.blocker.as_deref()
+            && !module.imported
+        {
+            let entry = tally.entry(blocker).or_default();
+            entry.0 += passing_in.get(module.module.as_str()).copied().unwrap_or(0);
+            entry.1 += 1;
+            continue;
+        }
+        for (test, blocker) in &module.blockers {
+            if !bad.contains(test.as_str()) {
+                tally.entry(blocker.as_str()).or_default().0 += 1;
+            }
+        }
+    }
+    let passed = |answered: bool| -> usize {
+        provided
+            .provided
+            .iter()
+            .filter(|m| m.provided == answered)
+            .map(|m| m.passed.len())
+            .sum()
+    };
+    let mut blockers: Vec<Blocker> = tally
+        .into_iter()
+        .map(|(name, (tests, modules))| Blocker {
+            name: name.to_string(),
+            tests,
+            modules,
+        })
+        .collect();
+    blockers.sort_by(|a, b| {
+        b.tests
+            .cmp(&a.tests)
+            .then(b.modules.cmp(&a.modules))
+            .then(a.name.cmp(&b.name))
+    });
+
+    Provided {
+        music21_run: plain.run,
+        music21_passing: plain.run.saturating_sub(bad.len()),
+        run: provided.run,
+        passing: passed(true),
+        passing_in_music21: passed(false),
+        modules: provided.provided.len(),
+        modules_imported: provided.provided.iter().filter(|m| m.imported).count(),
+        blockers,
+    }
+}
+
+/// Prints the provided side's figure and the blockers at the top.
+fn report_provided(provided: &Provided) {
+    println!();
+    println!("== music21's suite on music21-rs alone ==");
+    println!(
+        "{} tests pass, against {} of {} on music21; {} more in music21's own \
+         code; {} of {} modules import",
+        provided.passing,
+        provided.music21_passing,
+        provided.music21_run,
+        provided.passing_in_music21,
+        provided.modules_imported,
+        provided.modules
+    );
+    println!("what blocks the most tests music21 passes:");
+    for blocker in provided.blockers.iter().take(30) {
+        println!(
+            "  {:>6}  {} ({} modules stop importing at it)",
+            blocker.tests, blocker.name, blocker.modules
+        );
+    }
 }
 
 /// Routes `converter.parse` through the crate for the formats asked for,
@@ -1456,6 +1739,10 @@ mod tests {
             Which::parse("music21_rs_wheel"),
             Some(Which::Music21RsWheel)
         ));
+        assert!(matches!(
+            Which::parse("music21_rs_provided"),
+            Some(Which::Music21RsProvided)
+        ));
         assert!(Which::parse("neither").is_none());
         assert_eq!(Which::Music21Rs.file(), "music21_rs.json");
         // Every side has a name, a label and a file of its own, or one run
@@ -1549,6 +1836,72 @@ mod tests {
         let timings = compare_timings(&plain, &[(Which::Music21Rs, ours)]).expect("a comparison");
         assert_eq!(timings.paired, 1);
         assert_eq!(timings.rows[0].name, "a");
+    }
+
+    #[test]
+    fn a_blocked_import_blocks_what_music21_passes_in_the_module() {
+        let mut plain = report(4, &["music21.chord.Test.testBroken"], &[]);
+        for (test, module) in [
+            ("music21.chord.Test.testA", "music21.chord"),
+            ("music21.chord.Test.testBroken", "music21.chord"),
+            ("music21.common.Test.testB", "music21.common"),
+            ("music21.note.Test.testC", "music21.note"),
+        ] {
+            plain
+                .test_modules
+                .insert(test.to_string(), module.to_string());
+        }
+        let blocked = |module: &str, blocker: &str| ProvidedModule {
+            module: module.to_string(),
+            blocker: Some(blocker.to_string()),
+            ..ProvidedModule::default()
+        };
+        let ran = ProvidedModule {
+            module: "music21.note".to_string(),
+            imported: true,
+            provided: true,
+            run: 2,
+            passed: vec!["passes".to_string()],
+            blockers: [(
+                "music21.note.Test.testC".to_string(),
+                "music21.common".to_string(),
+            )]
+            .into(),
+            ..ProvidedModule::default()
+        };
+        let provided = Report {
+            run: 2,
+            provided: vec![
+                blocked("music21.chord", "music21.common"),
+                blocked("music21.common", "music21.defaults"),
+                ran,
+                ProvidedModule {
+                    module: "music21.humdrum.questions".to_string(),
+                    imported: true,
+                    run: 1,
+                    passed: vec!["music21's own".to_string()],
+                    ..ProvidedModule::default()
+                },
+            ],
+            ..Report::default()
+        };
+
+        let summary = summarise_provided(&plain, &provided);
+        assert_eq!((summary.music21_run, summary.music21_passing), (4, 3));
+        assert_eq!((summary.run, summary.passing), (2, 1));
+        assert_eq!(summary.passing_in_music21, 1);
+        assert_eq!((summary.modules, summary.modules_imported), (4, 2));
+        // chord's failing test is not counted; note's test that stopped at
+        // the same name is.
+        let ranked: Vec<(&str, usize, usize)> = summary
+            .blockers
+            .iter()
+            .map(|b| (b.name.as_str(), b.tests, b.modules))
+            .collect();
+        assert_eq!(
+            ranked,
+            [("music21.common", 2, 1), ("music21.defaults", 1, 1)]
+        );
     }
 
     #[test]

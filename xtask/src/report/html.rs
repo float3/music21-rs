@@ -502,6 +502,36 @@ fn crate_facts(report: &Report) -> Vec<Fact> {
     facts
 }
 
+/// The headline for music21's suite run with music21 not installed and
+/// `provide_music21()` answering for it.
+fn provided_fact(provided: &Provided) -> Fact {
+    let first = provided
+        .blockers
+        .first()
+        .map_or_else(String::new, |blocker| {
+            format!(
+                "; {} blocks the most, {}",
+                escape(&blocker.name),
+                plural(blocker.tests, "test", "tests")
+            )
+        });
+    Fact {
+        anchor: "suites",
+        label: "music21's suite on music21-rs alone",
+        value: percent(provided.passing, provided.music21_passing),
+        sub: format!(
+            "{} of the {} tests music21 passes, music21 not installed; {} of {} modules import{first}",
+            provided.passing, provided.music21_passing, provided.modules_imported, provided.modules
+        ),
+        bar: meter(
+            share(provided.passing, provided.music21_passing),
+            false,
+            "is-wheel",
+        ),
+        warn: false,
+    }
+}
+
 fn wheel_facts(report: &Report) -> Vec<Fact> {
     let mut facts = Vec::new();
     let members = MemberCounts::of(&report.features);
@@ -521,6 +551,9 @@ fn wheel_facts(report: &Report) -> Vec<Fact> {
     }
     if !report.suites.is_empty() {
         facts.push(SuiteCounts::of(&report.suites, View::Wheel).fact());
+    }
+    if let Some(provided) = report.provided.as_ref().filter(|p| p.music21_passing > 0) {
+        facts.push(provided_fact(provided));
     }
     let speed = Speed::of(report.benchmarks.as_ref());
     if let Some(speed) = &speed {
@@ -2023,4 +2056,32 @@ pub(super) fn render_html(report: &Report, view: View) -> String {
 
     html.push_str(&page_close(view.root()));
     html
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The headline is what passes against what music21 passes, and names
+    /// the blocker at the top.
+    #[test]
+    fn the_suite_on_music21_rs_alone_is_a_share_of_what_music21_passes() {
+        let provided = Provided {
+            music21_run: 10,
+            music21_passing: 8,
+            passing: 2,
+            modules: 4,
+            modules_imported: 1,
+            blockers: vec![ProvidedBlocker {
+                name: "music21.common".to_string(),
+                tests: 5,
+                modules: 3,
+            }],
+            ..Provided::default()
+        };
+        let fact = provided_fact(&provided);
+        assert_eq!(fact.value, "25.0%");
+        assert!(fact.sub.starts_with("2 of the 8 tests music21 passes"));
+        assert!(fact.sub.contains("music21.common blocks the most, 5 tests"));
+    }
 }

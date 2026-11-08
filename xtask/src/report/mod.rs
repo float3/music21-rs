@@ -193,6 +193,9 @@ struct Report {
     /// What music21's own suite said about speed, where it has been run.
     #[serde(default)]
     timings: Option<Timings>,
+    /// What music21's suite made of music21-rs alone, where it has been run.
+    #[serde(default)]
+    provided: Option<Provided>,
     /// Every public member of the crate no music21 member accounts for.
     #[serde(default)]
     beyond_members: Vec<BeyondModule>,
@@ -246,6 +249,38 @@ struct DoctestSummary {
     docstrings: usize,
     examples_passing: usize,
     examples: usize,
+}
+
+/// music21's suite on music21-rs alone, as `xtask music21-suite` writes it
+/// into `target/music21-suite/provided.json`: music21 not importable and
+/// `provide_music21()` answering for it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Provided {
+    #[serde(default)]
+    music21_run: usize,
+    #[serde(default)]
+    music21_passing: usize,
+    #[serde(default)]
+    run: usize,
+    #[serde(default)]
+    passing: usize,
+    #[serde(default)]
+    passing_in_music21: usize,
+    #[serde(default)]
+    modules: usize,
+    #[serde(default)]
+    modules_imported: usize,
+    /// What blocks the most tests music21 passes, most first.
+    #[serde(default)]
+    blockers: Vec<ProvidedBlocker>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct ProvidedBlocker {
+    name: String,
+    tests: usize,
+    #[serde(default)]
+    modules: usize,
 }
 
 /// What the pair of runs of music21's own suite said about time, as
@@ -772,6 +807,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
 
     let doctests = read_doctests(workspace_root);
     let timings = read_timings(workspace_root);
+    let provided = read_provided(workspace_root);
 
     let (features, beyond, beyond_members) = if options.features {
         let map_path = workspace_root.join("data/feature_map.toml");
@@ -798,6 +834,7 @@ pub(crate) fn report(workspace_root: &Path, options: &Options) -> Result<(), Box
         benchmarks,
         doctests,
         timings,
+        provided,
         features,
         beyond_members,
         beyond,
@@ -908,6 +945,13 @@ fn read_module_tests(workspace_root: &Path) -> Vec<ModuleTests> {
 /// What the last run of music21's own suite said about time, if there is one.
 fn read_timings(workspace_root: &Path) -> Option<Timings> {
     let path = workspace_root.join("target/music21-suite/timings.json");
+    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
+}
+
+/// What the last run of music21's suite on music21-rs alone said, if there
+/// is one.
+fn read_provided(workspace_root: &Path) -> Option<Provided> {
+    let path = workspace_root.join("target/music21-suite/provided.json");
     serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
 }
 
