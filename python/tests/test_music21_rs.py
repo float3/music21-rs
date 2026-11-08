@@ -9595,17 +9595,17 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.environment', 'from music21 import musicxml'):
+for statement in ('import music21.mei', 'from music21 import musicxml'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'environment'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.environment",
+        "music21-rs does not provide music21.mei",
         "music21-rs does not provide music21.musicxml",
         "False True",
     ]
@@ -10171,3 +10171,72 @@ def test_a_wheel_note_reports_the_wheels_own_bases():
     assert len(line.getElementsByClass(m.GeneralNote)) == 2
     assert len(line.getElementsByClass(m.NotRest)) == 1
     assert len(line.getElementsByClass(m.Music21Object)) == 2
+
+
+def test_provided_environment_reads_and_writes_music21s_settings(tmp_path):
+    """Provided, `environment` keeps music21's preferences and writes its
+    settings file in music21's layout."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import pathlib
+from music21 import environment
+e = environment.Environment('x')
+print(e['autoDownload'], e['debug'], e.formatToKey('svg'))
+e['musicxmlPath'] = '/a&b/MuseScore.app'
+print(repr(e['musicxmlPath']), e.xmlReaderType())
+try:
+    e['showFormat'] = 'asdf'
+except environment.EnvironmentException as error:
+    print(error)
+target = pathlib.Path.cwd() / 'rc.xml'
+e.write(target)
+text = target.read_text()
+print(text.startswith('<settings encoding="utf-8">'), 'a&amp;b' in text)
+e['musicxmlPath'] = None
+e.read(target)
+print(e['musicxmlPath'])
+lcs = environment.LocalCorpusSettings(['/tmp'], name='n')
+print(lcs, isinstance(lcs, list))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "ask 0 vectorPath",
+        "PosixPath('/a&b/MuseScore.app') Musescore",
+        "asdf is not an acceptable value for preference: showFormat",
+        "True True",
+        "/a&b/MuseScore.app",
+        "LocalCorpusSettings(['/tmp'], name='n') True",
+    ]
+
+
+def test_provided_prebase_and_element_wrapper_behave_as_music21s(tmp_path):
+    """Provided, `ProtoM21Object` names a Python subclass's classes and
+    shows it as music21 does, and an `ElementWrapper` sits in a stream."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import base, prebase, stream
+from music21.scale.intervalNetwork import Direction
+class Counter(prebase.ProtoM21Object):
+    def _reprInternal(self):
+        return 'no pitches'
+c = Counter()
+print(c.classes, repr(c), Counter in c.classSet, 'prebase.ProtoM21Object' in c.classSet)
+print(issubclass(base.Music21Object, prebase.ProtoM21Object))
+w = base.ElementWrapper(['a', 'b'])
+s = stream.Stream()
+s.insert(2, w)
+w.id = 'w1'
+print(repr(w), w.count('a'), w == base.ElementWrapper(['a', 'b']))
+print(Direction.DESCENDING, Direction('bi'))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "('Counter', 'ProtoM21Object', 'object') <Counter no pitches> True True",
+        "True",
+        "<music21.base.ElementWrapper id=w1 offset=2.0 obj=\"['a', 'b']\"> 1 True",
+        "Direction.DESCENDING Direction.BI",
+    ]

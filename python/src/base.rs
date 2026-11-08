@@ -19,14 +19,22 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyTuple};
 use pyo3::{PyClass, PyClassInitializer, PyTypeInfo};
 
+use crate::prebase::ProtoM21Object;
+
 pyo3::create_exception!(music21_rs_facade, ElementException, crate::Music21Exception);
 pyo3::create_exception!(music21_rs_facade, GroupException, crate::Music21Exception);
 
 /// The names this module hands out.
-pub const NAMES: &[&str] = &["Music21Object", "GeneralNote", "NotRest", "Groups"];
+pub const NAMES: &[&str] = &[
+    "Music21Object",
+    "GeneralNote",
+    "NotRest",
+    "Groups",
+    "ElementWrapper",
+];
 
 /// music21's `Music21Object`: what a stream holds.
-#[pyclass(name = "Music21Object", module = "music21.base", subclass)]
+#[pyclass(name = "Music21Object", module = "music21.base", extends = ProtoM21Object, subclass)]
 #[derive(Default)]
 pub struct Music21Object {
     /// music21's `groups`, made on first asking.
@@ -45,7 +53,7 @@ impl Music21Object {
     fn new(
         _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
+    ) -> PyResult<PyClassInitializer<Self>> {
         let groups = match keywords {
             Some(keywords) => keywords
                 .get_item("groups")?
@@ -53,10 +61,10 @@ impl Music21Object {
                 .map(Bound::unbind),
             None => None,
         };
-        Ok(Self {
+        Ok(PyClassInitializer::from(ProtoM21Object).add_subclass(Self {
             groups,
             derivation: None,
-        })
+        }))
     }
 
     /// music21's `groups`: the names of the groups this belongs to, as a
@@ -124,7 +132,7 @@ impl GeneralNote {
         arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(PyClassInitializer::from(Music21Object::new(arguments, keywords)?).add_subclass(Self))
+        Ok(Music21Object::new(arguments, keywords)?.add_subclass(Self))
     }
 }
 
@@ -143,6 +151,215 @@ impl NotRest {
     ) -> PyResult<PyClassInitializer<Self>> {
         Ok(GeneralNote::new(arguments, keywords)?.add_subclass(Self))
     }
+}
+
+/// music21's `ElementWrapper`: an object that is not a `Music21Object`,
+/// carried as one so a stream can hold it.
+///
+/// The wrapped object is `obj`. An attribute the wrapper does not have is
+/// read off it, and one it has is set on it, unless `Music21Object` has an
+/// attribute of that name: an `offset` is always the wrapper's own.
+#[pyclass(name = "ElementWrapper", module = "music21.base", extends = Music21Object, subclass, dict, weakref)]
+pub struct ElementWrapper {
+    /// The object carried.
+    obj: Py<PyAny>,
+    /// The `id` given, where one has been.
+    #[pyo3(get, set)]
+    _id: Option<Py<PyAny>>,
+}
+
+#[pymethods]
+impl ElementWrapper {
+    #[new]
+    #[pyo3(signature = (obj=None, **keywords))]
+    fn new(
+        py: Python<'_>,
+        obj: Option<Py<PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let wrapper = Self {
+            obj: obj.unwrap_or_else(|| py.None()),
+            _id: None,
+        };
+        Ok(Music21Object::new(&PyTuple::empty(py), keywords)?.add_subclass(wrapper))
+    }
+
+    #[classattr]
+    fn equalityAttributes() -> (&'static str,) {
+        ("obj",)
+    }
+
+    #[classattr]
+    fn _DOC_ORDER() -> Vec<&'static str> {
+        vec!["obj"]
+    }
+
+    #[classattr]
+    fn _DOC_ATTR(py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let made = PyDict::new(py);
+        made.set_item(
+            "obj",
+            "The object this wraps. It should not be a Music21Object, which a stream \
+             can hold as it is.",
+        )?;
+        Ok(made.unbind())
+    }
+
+    /// The object carried.
+    #[getter]
+    fn get_obj(&self, py: Python<'_>) -> Py<PyAny> {
+        self.obj.clone_ref(py)
+    }
+
+    #[setter]
+    fn set_obj(&mut self, value: Py<PyAny>) {
+        self.obj = value;
+    }
+
+    /// The `id` given, or Python's `id()` of the wrapper where none has
+    /// been, as music21's `Music21Object.id` answers.
+    #[getter]
+    fn get_id(slf: &Bound<'_, Self>) -> Py<PyAny> {
+        let py = slf.py();
+        match &slf.borrow()._id {
+            Some(given) => given.clone_ref(py),
+            None => (slf.as_ptr() as usize)
+                .into_pyobject(py)
+                .map(|id| id.into_any().unbind())
+                .unwrap_or_else(|_| py.None()),
+        }
+    }
+
+    #[setter]
+    fn set_id(&mut self, value: Option<Py<PyAny>>) {
+        self._id = value;
+    }
+
+    /// `id=... offset=... obj='...'`, the object shown in thirty
+    /// characters at most.
+    fn _reprInternal(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let py = slf.py();
+        let shown: String = slf.borrow().obj.bind(py).str()?.to_string();
+        let mut short: String = shown.chars().take(30).collect();
+        if shown.chars().count() > 30 {
+            short.push_str("...");
+            if short.starts_with('<') {
+                short.push('>');
+            }
+        }
+        let short = short.into_pyobject(py)?.repr()?.to_string();
+        let offset = slf.getattr("offset")?.str()?.to_string();
+        if slf.borrow()._id.is_some() {
+            let id = slf.getattr("id")?.str()?.to_string();
+            return Ok(format!("id={id} offset={offset} obj={short}"));
+        }
+        Ok(format!("offset={offset} obj={short}"))
+    }
+
+    /// Sets `obj` on the wrapper, and anything else on the object carried
+    /// where that has the attribute and `Music21Object` has not.
+    fn __setattr__(slf: &Bound<'_, Self>, name: &str, value: Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let own = |value: &Bound<'_, PyAny>| -> PyResult<()> {
+            py.import("builtins")?
+                .getattr("object")?
+                .call_method1("__setattr__", (slf, name, value))?;
+            Ok(())
+        };
+        if name == "obj" {
+            slf.borrow_mut().obj = value.unbind();
+            return Ok(());
+        }
+        if slf.getattr("__dict__")?.contains(name)? {
+            own(&value)?;
+        }
+        let stored = slf.borrow().obj.clone_ref(py).into_bound(py);
+        let reserved = music21_object_keys(py)?.contains(name)?;
+        if !reserved && !stored.is_none() && stored.hasattr(name)? {
+            return stored.setattr(name, value);
+        }
+        own(&value)
+    }
+
+    /// An attribute the wrapper has not, read off the object carried.
+    fn __getattr__<'py>(slf: &Bound<'py, Self>, name: &str) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let stored = slf.borrow().obj.clone_ref(py).into_bound(py);
+        if stored.is_none() {
+            return Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+                "Could not get attribute {name:?} in an object-less element"
+            )));
+        }
+        py.import("builtins")?
+            .getattr("object")?
+            .call_method1("__getattribute__", (stored, name))
+    }
+
+    /// Equal where the other is of this class and every attribute named in
+    /// an `equalityAttributes` along the class's chain is equal.
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        if !other.is_instance(&slf.get_type())? {
+            return Ok(false);
+        }
+        for name in equality_attributes(&slf.get_type())? {
+            let mine = slf.getattr(name.as_str()).ok();
+            let theirs = other.getattr(name.as_str()).ok();
+            match (mine, theirs) {
+                (Some(mine), Some(theirs)) => {
+                    if !mine.eq(theirs)? {
+                        return Ok(false);
+                    }
+                }
+                // Neither has it: the wheel's `Music21Object` has no
+                // `duration` to compare.
+                (None, None) => {}
+                _ => return Ok(false),
+            }
+        }
+        Ok(true)
+    }
+
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        (slf.as_ptr() as usize >> 4) as isize
+    }
+}
+
+/// The names music21 collects from every `equalityAttributes` along a
+/// class's chain.
+fn equality_attributes(class: &Bound<'_, pyo3::types::PyType>) -> PyResult<Vec<String>> {
+    let mut names: Vec<String> = Vec::new();
+    for ancestor in class.mro().iter() {
+        let Ok(named) = ancestor.getattr("equalityAttributes") else {
+            continue;
+        };
+        let named: Vec<String> = match named.extract::<String>() {
+            Ok(one) => vec![one],
+            Err(_) => named.extract()?,
+        };
+        for name in named {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    Ok(names)
+}
+
+static MUSIC21_OBJECT_KEYS: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// Every attribute a bare `Music21Object` has: music21's
+/// `_m21ObjDefaultDefinedKeys`, which an `ElementWrapper` keeps for itself.
+fn music21_object_keys(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    let held = MUSIC21_OBJECT_KEYS.get_or_try_init(py, || {
+        let bare = Bound::new(py, ProtoM21Object::under(Music21Object::default()))?;
+        let names = py.import("builtins")?.call_method1("dir", (bare,))?;
+        Ok::<_, PyErr>(
+            pyo3::types::PyFrozenSet::new(py, names.try_iter()?.collect::<PyResult<Vec<_>>>()?)?
+                .into_any()
+                .unbind(),
+        )
+    })?;
+    Ok(held.bind(py).clone())
 }
 
 /// Gives a copy the groups of what it was copied from, as music21's
@@ -200,9 +417,15 @@ impl Footing for PyAny {
     }
 }
 
+impl Footing for ProtoM21Object {
+    fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
+        PyClassInitializer::from(ProtoM21Object).add_subclass(value)
+    }
+}
+
 impl Footing for Music21Object {
     fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
-        PyClassInitializer::from(Music21Object::default()).add_subclass(value)
+        ProtoM21Object::under(Music21Object::default()).add_subclass(value)
     }
 }
 
@@ -347,6 +570,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Music21Object>()?;
     m.add_class::<GeneralNote>()?;
     m.add_class::<NotRest>()?;
+    m.add_class::<ElementWrapper>()?;
     m.add("Groups", own_groups(m.py())?)?;
     Ok(())
 }

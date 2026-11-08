@@ -176,6 +176,10 @@ pub enum Error {
     /// itself; [`Error::unplaced`] hands that error back to match on.
     #[error("{0}")]
     Placed(Box<PlacedError>),
+    /// A preference that cannot be set or read as asked, or a settings
+    /// file that cannot be read: music21's `EnvironmentException`.
+    #[error("Environment error: {0}")]
+    Environment(String),
 }
 
 /// An error that is no format's own, and where in its document a reader

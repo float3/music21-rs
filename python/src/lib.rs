@@ -83,12 +83,15 @@ pub mod clef;
 pub mod clercqtemperley;
 pub mod converters;
 pub mod correlate;
+pub mod defaults;
 pub mod derivation;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
 pub mod editorial;
 pub mod enharmonics;
+pub mod environment;
+pub mod exceptions21;
 pub mod expressions;
 pub mod extractors;
 pub mod fbrules;
@@ -104,6 +107,7 @@ pub mod hasher;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
+pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
 pub mod makenotation;
@@ -119,6 +123,7 @@ pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
+pub mod prebase;
 pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
@@ -1377,6 +1382,15 @@ def make_class(facade, original):
         # A one-element tuple; see `lineage` for why it is not the class.
         '_replaces': (original,),
     })
+    # The wheel's `ProtoM21Object` is the facade's plumbing, not the
+    # class's: where the facade says nothing of its own about how it is
+    # shown, music21's class says it, as it did before that base was there.
+    for name in ('__repr__', '_reprInternal'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
+                    namespace.setdefault(name, getattr(original, name))
+                break
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
@@ -2039,6 +2053,26 @@ exceptions![
         stream::StreamException,
         Some("music21.exceptions21")
     ),
+    (
+        "ImmutableStreamException",
+        exceptions21::ImmutableStreamException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "AnalysisException",
+        exceptions21::AnalysisException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "TreeException",
+        exceptions21::TreeException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "SubConverterException",
+        exceptions21::SubConverterException,
+        Some("music21.exceptions21")
+    ),
     ("TempoException", tempo::TempoException, None),
     (
         "InstrumentException",
@@ -2109,6 +2143,7 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    prebase::register(m)?;
     base::register(m)?;
     pitch::register(m)?;
     figuredbass::register(m)?;
@@ -2184,6 +2219,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     chordtables::register(m)?;
     dynamics::register(m)?;
     scala::register(m)?;
+    intervalnetwork::register(m)?;
     instrument::register(m)?;
     clef::register(m)?;
     articulations::register(m)?;
@@ -2204,8 +2240,33 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `_thawed` on whichever of the two modules is present.
     m.add_function(wrap_pyfunction!(thawed, m)?)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
+    m.add("__music21_built_modules__", BUILT_MODULES.to_vec())?;
+    m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
+}
+
+/// music21's modules that are built here whole, as modules, rather than
+/// put together from the classes on this one: what they hold (`set`,
+/// `get`, `keys`) would shadow Python's own in a flat namespace, and their
+/// exceptions must wait for music21's `Music21Exception`.
+const BUILT_MODULES: [&str; 3] = [
+    "music21.environment",
+    "music21.defaults",
+    "music21._version",
+];
+
+/// The module of music21's named, built on first asking: one of
+/// [`BUILT_MODULES`].
+#[pyfunction]
+#[pyo3(name = "_music21_module")]
+fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    match name {
+        "music21.environment" => environment::module(py),
+        "music21.defaults" => defaults::defaults_module(py),
+        "music21._version" => defaults::version_module(py),
+        _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
+    }
 }
 
 /// music21's analysis classes, implemented in Rust.
