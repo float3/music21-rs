@@ -9801,30 +9801,208 @@ def test_groups_are_music21s_groups():
 # class does not have. Each is (class, the other class, whether music21's
 # class is a subclass of the other).
 _HIERARCHY_GAPS = {
-    ("music21.articulations.FrettedPluck", "music21.articulations.Fingering", True),
-    ("music21.articulations.Spiccato", "music21.articulations.Accent", True),
-    ("music21.articulations.Spiccato", "music21.articulations.DynamicArticulation", True),
-    ("music21.articulations.Stress", "music21.articulations.LengthArticulation", True),
-    ("music21.articulations.StringFingering", "music21.articulations.Fingering", True),
-    ("music21.articulations.StringHarmonic", "music21.articulations.Harmonic", True),
-    ("music21.braille.segment.BrailleGrandSegment",
-     "music21.braille.text.BrailleKeyboard", True),
+    # music21's `Key` is a `KeySignature` and a `DiatonicScale`; a pyo3 class
+    # has one base, and both of these keep a value of their own, so Python
+    # will not take the two as bases of one class either.
     ("music21.key.Key", "music21.scale.ConcreteScale", True),
     ("music21.key.Key", "music21.scale.DiatonicScale", True),
     ("music21.key.Key", "music21.scale.Scale", True),
-    ("music21.layout.PageLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.ScoreLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.StaffLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.SystemLayout", "music21.layout.LayoutBase", True),
-    ("music21.scale.RagMarwa", "music21.scale.DiatonicScale", False),
-    ("music21.search.serial.TransposedInvertedMultisetMatcher",
-     "music21.search.serial.TransposedMultisetMatcher", True),
+    # The same for `BrailleGrandSegment`, a `BrailleSegment` and a
+    # `BrailleKeyboard`, both of which keep what they have written.
+    ("music21.braille.segment.BrailleGrandSegment",
+     "music21.braille.text.BrailleKeyboard", True),
+    # music21's tone rows are streams of notes; the package's are the
+    # crate's row, with no stream half to keep the notes in.
     ("music21.serial.HistoricalTwelveToneRow", "music21.stream.Stream", True),
+    ("music21.serial.HistoricalTwelveToneRow", "music21.stream.core.StreamCore", True),
     ("music21.serial.ToneRow", "music21.stream.Stream", True),
+    ("music21.serial.ToneRow", "music21.stream.core.StreamCore", True),
     ("music21.serial.TwelveToneMatrix", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneMatrix", "music21.stream.core.StreamCore", True),
     ("music21.serial.TwelveToneRow", "music21.stream.Stream", True),
-    ("music21.stream.PartStaff", "music21.stream.Part", True),
+    ("music21.serial.TwelveToneRow", "music21.stream.core.StreamCore", True),
 }
+
+
+# music21's classes between an element's own and `Music21Object`, with
+# classes of the package's music21 builds on each.
+_MIDDLE_CLASSES = {
+    ("music21.chord", "ChordBase"): ["Chord", "PercussionChord", "ChordSymbol", "RomanNumeral"],
+    ("music21.harmony", "Harmony"): ["ChordSymbol", "NoChord", "RomanNumeral"],
+    ("music21.stream.core", "StreamCore"): ["Stream", "Measure", "Score", "PartStaff"],
+    ("music21.tempo", "TempoIndication"): ["MetronomeMark", "TempoText", "MetricModulation"],
+    ("music21.interval", "IntervalBase"): [
+        "GenericInterval", "DiatonicInterval", "ChromaticInterval", "Interval",
+    ],
+    ("music21.expressions", "Expression"): [
+        "Ornament", "Trill", "TextExpression", "RepeatExpression", "Coda",
+    ],
+    ("music21.repeat", "RepeatMark"): ["RepeatExpression", "Segno", "DaCapo", "Repeat"],
+    ("music21.repeat", "RepeatExpressionMarker"): ["Coda", "Segno", "Fine"],
+    ("music21.repeat", "RepeatExpressionCommand"): ["DaCapo", "AlSegno", "DalSegnoAlCoda"],
+    ("music21.dynamics", "DynamicWedge"): ["Crescendo", "Diminuendo"],
+    ("music21.meter.base", "TimeSignatureBase"): ["TimeSignature"],
+    ("music21.note", "Unpitched"): [],
+}
+
+
+def test_an_unpitched_stroke_is_music21s():
+    """`note.Unpitched` is displayed at a step and octave, has no pitch,
+    and answers a note's notation members, as music21's examples show."""
+    unp = m.Unpitched()
+    assert (unp.displayStep, unp.displayOctave) == ("B", 4)
+    assert repr(unp) == "<music21.note.Unpitched>"
+    unp.displayStep = "G"
+    with pytest.raises(AttributeError, match="pitch"):
+        unp.pitch
+    unp.storedInstrument = m.Woodblock()
+    assert repr(unp) == "<music21.note.Unpitched 'Woodblock'>"
+    other = m.Unpitched()
+    assert unp != other
+    other.displayStep = "G"
+    other.storedInstrument = m.Woodblock()
+    assert unp == other
+    other.storedInstrument = m.Triangle()
+    assert unp != other
+    low = m.Unpitched()
+    low.displayStep, low.displayOctave = "E", 4
+    assert repr(low.displayPitch()) == "<music21.pitch.Pitch E4>"
+    assert m.Unpitched("B2").displayName == "B2"
+    assert isinstance(unp, m.NotRest) and not isinstance(unp, m.Note)
+    assert unp.pitches == () and not unp.isNote and not unp.isRest
+    assert unp.classes[:2] == ["Unpitched", "NotRest"]
+    assert copy.deepcopy(unp) == unp and copy.deepcopy(unp) is not unp
+    thawed = pickle.loads(pickle.dumps(unp))
+    assert (repr(thawed), thawed.displayStep) == (repr(unp), "G")
+
+    long = m.Unpitched(quarterLength=2)
+    assert long.duration.quarterLength == 2.0
+    held = m.Stream()
+    held.append(long)
+    held.append(m.Unpitched())
+    assert held.highestTime == 3.0 and long.offset == 0.0
+    assert long.activeSite is held
+
+    chord = m.PercussionChord([m.Unpitched("D4"), m.Note("C4")])
+    assert repr(chord) == "<music21.percussion.PercussionChord [unpitched[D4] C4]>"
+    assert chord.pitches == (chord.notes[1].pitch,)
+    assert repr(m.PercussionChord([unp])) == "<music21.percussion.PercussionChord [Woodblock]>"
+
+
+def test_a_copy_says_what_it_was_derived_from():
+    """An element's `derivation` names what it was copied or made from and
+    how, as music21's does, and the chain runs back to the first."""
+    note = m.Note("C4")
+    assert repr(note.derivation) == "<Derivation of <music21.note.Note C> from None>"
+    copied = copy.deepcopy(note)
+    assert copied.derivation.origin is note and copied.derivation.client is copied
+    assert copied.derivation.method == "__deepcopy__"
+    assert m.Note("C4").transpose("M2").derivation.method == "transpose"
+    chord = m.Chord("C4 E4 G4")
+    assert chord.transpose(2).derivation.method == "__deepcopy__"
+    assert chord.closedPosition().derivation.origin is chord
+
+    part = m.Part()
+    part.append(m.Note("C4"))
+    flat = part.flatten()
+    assert (flat.derivation.origin, flat.derivation.method) == (part, "flatten")
+    moved = flat.transpose(2)
+    assert (moved.derivation.origin, moved.derivation.method) == (flat, "transpose")
+    assert list(moved.derivation.chain()) == [flat, part]
+    assert moved.derivation.rootDerivation is part
+    assert moved.derivation.originId == id(flat)
+    assert part.makeMeasures().derivation.method == "makeMeasures"
+    assert part.chordify().derivation.method == "template"
+    assert copy.deepcopy(part).derivation.origin is part
+
+    first, second = m.Stream(id="DerivedStream"), m.Stream(id="OriginalStream")
+    made = m.Derivation(first)
+    made.method, made.origin = "manual", second
+    assert repr(made) == (
+        "<Derivation of <music21.stream.Stream DerivedStream> from "
+        "<music21.stream.Stream OriginalStream> via 'manual'>"
+    )
+    assert copy.deepcopy(made).origin is second
+    del first
+    gc.collect()
+    assert repr(made) == "<Derivation of None from None via 'manual'>"
+
+
+def test_the_context_search_follows_derivations():
+    """A copy finds its contexts through what it was copied from, as
+    music21's `contextSites` and `getContextByClass` do, unless asked not
+    to."""
+    part = m.Part()
+    measure = m.Measure(number=1)
+    part.insert(0, measure)
+    note = m.Note("D")
+    measure.insert(2.0, note)
+    copied = copy.deepcopy(note)
+    assert copied.getContextByClass(m.Measure) is measure
+    assert copied.getContextByClass(m.Measure, followDerivation=False) is None
+    assert copied.getOffsetBySite(measure) == 2.0
+
+    score = m.Score(id="bach")
+    alto = m.Part(id="Alto")
+    third = m.Measure(number=3)
+    score.insert(0, alto)
+    alto.insert(9.0, third)
+    third.insert(1.0, m.Note("E"))
+    again = copy.deepcopy(third)
+    again.number = 3333
+    found = [(context.site, context.offset) for context in again.contextSites()]
+    assert found == [(again, 0.0), (third, 0.0), (alto, 9.0), (score, 9.0)]
+    assert [context.site for context in again.contextSites(followDerivation=False)] == [again]
+
+
+def test_a_spanner_is_a_site_of_what_it_joins():
+    """What a spanner joins stands in its `spannerStorage`, which is one of
+    their sites but never their `activeSite` or a context, and each finds
+    the spanners it is in through `getSpannerSites`, as in music21."""
+    c, d, e = m.Note("C4"), m.Note("D4"), m.Note("E4")
+    slur = m.Slur(c, d)
+    assert c.getSpannerSites() == [slur]
+    cresc = m.Crescendo(d, c)
+    assert d.getSpannerSites() == [slur, cresc]
+    dim = m.Diminuendo(c, d)
+    assert d.getSpannerSites(m.Diminuendo) == [dim]
+    assert d.getSpannerSites(m.DynamicWedge) == [cresc, dim]
+    assert d.getSpannerSites(["Slur", "Diminuendo"]) == [slur, dim]
+    assert e.getSpannerSites() == []
+
+    storage = slur.spannerStorage
+    assert repr(storage) == "<music21.stream.SpannerStorage for music21.spanner.Slur>"
+    assert storage.client is slur and storage.classes[0] == "SpannerStorage"
+    assert storage in c.sites and c.sites.getSitesByClass("SpannerStorage")[0] is storage
+    assert c.activeSite is None
+
+    held = m.Stream()
+    held.append(c)
+    held.append(d)
+    held.insert(0, slur)
+    assert c.activeSite is held
+    assert [context.site for context in c.contextSites()] == [held]
+    slur.replaceSpannedElement(d, e)
+    assert d.getSpannerSites() == [cresc, dim] and e.getSpannerSites() == [slur]
+    assert repr(m.SpannerStorage(client=m.Slur())) == (
+        "<music21.stream.SpannerStorage for music21.spanner.Slur>"
+    )
+
+
+def test_music21s_middle_classes_are_the_packages():
+    """The classes music21 puts between an element's class and
+    `Music21Object` are the package's too, in music21's modules, so
+    `isinstance(x, chord.ChordBase)` asks what music21 asks."""
+    for (module, name), kinds in _MIDDLE_CLASSES.items():
+        middle = getattr(m, name)
+        assert (middle.__module__, middle.__name__) == (module, name)
+        assert issubclass(middle, m.Music21Object) or name == "RepeatMark"
+        for kind in kinds:
+            assert issubclass(getattr(m, kind), middle), (kind, name)
+    assert isinstance(m.Chord("C4 E4"), m.ChordBase)
+    assert isinstance(m.MetronomeMark(number=60), m.TempoIndication)
+    assert not issubclass(m.Fermata if hasattr(m, "Fermata") else m.Ornament, m.RepeatMark)
+    assert not issubclass(m.Note, m.ChordBase)
 
 
 def test_every_class_is_a_kind_of_what_music21s_is():

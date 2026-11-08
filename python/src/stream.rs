@@ -19,9 +19,9 @@
 //! None of it is installed over music21. music21's `Stream` is the machinery
 //! its whole library is built on, sites and contexts and derivations; a
 //! stream here is a site of the package's own elements, which find their
-//! offsets, measures and meters through it as music21's do (`sites`), but
-//! keeps no derivations, and the classes are the wheel's own, for a caller
-//! with no music21 at all.
+//! offsets, measures and meters through it as music21's do (`sites`), and
+//! says what it was derived from as music21's does (`derivation`); the
+//! classes are the wheel's own, for a caller with no music21 at all.
 //!
 //! **Four of music21's `Stream` members the crate has ported are left out
 //! here, and each is left out for a reason the package cannot talk its way
@@ -256,6 +256,15 @@ fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+middle_class!(
+    /// music21's `stream.core.StreamCore`: what every stream is built on,
+    /// the storage beneath music21's `Stream`.
+    StreamCore,
+    "StreamCore",
+    "music21.stream.core",
+    crate::base::Music21Object
+);
+
 /// music21's `stream.Stream`: objects at quarter-length offsets, kept in
 /// order of offset, then of `classSortOrder`, then of when each was put in.
 ///
@@ -263,7 +272,7 @@ fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
 /// `Part`, `PartStaff`, `Measure`, `Voice` and `Opus` are the same class
 /// under music21's other names; a score's parts are what
 /// `iterateAllVoiceLeadingQuartets` reads as its voices.
-#[pyclass(name = "Stream", module = "music21.stream", extends = crate::base::Music21Object, subclass, dict, weakref)]
+#[pyclass(name = "Stream", module = "music21.stream", extends = StreamCore, subclass, dict, weakref)]
 pub struct Stream {
     kind: StreamKind,
     /// What the stream holds, in the order it was put in: read through
@@ -2528,6 +2537,7 @@ impl Stream {
                 )?;
                 out.cast::<Stream>()?.borrow_mut().put(0.0, &measured);
             }
+            crate::derived_from(&out, slf.as_any(), "measures")?;
             return Ok(out);
         }
 
@@ -2562,6 +2572,7 @@ impl Stream {
         let out = Self::cloneEmpty(slf, None)?;
         let kept = out.cast::<Stream>()?;
         let Some((start, opening)) = found.first().map(|(at, object)| (*at, object.clone())) else {
+            crate::derived_from(&out, slf.as_any(), "measures")?;
             return Ok(out);
         };
         // What was in force where the first measure begins, which that
@@ -2584,6 +2595,7 @@ impl Stream {
         for (at, object) in found {
             kept.borrow_mut().put(at - start, &object);
         }
+        crate::derived_from(&out, slf.as_any(), "measures")?;
         Ok(out)
     }
 
@@ -2980,7 +2992,7 @@ impl Stream {
     ) -> PyResult<Bound<'py, PyAny>> {
         // The package keeps no spanners, so there are none to copy.
         let _ = copySpanners;
-        edited(slf, RsStream::expand_repeats)
+        edited(slf, None, RsStream::expand_repeats)
     }
 
     /// The barline closing the last measure of this stream: music21's
@@ -3426,7 +3438,9 @@ impl Stream {
                 "useGaps=False is not supported here: the bar is measured as music21 measures it by default",
             ));
         }
-        remade(slf, |stream| stream.pad_as_anacrusis(None, useInitialRests))
+        remade(slf, None, |stream| {
+            stream.pad_as_anacrusis(None, useInitialRests)
+        })
     }
 
     /// The spanners this stream holds, the stream's own objects:
@@ -3699,7 +3713,16 @@ impl Stream {
         let made = stream
             .chordify_with(&options)
             .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-        from_crate(slf.py(), &made)
+        let made = from_crate(slf.py(), &made)?;
+        // music21 lays the chords out on a template of the first part, of
+        // a score, or of the stream itself, and the template says so.
+        let laid_on = match slf.borrow().kind {
+            StreamKind::Score | StreamKind::Opus => Self::first_stream(slf),
+            _ => None,
+        };
+        let laid_on = laid_on.unwrap_or_else(|| slf.clone().into_any());
+        crate::derived_from(&made, &laid_on, "template")?;
+        Ok(made)
     }
 
     /// The notes and chords that follow one another in the stream, the very
@@ -3809,7 +3832,9 @@ impl Stream {
             Ok(length) => vec![length],
             Err(_) => quarterLengthList.extract()?,
         };
-        edited(slf, |stream| stream.slice_by_quarter_lengths(&lengths))
+        edited(slf, Some("sliceByQuarterLengths"), |stream| {
+            stream.slice_by_quarter_lengths(&lengths)
+        })
     }
 
     /// A copy with each note and rest cut into pieces of the greatest
@@ -3822,7 +3847,11 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, !addTies, inPlace)?;
-        edited(slf, RsStream::slice_by_greatest_divisor)
+        edited(
+            slf,
+            Some("sliceByGreatestDivisor"),
+            RsStream::slice_by_greatest_divisor,
+        )
     }
 
     /// A copy with what sounds across each offset cut there: music21's
@@ -3838,7 +3867,9 @@ impl Stream {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = displayTiedAccidentals;
         refuse_unported(target.is_some(), !addTies, inPlace)?;
-        edited(slf, |stream| stream.slice_at_offsets(&offsetList))
+        edited(slf, Some("sliceAtOffsets"), |stream| {
+            stream.slice_at_offsets(&offsetList)
+        })
     }
 
     /// A copy with each note and rest cut at the beats of its time
@@ -3853,7 +3884,7 @@ impl Stream {
     ) -> PyResult<Bound<'py, PyAny>> {
         let _ = displayTiedAccidentals;
         refuse_unported(target.is_some(), !addTies, inPlace)?;
-        edited(slf, RsStream::slice_by_beat)
+        edited(slf, Some("sliceByBeat"), RsStream::slice_by_beat)
     }
 
     /// A copy with its offsets scaled, held still at `anchorZero`
@@ -3870,7 +3901,7 @@ impl Stream {
         refuse_unported(false, false, inPlace)?;
         let anchor = anchor_of(anchorZero.as_deref())?;
         let nested = anchor_of(anchorZeroRecurse.as_deref())?;
-        edited(slf, |stream| {
+        edited(slf, Some("scaleOffsets"), |stream| {
             stream.scale_offsets(amountToScale, anchor, nested)
         })
     }
@@ -3883,7 +3914,9 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        edited(slf, |stream| stream.scale_durations(amountToScale))
+        edited(slf, Some("scaleDurations"), |stream| {
+            stream.scale_durations(amountToScale)
+        })
     }
 
     /// A copy with its offsets and lengths scaled: music21's
@@ -3895,7 +3928,9 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        edited(slf, |stream| stream.augment_or_diminish(amountToScale))
+        edited(slf, Some("augmentOrDiminish"), |stream| {
+            stream.augment_or_diminish(amountToScale)
+        })
     }
 
     /// A copy with each note turned upside down about `inversionNote`, C4
@@ -3919,7 +3954,9 @@ impl Stream {
             }
             None => None,
         };
-        edited(slf, |stream| stream.invert_diatonic(pitch.as_ref()))
+        edited(slf, Some("invertDiatonic"), |stream| {
+            stream.invert_diatonic(pitch.as_ref())
+        })
     }
 
     /// A score with a part for each voice: music21's `voicesToParts`.
@@ -3928,12 +3965,12 @@ impl Stream {
         slf: &Bound<'py, Self>,
         #[pyo3(from_py_with = crate::truthy)] separateById: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        edited(slf, |stream| stream.voices_to_parts(separateById))
+        edited(slf, None, |stream| stream.voices_to_parts(separateById))
     }
 
     /// A score with a part for each voice: music21's `explode`.
     fn explode<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        edited(slf, RsStream::explode)
+        edited(slf, None, RsStream::explode)
     }
 
     /// A score whose parts hold this score's parts as voices, grouped by
@@ -3964,14 +4001,14 @@ impl Stream {
                 }
             },
         };
-        edited(slf, |stream| {
+        edited(slf, Some("partsToVoices"), |stream| {
             stream.parts_to_voices(&allocation, permitOneVoicePerPart, setStems)
         })
     }
 
     /// The parts joined two to a part as voices: music21's `implode`.
     fn implode<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        edited(slf, RsStream::implode)
+        edited(slf, Some("partsToVoices"), RsStream::implode)
     }
 
     /// Where the last element this stream holds itself starts: music21's
@@ -4134,7 +4171,9 @@ impl Stream {
                 false => out.put(offset, object.bind(py)),
             }
         }
-        Self::born(py, out)
+        let made = Self::born(py, out)?;
+        crate::derived_from(made.as_any(), slf.as_any(), "flatten")?;
+        Ok(made)
     }
 
     /// Everything held at every depth, streams included, in the order the
@@ -4321,7 +4360,9 @@ impl Stream {
         refuse_unported(false, false, inPlace)?;
         let names = class_names(objName)?;
         let asked: Vec<&str> = names.iter().map(String::as_str).collect();
-        edited(slf, |stream| stream.extend_duration(&asked))
+        edited(slf, Some("extendDuration"), |stream| {
+            stream.extend_duration(&asked)
+        })
     }
 
     /// Takes in everything another stream holds, each at the offset it
@@ -4381,10 +4422,12 @@ impl Stream {
         slf: &Bound<'py, Self>,
         derivationMethod: Option<&str>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        // Derivations say where a stream came from, which this package
-        // keeps nothing of.
-        let _ = derivationMethod;
         let made = slf.get_type().call0()?;
+        let derivation = made.getattr("derivation")?;
+        derivation.setattr("origin", slf)?;
+        if let Some(method) = derivationMethod {
+            derivation.setattr("method", method)?;
+        }
         if let Some(id) = &slf.borrow().id {
             made.setattr("id", id.bind(slf.py()))?;
         }
@@ -4462,7 +4505,7 @@ impl Stream {
             inPlace,
         )?;
         let interval = crate::interval::interval_from_any(value)?;
-        edited(slf, |stream| stream.transpose(&interval))
+        edited(slf, Some("transpose"), |stream| stream.transpose(&interval))
     }
 
     /// A copy with each run of tied notes joined into one: music21's
@@ -4474,7 +4517,9 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        remade(slf, |stream| stream.strip_ties(matchByPitch))
+        remade(slf, Some("stripTies"), |stream| {
+            stream.strip_ties(matchByPitch)
+        })
     }
 
     /// A copy with every offset and length moved onto the nearest place a
@@ -4497,7 +4542,7 @@ impl Stream {
             ));
         }
         let divisors = quarterLengthDivisors.unwrap_or_default();
-        remade(slf, |stream| {
+        remade(slf, Some("quantize"), |stream| {
             music21::makenotation::quantize(stream, &divisors)
         })
     }
@@ -4529,7 +4574,9 @@ impl Stream {
         options.retain_voices = retainVoices;
         options.remove_all = removeAll;
         let stream = crate_stream(slf.as_any())?;
-        from_crate(slf.py(), &stream.template(&options))
+        let made = from_crate(slf.py(), &stream.template(&options))?;
+        crate::derived_from(&made, slf.as_any(), "template")?;
+        Ok(made)
     }
 
     /// The stream cut in two at a length from its start, each piece a new
@@ -4641,7 +4688,7 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        remade(slf, |stream| {
+        remade(slf, None, |stream| {
             stream.flatten_unnecessary_voices(force);
             Ok(())
         })
@@ -4656,7 +4703,7 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        edited(slf, RsStream::to_sounding_pitch)
+        edited(slf, Some("toSoundingPitch"), RsStream::to_sounding_pitch)
     }
 
     /// A copy with every note where it is written for its instrument:
@@ -4670,7 +4717,9 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] ottavasToSounding: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         refuse_unported(false, false, inPlace)?;
-        edited(slf, |stream| stream.to_written_pitch_by(ottavasToSounding))
+        edited(slf, Some("toWrittenPitch"), |stream| {
+            stream.to_written_pitch_by(ottavasToSounding)
+        })
     }
 
     /// The offsets where something in this stream and something in
@@ -4759,7 +4808,7 @@ impl Stream {
             Some(given) => meters_of(given)?,
             None => Vec::new(),
         };
-        edited(slf, |stream| {
+        edited(slf, Some("makeMeasures"), |stream| {
             if meters.is_empty() {
                 music21::makenotation::make_measures(stream)
             } else {
@@ -4795,7 +4844,7 @@ impl Stream {
                 "hideRests and refStreamOrTimeRange are not supported here",
             ));
         }
-        remade(slf, music21::makenotation::make_rests)
+        remade(slf, Some("makeRests"), music21::makenotation::make_rests)
     }
 
     /// A copy with what runs past a barline cut there and tied: music21's
@@ -4818,7 +4867,7 @@ impl Stream {
                 "a meterStream and displayTiedAccidentals are not supported here: the meters are the stream's own",
             ));
         }
-        remade(slf, music21::makenotation::make_ties)
+        remade(slf, Some("makeTies"), music21::makenotation::make_ties)
     }
 
     /// A copy with its notes beamed by the meter in force, and each beamed
@@ -4836,7 +4885,7 @@ impl Stream {
                 "setStemDirections=False and failOnNoTimeSignature=True are not supported here: beaming always points a group's stems, and a stream with no meter is left unbeamed",
             ));
         }
-        remade(slf, music21::makenotation::make_beams)
+        remade(slf, Some("makeBeams"), music21::makenotation::make_beams)
     }
 
     /// A copy with each accidental's showing decided: music21's
@@ -4853,7 +4902,7 @@ impl Stream {
                 "the accidental keywords are not supported here: what is decided is music21's own defaults",
             ));
         }
-        remade(slf, |stream| {
+        remade(slf, Some("makeAccidentals"), |stream| {
             music21::makenotation::make_accidentals(stream);
             Ok(())
         })
@@ -4877,7 +4926,7 @@ impl Stream {
                 "fillGaps=True is not supported here: the voices are made without the rests that fill their gaps",
             ));
         }
-        remade(slf, |stream| {
+        remade(slf, Some("makeVoices"), |stream| {
             music21::makenotation::make_voices(stream);
             Ok(())
         })
@@ -4898,7 +4947,11 @@ impl Stream {
                 "the makeNotation keywords are not supported here: each step is taken at music21's own defaults",
             ));
         }
-        remade(slf, music21::makenotation::make_notation)
+        remade(
+            slf,
+            Some("makeNotation"),
+            music21::makenotation::make_notation,
+        )
     }
 
     /// The lyrics sung in the stream, gathered by the number each is sung
@@ -4990,6 +5043,7 @@ impl Stream {
                 stream.put(offset, &object);
             }
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -5295,11 +5349,16 @@ pub(crate) fn changed<'py>(
 /// and music21 hands back a copy unless asked for `inPlace`.
 fn remade<'py>(
     slf: &Bound<'py, Stream>,
+    method: Option<&str>,
     change: impl FnOnce(&mut RsStream) -> music21::Result<()>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let mut stream = crate_stream(slf.as_any())?;
     change(&mut stream).map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-    from_crate(slf.py(), &stream)
+    let made = from_crate(slf.py(), &stream)?;
+    if let Some(method) = method {
+        crate::derived_from(&made, slf.as_any(), method)?;
+    }
+    Ok(made)
 }
 
 /// One line of lyrics as music21 answers it: the note's own `Lyric` where
@@ -5325,15 +5384,21 @@ fn sung_line<'py>(
     Ok(out)
 }
 
-/// The stream edited by the crate, as a new stream of this package's.
+/// The stream edited by the crate, as a new stream of this package's,
+/// derived from this one by `method` where music21's is.
 fn edited<'py>(
     slf: &Bound<'py, Stream>,
+    method: Option<&str>,
     edit: impl FnOnce(&RsStream) -> music21::Result<RsStream>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let stream = crate_stream(slf.as_any())?;
     let made =
         edit(&stream).map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-    from_crate(slf.py(), &made)
+    let made = from_crate(slf.py(), &made)?;
+    if let Some(method) = method {
+        crate::derived_from(&made, slf.as_any(), method)?;
+    }
+    Ok(made)
 }
 
 /// The class a stream of this shape is built as: music21's own where
@@ -6045,6 +6110,15 @@ fn element_object_as<'py>(
         StreamElement::TextBox(text_box) if whose == Whose::Music21 => {
             crate::text::music21_object(py, text_box)?
         }
+        StreamElement::Unpitched(stroke) if whose == Whose::Wheel => element_new(
+            py,
+            "music21.note",
+            "Unpitched",
+            crate::unpitched::Unpitched::of(py, stroke)?,
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -6180,10 +6254,10 @@ fn music21_expression<'py>(
 
 /// music21's other stream classes, each the same `Stream` under its name.
 macro_rules! stream_kinds {
-    ($(($class:ident, $name:literal, $kind:expr, $order:literal, $doc:literal)),* $(,)?) => {
+    ($(($class:ident, $name:literal, $parent:ident, [$($chain:ident),*], $kind:expr, $order:literal, $doc:literal)),* $(,)?) => {
         $(
             #[doc = $doc]
-            #[pyclass(name = $name, module = "music21.stream", extends = Stream, subclass)]
+            #[pyclass(name = $name, module = "music21.stream", extends = $parent, subclass)]
             pub struct $class;
 
             #[pymethods]
@@ -6211,6 +6285,7 @@ macro_rules! stream_kinds {
                         givenElements,
                         keywords,
                     )?)
+                    $(.add_subclass($chain))*
                     .add_subclass($class))
                 }
             }
@@ -6218,6 +6293,7 @@ macro_rules! stream_kinds {
 
         fn register_kinds(m: &Bound<'_, PyModule>) -> PyResult<()> {
             $(m.add_class::<$class>()?;)*
+            m.add_class::<SpannerStorage>()?;
             Ok(())
         }
     };
@@ -6227,6 +6303,8 @@ stream_kinds!(
     (
         Score,
         "Score",
+        Stream,
+        [],
         StreamKind::Score,
         -20,
         "music21's `Score`: parts at one time."
@@ -6234,6 +6312,8 @@ stream_kinds!(
     (
         Part,
         "Part",
+        Stream,
+        [],
         StreamKind::Part,
         -20,
         "music21's `Part`: one voice's line through the piece."
@@ -6241,6 +6321,8 @@ stream_kinds!(
     (
         PartStaff,
         "PartStaff",
+        Part,
+        [Part],
         StreamKind::PartStaff,
         -20,
         "music21's `PartStaff`: one staff of a part written on several."
@@ -6248,6 +6330,8 @@ stream_kinds!(
     (
         System,
         "System",
+        Stream,
+        [],
         StreamKind::System,
         -20,
         "music21's `System`: one line of a page's staves."
@@ -6255,6 +6339,8 @@ stream_kinds!(
     (
         Measure,
         "Measure",
+        Stream,
+        [],
         StreamKind::Measure,
         -20,
         "music21's `Measure`: one bar."
@@ -6262,6 +6348,8 @@ stream_kinds!(
     (
         Voice,
         "Voice",
+        Stream,
+        [],
         StreamKind::Voice,
         5,
         "music21's `Voice`: one line inside a bar."
@@ -6269,13 +6357,123 @@ stream_kinds!(
     (
         Opus,
         "Opus",
+        Stream,
+        [],
         StreamKind::Opus,
         -20,
         "music21's `Opus`: a collection of scores."
     ),
 );
 
+/// music21's `stream.SpannerStorage`: the stream a spanner keeps what it
+/// joins in. Holding them makes it one of their sites, through which each
+/// finds its spanners (`getSpannerSites`); it is never their `activeSite`
+/// and never one of their contexts, as music21's is not.
+#[pyclass(name = "SpannerStorage", module = "music21.stream", extends = Stream, subclass)]
+pub struct SpannerStorage {
+    /// The spanner whose storage this is: music21's `client`.
+    #[pyo3(get, set)]
+    client: Py<PyAny>,
+}
+
+impl SpannerStorage {
+    /// A storage for `client` holding these, one after another, as
+    /// music21's spanner appends them.
+    pub(crate) fn holding<'py>(
+        client: &Bound<'py, PyAny>,
+        held: &[Py<PyAny>],
+    ) -> PyResult<Bound<'py, SpannerStorage>> {
+        let py = client.py();
+        let mut stream = Stream::empty(StreamKind::Stream);
+        let mut end = 0.0;
+        for object in held {
+            let object = object.bind(py);
+            stream.put(end, object);
+            end += length_of(object)?;
+        }
+        let made = Bound::new(
+            py,
+            crate::base::built(stream).add_subclass(Self {
+                client: client.clone().unbind(),
+            }),
+        )?;
+        Stream::birth(made.as_super())?;
+        Ok(made)
+    }
+
+    /// Holds these instead of what it held, as music21 edits its storage in
+    /// place: what is let go no longer finds the spanner.
+    pub(crate) fn refill(storage: &Bound<'_, SpannerStorage>, held: &[Py<PyAny>]) -> PyResult<()> {
+        let py = storage.py();
+        let mut stream = storage.as_super().borrow_mut();
+        stream.held_mut().clear();
+        let mut end = 0.0;
+        for object in held {
+            let object = object.bind(py);
+            stream.put(end, object);
+            end += length_of(object)?;
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl SpannerStorage {
+    /// music21's `SpannerStorage(givenElements=None, *, client=None)`; with
+    /// no client, a bare `Spanner`'s, as music21 makes one for testing.
+    #[new]
+    #[pyo3(signature = (givenElements = None, *, client = None, **keywords))]
+    fn new(
+        py: Python<'_>,
+        givenElements: Option<&Bound<'_, PyAny>>,
+        client: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let client = match client.filter(|client| !client.is_none()) {
+            Some(client) => client.clone().unbind(),
+            None => py.get_type::<crate::spanner::Spanner>().call0()?.unbind(),
+        };
+        let stream = Stream::filled(py, StreamKind::Stream, givenElements, keywords)?;
+        Ok(crate::base::built(stream).add_subclass(Self { client }))
+    }
+
+    /// What music21 says this is.
+    #[getter]
+    fn classes(slf: &Bound<'_, Self>) -> PyResult<Vec<String>> {
+        let mut names = vec!["SpannerStorage".to_string()];
+        names.extend(lineage_of(slf.as_any())?);
+        Ok(names)
+    }
+
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let client = slf.borrow().client.bind(slf.py()).get_type();
+        Ok(format!(
+            "<music21.stream.{} for {}.{}>",
+            slf.get_type().qualname()?,
+            client.getattr("__module__")?,
+            client.qualname()?
+        ))
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.client)
+    }
+}
+
 impl Stream {
+    /// The first stream this one holds, in its order.
+    fn first_stream<'py>(slf: &Bound<'py, Self>) -> Option<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let me = slf.borrow();
+        me.sorted()
+            .iter()
+            .map(|held| held.object.bind(py).clone())
+            .find(|object| object.cast::<Stream>().is_ok())
+    }
+
     /// The first score whose metadata answers a query in one field, asked
     /// of the metadata itself so that music21's own answers where it is
     /// installed and the package's own where it is not.
@@ -8998,6 +9196,7 @@ impl Walked {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<StreamCore>()?;
     m.add_class::<Stream>()?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;

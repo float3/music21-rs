@@ -2436,7 +2436,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         py,
         RsScaleType::ALL
             .into_iter()
-            .map(|scale_type| (scale_type.music21_name(), scale_type.degree_count() == 7)),
+            .map(|scale_type| (scale_type.music21_name(), is_diatonic(scale_type))),
     )?;
     let built = builder
         .getattr("build")?
@@ -2459,6 +2459,12 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add(name.extract::<String>()?.as_str(), class)?;
     }
     Ok(())
+}
+
+/// Whether music21 builds this scale on its `DiatonicScale`: the ones of
+/// seven steps, but for the rag music21 builds on `ConcreteScale`.
+fn is_diatonic(kind: RsScaleType) -> bool {
+    kind.degree_count() == 7 && !matches!(kind, RsScaleType::RagMarwa)
 }
 
 /// Whether music21 builds this pattern as an `AbstractDiatonicScale`, the

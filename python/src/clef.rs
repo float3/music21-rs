@@ -245,6 +245,7 @@ impl Clef {
             copy.inner = me.inner.clone();
             copy.lowest_line_given = me.lowest_line_given;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

@@ -709,12 +709,12 @@ impl SegmentMatcher {
 
 /// The five matchers music21 writes as subclasses, each one `Matching`.
 macro_rules! matchers {
-    ($(($class:ident, $name:literal, $matching:expr, $duplicates:literal, $shape:ident, {$($extra:item)*})),* $(,)?) => {
+    ($(($class:ident, $name:literal, $parent:ident, [$($chain:ident),*], $matching:expr, $duplicates:literal, $shape:ident, {$($extra:item)*})),* $(,)?) => {
         $(
             #[pyclass(
                 name = $name,
                 module = "music21.search.serial",
-                extends = SegmentMatcher,
+                extends = $parent,
                 subclass,
                 skip_from_py_object
             )]
@@ -738,6 +738,7 @@ macro_rules! matchers {
                             reps,
                             includeChords,
                         )?)
+                        $(.add_subclass($chain))*
                         .add_subclass(Self),
                     )
                 }
@@ -789,6 +790,8 @@ matchers![
     (
         TransposedSegmentMatcher,
         "TransposedSegmentMatcher",
+        SegmentMatcher,
+        [],
         Matching::Transposed,
         false,
         as_intervals,
@@ -797,6 +800,8 @@ matchers![
     (
         TransformedSegmentMatcher,
         "TransformedSegmentMatcher",
+        SegmentMatcher,
+        [],
         Matching::Transformed,
         false,
         as_row,
@@ -816,6 +821,8 @@ matchers![
     (
         MultisetSegmentMatcher,
         "MultisetSegmentMatcher",
+        SegmentMatcher,
+        [],
         Matching::Multiset,
         true,
         as_classes,
@@ -824,6 +831,8 @@ matchers![
     (
         TransposedMultisetMatcher,
         "TransposedMultisetMatcher",
+        SegmentMatcher,
+        [],
         Matching::TransposedMultiset,
         true,
         as_classes,
@@ -832,6 +841,8 @@ matchers![
     (
         TransposedInvertedMultisetMatcher,
         "TransposedInvertedMultisetMatcher",
+        TransposedMultisetMatcher,
+        [TransposedMultisetMatcher],
         Matching::TransposedInvertedMultiset,
         true,
         as_classes,

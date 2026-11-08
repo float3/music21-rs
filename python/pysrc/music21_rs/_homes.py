@@ -266,6 +266,7 @@ ALSO = {
         'DiscreteAnalysisException',
     ),
     'music21.base': (
+        'Derivation',
         'Duration',
         'DurationException',
         'Editorial',
@@ -320,6 +321,7 @@ ALSO = {
         'MeterException',
         'MeterSequence',
         'MeterTerminal',
+        'TimeSignatureBase',
         'TimeSignatureException',
         'bestTimeSignature',
     ),
@@ -371,6 +373,11 @@ ALSO = {
     ),
     'music21.stream': (
         'StreamException',
+    ),
+    'music21.stream.core': (
+        'Music21Object',
+        'StreamException',
+        'StreamIterator',
     ),
     'music21.stream.iterator': (
         'SitesException',

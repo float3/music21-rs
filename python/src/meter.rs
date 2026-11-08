@@ -132,12 +132,21 @@ fn checked_divisions(
     meter.divide_beats(asked).map_err(meter_error)
 }
 
+middle_class!(
+    /// music21's `meter.base.TimeSignatureBase`: what a time signature is
+    /// built on.
+    TimeSignatureBase,
+    "TimeSignatureBase",
+    "music21.meter.base",
+    crate::base::Music21Object
+);
+
 /// music21's `TimeSignature`: a numerator over a denominator, and everything
 /// that follows from the pair.
 #[pyclass(
     name = "TimeSignature",
     module = "music21.meter",
-    extends = crate::base::Music21Object,
+    extends = TimeSignatureBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -2622,6 +2631,7 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bestTimeSignature, m)?)?;
+    m.add_class::<TimeSignatureBase>()?;
     m.add_class::<TimeSignature>()?;
     m.add_class::<MeterTerminal>()?;
     m.add_class::<MeterSequence>()?;

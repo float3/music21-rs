@@ -78,6 +78,12 @@ fn read_tenths(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Tenths>> {
 )]
 pub struct LayoutBase;
 
+impl crate::base::Footing for LayoutBase {
+    fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
+        crate::base::built(Self).add_subclass(value)
+    }
+}
+
 #[pymethods]
 impl LayoutBase {
     /// Refuses a member nothing here defines, as Python refuses it.
@@ -101,7 +107,7 @@ impl LayoutBase {
 #[pyclass(
     name = "ScoreLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -237,6 +243,7 @@ impl ScoreLayout {
             copy.systemLayout = system;
             copy.staffLayoutList = staves;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -292,7 +299,7 @@ fn said(value: Option<Tenths>) -> String {
 #[pyclass(
     name = "PageLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -445,6 +452,7 @@ impl PageLayout {
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -469,7 +477,7 @@ impl PageLayout {
 #[pyclass(
     name = "SystemLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -610,6 +618,7 @@ impl SystemLayout {
             let mut copy = copied.extract::<PyRefMut<'_, Self>>()?;
             copy.inner = me.inner.clone();
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -634,7 +643,7 @@ impl SystemLayout {
 #[pyclass(
     name = "StaffLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -816,6 +825,7 @@ impl StaffLayout {
             // one of those copies.
             copy.given_size = me.given_size.as_ref().map(|given| given.clone_ref(py));
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 

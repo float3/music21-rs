@@ -49,11 +49,20 @@ enum Shape {
     Tremolo,
 }
 
+middle_class!(
+    /// music21's `expressions.Expression`: a mark written on a note or in a
+    /// stream that says how to play it, an ornament or words among them.
+    Expression,
+    "Expression",
+    "music21.expressions",
+    crate::base::Music21Object
+);
+
 /// music21's `expressions.Ornament`.
 #[pyclass(
     name = "Ornament",
     module = "music21.expressions",
-    extends = crate::base::Music21Object,
+    extends = Expression,
     subclass,
     skip_from_py_object,
     weakref
@@ -1116,6 +1125,7 @@ impl Ornament {
             copy.ornamental = ornamental;
             copy.connected_to_previous = me.connected_to_previous;
         }
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -1358,7 +1368,7 @@ impl Trill {
 #[pyclass(
     name = "TextExpression",
     module = "music21.expressions",
-    extends = crate::base::Music21Object,
+    extends = Expression,
     subclass,
     skip_from_py_object,
     weakref
@@ -1554,6 +1564,7 @@ fn realizeOrnaments<'py>(
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(realizeOrnaments, m)?)?;
+    m.add_class::<Expression>()?;
     m.add_class::<Ornament>()?;
     m.add_class::<TextExpression>()?;
     m.add_class::<Trill>()?;

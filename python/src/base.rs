@@ -6,7 +6,7 @@
 //! its own value; these are here so that `isinstance(n, note.GeneralNote)`
 //! and `issubclass(Note, base.Music21Object)` say what they say in music21,
 //! and so that code written for music21 can subclass them. What they hold
-//! is music21's `groups`, which every `Music21Object` has.
+//! is music21's `groups` and `derivation`, which every `Music21Object` has.
 //!
 //! An installed class stands on music21's own classes as well; its chain
 //! has these first and music21's after, and music21's `groups` is the one
@@ -31,6 +31,9 @@ pub const NAMES: &[&str] = &["Music21Object", "GeneralNote", "NotRest", "Groups"
 pub struct Music21Object {
     /// music21's `groups`, made on first asking.
     groups: Option<Py<PyAny>>,
+    /// music21's `derivation`: what this was made from, made on first
+    /// asking or by what made it.
+    derivation: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -50,7 +53,10 @@ impl Music21Object {
                 .map(Bound::unbind),
             None => None,
         };
-        Ok(Self { groups })
+        Ok(Self {
+            groups,
+            derivation: None,
+        })
     }
 
     /// music21's `groups`: the names of the groups this belongs to, as a
@@ -70,15 +76,38 @@ impl Music21Object {
         self.groups = Some(value);
     }
 
+    /// music21's `derivation`: what this was made from and how, a
+    /// `Derivation` of nothing until something made it.
+    #[getter]
+    fn get_derivation(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(derivation) = &slf.borrow().derivation {
+            return Ok(derivation.clone_ref(py));
+        }
+        let made = Py::new(
+            py,
+            crate::derivation::Derivation::of(slf.as_any(), None, None),
+        )?;
+        slf.borrow_mut().derivation = Some(made.clone_ref(py).into_any());
+        Ok(made.into_any())
+    }
+
+    #[setter]
+    fn set_derivation(&mut self, value: Option<Py<PyAny>>) {
+        self.derivation = value;
+    }
+
     fn __traverse__(
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
-        visit.call(&self.groups)
+        visit.call(&self.groups)?;
+        visit.call(&self.derivation)
     }
 
     fn __clear__(&mut self) {
         self.groups = None;
+        self.derivation = None;
     }
 }
 
@@ -137,6 +166,28 @@ pub(crate) fn carry_groups(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -
     Ok(())
 }
 
+/// The derivation an object has, without making one for an object that has
+/// none: the package's own, or music21's `_derivation`.
+pub(crate) fn derivation_held<'py>(object: &Bound<'py, PyAny>) -> Option<Bound<'py, PyAny>> {
+    let py = object.py();
+    if let Ok(ours) = object.cast::<Music21Object>()
+        && let Some(held) = &ours.borrow().derivation
+    {
+        return Some(held.bind(py).clone());
+    }
+    object
+        .getattr(pyo3::intern!(py, "_derivation"))
+        .ok()
+        .filter(|held| !held.is_none())
+}
+
+/// Says of a copy that it was copied from `source`, as music21's
+/// `deepcopy` does: a derivation via `'__deepcopy__'`, and the groups.
+pub(crate) fn copied_from(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
+    carry_groups(source, copy)?;
+    crate::derived_from(copy, source, "__deepcopy__")
+}
+
 /// What a class of the package's is built on, and how to build one on it.
 pub(crate) trait Footing: PyTypeInfo {
     /// `value` as a whole object, its bases built bare beneath it.
@@ -175,6 +226,37 @@ where
     T::BaseType: Footing,
 {
     <T::BaseType as Footing>::under(value)
+}
+
+/// The classes music21 gives more than one base, with all of them, in
+/// music21's order.
+const MULTIPLE_BASES: &[(&str, &[&str])] = &[
+    ("Spiccato", &["Staccato", "Accent"]),
+    ("Stress", &["DynamicArticulation", "LengthArticulation"]),
+    ("StringHarmonic", &["Bowing", "Harmonic"]),
+    ("StringFingering", &["StringIndication", "Fingering"]),
+    ("FrettedPluck", &["FretIndication", "Fingering"]),
+    ("RepeatExpression", &["RepeatMark", "Expression"]),
+    ("Repeat", &["RepeatMark", "Barline"]),
+];
+
+/// Gives the classes music21 builds on more than one base the rest of
+/// theirs: `articulations.Spiccato` is a `Staccato` and an `Accent`. A pyo3
+/// class extends one class; Python takes the others once the classes are
+/// made, where they add nothing to an instance's layout -- a class with no
+/// value of its own, or a mixin with no slots -- which is all these are.
+/// Where both bases keep a value Python refuses, and the wheel tests'
+/// `_HIERARCHY_GAPS` lists the class instead.
+pub(crate) fn add_bases(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    for (name, bases) in MULTIPLE_BASES {
+        let class = m.getattr(*name)?;
+        let mut all = Vec::new();
+        for base in *bases {
+            all.push(m.getattr(*base)?);
+        }
+        class.setattr("__bases__", PyTuple::new(m.py(), all)?)?;
+    }
+    Ok(())
 }
 
 /// music21's `Groups`, as Python: a list of distinct strings that compares

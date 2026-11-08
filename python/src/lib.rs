@@ -33,6 +33,37 @@ macro_rules! error_into {
     };
 }
 
+/// A class of music21's that stands between its subclasses and the class
+/// it extends and carries nothing of its own here: `chord.ChordBase`,
+/// `tempo.TempoIndication`. It is there so that `isinstance` and
+/// `issubclass` answer as in music21; built bare, it is music21's bare one.
+macro_rules! middle_class {
+    ($(#[$doc:meta])* $class:ident, $name:literal, $module:literal, $parent:ty) => {
+        $(#[$doc])*
+        #[pyo3::pyclass(name = $name, module = $module, extends = $parent, subclass)]
+        #[derive(Default)]
+        pub struct $class;
+
+        #[pyo3::pymethods]
+        impl $class {
+            #[new]
+            #[pyo3(signature = (*_arguments, **_keywords))]
+            fn new(
+                _arguments: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+                _keywords: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+            ) -> pyo3::PyClassInitializer<Self> {
+                $crate::base::built(Self)
+            }
+        }
+
+        impl $crate::base::Footing for $class {
+            fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> pyo3::PyClassInitializer<T> {
+                $crate::base::built(Self).add_subclass(value)
+            }
+        }
+    };
+}
+
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -52,6 +83,7 @@ pub mod clef;
 pub mod clercqtemperley;
 pub mod converters;
 pub mod correlate;
+pub mod derivation;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
@@ -117,6 +149,7 @@ pub mod text;
 pub mod transposition;
 pub mod tree;
 pub mod tsvconverter;
+pub mod unpitched;
 pub mod variant;
 pub mod voiceleading;
 pub mod windowed;
@@ -289,7 +322,7 @@ where
     // installed only the wheel.
     if class.is(T::type_object(py)) {
         let copy = Bound::new(py, base::built(value))?.into_any();
-        base::carry_groups(slf.as_any(), &copy)?;
+        base::copied_from(slf.as_any(), &copy)?;
         return Ok(copy);
     }
     // Through the helper, so that the copy gets the music21 half started as
@@ -297,7 +330,7 @@ where
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
-    base::carry_groups(slf.as_any(), &copy)?;
+    base::copied_from(slf.as_any(), &copy)?;
     carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
 }
@@ -331,8 +364,9 @@ fn carry_attributes(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyRes
 ///
 /// `n.transpose('P5')` hands back a copy, and music21 writes on the copy
 /// what it was made from and how; its own streams read that back — a
-/// deepcopy of a stream moves its spanners onto the copies by it. A thing no
-/// stream holds keeps no derivation, and nothing is written on one.
+/// deepcopy of a stream moves its spanners onto the copies by it — and the
+/// context search follows it. A thing no stream holds keeps no derivation,
+/// and nothing is written on one.
 pub(crate) fn derived_from(
     made: &Bound<'_, PyAny>,
     origin: &Bound<'_, PyAny>,
@@ -2144,6 +2178,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     notation::register(m)?;
     note::register(m)?;
     rest::register(m)?;
+    unpitched::register(m)?;
     duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;
@@ -2157,6 +2192,9 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tree::register(m)?;
     formats::register(m)?;
     converters::register(m)?;
+    derivation::register(m)?;
+    // Once every class is made: it gives some a second base.
+    base::add_bases(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
