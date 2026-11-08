@@ -71,7 +71,8 @@ pub mod chord;
 pub mod chordsymbol;
 /// Clefs: which line a note is written on.
 pub mod clef;
-pub(crate) mod common;
+/// music21's `common`: the plumbing its modules share.
+pub mod common;
 pub(crate) mod defaults;
 pub(crate) mod display;
 /// Rhythmic duration primitives.

@@ -1,2 +1,9 @@
+pub mod classtools;
+pub mod decorators;
+pub mod enums;
+pub mod filetools;
 pub(crate) mod numbertools;
+pub mod objects;
+pub mod parallel;
+pub mod pathtools;
 pub(crate) mod stringtools;
