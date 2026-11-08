@@ -345,13 +345,9 @@ fn delay_from_any(value: &Bound<'_, PyAny>) -> PyResult<OrnamentDelay> {
     Ok(OrnamentDelay::Timed(length))
 }
 
-/// One of music21's `OrnamentDelay` members, or the text it stands for
-/// where music21 is not there to ask.
-fn delay_member<'py>(py: Python<'py>, member: &str, value: &str) -> PyResult<Bound<'py, PyAny>> {
-    match crate::real_music21(py, "music21.common.enums") {
-        Ok(enums) => enums.getattr("OrnamentDelay")?.getattr(member),
-        Err(_) => Ok(PyString::new(py, value).into_any()),
-    }
+/// One of music21's `OrnamentDelay` members.
+fn delay_member<'py>(py: Python<'py>, member: &str) -> PyResult<Bound<'py, PyAny>> {
+    crate::plumbing::enum_member(py, "OrnamentDelay", member)
 }
 
 /// Whether an interval moves nowhere, as music21's `isUnison` reads one: an
@@ -553,8 +549,8 @@ impl Ornament {
         let py = slf.py();
         let delay = slf.borrow().inner.delay();
         match delay {
-            OrnamentDelay::NoDelay => delay_member(py, "NO_DELAY", "noDelay"),
-            OrnamentDelay::Default => delay_member(py, "DEFAULT_DELAY", "defaultDelay"),
+            OrnamentDelay::NoDelay => delay_member(py, "NO_DELAY"),
+            OrnamentDelay::Default => delay_member(py, "DEFAULT_DELAY"),
             OrnamentDelay::Timed(length) => crate::duration::op_frac(py, length),
         }
     }
