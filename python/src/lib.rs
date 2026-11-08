@@ -52,9 +52,11 @@ pub mod clef;
 pub mod clercqtemperley;
 pub mod converters;
 pub mod correlate;
+pub mod defaults;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
+pub mod environment;
 pub mod editorial;
 pub mod enharmonics;
 pub mod expressions;
@@ -2201,10 +2203,35 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
 /// ```
 ///
+    m.add("__music21_built_modules__", BUILT_MODULES.to_vec())?;
+    m.add_function(wrap_pyfunction!(music21_module, m)?)?;
 /// Everything lives in this one namespace. Each class reports the music21
 /// module it corresponds to (`m.Chord.__module__ == 'music21.chord'`), so its
 /// `repr` matches music21's.
 ///
+/// music21's modules that are built here whole, as modules, rather than
+/// put together from the classes on this one: what they hold (`set`,
+/// `get`, `keys`) would shadow Python's own in a flat namespace, and their
+/// exceptions must wait for music21's `Music21Exception`.
+const BUILT_MODULES: [&str; 3] = [
+    "music21.environment",
+    "music21.defaults",
+    "music21._version",
+];
+
+/// The module of music21's named, built on first asking: one of
+/// [`BUILT_MODULES`].
+#[pyfunction]
+#[pyo3(name = "_music21_module")]
+fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    match name {
+        "music21.environment" => environment::module(py),
+        "music21.defaults" => defaults::defaults_module(py),
+        "music21._version" => defaults::version_module(py),
+        _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
+    }
+}
+
 /// Streams, file parsing, notation output and the corpus are not included.
 /// To use those, install music21 as well and call `install_into_music21()`:
 /// music21's own code then runs on these classes.

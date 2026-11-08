@@ -9595,17 +9595,17 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.environment', 'from music21 import musicxml'):
+for statement in ('import music21.mei', 'from music21 import musicxml'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'environment'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.environment",
+        "music21-rs does not provide music21.mei",
         "music21-rs does not provide music21.musicxml",
         "False True",
     ]
