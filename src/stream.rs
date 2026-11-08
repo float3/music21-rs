@@ -213,6 +213,8 @@ pub enum StreamElement {
     /// A `*` instruction of a Humdrum spine with no object of its own,
     /// kept where it was written.
     MiscTandem(crate::humdrum::MiscTandem),
+    /// A `!` comment in one Humdrum spine: music21's `SpineComment`.
+    SpineComment(crate::humdrum::SpineComment),
     /// Where a braille segment divides; nothing is written for it.
     BrailleSegmentDivision(crate::braille::SegmentDivision),
 }
@@ -253,6 +255,7 @@ impl StreamElement {
             | Self::Variant(_)
             | Self::GlobalComment(_)
             | Self::MiscTandem(_)
+            | Self::SpineComment(_)
             | Self::BrailleSegmentDivision(_) => None,
         }
     }
@@ -285,6 +288,7 @@ impl StreamElement {
             | Self::Variant(_)
             | Self::GlobalComment(_)
             | Self::MiscTandem(_)
+            | Self::SpineComment(_)
             | Self::BrailleSegmentDivision(_) => 0.0,
             _ => self
                 .duration()
@@ -324,6 +328,7 @@ impl StreamElement {
             | Self::Variant(_)
             | Self::GlobalComment(_)
             | Self::MiscTandem(_)
+            | Self::SpineComment(_)
             | Self::BrailleSegmentDivision(_) => Vec::new(),
         }
     }
@@ -409,6 +414,7 @@ impl StreamElement {
             Self::Variant(variant) => Ok(Self::Variant(Box::new(variant.transpose(interval)?))),
             Self::GlobalComment(said) => Ok(Self::GlobalComment(said.clone())),
             Self::MiscTandem(tandem) => Ok(Self::MiscTandem(tandem.clone())),
+            Self::SpineComment(said) => Ok(Self::SpineComment(said.clone())),
             Self::BrailleSegmentDivision(division) => Ok(Self::BrailleSegmentDivision(*division)),
         }
     }
@@ -429,6 +435,12 @@ impl From<PedalObject> for StreamElement {
 impl From<crate::humdrum::GlobalComment> for StreamElement {
     fn from(value: crate::humdrum::GlobalComment) -> Self {
         Self::GlobalComment(value)
+    }
+}
+
+impl From<crate::humdrum::SpineComment> for StreamElement {
+    fn from(value: crate::humdrum::SpineComment) -> Self {
+        Self::SpineComment(value)
     }
 }
 
@@ -564,6 +576,11 @@ impl From<MetronomeMark> for StreamElement {
 pub struct StreamEvent {
     offset: FloatType,
     element: StreamElement,
+    /// music21's `priority`, which sorts what stands at one offset ahead
+    /// of its class: nought but where a reader says, as Humdrum's says the
+    /// line each thing was written on.
+    #[cfg_attr(feature = "serde", serde(default))]
+    priority: i32,
 }
 
 impl StreamEvent {
@@ -572,7 +589,20 @@ impl StreamEvent {
         Self {
             offset,
             element: element.into(),
+            priority: 0,
         }
+    }
+
+    /// The same event, sorted by `priority` among what shares its offset.
+    pub fn with_priority(mut self, priority: i32) -> Self {
+        self.priority = priority;
+        self
+    }
+
+    /// music21's `priority` for the element, nought unless a reader gave
+    /// one.
+    pub fn priority(&self) -> i32 {
+        self.priority
     }
 
     /// Returns the offset in quarter lengths.

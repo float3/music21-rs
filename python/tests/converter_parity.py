@@ -22,13 +22,21 @@ import time
 # What names an object by where it is in memory, which differs every read.
 ADDRESS = re.compile(r'0x[0-9a-f]+|\b[0-9]{9,}\b')
 
+# A random name a reader gives a spanner, which differs every read: MEI's
+# slurs written apart from their notes, as `idLocal` and as the number the
+# MusicXML writer gives them.
+RANDOM_NAME = re.compile(
+    r"""(?<=idLocal=')[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=')"""
+    r'|(?<=number=")[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=")'
+)
+
 # What an element says beyond its class, offset and length, by class.
 ATTRIBUTES = {
     'GeneralNote': (
         'fullName', 'tie', 'lyrics', 'articulations', 'expressions',
         'stemDirection', 'beams', 'notehead', 'noteheadFill',
         'noteheadParenthesis', 'duration.tuplets', 'duration.isGrace',
-        'duration.linked', 'volume.velocity', 'stemDirection',
+        'duration.linked', 'duration.expressionIsInferred', 'volume.velocity', 'stemDirection',
         'hasVolumeInformation', 'editorial',
     ),
     'Rest': ('stepShift', 'fullMeasure'),
@@ -142,7 +150,7 @@ def listed(score):
     lines.append('-- spanners')
     for spanner in score.spannerBundle:
         joined = ', '.join(places.get(id(each), '?') for each in spanner.getSpannedElements())
-        lines.append(f'{type(spanner).__name__} [{joined}] {_attributes(spanner)}')
+        lines.append(RANDOM_NAME.sub('uuid4', f'{type(spanner).__name__} [{joined}] {_attributes(spanner)}'))
     lines.append('-- metadata')
     metadata = score.metadata
     if metadata is not None:
@@ -175,7 +183,7 @@ def _list_stream(stream, where, lines, places):
                 inner = element.id
             _list_stream(element, f'{where}/{inner}', lines, places)
             continue
-        lines.append(f'{line} {_attributes(element)} | {_repr(element)}')
+        lines.append(RANDOM_NAME.sub('uuid4', f'{line} {_attributes(element)} | {_repr(element)}'))
 
 
 def _repr(element):
@@ -195,7 +203,7 @@ def _musicxml(score):
     written = re.sub(r' id="[^"]*"', '', written)
     if IGNORE_STYLE:
         written = DRAWN.sub('', written)
-    return ADDRESS.sub('', written).splitlines()
+    return RANDOM_NAME.sub('uuid4', ADDRESS.sub('', written)).splitlines()
 
 
 def read(path, fmt, routed):

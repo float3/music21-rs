@@ -92,6 +92,10 @@ pub struct Rest {
     full_measure: FullMeasure,
     #[cfg_attr(feature = "serde", serde(default))]
     color: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    id: Option<String>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    beams: Option<crate::notation::Beams>,
 }
 
 impl PartialEq for Rest {
@@ -114,7 +118,31 @@ impl Rest {
             tie: None,
             full_measure: FullMeasure::Auto,
             color: None,
+            id: None,
+            beams: None,
         }
+    }
+
+    /// The beams music21's makeBeams handed the rest, empty, where it
+    /// beamed the line the rest stands in; none where nothing did.
+    pub fn beams(&self) -> Option<&crate::notation::Beams> {
+        self.beams.as_ref()
+    }
+
+    /// Hands the rest beams, or takes them away.
+    pub fn set_beams(&mut self, beams: Option<crate::notation::Beams>) {
+        self.beams = beams;
+    }
+
+    /// The name the rest is known by, where a reader found one: music21's
+    /// `id`, from MEI's `xml:id`.
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
+    /// Names the rest, or takes its name away.
+    pub fn set_id(&mut self, id: Option<String>) {
+        self.id = id;
     }
 
     /// What the rest says of its measure: music21's `fullMeasure`. The

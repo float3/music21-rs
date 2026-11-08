@@ -1270,9 +1270,12 @@ pub fn outline(score: &Stream) -> String {
             ));
             out.extend(barlines(measure));
             // A humdrum instruction is compared on its own, and music21's
-            // outline says nothing for it.
+            // outline says nothing for it or for a spine comment.
             let said = |event: &&music21::StreamEvent| {
-                !matches!(event.element(), StreamElement::MiscTandem(_))
+                !matches!(
+                    event.element(),
+                    StreamElement::MiscTandem(_) | StreamElement::SpineComment(_)
+                )
             };
             for held in measure.events().iter().filter(said) {
                 match held.element().as_stream() {

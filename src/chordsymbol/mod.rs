@@ -121,6 +121,10 @@ pub struct ChordSymbol {
     /// object carry.
     #[cfg_attr(feature = "serde", serde(default))]
     lyrics: Vec<crate::notation::Lyric>,
+    /// The pitches a transposition left, each moved on its own as music21
+    /// moves a chord's, which stand in for the ones the figure would sound.
+    #[cfg_attr(feature = "serde", serde(default))]
+    transposed: Option<Vec<Pitch>>,
 }
 
 /// The length of a symbol nobody has given one: none at all.
@@ -410,6 +414,7 @@ impl ChordSymbol {
             kind_text: crate::display::Drawn(None),
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
+            transposed: None,
         })
     }
 
@@ -493,6 +498,7 @@ impl ChordSymbol {
             kind_text: crate::display::Drawn(None),
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
+            transposed: None,
         })
     }
 
@@ -515,6 +521,7 @@ impl ChordSymbol {
             kind_text: crate::display::Drawn(Some(text.unwrap_or_else(|| "N.C.".to_string()))),
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
+            transposed: None,
         }
     }
 
@@ -658,6 +665,16 @@ impl ChordSymbol {
     /// second is `C/E`.
     pub fn transpose(&self, interval: &Interval) -> Result<ChordSymbol> {
         let mut transposed = self.clone();
+        // music21 moves a chord's pitches one by one; a symbol sounding
+        // nothing it leaves be.
+        if !self.is_no_chord() {
+            let moved = self
+                .pitches()?
+                .iter()
+                .map(|pitch| interval.transpose_pitch(pitch))
+                .collect::<Result<Vec<_>>>()?;
+            transposed.transposed = Some(moved);
+        }
         transposed.root = self.root.transpose(interval)?;
         transposed.bass = self
             .bass
@@ -708,11 +725,13 @@ impl ChordSymbol {
         if !self.modifications.contains(&modification) {
             self.modifications.push(modification);
         }
+        self.transposed = None;
     }
 
     /// Replaces every chord-step modification at once.
     pub fn set_chord_step_modifications(&mut self, modifications: Vec<ChordStepModification>) {
         self.modifications = modifications;
+        self.transposed = None;
     }
 
     /// A symbol given as MusicXML gives one: a root, one of music21's chord
@@ -742,17 +761,20 @@ impl ChordSymbol {
     pub fn with_kind(mut self, kind: &str) -> Self {
         self.kind = Some(kind.to_string());
         self.modifications.clear();
+        self.transposed = None;
         self
     }
 
     /// Sets the root the symbol is sounded on.
     pub fn set_root(&mut self, root: Pitch) {
         self.root = root;
+        self.transposed = None;
     }
 
     /// Sets the bass, or takes it away with `None`.
     pub fn set_bass(&mut self, bass: Option<Pitch>) {
         self.bass = bass;
+        self.transposed = None;
     }
 
     fn fifth_is_implied(&self) -> bool {
@@ -821,6 +843,13 @@ impl ChordSymbol {
         Chord::new(self.pitches()?.as_slice())
     }
 
+    /// The pitches a transposition left the symbol sounding, each moved on
+    /// its own, where it has been transposed; [`ChordSymbol::pitches`]
+    /// answers them.
+    pub fn transposed_pitches(&self) -> Option<&[Pitch]> {
+        self.transposed.as_deref()
+    }
+
     /// The pitches the symbol sounds, with their octaves, lowest first:
     /// music21's `ChordSymbol._updatePitches`.
     ///
@@ -838,6 +867,9 @@ impl ChordSymbol {
     pub fn pitches(&self) -> Result<Vec<Pitch>> {
         if self.is_no_chord() {
             return Ok(Vec::new());
+        }
+        if let Some(moved) = &self.transposed {
+            return Ok(moved.clone());
         }
         // A kind music21's table has no notation for -- one a MusicXML file
         // names, as `minor-major` -- sounds as the empty kind does: the root,
@@ -1141,6 +1173,23 @@ impl TryFrom<String> for ChordSymbol {
 
 #[cfg(test)]
 mod tests {
+
+    /// music21 transposes a symbol as it does any chord, moving each of its
+    /// pitches on its own: by a count of semitones each is spelled afresh
+    /// where it lands, so B major down an octave sounds `B1 Eb2 F#2`.
+    #[test]
+    fn a_transposed_symbol_moves_each_pitch() {
+        let symbol = ChordSymbol::parse_music21("B").unwrap();
+        let interval = crate::interval::Interval::from_semitones(-12).unwrap();
+        let moved = symbol.transpose(&interval).unwrap();
+        let names: Vec<String> = moved
+            .pitches()
+            .unwrap()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(names, ["B1", "Eb2", "F#2"]);
+    }
 
     /// music21 puts its root and bass objects themselves in the list it
     /// voices, so an octave pass over the list moves them too, once for

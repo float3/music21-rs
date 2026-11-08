@@ -676,6 +676,9 @@ impl AbcNote {
 struct Spanning {
     kind: SpannerKind,
     uids: Vec<usize>,
+    /// The notes it took that no stream holds, by their uid: a grace
+    /// note's own, which music21 copies as the grace it places.
+    strays: Vec<(usize, StreamElement)>,
     /// Where its part had got to when it opened, which is where music21
     /// appends it to the part.
     offset: FloatType,
@@ -1127,6 +1130,7 @@ impl Handler {
                     spanners.push(Spanning {
                         kind,
                         uids: Vec::new(),
+                        strays: Vec::new(),
                         offset: 0.0,
                     });
                     let made = spanners.len() - 1;
@@ -1694,6 +1698,15 @@ fn note_elements(
         for spanner in &token.spanners {
             reader.spanners[*spanner].uids.push(uid);
         }
+        if token.in_grace {
+            let mut stray = Rest::new(duration.clone());
+            stray.set_tie(tie_of(token.tie));
+            for spanner in &token.spanners {
+                reader.spanners[*spanner]
+                    .strays
+                    .push((uid, stray.clone().into()));
+            }
+        }
         let duration = if token.in_grace {
             grace_of(&duration)
         } else {
@@ -1725,6 +1738,13 @@ fn note_elements(
     // A grace note is a copy made after the spanners took the note itself,
     // which no stream then holds.
     let placed = if token.in_grace {
+        let mut stray = note.clone();
+        stray.set_duration(duration.clone());
+        for spanner in &token.spanners {
+            reader.spanners[*spanner]
+                .strays
+                .push((uid, stray.clone().into()));
+        }
         duration = grace_of(&duration);
         reader.uid()
     } else {
@@ -2052,7 +2072,11 @@ fn part_of(
             .flat_map(|measure| &mut measure.line.items)
             .chain(&mut part.items)
         {
-            if item.element.is_note_or_chord() {
+            // A chord symbol moves with the notes, as music21 moves any
+            // element that can be transposed.
+            let moves = item.element.is_note_or_chord()
+                || matches!(item.element, StreamElement::ChordSymbol(_));
+            if moves {
                 item.element = item.element.transpose(&interval)?;
             }
         }
@@ -2361,6 +2385,14 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             kind => Spanner::with_unplaced(kind, positions),
         };
         made.set_offset(spanner.offset);
+        for (place, uid) in spanner.uids.iter().enumerate() {
+            if made.spanned().get(place).is_some_and(Option::is_some) {
+                continue;
+            }
+            if let Some((_, stray)) = spanner.strays.iter().find(|(held, _)| held == uid) {
+                made.set_unplaced_element(place, stray.clone());
+            }
+        }
         score.add_spanner(made);
     }
     Ok(score)
@@ -2472,6 +2504,22 @@ mod tests {
             Bar::new("||").barline().unwrap().bar_type(),
             BarlineType::Double
         );
+    }
+
+    /// A slur over a grace note holds the note music21 made before it
+    /// copied it as a grace, which no stream holds: the spanner keeps it.
+    #[test]
+    fn a_slur_keeps_the_grace_note_no_stream_holds() {
+        let score = from_abc("X:1\nM:4/4\nL:1/8\nK:C\n(g2{a}g) c4 |\n").unwrap();
+        let slur = &score.spanners()[0];
+        assert_eq!(slur.len(), 3);
+        assert_eq!(slur.spanned()[1], None);
+        let stray: Vec<(usize, String)> = slur
+            .unplaced_elements()
+            .iter()
+            .map(|(place, element)| (*place, element.pitches()[0].name_with_octave()))
+            .collect();
+        assert_eq!(stray, [(1, "A5".to_string())]);
     }
 
     #[test]

@@ -395,6 +395,41 @@ def test_harmony_module_functions():
         m.getCurrentAbbreviationFor("nonsense")
 
 
+def test_a_grace_duration_is_never_inferred():
+    """music21's `getGraceDuration` builds a fresh `GraceDuration`, which
+    says its written value was not inferred, however the length it came
+    from was given."""
+    assert m.Duration(1.0).getGraceDuration().expressionIsInferred is False
+    assert m.Duration(type="eighth").getGraceDuration().expressionIsInferred is False
+
+
+def test_a_rest_read_keeps_where_it_is_shown():
+    """A rest MusicXML shows at a pitch keeps the steps it is moved from the
+    middle line: music21's `stepShift`."""
+    xml = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>x</part-name></score-part></part-list><part id=\"P1\">"
+        "<measure number=\"1\"><attributes><divisions>1</divisions>"
+        "<time><beats>1</beats><beat-type>4</beat-type></time>"
+        "<clef><sign>G</sign><line>2</line></clef></attributes>"
+        "<note><rest><display-step>E</display-step><display-octave>4</display-octave>"
+        "</rest><duration>1</duration><type>quarter</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    rests = [r for r in m.from_musicxml(xml).recurse().notesAndRests]
+    assert [r.stepShift for r in rests] == [-4]
+
+
+def test_chord_keeps_the_beams_it_is_given():
+    """`Chord(notes, beams=b)` holds `b`, as music21's `NotRest` keeps the
+    beams it is built with; music21's Humdrum reader beams its chords so."""
+    b = m.Beams()
+    b.append("start")
+    made = m.Chord(["C4", "E4"], beams=b)
+    assert made.beams is b
+    assert [beam.type for beam in made.beams.beamsList] == ["start"]
+
+
 def test_chord_module_functions():
     assert [p.name for p in m.fromForteClass("3-11").pitches] == ["C", "E-", "G"]
     assert [p.name for p in m.fromForteClass([3, 11]).pitches] == ["C", "E-", "G"]
@@ -7826,6 +7861,28 @@ print(m.route_converters(['midi']))
     ]
 
 
+def test_install_routes_every_format_read_as_music21_reads_it():
+    """Installed, `converter.parse` reads ABC, MIDI, Humdrum and MEI through
+    the crate, whose scores of them are music21's to the last attribute,
+    and leaves MusicXML to music21's reader."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import common, converter
+import music21_rs as m
+m.install_into_music21()
+root = common.getSourceFilePath()
+for path in ('corpus/ryansMammoth/BanjoReel.abc', 'corpus/bach/bwv281.krn',
+             'mei/test/test_file.mei', 'corpus/bach/bwv66.6.mxl'):
+    made = converter.Converter()
+    made.parseFile(root / path, forceSource=True, storePickle=False)
+    print(path.rsplit('.', 1)[-1], getattr(made.subConverter, 'readByCrate', False))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["abc True", "krn True", "mei True", "mxl False"]
+
+
 def test_route_converters_routes_its_formats_and_no_others():
     """Each format routed is music21's own subconverter class under the
     same name, reading through the crate; a format it has no reader for is
@@ -8016,6 +8073,24 @@ def test_routed_musicxml_keeps_a_rest_hidden():
     pytest.importorskip("music21.stream")
     paths = ("corpus/schubert/Lindenbaum.xml",)
     assert _routed_differences("musicxml", paths, ("print-object",), drawn=False) == []
+
+
+def test_routed_mei_puts_slurs_in_the_score_and_keeps_ids():
+    """An MEI score read through the crate is music21's to the last
+    attribute: its slurs stand in the score after the last measure,
+    named as music21 names them, and its chords and rests keep their
+    `xml:id`."""
+    pytest.importorskip("music21.stream")
+    assert _routed_differences("mei", ("mei/test/test_file.mei",)) == []
+
+
+def test_routed_abc_keeps_endings_and_the_beams_of_rests():
+    """An ABC tune read through the crate brackets its alternative endings
+    with music21's `RepeatBracket`, and gives each rest of a beamed measure
+    the empty beams music21's makeBeams gives it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/BanjoReel.abc",)
+    assert _routed_differences("abc", paths, ("RepeatBracket", " Rest ", "<ending")) == []
 
 
 def test_routed_scores_carry_music21s_own_metadata():

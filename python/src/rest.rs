@@ -97,6 +97,8 @@ fn full_measure_from(value: &Bound<'_, PyAny>) -> PyResult<FullMeasure> {
 
 impl Rest {
     pub(crate) fn wrap(_py: Python<'_>, inner: RsRest) -> Self {
+        // Where a reader found it shown, which the facade keeps.
+        let step_shift = inner.step_shift();
         Self {
             inner,
             duration: None,
@@ -106,7 +108,7 @@ impl Rest {
             expressions: None,
             articulations: None,
             style: None,
-            step_shift: 0,
+            step_shift,
             watched: false,
         }
     }
