@@ -40,9 +40,11 @@ pub mod articulations;
 pub mod audiosearch;
 pub mod bar;
 pub mod base;
+pub mod base40;
 pub mod braillebasic;
 pub mod braillelookup;
 pub mod braillenotegrouping;
+pub mod brailleobjects;
 pub mod braillesegment;
 pub mod brailletext;
 pub mod brailletranslate;
@@ -72,6 +74,7 @@ pub mod harmony;
 pub mod harmparser;
 pub mod hartelabel;
 pub mod hasher;
+pub mod humdruminstruments;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
@@ -116,6 +119,7 @@ pub mod spanner;
 mod spelling;
 pub mod spineparser;
 pub mod stream;
+pub mod style;
 pub mod tablature;
 pub mod tempo;
 pub mod text;
@@ -2133,6 +2137,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tablature::register(m)?;
     midipercussion::register(m)?;
     braillebasic::register(m)?;
+    brailleobjects::register(m)?;
     braillelookup::register(m)?;
     braillenotegrouping::register(m)?;
     braillesegment::register(m)?;
@@ -2177,6 +2182,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sieve::register(m)?;
     roman::register(m)?;
     notation::register(m)?;
+    style::register(m)?;
     note::register(m)?;
     rest::register(m)?;
     duration::register(m)?;
@@ -2212,10 +2218,17 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// put together from the classes on this one: what they hold (`set`,
 /// `get`, `keys`) would shadow Python's own in a flat namespace, and their
 /// exceptions must wait for music21's `Music21Exception`.
-const BUILT_MODULES: [&str; 3] = [
+const BUILT_MODULES: [&str; 10] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
+    "music21.humdrum.instruments",
+    "music21.musedata.base40",
+    "music21.musedata.base12_26",
+    "music21.figuredBass.possibility",
+    "music21.omr.correctors",
+    "music21.braille.lookup",
+    "music21.style",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2227,6 +2240,13 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.environment" => environment::module(py),
         "music21.defaults" => defaults::defaults_module(py),
         "music21._version" => defaults::version_module(py),
+        "music21.humdrum.instruments" => humdruminstruments::module(py),
+        "music21.musedata.base40" => base40::base40_module(py),
+        "music21.musedata.base12_26" => base40::base12_26_module(py),
+        "music21.figuredBass.possibility" => possibility::module(py),
+        "music21.omr.correctors" => omrcorrectors::module(py),
+        "music21.braille.lookup" => braillelookup::module(py),
+        "music21.style" => style::module(py),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
 }
