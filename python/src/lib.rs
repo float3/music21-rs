@@ -67,6 +67,7 @@ pub mod extractors;
 pub mod fbrules;
 pub mod features;
 pub mod figuredbass;
+pub mod filters;
 pub mod fixer;
 pub mod formats;
 pub mod harmonicfunction;
@@ -2218,7 +2219,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// put together from the classes on this one: what they hold (`set`,
 /// `get`, `keys`) would shadow Python's own in a flat namespace, and their
 /// exceptions must wait for music21's `Music21Exception`.
-const BUILT_MODULES: [&str; 10] = [
+const BUILT_MODULES: [&str; 11] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2229,6 +2230,7 @@ const BUILT_MODULES: [&str; 10] = [
     "music21.omr.correctors",
     "music21.braille.lookup",
     "music21.style",
+    "music21.stream.filters",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2247,6 +2249,7 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.omr.correctors" => omrcorrectors::module(py),
         "music21.braille.lookup" => braillelookup::module(py),
         "music21.style" => style::module(py),
+        "music21.stream.filters" => filters::module(py),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
 }

@@ -10174,3 +10174,55 @@ print(correctors.MeasureRelationship._fields[:2])
         "True",
         "('flaggedMeasurePart', 'flaggedMeasureIndex')",
     ]
+
+
+def test_provided_filters_pick_what_music21s_pick(tmp_path):
+    """Provided, `stream.filters` has music21's filters, and an iterator
+    takes them with `addFilter`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import key, note, stream
+from music21.stream import filters
+s = stream.Stream()
+s.insert(0, key.KeySignature(-3))
+n = note.Note('C#')
+s.append(n)
+s.append(note.Rest())
+is_n = filters.IsFilter(n)
+print(is_n.derivationStr, is_n.target, is_n.numToFind)
+print([el is n for el in s.iter().addFilter(is_n)])
+print(list(s.iter().addFilter(filters.IsNotFilter(n))))
+print(filters.ClassFilter('Note'), filters.ClassFilter('Note') == filters.ClassFilter('Note'))
+print(list(s.iter().addFilter(filters.ClassNotFilter('Note'))))
+n.groups.append('tuba')
+print(list(s.iter().addFilter(filters.GroupFilter('tuba'))))
+of = filters.OffsetFilter(0, 1)
+print(of, of.zeroLengthSearch, list(s.iter().addFilter(of)))
+print(list(s.iter().addFilter(filters.OffsetFilter(1))))
+from music21 import base
+w = base.ElementWrapper(1)
+w.id = 'Mine'
+print(filters.IdFilter('mine')(w), filters.StreamFilter()(n), filters.StreamFilter().classes)
+try:
+    filters.OffsetHierarchyFilter(0)(n)
+except TypeError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "is (<music21.note.Note C#>,) 1",
+        "[True]",
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Rest quarter>]",
+        "<music21.stream.filters.ClassFilter Note> True",
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Rest quarter>]",
+        "[<music21.note.Note C#>]",
+        "<music21.stream.filters.OffsetFilter 0.0-1.0> False "
+        "[<music21.key.KeySignature of 3 flats>, <music21.note.Note C#>, "
+        "<music21.note.Rest quarter>]",
+        "[<music21.note.Rest quarter>]",
+        "True True ('StreamFilter', 'ProtoM21Object', 'object')",
+        "Cannot call OffsetHierarchyFilter without an iterator",
+    ]
+
