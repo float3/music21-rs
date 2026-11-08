@@ -395,6 +395,15 @@ def test_harmony_module_functions():
         m.getCurrentAbbreviationFor("nonsense")
 
 
+def test_a_grace_duration_is_never_inferred():
+    """music21's `getGraceDuration` builds a fresh `GraceDuration`, which
+    says its written value was not inferred, however the length it came
+    from was given."""
+    assert m.Duration(1.0).getGraceDuration().expressionIsInferred is False
+    assert m.Duration(type="eighth").getGraceDuration().expressionIsInferred is False
+
+
+
 def test_chord_keeps_the_beams_it_is_given():
     """`Chord(notes, beams=b)` holds `b`, as music21's `NotRest` keeps the
     beams it is built with; music21's Humdrum reader beams its chords so."""

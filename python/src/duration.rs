@@ -2135,6 +2135,9 @@ impl Duration {
         );
         grace.linked = false;
         grace.unlinked_type = Some(written_type);
+        // A fresh `GraceDuration`, which music21 builds saying nothing was
+        // inferred.
+        grace.expression_is_inferred = false;
         grace.inner = RsDuration::new(0.0).map_err(duration_error)?;
         let kind = match appoggiatura {
             true => GraceKind::Appoggiatura,
