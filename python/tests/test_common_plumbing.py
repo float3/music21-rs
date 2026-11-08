@@ -19,12 +19,13 @@ def _run_provided(code, cwd):
     package_root = pathlib.Path(m.__file__).resolve().parents[1]
     if (package_root / "music21").exists():
         pytest.skip("music21 is installed beside this package")
-    env = dict(os.environ, PYTHONPATH=str(package_root))
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8")
     prelude = "import music21_rs\nmusic21_rs.provide_music21()\n"
     done = subprocess.run(
         [sys.executable, "-S", "-c", prelude + code],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=cwd,
         env=env,
     )
@@ -348,7 +349,9 @@ from music21.common import pathTools, fileTools
 from music21 import exceptions21
 root = {str(tmp_path)!r}
 print(pathTools.cleanpath(root + '/real/../x') == os.path.join(root, 'x'))
-print(pathTools.cleanpath(root + '/none/../x') == root + '/none/../x')
+# Windows collapses 'none/..' before asking the disk, and music21 with it.
+missing = os.path.join(root, 'x') if os.name == 'nt' else root + '/none/../x'
+print(pathTools.cleanpath(root + '/none/../x') == missing)
 print(isinstance(pathTools.cleanpath(pathlib.Path(root)), pathlib.Path),
       isinstance(pathTools.cleanpath(pathlib.Path(root), returnPathlib=False), str))
 print(pathTools.cleanpath('rel') == os.path.join(os.getcwd(), 'rel'))

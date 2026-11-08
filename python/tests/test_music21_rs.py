@@ -9680,11 +9680,13 @@ def _run_without_music21(code, cwd, **environment):
     package_root = pathlib.Path(m.__file__).resolve().parents[1]
     if (package_root / "music21").exists():
         pytest.skip("music21 is installed beside this package")
-    env = dict(os.environ, PYTHONPATH=str(package_root), **environment)
+    # UTF-8 both ways, braille and all, whatever the console's encoding.
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8", **environment)
     return subprocess.run(
         [sys.executable, "-S", "-c", code],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         cwd=cwd,
         env=env,
     )
@@ -10364,12 +10366,14 @@ print(lcs, isinstance(lcs, list))
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
+    # music21 keeps the path as this platform's `Path`.
+    app = pathlib.Path("/a&b/MuseScore.app")
     assert done.stdout.splitlines() == [
         "ask 0 vectorPath",
-        "PosixPath('/a&b/MuseScore.app') Musescore",
+        f"{app!r} Musescore",
         "asdf is not an acceptable value for preference: showFormat",
         "True True",
-        "/a&b/MuseScore.app",
+        str(app),
         "LocalCorpusSettings(['/tmp'], name='n') True",
     ]
 
