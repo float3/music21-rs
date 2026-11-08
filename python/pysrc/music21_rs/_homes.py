@@ -257,32 +257,56 @@ HOMES = {
 ALSO = {
     'music21': (
         'ElementException',
+        'ElementWrapper',
         'Groups',
         'Music21Object',
         'Music21ObjectException',
         'SitesException',
     ),
     'music21.alpha.analysis.ornamentRecognizer': (
+        'OffsetQL',
         'opFrac',
     ),
+    'music21.analysis': (
+        'AnalysisException',
+    ),
+    'music21.analysis.floatingKey': (
+        'AnalysisException',
+    ),
     'music21.analysis.reduceChords': (
+        'DocOrder',
         'opFrac',
+    ),
+    'music21.analysis.reduction': (
+        'DocOrder',
     ),
     'music21.analysis.windowed': (
         'DiscreteAnalysisException',
+    ),
+    'music21.articulations': (
+        'OffsetQL',
+        'tempAttribute',
     ),
     'music21.base': (
         'Derivation',
         'Duration',
         'DurationException',
         'Editorial',
+        'ElementSearch',
         'Music21Exception',
+        'OffsetQL',
+        'OffsetQLIn',
+        'OffsetSpecial',
         'Sites',
         'SitesException',
         'Style',
         'opFrac',
     ),
+    'music21.beam': (
+        'EqualSlottedObjectMixin',
+    ),
     'music21.braille.segment': (
+        'ProtoM21Object',
         'opFrac',
     ),
     'music21.braille.text': (
@@ -294,12 +318,35 @@ ALSO = {
     ),
     'music21.chord': (
         'Duration',
+        'cacheMethod',
+    ),
+    'music21.common.fileTools': (
+        'Music21Exception',
+    ),
+    'music21.common.numberTools': (
+        'OffsetQL',
+        'OffsetQLIn',
+    ),
+    'music21.common.objects': (
+        'deprecated',
+    ),
+    'music21.common.types': (
+        'OffsetSpecial',
+    ),
+    'music21.derivation': (
+        'SlottedObjectMixin',
     ),
     'music21.duration': (
         'DENOM_LIMIT',
+        'DocOrder',
+        'OffsetQL',
+        'OffsetQLIn',
+        'SlottedObjectMixin',
         'opFrac',
     ),
     'music21.expressions': (
+        'OffsetQL',
+        'OrnamentDelay',
         'opFrac',
     ),
     'music21.features': (
@@ -307,24 +354,46 @@ ALSO = {
         'DataSetException',
         'FeatureException',
         'FeatureExtractor',
+        'StreamType',
         'allFeaturesAsList',
         'extractorById',
         'extractorsById',
         'getIndex',
+        'safeToParallize',
         'vectorById',
+    ),
+    'music21.features.base': (
+        'StreamType',
+        'safeToParallize',
     ),
     'music21.features.jSymbolic': (
         'Instrument',
     ),
     'music21.figuredBass.realizer': (
+        'OffsetQL',
         'opFrac',
     ),
     'music21.figuredBass.realizerScale': (
         'convertToPitch',
     ),
+    'music21.figuredBass.segment': (
+        'OffsetQL',
+    ),
     'music21.humdrum.spineParser': (
         'GraceDuration',
+        'OffsetQL',
         'opFrac',
+    ),
+    'music21.interval': (
+        'StepName',
+        'cacheMethod',
+    ),
+    'music21.key': (
+        'StepName',
+        'cacheMethod',
+    ),
+    'music21.layout': (
+        'GatherSpanners',
     ),
     'music21.metadata': (
         'Contributor',
@@ -336,6 +405,8 @@ ALSO = {
         'DateRelative',
         'DateSelection',
         'DateSingle',
+        'DocOrder',
+        'OffsetQL',
         'Text',
     ),
     'music21.meter': (
@@ -347,19 +418,34 @@ ALSO = {
         'bestTimeSignature',
     ),
     'music21.meter.base': (
+        'MeterDivision',
         'MeterSequence',
         'opFrac',
     ),
     'music21.meter.core': (
+        'FrozenObject',
         'MeterException',
+        'OffsetQL',
+        'OffsetQLIn',
         'opFrac',
     ),
     'music21.note': (
         'Duration',
         'Pitch',
     ),
+    'music21.pitch': (
+        'SlottedObjectMixin',
+        'StepName',
+    ),
     'music21.roman': (
         'Pitch',
+    ),
+    'music21.scale': (
+        'Direction',
+        'Terminus',
+    ),
+    'music21.scale.scala': (
+        'DocOrder',
     ),
     'music21.search': (
         'SearchException',
@@ -391,37 +477,85 @@ ALSO = {
         'Music21Exception',
     ),
     'music21.search.serial': (
+        'OffsetQL',
         'ToneRow',
         'pcToToneRow',
     ),
     'music21.spanner': (
+        'OffsetQL',
         'opFrac',
     ),
     'music21.stream': (
+        'ImmutableStreamException',
         'StreamException',
+        'StreamType',
+    ),
+    'music21.stream.base': (
+        'ChangedM21ObjType',
+        'GatherSpanners',
+        'ImmutableStreamException',
+        'OffsetQL',
+        'OffsetQLIn',
+        'OffsetQLSpecial',
+        'OffsetSpecial',
+        'StreamException',
+        'StreamType',
+        'opFrac',
     ),
     'music21.stream.core': (
+        'ImmutableStreamException',
+        'M21ObjType',
         'Music21Object',
+        'OffsetQL',
+        'OffsetQLSpecial',
+        'OffsetSpecial',
         'StreamException',
         'StreamIterator',
+        'opFrac',
     ),
     'music21.stream.iterator': (
+        'ChangedM21ObjType',
+        'OffsetQLIn',
+        'OffsetSpecial',
         'SitesException',
+        'StreamType',
+        'saveAttributes',
+        'tempAttribute',
     ),
     'music21.stream.makeNotation': (
+        'OffsetQL',
         'StreamException',
+        'StreamType',
         'opFrac',
+    ),
+    'music21.style': (
+        'ProtoM21Object',
+    ),
+    'music21.tie': (
+        'SlottedObjectMixin',
+    ),
+    'music21.tree.spans': (
+        'OffsetQL',
+        'OffsetQLIn',
+    ),
+    'music21.tree.verticality': (
+        'OffsetQL',
+        'OffsetQLIn',
     ),
     'music21.voiceLeading': (
         'Key',
         'KeySignature',
         'convertKeyStringToMusic21KeyString',
     ),
+    'music21.volume': (
+        'SlottedObjectMixin',
+    ),
 }
 
 NO_HOME = (
     'Placed',
     '_HarteLabel',
+    '_music21_module',
     '_thawed',
     'from_abc',
     'from_abc_number',

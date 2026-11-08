@@ -170,6 +170,19 @@ pub struct ElementWrapper {
 
 #[pymethods]
 impl ElementWrapper {
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.obj)?;
+        visit.call(&self._id)
+    }
+
+    fn __clear__(&mut self) {
+        Python::attach(|py| self.obj = py.None());
+        self._id = None;
+    }
+
     #[new]
     #[pyo3(signature = (obj=None, **keywords))]
     fn new(

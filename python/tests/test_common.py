@@ -51,7 +51,9 @@ print(sorted(common.__all__))
         "nested=[ParenthesesMatch(start=6, end=9, text='mix', nested=[])])]",
         "('musicxml', '.musicxml') 098f6bcd4621d373cade4e832627b4f6",
         "['addFloatPrecision', 'approximateGCD'] False 255",
-        "['formats', 'misc', 'numberTools', 'stringTools']",
+        "['classTools', 'decorators', 'enums', 'fileTools', 'formats', 'misc', "
+        "'numberTools', 'objects', 'parallel', 'pathTools', 'stringTools', "
+        "'types', 'weakrefTools']",
     ]
 
 
