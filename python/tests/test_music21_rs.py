@@ -7883,6 +7883,32 @@ for path in ('corpus/ryansMammoth/BanjoReel.abc', 'corpus/bach/bwv281.krn',
     assert done.stdout.splitlines() == ["abc True", "krn True", "mei True", "mxl False"]
 
 
+def test_a_humdrum_flavour_the_crate_lacks_is_read_by_music21():
+    """With the Josquin Research Project's flavour of Humdrum switched on,
+    whose dots go on the note and not the tuplet, `converter.parse` reads
+    with music21's reader, which knows it, and its tuplets are music21's."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import converter, humdrum
+import music21_rs as m
+m.install_into_music21()
+lines = '\\n'.join('**kern *M3/1 3.c 6d 3e'.split())
+humdrum.spineParser.flavors['JRP'] = True
+made = converter.Converter()
+made.parseData(lines, format='humdrum')
+notes = made.stream.flatten().notes
+print(made.subConverter.readByCrate, [n.duration.tuplets[0].type for n in notes])
+humdrum.spineParser.flavors['JRP'] = False
+made = converter.Converter()
+made.parseData(lines, format='humdrum')
+print(made.subConverter.readByCrate)
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["False ['start', None, 'stop']", "True"]
+
+
 def test_route_converters_routes_its_formats_and_no_others():
     """Each format routed is music21's own subconverter class under the
     same name, reading through the crate; a format it has no reader for is

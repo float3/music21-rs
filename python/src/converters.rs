@@ -148,6 +148,14 @@ class ConverterMidi(ThroughCrate, _sub.ConverterMidi):
 
 
 class ConverterHumdrum(ThroughCrate, _sub.ConverterHumdrum):
+    def _routable(self, keywords):
+        # The crate reads standard Humdrum only; the Josquin Research
+        # Project's flavour, whose dots go on the note, is music21's.
+        from music21.humdrum import spineParser
+        if spineParser.flavors.get('JRP'):
+            return False
+        return super()._routable(keywords)
+
     def _crate(self, data, number):
         return wheel.from_humdrum(_text(data))
 
