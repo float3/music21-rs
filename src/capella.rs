@@ -4,12 +4,14 @@
 //! [`from_capella`] reads that document's text, the caller having unpacked
 //! it, as this crate unpacks nothing.
 
+use std::collections::HashMap;
+
 use crate::bar::{Barline, BarlineType, RepeatDirection};
 use crate::chord::Chord;
 use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, Tuplet};
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::key::KeySignature;
 use crate::makenotation::{make_measures, op_frac};
 use crate::meter::TimeSignature;
@@ -92,8 +94,9 @@ pub fn from_capella(document: &str) -> Result<Stream> {
     // in the system where it was, and what it holds.
     let mut parts: Vec<(String, usize, Placed)> = Vec::new();
     let mut system_offset = 0.0;
+    let mut barlines_read = HashMap::new();
     for system in systems {
-        let staves = read_system(system)?;
+        let staves = read_system(system, &mut barlines_read)?;
         let length = staves
             .iter()
             .map(|(_, elements)| end_of(elements))
@@ -177,7 +180,11 @@ fn end_of(elements: &[(FloatType, StreamElement)]) -> FloatType {
 }
 
 /// `systemFromSystem`: each staff's id and what its one voice holds.
-fn read_system(system: &Xml) -> Result<Vec<Staff>> {
+///
+/// What goes wrong in a staff says its part, and inside a note object its
+/// measure: counted from one by the barlines `barlines_read` in the staff's
+/// part so far, as Capella numbers none.
+fn read_system(system: &Xml, barlines_read: &mut HashMap<String, usize>) -> Result<Vec<Staff>> {
     let staves = only(
         system,
         "staves",
@@ -187,18 +194,19 @@ fn read_system(system: &Xml) -> Result<Vec<Staff>> {
     let mut out = Vec::new();
     for staff in children(staves, "staff") {
         let id = staff.get("layout").unwrap_or("UnknownPart").to_string();
+        let in_part = |error: Error| error.placed(|| Position::default().in_part(&id));
         let voices = children(staff, "voices").next().ok_or_else(|| {
-            error(
+            in_part(error(
                 "No <voices> tag found in the <staff> tag for the <staves> element for this \
                  <system> element",
-            )
+            ))
         })?;
         let voice_list: Vec<&Xml> = children(voices, "voice").collect();
         if voice_list.is_empty() {
-            return Err(error(
+            return Err(in_part(error(
                 "No <voice> tag found in the <voices> tag for the <staff> tag for the <staves> \
                  element for this <system> element",
-            ));
+            )));
         }
         let mut elements = Vec::new();
         if let [voice] = voice_list.as_slice() {
@@ -207,9 +215,18 @@ fn read_system(system: &Xml) -> Result<Vec<Staff>> {
                 "noteObjects",
                 "No <noteObjects> tag found in the <voice> tag",
                 "More than one <noteObjects> tag found in the <voice> tag",
-            )?;
+            )
+            .map_err(in_part)?;
+            let barlines = barlines_read.entry(id.clone()).or_insert(0);
             for object in &objects.children {
-                for element in note_object(object)? {
+                let measure = *barlines + 1;
+                let read = note_object(object).map_err(|error| {
+                    error.placed(|| Position::measure(measure.to_string()).in_part(&id))
+                })?;
+                if object.tag == "barline" {
+                    *barlines += 1;
+                }
+                for element in read {
                     let at = end_of(&elements);
                     elements.push((at, element));
                 }
@@ -561,6 +578,22 @@ mod tests {
     fn a_single_barline_is_a_regular_one() {
         assert!(from_capella(&staff("<barline type=\"single\"/>")).is_ok());
         assert!(from_capella(&staff("<barline/>")).is_ok());
+    }
+
+    #[test]
+    fn a_refusal_says_its_part_and_measure() {
+        let chord = "<chord><duration base=\"1/4\"/><heads><head pitch=\"C5\"/></heads></chord>";
+        let objects = format!(
+            "{chord}<barline type=\"single\"/>{chord}<barline type=\"single\"/>\
+             <chord><duration base=\"1/x\"/><heads><head pitch=\"C5\"/></heads></chord>"
+        );
+        let error = from_capella(&staff(&objects)).unwrap_err();
+        assert_eq!(error.to_string(), "Capella error: \"x\" is not a number");
+        assert_eq!(error.position(), Some(&Position::measure("3").in_part("S")));
+
+        let error =
+            from_capella(&staff("<chord><heads><head pitch=\"H9\"/></heads></chord>")).unwrap_err();
+        assert_eq!(error.position(), Some(&Position::measure("1").in_part("S")));
     }
 
     #[test]
