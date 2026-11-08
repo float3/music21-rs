@@ -153,6 +153,16 @@ def _contents(homes=True, children=False):
         for name, value in vars(built).items():
             if not name.startswith("__"):
                 names[name] = value
+    # TEMPORARY (w20/common2): `music21.common`'s star imports of the built
+    # modules, for measuring the gate; the w20/common1 branch owns
+    # `music21.common` and wires these. Drop this block when merging.
+    for module, built in getattr(_extension, "__music21_submodules__", {}).items():
+        shared = getattr(built, "__all__", None)
+        if shared is None:
+            shared = [name for name in vars(built) if not name.startswith("_")]
+        common = contents.setdefault("music21.common", {})
+        for name in shared:
+            common.setdefault(name, getattr(built, name))
     # music21 defines it there and imports it into `corpus`.
     contents["music21.exceptions21"]["CorpusException"] = contents["music21.corpus"][
         "CorpusException"
