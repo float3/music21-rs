@@ -501,6 +501,17 @@ impl Instrument {
         written
     }
 
+    /// Two instruments are equal where they are of one class, whatever
+    /// they are called: music21 compares them by no attribute of theirs.
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> bool {
+        other.get_type().is(slf.get_type())
+    }
+
+    /// By identity, as music21 hashes every `Music21Object`.
+    fn __hash__(slf: &Bound<'_, Self>) -> isize {
+        slf.as_ptr() as isize >> 4
+    }
+
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
         let class = slf.get_type().name()?;
         let written = slf.borrow().__str__();

@@ -6054,6 +6054,15 @@ fn element_object_as<'py>(
         StreamElement::TextBox(text_box) if whose == Whose::Music21 => {
             crate::text::music21_object(py, text_box)?
         }
+        StreamElement::Unpitched(stroke) if whose == Whose::Wheel => element_new(
+            py,
+            "music21.note",
+            "Unpitched",
+            crate::unpitched::Unpitched::of(py, stroke)?,
+            holdable,
+        )?
+        .into_bound(py)
+        .into_any(),
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)

@@ -9842,7 +9842,51 @@ _MIDDLE_CLASSES = {
     ("music21.repeat", "RepeatExpressionCommand"): ["DaCapo", "AlSegno", "DalSegnoAlCoda"],
     ("music21.dynamics", "DynamicWedge"): ["Crescendo", "Diminuendo"],
     ("music21.meter.base", "TimeSignatureBase"): ["TimeSignature"],
+    ("music21.note", "Unpitched"): [],
 }
+
+
+def test_an_unpitched_stroke_is_music21s():
+    """`note.Unpitched` is displayed at a step and octave, has no pitch,
+    and answers a note's notation members, as music21's examples show."""
+    unp = m.Unpitched()
+    assert (unp.displayStep, unp.displayOctave) == ("B", 4)
+    assert repr(unp) == "<music21.note.Unpitched>"
+    unp.displayStep = "G"
+    with pytest.raises(AttributeError, match="pitch"):
+        unp.pitch
+    unp.storedInstrument = m.Woodblock()
+    assert repr(unp) == "<music21.note.Unpitched 'Woodblock'>"
+    other = m.Unpitched()
+    assert unp != other
+    other.displayStep = "G"
+    other.storedInstrument = m.Woodblock()
+    assert unp == other
+    other.storedInstrument = m.Triangle()
+    assert unp != other
+    low = m.Unpitched()
+    low.displayStep, low.displayOctave = "E", 4
+    assert repr(low.displayPitch()) == "<music21.pitch.Pitch E4>"
+    assert m.Unpitched("B2").displayName == "B2"
+    assert isinstance(unp, m.NotRest) and not isinstance(unp, m.Note)
+    assert unp.pitches == () and not unp.isNote and not unp.isRest
+    assert unp.classes[:2] == ["Unpitched", "NotRest"]
+    assert copy.deepcopy(unp) == unp and copy.deepcopy(unp) is not unp
+    thawed = pickle.loads(pickle.dumps(unp))
+    assert (repr(thawed), thawed.displayStep) == (repr(unp), "G")
+
+    long = m.Unpitched(quarterLength=2)
+    assert long.duration.quarterLength == 2.0
+    held = m.Stream()
+    held.append(long)
+    held.append(m.Unpitched())
+    assert held.highestTime == 3.0 and long.offset == 0.0
+    assert long.activeSite is held
+
+    chord = m.PercussionChord([m.Unpitched("D4"), m.Note("C4")])
+    assert repr(chord) == "<music21.percussion.PercussionChord [unpitched[D4] C4]>"
+    assert chord.pitches == (chord.notes[1].pitch,)
+    assert repr(m.PercussionChord([unp])) == "<music21.percussion.PercussionChord [Woodblock]>"
 
 
 def test_music21s_middle_classes_are_the_packages():

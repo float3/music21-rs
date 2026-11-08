@@ -148,6 +148,7 @@ pub mod text;
 pub mod transposition;
 pub mod tree;
 pub mod tsvconverter;
+pub mod unpitched;
 pub mod variant;
 pub mod voiceleading;
 pub mod windowed;
@@ -2175,6 +2176,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     notation::register(m)?;
     note::register(m)?;
     rest::register(m)?;
+    unpitched::register(m)?;
     duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;

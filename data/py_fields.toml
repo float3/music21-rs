@@ -396,6 +396,10 @@ reason = "a tree and the offset asked about"
 kind = "facade-only"
 reason = "the intervals a turn may step by, read into the crate afresh at each question"
 
+[Unpitched]
+kind = "facade-only"
+reason = "the note standing where it is displayed, which carries what is written of it"
+
 [Verticality]
 kind = "facade-only"
 reason = "a dictionary of what sounds at one offset"

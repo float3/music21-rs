@@ -59,6 +59,9 @@ fn sounds(object: &Bound<'_, PyAny>) -> bool {
     if object.extract::<PyRef<'_, crate::note::Note>>().is_ok() {
         return true;
     }
+    if crate::unpitched::is_unpitched(object) {
+        return false;
+    }
     object
         .getattr("classSet")
         .and_then(|classes| classes.contains("music21.note.Note"))
@@ -98,7 +101,9 @@ fn note_class(py: Python<'_>) -> Bound<'_, PyAny> {
 /// Whether an object is something a percussion chord may hold: a note or a
 /// stroke, this package's or music21's.
 fn struck(object: &Bound<'_, PyAny>) -> bool {
-    if object.extract::<PyRef<'_, crate::note::Note>>().is_ok() {
+    if object.extract::<PyRef<'_, crate::note::Note>>().is_ok()
+        || crate::unpitched::is_unpitched(object)
+    {
         return true;
     }
     let named = |name: &str| {
