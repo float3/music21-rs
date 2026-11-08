@@ -33,6 +33,37 @@ macro_rules! error_into {
     };
 }
 
+/// A class of music21's that stands between its subclasses and the class
+/// it extends and carries nothing of its own here: `chord.ChordBase`,
+/// `tempo.TempoIndication`. It is there so that `isinstance` and
+/// `issubclass` answer as in music21; built bare, it is music21's bare one.
+macro_rules! middle_class {
+    ($(#[$doc:meta])* $class:ident, $name:literal, $module:literal, $parent:ty) => {
+        $(#[$doc])*
+        #[pyo3::pyclass(name = $name, module = $module, extends = $parent, subclass)]
+        #[derive(Default)]
+        pub struct $class;
+
+        #[pyo3::pymethods]
+        impl $class {
+            #[new]
+            #[pyo3(signature = (*_arguments, **_keywords))]
+            fn new(
+                _arguments: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+                _keywords: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+            ) -> pyo3::PyClassInitializer<Self> {
+                $crate::base::built(Self)
+            }
+        }
+
+        impl $crate::base::Footing for $class {
+            fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> pyo3::PyClassInitializer<T> {
+                $crate::base::built(Self).add_subclass(value)
+            }
+        }
+    };
+}
+
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -40,9 +71,11 @@ pub mod articulations;
 pub mod audiosearch;
 pub mod bar;
 pub mod base;
+pub mod base40;
 pub mod braillebasic;
 pub mod braillelookup;
 pub mod braillenotegrouping;
+pub mod brailleobjects;
 pub mod braillesegment;
 pub mod brailletext;
 pub mod brailletranslate;
@@ -50,18 +83,24 @@ pub mod chord;
 pub mod chordtables;
 pub mod clef;
 pub mod clercqtemperley;
+mod common;
 pub mod converters;
 pub mod correlate;
+pub mod defaults;
+pub mod derivation;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
 pub mod editorial;
 pub mod enharmonics;
+pub mod environment;
+pub mod exceptions21;
 pub mod expressions;
 pub mod extractors;
 pub mod fbrules;
 pub mod features;
 pub mod figuredbass;
+pub mod filters;
 pub mod fixer;
 pub mod formats;
 pub mod harmonicfunction;
@@ -69,9 +108,11 @@ pub mod harmony;
 pub mod harmparser;
 pub mod hartelabel;
 pub mod hasher;
+pub mod humdruminstruments;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
+pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
 pub mod makenotation;
@@ -86,7 +127,9 @@ pub mod omrcorrectors;
 pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
+mod plumbing;
 pub mod possibility;
+pub mod prebase;
 pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
@@ -111,12 +154,15 @@ pub mod spanner;
 mod spelling;
 pub mod spineparser;
 pub mod stream;
+pub mod style;
+pub mod subconverters;
 pub mod tablature;
 pub mod tempo;
 pub mod text;
 pub mod transposition;
 pub mod tree;
 pub mod tsvconverter;
+pub mod unpitched;
 pub mod variant;
 pub mod voiceleading;
 pub mod windowed;
@@ -182,6 +228,31 @@ pub(crate) fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
     py.import("warnings")?
         .call_method1("warn", (message, deprecation_category(py)?, 2))?;
     Ok(())
+}
+
+/// Writes an attribute as `object.__setattr__` does: through the first
+/// data descriptor the class chain has under the name, else into the
+/// object's dictionary. Python 3.9 and 3.10 refuse `object.__setattr__`
+/// itself on an object whose class sets attributes in Rust.
+pub(crate) fn plain_setattr(
+    object: &Bound<'_, PyAny>,
+    name: &str,
+    value: &Bound<'_, PyAny>,
+) -> PyResult<()> {
+    let classes = object.get_type().getattr("__mro__")?;
+    for class in classes.try_iter()? {
+        let members = class?.getattr("__dict__")?;
+        if !members.contains(name)? {
+            continue;
+        }
+        let found = members.get_item(name)?;
+        if let Some(setter) = found.get_type().getattr_opt("__set__")? {
+            setter.call1((found, object, value))?;
+            return Ok(());
+        }
+        break;
+    }
+    object.getattr("__dict__")?.set_item(name, value)
 }
 
 /// A flag read for its truth, as music21 reads one with `if inPlace:`, so
@@ -289,7 +360,7 @@ where
     // installed only the wheel.
     if class.is(T::type_object(py)) {
         let copy = Bound::new(py, base::built(value))?.into_any();
-        base::carry_groups(slf.as_any(), &copy)?;
+        base::copied_from(slf.as_any(), &copy)?;
         return Ok(copy);
     }
     // Through the helper, so that the copy gets the music21 half started as
@@ -297,7 +368,7 @@ where
     // with no sites for a stream to hold it by.
     let copy = blank_installed(class.as_any())?;
     *copy.cast::<T>()?.borrow_mut() = value;
-    base::carry_groups(slf.as_any(), &copy)?;
+    base::copied_from(slf.as_any(), &copy)?;
     carry_attributes(slf.as_any(), &copy)?;
     Ok(copy)
 }
@@ -331,8 +402,9 @@ fn carry_attributes(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyRes
 ///
 /// `n.transpose('P5')` hands back a copy, and music21 writes on the copy
 /// what it was made from and how; its own streams read that back — a
-/// deepcopy of a stream moves its spanners onto the copies by it. A thing no
-/// stream holds keeps no derivation, and nothing is written on one.
+/// deepcopy of a stream moves its spanners onto the copies by it — and the
+/// context search follows it. A thing no stream holds keeps no derivation,
+/// and nothing is written on one.
 pub(crate) fn derived_from(
     made: &Bound<'_, PyAny>,
     origin: &Bound<'_, PyAny>,
@@ -1343,6 +1415,15 @@ def make_class(facade, original):
         # A one-element tuple; see `lineage` for why it is not the class.
         '_replaces': (original,),
     })
+    # The wheel's `ProtoM21Object` is the facade's plumbing, not the
+    # class's: where the facade says nothing of its own about how it is
+    # shown, music21's class says it, as it did before that base was there.
+    for name in ('__repr__', '_reprInternal'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
+                    namespace.setdefault(name, getattr(original, name))
+                break
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
@@ -2005,6 +2086,26 @@ exceptions![
         stream::StreamException,
         Some("music21.exceptions21")
     ),
+    (
+        "ImmutableStreamException",
+        exceptions21::ImmutableStreamException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "AnalysisException",
+        exceptions21::AnalysisException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "TreeException",
+        exceptions21::TreeException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "SubConverterException",
+        exceptions21::SubConverterException,
+        Some("music21.exceptions21")
+    ),
     ("TempoException", tempo::TempoException, None),
     (
         "InstrumentException",
@@ -2075,6 +2176,7 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    prebase::register(m)?;
     base::register(m)?;
     pitch::register(m)?;
     figuredbass::register(m)?;
@@ -2098,6 +2200,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tablature::register(m)?;
     midipercussion::register(m)?;
     braillebasic::register(m)?;
+    brailleobjects::register(m)?;
     braillelookup::register(m)?;
     braillenotegrouping::register(m)?;
     braillesegment::register(m)?;
@@ -2142,13 +2245,16 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     sieve::register(m)?;
     roman::register(m)?;
     notation::register(m)?;
+    style::register(m)?;
     note::register(m)?;
     rest::register(m)?;
+    unpitched::register(m)?;
     duration::register(m)?;
     chord::register(m)?;
     chordtables::register(m)?;
     dynamics::register(m)?;
     scala::register(m)?;
+    intervalnetwork::register(m)?;
     instrument::register(m)?;
     clef::register(m)?;
     articulations::register(m)?;
@@ -2157,6 +2263,9 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tree::register(m)?;
     formats::register(m)?;
     converters::register(m)?;
+    derivation::register(m)?;
+    // Once every class is made: it gives some a second base.
+    base::add_bases(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
@@ -2166,8 +2275,58 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `_thawed` on whichever of the two modules is present.
     m.add_function(wrap_pyfunction!(thawed, m)?)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
+    // `common` first: where two of these have a name, `provide_music21`
+    // places `common`'s wherever music21 imports it.
+    let built: Vec<String> = common::names()
+        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
+        .collect();
+    m.add("__music21_built_modules__", built)?;
+    m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
+}
+
+/// music21's modules that are built here whole, as modules, rather than
+/// put together from the classes on this one, besides `common` and its
+/// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
+/// own in a flat namespace, and their exceptions must wait for music21's
+/// `Music21Exception`. Each is built on first asking, and once.
+const BUILT_MODULES: [&str; 12] = [
+    "music21.environment",
+    "music21.defaults",
+    "music21._version",
+    "music21.humdrum.instruments",
+    "music21.musedata.base40",
+    "music21.musedata.base12_26",
+    "music21.figuredBass.possibility",
+    "music21.omr.correctors",
+    "music21.braille.lookup",
+    "music21.style",
+    "music21.stream.filters",
+    "music21.converter.subConverters",
+];
+
+/// The module of music21's named, built on first asking: one of
+/// [`BUILT_MODULES`], `music21.common` or one of its modules.
+#[pyfunction]
+#[pyo3(name = "_music21_module")]
+fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyModule>> {
+    match name {
+        "music21.environment" => environment::module(py),
+        "music21.defaults" => defaults::defaults_module(py),
+        "music21._version" => defaults::version_module(py),
+        "music21.humdrum.instruments" => humdruminstruments::module(py),
+        "music21.musedata.base40" => base40::base40_module(py),
+        "music21.musedata.base12_26" => base40::base12_26_module(py),
+        "music21.figuredBass.possibility" => possibility::module(py),
+        "music21.omr.correctors" => omrcorrectors::module(py),
+        "music21.braille.lookup" => braillelookup::module(py),
+        "music21.style" => style::module(py),
+        "music21.stream.filters" => filters::module(py),
+        "music21.converter.subConverters" => subconverters::module(py),
+        _ if name.starts_with("music21.common") => common::module(py, name),
+        _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
+    }
 }
 
 /// music21's analysis classes, implemented in Rust.

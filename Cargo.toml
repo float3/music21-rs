@@ -10,7 +10,7 @@ name = "music21"
 readme = "README.md"
 repository = "https://github.com/float3/music21-rs"
 rust-version = "1.90"
-version = "0.19.0"
+version = "0.20.0"
 
 # docs.rs builds default features only, and this crate's defaults are empty --
 # without this every `serde` impl and all of `ScalaArchive::bundled()` would be
@@ -71,6 +71,7 @@ num-traits = "0.2.19"
 ordered-float = "5.5.0"
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 thiserror = "2.0.17"
+unicode-normalization = "0.1"
 
 # No plots and no rayon: the benches need only the timing and the report.
 [dev-dependencies]

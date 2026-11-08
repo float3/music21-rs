@@ -37,7 +37,7 @@ use crate::roman::{Minor67Default, RomanNumeral};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 
-pub use comment::GlobalComment;
+pub use comment::{GlobalComment, SpineComment};
 pub use tables::{INSTRUMENT_CLASSES, INSTRUMENTS};
 pub use tandem::MiscTandem;
 
@@ -742,7 +742,14 @@ fn parse_kern(events: &[(String, usize)]) -> Vec<Placed> {
                 return Ok(Some(Thing::Measure(measure)));
             }
             if contents.starts_with('!') {
-                return Ok(None);
+                // music21's `SpineComment`: the line without its bangs and
+                // one space, kept where it says anything.
+                let text = contents.trim_start_matches('!');
+                let text = text.strip_prefix(char::is_whitespace).unwrap_or(text);
+                if text.is_empty() {
+                    return Ok(None);
+                }
+                return Ok(Some(Thing::Element(SpineComment::new(text).into())));
             }
             let mut element = if contents.contains(' ') {
                 chord_of(contents)?
@@ -1018,6 +1025,8 @@ fn insert_voices(spines: &mut [Spine], index: usize) {
 struct Gathered {
     measure: Measure,
     offset: FloatType,
+    /// The line of the barline opening it, which music21 sorts it by.
+    priority: usize,
     things: Vec<Placed>,
 }
 
@@ -1030,6 +1039,7 @@ fn into_measures(mut stream: Vec<Placed>) -> (Vec<Gathered>, Vec<Placed>) {
     let mut current = Gathered {
         measure: Measure::default(),
         offset: 0.0,
+        priority: 0,
         things: Vec::new(),
     };
     let mut number = 0;
@@ -1045,6 +1055,7 @@ fn into_measures(mut stream: Vec<Placed>) -> (Vec<Gathered>, Vec<Placed>) {
                 current = Gathered {
                     measure,
                     offset: thing.offset,
+                    priority: thing.priority,
                     things: Vec::new(),
                 };
             }
@@ -1199,7 +1210,7 @@ fn measure_stream(gathered: Gathered) -> Stream {
         let voice = Stream::with_kind(StreamKind::Voice).with_events(
             events(things)
                 .into_iter()
-                .map(|(offset, _, _, element)| StreamEvent::new(offset, element))
+                .map(|(offset, priority, _, element)| placed_event(offset, priority, element))
                 .collect(),
         );
         held.push((lowest.unwrap_or(0.0), 0, 5, voice.into()));
@@ -1212,7 +1223,7 @@ fn measure_stream(gathered: Gathered) -> Stream {
     });
     let mut measure = Stream::with_kind(StreamKind::Measure).with_events(
         held.into_iter()
-            .map(|(offset, _, _, element)| StreamEvent::new(offset, element))
+            .map(|(offset, priority, _, element)| placed_event(offset, priority, element))
             .collect(),
     );
     measure.set_number(gathered.measure.number);
@@ -1220,6 +1231,11 @@ fn measure_stream(gathered: Gathered) -> Stream {
     measure.set_left_barline(gathered.measure.left);
     measure.set_right_barline(gathered.measure.right);
     measure
+}
+
+/// An element where it stands, sorted by the line it was written on.
+fn placed_event(offset: FloatType, priority: usize, element: StreamElement) -> StreamEvent {
+    StreamEvent::new(offset, element).with_priority(i32::try_from(priority).unwrap_or(i32::MAX))
 }
 
 /// What a thing stands in the score as: an element as itself, an
@@ -1452,7 +1468,7 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
     // The parts come out in the order opposite to the file's, which is
     // written lowest part first.
     let mut events = Vec::new();
-    for (_, measures, loose) in parts.into_iter().rev() {
+    for (spine, measures, loose) in parts.into_iter().rev() {
         // The instructions before the first barline stay in the part, ahead
         // of its measures, where music21 leaves them.
         let mut held: Vec<StreamEvent> = loose
@@ -1460,23 +1476,24 @@ fn score_of(lines: &[&str]) -> Result<Stream> {
             .filter(|thing| matches!(thing.thing, Thing::Tandem(_)))
             .filter_map(|thing| {
                 let element = element_of(thing.thing, thing.priority)?;
-                Some(StreamEvent::new(thing.offset, element))
+                Some(placed_event(thing.offset, thing.priority, element))
             })
             .collect();
         let mut offset = 0.0;
         for (index, gathered) in measures.into_iter().enumerate() {
+            let priority = gathered.priority;
             let mut measure = measure_stream(gathered);
             let length = measure.end_offset();
             if index == 0 {
                 pad_pickup(&mut measure, length);
             }
-            held.push(StreamEvent::new(offset, measure));
+            held.push(placed_event(offset, priority, measure.into()));
             offset = op_frac(offset + length);
         }
-        events.push(StreamEvent::new(
-            0.0,
-            Stream::with_kind(StreamKind::Part).with_events(held),
-        ));
+        let mut part = Stream::with_kind(StreamKind::Part).with_events(held);
+        // music21 names a part by the spine it was read from.
+        part.set_id(Some(format!("spine_{spine}")));
+        events.push(StreamEvent::new(0.0, part));
     }
     place_comments(&mut events, &globals, &places);
     let mut score = Stream::with_kind(StreamKind::Score).with_events(events);
@@ -1879,6 +1896,48 @@ mod tests {
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[0].measures()[0].pitches().len(), 2);
         assert_eq!(parts[1].measures()[0].pitches()[0].name_with_octave(), "C3");
+    }
+
+    /// music21 gives each thing it reads the line it was written on as its
+    /// priority, a measure that of its barline, and names a part by its
+    /// spine.
+    #[test]
+    fn what_is_read_keeps_its_line_and_its_spine() {
+        let score = from_humdrum(
+            "**kern\t**kern\n*clefF4\t*clefG2\n*M2/4\t*M2/4\n=1\t=1\n2C\t4c\n.\t4d\n=2\t=2\n\
+             2D\t2e\n==\t==\n*-\t*-\n",
+        )
+        .unwrap();
+        let parts = score.parts();
+        assert_eq!(parts[0].id(), Some("spine_1"));
+        assert_eq!(parts[1].id(), Some("spine_0"));
+        let measures: Vec<i32> = parts[0]
+            .events()
+            .iter()
+            .filter(|event| event.element().as_stream().is_some())
+            .map(StreamEvent::priority)
+            .collect();
+        assert_eq!(measures, [4, 7]);
+        let first = parts[0].measures()[0];
+        let lines: Vec<i32> = first.events().iter().map(StreamEvent::priority).collect();
+        // The clef, the meter and the two notes.
+        assert_eq!(lines, [2, 3, 5, 6]);
+    }
+
+    /// A `!` comment in a `**kern` spine stands where it was written, as
+    /// music21's `SpineComment`; an empty one is passed over.
+    #[test]
+    fn a_spine_comment_stands_where_it_was_written() {
+        let score = from_humdrum("**kern\n*M2/4\n!Cantus\n!\n=1\n2c\n==\n*-\n").unwrap();
+        let said: Vec<(&str, i32)> = score.parts()[0].measures()[0]
+            .events()
+            .iter()
+            .filter_map(|event| match event.element() {
+                StreamElement::SpineComment(said) => Some((said.comment(), event.priority())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(said, [("Cantus", 3)]);
     }
 
     #[test]

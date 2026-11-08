@@ -125,6 +125,14 @@ outside a format's variant (a pitch a MusicXML note cannot spell) has no
 place, and ABC, MEI, Capella, MuseData and NoteWorthy say no place yet
 beyond what the XML reader under them knows.
 
+**an error that is no format's own is placed by wrapping it.** *changed
+2026-11-08.* a pitch an ABC note cannot spell stays an `Error::Pitch`,
+inside `Error::Placed` with the reader's position, rather than every
+variant growing a position field: `unplaced()` is what to match on, and
+`Display` is the inner error's. ABC and Capella number measures by
+counting them, so an ABC pickup is measure 1 where music21 says 0.
+*costs:* matching on the variant alone misses a placed error.
+
 **`#![forbid(unsafe_code)]`.** the crate contains no unsafe Rust, and cannot
 grow any without the attribute coming off. the wheel denies rather than
 forbids it, with exactly one allow, because a pyo3 exception type standing on
@@ -231,6 +239,44 @@ state goes through `real_music21()`, which passes a provided module
 over, so the package then does what it does with no music21 at all.
 *costs:* a provided module lacks whatever the package does not port,
 and says so only when the name is asked for.
+
+**music21's plumbing is ported to Rust, not vendored.** *decided
+2026-11-08 by the maintainer.* `common`, `environment`, `defaults`,
+`prebase` and `_version` are ports: the logic in the crate
+(`music21::common`, `music21::environment`), the Python objects music21's
+callers expect built over it in the wheel. what must be a Python class
+(an enum, a `list` subclass, a decorator) is built at module load
+through Python's own class machinery, with `#[pyfunction]` methods.
+*costs:* `LocalCorpusSettings` is made by `type(...)`, since pyo3 cannot
+subclass `list`; `Direction` and `Terminus` by the enum functional API;
+temporary files by Python's `tempfile`; Python ints cross as `BigInt`.
+
+**modules built whole are listed and built on first asking.** the
+extension names in `__music21_built_modules__` every module of music21's
+it builds whole -- `common` and its thirteen modules, `environment`,
+`style`, `stream.filters` and others -- and `_music21_module(name)`
+builds one, once, when `provide_music21()` first asks. a module whose
+names would shadow Python's own (`set`, `get`) cannot be names on the
+flat extension, and one whose exceptions need the provided
+`Music21Exception` cannot be built while the wheel is imported. the
+provided module takes every name, private ones too, and its `__all__`;
+`music21.common` star-imports its modules in music21's order. *costs:* a
+module built this way is not on `music21_rs` itself, only provided.
+
+**a provided module is music21's public surface, not its parser's
+insides.** music21's tests reach into `mei`, `musicxml`, `abcFormat`,
+`lily` and `musedata.translate` internals; those are not provided, nor
+`graph` (matplotlib's layer) or `tree.core` (another design). a stream
+iterator's filters apply when `addFilter` is called, not lazily.
+*costs:* music21's tests of those modules fail on the provided side.
+
+**a pyo3 class takes a second base only where it adds no layout.**
+music21's middle classes (`ChordBase`, `StreamCore`) and articulations'
+several bases are given by `__bases__` assignment, which Python allows
+only for bases with no instance layout of their own; `StyleMixin` is
+layout-free with empty `__slots__` so it mixes into `ProtoM21Object`.
+*costs:* a base that would carry state (`Key` as a `DiatonicScale`, an
+`Editorial` that is a `dict`) stays a gap.
 
 **the package keeps music21's sites; the crate keeps none.** an element of
 the package's put into one of its streams answers `sites`, `activeSite`,
@@ -509,6 +555,17 @@ is timed once, so a test that caught one read as many times slower than it
 is — fourteen rows of the published comparison were collector pauses on tests
 that are at parity. the pause is recorded against the test it landed on and
 taken off before the sides are compared; the clock time stays in the JSON.
+
+**parity tests are dealt to shards by measured time.**
+`python-parity/shards.py` deals the tests, slowest first, by the times in
+`test-times.toml`, and nextest's priorities start the slow ones first.
+refresh with `python3 python-parity/shards.py times shard*.log >
+python-parity/test-times.toml`. *costs:* the times go stale as tests
+change, and a test missing from the file is dealt as if quick.
+
+**the crate's events carry music21's priority.** `StreamEvent::priority`
+is nought unless a reader gives one, as music21's is, so a stream the
+crate builds for `converter.parse` sorts as music21's reader does.
 
 **a benchmark case is timed only where every side agrees on the answer.**
 Timing two different computations says nothing. a case whose crate-side

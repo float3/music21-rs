@@ -1991,6 +1991,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
             | StreamElement::Variant(_)
             | StreamElement::GlobalComment(_)
             | StreamElement::MiscTandem(_)
+            | StreamElement::SpineComment(_)
             | StreamElement::BrailleSegmentDivision(_) => {}
         }
         Ok(())

@@ -223,7 +223,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
             tokens.push(tagged(line));
         }
     }
-    for line in &lines[body..] {
+    for (index, line) in lines.iter().enumerate().skip(body) {
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -232,7 +232,8 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
             tokens.push(tagged(line));
             continue;
         };
-        let (numbers, letters) = measure_numbers(line[..end].trim())?;
+        let (numbers, letters) = measure_numbers(line[..end].trim())
+            .map_err(|error| error.placed(|| Position::line(index + 1)))?;
         let raw = line[end..].trim();
         // `var1` and `varA` mark a variant reading, which is passed over.
         let variant = raw.strip_prefix("var").is_some_and(|rest| {
@@ -1120,7 +1121,15 @@ impl Translator {
 fn score_of(tokens: &[Token]) -> Result<Stream> {
     let mut translator = Translator::new()?;
     for token in tokens {
-        translator.token(token)?;
+        // What goes wrong in a measure says which, by its first number.
+        let measure = match token {
+            Token::Measure { numbers, .. } => numbers.first().copied(),
+            _ => None,
+        };
+        translator.token(token).map_err(|error| match measure {
+            Some(number) => error.placed(|| Position::measure(number.to_string())),
+            None => error,
+        })?;
     }
     let (part, metadata) = translator.part()?;
     let mut score =
@@ -1528,6 +1537,19 @@ mod tests {
     #[test]
     fn a_measure_after_the_largest_number_is_read() {
         assert!(from_roman_text("m2147483647 C: I\nm1 I\n").is_ok());
+    }
+
+    #[test]
+    fn a_refusal_says_its_measure_or_line() {
+        let error = from_roman_text("m1 C: I\nm2 V\nm3 KS1x I\n").unwrap_err();
+        assert_eq!(error.position(), Some(&Position::measure("3")));
+
+        let error = from_roman_text("Title: x\nm1 C: I\n\nm99999999999 V\n").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "RomanText error: cannot read the measure number in \"m99999999999\""
+        );
+        assert_eq!(error.position(), Some(&Position::line(4)));
     }
 
     #[test]

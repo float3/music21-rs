@@ -64,11 +64,20 @@ fn referent_duration(value: Option<&Bound<'_, PyAny>>) -> PyResult<RsDuration> {
     duration_from_any(value)
 }
 
+middle_class!(
+    /// music21's `tempo.TempoIndication`: what a metronome mark, words of
+    /// tempo and a metric modulation all are.
+    TempoIndication,
+    "TempoIndication",
+    "music21.tempo",
+    crate::base::Music21Object
+);
+
 /// music21's `tempo.MetronomeMark`.
 #[pyclass(
     name = "MetronomeMark",
     module = "music21.tempo",
-    extends = crate::base::Music21Object,
+    extends = TempoIndication,
     subclass,
     skip_from_py_object,
     weakref
@@ -644,7 +653,7 @@ impl MetronomeMark {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().copied(slf.py());
-        crate::copy_as_same_type(slf, copied)
+        crate::copy_as_same_type(slf, copied).map(crate::base::shallow)
     }
 }
 
@@ -657,7 +666,7 @@ impl MetronomeMark {
 #[pyclass(
     name = "TempoText",
     module = "music21.tempo",
-    extends = crate::base::Music21Object,
+    extends = TempoIndication,
     subclass,
     skip_from_py_object,
     weakref
@@ -1002,7 +1011,7 @@ fn mark_value(mark: &Bound<'_, PyAny>) -> PyResult<RsMetronomeMark> {
 #[pyclass(
     name = "MetricModulation",
     module = "music21.tempo",
-    extends = crate::base::Music21Object,
+    extends = TempoIndication,
     subclass,
     skip_from_py_object,
     weakref
@@ -1417,6 +1426,7 @@ impl MetricModulation {
         };
         drop(me);
         *copied.extract::<PyRefMut<'_, Self>>()? = fresh;
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
@@ -1498,9 +1508,7 @@ fn sounding_mark(found: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
 /// sits in, or `None` where there is none.
 fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound<'py, PyAny>>> {
     let py = holder.py();
-    let search = crate::real_music21(py, "music21.common.enums")?
-        .getattr("ElementSearch")?
-        .getattr("BEFORE_OFFSET")?;
+    let search = crate::plumbing::enum_member(py, "ElementSearch", "BEFORE_OFFSET")?;
     let arguments = PyDict::new(py);
     arguments.set_item("getElementMethod", search)?;
     let found = holder.call_method("getContextByClass", ("TempoIndication",), Some(&arguments))?;
@@ -1508,6 +1516,7 @@ fn previous_indication<'py>(holder: &Bound<'py, PyAny>) -> PyResult<Option<Bound
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<TempoIndication>()?;
     m.add_class::<MetronomeMark>()?;
     m.add_class::<MetricModulation>()?;
     m.add_class::<TempoText>()?;

@@ -1679,16 +1679,16 @@ impl Volume {
     /// music21's `cachedRealized`: the last answer, or a fresh one where
     /// nothing has realized this volume yet.
     #[getter]
-    fn cachedRealized(&mut self, py: Python<'_>) -> PyResult<f64> {
-        if let Some(cached) = self.cached {
+    fn cachedRealized(slf: &Bound<'_, Self>) -> PyResult<f64> {
+        if let Some(cached) = slf.borrow().cached {
             return Ok(cached);
         }
-        self.getRealized(py, None, true, None, 0.5, true)
+        Self::getRealized(slf, None, true, None, 0.5, true)
     }
 
     #[getter]
-    fn cachedRealizedStr(&mut self, py: Python<'_>) -> PyResult<String> {
-        Ok(music21::volume::rounded_str(self.cachedRealized(py)?))
+    fn cachedRealizedStr(slf: &Bound<'_, Self>) -> PyResult<String> {
+        Ok(music21::volume::rounded_str(Self::cachedRealized(slf)?))
     }
 
     /// music21's `mergeAttributes`: everything the other volume says except
@@ -1723,25 +1723,30 @@ impl Volume {
         clip = true,
     ))]
     fn getRealized(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
         #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<f64> {
-        let dynamic = self.dynamic_scalar(py, useDynamicContext)?;
-        let shift = self.articulation_shift(py, useArticulations)?;
-        let realized = if useVelocity {
-            self.inner.realized_with(dynamic, shift, baseLevel, clip)
-        } else {
-            self.inner
-                .realized_without_velocity(dynamic, shift, baseLevel, clip)
+        let py = slf.py();
+        // Borrowed only to read: looking for the dynamic reads the note,
+        // and the note reads this volume.
+        let realized = {
+            let me = slf.borrow();
+            let dynamic = me.dynamic_scalar(py, useDynamicContext)?;
+            let shift = me.articulation_shift(py, useArticulations)?;
+            if useVelocity {
+                me.inner.realized_with(dynamic, shift, baseLevel, clip)
+            } else {
+                me.inner
+                    .realized_without_velocity(dynamic, shift, baseLevel, clip)
+            }
         };
         // music21 keeps every answer, which is what `realizeVolume` walks a
         // score to fill in.
-        self.cached = Some(realized);
+        slf.borrow_mut().cached = Some(realized);
         Ok(realized)
     }
 
@@ -1753,16 +1758,15 @@ impl Volume {
         clip = true,
     ))]
     fn getRealizedStr(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
         #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<String> {
-        let realized = self.getRealized(
-            py,
+        let realized = Self::getRealized(
+            slf,
             useDynamicContext,
             useVelocity,
             useArticulations,
@@ -1873,25 +1877,6 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
-/// The enclosures music21's `style.Enclosure` names.
-const ENCLOSURES: [&str; 15] = [
-    "rectangle",
-    "square",
-    "oval",
-    "circle",
-    "bracket",
-    "triangle",
-    "diamond",
-    "pentagon",
-    "hexagon",
-    "heptagon",
-    "octagon",
-    "nonagon",
-    "decagon",
-    "inverted-bracket",
-    "none",
-];
-
 /// music21's `style.Style`, for the wheel on its own: how something is drawn
 /// on the page, which the crate does not model beyond its colour.
 ///
@@ -1900,7 +1885,7 @@ const ENCLOSURES: [&str; 15] = [
 /// does. `absoluteY` and `enclosure` check what they are given, as music21's
 /// do. Where music21 is present its own class is used instead, so none of
 /// this is installed over it.
-#[pyclass(name = "Style", module = "music21.style", subclass, dict)]
+#[pyclass(name = "Style", module = "music21.style", extends = crate::prebase::ProtoM21Object, subclass, dict)]
 pub struct Style;
 
 impl Style {
@@ -1923,8 +1908,8 @@ impl Style {
     fn new(
         _arguments: &Bound<'_, pyo3::types::PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> Self {
-        Self
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Self)
     }
 
     #[classattr]
@@ -2021,8 +2006,9 @@ impl Style {
         Self::store(slf.as_any(), "_absoluteY", stored)
     }
 
-    /// What the object is drawn inside, by music21's name for the shape;
-    /// `None` leaves it unsaid and `'none'` says there is nothing.
+    /// What the object is drawn inside, as a member of `Enclosure`, which
+    /// may be given by its name; `None` leaves it unsaid and
+    /// `Enclosure.NO_ENCLOSURE` says there is nothing.
     #[getter]
     fn get_enclosure<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         Self::stored(slf.as_any(), "_enclosure")
@@ -2034,13 +2020,12 @@ impl Style {
         let stored = match value.filter(|value| !value.is_none()) {
             None => py.None().into_bound(py),
             Some(value) => {
-                let named = value
-                    .extract::<String>()
-                    .ok()
-                    .map(|text| text.to_lowercase())
-                    .filter(|text| ENCLOSURES.contains(&text.as_str()));
+                let named = match value.extract::<String>() {
+                    Ok(text) => crate::style::enclosure_named(py, &text)?,
+                    Err(_) => None,
+                };
                 match named {
-                    Some(name) => name.into_pyobject(py)?.into_any(),
+                    Some(member) => member,
                     None => {
                         return Err(TextFormatException::new_err(format!(
                             "Not a supported enclosure: {}",

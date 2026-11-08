@@ -16,7 +16,7 @@ use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Tuplet};
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::expressions::TextExpression;
 use crate::instrument::Instrument;
 use crate::interval::Interval;
@@ -73,14 +73,21 @@ fn error(message: impl Into<String>) -> Error {
 /// value, a clef, barline style, flow mark or note length it does not know,
 /// an octave shift on an alto or tenor clef -- or a number that is not one.
 pub fn from_noteworthy(text: &str) -> Result<Stream> {
-    from_lines(text.lines())
+    from_lines(text.lines(), true)
 }
 
 /// [`from_noteworthy`] over lines already split, as music21's `parseList`
-/// takes them.
-fn from_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Result<Stream> {
+/// takes them. What goes wrong on a line says which where the lines are
+/// `numbered`, the lines of a file rather than ones made from a binary one.
+fn from_lines<'a>(lines: impl IntoIterator<Item = &'a str>, numbered: bool) -> Result<Stream> {
     let mut reader = Reader::new();
-    for line in lines {
+    for (index, line) in lines.into_iter().enumerate() {
+        let here = |error: Error| {
+            if numbered {
+                return error.placed(|| Position::line(index + 1));
+            }
+            error
+        };
         let line = line.trim_end();
         if !line.starts_with('|') {
             continue;
@@ -97,13 +104,13 @@ fn from_lines<'a>(lines: impl IntoIterator<Item = &'a str>) -> Result<Stream> {
                 ),
                 None if attribute.trim().is_empty() => {}
                 None => {
-                    return Err(error(format!(
+                    return Err(here(error(format!(
                         "Cannot unpack value from {attribute} in {line}"
-                    )));
+                    ))));
                 }
             }
         }
-        reader.command(command, &attributes)?;
+        reader.command(command, &attributes).map_err(here)?;
     }
     reader.finish()
 }
@@ -1142,6 +1149,18 @@ fn assemble(part: PartBuilt, index: usize, endings: &[(Vec<Place>, u32)]) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refusal_says_its_line() {
+        let text = "!NoteWorthyComposer(2.0)\n|AddStaff|\n|Clef|Type:Bass\n\
+                    |Note|Dur:Whole|Pos:1\n|Note|Dur:Eon|Pos:2\n";
+        let error = from_noteworthy(text).unwrap_err();
+        assert_eq!(error.to_string(), "NoteWorthy error: no note length Eon");
+        assert_eq!(error.position(), Some(&Position::line(5)));
+
+        let error = from_noteworthy("|AddStaff|\n|Note|Dur:4th|Pos:x\n").unwrap_err();
+        assert_eq!(error.position(), Some(&Position::line(2)));
+    }
 
     fn names(score: &Stream) -> Vec<String> {
         score

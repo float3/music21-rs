@@ -176,7 +176,8 @@ pub(crate) fn pitch_error(error: music21::Error) -> PyErr {
 /// spell, a microtone it cannot read, or an argument that was never a value
 /// at all.
 pub(crate) fn specific_error(error: &music21::Error) -> Option<PyErr> {
-    match error {
+    // A reader's error keeps its class under the place it gives.
+    match error.unplaced() {
         music21::Error::Accidental(_) => Some(AccidentalException::new_err(message(error))),
         music21::Error::Microtone(_) => Some(MicrotoneException::new_err(message(error))),
         music21::Error::Value(_) => Some(pyo3::exceptions::PyValueError::new_err(message(error))),

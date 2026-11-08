@@ -22,7 +22,7 @@ pub const NAMES: &[&str] = &["PercussionChord"];
 #[pyclass(
     name = "PercussionChord",
     module = "music21.percussion",
-    extends = crate::base::NotRest,
+    extends = crate::chord::ChordBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -58,6 +58,9 @@ impl PercussionChord {
 fn sounds(object: &Bound<'_, PyAny>) -> bool {
     if object.extract::<PyRef<'_, crate::note::Note>>().is_ok() {
         return true;
+    }
+    if crate::unpitched::is_unpitched(object) {
+        return false;
     }
     object
         .getattr("classSet")
@@ -98,7 +101,9 @@ fn note_class(py: Python<'_>) -> Bound<'_, PyAny> {
 /// Whether an object is something a percussion chord may hold: a note or a
 /// stroke, this package's or music21's.
 fn struck(object: &Bound<'_, PyAny>) -> bool {
-    if object.extract::<PyRef<'_, crate::note::Note>>().is_ok() {
+    if object.extract::<PyRef<'_, crate::note::Note>>().is_ok()
+        || crate::unpitched::is_unpitched(object)
+    {
         return true;
     }
     let named = |name: &str| {
@@ -284,11 +289,12 @@ impl PercussionChord {
         copied
             .extract::<PyRefMut<'_, Self>>()?
             .set_notes(Some(copies.as_any()))?;
+        crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        Self::__deepcopy__(slf, None)
+        Self::__deepcopy__(slf, None).map(crate::base::shallow)
     }
 }
 

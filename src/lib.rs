@@ -71,13 +71,18 @@ pub mod chord;
 pub mod chordsymbol;
 /// Clefs: which line a note is written on.
 pub mod clef;
-pub(crate) mod common;
+/// music21's `common`: the plumbing its modules share, which knows no
+/// music.
+pub mod common;
 pub(crate) mod defaults;
 pub(crate) mod display;
 /// Rhythmic duration primitives.
 pub mod duration;
 /// Dynamic marks and the loudness each stands for.
 pub mod dynamics;
+/// music21's user environment: preferences, the settings file and
+/// temporary files.
+pub mod environment;
 /// Error and result types used by the crate.
 pub mod error;
 /// Ornaments and what they play.

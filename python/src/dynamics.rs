@@ -5,9 +5,8 @@
 //! while keeping its own value, so a dynamic built from `0.98` is an `fff`
 //! that is still louder than one.
 //!
-//! `DynamicWedge`, `Crescendo` and `Diminuendo` stay music21's. They are
-//! spanners — two ends and everything between them — which is stream
-//! machinery this crate does not model.
+//! `DynamicWedge`, `Crescendo` and `Diminuendo` are spanners -- two ends
+//! and everything between them -- and are in `spanner`.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
@@ -21,8 +20,6 @@ use music21::dynamics::{
 };
 
 /// The names the `dynamics` facade replaces in `music21.dynamics`.
-///
-/// The wedges are left where they are; see the module comment.
 pub const NAMES: &[&str] = &["Dynamic", "DynamicException", "dynamicStrFromDecimal"];
 
 pyo3::create_exception!(music21_rs_facade, DynamicException, crate::Music21Exception);
@@ -288,7 +285,7 @@ impl Dynamic {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().copied();
-        crate::copy_as_same_type(slf, copied)
+        crate::copy_as_same_type(slf, copied).map(crate::base::shallow)
     }
 }
 

@@ -110,6 +110,32 @@ _EXCEPTIONS21 = {
     "Music21DeprecationWarning": Music21DeprecationWarning,
 }
 
+# What music21's `exceptions21` defines, each answered by the package's own
+# class of that name.
+_EXCEPTIONS21_NAMES = (
+    "StreamException",
+    "ImmutableStreamException",
+    "MetadataException",
+    "AnalysisException",
+    "TreeException",
+    "InstrumentException",
+    "SubConverterException",
+    "GroupException",
+    "MeterException",
+    "TimeSignatureException",
+)
+
+# What every module object has of its own, which a built module's names
+# must not put over the provided module's.
+_MODULE_SPECIALS = frozenset(
+    ("__name__", "__doc__", "__loader__", "__spec__", "__package__")
+)
+
+# A module of music21's whose names the package keeps on its package: the
+# stream classes music21 defines in `stream.base` are `music21.stream`'s
+# here, and are answered under both names.
+_CHILDREN_OF_PACKAGE = {"music21.stream.base": "music21.stream"}
+
 # music21's modules the package has in Python beside the extension, each by
 # the name of the package's own module.
 _PYTHON_MODULES = {
@@ -143,21 +169,41 @@ def _contents(homes=True, children=False):
         if not isinstance(module, str) or not module.startswith("music21."):
             continue
         contents.setdefault(module, {}).setdefault(name, value)
+    # Modules built whole in Rust, `music21.common` among them, each on
+    # first asking: every name each has, its private ones too, since
+    # music21's examples reach for some, and its `__all__`, which a star
+    # import of it follows.
+    built_names = {}
+    for module in _extension.__music21_built_modules__:
+        built = _extension._music21_module(module)
+        names = contents.setdefault(module, {})
+        for name, value in vars(built).items():
+            if name not in _MODULE_SPECIALS:
+                names[name] = value
+            if not name.startswith("__"):
+                built_names.setdefault(name, value)
     for module, own in _PYTHON_MODULES.items():
         written = importlib.import_module(f"{__package__}.{own}")
         for name in written.__all__:
             contents.setdefault(module, {})[name] = getattr(written, name)
+    for name in _EXCEPTIONS21_NAMES:
+        exception = getattr(_extension, name, None)
+        if exception is not None:
+            contents["music21.exceptions21"].setdefault(name, exception)
     # music21 defines it there and imports it into `corpus`.
     contents["music21.exceptions21"]["CorpusException"] = contents["music21.corpus"][
         "CorpusException"
     ]
     if homes:
-        known = {"Music21Exception": Music21Exception}
+        known = {**built_names, "Music21Exception": Music21Exception}
         for table in (_homes.HOMES, _homes.ALSO):
             for module, names in table.items():
                 for name in names:
-                    value = known.get(name) or getattr(_extension, name)
+                    value = known[name] if name in known else getattr(_extension, name)
                     contents.setdefault(module, {}).setdefault(name, value)
+    for child, parent in _CHILDREN_OF_PACKAGE.items():
+        for name, value in contents.get(parent, {}).items():
+            contents.setdefault(child, {}).setdefault(name, value)
     for module in list(contents):
         parts = module.split(".")
         for end in range(1, len(parts)):
@@ -238,7 +284,9 @@ class _Provider(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         names = self.contents[fullname]
         module.__doc__ = f"music21's {fullname}, as far as music21-rs provides it."
         module.__dict__.update(names)
-        module.__all__ = sorted(name for name in names if not name.startswith("_"))
+        module.__all__ = list(names["__all__"]) if "__all__" in names else sorted(
+            name for name in names if not name.startswith("_")
+        )
         if fullname == "music21":
             version = _extension.__version__
             module.__doc__ = (

@@ -142,7 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let rest = &args[2..];
             let one = match flag_value(rest, "--run") {
                 Some(side) => Some(music21_suite::Which::parse(&side).ok_or_else(|| {
-                    format!("--run takes music21, music21_rs or music21_rs_wheel, not {side:?}")
+                    format!("--run takes music21, music21_rs, music21_rs_wheel or music21_rs_provided, not {side:?}")
                 })?),
                 None => None,
             };
@@ -206,7 +206,7 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask -- downstream");
     eprintln!("  cargo run --release -p xtask -- contributed-back [--check]");
     eprintln!(
-        "  cargo run --release -p xtask --features python -- music21-suite [--parallel] [--only a,b] [--sides music21,music21_rs_wheel] [--profile] [--route-converters musicxml,midi]"
+        "  cargo run --release -p xtask --features python -- music21-suite [--parallel] [--only a,b] [--sides music21_rs_wheel,music21_rs_provided] [--profile] [--route-converters musicxml,midi]"
     );
     eprintln!("  cargo run --release -p xtask -- emit-report-script");
     eprintln!("  cargo run --release -p xtask -- verify-report-script");

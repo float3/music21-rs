@@ -123,6 +123,7 @@ pub fn midi_notes_from_stream(stream: &Stream) -> Result<Vec<MidiNote>> {
             | StreamElement::Variant(_)
             | StreamElement::GlobalComment(_)
             | StreamElement::MiscTandem(_)
+            | StreamElement::SpineComment(_)
             | StreamElement::BrailleSegmentDivision(_) => {}
         }
     }

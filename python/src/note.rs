@@ -1771,7 +1771,7 @@ impl Note {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        Self::copied_object(slf, py, None)
+        Self::copied_object(slf, py, None).map(crate::base::shallow)
     }
 
     /// music21's `storedInstrument`.

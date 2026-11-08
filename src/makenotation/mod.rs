@@ -474,6 +474,8 @@ fn beam_line(
         match line.events_mut()[place].element_mut() {
             StreamElement::Note(note) => note.set_beams(beams),
             StreamElement::Chord(chord) => chord.set_beams(beams),
+            // music21 hands a rest its beams too, which are empty.
+            StreamElement::Rest(rest) => rest.set_beams(Some(beams)),
             StreamElement::Unpitched(stroke) => stroke.written_mut().set_beams(beams),
             StreamElement::PercussionChord(chord) => chord.written_mut().set_beams(beams),
             _ => {}
@@ -926,6 +928,24 @@ pub fn make_measures_by(stream: &Stream, given: &[(FloatType, TimeSignature)]) -
             None => bar.own.push(StreamEvent::new(within, item.element)),
             Some(voice) => bar.voices[voice].push(StreamEvent::new(within, item.element)),
         }
+    }
+
+    // music21 stores those at the end of the measures as they stand, where
+    // the music in them ends rather than where the last bar does.
+    let reached = bars
+        .iter()
+        .map(|bar| {
+            let held = bar
+                .own
+                .iter()
+                .chain(bar.voices.iter().flatten())
+                .map(StreamEvent::end_offset)
+                .fold(0.0, FloatType::max);
+            op_frac(bar.start + held)
+        })
+        .fold(0.0, FloatType::max);
+    for event in &mut loose {
+        *event = StreamEvent::new(reached, event.element().clone());
     }
 
     let count = bars.len();
@@ -1543,6 +1563,13 @@ fn make_ties_of(stream: &mut Stream, wanted: fn(&StreamElement) -> bool) -> Resu
                 if end - bar <= 1e-9 || offset >= bar - 1e-9 {
                     continue;
                 }
+                // music21 refuses before tying a note over more bars than
+                // it would make measures for.
+                if index as FloatType + (end - bar) / bar > MAX_MEASURES as FloatType {
+                    return Err(Error::Stream(format!(
+                        "cannot make more than {MAX_MEASURES} measures"
+                    )));
+                }
                 let (first, remain) = split_element(event.element(), op_frac(bar - offset))?;
                 *event = StreamEvent::new(offset, first);
                 remains.push((id.clone(), remain));
@@ -2105,6 +2132,25 @@ mod tests {
     use super::*;
     use crate::{Duration, Note};
 
+    /// A note longer than `MAX_MEASURES` bars is refused before any
+    /// measure is made for it, as music21 refuses it.
+    #[test]
+    fn ties_past_the_most_measures_are_refused() -> Result<()> {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(1);
+        measure.insert(0.0, TimeSignature::new(4, 4)?);
+        measure.insert(
+            0.0,
+            Note::from_name("C4")?.with_duration(Duration::new(FloatType::from(1u32 << 28))?),
+        );
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, measure);
+        let refused = make_ties(&mut part).unwrap_err();
+        assert!(matches!(refused, Error::Stream(_)), "{refused}");
+        assert!(refused.to_string().contains("more than 100000 measures"));
+        Ok(())
+    }
+
     /// Notes in two voices tied into a measure with none continue there in
     /// voices of the same names, beside the notes the measure already held.
     #[test]
@@ -2249,6 +2295,56 @@ mod tests {
                 (Some(BeamType::Stop), StemDirection::Up),
             ]
         );
+    }
+
+    /// music21's `makeMeasures` stores what stands with no length at the
+    /// very end with `storeAtEnd`, which puts it where the measures' music
+    /// then ends -- the end of the last note, not of the last bar.
+    #[test]
+    fn what_stands_at_the_very_end_follows_the_last_note() {
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, TimeSignature::new(2, 4).unwrap());
+        part.insert(
+            0.0,
+            Note::from_name("C4")
+                .unwrap()
+                .with_duration(Duration::new(1.5).unwrap()),
+        );
+        part.insert(2.0, crate::tempo::MetronomeMark::new(60.0));
+        let made = make_measures(&part).unwrap();
+        let marks: Vec<FloatType> = made
+            .events()
+            .iter()
+            .filter(|event| matches!(event.element(), StreamElement::MetronomeMark(_)))
+            .map(StreamEvent::offset)
+            .collect();
+        assert_eq!(marks, [1.5]);
+    }
+
+    /// music21's makeBeams hands every rest of a line it beams the beams it
+    /// worked out for it, an empty `Beams`; a rest it passes over has none.
+    #[test]
+    fn a_beamed_line_gives_its_rests_empty_beams() {
+        let mut measure = eighths(&["C5", "D5", "E4"]);
+        measure.insert(1.5, crate::rest::Rest::new(Duration::eighth()));
+        let mut lone = Stream::with_kind(StreamKind::Measure);
+        lone.insert(0.0, crate::rest::Rest::new(Duration::new(2.0).unwrap()));
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, measure);
+        part.insert(1.0, lone);
+        make_beams(&mut part).unwrap();
+        let beamed: Vec<bool> = part
+            .measures()
+            .iter()
+            .flat_map(|measure| measure.events())
+            .filter_map(|event| match event.element() {
+                StreamElement::Rest(rest) => {
+                    Some(rest.beams().is_some_and(crate::notation::Beams::is_empty))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(beamed, [true, false]);
     }
 
     /// A bar length written over the meter's own is the length music21's

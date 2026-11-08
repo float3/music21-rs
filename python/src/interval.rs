@@ -386,11 +386,19 @@ impl Specifier {
     }
 }
 
+middle_class!(
+    /// music21's `interval.IntervalBase`: what every kind of interval is.
+    IntervalBase,
+    "IntervalBase",
+    "music21.interval",
+    crate::base::Music21Object
+);
+
 /// music21's `interval.GenericInterval`.
 #[pyclass(
     name = "GenericInterval",
     module = "music21.interval",
-    extends = crate::base::Music21Object,
+    extends = IntervalBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -692,7 +700,7 @@ impl GenericInterval {
 #[pyclass(
     name = "DiatonicInterval",
     module = "music21.interval",
-    extends = crate::base::Music21Object,
+    extends = IntervalBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -924,7 +932,7 @@ impl DiatonicInterval {
 #[pyclass(
     name = "ChromaticInterval",
     module = "music21.interval",
-    extends = crate::base::Music21Object,
+    extends = IntervalBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -1112,7 +1120,7 @@ impl ChromaticInterval {
 #[pyclass(
     name = "Interval",
     module = "music21.interval",
-    extends = crate::base::Music21Object,
+    extends = IntervalBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -2104,6 +2112,7 @@ fn subtract(py: Python<'_>, intervalList: &Bound<'_, PyAny>) -> PyResult<Py<PyAn
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Direction>()?;
     m.add_class::<Specifier>()?;
+    m.add_class::<IntervalBase>()?;
     m.add_class::<GenericInterval>()?;
     m.add_class::<DiatonicInterval>()?;
     m.add_class::<ChromaticInterval>()?;

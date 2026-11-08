@@ -248,6 +248,10 @@ reason = "a rule's text and what it parsed into"
 kind = "facade-only"
 reason = "a song's text and what it parsed into"
 
+[ClassFilter]
+kind = "facade-only"
+reason = "the classes looked for, read off each element's classSet"
+
 [ContiguousSegmentOfNotes]
 kind = "facade-only"
 reason = "a search result over a stream"
@@ -256,6 +260,10 @@ reason = "a search result over a stream"
 kind = "facade-only"
 reason = "a search over a stream"
 
+[Derivation]
+kind = "facade-only"
+reason = "what an element was made from and how, which no crate value carries"
+
 [Editorial]
 kind = "facade-only"
 reason = "a dictionary of what an analysis wrote"
@@ -263,6 +271,10 @@ reason = "a dictionary of what an analysis wrote"
 [ElementTimespan]
 kind = "facade-only"
 reason = "an element and its parentage"
+
+[ElementWrapper]
+kind = "facade-only"
+reason = "the object it carries and its id"
 
 [EnharmonicFixer]
 kind = "facade-only"
@@ -276,6 +288,18 @@ reason = "penalty weights"
 kind = "facade-only"
 reason = "pitches and the spellings tried"
 
+[Environment]
+kind = "facade-only"
+reason = "the name of the module it speaks for"
+
+[EnvironmentCore]
+kind = "facade-only"
+reason = "the preferences, held as music21 holds them; the crate reads none back"
+
+[GroupFilter]
+kind = "facade-only"
+reason = "the groups looked for, read off each element's groups"
+
 [Hasher]
 kind = "facade-only"
 reason = "settings and the hashes it made"
@@ -284,9 +308,17 @@ reason = "settings and the hashes it made"
 kind = "facade-only"
 reason = "timespans"
 
+[IdFilter]
+kind = "facade-only"
+reason = "the id looked for, compared as Python compares it"
+
 [IndexedLyric]
 kind = "facade-only"
 reason = "a search result; its measure number is a crate integer, not a value"
+
+[IsFilter]
+kind = "facade-only"
+reason = "music21's filter attributes, the objects looked for and the count left; the crate keeps nothing of them"
 
 [KeyAnalyzer]
 kind = "facade-only"
@@ -322,7 +354,11 @@ reason = "two marks and how the change is drawn"
 
 [Music21Object]
 kind = "facade-only"
-reason = "music21's groups, a list of names no crate value carries"
+reason = "music21's groups and derivation, which no crate value carries"
+
+[OffsetFilter]
+kind = "facade-only"
+reason = "the span's two offsets as music21 holds them; each call builds the crate's OffsetSpan from them"
 
 [PercussionChord]
 kind = "facade-only"
@@ -356,6 +392,10 @@ reason = "a member put on the element classes, holding the function it binds"
 kind = "facade-only"
 reason = "the element whose sites it reads, kept in the sites table"
 
+[SpannerStorage]
+kind = "facade-only"
+reason = "the spanner it is the storage of"
+
 [SpannerBundle]
 kind = "facade-only"
 reason = "spanners"
@@ -371,6 +411,10 @@ reason = "an alignment over two streams"
 [StreamSearcher]
 kind = "facade-only"
 reason = "a search over a stream"
+
+[SubConverter]
+kind = "facade-only"
+reason = "the stream read and the keywords given; the wheel's converter does the reading"
 
 [TabChord]
 kind = "facade-only"
@@ -396,6 +440,14 @@ reason = "a tree and the offset asked about"
 kind = "facade-only"
 reason = "the intervals a turn may step by, read into the crate afresh at each question"
 
+[Unpitched]
+kind = "facade-only"
+reason = "the note standing where it is displayed, which carries what is written of it"
+
+[UserSettings]
+kind = "facade-only"
+reason = "the Environment it writes through"
+
 [Verticality]
 kind = "facade-only"
 reason = "a dictionary of what sounds at one offset"
@@ -406,4 +458,4 @@ reason = "verticalities"
 
 [Walked]
 kind = "facade-only"
-reason = "elements and their offsets; its kind is a tag"
+reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"

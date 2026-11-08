@@ -746,3 +746,79 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SinglePart>()?;
     Ok(())
 }
+
+/// music21's `PriorsIntegrationScore`, built once where there is no
+/// music21 to ask for its own.
+static PRIORS: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+static BUILT: pyo3::sync::PyOnceLock<Py<PyModule>> = pyo3::sync::PyOnceLock::new();
+
+/// Where music21's `omr` directory is, which holds the K525 scores its
+/// examples read: beside the corpus `MUSIC21_RS_CORPUS` names, as the
+/// wheel's `corpus` finds it, else in an installed music21's package. The
+/// empty path where there is neither, so that the scores are missing
+/// rather than some other file found.
+fn omr_directory(py: Python<'_>) -> PyResult<std::path::PathBuf> {
+    if let Some(corpus) = std::env::var_os("MUSIC21_RS_CORPUS") {
+        let corpus = std::path::PathBuf::from(corpus);
+        if let Some(package) = corpus.parent() {
+            return Ok(package.join("omr"));
+        }
+    }
+    let spec = py
+        .import("importlib.util")?
+        .call_method1("find_spec", ("music21",))
+        .ok()
+        .filter(|spec| !spec.is_none());
+    let locations = spec.and_then(|spec| spec.getattr("submodule_search_locations").ok());
+    if let Some(locations) = locations.filter(|found| !found.is_none()) {
+        for location in locations.try_iter()? {
+            let package = std::path::PathBuf::from(location?.extract::<String>()?);
+            if package.join("omr").is_dir() {
+                return Ok(package.join("omr"));
+            }
+        }
+    }
+    Ok(std::path::PathBuf::new())
+}
+
+/// music21's `omr.correctors`, built: the classes, the paths of the K525
+/// scores its examples read, and its two named tuples.
+pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    let held = BUILT.get_or_try_init(py, || {
+        let m = PyModule::new(py, "music21.omr.correctors")?;
+        register(&m)?;
+        let directory = omr_directory(py)?;
+        let shown = directory.to_string_lossy().to_string();
+        m.add("pathName", &shown)?;
+        let separator = std::path::MAIN_SEPARATOR;
+        for (name, file) in [
+            ("K525omrFilePath", "k525OMRMvt1.xml"),
+            ("K525groundTruthFilePath", "k525GTMvt1.xml"),
+            ("K525omrShortPath", "k525OMRshort.xml"),
+            ("K525groundTruthShortPath", "k525GTshort.xml"),
+        ] {
+            m.add(name, format!("{shown}{separator}{file}"))?;
+        }
+        m.add("debug", false)?;
+        let relationship = crate::music21_or_namedtuple(
+            py,
+            "music21.omr.correctors",
+            "MeasureRelationship",
+            "flaggedMeasurePart flaggedMeasureIndex correctMeasurePart correctMeasureIndex \
+             correctionProbability",
+            &RELATIONSHIP,
+        )?;
+        m.add("MeasureRelationship", relationship)?;
+        let priors = crate::music21_or_namedtuple(
+            py,
+            "music21.omr.correctors",
+            "PriorsIntegrationScore",
+            "total horizontal vertical ignored",
+            &PRIORS,
+        )?;
+        m.add("PriorsIntegrationScore", priors)?;
+        Ok::<_, PyErr>(m.unbind())
+    })?;
+    Ok(held.bind(py).clone())
+}

@@ -122,6 +122,15 @@ pub struct Spanner {
     /// `completeStatus`, which only some of its readers set.
     #[cfg_attr(feature = "serde", serde(default))]
     complete: Drawn<bool>,
+    /// Whether the reader put it in the score itself rather than in the
+    /// part holding what it joins, as music21's MEI reader does.
+    #[cfg_attr(feature = "serde", serde(default))]
+    in_score: Drawn<bool>,
+    /// What it joins that no stream holds, each by its place among what it
+    /// joins: an ABC slur over a grace note holds the note music21 made
+    /// before copying it as a grace.
+    #[cfg_attr(feature = "serde", serde(default))]
+    unplaced: Drawn<Vec<(usize, crate::stream::StreamElement)>>,
 }
 
 /// How a rest of several measures is drawn and counted: music21's
@@ -546,6 +555,8 @@ impl Spanner {
             multi_rest: None,
             id_local: Drawn(None),
             complete: Drawn(false),
+            in_score: Drawn(false),
+            unplaced: Drawn(Vec::new()),
         }
     }
 
@@ -913,6 +924,31 @@ impl Spanner {
     /// Sets the number it is told apart by, or clears it.
     pub fn set_id_local(&mut self, id_local: Option<String>) {
         self.id_local.0 = id_local;
+    }
+
+    /// What it joins that no stream holds, each by its place among what it
+    /// joins, where [`Spanner::spanned`] says nothing.
+    pub fn unplaced_elements(&self) -> &[(usize, crate::stream::StreamElement)] {
+        &self.unplaced.0
+    }
+
+    /// Says what it joins at `place` that no stream holds.
+    pub fn set_unplaced_element(&mut self, place: usize, element: crate::stream::StreamElement) {
+        self.unplaced.0.retain(|(held, _)| *held != place);
+        self.unplaced.0.push((place, element));
+        self.unplaced.0.sort_by_key(|(held, _)| *held);
+    }
+
+    /// Whether the reader put it in the score itself, after its last
+    /// measure, rather than in the part holding what it joins: music21's
+    /// MEI reader appends its slurs to the score.
+    pub fn stands_in_score(&self) -> bool {
+        self.in_score.0
+    }
+
+    /// Says whether it stands in the score itself.
+    pub fn set_stands_in_score(&mut self, in_score: bool) {
+        self.in_score.0 = in_score;
     }
 
     /// Whether the reader that made it saw it to its end: music21's

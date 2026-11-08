@@ -97,6 +97,8 @@ fn full_measure_from(value: &Bound<'_, PyAny>) -> PyResult<FullMeasure> {
 
 impl Rest {
     pub(crate) fn wrap(_py: Python<'_>, inner: RsRest) -> Self {
+        // Where a reader found it shown, which the facade keeps.
+        let step_shift = inner.step_shift();
         Self {
             inner,
             duration: None,
@@ -106,7 +108,7 @@ impl Rest {
             expressions: None,
             articulations: None,
             style: None,
-            step_shift: 0,
+            step_shift,
             watched: false,
         }
     }
@@ -739,7 +741,7 @@ impl Rest {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        crate::copy_as_same_type(slf, slf.borrow().copied(py)?)
+        crate::copy_as_same_type(slf, slf.borrow().copied(py)?).map(crate::base::shallow)
     }
 }
 

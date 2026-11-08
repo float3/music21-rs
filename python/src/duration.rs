@@ -41,23 +41,9 @@ pyo3::create_exception!(
 /// A number written the way music21's `common.mixedNumeral` writes it: a
 /// whole number where it is one, and a whole number and a fraction where the
 /// two are both there.
-pub(crate) fn mixed_numeral(py: Python<'_>, value: f64) -> PyResult<String> {
-    let exact = py
-        .import("fractions")?
-        .getattr("Fraction")?
-        .call1((value,))?
-        .call_method1("limit_denominator", (65_535,))?;
-    let numerator: i64 = exact.getattr("numerator")?.extract()?;
-    let denominator: i64 = exact.getattr("denominator")?.extract()?;
-    if denominator == 1 {
-        return Ok(numerator.to_string());
-    }
-    let whole = numerator.div_euclid(denominator);
-    let rest = numerator.rem_euclid(denominator);
-    if whole == 0 {
-        return Ok(format!("{rest}/{denominator}"));
-    }
-    Ok(format!("{whole} {rest}/{denominator}"))
+pub(crate) fn mixed_numeral(value: f64) -> PyResult<String> {
+    music21::common::numbertools::mixed_numeral(value, 65_535)
+        .map_err(|error| crate::common::value_error(&error))
 }
 
 /// A written value's name with its first letter capitalized, which is what
@@ -744,32 +730,12 @@ impl Tuplet {
 /// exactly a float, so it stays one; anything else is snapped onto the
 /// nearest fraction with a denominator music21 will keep.
 pub(crate) fn op_frac<'py>(py: Python<'py>, value: f64) -> PyResult<Bound<'py, PyAny>> {
-    let float = PyFloat::new(py, value).into_any();
     if !value.is_finite() {
-        return Ok(float);
+        return Ok(PyFloat::new(py, value).into_any());
     }
-    let ratio = float.call_method0("as_integer_ratio")?;
-    let numerator = ratio.get_item(0)?;
-    let denominator = ratio.get_item(1)?;
-    // A denominator too wide for a `u64` is far past the limit: a value as
-    // small as 1/10080 is written over 2^65.
-    if denominator
-        .extract::<u64>()
-        .is_ok_and(|exact| exact <= OFFSET_DENOMINATOR_LIMIT)
-    {
-        return Ok(float);
-    }
-    let limited = py
-        .import("fractions")?
-        .getattr("Fraction")?
-        .call1((numerator, denominator))?
-        .call_method1("limit_denominator", (OFFSET_DENOMINATOR_LIMIT,))?;
-    let denominator = limited.getattr("denominator")?.extract::<u64>()?;
-    if denominator & (denominator - 1) == 0 {
-        let numerator = limited.getattr("numerator")?.extract::<f64>()?;
-        return Ok(PyFloat::new(py, numerator / denominator as f64).into_any());
-    }
-    Ok(limited)
+    let snapped = music21::common::numbertools::op_frac(value)
+        .map_err(|error| crate::common::value_error(&error))?;
+    crate::common::offset_ql(py, snapped)
 }
 
 /// The same, for a ratio that is already exact — a tuplet multiplier, which
@@ -786,10 +752,6 @@ pub(crate) fn op_frac_ratio<'py>(
         .getattr("Fraction")?
         .call1((numerator, denominator))
 }
-
-/// music21's `defaults.limitOffsetDenominator`: the largest denominator it
-/// will keep a quarter length as a fraction for.
-const OFFSET_DENOMINATOR_LIMIT: u64 = 65535;
 
 /// A quarter length written as a float, a whole number or a `Fraction`.
 fn quarter_length_from_any(value: &Bound<'_, PyAny>) -> PyResult<f64> {
@@ -973,8 +935,7 @@ impl Clone for Duration {
 /// What one group of dots multiplies a written value by: music21's
 /// `dotMultiplier`, `(2^(n+1) - 1) / 2^n`.
 fn dot_multiplier(dots: u32) -> f64 {
-    let scale = 2f64.powi(i32::try_from(dots).unwrap_or(i32::MAX));
-    (scale * 2.0 - 1.0) / scale
+    music21::common::numbertools::dot_multiplier(dots)
 }
 
 /// A ratio in lowest terms, so that multiplying tuplet ratios together does
@@ -2135,6 +2096,9 @@ impl Duration {
         );
         grace.linked = false;
         grace.unlinked_type = Some(written_type);
+        // A fresh `GraceDuration`, which music21 builds saying nothing was
+        // inferred.
+        grace.expression_is_inferred = false;
         grace.inner = RsDuration::new(0.0).map_err(duration_error)?;
         let kind = match appoggiatura {
             true => GraceKind::Appoggiatura,
@@ -2213,7 +2177,7 @@ impl Duration {
         }
         let tuplet_name = named.join(" ");
         let components = self.component_list_materialized(py)?;
-        let length = mixed_numeral(py, self.inner.quarter_length())?;
+        let length = mixed_numeral(self.inner.quarter_length())?;
         let mut written: Vec<String> = Vec::with_capacity(components.len());
         for component in &components {
             let dots = component.dots();
