@@ -214,6 +214,10 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # The script that deals the tests out to the shards below.
+      - name: Test the shard dealing
+        run: python -m unittest discover -s python-parity -p test_shards.py
+
       - name: Build and archive the parity tests
         shell: bash
         run: |
@@ -234,13 +238,16 @@ jobs:
           retention-days: 1
 
   # Each test runs in a process of its own under nextest, four at a time on
-  # each of five runners, which share the tests out by a hash of their
-  # names, so a test stays on the same runner from run to run. Five, not
-  # three, since a shard no longer compiles anything: what is left is the
-  # tests. A hash balances only tests of about one size, so the corpus
-  # sweeps are cut into several tests each, the heaviest scores dealt one
-  # to a test (`musicxml_common::dealt`), and no test runs much past four
-  # minutes.
+  # each of five runners. Five, not three, since a shard no longer compiles
+  # anything: what is left is the tests. The tests are dealt out by the
+  # times CI measured (`python-parity/test-times.toml`), slowest first to
+  # the shard with the least so far, and each shard starts its slowest
+  # first, so no shard waits on a long test started last: a hash of the
+  # names left the shards five minutes apart. A test the times do not
+  # know goes to a shard by a hash of its name and moves no other. The
+  # corpus sweeps are still cut into several tests each, the heaviest
+  # scores dealt one to a test (`musicxml_common::dealt`), since no shard
+  # can finish before its slowest test.
   python-parity:
     name: Python Parity (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
@@ -312,9 +319,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          cargo nextest list --archive-file python-parity.tar.zst \
+            --workspace-remap python-parity \
+            --message-format json > "$RUNNER_TEMP/parity-tests.json"
+          filter="$(python python-parity/shards.py run ${{ matrix.shard }} 5 \
+            --list "$RUNNER_TEMP/parity-tests.json" \
+            --config "$RUNNER_TEMP/parity-shard.toml")"
           cargo nextest run --archive-file python-parity.tar.zst \
             --workspace-remap python-parity \
-            --no-fail-fast --partition hash:${{ matrix.shard }}/5
+            --config-file "$RUNNER_TEMP/parity-shard.toml" \
+            --no-fail-fast --no-tests=pass -E "$filter"
 
   # The wheel is built and tested on Linux here, and on Windows and macOS
   # in `wheel-platforms`. Linux's is a job of its own because

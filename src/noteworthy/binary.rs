@@ -29,7 +29,7 @@ const COMPRESSED: &[u8] = b"[NWZ]\x00";
 /// anything the text reader refuses.
 pub fn from_nwc(bytes: &[u8]) -> Result<Stream> {
     let lines = nwc_lines(bytes)?;
-    from_lines(lines.iter().map(String::as_str))
+    from_lines(lines.iter().map(String::as_str), false)
 }
 
 /// The lines of NoteWorthy text a `.nwc` file's bytes stand for, as

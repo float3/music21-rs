@@ -10,7 +10,7 @@
 
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Tuplet, TupletType};
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::expressions::{Expression, Fermata};
 use crate::makenotation::{make_measures, op_frac};
 use crate::meter::TimeSignature;
@@ -554,6 +554,27 @@ impl Reader {
     }
 }
 
+/// The words of `text` split at whitespace, each with the byte it starts
+/// at.
+fn tokens_of(text: &str) -> Vec<(usize, &str)> {
+    let mut tokens = Vec::new();
+    let mut start = None;
+    for (index, character) in text.char_indices() {
+        match (character.is_whitespace(), start) {
+            (true, Some(from)) => {
+                tokens.push((from, &text[from..index]));
+                start = None;
+            }
+            (false, None) => start = Some(index),
+            _ => {}
+        }
+    }
+    if let Some(from) = start {
+        tokens.push((from, &text[from..]));
+    }
+    tokens
+}
+
 /// Reads a line of TinyNotation into a part of measures: music21's
 /// `converter.parse('tinyNotation: ...')`.
 ///
@@ -579,6 +600,7 @@ impl Reader {
 /// # Ok::<(), music21::Error>(())
 /// ```
 pub fn from_tiny_notation(text: &str) -> Result<Stream> {
+    let whole = text;
     let text = text.trim_start();
     let body = match text.split_once(':') {
         Some((head, body)) if head.eq_ignore_ascii_case("tinynotation") => body,
@@ -590,8 +612,12 @@ pub fn from_tiny_notation(text: &str) -> Result<Stream> {
         last_length: 1.0,
         states: Vec::new(),
     };
-    for token in body.split_whitespace() {
-        reader.token(token)?;
+    // What goes wrong in a token says where the token starts.
+    let before = whole.len() - body.len();
+    for (start, token) in tokens_of(body) {
+        reader
+            .token(token)
+            .map_err(|error| error.placed(|| Position::in_text(whole, before + start)))?;
     }
     let mut events = Vec::new();
     let mut offset = 0.0;
@@ -608,6 +634,18 @@ pub fn from_tiny_notation(text: &str) -> Result<Stream> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refusal_says_where_its_token_starts() {
+        let error =
+            from_tiny_notation("tinyNotation: 4/4 c4\n  d4 é4 e99999999999999999999").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Duration error: Cannot parse token with duration 99999999999999999999"
+        );
+        assert!(matches!(error.unplaced(), Error::Duration(_)));
+        assert_eq!(error.position(), Some(&Position::line(2).with_column(9)));
+    }
 
     #[test]
     fn a_closing_brace_ends_the_bracket_rather_than_a_tie() {

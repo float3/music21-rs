@@ -16,7 +16,7 @@ use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::dynamics::Dynamic;
-use crate::error::{Error, Result};
+use crate::error::{Error, Position, Result};
 use crate::expressions::{Expression, Fermata, Ornament, OrnamentKind};
 use crate::interval::Interval;
 use crate::key::KeySignature;
@@ -164,8 +164,10 @@ impl Slurs {
 fn split_parts(text: &str) -> Result<Vec<Part>> {
     let mut parts = Vec::new();
     let mut lines: Vec<String> = Vec::new();
+    // The line of the file each of them is, counted from one.
+    let mut numbers: Vec<usize> = Vec::new();
     let mut comment = false;
-    for line in text.replace("\r\n", "\n").split('\n') {
+    for (index, line) in text.replace("\r\n", "\n").split('\n').enumerate() {
         if line.starts_with('&') {
             comment = !comment;
             continue;
@@ -176,11 +178,16 @@ fn split_parts(text: &str) -> Result<Vec<Part>> {
         if line.starts_with("/END") || line.starts_with("END") {
             if lines.len() <= 1 {
                 lines.clear();
+                numbers.clear();
                 continue;
             }
-            parts.push(Part::new(std::mem::take(&mut lines))?);
+            let at = numbers.first().copied().unwrap_or(index + 1);
+            let part = Part::new(std::mem::take(&mut lines), std::mem::take(&mut numbers))
+                .map_err(|error| error.placed(|| Position::line(at)))?;
+            parts.push(part);
         } else if !line.starts_with("/eof") {
             lines.push(line.to_string());
+            numbers.push(index + 1);
         }
     }
     Ok(parts)
@@ -202,30 +209,65 @@ enum Stage {
 /// A part's lines and the stage they are written in.
 struct Part {
     lines: Vec<String>,
+    /// The line of its file each line is, counted from one.
+    numbers: Vec<usize>,
     stage: Stage,
 }
 
 impl Part {
     /// music21's `MuseDataPart`: stage 2 where any line is an attribute
     /// record, stage 1 otherwise, whose leading blank lines are dropped.
-    fn new(lines: Vec<String>) -> Result<Self> {
+    fn new(lines: Vec<String>, numbers: Vec<usize>) -> Result<Self> {
         if lines.iter().any(|line| line.starts_with('$')) {
             return Ok(Self {
                 lines,
+                numbers,
                 stage: Stage::Two,
             });
         }
         if lines.len() <= 1 {
             return Err(error("cannot scrub empty source"));
         }
-        let lines = lines
+        let (lines, numbers) = lines
             .into_iter()
-            .skip_while(|line| line.trim().is_empty())
-            .collect();
+            .zip(numbers)
+            .skip_while(|(line, _)| line.trim().is_empty())
+            .unzip();
         Ok(Self {
             lines,
+            numbers,
             stage: Stage::One,
         })
+    }
+
+    /// Where the line at `index` stands in the file, in this part.
+    fn place(&self, index: usize) -> Position {
+        let position = Position {
+            line: self.numbers.get(index).copied(),
+            ..Position::default()
+        };
+        match self.part_name() {
+            Some(name) => position.in_part(name),
+            None => position,
+        }
+    }
+
+    /// Where the attribute record stands: what goes wrong reading a
+    /// part's key, meter, clef or divisions is placed there.
+    fn attributes_place(&self) -> Position {
+        let index = match self.stage {
+            Stage::One => Some(6),
+            Stage::Two => self
+                .lines
+                .iter()
+                .skip(11)
+                .position(|line| line.starts_with('$'))
+                .map(|index| index + 11),
+        };
+        match index {
+            Some(index) => self.place(index),
+            None => self.place(usize::MAX),
+        }
     }
 
     fn line(&self, index: usize) -> Result<&str> {
@@ -503,7 +545,8 @@ impl Part {
         let name = self.part_name();
         part.set_id(name.clone());
         part.set_name(name);
-        let divisions = self.divisions()?;
+        let header = |error: Error| error.placed(|| self.attributes_place());
+        let divisions = self.divisions().map_err(header)?;
         let bounds = self.measure_bounds()?;
         let measures: Vec<&[String]> = bounds
             .iter()
@@ -518,27 +561,39 @@ impl Part {
             if !has_notes(lines) {
                 continue;
             }
-            let mut measure = measure_object(lines)?;
+            // What goes wrong inside a measure says which, by the number
+            // its record gives it, and the line it opens on.
+            let first = bounds[index].0;
+            let here = |error: Error| {
+                error.placed(|| {
+                    let mut position = self.place(first);
+                    position.measure = measure_number(lines).ok();
+                    position
+                })
+            };
+            let mut measure = measure_object(lines).map_err(here)?;
             if let Some(next) = measures.get(index + 1)
                 && !has_notes(next)
             {
-                measure.set_right_barline(Some(bar_object(next)?));
+                let after = bounds[index + 1].0;
+                let barline = bar_object(next).map_err(|error| error.placed(|| self.place(after)));
+                measure.set_right_barline(Some(barline.map_err(here)?));
             }
             if bars == 0 {
-                if let Some(clef) = self.clef()? {
+                if let Some(clef) = self.clef().map_err(header)? {
                     append_at(&mut measure, 0.0, StreamElement::Clef(clef));
                 }
                 append_at(
                     &mut measure,
                     0.0,
-                    StreamElement::TimeSignature(self.time_signature()?),
+                    StreamElement::TimeSignature(self.time_signature().map_err(header)?),
                 );
                 append_at(
                     &mut measure,
                     0.0,
-                    StreamElement::KeySignature(self.key_signature()?),
+                    StreamElement::KeySignature(self.key_signature().map_err(header)?),
                 );
-                if let Some(directive) = self.directive()? {
+                if let Some(directive) = self.directive().map_err(header)? {
                     let words = TempoText::new(directive);
                     if words.is_common_tempo_text() {
                         append_at(
@@ -552,10 +607,12 @@ impl Part {
             self.fill(
                 &mut measure,
                 lines,
+                first,
                 divisions,
                 &mut last_by_voice,
                 &mut slurs,
-            )?;
+            )
+            .map_err(here)?;
             if bars == 0 {
                 let bar = self.time_signature()?.bar_duration().quarter_length();
                 let length = measure.end_offset();
@@ -566,7 +623,7 @@ impl Part {
             part.push(measure);
             bars += 1;
         }
-        if let Some(interval) = self.transposition()? {
+        if let Some(interval) = self.transposition().map_err(header)? {
             let mut failure = None;
             part.for_each_mut(&mut |_, element| {
                 let moved = match element {
@@ -616,6 +673,7 @@ impl Part {
         &self,
         measure: &mut Stream,
         lines: &[String],
+        first: usize,
         divisions: FloatType,
         last_by_voice: &mut HashMap<usize, Option<Option<TieType>>>,
         slurs: &mut Slurs,
@@ -626,10 +684,11 @@ impl Part {
         let mut number = 0;
         let mut last = last_by_voice.get(&number).copied().flatten();
         let previous = &mut last;
-        for line in lines {
+        for (index, line) in lines.iter().enumerate() {
             let record = Record {
                 line,
                 stage: self.stage,
+                number: self.numbers.get(first + index).copied(),
             };
             if record.is_back() {
                 self.flush(
@@ -656,7 +715,11 @@ impl Part {
                     previous,
                     slurs,
                 )?;
-                let rest = Rest::new(Duration::new(record.quarter_length(divisions)?)?);
+                let length = record
+                    .quarter_length(divisions)
+                    .and_then(Duration::new)
+                    .map_err(|error| record.placed(error))?;
+                let rest = Rest::new(length);
                 let target = voice.as_mut().unwrap_or(&mut *measure);
                 append(target, StreamElement::Rest(rest));
                 *previous = Some(None);
@@ -707,7 +770,8 @@ impl Part {
         }
         let records = std::mem::take(pending);
         slurs.add(&records[0].slur_marks());
-        let (element, dynamics, tie) = note_or_chord(&records, divisions, *previous)?;
+        let (element, dynamics, tie) = note_or_chord(&records, divisions, *previous)
+            .map_err(|error| records[0].placed(error))?;
         *previous = Some(tie);
         let target = voice.unwrap_or(measure);
         let at = target.end_offset();
@@ -792,22 +856,28 @@ fn bar_object(lines: &[String]) -> Result<Barline> {
     Ok(barline)
 }
 
-/// `MuseDataMeasure.getMeasureObject`: a measure numbered as its record
-/// says, opening with its barline.
-fn measure_object(lines: &[String]) -> Result<Stream> {
+/// The number a measure's record gives it, as music21 reads it: every
+/// digit of the record, `1` where it gives none, and `0` for the notes
+/// before the first record, a pickup.
+fn measure_number(lines: &[String]) -> Result<String> {
     let line = measure_line(lines)?;
     let rest: String = line.chars().skip(8).collect();
-    // Notes before the first measure record form a pickup, numbered 0.
     let opens_with_record = lines
         .first()
         .is_some_and(|first| first.trim().starts_with('m'));
-    let number = if line.chars().count() >= 9 && !rest.trim().is_empty() {
+    Ok(if line.chars().count() >= 9 && !rest.trim().is_empty() {
         digits(&line)
     } else if opens_with_record {
         "1".to_string()
     } else {
         "0".to_string()
-    };
+    })
+}
+
+/// `MuseDataMeasure.getMeasureObject`: a measure numbered as its record
+/// says, opening with its barline.
+fn measure_object(lines: &[String]) -> Result<Stream> {
+    let number = measure_number(lines)?;
     let mut measure = Stream::with_kind(StreamKind::Measure);
     measure.set_left_barline(Some(bar_object(lines)?));
     if !number.is_empty() {
@@ -825,9 +895,19 @@ fn measure_object(lines: &[String]) -> Result<Stream> {
 struct Record<'a> {
     line: &'a str,
     stage: Stage,
+    /// The line of the file it is, counted from one.
+    number: Option<usize>,
 }
 
 impl Record<'_> {
+    /// `error`, placed at this record's line.
+    fn placed(&self, error: Error) -> Error {
+        match self.number {
+            Some(number) => error.placed(|| Position::line(number)),
+            None => error,
+        }
+    }
+
     fn first(&self) -> Option<char> {
         self.line.chars().next()
     }
@@ -1201,6 +1281,28 @@ mod tests {
     }
 
     #[test]
+    fn a_refusal_says_its_line_measure_and_part() {
+        let part = |attributes: &str, record: &str| {
+            format!(
+                "\n\n\n01/01/01 x\nWK#:1 MV#:1\nsource\nWork\nMovement\nFlute\n\
+                 1 0\nGroup memberships: score\nscore: part 1 of 1\n\
+                 & a comment\n&\n{attributes}\nC5     2        q     u\n\
+                 D5     2        q     u\nmeasure 2\n{record}\n/END\n"
+            )
+        };
+        let error =
+            from_musedata(&[&part("$  K:0   Q:2   T:2/4   C:4", "E5     x        h")]).unwrap_err();
+        assert_eq!(error.to_string(), "MuseData error: \"  x\" is not a number");
+        let mut wanted = Position::line(19).in_part("Flute");
+        wanted.measure = Some("2".to_string());
+        assert_eq!(error.position(), Some(&wanted));
+
+        let error =
+            from_musedata(&[&part("$  K:0   Q:2   T:x/4   C:4", "E5     4        h")]).unwrap_err();
+        assert_eq!(error.position(), Some(&Position::line(15).in_part("Flute")));
+    }
+
+    #[test]
     fn beams_are_read_from_their_column() {
         let beams = beams_of("[[/");
         assert_eq!(beams.len(), 3);
@@ -1211,6 +1313,7 @@ mod tests {
         let record = Record {
             line: "C5     3        e     d  [     pp.",
             stage: Stage::Two,
+            number: None,
         };
         let values: Vec<String> = record
             .dynamics()
