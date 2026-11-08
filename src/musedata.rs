@@ -7,6 +7,9 @@
 //! read: stage 2, with its `$` attribute records and its columns for beams,
 //! accidentals, notations and lyrics, and the older stage 1.
 
+pub mod base12_26;
+pub mod base40;
+
 use std::collections::HashMap;
 
 use crate::articulations::{Articulation, ArticulationKind};
@@ -1131,51 +1134,9 @@ fn note_or_chord(
     Ok((element, first.dynamics(), tie))
 }
 
-/// music21's `base40IntervalTable`: the simple interval each distance in
-/// base 40 is.
-const BASE40_INTERVALS: [(i32, &str); 25] = [
-    (0, "P1"),
-    (1, "A1"),
-    (4, "d2"),
-    (5, "m2"),
-    (6, "M2"),
-    (7, "A2"),
-    (10, "d3"),
-    (11, "m3"),
-    (12, "M3"),
-    (13, "A3"),
-    (16, "d4"),
-    (17, "P4"),
-    (18, "A4"),
-    (22, "d5"),
-    (23, "P5"),
-    (24, "A5"),
-    (27, "d6"),
-    (28, "m6"),
-    (29, "M6"),
-    (30, "A6"),
-    (33, "d7"),
-    (34, "m7"),
-    (35, "M7"),
-    (36, "A7"),
-    (39, "d8"),
-];
-
-/// music21's `base40DeltaToInterval`: a distance in base 40 as an interval,
-/// its octaves counted and its direction kept.
+/// music21's `base40DeltaToInterval`, refused as a MuseData error.
 fn base40_interval(delta: i32) -> Result<Interval> {
-    let simple = delta.abs() % 40;
-    let name = BASE40_INTERVALS
-        .iter()
-        .find(|(distance, _)| *distance == simple)
-        .map(|(_, name)| *name)
-        .ok_or_else(|| error(format!("Interval not handled by Base40 {simple}")))?;
-    let (specifier, number) = name.split_at(1);
-    let number: i32 = number.parse().unwrap_or(1);
-    let octaves = delta.abs() / 40;
-    let generic = number + 7 * octaves;
-    let generic = if delta < 0 { -generic } else { generic };
-    Interval::from_name(format!("{specifier}{generic}"))
+    base40::delta_to_interval(delta).map_err(|refused| error(refused.message()))
 }
 
 #[cfg(test)]
