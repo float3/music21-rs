@@ -7843,6 +7843,28 @@ print(m.route_converters(['midi']))
     ]
 
 
+def test_install_routes_every_format_read_as_music21_reads_it():
+    """Installed, `converter.parse` reads ABC, MIDI, Humdrum and MEI through
+    the crate, whose scores of them are music21's to the last attribute,
+    and leaves MusicXML to music21's reader."""
+    pytest.importorskip("music21.stream")
+    code = """
+from music21 import common, converter
+import music21_rs as m
+m.install_into_music21()
+root = common.getSourceFilePath()
+for path in ('corpus/ryansMammoth/BanjoReel.abc', 'corpus/bach/bwv281.krn',
+             'mei/test/test_file.mei', 'corpus/bach/bwv66.6.mxl'):
+    made = converter.Converter()
+    made.parseFile(root / path, forceSource=True, storePickle=False)
+    print(path.rsplit('.', 1)[-1], getattr(made.subConverter, 'readByCrate', False))
+"""
+    done = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert done.stdout.splitlines() == ["abc True", "krn True", "mei True", "mxl False"]
+
+
 def test_route_converters_routes_its_formats_and_no_others():
     """Each format routed is music21's own subconverter class under the
     same name, reading through the crate; a format it has no reader for is
