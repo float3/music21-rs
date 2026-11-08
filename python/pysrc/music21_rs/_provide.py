@@ -195,6 +195,9 @@ def _contents(homes=True, children=False):
                 for name in names:
                     value = known.get(name) or getattr(_extension, name)
                     contents.setdefault(module, {}).setdefault(name, value)
+    for child, parent in _CHILDREN_OF_PACKAGE.items():
+        for name, value in contents.get(parent, {}).items():
+            contents.setdefault(child, {}).setdefault(name, value)
     for module in list(contents):
         parts = module.split(".")
         for end in range(1, len(parts)):

@@ -56,9 +56,10 @@ pub mod defaults;
 pub mod discrete;
 pub mod duration;
 pub mod dynamics;
-pub mod environment;
 pub mod editorial;
 pub mod enharmonics;
+pub mod environment;
+pub mod exceptions21;
 pub mod expressions;
 pub mod extractors;
 pub mod fbrules;
@@ -74,6 +75,7 @@ pub mod hasher;
 pub mod instrument;
 mod instrument_kinds;
 pub mod interval;
+pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
 pub mod makenotation;
@@ -89,11 +91,11 @@ pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
 pub mod possibility;
+pub mod prebase;
 pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
 pub mod reducechords;
-pub mod prebase;
 pub mod reduction;
 pub mod repeat;
 pub mod resolution;
@@ -1346,10 +1348,6 @@ def make_class(facade, original):
         # A one-element tuple; see `lineage` for why it is not the class.
         '_replaces': (original,),
     })
-    if issubclass(original, _base.Music21Object):
-        # music21 tells an element's sites of a new priority or length
-        # through `informSites`, which reaches music21's streams alone. The
-        # package's streams are told first, and keep what they worked out
     # The wheel's `ProtoM21Object` is the facade's plumbing, not the
     # class's: where the facade says nothing of its own about how it is
     # shown, music21's class says it, as it did before that base was there.
@@ -1359,6 +1357,10 @@ def make_class(facade, original):
                 if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
                     namespace.setdefault(name, getattr(original, name))
                 break
+    if issubclass(original, _base.Music21Object):
+        # music21 tells an element's sites of a new priority or length
+        # through `informSites`, which reaches music21's streams alone. The
+        # package's streams are told first, and keep what they worked out
         # until then.
         inform = original.informSites
 
@@ -2017,6 +2019,26 @@ exceptions![
         stream::StreamException,
         Some("music21.exceptions21")
     ),
+    (
+        "ImmutableStreamException",
+        exceptions21::ImmutableStreamException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "AnalysisException",
+        exceptions21::AnalysisException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "TreeException",
+        exceptions21::TreeException,
+        Some("music21.exceptions21")
+    ),
+    (
+        "SubConverterException",
+        exceptions21::SubConverterException,
+        Some("music21.exceptions21")
+    ),
     ("TempoException", tempo::TempoException, None),
     (
         "InstrumentException",
@@ -2087,6 +2109,7 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    prebase::register(m)?;
     base::register(m)?;
     pitch::register(m)?;
     figuredbass::register(m)?;
@@ -2111,7 +2134,6 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     midipercussion::register(m)?;
     braillebasic::register(m)?;
     braillelookup::register(m)?;
-    prebase::register(m)?;
     braillenotegrouping::register(m)?;
     braillesegment::register(m)?;
     brailletext::register(m)?;
@@ -2162,6 +2184,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     chordtables::register(m)?;
     dynamics::register(m)?;
     scala::register(m)?;
+    intervalnetwork::register(m)?;
     instrument::register(m)?;
     clef::register(m)?;
     articulations::register(m)?;
@@ -2179,36 +2202,12 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // `_thawed` on whichever of the two modules is present.
     m.add_function(wrap_pyfunction!(thawed, m)?)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
+    m.add("__music21_built_modules__", BUILT_MODULES.to_vec())?;
+    m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
 }
 
-/// music21's analysis classes, implemented in Rust.
-///
-/// The classes here have music21's names, constructor arguments, properties
-/// and `repr`, and give music21's answers: `Pitch`, `Interval`, `Chord`,
-/// `Note`, `Duration`, `Key`, `KeySignature`, the scales, `RomanNumeral`,
-/// `TimeSignature`, `MetronomeMark`, `ToneRow` and more. The package does not
-/// need music21 to run.
-///
-/// ```python
-/// import music21_rs as m
-///
-/// chord = m.Chord("C4 E4 G4 B-4")
-/// chord.commonName            # 'dominant seventh chord'
-/// chord.root()                # <music21.pitch.Pitch C4>
-/// chord.transpose("M3")       # <music21.chord.Chord E4 G#4 B4 D5>
-///
-/// m.RomanNumeral("V7", m.Key("G")).pitches
-/// m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
-/// ```
-///
-    m.add("__music21_built_modules__", BUILT_MODULES.to_vec())?;
-    m.add_function(wrap_pyfunction!(music21_module, m)?)?;
-/// Everything lives in this one namespace. Each class reports the music21
-/// module it corresponds to (`m.Chord.__module__ == 'music21.chord'`), so its
-/// `repr` matches music21's.
-///
 /// music21's modules that are built here whole, as modules, rather than
 /// put together from the classes on this one: what they hold (`set`,
 /// `get`, `keys`) would shadow Python's own in a flat namespace, and their
@@ -2232,6 +2231,30 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
     }
 }
 
+/// music21's analysis classes, implemented in Rust.
+///
+/// The classes here have music21's names, constructor arguments, properties
+/// and `repr`, and give music21's answers: `Pitch`, `Interval`, `Chord`,
+/// `Note`, `Duration`, `Key`, `KeySignature`, the scales, `RomanNumeral`,
+/// `TimeSignature`, `MetronomeMark`, `ToneRow` and more. The package does not
+/// need music21 to run.
+///
+/// ```python
+/// import music21_rs as m
+///
+/// chord = m.Chord("C4 E4 G4 B-4")
+/// chord.commonName            # 'dominant seventh chord'
+/// chord.root()                # <music21.pitch.Pitch C4>
+/// chord.transpose("M3")       # <music21.chord.Chord E4 G#4 B4 D5>
+///
+/// m.RomanNumeral("V7", m.Key("G")).pitches
+/// m.TimeSignature("6/8").getAccentWeight(1.5)   # 0.5
+/// ```
+///
+/// Everything lives in this one namespace. Each class reports the music21
+/// module it corresponds to (`m.Chord.__module__ == 'music21.chord'`), so its
+/// `repr` matches music21's.
+///
 /// Streams, file parsing, notation output and the corpus are not included.
 /// To use those, install music21 as well and call `install_into_music21()`:
 /// music21's own code then runs on these classes.
