@@ -1679,16 +1679,16 @@ impl Volume {
     /// music21's `cachedRealized`: the last answer, or a fresh one where
     /// nothing has realized this volume yet.
     #[getter]
-    fn cachedRealized(&mut self, py: Python<'_>) -> PyResult<f64> {
-        if let Some(cached) = self.cached {
+    fn cachedRealized(slf: &Bound<'_, Self>) -> PyResult<f64> {
+        if let Some(cached) = slf.borrow().cached {
             return Ok(cached);
         }
-        self.getRealized(py, None, true, None, 0.5, true)
+        Self::getRealized(slf, None, true, None, 0.5, true)
     }
 
     #[getter]
-    fn cachedRealizedStr(&mut self, py: Python<'_>) -> PyResult<String> {
-        Ok(music21::volume::rounded_str(self.cachedRealized(py)?))
+    fn cachedRealizedStr(slf: &Bound<'_, Self>) -> PyResult<String> {
+        Ok(music21::volume::rounded_str(Self::cachedRealized(slf)?))
     }
 
     /// music21's `mergeAttributes`: everything the other volume says except
@@ -1723,25 +1723,30 @@ impl Volume {
         clip = true,
     ))]
     fn getRealized(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
         #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<f64> {
-        let dynamic = self.dynamic_scalar(py, useDynamicContext)?;
-        let shift = self.articulation_shift(py, useArticulations)?;
-        let realized = if useVelocity {
-            self.inner.realized_with(dynamic, shift, baseLevel, clip)
-        } else {
-            self.inner
-                .realized_without_velocity(dynamic, shift, baseLevel, clip)
+        let py = slf.py();
+        // Borrowed only to read: looking for the dynamic reads the note,
+        // and the note reads this volume.
+        let realized = {
+            let me = slf.borrow();
+            let dynamic = me.dynamic_scalar(py, useDynamicContext)?;
+            let shift = me.articulation_shift(py, useArticulations)?;
+            if useVelocity {
+                me.inner.realized_with(dynamic, shift, baseLevel, clip)
+            } else {
+                me.inner
+                    .realized_without_velocity(dynamic, shift, baseLevel, clip)
+            }
         };
         // music21 keeps every answer, which is what `realizeVolume` walks a
         // score to fill in.
-        self.cached = Some(realized);
+        slf.borrow_mut().cached = Some(realized);
         Ok(realized)
     }
 
@@ -1753,16 +1758,15 @@ impl Volume {
         clip = true,
     ))]
     fn getRealizedStr(
-        &mut self,
-        py: Python<'_>,
+        slf: &Bound<'_, Self>,
         useDynamicContext: Option<&Bound<'_, PyAny>>,
         #[pyo3(from_py_with = crate::truthy)] useVelocity: bool,
         useArticulations: Option<&Bound<'_, PyAny>>,
         baseLevel: f64,
         #[pyo3(from_py_with = crate::truthy)] clip: bool,
     ) -> PyResult<String> {
-        let realized = self.getRealized(
-            py,
+        let realized = Self::getRealized(
+            slf,
             useDynamicContext,
             useVelocity,
             useArticulations,

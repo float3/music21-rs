@@ -2025,6 +2025,21 @@ def test_a_figured_bass_scale_edited_in_place_is_counted_in():
     assert assigned.getPitchNames("E3", "6") == ["E", "G", "C#"]
 
 
+def test_a_volume_realized_in_a_stream_reads_its_dynamic():
+    """A note's volume asks its note's context for the dynamic over it,
+    and the note is read while the volume is asked, as in music21."""
+    held = m.Stream()
+    held.append(m.Dynamic("f"))
+    first = m.Note("C4")
+    held.append(first)
+    held.append(m.Rest())
+    second = m.Note("D4")
+    held.append(second)
+    for note in (first, second):
+        assert note.volume.getRealized() == 0.992124
+        assert note.volume.cachedRealizedStr == "0.99"
+
+
 def test_an_appoggiaturas_size_edited_in_place_is_realized():
     appoggiatura = m.Appoggiatura()
     appoggiatura.size = m.ChromaticInterval(1)
