@@ -164,11 +164,20 @@ pub(crate) fn duration_from_keywords(
 
 error_into!(pub(crate) chord_error, ChordException);
 
+middle_class!(
+    /// music21's `chord.ChordBase`: what a chord and a percussion chord
+    /// both are, several things struck at once.
+    ChordBase,
+    "ChordBase",
+    "music21.chord",
+    crate::base::NotRest
+);
+
 /// music21's `chord.Chord`.
 #[pyclass(
     name = "Chord",
     module = "music21.chord",
-    extends = crate::base::NotRest,
+    extends = ChordBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -3841,6 +3850,7 @@ fn fromIntervalVector(
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fromForteClass, m)?)?;
     m.add_function(wrap_pyfunction!(fromIntervalVector, m)?)?;
+    m.add_class::<ChordBase>()?;
     m.add_class::<Chord>()?;
     m.add_class::<ChordTableAddress>()?;
     Ok(())

@@ -78,6 +78,12 @@ fn read_tenths(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Tenths>> {
 )]
 pub struct LayoutBase;
 
+impl crate::base::Footing for LayoutBase {
+    fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
+        crate::base::built(Self).add_subclass(value)
+    }
+}
+
 #[pymethods]
 impl LayoutBase {
     /// Refuses a member nothing here defines, as Python refuses it.
@@ -101,7 +107,7 @@ impl LayoutBase {
 #[pyclass(
     name = "ScoreLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -292,7 +298,7 @@ fn said(value: Option<Tenths>) -> String {
 #[pyclass(
     name = "PageLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -469,7 +475,7 @@ impl PageLayout {
 #[pyclass(
     name = "SystemLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref
@@ -634,7 +640,7 @@ impl SystemLayout {
 #[pyclass(
     name = "StaffLayout",
     module = "music21.layout",
-    extends = crate::base::Music21Object,
+    extends = LayoutBase,
     subclass,
     skip_from_py_object,
     weakref

@@ -177,6 +177,37 @@ where
     <T::BaseType as Footing>::under(value)
 }
 
+/// The classes music21 gives more than one base, with all of them, in
+/// music21's order.
+const MULTIPLE_BASES: &[(&str, &[&str])] = &[
+    ("Spiccato", &["Staccato", "Accent"]),
+    ("Stress", &["DynamicArticulation", "LengthArticulation"]),
+    ("StringHarmonic", &["Bowing", "Harmonic"]),
+    ("StringFingering", &["StringIndication", "Fingering"]),
+    ("FrettedPluck", &["FretIndication", "Fingering"]),
+    ("RepeatExpression", &["RepeatMark", "Expression"]),
+    ("Repeat", &["RepeatMark", "Barline"]),
+];
+
+/// Gives the classes music21 builds on more than one base the rest of
+/// theirs: `articulations.Spiccato` is a `Staccato` and an `Accent`. A pyo3
+/// class extends one class; Python takes the others once the classes are
+/// made, where they add nothing to an instance's layout -- a class with no
+/// value of its own, or a mixin with no slots -- which is all these are.
+/// Where both bases keep a value Python refuses, and the wheel tests'
+/// `_HIERARCHY_GAPS` lists the class instead.
+pub(crate) fn add_bases(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    for (name, bases) in MULTIPLE_BASES {
+        let class = m.getattr(*name)?;
+        let mut all = Vec::new();
+        for base in *bases {
+            all.push(m.getattr(*base)?);
+        }
+        class.setattr("__bases__", PyTuple::new(m.py(), all)?)?;
+    }
+    Ok(())
+}
+
 /// music21's `Groups`, as Python: a list of distinct strings that compares
 /// as a set, ignoring case.
 const GROUPS: &str = r#"

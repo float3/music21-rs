@@ -27,12 +27,46 @@ pyo3::create_exception!(
     crate::Music21Exception
 );
 
+/// music21's `repeat.RepeatMark`: what every mark of a repeat is, a
+/// repeat barline among them. It is no `Music21Object`, and adds nothing
+/// to what it is mixed into, so it is a second base where music21 makes it
+/// one (`base::add_bases`).
+const REPEAT_MARK: &str = r#"
+class RepeatMark:
+    """Base class of all repeat objects, including RepeatExpression objects
+    and Repeat (Barline) objects, used to filter by class for everything
+    that marks a repeat. It is not a Music21Object."""
+
+    __slots__ = ()
+
+
+RepeatMark.__module__ = 'music21.repeat'
+"#;
+
+static REPEAT_MARK_CLASS: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// The package's `RepeatMark`, made once per interpreter, since the classes
+/// it is a base of are made once.
+fn repeat_mark(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    REPEAT_MARK_CLASS
+        .get_or_try_init(py, || {
+            let module = PyModule::from_code(
+                py,
+                &std::ffi::CString::new(REPEAT_MARK)?,
+                c"music21_rs_repeat.py",
+                c"music21_rs_repeat",
+            )?;
+            Ok::<_, PyErr>(module.getattr("RepeatMark")?.unbind())
+        })
+        .map(|class| class.bind(py).clone())
+}
+
 /// music21's `repeat.RepeatExpression`: a mark saying where the music goes
 /// back to, which this package holds as the one value every kind of it is.
 #[pyclass(
     name = "RepeatExpression",
     module = "music21.repeat",
-    extends = crate::base::Music21Object,
+    extends = crate::expressions::Expression,
     subclass,
     skip_from_py_object,
     weakref
@@ -60,6 +94,28 @@ impl RepeatExpression {
         Self::wrap(made)
     }
 }
+
+impl crate::base::Footing for RepeatExpression {
+    fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
+        crate::base::built(Self::wrap(RsRepeatExpression::new(Kind::Coda))).add_subclass(value)
+    }
+}
+
+middle_class!(
+    /// music21's `RepeatExpressionMarker`: a place a jump goes to.
+    RepeatExpressionMarker,
+    "RepeatExpressionMarker",
+    "music21.repeat",
+    RepeatExpression
+);
+
+middle_class!(
+    /// music21's `RepeatExpressionCommand`: a jump.
+    RepeatExpressionCommand,
+    "RepeatExpressionCommand",
+    "music21.repeat",
+    RepeatExpression
+);
 
 #[pymethods]
 impl RepeatExpression {
@@ -188,13 +244,13 @@ impl RepeatExpression {
 /// music21's kinds of repeat mark, each the same `RepeatExpression` under
 /// its own name.
 macro_rules! repeat_kinds {
-    ($(($class:ident, $name:literal, $kind:expr, $doc:literal)),* $(,)?) => {
+    ($(($class:ident, $name:literal, $parent:ident, $kind:expr, $doc:literal)),* $(,)?) => {
         $(
             #[doc = $doc]
             #[pyclass(
                 name = $name,
                 module = "music21.repeat",
-                extends = RepeatExpression,
+                extends = $parent,
                 subclass
             )]
             pub struct $class;
@@ -208,6 +264,7 @@ macro_rules! repeat_kinds {
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyClassInitializer<Self> {
                     crate::base::built(RepeatExpression::of_kind($kind, text))
+                        .add_subclass($parent)
                         .add_subclass($class)
                 }
             }
@@ -215,7 +272,10 @@ macro_rules! repeat_kinds {
 
         /// Adds the repeat classes to a module.
         pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+            m.add("RepeatMark", repeat_mark(m.py())?)?;
             m.add_class::<RepeatExpression>()?;
+            m.add_class::<RepeatExpressionMarker>()?;
+            m.add_class::<RepeatExpressionCommand>()?;
             $(m.add_class::<$class>()?;)*
             Ok(())
         }
@@ -233,60 +293,70 @@ repeat_kinds!(
     (
         Coda,
         "Coda",
+        RepeatExpressionMarker,
         Kind::Coda,
         "music21's `Coda`: the place a *to Coda* jumps to."
     ),
     (
         Segno,
         "Segno",
+        RepeatExpressionMarker,
         Kind::Segno,
         "music21's `Segno`: the sign a *Dal Segno* goes back to."
     ),
     (
         Fine,
         "Fine",
+        RepeatExpressionMarker,
         Kind::Fine,
         "music21's `Fine`: where the piece ends after a jump back."
     ),
     (
         DaCapo,
         "DaCapo",
+        RepeatExpressionCommand,
         Kind::DaCapo,
         "music21's `DaCapo`: back to the start."
     ),
     (
         DaCapoAlFine,
         "DaCapoAlFine",
+        RepeatExpressionCommand,
         Kind::DaCapoAlFine,
         "music21's `DaCapoAlFine`: back to the start and on to *Fine*."
     ),
     (
         DaCapoAlCoda,
         "DaCapoAlCoda",
+        RepeatExpressionCommand,
         Kind::DaCapoAlCoda,
         "music21's `DaCapoAlCoda`: back to the start and on to the coda."
     ),
     (
         AlSegno,
         "AlSegno",
+        RepeatExpressionCommand,
         Kind::AlSegno,
         "music21's `AlSegno`: on to the sign."
     ),
     (
         DalSegno,
         "DalSegno",
+        RepeatExpressionCommand,
         Kind::DalSegno,
         "music21's `DalSegno`: back to the sign."
     ),
     (
         DalSegnoAlFine,
         "DalSegnoAlFine",
+        RepeatExpressionCommand,
         Kind::DalSegnoAlFine,
         "music21's `DalSegnoAlFine`: back to the sign and on to *Fine*."
     ),
     (
         DalSegnoAlCoda,
         "DalSegnoAlCoda",
+        RepeatExpressionCommand,
         Kind::DalSegnoAlCoda,
         "music21's `DalSegnoAlCoda`: back to the sign and on to the coda."
     ),

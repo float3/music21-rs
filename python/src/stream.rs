@@ -256,6 +256,15 @@ fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
         .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+middle_class!(
+    /// music21's `stream.core.StreamCore`: what every stream is built on,
+    /// the storage beneath music21's `Stream`.
+    StreamCore,
+    "StreamCore",
+    "music21.stream.core",
+    crate::base::Music21Object
+);
+
 /// music21's `stream.Stream`: objects at quarter-length offsets, kept in
 /// order of offset, then of `classSortOrder`, then of when each was put in.
 ///
@@ -263,7 +272,7 @@ fn locked<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
 /// `Part`, `PartStaff`, `Measure`, `Voice` and `Opus` are the same class
 /// under music21's other names; a score's parts are what
 /// `iterateAllVoiceLeadingQuartets` reads as its voices.
-#[pyclass(name = "Stream", module = "music21.stream", extends = crate::base::Music21Object, subclass, dict, weakref)]
+#[pyclass(name = "Stream", module = "music21.stream", extends = StreamCore, subclass, dict, weakref)]
 pub struct Stream {
     kind: StreamKind,
     /// What the stream holds, in the order it was put in: read through
@@ -6180,10 +6189,10 @@ fn music21_expression<'py>(
 
 /// music21's other stream classes, each the same `Stream` under its name.
 macro_rules! stream_kinds {
-    ($(($class:ident, $name:literal, $kind:expr, $order:literal, $doc:literal)),* $(,)?) => {
+    ($(($class:ident, $name:literal, $parent:ident, [$($chain:ident),*], $kind:expr, $order:literal, $doc:literal)),* $(,)?) => {
         $(
             #[doc = $doc]
-            #[pyclass(name = $name, module = "music21.stream", extends = Stream, subclass)]
+            #[pyclass(name = $name, module = "music21.stream", extends = $parent, subclass)]
             pub struct $class;
 
             #[pymethods]
@@ -6211,6 +6220,7 @@ macro_rules! stream_kinds {
                         givenElements,
                         keywords,
                     )?)
+                    $(.add_subclass($chain))*
                     .add_subclass($class))
                 }
             }
@@ -6227,6 +6237,8 @@ stream_kinds!(
     (
         Score,
         "Score",
+        Stream,
+        [],
         StreamKind::Score,
         -20,
         "music21's `Score`: parts at one time."
@@ -6234,6 +6246,8 @@ stream_kinds!(
     (
         Part,
         "Part",
+        Stream,
+        [],
         StreamKind::Part,
         -20,
         "music21's `Part`: one voice's line through the piece."
@@ -6241,6 +6255,8 @@ stream_kinds!(
     (
         PartStaff,
         "PartStaff",
+        Part,
+        [Part],
         StreamKind::PartStaff,
         -20,
         "music21's `PartStaff`: one staff of a part written on several."
@@ -6248,6 +6264,8 @@ stream_kinds!(
     (
         System,
         "System",
+        Stream,
+        [],
         StreamKind::System,
         -20,
         "music21's `System`: one line of a page's staves."
@@ -6255,6 +6273,8 @@ stream_kinds!(
     (
         Measure,
         "Measure",
+        Stream,
+        [],
         StreamKind::Measure,
         -20,
         "music21's `Measure`: one bar."
@@ -6262,6 +6282,8 @@ stream_kinds!(
     (
         Voice,
         "Voice",
+        Stream,
+        [],
         StreamKind::Voice,
         5,
         "music21's `Voice`: one line inside a bar."
@@ -6269,6 +6291,8 @@ stream_kinds!(
     (
         Opus,
         "Opus",
+        Stream,
+        [],
         StreamKind::Opus,
         -20,
         "music21's `Opus`: a collection of scores."
@@ -8998,6 +9022,7 @@ impl Walked {
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<StreamCore>()?;
     m.add_class::<Stream>()?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;

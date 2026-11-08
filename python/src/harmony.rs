@@ -494,6 +494,38 @@ fn symbol_pitch(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
     pitch_from_any(value)
 }
 
+/// music21's `harmony.Harmony`: a chord written as a symbol to be read, a
+/// chord symbol or a roman numeral. It carries nothing beyond the chord.
+#[pyclass(
+    name = "Harmony",
+    module = "music21.harmony",
+    extends = Chord,
+    subclass,
+    skip_from_py_object
+)]
+pub struct Harmony;
+
+impl Harmony {
+    /// A harmony standing on this chord, for a subclass to be built on.
+    pub(crate) fn on(chord: Chord) -> PyClassInitializer<Self> {
+        crate::base::built(chord).add_subclass(Self)
+    }
+}
+
+#[pymethods]
+impl Harmony {
+    /// music21's `Harmony()`, a chord of nothing.
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        py: Python<'_>,
+        _arguments: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(Self::on(Chord::build(py, None, None)?))
+    }
+}
+
 /// music21's `harmony.ChordSymbol`: a chord written as a lead-sheet symbol.
 ///
 /// It is a `Chord` — the notes are the ones the symbol sounds — and beside
@@ -504,7 +536,7 @@ fn symbol_pitch(value: &Bound<'_, PyAny>) -> PyResult<RsPitch> {
 #[pyclass(
     name = "ChordSymbol",
     module = "music21.harmony",
-    extends = Chord,
+    extends = Harmony,
     subclass,
     skip_from_py_object
 )]
@@ -636,7 +668,7 @@ impl ChordSymbol {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(crate::base::built(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
+        Ok(Harmony::on(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
     }
 
     fn __traverse__(
@@ -1406,7 +1438,7 @@ impl NoChord {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(crate::base::built(Chord::build(py, None, None)?)
+        Ok(Harmony::on(Chord::build(py, None, None)?)
             .add_subclass(ChordSymbol::blank(py))
             .add_subclass(NoChord))
     }
@@ -1529,6 +1561,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getNotationStringGivenChordType, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFigureFromChord, m)?)?;
     m.add_function(wrap_pyfunction!(chordSymbolFromChord, m)?)?;
+    m.add_class::<Harmony>()?;
     m.add_class::<ChordSymbol>()?;
     m.add_class::<ChordStepModification>()?;
     m.add_class::<NoChord>()?;

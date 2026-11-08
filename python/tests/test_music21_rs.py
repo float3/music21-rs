@@ -9801,30 +9801,64 @@ def test_groups_are_music21s_groups():
 # class does not have. Each is (class, the other class, whether music21's
 # class is a subclass of the other).
 _HIERARCHY_GAPS = {
-    ("music21.articulations.FrettedPluck", "music21.articulations.Fingering", True),
-    ("music21.articulations.Spiccato", "music21.articulations.Accent", True),
-    ("music21.articulations.Spiccato", "music21.articulations.DynamicArticulation", True),
-    ("music21.articulations.Stress", "music21.articulations.LengthArticulation", True),
-    ("music21.articulations.StringFingering", "music21.articulations.Fingering", True),
-    ("music21.articulations.StringHarmonic", "music21.articulations.Harmonic", True),
-    ("music21.braille.segment.BrailleGrandSegment",
-     "music21.braille.text.BrailleKeyboard", True),
+    # music21's `Key` is a `KeySignature` and a `DiatonicScale`; a pyo3 class
+    # has one base, and both of these keep a value of their own, so Python
+    # will not take the two as bases of one class either.
     ("music21.key.Key", "music21.scale.ConcreteScale", True),
     ("music21.key.Key", "music21.scale.DiatonicScale", True),
     ("music21.key.Key", "music21.scale.Scale", True),
-    ("music21.layout.PageLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.ScoreLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.StaffLayout", "music21.layout.LayoutBase", True),
-    ("music21.layout.SystemLayout", "music21.layout.LayoutBase", True),
-    ("music21.scale.RagMarwa", "music21.scale.DiatonicScale", False),
-    ("music21.search.serial.TransposedInvertedMultisetMatcher",
-     "music21.search.serial.TransposedMultisetMatcher", True),
+    # The same for `BrailleGrandSegment`, a `BrailleSegment` and a
+    # `BrailleKeyboard`, both of which keep what they have written.
+    ("music21.braille.segment.BrailleGrandSegment",
+     "music21.braille.text.BrailleKeyboard", True),
+    # music21's tone rows are streams of notes; the package's are the
+    # crate's row, with no stream half to keep the notes in.
     ("music21.serial.HistoricalTwelveToneRow", "music21.stream.Stream", True),
+    ("music21.serial.HistoricalTwelveToneRow", "music21.stream.core.StreamCore", True),
     ("music21.serial.ToneRow", "music21.stream.Stream", True),
+    ("music21.serial.ToneRow", "music21.stream.core.StreamCore", True),
     ("music21.serial.TwelveToneMatrix", "music21.stream.Stream", True),
+    ("music21.serial.TwelveToneMatrix", "music21.stream.core.StreamCore", True),
     ("music21.serial.TwelveToneRow", "music21.stream.Stream", True),
-    ("music21.stream.PartStaff", "music21.stream.Part", True),
+    ("music21.serial.TwelveToneRow", "music21.stream.core.StreamCore", True),
 }
+
+
+# music21's classes between an element's own and `Music21Object`, with
+# classes of the package's music21 builds on each.
+_MIDDLE_CLASSES = {
+    ("music21.chord", "ChordBase"): ["Chord", "PercussionChord", "ChordSymbol", "RomanNumeral"],
+    ("music21.harmony", "Harmony"): ["ChordSymbol", "NoChord", "RomanNumeral"],
+    ("music21.stream.core", "StreamCore"): ["Stream", "Measure", "Score", "PartStaff"],
+    ("music21.tempo", "TempoIndication"): ["MetronomeMark", "TempoText", "MetricModulation"],
+    ("music21.interval", "IntervalBase"): [
+        "GenericInterval", "DiatonicInterval", "ChromaticInterval", "Interval",
+    ],
+    ("music21.expressions", "Expression"): [
+        "Ornament", "Trill", "TextExpression", "RepeatExpression", "Coda",
+    ],
+    ("music21.repeat", "RepeatMark"): ["RepeatExpression", "Segno", "DaCapo", "Repeat"],
+    ("music21.repeat", "RepeatExpressionMarker"): ["Coda", "Segno", "Fine"],
+    ("music21.repeat", "RepeatExpressionCommand"): ["DaCapo", "AlSegno", "DalSegnoAlCoda"],
+    ("music21.dynamics", "DynamicWedge"): ["Crescendo", "Diminuendo"],
+    ("music21.meter.base", "TimeSignatureBase"): ["TimeSignature"],
+}
+
+
+def test_music21s_middle_classes_are_the_packages():
+    """The classes music21 puts between an element's class and
+    `Music21Object` are the package's too, in music21's modules, so
+    `isinstance(x, chord.ChordBase)` asks what music21 asks."""
+    for (module, name), kinds in _MIDDLE_CLASSES.items():
+        middle = getattr(m, name)
+        assert (middle.__module__, middle.__name__) == (module, name)
+        assert issubclass(middle, m.Music21Object) or name == "RepeatMark"
+        for kind in kinds:
+            assert issubclass(getattr(m, kind), middle), (kind, name)
+    assert isinstance(m.Chord("C4 E4"), m.ChordBase)
+    assert isinstance(m.MetronomeMark(number=60), m.TempoIndication)
+    assert not issubclass(m.Fermata if hasattr(m, "Fermata") else m.Ornament, m.RepeatMark)
+    assert not issubclass(m.Note, m.ChordBase)
 
 
 def test_every_class_is_a_kind_of_what_music21s_is():

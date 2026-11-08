@@ -1811,13 +1811,31 @@ fn drawn_with_a_line(slf: &Bound<'_, Spanner>, member: &str) -> PyResult<()> {
     only(slf, SpannerKind::Line, member)
 }
 
+/// music21's `dynamics.DynamicWedge`: what a crescendo and a diminuendo
+/// both are, a hairpin.
+#[pyclass(name = "DynamicWedge", module = "music21.dynamics", extends = Spanner, subclass)]
+pub struct DynamicWedge;
+
+#[pymethods]
+impl DynamicWedge {
+    /// A bare one, which is a bare `Spanner` under this name.
+    #[new]
+    #[pyo3(signature = (*_spannedElements, **_keywords))]
+    fn new(
+        _spannedElements: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Spanner::of_kind(SpannerKind::Slur)).add_subclass(Self))
+    }
+}
+
 /// music21's kinds of spanner, each the same `Spanner` under its own name
 /// and in the module music21 keeps it in.
 macro_rules! spanner_kinds {
-    ($(($class:ident, $name:literal, $module:literal, $kind:expr, $doc:literal)),* $(,)?) => {
+    ($(($class:ident, $name:literal, $module:literal, $parent:ident, [$($chain:ident),*], $kind:expr, $doc:literal)),* $(,)?) => {
         $(
             #[doc = $doc]
-            #[pyclass(name = $name, module = $module, extends = Spanner, subclass)]
+            #[pyclass(name = $name, module = $module, extends = $parent, subclass)]
             pub struct $class;
 
             #[pymethods]
@@ -1831,7 +1849,9 @@ macro_rules! spanner_kinds {
                     _spannedElements: &Bound<'_, PyTuple>,
                     _keywords: Option<&Bound<'_, PyDict>>,
                 ) -> PyResult<PyClassInitializer<Self>> {
-                    Ok(crate::base::built(Spanner::of_kind($kind)).add_subclass($class))
+                    Ok(crate::base::built(Spanner::of_kind($kind))
+                        $(.add_subclass($chain))*
+                        .add_subclass($class))
                 }
             }
         )*
@@ -1840,6 +1860,7 @@ macro_rules! spanner_kinds {
         pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
             m.add_class::<Spanner>()?;
             m.add_class::<SpannerBundle>()?;
+            m.add_class::<DynamicWedge>()?;
             $(m.add_class::<$class>()?;)*
             Ok(())
         }
@@ -1854,6 +1875,8 @@ spanner_kinds!(
         Slur,
         "Slur",
         "music21.spanner",
+        Spanner,
+        [],
         SpannerKind::Slur,
         "music21's `Slur`: a curve over the notes played in one breath or bow."
     ),
@@ -1861,6 +1884,8 @@ spanner_kinds!(
         Crescendo,
         "Crescendo",
         "music21.dynamics",
+        DynamicWedge,
+        [DynamicWedge],
         SpannerKind::Crescendo,
         "music21's `Crescendo`: a hairpin opening out, growing louder."
     ),
@@ -1868,6 +1893,8 @@ spanner_kinds!(
         Diminuendo,
         "Diminuendo",
         "music21.dynamics",
+        DynamicWedge,
+        [DynamicWedge],
         SpannerKind::Diminuendo,
         "music21's `Diminuendo`: a hairpin closing, growing softer."
     ),
@@ -1875,6 +1902,8 @@ spanner_kinds!(
         Ottava,
         "Ottava",
         "music21.spanner",
+        Spanner,
+        [],
         SpannerKind::Ottava,
         "music21's `Ottava`: an octave line, `8va` or `15mb`."
     ),
@@ -1882,6 +1911,8 @@ spanner_kinds!(
         Line,
         "Line",
         "music21.spanner",
+        Spanner,
+        [],
         SpannerKind::Line,
         "music21's `Line`: a bracket or line over a passage."
     ),
@@ -1889,6 +1920,8 @@ spanner_kinds!(
         Glissando,
         "Glissando",
         "music21.spanner",
+        Spanner,
+        [],
         SpannerKind::Glissando,
         "music21's `Glissando`: a slide from one note to the next."
     ),
@@ -1896,6 +1929,8 @@ spanner_kinds!(
         TrillExtension,
         "TrillExtension",
         "music21.expressions",
+        Spanner,
+        [],
         SpannerKind::TrillExtension,
         "music21's `TrillExtension`: the wavy line carrying a trill on."
     ),
@@ -1903,6 +1938,8 @@ spanner_kinds!(
         TremoloSpanner,
         "TremoloSpanner",
         "music21.expressions",
+        Spanner,
+        [],
         SpannerKind::TremoloSpanner,
         "music21's `TremoloSpanner`: a tremolo alternating between two notes."
     ),
@@ -1910,6 +1947,8 @@ spanner_kinds!(
         ArpeggioMarkSpanner,
         "ArpeggioMarkSpanner",
         "music21.expressions",
+        Spanner,
+        [],
         SpannerKind::ArpeggioMark,
         "music21's `ArpeggioMarkSpanner`: one arpeggio across several chords."
     ),
@@ -1917,6 +1956,8 @@ spanner_kinds!(
         PedalMark,
         "PedalMark",
         "music21.expressions",
+        Spanner,
+        [],
         SpannerKind::PedalMark,
         "music21's `PedalMark`: how long a pedal is held."
     ),
@@ -1924,6 +1965,8 @@ spanner_kinds!(
         Neume,
         "Neume",
         "music21.volpiano",
+        Spanner,
+        [],
         SpannerKind::Neume,
         "music21's `volpiano.Neume`: the notes sung to one syllable as one figure."
     ),
@@ -1931,6 +1974,8 @@ spanner_kinds!(
         MultiMeasureRest,
         "MultiMeasureRest",
         "music21.spanner",
+        Spanner,
+        [],
         SpannerKind::MultiMeasureRest,
         "music21's `MultiMeasureRest`: rests of several measures drawn as one."
     ),

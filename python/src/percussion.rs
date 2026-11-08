@@ -22,7 +22,7 @@ pub const NAMES: &[&str] = &["PercussionChord"];
 #[pyclass(
     name = "PercussionChord",
     module = "music21.percussion",
-    extends = crate::base::NotRest,
+    extends = crate::chord::ChordBase,
     subclass,
     skip_from_py_object,
     weakref

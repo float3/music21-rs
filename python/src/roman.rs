@@ -49,7 +49,7 @@ const NUMERALS: [&str; 7] = ["I", "II", "III", "IV", "V", "VI", "VII"];
 #[pyclass(
     name = "RomanNumeral",
     module = "music21.roman",
-    extends = Chord,
+    extends = crate::harmony::Harmony,
     subclass,
     skip_from_py_object
 )]
@@ -213,7 +213,10 @@ impl RomanNumeral {
         numeral.implied_key = slf.borrow().implied_key;
         slf.borrow_mut().blank = false;
         let chord = numeral.chord()?;
-        slf.as_super().borrow_mut().replace_value(py, chord)?;
+        slf.as_super()
+            .as_super()
+            .borrow_mut()
+            .replace_value(py, chord)?;
         slf.borrow_mut().inner = numeral.inner;
         Ok(())
     }
@@ -242,14 +245,14 @@ impl RomanNumeral {
         // figure: a numeral in a score has been timed, and one whose copy
         // lasted a quarter again would shorten every measure it was copied
         // into — which is what expanding a repeat does.
-        let chord = slf.as_super().borrow_mut().copied_value(py)?;
+        let chord = slf.as_super().as_super().borrow_mut().copied_value(py)?;
         let class = slf.as_any().get_type();
         let copy = crate::blank_installed(class.as_any())?;
         {
             let cell = copy.cast::<Self>()?;
             let mut me = cell.borrow_mut();
             std::mem::swap(&mut *me, &mut numeral);
-            *me.into_super() = chord;
+            *me.into_super().into_super() = chord;
         }
         Ok(copy)
     }
@@ -257,7 +260,7 @@ impl RomanNumeral {
     /// The numeral, standing on the chord it names.
     pub(crate) fn initializer(py: Python<'_>, numeral: Self) -> PyResult<PyClassInitializer<Self>> {
         let chord = Chord::from_inner(py, numeral.chord()?)?;
-        Ok(crate::base::built(chord).add_subclass(numeral))
+        Ok(crate::harmony::Harmony::on(chord).add_subclass(numeral))
     }
 
     /// The same as an object, and as the class music21 now has under that
@@ -294,7 +297,7 @@ impl RomanNumeral {
         };
         let Some(class) = found else {
             let chord = Chord::from_inner(py, chord)?;
-            return Py::new(py, crate::base::built(chord).add_subclass(numeral));
+            return Py::new(py, crate::harmony::Harmony::on(chord).add_subclass(numeral));
         };
         let chord = Chord::from_inner(py, chord)?;
         let object = crate::blank_installed(&class)?;
@@ -302,7 +305,7 @@ impl RomanNumeral {
         {
             let mut me = cell.borrow_mut();
             *me = numeral;
-            *me.into_super() = chord;
+            *me.into_super().into_super() = chord;
         }
         Ok(cell.clone().unbind())
     }
@@ -738,7 +741,7 @@ impl RomanNumeral {
             me.blank,
             me.follows_key_change,
             me.write_as_chord,
-            slf.as_super().borrow().inner.clone(),
+            slf.as_super().as_super().borrow().inner.clone(),
         );
         drop(me);
         crate::pickled_extra(slf, &written, Some(&extra))
@@ -775,7 +778,10 @@ impl RomanNumeral {
         else {
             return Ok(());
         };
-        slf.as_super().borrow_mut().replace_value(py, chord)?;
+        slf.as_super()
+            .as_super()
+            .borrow_mut()
+            .replace_value(py, chord)?;
         {
             let mut me = slf.borrow_mut();
             me.inner = inner;
@@ -832,7 +838,10 @@ impl RomanNumeral {
     ) -> PyResult<()> {
         let built = Self::build(figure, keyOrScale, _keywords)?;
         let chord = built.chord()?;
-        slf.as_super().borrow_mut().replace_value(py, chord)?;
+        slf.as_super()
+            .as_super()
+            .borrow_mut()
+            .replace_value(py, chord)?;
         let mut me = slf.borrow_mut();
         me.inner = built.inner;
         me.octave = built.octave;
@@ -1388,11 +1397,14 @@ impl RomanNumeral {
         let quality = RsImpliedQuality::from_name(impliedQuality);
         slf.borrow_mut().state.implied_quality = Some(quality);
         let written: Vec<u8> = Vec::new();
-        let mut pitches = slf.as_super().borrow().value_pitches();
+        let mut pitches = slf.as_super().as_super().borrow().value_pitches();
         rs_roman::match_pitches_to_quality(&mut pitches, None, quality, &written)
             .map_err(roman_error)?;
         let chord = RsChord::new(pitches.as_slice()).map_err(roman_error)?;
-        slf.as_super().borrow_mut().replace_value(py, chord)
+        slf.as_super()
+            .as_super()
+            .borrow_mut()
+            .replace_value(py, chord)
     }
 
     /// music21's `adjustMinorVIandVIIByQuality`: a numeral on the sixth or
@@ -1491,7 +1503,10 @@ impl RomanNumeral {
         if inPlace {
             let numeral = Self::wrap(moved, octave);
             let chord = numeral.chord()?;
-            slf.as_super().borrow_mut().replace_value(py, chord)?;
+            slf.as_super()
+                .as_super()
+                .borrow_mut()
+                .replace_value(py, chord)?;
             slf.borrow_mut().inner = numeral.inner;
             return Ok(None);
         }
@@ -1640,7 +1655,7 @@ impl RomanNumeral {
         // voiced, but one lengthened to a half note is not.
         let py = other.py();
         let theirs = other.extract::<PyRef<'_, Chord>>()?;
-        Ok(slf.as_super().borrow().quarter_length(py) == theirs.quarter_length(py))
+        Ok(slf.as_super().as_super().borrow().quarter_length(py) == theirs.quarter_length(py))
     }
 
     /// A copy is one of whatever class this is, since music21 keeps it in a

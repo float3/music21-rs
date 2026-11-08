@@ -33,6 +33,37 @@ macro_rules! error_into {
     };
 }
 
+/// A class of music21's that stands between its subclasses and the class
+/// it extends and carries nothing of its own here: `chord.ChordBase`,
+/// `tempo.TempoIndication`. It is there so that `isinstance` and
+/// `issubclass` answer as in music21; built bare, it is music21's bare one.
+macro_rules! middle_class {
+    ($(#[$doc:meta])* $class:ident, $name:literal, $module:literal, $parent:ty) => {
+        $(#[$doc])*
+        #[pyo3::pyclass(name = $name, module = $module, extends = $parent, subclass)]
+        #[derive(Default)]
+        pub struct $class;
+
+        #[pyo3::pymethods]
+        impl $class {
+            #[new]
+            #[pyo3(signature = (*_arguments, **_keywords))]
+            fn new(
+                _arguments: &pyo3::Bound<'_, pyo3::types::PyTuple>,
+                _keywords: Option<&pyo3::Bound<'_, pyo3::types::PyDict>>,
+            ) -> pyo3::PyClassInitializer<Self> {
+                $crate::base::built(Self)
+            }
+        }
+
+        impl $crate::base::Footing for $class {
+            fn under<T: pyo3::PyClass<BaseType = Self>>(value: T) -> pyo3::PyClassInitializer<T> {
+                $crate::base::built(Self).add_subclass(value)
+            }
+        }
+    };
+}
+
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -2157,6 +2188,8 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     tree::register(m)?;
     formats::register(m)?;
     converters::register(m)?;
+    // Once every class is made: it gives some a second base.
+    base::add_bases(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
