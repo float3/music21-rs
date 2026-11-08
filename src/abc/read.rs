@@ -14,7 +14,7 @@ use crate::chordsymbol::ChordSymbol;
 use crate::clef::Clef;
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, Tuplet};
-use crate::error::{Error, FormatErrorKind, Result};
+use crate::error::{Error, FormatErrorKind, Position, Result};
 use crate::interval::Interval;
 use crate::key::KeySignature;
 use crate::makenotation::split_element;
@@ -143,6 +143,8 @@ impl Bar {
 #[derive(Clone, Debug, Default)]
 struct AbcNote {
     src: String,
+    /// The line of the text it starts on.
+    line: usize,
     is_chord: bool,
     carried_accidental: String,
     chord_symbols: Vec<String>,
@@ -168,10 +170,12 @@ enum Token {
     Metadata {
         tag: String,
         data: String,
+        line: usize,
     },
     Bar(Bar),
     Tuplet {
         src: String,
+        line: usize,
     },
     Tie,
     /// A slur or a hairpin opening: the spanner it starts.
@@ -199,15 +203,33 @@ impl Token {
 
     fn metadata(&self) -> Option<(&str, &str)> {
         match self {
-            Self::Metadata { tag, data } => Some((tag, data)),
+            Self::Metadata { tag, data, .. } => Some((tag, data)),
+            _ => None,
+        }
+    }
+
+    /// The line of the text the token starts on, where it is one that can
+    /// be refused.
+    fn line(&self) -> Option<usize> {
+        match self {
+            Self::Metadata { line, .. } | Self::Tuplet { line, .. } => Some(*line),
+            Self::Note(note) => Some(note.line),
             _ => None,
         }
     }
 }
 
+/// `error`, placed at `line` where the token knows one.
+fn at_line(error: Error, line: Option<usize>) -> Error {
+    match line {
+        Some(line) => error.placed(|| Position::line(line)),
+        None => error,
+    }
+}
+
 /// music21's `ABCMetadata.preParse`: the tag before the colon and what
 /// follows it, a comment taken off.
-fn metadata_token(src: &str) -> Token {
+fn metadata_token(src: &str, line: usize) -> Token {
     let chars: Vec<char> = src.chars().collect();
     let is_tag =
         chars.len() >= 2 && (chars[0].is_ascii_uppercase() || chars[0] == 'w') && chars[1] == ':';
@@ -215,6 +237,7 @@ fn metadata_token(src: &str) -> Token {
         return Token::Metadata {
             tag: String::new(),
             data: String::new(),
+            line,
         };
     }
     let stripped = src.split('%').next().unwrap_or("");
@@ -224,6 +247,7 @@ fn metadata_token(src: &str) -> Token {
     Token::Metadata {
         tag,
         data: data.trim().to_string(),
+        line,
     }
 }
 
@@ -433,9 +457,10 @@ fn default_quarter_length(tag: &str, data: &str) -> Result<FloatType> {
 }
 
 impl AbcNote {
-    fn new(src: &str, carried_accidental: &str, is_chord: bool) -> Self {
+    fn new(src: &str, line: usize, carried_accidental: &str, is_chord: bool) -> Self {
         Self {
             src: src.to_string(),
+            line,
             is_chord,
             carried_accidental: carried_accidental.to_string(),
             ..Self::default()
@@ -609,7 +634,8 @@ impl AbcNote {
             let outer_length = self.read_quarter_length(&outer, Some(1.0))?;
             let key = forced_key.cloned().or_else(|| self.key.clone());
             let mut handler = Handler::new(DEFAULT_VERSION);
-            handler.tokenize(&inner)?;
+            // What goes wrong inside is placed where the chord stands.
+            handler.read_tokens(&inner).map_err(|(_, error)| error)?;
             let mut inner_length = 0.0;
             for token in handler.tokens {
                 let Token::Note(mut note) = token else {
@@ -723,10 +749,27 @@ impl Handler {
         }
     }
 
-    /// music21's `tokenize`.
+    /// music21's `tokenize`, what goes wrong placed at its line and column.
     fn tokenize(&mut self, source: &str) -> Result<()> {
+        self.read_tokens(source).map_err(|(at, error)| {
+            let byte = source
+                .char_indices()
+                .nth(at)
+                .map_or(source.len(), |(byte, _)| byte);
+            error.placed(|| Position::in_text(source, byte))
+        })
+    }
+
+    /// The tokens of `source`, or what went wrong and the character it
+    /// went wrong at.
+    fn read_tokens(&mut self, source: &str) -> std::result::Result<(), (usize, Error)> {
         let src: Vec<char> = source.chars().collect();
         let len = src.len();
+        // Where each line starts, to tell a token its line.
+        let line_starts: Vec<usize> = std::iter::once(0)
+            .chain((0..len).filter(|at| src[*at] == '\n').map(|at| at + 1))
+            .collect();
+        let line_of = |at: usize| line_starts.partition_point(|start| *start <= at);
         let at = |index: usize| src.get(index).copied();
         let slice =
             |from: usize, to: usize| -> String { src[from.min(len)..to.min(len)].iter().collect() };
@@ -773,7 +816,8 @@ impl Handler {
                 && (c == 'w' || (c.is_alphabetic() && c.is_uppercase()));
             if starts_metadata {
                 let end = next_line_break(pos);
-                self.tokens.push(metadata_token(slice(pos, end).trim()));
+                self.tokens
+                    .push(metadata_token(slice(pos, end).trim(), line_of(pos)));
                 pos = end;
                 continue;
             }
@@ -806,10 +850,10 @@ impl Handler {
             if c == '(' && next.is_some_and(|c| c.is_ascii_digit()) {
                 let mut j = pos + 2;
                 if j >= len {
-                    return Err(abc_error(format!(
-                        "bad index value {j}, max is {}",
-                        len - 1
-                    )));
+                    return Err((
+                        pos,
+                        abc_error(format!("bad index value {j}, max is {}", len - 1)),
+                    ));
                 }
                 if at(j) == Some(':') {
                     j += 1;
@@ -823,7 +867,10 @@ impl Handler {
                         }
                     }
                 }
-                self.tokens.push(Token::Tuplet { src: slice(pos, j) });
+                self.tokens.push(Token::Tuplet {
+                    src: slice(pos, j),
+                    line: line_of(pos),
+                });
                 pos = j;
                 continue;
             }
@@ -903,8 +950,12 @@ impl Handler {
                 }
                 let collected = format!("{}{}", active_chord_symbol, slice(pos, j));
                 active_chord_symbol.clear();
-                self.tokens
-                    .push(Token::Note(Box::new(AbcNote::new(&collected, "", true))));
+                self.tokens.push(Token::Note(Box::new(AbcNote::new(
+                    &collected,
+                    line_of(pos),
+                    "",
+                    true,
+                ))));
                 pos = j.max(pos + 1);
                 continue;
             }
@@ -945,7 +996,7 @@ impl Handler {
                             Some(after) if ACCIDENTALS.contains(after) => accidental.push(after),
                             Some(_) => {}
                             None => {
-                                return Err(abc_error("a decoration ends the text"));
+                                return Err((pos, abc_error("a decoration ends the text")));
                             }
                         }
                     } else if !found && here.is_alphabetic() && !"~wuvhHLTSN".contains(here) {
@@ -1006,7 +1057,10 @@ impl Handler {
                         }
                     }
                     self.tokens.push(Token::Note(Box::new(AbcNote::new(
-                        &collected, &carried, false,
+                        &collected,
+                        line_of(pos),
+                        &carried,
+                        false,
                     ))));
                 }
                 pos = j.max(pos + 1);
@@ -1037,15 +1091,17 @@ impl Handler {
         for index in 0..self.tokens.len() {
             let previous_is_note = index > 0 && self.tokens[index - 1].is_note();
             let next_is_note = self.tokens.get(index + 1).is_some_and(Token::is_note);
+            let line = self.tokens[index].line();
+            let here = |error: Error| at_line(error, line);
             match self.tokens[index].clone() {
-                Token::Metadata { tag, data } => {
+                Token::Metadata { tag, data, .. } => {
                     if tag == "M" {
-                        meter = meter_of(&data)?;
+                        meter = meter_of(&data).map_err(here)?;
                     }
                     if tag == "L" || (tag == "M" && default_length.is_none()) {
-                        default_length = Some(default_quarter_length(&tag, &data)?);
+                        default_length = Some(default_quarter_length(&tag, &data).map_err(here)?);
                     } else if tag == "K" {
-                        let (sharps, _) = key_parameters(&data)?;
+                        let (sharps, _) = key_parameters(&data).map_err(here)?;
                         key = Some(KeySignature::new(sharps));
                     }
                     if tag == "X" {
@@ -1063,8 +1119,8 @@ impl Handler {
                         }
                     }
                 }
-                Token::Tuplet { src } => {
-                    let (made, count) = tuplet_of(&src, meter.as_ref())?;
+                Token::Tuplet { src, .. } => {
+                    let (made, count) = tuplet_of(&src, meter.as_ref()).map_err(here)?;
                     tuplet = Some((made, count));
                 }
                 Token::SpannerStart(kind, _) => {
@@ -1118,9 +1174,9 @@ impl Handler {
                 Token::Bar(_) => {}
                 Token::Note(_) => {
                     let Some(default_length) = default_length else {
-                        return Err(abc_error(
+                        return Err(here(abc_error(
                             "no active default note length provided for note processing.",
-                        ));
+                        )));
                     };
                     let Token::Note(note) = &mut self.tokens[index] else {
                         continue;
@@ -1162,7 +1218,9 @@ impl Handler {
         }
         for token in &mut self.tokens {
             if let Token::Note(note) = token {
-                note.parse(None, None)?;
+                let line = Some(note.line);
+                note.parse(None, None)
+                    .map_err(|error| at_line(error, line))?;
             }
         }
         Ok(spanners)
@@ -1807,8 +1865,17 @@ fn part_of(
                 &mut part
             };
             for token in &handler.tokens {
+                // What goes wrong says its line, and its measure counted
+                // from one as the tune writes them, a pickup the first.
+                let refused = |error: Error| {
+                    let error = at_line(error, token.line());
+                    if in_measure {
+                        return error.placed(|| Position::measure(bar_count.to_string()));
+                    }
+                    error
+                };
                 match token {
-                    Token::Metadata { tag, data } => {
+                    Token::Metadata { tag, data, .. } => {
                         if tag == "w" {
                             let wanted = std::mem::take(&mut reader.lyric_targets);
                             let mut targets: Vec<&mut StreamElement> = Vec::new();
@@ -1826,21 +1893,22 @@ fn part_of(
                                 let mut passed = 0;
                                 for index in here {
                                     let (_, tail) = rest.split_at_mut(index - passed);
-                                    let (item, tail) = tail
-                                        .split_first_mut()
-                                        .ok_or_else(|| abc_error("a lyric's note is missing"))?;
+                                    let (item, tail) = tail.split_first_mut().ok_or_else(|| {
+                                        refused(abc_error("a lyric's note is missing"))
+                                    })?;
                                     targets.push(&mut item.element);
                                     rest = tail;
                                     passed = index + 1;
                                 }
-                                add_lyrics(data, &mut targets)?;
+                                add_lyrics(data, &mut targets).map_err(refused)?;
                             } else {
-                                add_lyrics_across(data, &wanted, &mut measures, line, place)?;
+                                add_lyrics_across(data, &wanted, &mut measures, line, place)
+                                    .map_err(refused)?;
                             }
                         }
                         match tag.as_str() {
                             "M" => {
-                                if let Some(meter) = meter_of(data)? {
+                                if let Some(meter) = meter_of(data).map_err(refused)? {
                                     if use_measures {
                                         line.set_at_start(meter.into());
                                     } else {
@@ -1849,7 +1917,7 @@ fn part_of(
                                 }
                             }
                             "K" => {
-                                let key = key_of(data)?;
+                                let key = key_of(data).map_err(refused)?;
                                 if use_measures {
                                     line.set_at_start(key);
                                 } else {
@@ -1864,12 +1932,12 @@ fn part_of(
                                     reader.post_transposition = transposition;
                                 }
                             }
-                            "Q" => line.append(tempo_of(data)?, None),
+                            "Q" => line.append(tempo_of(data).map_err(refused)?, None),
                             _ => {}
                         }
                     }
                     Token::Note(note) => {
-                        let (symbol, made) = note_elements(note, &mut reader)?;
+                        let (symbol, made) = note_elements(note, &mut reader).map_err(refused)?;
                         if let Some(symbol) = symbol {
                             line.append(symbol, None);
                         }
@@ -2221,6 +2289,7 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
         let Some((tag, data)) = token.metadata() else {
             continue;
         };
+        let line = token.line();
         match tag {
             "T" => {
                 metadata.add_text(
@@ -2237,7 +2306,8 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
             "O" => metadata.add_text("localeOfComposition", data),
             "X" => {
                 let number = data.trim().parse::<IntegerType>().map_err(|_| {
-                    abc_error(format!("the reference number {data:?} is no number"))
+                    let refused = abc_error(format!("the reference number {data:?} is no number"));
+                    at_line(refused, line)
                 })?;
                 metadata.add_text("number", number.to_string());
             }
@@ -2296,10 +2366,12 @@ fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
     Ok(score)
 }
 
-/// music21's `extractReferenceNumber`: the lines of one tune.
-fn extract_reference_number(text: &str, number: IntegerType) -> Result<String> {
+/// music21's `extractReferenceNumber`: the lines of one tune, and how many
+/// lines of the text stand before them.
+fn extract_reference_number(text: &str, number: IntegerType) -> Result<(usize, String)> {
     let mut collected = Vec::new();
     let mut gathering = false;
+    let mut before = 0;
     for line in text.split('\n') {
         let starts = line.trim().starts_with("X:");
         if starts && !gathering {
@@ -2313,6 +2385,8 @@ fn extract_reference_number(text: &str, number: IntegerType) -> Result<String> {
         }
         if gathering {
             collected.push(line);
+        } else if collected.is_empty() {
+            before += 1;
         }
     }
     if collected.is_empty() {
@@ -2321,7 +2395,7 @@ fn extract_reference_number(text: &str, number: IntegerType) -> Result<String> {
         ))
         .of_kind(FormatErrorKind::NotFound));
     }
-    Ok(collected.join("\n"))
+    Ok((before, collected.join("\n")))
 }
 
 fn handler_of(text: &str) -> Result<(Handler, Vec<Spanning>)> {
@@ -2370,8 +2444,9 @@ pub fn from_abc(text: &str) -> Result<Stream> {
 /// Reads one tune out of ABC text holding several, by its `X:` reference
 /// number: music21's `converter.parse(..., number=n)`.
 pub fn from_abc_number(text: &str, number: IntegerType) -> Result<Stream> {
-    let (handler, spanners) = handler_of(&extract_reference_number(text, number)?)?;
-    score_of(&handler, &spanners)
+    let (before, tune) = extract_reference_number(text, number)?;
+    let read = handler_of(&tune).and_then(|(handler, spanners)| score_of(&handler, &spanners));
+    read.map_err(|error| error.lines_down(before))
 }
 
 #[cfg(test)]
@@ -2513,7 +2588,7 @@ mod tests {
     #[test]
     fn a_length_is_read_against_the_default() {
         // music21's `getQuarterLength` docstring.
-        let mut note = AbcNote::new("", "", false);
+        let mut note = AbcNote::new("", 1, "", false);
         note.default_quarter_length = Some(0.5);
         assert_eq!(note.read_quarter_length("f", None).unwrap(), 0.5);
         assert_eq!(note.read_quarter_length("f2", None).unwrap(), 1.0);
@@ -2525,7 +2600,7 @@ mod tests {
 
     #[test]
     fn a_pitch_takes_its_accidental_from_the_key() {
-        let mut note = AbcNote::new("f", "", false);
+        let mut note = AbcNote::new("f", 1, "", false);
         note.key = Some(KeySignature::new(1));
         assert_eq!(
             note.pitch_name("f", None).unwrap(),
@@ -2540,6 +2615,32 @@ mod tests {
             note.pitch_name("C,,", None).unwrap(),
             (Some("C2".to_string()), Some(false))
         );
+    }
+
+    #[test]
+    fn a_refusal_says_its_line_and_measure() {
+        let error = from_abc("X:1\nK:C\nc d ~.").unwrap_err();
+        assert_eq!(error.to_string(), "ABC error: a decoration ends the text");
+        assert_eq!(error.format_error().unwrap().kind, FormatErrorKind::Invalid);
+        assert_eq!(error.position(), Some(&Position::line(3).with_column(5)));
+
+        let error = from_abc("X:1\nL:1/4\nK:C\n(0c d e\n").unwrap_err();
+        assert_eq!(error.position(), Some(&Position::line(4)));
+
+        let tune = "X:2\nM:4/4\nL:1/4\nK:C\nc d e f |\ng a Q:1/4=x\nb c |\nc d e f |\n";
+        let error = from_abc(tune).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "ABC error: cannot read the tempo \"1/4=x\""
+        );
+        let mut wanted = Position::line(6);
+        wanted.measure = Some("2".to_string());
+        assert_eq!(error.position(), Some(&wanted));
+
+        let opus = format!("X:1\nK:C\nc d e f |\n{tune}");
+        let error = from_abc_number(&opus, 2).unwrap_err();
+        wanted.line = Some(9);
+        assert_eq!(error.position(), Some(&wanted));
     }
 
     #[test]
