@@ -86,6 +86,7 @@ pub mod omrcorrectors;
 pub mod ornamentrecognizer;
 pub mod percussion;
 pub mod pitch;
+mod plumbing;
 pub mod possibility;
 pub mod primitives;
 pub mod realizer;
@@ -2209,6 +2210,8 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // What `provide_music21` builds music21's modules from: the names each
     // module of music21's is installed under, and the package's version.
     m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
+    // music21's `common.<name>` modules this package builds whole.
+    m.add("__music21_submodules__", plumbing::modules(m.py())?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     // maturin's generated package does `from .music21_rs import *`, which
     // without this would pull the extension module in under its own name.

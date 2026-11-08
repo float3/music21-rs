@@ -147,6 +147,12 @@ def _contents(homes=True, children=False):
         written = importlib.import_module(f"{__package__}.{own}")
         for name in written.__all__:
             contents.setdefault(module, {})[name] = getattr(written, name)
+    # music21's modules the extension builds whole, each with its own names.
+    for module, built in getattr(_extension, "__music21_submodules__", {}).items():
+        names = contents.setdefault(module, {})
+        for name, value in vars(built).items():
+            if not name.startswith("__"):
+                names[name] = value
     # music21 defines it there and imports it into `corpus`.
     contents["music21.exceptions21"]["CorpusException"] = contents["music21.corpus"][
         "CorpusException"
