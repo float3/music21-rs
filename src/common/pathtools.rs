@@ -34,15 +34,7 @@ pub fn clean_path(path: &str) -> String {
     let expanded = expand_user(path);
     let parts: Vec<&str> = expanded.split('/').collect();
     let normalizable = match last_parent_dir(&parts) {
-        Some(last) => {
-            let through = parts[..=last].join("/");
-            let through = if through.is_empty() {
-                "/".to_owned()
-            } else {
-                through
-            };
-            Path::new(&through).is_dir()
-        }
+        Some(last) => climbs_through_directories(&parts[..=last]),
         None => true,
     };
     let cleaned = if normalizable {
@@ -51,6 +43,30 @@ pub fn clean_path(path: &str) -> String {
         join(&working_directory(), &expanded)
     };
     expand_variables(&cleaned)
+}
+
+/// Whether every `..` among the parts climbs out of a directory that
+/// exists, as POSIX asks before resolving `a/..`. Each one is checked on
+/// its own: Windows resolves `a/..` on paper, so asking it about the
+/// whole path would say yes where `a` is missing.
+fn climbs_through_directories(parts: &[&str]) -> bool {
+    for (index, part) in parts.iter().enumerate() {
+        if *part != ".." {
+            continue;
+        }
+        let climbed = parts[..index].join("/");
+        let climbed = if climbed.is_empty() && index > 0 {
+            "/".to_owned()
+        } else if climbed.is_empty() {
+            ".".to_owned()
+        } else {
+            climbed
+        };
+        if !Path::new(&climbed).is_dir() {
+            return false;
+        }
+    }
+    true
 }
 
 /// `~` and `~user` at the start expanded, as `os.path.expanduser` does on
@@ -190,6 +206,20 @@ mod tests {
         assert_eq!(last_parent_dir(&["...", "a..", "..b"]), None);
         assert_eq!(last_parent_dir(&[".."]), Some(0));
         assert_eq!(last_parent_dir::<&str>(&[]), None);
+    }
+
+    /// Each `..` is asked about on its own, so the answer does not hang on
+    /// how the platform resolves `missing/..`.
+    #[test]
+    fn a_climb_needs_the_directory_it_leaves() {
+        assert!(climbs_through_directories(&["src", ".."]));
+        assert!(!climbs_through_directories(&["no-such-directory", ".."]));
+        assert!(!climbs_through_directories(&[
+            "src",
+            "no-such-directory",
+            "..",
+            ".."
+        ]));
     }
 
     #[test]
