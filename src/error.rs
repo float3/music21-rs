@@ -171,6 +171,38 @@ pub enum Error {
     /// two separately, so the crate keeps them apart too.
     #[error("Value error: {0}")]
     Value(String),
+    /// Another error, placed where a reader met it: a pitch an ABC note
+    /// cannot spell, at the tune's line and measure. It reads as the error
+    /// itself; [`Error::unplaced`] hands that error back to match on.
+    #[error("{0}")]
+    Placed(Box<PlacedError>),
+}
+
+/// An error that is no format's own, and where in its document a reader
+/// met it.
+///
+/// ```
+/// use music21::error::{Error, Position};
+///
+/// let error = music21::tinynotation::from_tiny_notation("4/4 c4 e99999999999999999999");
+/// let error = error.unwrap_err();
+/// assert!(error.to_string().starts_with("Duration error: Cannot parse token"));
+/// assert!(matches!(error.unplaced(), Error::Duration(_)));
+/// assert_eq!(error.position(), Some(&Position::line(1).with_column(8)));
+/// ```
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct PlacedError {
+    /// What went wrong.
+    pub error: Error,
+    /// Where.
+    pub position: Position,
+}
+
+impl std::fmt::Display for PlacedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
 }
 
 /// A document of one format that cannot be read or written: what kind of
@@ -295,6 +327,16 @@ impl Position {
         }
     }
 
+    /// The line and column, counted from one in characters, of the byte
+    /// `at` in `text`.
+    pub(crate) fn in_text(text: &str, at: usize) -> Self {
+        let before = &text[..at];
+        let line = before.matches('\n').count() + 1;
+        let line_start = before.rfind('\n').map_or(0, |newline| newline + 1);
+        let column = before[line_start..].chars().count() + 1;
+        Self::line(line).with_column(column)
+    }
+
     /// The same position, at a column of its line.
     #[must_use]
     pub fn with_column(mut self, column: usize) -> Self {
@@ -385,10 +427,19 @@ format_constructors! {
 }
 
 impl Error {
+    /// The error itself, without the place a reader gave it: what to match
+    /// on to ask which kind of error it is.
+    pub fn unplaced(&self) -> &Error {
+        match self {
+            Self::Placed(placed) => &placed.error,
+            _ => self,
+        }
+    }
+
     /// The document error this is, where it is a format's: which kind of
     /// trouble, where, and the reader's words.
     pub fn format_error(&self) -> Option<&FormatError> {
-        match self {
+        match self.unplaced() {
             Self::Midi(error)
             | Self::Abc(error)
             | Self::Humdrum(error)
@@ -423,10 +474,20 @@ impl Error {
         }
     }
 
-    /// Where in its document a format's error was met, where the reader
-    /// knows.
+    /// Where in its document the error was met, where the reader knows.
     pub fn position(&self) -> Option<&Position> {
+        if let Self::Placed(placed) = self {
+            return Some(&placed.position);
+        }
         self.format_error()?.position.as_ref()
+    }
+
+    /// Where this error says it is, to change.
+    fn position_mut(&mut self) -> Option<&mut Position> {
+        if let Self::Placed(placed) = self {
+            return Some(&mut placed.position);
+        }
+        self.format_error_mut()?.position.as_mut()
     }
 
     /// The same error, of `kind` where it is a format's.
@@ -444,8 +505,7 @@ impl Error {
     #[must_use]
     pub(crate) fn lines_down(mut self, before: usize) -> Self {
         let line = self
-            .format_error_mut()
-            .and_then(|error| error.position.as_mut())
+            .position_mut()
             .and_then(|position| position.line.as_mut());
         if let Some(line) = line {
             *line += before;
@@ -453,18 +513,24 @@ impl Error {
         self
     }
 
-    /// The same error, placed at what `position` says where a format's
-    /// error does not already say it: a reader's loop over measures or
-    /// tracks places what went wrong inside one.
+    /// The same error, placed at what `position` says where it does not
+    /// already say it: a reader's loop over measures or tracks places what
+    /// went wrong inside one. An error that is no format's own is held in
+    /// [`Error::Placed`].
     #[must_use]
     pub(crate) fn placed(mut self, position: impl FnOnce() -> Position) -> Self {
-        if let Some(error) = self.format_error_mut() {
-            match &mut error.position {
-                Some(known) => known.fill_from(position()),
-                None => error.position = Some(position()),
-            }
+        if let Some(known) = self.position_mut() {
+            known.fill_from(position());
+            return self;
         }
-        self
+        if let Some(error) = self.format_error_mut() {
+            error.position = Some(position());
+            return self;
+        }
+        Self::Placed(Box::new(PlacedError {
+            error: self,
+            position: position(),
+        }))
     }
 }
 
@@ -575,6 +641,26 @@ mod tests {
             .placed(|| Position::line(2))
             .lines_down(3);
         assert_eq!(shifted.position(), Some(&Position::line(5)));
+    }
+
+    #[test]
+    fn an_error_of_no_format_is_placed_around_itself() {
+        let error = Error::Pitch("cannot spell it".to_string())
+            .placed(|| Position::line(4))
+            .placed(|| Position::measure("2").with_column(9))
+            .lines_down(1);
+        assert_eq!(error.to_string(), "Pitch error: cannot spell it");
+        assert_eq!(
+            error.unplaced(),
+            &Error::Pitch("cannot spell it".to_string())
+        );
+        let mut wanted = Position::line(5).with_column(9);
+        wanted.measure = Some("2".to_string());
+        assert_eq!(error.position(), Some(&wanted));
+        assert!(error.format_error().is_none());
+
+        let read = Error::abc("x").placed(|| Position::line(1));
+        assert_eq!(read.unplaced(), &read);
     }
 
     #[test]
