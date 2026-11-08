@@ -675,18 +675,17 @@ contributed upstream, mostly fixes found while porting:
 - [cuthbertLab/music21#2204](https://github.com/cuthbertLab/music21/pull/2204):
   meter: rename in-place methods so old calls raise.
 - [cuthbertLab/music21#2213](https://github.com/cuthbertLab/music21/pull/2213):
-  Make no hidden rest for a Finale <forward> of no duration (open).
+  Make no hidden rest for a Finale <forward> of no duration.
 - [cuthbertLab/music21#2214](https://github.com/cuthbertLab/music21/pull/2214):
-  Use opFrac for the chord end in reduceChordsOld (open).
+  Use opFrac for the chord end in reduceChordsOld.
 - [cuthbertLab/music21#2215](https://github.com/cuthbertLab/music21/pull/2215):
-  Keep fillBassGaps from overlapping a part's next timespan (open).
+  Keep fillBassGaps from overlapping a part's next timespan.
 - [cuthbertLab/music21#2216](https://github.com/cuthbertLab/music21/pull/2216):
-  Ignore Nix files in .gitignore (open).
+  Ignore Nix files in .gitignore.
 - [cuthbertLab/music21#2217](https://github.com/cuthbertLab/music21/pull/2217):
-  List quarterLength and type as keywords of GeneralNote.__init__ (open).
+  List quarterLength and type as keywords of GeneralNote.__init__.
 - [cuthbertLab/music21#2218](https://github.com/cuthbertLab/music21/pull/2218):
-  Check for a previous element before reading it in prepareBeamedNotes
-  (open).
+  Check for a previous element before reading it in prepareBeamedNotes.
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
