@@ -403,6 +403,22 @@ def test_a_grace_duration_is_never_inferred():
     assert m.Duration(type="eighth").getGraceDuration().expressionIsInferred is False
 
 
+def test_a_rest_read_keeps_where_it_is_shown():
+    """A rest MusicXML shows at a pitch keeps the steps it is moved from the
+    middle line: music21's `stepShift`."""
+    xml = (
+        '<score-partwise version="3.1"><part-list><score-part id="P1">'
+        "<part-name>x</part-name></score-part></part-list><part id=\"P1\">"
+        "<measure number=\"1\"><attributes><divisions>1</divisions>"
+        "<time><beats>1</beats><beat-type>4</beat-type></time>"
+        "<clef><sign>G</sign><line>2</line></clef></attributes>"
+        "<note><rest><display-step>E</display-step><display-octave>4</display-octave>"
+        "</rest><duration>1</duration><type>quarter</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    rests = [r for r in m.from_musicxml(xml).recurse().notesAndRests]
+    assert [r.stepShift for r in rests] == [-4]
+
 
 def test_chord_keeps_the_beams_it_is_given():
     """`Chord(notes, beams=b)` holds `b`, as music21's `NotRest` keeps the
