@@ -91,6 +91,7 @@ pub mod primitives;
 pub mod realizer;
 pub mod realizerscale;
 pub mod reducechords;
+pub mod prebase;
 pub mod reduction;
 pub mod repeat;
 pub mod resolution;
@@ -1347,6 +1348,15 @@ def make_class(facade, original):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
         # package's streams are told first, and keep what they worked out
+    # The wheel's `ProtoM21Object` is the facade's plumbing, not the
+    # class's: where the facade says nothing of its own about how it is
+    # shown, music21's class says it, as it did before that base was there.
+    for name in ('__repr__', '_reprInternal'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
+                    namespace.setdefault(name, getattr(original, name))
+                break
         # until then.
         inform = original.informSites
 
@@ -2099,6 +2109,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     midipercussion::register(m)?;
     braillebasic::register(m)?;
     braillelookup::register(m)?;
+    prebase::register(m)?;
     braillenotegrouping::register(m)?;
     braillesegment::register(m)?;
     brailletext::register(m)?;
