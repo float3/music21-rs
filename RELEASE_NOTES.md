@@ -1,3 +1,94 @@
+# music21-rs 0.20.0
+
+`harte` 0.13.0 depends on this release.
+
+## breaking changes
+
+- **An error that is no format's own, met inside a reader, comes back
+  placed**: as `Error::Placed` around it, which says where the reader
+  stood. Match on `error.unplaced()`, which hands back the error inside
+  (an `Error::Pitch`, an `Error::Duration`); `error.position()` says
+  where. `Display` reads as before. Positions now come from ABC (line,
+  column, measure), MuseData (line, measure, part), NoteWorthy (line),
+  Capella (part, measure), TinyNotation (line, column) and RomanText
+  (measure, line).
+
+## added
+
+- **`provide_music21()` answers far more of music21**: `common` and all
+  thirteen of its modules (`numberTools`, `stringTools`, `misc`,
+  `formats`, `classTools`, `decorators`, `enums`, `objects`, `types`,
+  `weakrefTools`, `parallel`, `pathTools`, `fileTools`), built in Rust
+  with the package re-exporting their names as music21's does;
+  `environment` (`Environment`, `UserSettings`, a settings file in
+  music21's format), `defaults` and `_version` (music21-rs's version);
+  `prebase.ProtoM21Object`, now the base of `Music21Object`;
+  `base.ElementWrapper`; `stream.base`; `stream.filters` (nine filters
+  and `FilterException`) with `StreamIterator.addFilter`, `srcStream` and
+  `filters`; `style`'s text, line and stream styles, `Enclosure` and
+  `StyleMixin`; `converter.subConverters` (`SubConverter` and nineteen
+  format classes, whose `launch` and `show` refuse); `braille.objects`
+  and `braille.lookup`, `humdrum.instruments`, `musedata.base40` and
+  `base12_26`, `figuredBass.possibility`, `omr.correctors`,
+  `scale.intervalNetwork.Direction` and `Terminus`, and every name of
+  `exceptions21`.
+- **The wheel has music21's middle classes**: `ChordBase`, `Harmony`,
+  `StreamCore`, `TempoIndication`, `IntervalBase`, `Expression`,
+  `RepeatMark`, `DynamicWedge`, `TimeSignatureBase` and more, and
+  articulations with music21's several bases; `note.Unpitched`, which
+  percussion reads drum strokes into; `derivation.Derivation`, which
+  copies and transformations set and context searches follow; and
+  `stream.SpannerStorage`, a spanner being a site of what it joins
+  (`getSpannerSites`).
+- **`install_into_music21()` reads ABC, Humdrum and MEI through the
+  crate** in `converter.parse`, as it read MIDI; each matches music21's
+  reader on the compared files (MEI 3 of 3, ABC 55 of 55, Humdrum 40 of
+  40, MIDI 21 of 21), Humdrum and MIDI about 3.9 times as fast, MEI 1.6
+  and ABC 1.5.
+- Crate: public `common` (music21's `common` plumbing: `numbertools`,
+  `stringtools`, `misc`, `formats`, `classtools`, `decorators`, `enums`,
+  `objects`, `parallel`, `pathtools`, `filetools`); `environment`, the
+  preferences, their defaults and the settings file, with
+  `Error::Environment`; `musedata::base40` and `base12_26`, which the
+  MuseData reader now uses; `StreamEvent::priority`, music21's priority,
+  nought unless a reader gives one; `StreamElement::SpineComment`.
+- `xtask music21-suite` has a fourth side, `music21_rs_provided`:
+  music21's suite with music21 not installed and `provide_music21()`
+  answering. The report headlines its pass share, and an editable
+  `maturin develop` wheel is now found.
+
+## changed
+
+- `Chord.transpose` derives via `'__deepcopy__'`, as music21's does, and
+  instruments of one class compare equal.
+- CI deals parity tests to shards by measured time
+  (`python-parity/shards.py`, `test-times.toml`), slowest first.
+
+## fixed
+
+- `copy.copy` of a wheel element records no derivation, as in music21;
+  it said it was derived via `'__deepcopy__'`.
+- A negative mixed numeral is written as music21 writes it: `-1 1/3` for
+  -4/3, where the wheel wrote `-2 2/3` (in `recurseRepr` and duration
+  names).
+- `common.nearestMultiple`'s nought is unsigned.
+- A note's volume realized in a stream no longer panics ("Already
+  mutably borrowed") when it looks for the dynamic over the note.
+- `makeTies` refuses a note longer than 100,000 bars, as music21 does,
+  where it used every byte of memory tying it.
+- `converter.parse`, installed, leaves Humdrum to music21's reader when
+  `humdrum.spineParser.flavors['JRP']` is set; the crate reads standard
+  Humdrum only.
+- When music21 is not installed, a tempo's previous indication and an
+  ornament's delay use the built enums.
+- MEI: chord and rest ids, slurs at a score's end and their `idLocal`,
+  inferred grace values. ABC: repeat brackets, empty beams on rests,
+  chord symbols transposed pitch by pitch, `expressionIsInferred`.
+  Humdrum: part ids `spine_N`, spine comments, the repeat bar type, a
+  dynamic's default position, `Chord(beams=)`. MIDI: `makeMeasures`
+  ends where music21's does (test04's closing tempo at 558.5), and a
+  grace duration is not inferred. MusicXML rests keep their `stepShift`.
+
 # music21-rs 0.19.0
 
 `harte` 0.12.0 depends on this release.

@@ -258,33 +258,42 @@ two rules, set 2026-09-12, that most of the open work now serves:
     written files agree; `spannerBundle` does not. The reader also takes a
     count written `3.0`, which music21 refuses.
 
-13. **what the wheel's sites do not keep yet.** derivations are not kept,
-    so no context search follows one; a spanner is not a site of the
-    notes it spans; the context search's sort leaves out music21's
-    `isNotGrace`; `getContextByClass` costs about 100µs a note; a stream
-    unpickled may not be a site of what it holds until it is written to;
-    `returnSpecial` is ignored.
+13. **what the wheel's sites do not keep yet.** the context search's
+    sort leaves out music21's `isNotGrace`; `getContextByClass` costs
+    about 100µs a note; a stream unpickled may not be a site of what it
+    holds until it is written to; `returnSpecial` is ignored. A shallow
+    copy's `groups` is a copy, where music21's shares the list.
 
 14. **classes music21 has between the wheel's and its base classes.**
-    `Unpitched` is missing, and so are `ChordBase`, `StreamCore`,
-    `TempoIndication`, `IntervalBase`, `Expression`, `RepeatMark` and
-    others music21 puts between an element and `Music21Object`. The 21
-    pairs of classes `issubclass` answers otherwise than music21 for are
-    listed in the wheel tests' `_HIERARCHY_GAPS`.
+    The pairs `issubclass` answers otherwise than music21 for are listed
+    in the wheel tests' `_HIERARCHY_GAPS`: `Key` is no `DiatonicScale`,
+    the tone rows no streams. `ProtoM21Object` is under elements only,
+    not yet under the values music21 builds on it (`Pitch`, `Duration`,
+    `Beam`...); its subclasses that mix in `dict` or `list`
+    (`Editorial`) cannot stand on a pyo3 base. The facades' classes give
+    lists where music21's give tuples (prebase's doctest).
 
-15. **what `provide_music21()` cannot provide yet.** `common`,
-    `environment`, `musicxml` and `tinyNotation` are not provided at all.
-    Partial, in music21's public names: `converter` 6 of 20 (`parse`,
-    `parseFile`, `parseData`, `parseURL`, `toData` and the exceptions; no
-    subconverters or archive manager), `corpus` 5 of 16 (no search, no
-    `Corpus` classes), `stream` 11 of 21, `note` 10 of 18, `metadata` 12
-    of 20, `layout` 6 of 22, `voiceLeading` 8 of 20, `sieve` 8 of 26
-    (`generate_homes.py --coverage`, 1,073 of 1,938 in all). A provided
-    corpus is read from `MUSIC21_RS_CORPUS`. Five names are placed where
-    music21 lacks them: `metadata.MetadataException`,
+15. **what `provide_music21()` cannot provide yet.** `musicxml` and
+    `tinyNotation` are not provided at all, nor `mei`, `abcFormat`,
+    `lily`, `graph` and `tree.core` (see DECISIONS). Partial, in
+    music21's public names: `converter` 7 of 20, `corpus` 5 of 16,
+    `stream` 17 of 21, `note` 11 of 18, `metadata` 12 of 20, `layout` 7
+    of 22 (`generate_homes.py --coverage`, 1,502 of 2,245 in all). A
+    provided corpus is read from `MUSIC21_RS_CORPUS`, and
+    `getSourceFilePath` is that directory's parent. Five names are
+    placed where music21 lacks them: `metadata.MetadataException`,
     `omr.correctors.OmrException`, `tsvConverter.TsvException`,
-    `makeNotation.MakeNotationException` and `sieve.Primes`. A provided score's metadata names its software as
-    `music21_rs` and its version.
+    `makeNotation.MakeNotationException` and `sieve.Primes`. A provided
+    score's metadata names its software as `music21_rs` and its version.
+    Smaller: `findSubConverterForFormat` needs `converter.subConverters`'
+    classes registered; `cleanpath` and `relativepath` use `os.path`;
+    `HexEnum`'s repr takes ASCII digits only; `Beam` lacks
+    `_getSlotsRecursive`; `midi.ChannelVoiceMessages` is missing;
+    `ImmutableStreamException`'s default message differs; `iter(stream)`
+    gives a tuple iterator, not a `StreamIterator`; the wheel's
+    `KeySignature` has no duration and its `Note` no `id`; the star
+    import of `common` leaves out the standard-library names music21's
+    `enums` and `types` leak (`re`, `t`, `Enum`).
 
 16. **braille segments: what is still music21's or differs.**
     `splitMeasure` is music21's; a grouping split in two does not rebeam
@@ -296,23 +305,47 @@ two rules, set 2026-09-12, that most of the open work now serves:
     wheel.** They answer at random, and porting them needs the counts kept
     in insertion order.
 
-18. **what keeps `converter.parse` from routing more than MIDI through
-    the crate.** compared with music21's readers by
-    `python/tests/converter_parity.py`: MIDI 20 of 21 (`test04.mid`'s
-    closing tempo is 560 against 558.5); MusicXML 5 of 21 strictly, 7
-    ignoring drawing (positions, fonts and colours need crate fields;
-    part names' `print-object`, `HammerOn`/`PullOff`, `PedalBounce`,
-    dashed slurs, bend-alter); ABC 5 of 8 (rests lack the empty beams
-    `makeBeams` gives them; slurs lack notes that are in no stream);
-    Humdrum 0 of 10 (part ids `spine_N`, element priorities, spine
-    comments); MEI 2 of 3 (slurs appended at the end with `idLocal`;
-    chord and rest ids). `route_converters` opts any of them in anyway.
+18. **what keeps `converter.parse` from routing MusicXML through the
+    crate.** MIDI, ABC, Humdrum and MEI are routed by default; compared
+    by `python/tests/converter_parity.py`, MusicXML matches on 14 of 25:
+    score appearance and fonts, part names' `print-object`,
+    `ChordWithFretBoard`, `MultiMeasureRest`, positions and colours need
+    crate fields. The harness's "music21" side runs partly on the wheel
+    when it is installed. The crate is slower than music21 on
+    multi-voice Josquin ABC.
 
-19. **`add_dependency_venv` misses a `maturin develop` install.** it does
-    not read the `.pth` maturin writes under `lib/python3.x`, so the
-    parity harness needs `PYTHONPATH` set to find the wheel there.
+19. **`add_dependency_venv` misses a `maturin develop` install** in
+    `python-parity/src/doctest.rs`: it does not read the `.pth` maturin
+    writes under `lib/python3.x` (xtask now does), so the parity harness
+    needs `PYTHONPATH` set to find the wheel there.
+
+20. **what blocks music21's suite on music21-rs alone.** `xtask
+    music21-suite`'s provided side: 316
+    passes on w20/mods' head (+44 in music21's own code), 74 of 217
+    modules importing, up from 100 and 41 at 0.19.0; not remeasured
+    after the merge. Next blockers: `converter.museScore` (47), then
+    `mei`, `braille.objects`, `musicxml`, `abcFormat` and
+    `musedata.base12_26`. Under the provided harness, doctests showing
+    `0x` addresses fail.
+
+21. **the crate's ports that are copies.** the wheel's `makeNotation`
+    `op_frac` and `nearest_multiple` are approximate copies of the
+    crate's `common::numbertools`; `decimalToTuplet(1e-300)` differs
+    from music21's (it needs more than `i128`). An ABC pickup is measure
+    1 in an error's position, where music21 numbers it 0.
+
+22. **parity's slowest tests set the CI floor.** `stream_lookups_parity`
+    (359s) and `windowed_0` (382s, opus18no4) are the slowest single
+    tests and should be split; `test-times.toml` wants remeasuring after
+    a few runs.
 
 ## closed
+
+- **the wheel's elements keep music21's derivations** (was 13): copies
+  and transformations set `derivation`, context searches follow it, and
+  `copy.copy` records none, as in music21. A spanner is a site of what
+  it joins.
+- **`xtask` finds a `maturin develop` install** (was 19, there).
 
 - **appending to a wheel stream keeps its end** (was 10). 2,000 appends
   take 3.1ms where music21's take 17.7ms, from 47.8ms: two counts stand

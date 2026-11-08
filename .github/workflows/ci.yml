@@ -591,7 +591,7 @@ jobs:
       # The suite driver embeds an interpreter through pyo3, so it needs
       # xtask's `python` feature; the wheel it measures is the downloaded one,
       # imported by name from the interpreter this points at. `--parallel`
-      # runs the three sides at once, two minutes each rather than six in
+      # runs the four sides at once, two minutes each rather than eight in
       # all; the report runs them one after another, since it compares their
       # times.
       - name: Run music21's suite on music21 and on music21_rs

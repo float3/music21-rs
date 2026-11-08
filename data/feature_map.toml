@@ -21,13 +21,15 @@
 # Listing their hundreds of private steps would say nothing a reader does
 # not already know from "every corpus file agrees". The same goes for
 # music21's own small helper modules (`meter/tools.py`, `musedata/base40.py`,
-# `chord/tools.py`, `sorting.py`, `common/numberTools.py`,
+# `chord/tools.py`, `sorting.py`,
 # `midi/percussion.py`, whose mapping between a percussion key and the
 # instrument that plays it is `percussion_instrument` in the MIDI reader and
 # `Instrument::percussion_pitch` in its writer), whose content
-# the crate ports where it uses it rather than as a module of its own; and
+# the crate ports where it uses it rather than as a module of its own;
+# music21's plumbing (`common`, `environment.py`), ported module for
+# module, which holds functions and settings rather than classes; and
 # for what the crate does not model at all: the page (`graph`), the
-# environment and the corpus cache (`environment.py`, `configure.py`,
+# corpus cache and configuration (`configure.py`,
 # `metadata/bundles.py`, `metadata/caching.py`), music21's subconverters
 # (`converter/subConverters.py`; `converter` and `corpus` themselves are
 # tracked, the wheel having them in Python), and music21's own object
@@ -2557,6 +2559,16 @@ python = [
 reason = "a small helper table or module of music21's own, ported here where the crate uses it rather than as a module of its own"
 python = [
   "chord/tools.py",
+  "humdrum/instruments.py",
+  "languageExcerpts/instrumentLookup.py",
+  "meter/tools.py",
+  "musedata/base12_26.py",
+  "musedata/base40.py",
+]
+
+[[unlisted]]
+reason = "music21's plumbing, ported module for module: `common` to `music21::common` and `environment` to `music21::environment`, each built whole in the wheel for `provide_music21()`; they hold functions and settings rather than classes to list"
+python = [
   "common/__init__.py",
   "common/classTools.py",
   "common/decorators.py",
@@ -2571,11 +2583,7 @@ python = [
   "common/stringTools.py",
   "common/types.py",
   "common/weakrefTools.py",
-  "humdrum/instruments.py",
-  "languageExcerpts/instrumentLookup.py",
-  "meter/tools.py",
-  "musedata/base12_26.py",
-  "musedata/base40.py",
+  "environment.py",
 ]
 
 [[unlisted]]
@@ -2597,7 +2605,6 @@ python = [
   "converter/museScore.py",
   "converter/qmConverter.py",
   "converter/subConverters.py",
-  "environment.py",
   "ipython21/__init__.py",
   "ipython21/converters.py",
   "ipython21/ipExtension.py",
