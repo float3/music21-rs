@@ -1563,6 +1563,13 @@ fn make_ties_of(stream: &mut Stream, wanted: fn(&StreamElement) -> bool) -> Resu
                 if end - bar <= 1e-9 || offset >= bar - 1e-9 {
                     continue;
                 }
+                // music21 refuses before tying a note over more bars than
+                // it would make measures for.
+                if index as FloatType + (end - bar) / bar > MAX_MEASURES as FloatType {
+                    return Err(Error::Stream(format!(
+                        "cannot make more than {MAX_MEASURES} measures"
+                    )));
+                }
                 let (first, remain) = split_element(event.element(), op_frac(bar - offset))?;
                 *event = StreamEvent::new(offset, first);
                 remains.push((id.clone(), remain));
@@ -2124,6 +2131,25 @@ pub(crate) fn make_accidentals_by(stream: &mut Stream, cautionary_not_immediate_
 mod tests {
     use super::*;
     use crate::{Duration, Note};
+
+    /// A note longer than `MAX_MEASURES` bars is refused before any
+    /// measure is made for it, as music21 refuses it.
+    #[test]
+    fn ties_past_the_most_measures_are_refused() -> Result<()> {
+        let mut measure = Stream::with_kind(StreamKind::Measure);
+        measure.set_number(1);
+        measure.insert(0.0, TimeSignature::new(4, 4)?);
+        measure.insert(
+            0.0,
+            Note::from_name("C4")?.with_duration(Duration::new(FloatType::from(1u32 << 28))?),
+        );
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, measure);
+        let refused = make_ties(&mut part).unwrap_err();
+        assert!(matches!(refused, Error::Stream(_)), "{refused}");
+        assert!(refused.to_string().contains("more than 100000 measures"));
+        Ok(())
+    }
 
     /// Notes in two voices tied into a measure with none continue there in
     /// voices of the same names, beside the notes the measure already held.
