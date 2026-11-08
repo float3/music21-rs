@@ -474,6 +474,8 @@ fn beam_line(
         match line.events_mut()[place].element_mut() {
             StreamElement::Note(note) => note.set_beams(beams),
             StreamElement::Chord(chord) => chord.set_beams(beams),
+            // music21 hands a rest its beams too, which are empty.
+            StreamElement::Rest(rest) => rest.set_beams(Some(beams)),
             StreamElement::Unpitched(stroke) => stroke.written_mut().set_beams(beams),
             StreamElement::PercussionChord(chord) => chord.written_mut().set_beams(beams),
             _ => {}
@@ -2249,6 +2251,32 @@ mod tests {
                 (Some(BeamType::Stop), StemDirection::Up),
             ]
         );
+    }
+
+    /// music21's makeBeams hands every rest of a line it beams the beams it
+    /// worked out for it, an empty `Beams`; a rest it passes over has none.
+    #[test]
+    fn a_beamed_line_gives_its_rests_empty_beams() {
+        let mut measure = eighths(&["C5", "D5", "E4"]);
+        measure.insert(1.5, crate::rest::Rest::new(Duration::eighth()));
+        let mut lone = Stream::with_kind(StreamKind::Measure);
+        lone.insert(0.0, crate::rest::Rest::new(Duration::new(2.0).unwrap()));
+        let mut part = Stream::with_kind(StreamKind::Part);
+        part.insert(0.0, measure);
+        part.insert(1.0, lone);
+        make_beams(&mut part).unwrap();
+        let beamed: Vec<bool> = part
+            .measures()
+            .iter()
+            .flat_map(|measure| measure.events())
+            .filter_map(|event| match event.element() {
+                StreamElement::Rest(rest) => {
+                    Some(rest.beams().is_some_and(crate::notation::Beams::is_empty))
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(beamed, [true, false]);
     }
 
     /// A bar length written over the meter's own is the length music21's

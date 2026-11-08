@@ -8000,6 +8000,24 @@ def test_routed_musicxml_keeps_a_rest_hidden():
     assert _routed_differences("musicxml", paths, ("print-object",), drawn=False) == []
 
 
+def test_routed_mei_puts_slurs_in_the_score_and_keeps_ids():
+    """An MEI score read through the crate is music21's to the last
+    attribute: its slurs stand in the score after the last measure,
+    named as music21 names them, and its chords and rests keep their
+    `xml:id`."""
+    pytest.importorskip("music21.stream")
+    assert _routed_differences("mei", ("mei/test/test_file.mei",)) == []
+
+
+def test_routed_abc_keeps_endings_and_the_beams_of_rests():
+    """An ABC tune read through the crate brackets its alternative endings
+    with music21's `RepeatBracket`, and gives each rest of a beamed measure
+    the empty beams music21's makeBeams gives it."""
+    pytest.importorskip("music21.stream")
+    paths = ("corpus/ryansMammoth/BanjoReel.abc",)
+    assert _routed_differences("abc", paths, ("RepeatBracket", " Rest ", "<ending")) == []
+
+
 def test_routed_scores_carry_music21s_own_metadata():
     """A score read through the crate carries music21's own `Metadata`, as
     its readers make it, saying what the file says."""

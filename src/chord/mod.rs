@@ -105,6 +105,9 @@ pub struct Chord {
     /// part of them. Boxed, as most chords carry none.
     #[cfg_attr(feature = "serde", serde(default))]
     numeral: Option<Box<crate::roman::RomanNumeral>>,
+    /// The name the chord is known by, where a reader found one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    id: Option<String>,
 }
 
 use crate::interval::constants::PERFECT_FIFTH_UP as PERFECT_FIFTH;
@@ -272,7 +275,19 @@ impl Chord {
             expressions: Vec::new(),
             articulations: Vec::new(),
             numeral: None,
+            id: None,
         }
+    }
+
+    /// The name the chord is known by, where a reader found one: music21's
+    /// `id`, from MEI's `xml:id`.
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+
+    /// Names the chord, or takes its name away.
+    pub fn set_id(&mut self, id: Option<String>) {
+        self.id = id;
     }
 
     /// The roman numeral the chord stands for, where it is one: a chord a

@@ -5487,7 +5487,9 @@ pub(crate) fn from_crate_as<'py>(
     stream: &RsStream,
     whose: Whose,
 ) -> PyResult<Bound<'py, PyAny>> {
-    Ok(build_as(py, stream, whose)?.made)
+    let built = build_as(py, stream, whose)?;
+    insert_brackets(&built.brackets)?;
+    Ok(built.made)
 }
 
 /// What a crate stream became, and what each of its leaves became, in the
@@ -5497,6 +5499,17 @@ pub(crate) fn from_crate_as<'py>(
 struct Built<'py> {
     made: Bound<'py, PyAny>,
     leaves: Vec<Option<Py<PyAny>>>,
+    /// The repeat brackets of its parts, each with its part, which go in
+    /// after the spanners the score puts in its parts.
+    brackets: Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>,
+}
+
+/// Puts each repeat bracket in its part, at nought.
+fn insert_brackets(brackets: &[(Bound<'_, PyAny>, Bound<'_, PyAny>)]) -> PyResult<()> {
+    for (part, bracket) in brackets {
+        part.call_method1("insert", (0.0, bracket))?;
+    }
+    Ok(())
 }
 
 /// [`from_crate_as`], keeping what each leaf became.
@@ -5535,12 +5548,19 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     let mut leaves: Vec<Option<Py<PyAny>>> = Vec::new();
     // The parts, in order, which a staff group names by place.
     let mut parts = Vec::new();
+    // The measures in an alternative ending, in order, with it.
+    let mut endings = Vec::new();
+    let mut brackets = Vec::new();
     for event in stream.events() {
         // A nested stream's leaves are its own, in its order; anything else
         // is one leaf, built or left out.
         let object = match event.element() {
             StreamElement::Stream(inner) => {
                 let built = build_as(py, inner, whose)?;
+                brackets.extend(built.brackets);
+                if let Some(ending) = inner.ending() {
+                    endings.push((ending, built.made.clone()));
+                }
                 let first = leaves.len();
                 leaves.extend(built.leaves);
                 if matches!(inner.kind(), StreamKind::Part | StreamKind::PartStaff) {
@@ -5583,12 +5603,26 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     // just built.
     if !stream.spanners().is_empty() {
         for spanner in stream.spanners() {
-            let joined: Vec<Py<PyAny>> = spanner
-                .spanned()
-                .iter()
-                .filter_map(|place| place.and_then(|place| leaves.get(place)))
-                .filter_map(|leaf| leaf.as_ref().map(|object| object.clone_ref(py)))
-                .collect();
+            let mut joined: Vec<Py<PyAny>> = Vec::new();
+            for (index, place) in spanner.spanned().iter().enumerate() {
+                let leaf = place
+                    .and_then(|place| leaves.get(place))
+                    .and_then(|leaf| leaf.as_ref().map(|object| object.clone_ref(py)));
+                if let Some(leaf) = leaf {
+                    joined.push(leaf);
+                    continue;
+                }
+                // What it joins that no stream holds, built on its own.
+                let stray = spanner
+                    .unplaced_elements()
+                    .iter()
+                    .find(|(held, _)| *held == index);
+                if let Some((_, element)) = stray
+                    && let Some(made) = element_object_as(py, element, whose)?
+                {
+                    joined.push(made.unbind());
+                }
+            }
             match whose {
                 Whose::Wheel => {
                     let built = crate::spanner::Spanner::object_as(py, spanner, joined, whose)?;
@@ -5597,8 +5631,11 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 }
                 Whose::Music21 => {
                     let built = crate::spanner::music21_object(py, spanner, joined)?;
-                    let home = home_part(spanner, &parts, stream.staff_groups())
-                        .map_or(&made, |place| &parts[place].0);
+                    let home = match spanner.stands_in_score() {
+                        true => None,
+                        false => home_part(spanner, &parts, stream.staff_groups()),
+                    }
+                    .map_or(&made, |place| &parts[place].0);
                     // Where the reader put it: nought but for an ABC
                     // slur or hairpin, which music21 appends where its part
                     // had got to. A pedal mark's offset says where its line
@@ -5616,6 +5653,15 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 }
             }
         }
+    }
+    if whose == Whose::Music21 {
+        for bracket in music21_repeat_brackets(py, &endings)? {
+            brackets.push((made.clone(), bracket));
+        }
+    }
+    // A score's parts take their brackets once its spanners are in.
+    if stream.kind() == StreamKind::Score {
+        insert_brackets(&std::mem::take(&mut brackets))?;
     }
     // music21's own staff groups, which its reader puts in the score.
     if whose == Whose::Music21 {
@@ -5671,7 +5717,49 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
         }
         _ => {}
     }
-    Ok(Built { made, leaves })
+    Ok(Built {
+        made,
+        leaves,
+        brackets,
+    })
+}
+
+/// music21's own `RepeatBracket` over each alternative ending among a
+/// part's measures, from the measure it opens on to the one it closes on,
+/// each complete, in the order they close: what its readers put in the
+/// part at nought once the part is read.
+fn music21_repeat_brackets<'py>(
+    py: Python<'py>,
+    endings: &[(&music21::Ending, Bound<'py, PyAny>)],
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let mut made = Vec::new();
+    if endings.is_empty() {
+        return Ok(made);
+    }
+    let class = crate::real_music21(py, "music21.spanner")?.getattr("RepeatBracket")?;
+    let mut open: Option<Bound<'py, PyAny>> = None;
+    for (ending, measure) in endings {
+        let bracket = match open.take() {
+            Some(bracket) if !ending.starts() => bracket,
+            _ => {
+                let bracket = class.call0()?;
+                match ending.numbers() {
+                    [0] | [] => {}
+                    [number] => bracket.setattr("number", *number)?,
+                    _ => bracket.setattr("number", ending.number_text())?,
+                }
+                bracket
+            }
+        };
+        bracket.call_method1("addSpannedElements", (measure,))?;
+        if ending.stops() {
+            bracket.setattr("completeStatus", true)?;
+            made.push(bracket);
+        } else {
+            open = Some(bracket);
+        }
+    }
+    Ok(made)
 }
 
 /// The part of a score music21's reader puts a spanner in, by its place
@@ -5881,23 +5969,40 @@ fn element_object_as<'py>(
             .into_bound(py)
             .into_any()
         }
-        StreamElement::Chord(chord) => element_new(
-            py,
-            "music21.chord",
-            "Chord",
-            Chord::from_inner(py, chord.clone())?,
-            holdable,
-        )?
-        .into_bound(py)
-        .into_any(),
-        StreamElement::Rest(rest) => element_new(
-            py,
-            "music21.note",
-            "Rest",
-            Rest::wrap(py, rest.clone()),
-            holdable,
-        )?
-        .into_bound(py)
+        StreamElement::Chord(chord) => {
+            let made = element_new(
+                py,
+                "music21.chord",
+                "Chord",
+                Chord::from_inner(py, chord.clone())?,
+                holdable,
+            )?
+            .into_bound(py)
+            .into_any();
+            if whose == Whose::Music21
+                && let Some(id) = chord.id()
+            {
+                made.setattr("id", id)?;
+            }
+            made
+        }
+        StreamElement::Rest(rest) => {
+            let made = element_new(
+                py,
+                "music21.note",
+                "Rest",
+                Rest::wrap(py, rest.clone()),
+                holdable,
+            )?
+            .into_bound(py)
+            .into_any();
+            if whose == Whose::Music21
+                && let Some(id) = rest.id()
+            {
+                made.setattr("id", id)?;
+            }
+            made
+        }
         .into_any(),
         StreamElement::Clef(clef) => {
             crate::clef::Clef::object_as(py, clef.clone(), holdable)?.into_bound(py)
@@ -5980,7 +6085,24 @@ fn element_object_as<'py>(
                 if let Some(text) = symbol.kind_text() {
                     keywords.set_item("kindStr", text)?;
                 }
-                class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?
+                let made =
+                    class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?;
+                // What a transposition left it sounding, which music21
+                // moves pitch by pitch.
+                if let Some(moved) = symbol.transposed_pitches() {
+                    let pitches = PyList::empty(py);
+                    for pitch in moved {
+                        let inferred = pitch.spelling_is_inferred();
+                        pitches.append(crate::installed_new(
+                            py,
+                            "music21.pitch",
+                            "Pitch",
+                            crate::pitch::Pitch::wrap(pitch.clone(), inferred),
+                        )?)?;
+                    }
+                    made.setattr("pitches", pitches)?;
+                }
+                made
             }
         }
         StreamElement::TextExpression(text)
@@ -6094,6 +6216,30 @@ fn carry_notation(
     };
     if hidden {
         made.getattr("style")?.setattr("hideObjectOnPrint", true)?;
+    }
+    // A written value a reader was given rather than one read off a
+    // length, which music21's makeNotation will not cut to finish a
+    // tuplet: an MEI note's `dur`. The duration object built for it says
+    // inferred otherwise.
+    let written = element
+        .duration()
+        .is_some_and(|duration| !duration.expression_is_inferred());
+    if whose == Whose::Music21 && written {
+        made.getattr("duration")?
+            .setattr("expressionIsInferred", false)?;
+    }
+    // The empty beams music21's makeBeams hands a rest of a line it beams.
+    if let StreamElement::Rest(rest) = element
+        && let Some(beams) = rest.beams()
+        && whose == Whose::Music21
+    {
+        let made_beams = crate::installed_new(
+            py,
+            "music21.beam",
+            "Beams",
+            crate::notation::Beams::wrap(beams.clone()),
+        )?;
+        made.setattr("beams", made_beams)?;
     }
     // The tick a MIDI file started it on, and how far quantizing moved it,
     // which music21's reader writes into the editorial in that order.

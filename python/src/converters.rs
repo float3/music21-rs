@@ -125,8 +125,16 @@ class ConverterMusicXML(ThroughCrate, _sub.ConverterMusicXML):
 class ConverterABC(ThroughCrate, _sub.ConverterABC):
     def _crate(self, data, number):
         if number is None:
-            return wheel.from_abc(_text(data))
-        return wheel.from_abc_number(_text(data), number)
+            made = wheel.from_abc(_text(data))
+        else:
+            made = wheel.from_abc_number(_text(data), number)
+        # music21's reader gives each note its length, which leaves how it
+        # is written inferred, but for a grace note's; the crate's lengths
+        # say what a copy of the beamed tune says.
+        for each in made.recurse().notesAndRests:
+            if not each.duration.isGrace:
+                each.duration.expressionIsInferred = True
+        return made
 
 
 class ConverterMidi(ThroughCrate, _sub.ConverterMidi):

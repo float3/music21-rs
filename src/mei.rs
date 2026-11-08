@@ -64,6 +64,33 @@ fn descendants<'a>(element: &'a Xml, tag: &str, out: &mut Vec<&'a Xml>) {
     }
 }
 
+/// A random version-4 UUID, as music21 names a slur written apart from its
+/// notes with `uuid4()`; `count` keeps two in one read apart.
+fn fresh_uuid(count: usize) -> String {
+    use std::hash::{BuildHasher, Hasher};
+
+    // std seeds each `RandomState` afresh, which is all the randomness
+    // a name needs.
+    let random = std::collections::hash_map::RandomState::new();
+    let mut halves = [0_u64; 2];
+    for (half, made) in halves.iter_mut().enumerate() {
+        let mut hasher = random.build_hasher();
+        hasher.write_usize(count);
+        hasher.write_usize(half);
+        *made = hasher.finish();
+    }
+    let high = (halves[0] & !0xF000) | 0x4000;
+    let low = (halves[1] & 0x3FFF_FFFF_FFFF_FFFF) | 0x8000_0000_0000_0000;
+    format!(
+        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
+        high >> 32,
+        (high >> 16) & 0xFFFF,
+        high & 0xFFFF,
+        low >> 48,
+        low & 0xFFFF_FFFF_FFFF
+    )
+}
+
 fn without_hash(id: &str) -> &str {
     id.strip_prefix('#').unwrap_or(id)
 }
@@ -583,7 +610,7 @@ impl Reader {
         descendants(score, "slur", &mut found);
         for slur in std::mem::take(&mut found) {
             if let (Some(start), Some(end)) = (slur.get("startid"), slur.get("endid")) {
-                let name = format!("slur-{}", self.next_slur);
+                let name = fresh_uuid(self.next_slur);
                 self.next_slur += 1;
                 self.slurs.push((name.clone(), Vec::new()));
                 self.set(start, "m21SlurStart", name.clone());
@@ -784,10 +811,12 @@ impl Reader {
             note.set_duration(duration_of(length, dot_elements)?);
         }
         if element.get("grace").is_some() {
-            let grace = note
+            let mut grace = note
                 .duration()
                 .map(Duration::grace_duration)
                 .unwrap_or_default();
+            // music21's `GraceDuration(quarterLength)`, read off a length.
+            grace.set_expression_is_inferred(true);
             note.set_duration(grace);
         }
         if let Some(beam) = self.attribute(element, "m21Beam")
@@ -851,6 +880,9 @@ impl Reader {
         }
         let uid = self.uid();
         self.add_slurs(element, uid)?;
+        if let Some(id) = element.get("xml:id") {
+            chord.set_id(Some(id.to_string()));
+        }
         if let Some(marks) = element.get("artic") {
             chord.articulations_mut().extend(articulations_of(marks)?);
         }
@@ -858,10 +890,12 @@ impl Reader {
             chord.set_tie(Some(tie_of(&tie)));
         }
         if element.get("grace").is_some() {
-            let grace = chord
+            let mut grace = chord
                 .duration()
                 .map(Duration::grace_duration)
                 .unwrap_or_default();
+            // music21's `GraceDuration(quarterLength)`, read off a length.
+            grace.set_expression_is_inferred(true);
             chord.set_duration(grace);
         }
         if let Some(beam) = self.attribute(element, "m21Beam")
@@ -889,6 +923,9 @@ impl Reader {
             dots_of(element)?,
         )?);
         rest.set_hidden(hidden);
+        if let Some(id) = element.get("xml:id") {
+            rest.set_id(Some(id.to_string()));
+        }
         let mut thing = Thing {
             element: rest.into(),
             uid: self.uid(),
@@ -1577,6 +1614,9 @@ pub fn from_mei(document: &str) -> Result<Stream> {
     // slur may name.
     let mut events = Vec::new();
     let mut uids: Vec<Option<usize>> = Vec::new();
+    // Where the longest part ends, which is where music21 appends the
+    // slurs to the score.
+    let mut end: FloatType = 0.0;
     for name in &parts {
         let mut held = Vec::new();
         let mut offset = 0.0;
@@ -1620,6 +1660,7 @@ pub fn from_mei(document: &str) -> Result<Stream> {
                 }
             }
         }
+        end = end.max(offset);
         let mut part = Stream::with_kind(StreamKind::Part).with_events(held);
         // music21 says an MEI part is at written pitch.
         part.set_at_sounding_pitch(Some(false));
@@ -1627,12 +1668,16 @@ pub fn from_mei(document: &str) -> Result<Stream> {
     }
     let mut made = Stream::with_kind(StreamKind::Score).with_events(events);
     made.set_metadata(Some(metadata_of(&root)));
-    for (_, joined) in reader.slurs {
+    for (name, joined) in reader.slurs {
         let positions: Vec<Option<usize>> = joined
             .iter()
             .map(|uid| uids.iter().position(|held| *held == Some(*uid)))
             .collect();
-        made.add_spanner(Spanner::with_unplaced(SpannerKind::Slur, positions));
+        let mut slur = Spanner::with_unplaced(SpannerKind::Slur, positions);
+        slur.set_id_local(Some(name));
+        slur.set_stands_in_score(true);
+        slur.set_offset(end);
+        made.add_spanner(slur);
     }
     Ok(made)
 }
@@ -1753,6 +1798,66 @@ mod tests {
             })
             .collect();
         assert_eq!(ties, [Some(TieType::Start), Some(TieType::Stop)]);
+    }
+
+    #[test]
+    fn a_chord_and_a_rest_keep_their_ids() {
+        let score = from_mei(&document(
+            r#"<measure n="1"><staff n="1"><layer n="1">
+            <chord xml:id="c1" dur="2"><note pname="c" oct="4"/><note pname="e" oct="4"/></chord>
+            <rest xml:id="r1" dur="2"/></layer></staff></measure>"#,
+        ))
+        .unwrap();
+        let ids: Vec<Option<&str>> = score.parts()[0]
+            .recurse()
+            .into_iter()
+            .filter_map(|(_, element)| match element {
+                StreamElement::Chord(chord) => Some(chord.id()),
+                StreamElement::Rest(rest) => Some(rest.id()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids, [Some("c1"), Some("r1")]);
+    }
+
+    #[test]
+    fn slurs_stand_in_the_score_after_its_last_measure() {
+        let score = from_mei(&document(
+            r##"<measure n="1"><staff n="1"><layer n="1">
+            <note xml:id="a" pname="c" oct="4" dur="2" slur="1i"/>
+            <note xml:id="b" pname="d" oct="4" dur="2" slur="1t"/>
+            </layer></staff><slur startid="#a" endid="#b"/></measure>"##,
+        ))
+        .unwrap();
+        let slurs = score.spanners();
+        assert_eq!(slurs.len(), 2);
+        assert!(slurs.iter().all(Spanner::stands_in_score));
+        assert!(slurs.iter().all(|slur| slur.offset() == 4.0));
+        // One written apart is named afresh each read, as music21 names it
+        // with a random UUID; one written on its notes keeps its number.
+        let apart = slurs[0].id_local().unwrap();
+        assert_eq!(apart.len(), 36);
+        assert_eq!(apart.as_bytes()[14], b'4');
+        assert_eq!(slurs[1].id_local(), Some("1"));
+    }
+
+    /// music21 makes an MEI grace note's duration from its length, which
+    /// leaves the way it is written inferred, where the note's own `dur`
+    /// was written.
+    #[test]
+    fn a_grace_notes_value_is_inferred() {
+        let score = from_mei(&document(
+            r#"<measure n="1"><staff n="1"><layer n="1">
+            <note pname="c" oct="4" dur="8" grace="unacc"/><note pname="d" oct="4" dur="1"/>
+            </layer></staff></measure>"#,
+        ))
+        .unwrap();
+        let inferred: Vec<bool> = score.parts()[0]
+            .notes()
+            .into_iter()
+            .filter_map(|(_, element)| element.duration().map(Duration::expression_is_inferred))
+            .collect();
+        assert_eq!(inferred, [true, false]);
     }
 
     #[test]
