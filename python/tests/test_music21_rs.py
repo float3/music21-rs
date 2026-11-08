@@ -10226,3 +10226,50 @@ except TypeError as error:
         "Cannot call OffsetHierarchyFilter without an iterator",
     ]
 
+
+def test_provided_subconverters_read_and_write_through_the_wheel(tmp_path):
+    """Provided, `converter.subConverters` has music21's classes, each
+    registering music21's formats and reading through the wheel's
+    converter, and its base takes a subclass of one's own."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21.converter import subConverters
+abc = subConverters.ConverterABC()
+print(abc.parseData('X:1\\nT:t\\nM:4/4\\nK:C\\nCDEF|'))
+s = abc.stream
+print(type(s).__name__, len(s.recurse().notes))
+print(subConverters.ConverterMidi.registerInputExtensions,
+      subConverters.ConverterMidi().getExtensionForSubformats())
+print(issubclass(subConverters.ConverterMusicXML, subConverters.SubConverter))
+class QM(subConverters.SubConverter):
+    registerFormats = ('qm',)
+    registerOutputExtensions = ('qm',)
+    def __init__(self, **keywords):
+        super().__init__(**keywords)
+qm = QM(a=1)
+print(qm.keywords, qm.getTemporaryFile().suffix)
+try:
+    qm.parseData('C D')
+except NotImplementedError:
+    print('not implemented')
+try:
+    subConverters.SubConverter().getExtensionForSubformats()
+except subConverters.SubConverterException as error:
+    print(error)
+data = subConverters.ConverterVolpiano().toData(s, 'volpiano')
+print(type(data).__name__)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "None",
+        "Score 4",
+        "('mid', 'midi') .mid",
+        "True",
+        "{'a': 1} .qm",
+        "not implemented",
+        "This subConverter cannot show or write: no output extensions are "
+        "registered for it",
+        "str",
+    ]
