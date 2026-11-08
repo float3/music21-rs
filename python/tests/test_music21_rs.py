@@ -894,6 +894,19 @@ def test_a_stream_finds_where_an_element_is_held():
     assert mixed.splitlines()[1] == "{1 - 1 1/3} <music21.note.Note E>"
 
 
+def test_a_negative_offset_is_a_mixed_numeral_as_music21_writes_it():
+    """music21's `mixedNumeral` writes -4/3 as `-1 1/3`, its whole part
+    towards nought."""
+    from fractions import Fraction
+
+    held = m.Stream()
+    held.insert(Fraction(-4, 3), m.Note("C4"))
+    held.insert(Fraction(7, 3), m.Note("D4"))
+    assert held.recurseRepr(useMixedNumerals=True) == (
+        "{-1 1/3} <music21.note.Note C>\n{2 1/3} <music21.note.Note D>"
+    )
+
+
 def test_a_stream_shows_itself_as_text(capsys):
     """music21's `show('text')`, which prints the `recurseRepr` listing,
     and `show('textline')`, which answers it on one line; the formats

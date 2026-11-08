@@ -41,23 +41,9 @@ pyo3::create_exception!(
 /// A number written the way music21's `common.mixedNumeral` writes it: a
 /// whole number where it is one, and a whole number and a fraction where the
 /// two are both there.
-pub(crate) fn mixed_numeral(py: Python<'_>, value: f64) -> PyResult<String> {
-    let exact = py
-        .import("fractions")?
-        .getattr("Fraction")?
-        .call1((value,))?
-        .call_method1("limit_denominator", (65_535,))?;
-    let numerator: i64 = exact.getattr("numerator")?.extract()?;
-    let denominator: i64 = exact.getattr("denominator")?.extract()?;
-    if denominator == 1 {
-        return Ok(numerator.to_string());
-    }
-    let whole = numerator.div_euclid(denominator);
-    let rest = numerator.rem_euclid(denominator);
-    if whole == 0 {
-        return Ok(format!("{rest}/{denominator}"));
-    }
-    Ok(format!("{whole} {rest}/{denominator}"))
+pub(crate) fn mixed_numeral(value: f64) -> PyResult<String> {
+    music21::common::numbertools::mixed_numeral(value, 65_535)
+        .map_err(|error| crate::common::value_error(&error))
 }
 
 /// A written value's name with its first letter capitalized, which is what
@@ -2188,7 +2174,7 @@ impl Duration {
         }
         let tuplet_name = named.join(" ");
         let components = self.component_list_materialized(py)?;
-        let length = mixed_numeral(py, self.inner.quarter_length())?;
+        let length = mixed_numeral(self.inner.quarter_length())?;
         let mut written: Vec<String> = Vec::with_capacity(components.len());
         for component in &components {
             let dots = component.dots();

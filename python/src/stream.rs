@@ -2062,7 +2062,7 @@ impl Stream {
             .collect();
         let written = |value: f64| -> PyResult<String> {
             match useMixedNumerals {
-                true => crate::duration::mixed_numeral(py, value),
+                true => crate::duration::mixed_numeral(value),
                 false => Ok(str_trim_float(value)),
             }
         };
