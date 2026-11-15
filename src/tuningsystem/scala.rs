@@ -772,8 +772,17 @@ mod bundled_tests {
         // which is legal Scala and which music21 accepts too.
         assert_eq!(names, [] as [&str; 0]);
         assert_eq!(archive.len(), ScalaArchive::bundled_len());
-        // 3932 from the music21 submodule plus 62 from the hexatone one.
-        assert_eq!(ScalaArchive::bundled_len(), 3994);
+        // 3932 from the music21 submodule plus 63 from the hexatone one.
+        assert_eq!(ScalaArchive::bundled_len(), 3995);
+    }
+
+    #[test]
+    fn the_bundle_carries_hexatones_zarlino() {
+        let archive = ScalaArchive::bundled();
+        let zarlino = archive
+            .get("41-JI-13L-Zarlino.scl")
+            .expect("Zarlino is bundled");
+        assert_eq!(zarlino.len(), 41);
     }
 
     #[test]

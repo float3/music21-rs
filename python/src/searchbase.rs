@@ -334,8 +334,8 @@ impl StreamSearcher {
         let class = match_class(py)?;
         for one in found {
             let els = PyList::empty(py);
-            for at in one.index..one.index + searcher.search.len() {
-                els.append(handed.objects[at].bind(py))?;
+            for object in &handed.objects[one.index..one.index + searcher.search.len()] {
+                els.append(object.bind(py))?;
             }
             out.append(class.call1((
                 handed.objects[one.index].bind(py),

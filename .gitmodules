@@ -4,6 +4,6 @@
 	branch = master
 [submodule "hexatone"]
 	path = hexatone
-	url = https://github.com/float3/hexatone.git
+	url = https://github.com/PLAINSOUND/hexatone.git
 	shallow = true
-	branch = fix-scala-file-headers
+	branch = main
