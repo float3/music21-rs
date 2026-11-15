@@ -11,10 +11,10 @@
 # reads that. This is what the report falls back to where no such run
 # has happened.
 #
-# music21 11.0.0b20 at 26cfcc181b7ef832f014731f05500ee8298249ed
+# music21 11.0.0b20 at 640186c9d224b1dc7b369b37f81bf8757794971b
 
 music21_version = "11.0.0b20"
-music21_commit = "26cfcc181b7ef832f014731f05500ee8298249ed"
+music21_commit = "640186c9d224b1dc7b369b37f81bf8757794971b"
 
 [[module]]
 module = "music21.alpha.analysis.aligner"
@@ -167,6 +167,12 @@ examples = 199
 tests = 3
 
 [[module]]
+module = "music21.braille.examples"
+docstrings = 1
+examples = 4
+tests = 3
+
+[[module]]
 module = "music21.braille.lookup"
 docstrings = 2
 examples = 6
@@ -213,6 +219,18 @@ module = "music21.clef"
 docstrings = 29
 examples = 151
 tests = 7
+
+[[module]]
+module = "music21.converter"
+docstrings = 18
+examples = 103
+tests = 30
+
+[[module]]
+module = "music21.corpus"
+docstrings = 6
+examples = 32
+tests = 0
 
 [[module]]
 module = "music21.duration"
