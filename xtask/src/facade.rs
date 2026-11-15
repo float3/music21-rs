@@ -70,8 +70,12 @@ impl Facade {
         let mut current = class.to_string();
 
         // Walk up the chain; the depth bound only guards against a cycle.
-        for _ in 0..MAX_INHERITANCE_DEPTH {
-            let (text, parent) = self.declaration(&current)?;
+        for depth in 0..MAX_INHERITANCE_DEPTH {
+            // A base the scan cannot read, one a macro makes, ends the walk
+            // with what was found so far; only the class itself must be found.
+            let Some((text, parent)) = self.declaration(&current) else {
+                return (depth > 0).then_some(body);
+            };
             body.push_str(&impl_blocks(text, &current));
             body.push_str(&exposed_fields(text, &current));
             let Some(parent) = parent else {
@@ -163,9 +167,11 @@ fn extends(text: &str, class: &str) -> Option<String> {
     let (_, rest) = attribute.split_once("extends")?;
     let parent = rest.trim_start().strip_prefix('=')?.trim_start();
     let end = parent
-        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .find(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':'))
         .unwrap_or(parent.len());
-    Some(parent[..end].to_string()).filter(|parent| !parent.is_empty())
+    // `crate::base::NotRest` names the class `NotRest`.
+    let name = parent[..end].rsplit("::").next().unwrap_or_default();
+    Some(name.to_string()).filter(|name| !name.is_empty())
 }
 
 /// The parent a macro table gives a class, from a row written
@@ -402,6 +408,36 @@ ornament_kinds![
         let body = inheriting().class_body("Trill").unwrap();
         assert!(defines_member(&body, "own"));
         assert!(defines_member(&body, "realize"));
+    }
+
+    /// A base the scan cannot read, one a macro makes or one named by path,
+    /// leaves the class's own members counted.
+    #[test]
+    fn a_class_on_an_unread_base_keeps_its_own_members() {
+        let text = "
+#[pyclass(name = \"Chord\", extends = crate::base::NotRest)]
+pub struct Chord {}
+
+#[pymethods]
+impl Chord {
+    fn root(&self) {}
+}
+
+#[pyclass(name = \"Rest\", extends = MacroMadeBase)]
+pub struct Rest {}
+
+#[pymethods]
+impl Rest {
+    fn fullName(&self) {}
+}
+";
+        let files = BTreeMap::from([("note".to_string(), text.to_string())]);
+        let facade = Facade { files };
+        assert!(defines_member(&facade.class_body("Chord").unwrap(), "root"));
+        assert!(defines_member(
+            &facade.class_body("Rest").unwrap(),
+            "fullName"
+        ));
     }
 
     #[test]
