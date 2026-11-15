@@ -1,3 +1,18 @@
+# music21-rs 0.20.1
+
+`harte` 0.13.1 depends on this release.
+
+## changed
+
+- **The bundled Scala archive follows upstream Plainsound Hexatone**
+  (`main` bb10c78, which carries the merged PLAINSOUND/hexatone#3): it
+  adds `41-JI-13L-Zarlino.scl`, 3995 scales in all, and hexatone's
+  equal-division scales now carry the cents upstream writes, to about ten
+  decimals rather than five. The submodule now follows upstream rather
+  than the fork's branch.
+- The music21 submodule follows the fork's master 640186c9, which merges
+  a docstring-only change from upstream music21.
+
 # music21-rs 0.20.0
 
 `harte` 0.13.0 depends on this release.
