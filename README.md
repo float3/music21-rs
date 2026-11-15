@@ -367,7 +367,7 @@ Entries carry `source = "music21"`.
 
 ### Plainsound Hexatone
 
-the remaining 62 scales come from
+the remaining 63 scales come from
 [Plainsound Hexatone](https://github.com/PLAINSOUND/hexatone), a microtonal
 MIDI isomorphic keyboard designed and programmed by
 [Marc Sabat](https://www.plainsound.org), licensed
@@ -615,6 +615,6 @@ contributed upstream, mostly fixes found while porting:
 - issue [cuthbertLab/music21#2055](https://github.com/cuthbertLab/music21/issues/2055):
   `chordToXml` sorting a copy of the chord and discarding it.
 - [PLAINSOUND/hexatone#3](https://github.com/PLAINSOUND/hexatone/pull/3):
-  Scala headers in five Hexatone scale files (open).
+  Scala headers in five Hexatone scale files.
 - corrections to the Xenharmonic Wiki's temperament pages, found while
   checking its infoboxes: [special:contributions/hill](https://en.xen.wiki/w/Special:Contributions/hill).
