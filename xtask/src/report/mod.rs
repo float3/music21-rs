@@ -698,8 +698,7 @@ fn write_pages(out: &Path, report: &Report) -> Result<(), Box<dyn Error>> {
 }
 
 /// The three shares the READMEs show as badges: the music21 members the
-/// crate ports, the ones the wheel reaches, and the doctest examples that
-/// pass. Each is a file name, a label and the fraction behind it.
+/// crate ports, the ones the wheel reaches, and the docstrings that pass. Each is a file name, a label and the fraction behind it.
 fn badges(report: &Report) -> [(&'static str, String, usize, usize); 3] {
     let members: usize = report
         .features
@@ -708,11 +707,13 @@ fn badges(report: &Report) -> [(&'static str, String, usize, usize); 3] {
         .sum();
     let ported: usize = report.features.iter().map(|class| class.ported).sum();
     let in_wheel: usize = report.features.iter().map(|class| class.in_wheel).sum();
-    let examples: usize = report.doctests.iter().map(|module| module.examples).sum();
+    // Docstrings rather than examples: a site built without the suites knows
+    // the docstrings from the checked-in gates, and nothing of the examples.
+    let docstrings: usize = report.doctests.iter().map(|module| module.docstrings).sum();
     let passing: usize = report
         .doctests
         .iter()
-        .map(|module| module.examples_passing)
+        .map(|module| module.docstrings_passing)
         .sum();
     [
         (
@@ -729,9 +730,9 @@ fn badges(report: &Report) -> [(&'static str, String, usize, usize); 3] {
         ),
         (
             "badge-doctests.json",
-            "music21 doctests passing".to_string(),
+            "music21 docstrings passing".to_string(),
             passing,
-            examples,
+            docstrings,
         ),
     ]
 }
@@ -984,10 +985,11 @@ fn read_doctests(workspace_root: &Path) -> Vec<ModuleDoctests> {
     // since renamed or removed describes nothing the harness runs now.
     for suite in crate::harness::harness_suites(workspace_root) {
         let path = workspace_root.join(format!("target/doctest_{}.toml", suite.name));
-        let Ok(text) = fs::read_to_string(&path) else {
-            continue;
-        };
-        let Ok(summary) = toml::from_str::<DoctestSummary>(&text) else {
+        let summary = fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| toml::from_str::<DoctestSummary>(&text).ok())
+            .or_else(|| gate_summary(workspace_root, &suite, &totals));
+        let Some(summary) = summary else {
             continue;
         };
         let module = summary.module;
@@ -1054,6 +1056,32 @@ fn read_not_passing(workspace_root: &Path, name: &str) -> BTreeMap<String, Strin
     toml::from_str::<Expectations>(&text)
         .map(|expectations| expectations.not_passing)
         .unwrap_or_default()
+}
+
+/// What a suite's checked-in gate says where no run left a summary, as on a
+/// site built without the suites: the docstrings it lists as passing, against
+/// music21's total. Examples are not in the gate, so none count as passing.
+fn gate_summary(
+    workspace_root: &Path,
+    suite: &crate::harness::HarnessSuite,
+    totals: &[DoctestTotal],
+) -> Option<DoctestSummary> {
+    #[derive(Deserialize)]
+    struct Gate {
+        #[serde(default)]
+        passing: Vec<String>,
+    }
+
+    let total = totals.iter().find(|total| total.module == suite.module)?;
+    let path = workspace_root.join(format!("python-parity/doctest/{}.toml", suite.name));
+    let gate: Gate = toml::from_str(&fs::read_to_string(path).ok()?).ok()?;
+    Some(DoctestSummary {
+        module: suite.module.clone(),
+        docstrings_passing: gate.passing.len(),
+        docstrings: total.docstrings,
+        examples_passing: 0,
+        examples: total.examples,
+    })
 }
 
 /// The checked-in totals for every music21 module the crate ports, generated
@@ -1209,6 +1237,38 @@ mod tests {
                 .map(String::as_str),
             Some("not modelled")
         );
+    }
+
+    /// With no run's summary, as on a site built without the suites, a
+    /// suite's docstrings still count from its gate, not as nought.
+    #[test]
+    fn an_unrun_suite_counts_its_gates_docstrings() {
+        let root = env::temp_dir().join(format!("xtask-gate-{}", std::process::id()));
+        let write = |relative: &str, text: &str| {
+            let path = root.join(relative);
+            fs::create_dir_all(path.parent().expect("a parent")).expect("mkdir");
+            fs::write(path, text).expect("write");
+        };
+        write(
+            "python-parity/tests/doctest_sieve.rs",
+            "doctest_suite!(t, \"music21.sieve\", \"sieve\", []);",
+        );
+        write(
+            "python-parity/doctest/sieve.toml",
+            "passing = [\"music21.sieve.Sieve\", \"music21.sieve.Residual\"]\n",
+        );
+        write(
+            "data/doctest_totals.toml",
+            "[[module]]\nmodule = \"music21.sieve\"\ndocstrings = 3\nexamples = 9\ntests = 0\n",
+        );
+
+        let doctests = read_doctests(&root);
+        let _ = fs::remove_dir_all(&root);
+        let sieve = doctests
+            .iter()
+            .find(|module| module.module == "music21.sieve")
+            .expect("the sieve's row");
+        assert_eq!((sieve.docstrings_passing, sieve.docstrings), (2, 3));
     }
 
     #[test]
