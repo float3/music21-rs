@@ -2189,6 +2189,51 @@ def test_an_exception_is_the_class_music21_keeps_under_that_name():
         m.NoSuchException
 
 
+def test_an_interval_network_realizes_a_scale_on_any_degree():
+    net = m.IntervalNetwork(["M2", "M2", "m2", "M2", "M2", "M2", "m2"])
+    assert [str(p) for p in net.realizePitch("c#", 7)] == [
+        "D3", "E3", "F#3", "G3", "A3", "B3", "C#4", "D4",
+    ]
+    pitches, nodes = net.realize("c4", 1)
+    assert [str(n) for n in nodes] == [
+        "Terminus.LOW", "0", "1", "2", "3", "4", "5", "Terminus.HIGH",
+    ]
+    assert net.getRelativeNodeDegree("e-2", 1, "d3") == 7
+    assert str(net.find(["g", "a", "b", "d", "f#"])[0][1]) == "G"
+    assert repr(net.nodes[m.Terminus.LOW]) == (
+        "<music21.scale.intervalNetwork.Node id=Terminus.LOW>"
+    )
+    assert repr(net.edges[0]) == (
+        "<music21.scale.intervalNetwork.Edge Direction.BI M2 "
+        "[(Terminus.LOW, 0), (0, Terminus.LOW)]>"
+    )
+
+
+def test_a_melodic_minor_network_comes_down_another_way():
+    net = m.IntervalNetwork()
+    net.fillMelodicMinor()
+    assert str(net.getPitchFromNodeDegree("c4", 1, 6, m.Direction.DESCENDING)) == "A-4"
+    assert str(net.nextPitch("c4", 1, "c5", direction=m.Direction.DESCENDING)) == "B-4"
+    assert net.getNeighborNodeIds("c4", 1, "c#") == (m.Terminus.HIGH, 0)
+
+
+def test_a_weighted_network_draws_from_the_generator_given():
+    n1 = m.Node(id=1, degree=1, weight=1000000)
+    n2 = m.Node(id=2, degree=1, weight=1)
+    e1 = m.Edge("m3", id=1)
+    e2 = m.Edge("m3", id=2)
+    net = m.IntervalNetwork()
+    _, node = net.weightedSelection([e1, e2], [n1, n2], randomGenerator=lambda: 0.9999999)
+    assert node.id == 2
+
+
+def test_an_abstract_scale_hands_out_the_wheels_own_network():
+    net = m.MajorScale("g").abstract._net
+    assert isinstance(net, m.IntervalNetwork)
+    assert sorted(net.edges.keys()) == [0, 1, 2, 3, 4, 5, 6]
+    assert [str(p) for p in net.realizePitch("D5")][:3] == ["D5", "E5", "F#5"]
+
+
 def test_a_note_is_drawn_with_a_style_of_the_wheels_own():
     # Where there is no music21 to lend its own, as in this suite.
     note = m.Note("C4")

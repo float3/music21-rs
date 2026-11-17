@@ -1971,6 +1971,11 @@ exceptions![
         scale::IntervalNetworkException,
         Some("music21.scale.intervalNetwork")
     ),
+    (
+        "EdgeException",
+        intervalnetwork::EdgeException,
+        Some("music21.scale.intervalNetwork")
+    ),
     ("KeyException", key::KeyException, Some("music21.key")),
     (
         "KeySignatureException",

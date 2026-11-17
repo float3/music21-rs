@@ -16,6 +16,7 @@ use crate::Walkable;
 use crate::spelling::music21_name;
 use pyo3::types::{PyDict, PyTuple, PyType};
 
+use music21::scale::intervalnetwork::{IntervalNetwork as RsNetwork, Octaves as NetworkOctaves};
 use music21::scale::{
     DegreeComparison as RsDegreeComparison, Scale as RsScale, ScaleType as RsScaleType,
     Simplification as RsSimplification, SolfegVariant as RsSolfegVariant,
@@ -32,11 +33,10 @@ use crate::scalewrite::{Kind, show_scale, write_scale};
 /// `ScaleType::ALL` because this has to be a constant, and a test below
 /// keeps the two lists in step.
 ///
-/// `AbstractScale` is deliberately absent. A concrete scale hands one out
-/// under `abstract`, so the class is registered and reachable — but music21
-/// builds its own abstract scales out of interval networks, which this crate
-/// does not model at all, so replacing the class would be claiming something
-/// untrue.
+/// music21's subclasses of `AbstractScale`, `AbstractDiatonicScale` and the
+/// rest, are not here: each builds its network in its constructor, and
+/// this package has only the base class, whose `_net` is built from the
+/// crate's network.
 pub const NAMES: &[&str] = &[
     "Scale",
     "AbstractScale",
@@ -171,87 +171,6 @@ impl Scale {
         }
         Ok(wrap_pitches(pitches))
     }
-}
-
-/// The nodes and edges music21 spells a two-way scale out as.
-///
-/// A scale with a descending pattern of its own is not a set of edges walked
-/// in both directions: the way up and the way down are separate chains
-/// between the same two ends, and Rag Marwa's descent passes through a note
-/// above the octave that the ascent never reaches. `ascending` and
-/// `descending` are both written as rising steps from the tonic, so the
-/// descending chain is that list read backwards, from the top down.
-fn arbitrary_network<'py>(
-    module: &Bound<'py, PyModule>,
-    ascending: &[&str],
-    descending: &[&str],
-) -> PyResult<(Bound<'py, PyTuple>, Bound<'py, PyTuple>)> {
-    let py = module.py();
-    let terminus = module.getattr("Terminus")?;
-    let direction = module.getattr("Direction")?;
-    let (low, high) = (terminus.getattr("LOW")?, terminus.getattr("HIGH")?);
-    let (up, down) = (
-        direction.getattr("ASCENDING")?,
-        direction.getattr("DESCENDING")?,
-    );
-
-    let node = |id: &Bound<'py, PyAny>, degree: usize| -> PyResult<Bound<'py, PyDict>> {
-        let node = PyDict::new(py);
-        node.set_item("id", id)?;
-        node.set_item("degree", degree)?;
-        Ok(node)
-    };
-    let edge = |step: &str,
-                from: &Bound<'py, PyAny>,
-                to: &Bound<'py, PyAny>,
-                way: &Bound<'py, PyAny>|
-     -> PyResult<Bound<'py, PyDict>> {
-        let edge = PyDict::new(py);
-        edge.set_item("interval", step)?;
-        edge.set_item(
-            "connections",
-            PyTuple::new(py, [PyTuple::new(py, [from, to, way])?])?,
-        )?;
-        Ok(edge)
-    };
-
-    // The way up: the tonic, a node for every step but the last, and the
-    // octave. Degrees run straight up, one per node.
-    let mut ids: Vec<Bound<'py, PyAny>> = vec![low.clone()];
-    let mut nodes = Vec::new();
-    nodes.push(node(&low, 1)?);
-    for (index, degree) in (2..=ascending.len()).enumerate() {
-        let id = index.into_pyobject(py)?.into_any();
-        nodes.push(node(&id, degree)?);
-        ids.push(id);
-    }
-    nodes.push(node(&high, ascending.len() + 1)?);
-    ids.push(high.clone());
-
-    let mut edges = Vec::new();
-    for (index, step) in ascending.iter().enumerate() {
-        edges.push(edge(step, &ids[index], &ids[index + 1], &up)?);
-    }
-
-    // The way down, from the octave back to the tonic through nodes of its
-    // own, whose degrees count back down to the second.
-    let mut coming_down: Vec<Bound<'py, PyAny>> = vec![high.clone()];
-    for (index, degree) in (2..=descending.len()).rev().enumerate() {
-        let id = (ascending.len() - 1 + index).into_pyobject(py)?.into_any();
-        nodes.push(node(&id, degree)?);
-        coming_down.push(id);
-    }
-    coming_down.push(low.clone());
-    for (index, step) in descending.iter().rev().enumerate() {
-        edges.push(edge(
-            step,
-            &coming_down[index],
-            &coming_down[index + 1],
-            &down,
-        )?);
-    }
-
-    Ok((PyTuple::new(py, nodes)?, PyTuple::new(py, edges)?))
 }
 
 /// music21's `scale.AbstractScale`: a pattern of steps with no tonic, such
@@ -491,55 +410,36 @@ impl AbstractScale {
     }
 
     /// music21's `_net`: the interval network the pattern is realized
-    /// through upstream.
-    ///
-    /// The crate walks a list of steps instead, and nothing here reads a
-    /// network — but music21's own code and its own tests ask an abstract
-    /// scale for one, so the steps are handed over as the network they
-    /// describe, built by music21 itself. A pattern with no name has no
-    /// network to give.
+    /// through, built from the steps. A pattern with neither a name nor
+    /// steps has none.
     #[getter]
     fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let module = crate::real_music21(py, "music21.scale.intervalNetwork")?;
-        let Some(scale_type) = self.scale_type else {
-            // A pattern with no name is the network music21's own
-            // `AbstractCyclicalScale` and `AbstractOctaveRepeatingScale`
-            // build: the steps in order, and the spelling they are told.
-            if self.unnamed_steps.is_empty() {
+        let network = match self.scale_type {
+            Some(scale_type) => scale_type.network().map_err(scale_error)?,
+            None if self.unnamed_steps.is_empty() => {
                 return Err(pyo3::exceptions::PyAttributeError::new_err(
                     "'music21.scale.AbstractScale' object has no attribute '_net'",
                 ));
             }
-            let steps = self
-                .unnamed_steps
-                .iter()
-                .map(|step| crate::interval::interval_object(py, step.clone()))
-                .collect::<PyResult<Vec<_>>>()?;
-            let keywords = PyDict::new(py);
-            keywords.set_item("octaveDuplicating", self.octave_duplicating)?;
-            keywords.set_item("pitchSimplification", self.unnamed_simplification)?;
-            let network = module
-                .getattr("IntervalNetwork")?
-                .call((steps,), Some(&keywords))?;
-            return Ok(network.unbind());
-        };
-        let network = module.getattr("IntervalNetwork")?.call0()?;
-        network.setattr("octaveDuplicating", self.octave_duplicating)?;
-        match scale_type.descending_steps() {
-            // A scale that comes down by a pattern of its own is not a set of
-            // edges walked either way: music21 spells out the nodes and the
-            // edges between them, and Rag Marwa's descent runs through a node
-            // above the octave that the ascent never reaches.
-            Some(descending) => {
-                let (nodes, edges) =
-                    arbitrary_network(&module, &scale_type.realization_steps(), descending)?;
-                network.call_method1("fillArbitrary", (nodes, edges))?;
-            }
+            // The network music21's `AbstractCyclicalScale` and
+            // `AbstractOctaveRepeatingScale` build: the steps in order, and
+            // the spelling they are told.
             None => {
-                network.call_method1("fillBiDirectedEdges", (scale_type.realization_steps(),))?;
+                let mut network = RsNetwork::default();
+                network.fill_bidirected(&self.unnamed_steps);
+                network.simplification =
+                    RsSimplification::from_music21_name(self.unnamed_simplification)
+                        .unwrap_or(RsSimplification::MaxAccidental);
+                network
             }
-        }
-        Ok(network.unbind())
+        };
+        let mut network = network;
+        network.octaves = if self.octave_duplicating {
+            NetworkOctaves::Duplicating
+        } else {
+            NetworkOctaves::Distinct
+        };
+        crate::intervalnetwork::IntervalNetwork::object(py, network)
     }
 
     #[getter]
@@ -2218,11 +2118,7 @@ fn without_duplicates(pitches: Vec<RsPitch>, comparison: RsDegreeComparison) -> 
     let mut seen: Vec<String> = Vec::new();
     let mut kept = Vec::new();
     for pitch in pitches {
-        let key = match comparison {
-            RsDegreeComparison::Name => pitch.name(),
-            RsDegreeComparison::Step => pitch.name().chars().take(1).collect(),
-            RsDegreeComparison::PitchClass => pitch.pitch_class().number().to_string(),
-        };
+        let key = comparison.key(&pitch);
         if seen.contains(&key) {
             continue;
         }
