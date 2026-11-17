@@ -10760,3 +10760,23 @@ def test_a_staff_group_keeps_the_barring_it_was_built_with():
     """music21's constructor keeps `barTogether` unread, `None` and all."""
     assert m.StaffGroup(barTogether="yes").barTogether == "yes"
     assert m.StaffGroup(barTogether=None).barTogether is None
+
+
+def test_every_music21_object_has_a_style_and_a_duration():
+    """A `Music21Object` with no style or duration of its own makes music21's
+    on first asking: a style of its `_styleClass`, a duration of nothing."""
+    plain = m.Music21Object()
+    assert not plain.hasStyleInformation
+    assert type(plain.style) is m.Style and plain.hasStyleInformation
+    assert plain.duration.quarterLength == 0.0
+    assert plain.duration is plain.duration
+    assert type(m.TextExpression("x").style).__name__ == "TextStyle"
+
+    held = m.Duration(2.0)
+    plain.duration = held
+    assert plain.duration is held and held.client is plain
+    with pytest.raises(TypeError, match="this must be a Duration object, not 3"):
+        plain.duration = 3
+    assert m.Music21Object(quarterLength=1.5).duration.quarterLength == 1.5
+    # music21's `Chord` puts its own getter beside the setter it inherits.
+    assert isinstance(m.ChordBase.duration, property)

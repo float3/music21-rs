@@ -1426,6 +1426,17 @@ def make_class(facade, original):
                 if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
                     namespace.setdefault(name, getattr(original, name))
                 break
+    # Likewise the wheel's `Music21Object`, which keeps a style and a
+    # duration for a class with none of its own: installed, music21's class
+    # keeps them, in the `_style` and `_duration` its own code writes.
+    for name in ('duration', 'style', 'hasStyleInformation'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if (ancestor.__name__ == 'Music21Object'
+                        and ancestor in _facades
+                        and hasattr(original, name)):
+                    namespace.setdefault(name, getattr(original, name))
+                break
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
@@ -2273,6 +2284,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     derivation::register(m)?;
     // Once every class is made: it gives some a second base.
     base::add_bases(m)?;
+    base::add_late_members(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
