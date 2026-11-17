@@ -320,13 +320,15 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side: 316
-    passes on w20/mods' head (+44 in music21's own code), 74 of 217
-    modules importing, up from 100 and 41 at 0.19.0; not remeasured
-    after the merge. Next blockers: `converter.museScore` (47), then
-    `mei`, `braille.objects`, `musicxml`, `abcFormat` and
-    `musedata.base12_26`. Under the provided harness, doctests showing
-    `0x` addresses fail.
+    music21-suite`'s provided side at 0.21.0: 1766 of 5276 passing tests,
+    163 of 217 modules importing. Next blockers: `musicxml` (736 tests,
+    14 modules), `mei` (233), `metadata.bundles` (102, corpus cache),
+    `midi.translate` (96), `lily` (77), `abcFormat` (128),
+    `scale.intervalNetwork.IntervalNetwork` (49), `noteworthy` (47),
+    `sites.WEAKREF_ACTIVE` (41), `tree.core` (39), `freezeThaw` (17;
+    provided streams do not pickle). The facade's `storeAtEnd` keeps one
+    barline and sets no `activeSite`. Under the provided harness,
+    doctests showing `0x` addresses fail.
 
 21. **the crate's ports that are copies.** the wheel's `makeNotation`
     `op_frac` and `nearest_multiple` are approximate copies of the

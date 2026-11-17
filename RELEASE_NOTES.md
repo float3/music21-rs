@@ -1,3 +1,26 @@
+# music21-rs 0.21.0
+
+`harte` 0.14.0 depends on this release.
+
+## added
+
+- **Crate:** public `midi::base` (MIDI events, tracks and headers as
+  bytes), `romantext::tokens` (RomanText's tokenizing steps),
+  `meter::tools`, `figuredbass::checker`, `sorting` (how a SortTuple
+  compares and combines), `stream::enums`, `stream::iterator` and
+  `stream::status`; `Chord::all_chord_steps` and `BarTogether::from_word`.
+- **`provide_music21()` answers more of music21:** `midi.base`,
+  `romanText.rtObjects`, `test.commonTest.testCopyAll`, `stream.enums`,
+  `stream.streamStatus`, `sorting`, `stream.iterator.OffsetIterator`,
+  `base._SplitTuple`, `chord.tools`, `meter.tools`, meter.core's
+  `getMeterTerminal` and `getMeterSequence`, `duration.FrozenDuration`,
+  `layout.StaffGroup` and `figuredBass.checker`.
+- Every wheel `Music21Object` answers `classSortOrder`, `sortTuple()`,
+  `style` and `duration`; `StaffLayout` has `staffType`.
+
+Gate (`xtask music21-suite`, provided side): 1766 of music21's 5276
+passing tests pass, up from 1298; 163 of 217 modules import, up from 151.
+
 # music21-rs 0.20.1
 
 `harte` 0.13.1 depends on this release.
