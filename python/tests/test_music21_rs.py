@@ -10682,3 +10682,30 @@ print(tools.divisionOptionsFractionsDownward(12, 16), tools.validDenominators[-1
         "(('2/8', '2/8', '1/8'), ('2/8', '1/8', '2/8'))",
         "('6/8', '3/4') 128",
     ]
+
+
+def test_a_frozen_duration_cannot_change():
+    """A `FrozenDuration` refuses every write, hashes by its value, is its
+    own copy, and thaws into a `Duration` that can change."""
+    import copy
+
+    fd = m.FrozenDuration(type="half", dots=2)
+    assert fd.quarterLength == 3.5
+    assert repr(fd) == "<music21.duration.FrozenDuration 3.5>"
+    with pytest.raises(TypeError, match="This FrozenDuration instance is immutable."):
+        fd.dots = 1
+    with pytest.raises(TypeError, match="immutable"):
+        fd.splitDotGroups(inPlace=True)
+    assert fd.dots == 2
+    assert copy.deepcopy(fd) is fd
+    assert copy.copy(fd) is fd
+    assert hash(fd) == hash(m.FrozenDuration(type="half", dots=2))
+    assert len({fd, m.FrozenDuration(type="half", dots=2)}) == 1
+    assert fd == m.Duration(3.5)
+
+    thawed = fd.unfreeze()
+    assert type(thawed) is m.Duration
+    thawed.dots = 0
+    assert (thawed.quarterLength, fd.quarterLength) == (2.0, 3.5)
+    halved = m.FrozenDuration(quarterLength=1.0).augmentOrDiminish(0.5)
+    assert type(halved) is m.Duration and halved.quarterLength == 0.5
