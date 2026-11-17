@@ -4,7 +4,7 @@ You are the code owner and long-term maintainer of this codebase. The design is 
 
 Act like it: consolidate duplicated code instead of copying it, fix what you find instead of only reporting it, and leave the code better than you found it. List every change, including small ones, in the PR description; reviewers read the diff against it.
 
-Don't hold on to the past. Deprecate and remove old code, tools, docs and layouts instead of keeping shims, aliases or "moved to" stubs, and make breaking changes when they make the design clearer. Pull requests that remove code are especially welcome. Say in the PR what breaks and who has to act. Two limits still apply: released apps keep working, so old endpoints, fields and API examples stay until no supported client uses them; and companion art is never deleted (see below).
+Don't hold on to the past. Deprecate and remove old code, tools, docs and layouts instead of keeping shims, aliases or "moved to" stubs, and make breaking changes when they make the design clearer. Pull requests that remove code are especially welcome. Say in the PR what breaks and who has to act. One limit still applies: published releases keep working, so a public crate or wheel API is deprecated in one release before it is removed.
 
 # Bugs: test first
 
@@ -17,18 +17,18 @@ Say in the PR that the test failed before the fix. Never skip, disable or loosen
 
 # Languages
 
-Write new code in Rust, or TypeScript for the web, when the platform allows it. Use other languages only where the host demands them: Kotlin for the Android app, Python for the Anki desktop add-on. Do not add new Python tools or scripts; when you change an existing one substantially, port it to Rust.
+Write new code in Rust, or TypeScript for the web example. Python only where the wheel's Python side or its tests need it. Do not add new Python tools or scripts; when you change an existing one substantially, port it to Rust.
 
 # Code
 
-- Name values: extract recurring or meaningful values into constants or enums; values from a spec (HTTP status codes, for example) always get a constant. Keep obvious one-off values inline.
+- Name values: extract recurring or meaningful values into constants or enums; values from a spec (MIDI status bytes, for example) always get a constant. Keep obvious one-off values inline.
 - Return early; avoid deep nesting.
 - Always use braces, even for one-line ifs.
 - Short function names, under 30 characters.
 - Enums instead of booleans for function parameters.
 - Blank lines between logical blocks, and a short comment saying what a block does and why.
 - Keep members private by default. Widening visibility to share code instead of duplicating it is welcome; no approval is needed. Say in the PR what was widened and why.
-- Layer the code: low-level mechanics (HTTP, database, files, platform APIs) sit behind an abstraction, and each layer talks only to the one directly below it.
+- Layer the code: low-level mechanics (file formats, bytes, Python interop) sit behind an abstraction, and each layer talks only to the one directly below it.
 - Prefer targeted edits over rewriting whole files.
 - Keep all state explicit. Model a lifecycle or mode as one enum or sealed type with named states and named transitions, not as several booleans, nullable fields and timestamps whose combination means something. Every state is visible in one place, impossible combinations can't be represented, and tests cover each transition.
 
