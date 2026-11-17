@@ -10623,6 +10623,134 @@ print(type(data).__name__)
     ]
 
 
+def test_provided_stream_enums_are_music21s(tmp_path):
+    """Provided, `stream.enums` has music21's four enums, and a staff
+    layout's `staffType` is one of `StaffType`'s members."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import layout
+from music21.common.enums import StrEnum
+from music21.stream import enums
+print(repr(enums.StaffType('cue')), enums.StaffType.OSSIA.value)
+print(repr(enums.GivenElementsBehavior.APPEND), isinstance(enums.ShowNumber.NEVER, StrEnum))
+print([member.value for member in enums.RecursionType], enums.ShowNumber.NEVER == 'never')
+try:
+    enums.StaffType('tiny')
+except ValueError as error:
+    print(error)
+staff = layout.StaffLayout()
+print(repr(staff.staffType))
+staff.staffType = enums.StaffType.OSSIA
+print(staff.staffType is enums.StaffType.OSSIA)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<StaffType.CUE: 'cue'> ossia",
+        "<GivenElementsBehavior.APPEND> True",
+        "['elementsFirst', 'flatten', 'elementsOnly'] True",
+        "'tiny' is not a valid StaffType",
+        "<StaffType.REGULAR: 'regular'>",
+        "True",
+    ]
+
+
+def test_provided_sort_tuples_compare_as_music21s(tmp_path):
+    """Provided, `sorting.SortTuple` compares against bare offsets, one
+    stored at the end coming after all but infinity, and every element's
+    `sortTuple` is one."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, note, sites, sorting, stream
+st = sorting.SortTuple(0, 1.0, 0, 20, 1, 323)
+print(st.shortRepr(), st < 5.0, 5.0 > st, st == 1.0, st <= 1.0, st != 1.0)
+print(st.modify(atEnd=1, isNotGrace=0).shortRepr(), st.modify(offset=2.0).offset)
+print(sorting.ZeroSortTupleLow)
+print(st.add(st).shortRepr(), st.sub(st).shortRepr())
+try:
+    st.add((0, 1.0, 0, 20, 1, 323))
+except sorting.SortingException as error:
+    print(error)
+s = stream.Stream()
+n = note.Note()
+s.insert(4, n)
+print(type(n.sortTuple()) is sorting.SortTuple, n.sortTuple().offset)
+barline = bar.Barline('double')
+s.storeAtEnd(barline)
+at_end = barline.sortTuple(s)
+print(at_end.atEnd, at_end.classSortOrder, at_end > 999999, at_end == float('inf'))
+print(n.sortTuple() < at_end, s.sortTuple().classSortOrder)
+alone = note.Note()
+alone.offset = 30
+elsewhere = stream.Stream()
+print(alone.sortTuple(elsewhere).shortRepr())
+try:
+    alone.sortTuple(elsewhere, raiseExceptionOnMiss=True)
+except sites.SitesException:
+    print('not stored')
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "1.0 <0.20.323> True True True True False",
+        "End <0.20.[Grace].323> 2.0",
+        "SortTuple(atEnd=0, offset=0.0, priority=-inf, classSortOrder=0, "
+        "isNotGrace=1, insertIndex=0)",
+        "2.0 <0.40.646> 0.0 <0.0.0>",
+        "Cannot add attributes from a different class",
+        "True 4.0",
+        "1 -5 True True",
+        "True -20",
+        "30.0 <0.20.0>",
+        "not stored",
+    ]
+
+
+def test_provided_stream_status_reports_on_its_stream(tmp_path):
+    """Provided, a stream's `streamStatus` serves it, works out what it
+    is not told, and is copied with what it knows to serve the copy."""
+    code = """
+import copy
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream
+from music21.stream import streamStatus
+s = stream.Stream()
+print(type(s.streamStatus) is streamStatus.StreamStatus, s.streamStatus.client is s)
+print(s.streamStatus.haveTupletBracketsBeenMade(), s.streamStatus.tuplets)
+s.append(note.Note(quarterLength=1/3))
+print(s.streamStatus.haveTupletBracketsBeenMade())
+s.notes[0].duration.tuplets[0].type = 'start'
+print(s.streamStatus.haveTupletBracketsBeenMade(), s.streamStatus.haveAccidentalsBeenMade())
+print(copy.deepcopy(s.streamStatus).client)
+m = stream.Measure()
+first = note.Note('D4', type='eighth')
+second = note.Note('D4', type='eighth')
+m.append([first, second])
+print(m.streamStatus.haveBeamsBeenMade())
+first.beams.append('start')
+second.beams.append('stop')
+print(m.streamStatus.haveBeamsBeenMade())
+m.streamStatus.beams = False
+copied = copy.deepcopy(m)
+print(copied.streamStatus.client is copied, copied.streamStatus.beams)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True",
+        "None True",
+        "False",
+        "True False",
+        "None",
+        "False",
+        "True",
+        "True False",
+    ]
+
+
 def test_provided_base_has_split_tuple_and_class_sort_order(tmp_path):
     """Provided, `base._SplitTuple` is a tuple whose equality and hash
     take its spanners in, and `Music21Object.classSortOrder` is 20."""
@@ -10646,4 +10774,34 @@ print(base.Music21Object.classSortOrder)
         "False True",
         "False <class 'music21.base._SplitTuple'>",
         "20",
+    ]
+
+
+def test_provided_offset_iterator_groups_by_offset(tmp_path):
+    """Provided, `stream.iterator.OffsetIterator` hands out the elements
+    standing together at each offset, filtered ones too."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import clef, note, stream
+from music21.stream.iterator import OffsetIterator
+s = stream.Stream()
+for offset, name in ((0, 'C'), (0, 'D'), (1, 'E'), (2, 'F')):
+    s.insert(offset, note.Note(name))
+s.insert(2, clef.BassClef())
+grouped = OffsetIterator(s)
+print(list(grouped))
+print(list(grouped.notes))
+print(list(grouped.getElementsByClass(clef.Clef)), type(grouped.notes).__name__)
+print(grouped, isinstance(grouped, stream.iterator.StreamIterator))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[[<music21.note.Note C>, <music21.note.Note D>], [<music21.note.Note E>], "
+        "[<music21.clef.BassClef>, <music21.note.Note F>]]",
+        "[[<music21.note.Note C>, <music21.note.Note D>], [<music21.note.Note E>], "
+        "[<music21.note.Note F>]]",
+        "[[<music21.clef.BassClef>]] OffsetIterator",
+        "<music21.stream.iterator.OffsetIterator for Stream> True",
     ]

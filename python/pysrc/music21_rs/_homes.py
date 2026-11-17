@@ -298,7 +298,10 @@ ALSO = {
         'OffsetSpecial',
         'Sites',
         'SitesException',
+        'SortTuple',
         'Style',
+        'ZeroSortTupleHigh',
+        'ZeroSortTupleLow',
         'opFrac',
     ),
     'music21.beam': (
@@ -413,6 +416,7 @@ ALSO = {
     ),
     'music21.layout': (
         'GatherSpanners',
+        'StaffType',
     ),
     'music21.metadata': (
         'Contributor',
@@ -507,6 +511,9 @@ ALSO = {
         'ToneRow',
         'pcToToneRow',
     ),
+    'music21.sorting': (
+        'OffsetQL',
+    ),
     'music21.spanner': (
         'OffsetQL',
         'opFrac',
@@ -519,11 +526,14 @@ ALSO = {
     'music21.stream.base': (
         'ChangedM21ObjType',
         'GatherSpanners',
+        'GivenElementsBehavior',
         'ImmutableStreamException',
         'OffsetQL',
         'OffsetQLIn',
         'OffsetQLSpecial',
         'OffsetSpecial',
+        'RecursionType',
+        'ShowNumber',
         'StreamException',
         'StreamType',
         'opFrac',
@@ -538,6 +548,9 @@ ALSO = {
         'StreamException',
         'StreamIterator',
         'opFrac',
+    ),
+    'music21.stream.enums': (
+        'StrEnum',
     ),
     'music21.stream.filters': (
         'Music21Exception',
@@ -558,6 +571,10 @@ ALSO = {
         'StreamType',
         'opFrac',
     ),
+    'music21.stream.streamStatus': (
+        'SlottedObjectMixin',
+        'defaultDeepcopy',
+    ),
     'music21.style': (
         'ProtoM21Object',
     ),
@@ -571,6 +588,9 @@ ALSO = {
     'music21.tree.verticality': (
         'OffsetQL',
         'OffsetQLIn',
+    ),
+    'music21.variant': (
+        'GivenElementsBehavior',
     ),
     'music21.voiceLeading': (
         'Key',

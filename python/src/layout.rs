@@ -772,6 +772,19 @@ impl StaffLayout {
         self.inner.staff_lines = value;
     }
 
+    /// What the staff is for: music21's `staffType`, a member of
+    /// `stream.enums.StaffType`.
+    #[getter]
+    fn staffType<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        crate::streamenums::staff_type(py, self.inner.staff_type.as_str())
+    }
+
+    #[setter]
+    fn set_staffType(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.staff_type = read_staff_type(value)?;
+        Ok(())
+    }
+
     /// Whether it is hidden, or nothing to inherit whatever the part says.
     #[getter]
     fn hidden(&self) -> Option<bool> {
