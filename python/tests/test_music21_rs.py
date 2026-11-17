@@ -10730,3 +10730,33 @@ print(repr(four), meter.core.getMeterSequence('4/4', 4) is four)
         "<music21.meter.core.MeterTerminal 1/4> True False",
         "<music21.meter.core.MeterSequence {1/4+1/4+1/4+1/4}> True",
     ]
+
+
+def test_a_staff_group_reads_its_symbol_and_barring():
+    """A `StaffGroup` spans the parts given, takes its abbreviation as its
+    name where it has none, and reads its symbol and barring as music21
+    does, refusing what music21 refuses."""
+    p1, p2 = m.Part(), m.Part()
+    group = m.StaffGroup([p1, p2], abbreviation="Mba.", symbol="Brace")
+    assert group.name == "Mba." and group.abbreviation == "Mba."
+    assert group.symbol == "brace" and group.barTogether is True
+    assert len(group.getSpannedElements()) == 2
+    group.barTogether = "no"
+    assert group.barTogether is False
+    group.barTogether = "mensurstrich"
+    assert group.barTogether == "Mensurstrich"
+    group.barTogether = None
+    assert group.barTogether == "Mensurstrich"
+    group.symbol = "none"
+    assert group.symbol is None
+    with pytest.raises(m.StaffGroupException, match="the symbol value Wavy is not acceptable"):
+        group.symbol = "Wavy"
+    with pytest.raises(m.StaffGroupException, match="the bar together value maybe"):
+        group.barTogether = "maybe"
+    assert issubclass(m.StaffGroupException, m.SpannerException)
+
+
+def test_a_staff_group_keeps_the_barring_it_was_built_with():
+    """music21's constructor keeps `barTogether` unread, `None` and all."""
+    assert m.StaffGroup(barTogether="yes").barTogether == "yes"
+    assert m.StaffGroup(barTogether=None).barTogether is None

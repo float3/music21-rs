@@ -1751,6 +1751,11 @@ exceptions![
         layout::LayoutException,
         Some("music21.layout")
     ),
+    (
+        "StaffGroupException",
+        layout::StaffGroupException,
+        Some("music21.layout")
+    ),
     ("TextException", text::TextException, Some("music21.text")),
     (
         "SearchModuleException",

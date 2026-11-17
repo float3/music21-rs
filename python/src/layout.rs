@@ -1003,8 +1003,185 @@ pub(crate) fn music21_staff_group<'py>(
     Ok(made)
 }
 
+pyo3::create_exception!(
+    music21_rs_facade,
+    StaffGroupException,
+    crate::spanner::SpannerException
+);
+
+/// music21's `layout.StaffGroup`: parts shown together under a bracket, a
+/// brace or another symbol, and perhaps one name. It is a `Spanner` over
+/// the parts.
+///
+/// `name` and `abbreviation` are plain attributes, as music21's are; the
+/// symbol and the barring are checked as they are written.
+#[pyclass(
+    name = "StaffGroup",
+    module = "music21.layout",
+    extends = crate::spanner::Spanner,
+    subclass
+)]
+pub struct StaffGroup {
+    /// The symbol, checked by the crate's group.
+    group: music21::StaffGroup,
+    /// music21's `_barTogether`: as the constructor was given it, or as
+    /// the setter read it.
+    bar_together: Barring,
+}
+
+/// What music21 keeps as `_barTogether`: the setter's `True`, `False` or
+/// `'Mensurstrich'`, or whatever word or nothing the constructor was given,
+/// which it keeps unread.
+enum Barring {
+    Flag(bool),
+    Word(String),
+    Unset,
+}
+
+impl Barring {
+    /// What the constructor was given, kept as given.
+    fn given(value: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if value.is_none() {
+            return Ok(Self::Unset);
+        }
+        if let Ok(word) = value.extract::<String>() {
+            return Ok(Self::Word(word));
+        }
+        Ok(Self::Flag(value.is_truthy()?))
+    }
+
+    fn object(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(match self {
+            Self::Flag(flag) => flag.into_pyobject(py)?.to_owned().into_any().unbind(),
+            Self::Word(word) => word.into_pyobject(py)?.into_any().unbind(),
+            Self::Unset => py.None(),
+        })
+    }
+}
+
+#[pymethods]
+impl StaffGroup {
+    /// A group of nothing yet; `__init__` takes the parts.
+    #[new]
+    #[pyo3(signature = (*_spannedElements, **_keywords))]
+    fn new(
+        _spannedElements: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        let plain = crate::spanner::Spanner::of_kind(music21::spanner::SpannerKind::Slur);
+        crate::base::built(plain).add_subclass(Self {
+            group: music21::StaffGroup::new(Vec::new()),
+            bar_together: Barring::Flag(true),
+        })
+    }
+
+    /// The parts are joined by `Spanner.__init__`; the name is the
+    /// abbreviation where there is no name. `barTogether` is read from the
+    /// keywords, since one given as `None` is kept as `None`.
+    #[pyo3(signature = (
+        *spannedElements,
+        name = None,
+        abbreviation = None,
+        symbol = None,
+        **keywords
+    ))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        spannedElements: &Bound<'_, pyo3::types::PyTuple>,
+        name: Option<&Bound<'_, PyAny>>,
+        abbreviation: Option<&Bound<'_, PyAny>>,
+        symbol: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let keywords = match keywords {
+            Some(keywords) => keywords.copy()?,
+            None => PyDict::new(py),
+        };
+        let barTogether = keywords.get_item("barTogether")?;
+        if barTogether.is_some() {
+            keywords.del_item("barTogether")?;
+        }
+        let mut arguments = vec![slf.clone().into_any()];
+        arguments.extend(spannedElements.iter());
+        py.get_type::<crate::spanner::Spanner>()
+            .getattr("__init__")?
+            .call(pyo3::types::PyTuple::new(py, arguments)?, Some(&keywords))?;
+        let abbreviation = abbreviation
+            .cloned()
+            .unwrap_or_else(|| py.None().into_bound(py));
+        let name = match name.filter(|name| name.is_truthy().unwrap_or(false)) {
+            Some(name) => name.clone(),
+            None => abbreviation.clone(),
+        };
+        slf.setattr("name", name)?;
+        slf.setattr("abbreviation", abbreviation)?;
+        Self::set_symbol(&mut slf.borrow_mut(), symbol)?;
+        if let Some(given) = barTogether {
+            slf.borrow_mut().bar_together = Barring::given(&given)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the barlines run through the group: `True`, `False`, or
+    /// `'Mensurstrich'`, between the staves only. `'yes'` and `'no'` are
+    /// read as `True` and `False`, and `None` changes nothing.
+    #[getter]
+    fn get_barTogether(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.bar_together.object(py)
+    }
+
+    #[setter]
+    fn set_barTogether(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_none() {
+            return Ok(());
+        }
+        let read = match value.extract::<String>() {
+            Ok(word) => music21::BarTogether::from_word(&word),
+            // `True` and `False`, and the numbers equal to them.
+            Err(_) if value.eq(true)? => Some(music21::BarTogether::Yes),
+            Err(_) if value.eq(false)? => Some(music21::BarTogether::No),
+            Err(_) => None,
+        };
+        self.bar_together = match read {
+            Some(music21::BarTogether::Yes) => Barring::Flag(true),
+            Some(music21::BarTogether::No) => Barring::Flag(false),
+            Some(music21::BarTogether::Mensurstrich) => Barring::Word("Mensurstrich".to_string()),
+            None => {
+                return Err(StaffGroupException::new_err(format!(
+                    "the bar together value {} is not acceptable",
+                    value.str()?
+                )));
+            }
+        };
+        Ok(())
+    }
+
+    /// What the group is drawn with: `'bracket'`, `'line'`, `'brace'` or
+    /// `'square'`, in any case, or `None`.
+    #[getter]
+    fn get_symbol(&self) -> Option<&str> {
+        self.group.symbol()
+    }
+
+    #[setter]
+    fn set_symbol(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let written = match value.filter(|value| !value.is_none()) {
+            Some(value) => Some(value.str()?.to_string()),
+            None => None,
+        };
+        self.group.set_symbol(written.as_deref()).map_err(|_| {
+            StaffGroupException::new_err(format!(
+                "the symbol value {} is not acceptable",
+                written.as_deref().unwrap_or("None")
+            ))
+        })
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LayoutBase>()?;
+    m.add_class::<StaffGroup>()?;
     m.add_class::<ScoreLayout>()?;
     m.add_class::<PageLayout>()?;
     m.add_class::<SystemLayout>()?;
