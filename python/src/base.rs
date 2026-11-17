@@ -42,6 +42,13 @@ pub struct Music21Object {
     /// music21's `derivation`: what this was made from, made on first
     /// asking or by what made it.
     derivation: Option<Py<PyAny>>,
+    /// music21's `_style`: made of the class's `_styleClass` on first
+    /// asking, where the class keeps no style of its own.
+    style: Option<Py<PyAny>>,
+    /// music21's `_duration`, where the class keeps no duration of its
+    /// own: a `Duration` of nothing, made on first asking, until one is
+    /// set.
+    duration: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -54,16 +61,29 @@ impl Music21Object {
         _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        let groups = match keywords {
-            Some(keywords) => keywords
-                .get_item("groups")?
-                .filter(|given| !given.is_none())
-                .map(Bound::unbind),
-            None => None,
+        let given = |name: &str| -> PyResult<Option<Bound<'_, PyAny>>> {
+            Ok(match keywords {
+                Some(keywords) => keywords.get_item(name)?.filter(|value| !value.is_none()),
+                None => None,
+            })
         };
+        let groups = given("groups")?.map(Bound::unbind);
+        let mut duration = given("duration")?.map(Bound::unbind);
+        if let Some(length) = given("quarterLength")? {
+            let py = length.py();
+            let made = crate::duration::Duration::object(
+                py,
+                music21::Duration::new(0.0)
+                    .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?,
+            )?;
+            made.bind(py).setattr("quarterLength", length)?;
+            duration = Some(made);
+        }
         Ok(PyClassInitializer::from(ProtoM21Object).add_subclass(Self {
             groups,
             derivation: None,
+            style: None,
+            duration,
         }))
     }
 
@@ -112,17 +132,46 @@ impl Music21Object {
         self.derivation = value;
     }
 
+    /// music21's `style`: how this is drawn, an object of the class's
+    /// `_styleClass` made the first time it is asked for, and the same
+    /// object after that.
+    #[getter]
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
+        }
+        let made = style_class(slf.as_any())?.call0()?.unbind();
+        slf.borrow_mut().style = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_style(&mut self, value: Py<PyAny>) {
+        self.style = Some(value);
+    }
+
+    /// Whether a `style` has been made yet.
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.style.is_some()
+    }
+
     fn __traverse__(
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
         visit.call(&self.groups)?;
-        visit.call(&self.derivation)
+        visit.call(&self.derivation)?;
+        visit.call(&self.style)?;
+        visit.call(&self.duration)
     }
 
     fn __clear__(&mut self) {
         self.groups = None;
         self.derivation = None;
+        self.style = None;
+        self.duration = None;
     }
 }
 
@@ -398,6 +447,118 @@ pub(crate) fn carry_groups(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -
     Ok(())
 }
 
+/// A copy's own copies of the style and the duration kept here, as
+/// music21's deep copy makes them; a class keeping either elsewhere
+/// copies it itself.
+fn carry_style(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
+    let (Ok(source), Ok(copy)) = (source.cast::<Music21Object>(), copy.cast::<Music21Object>())
+    else {
+        return Ok(());
+    };
+    let py = source.py();
+    let deep = |held: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+        match held {
+            Some(held) => Ok(Some(
+                py.import("copy")?
+                    .call_method1("deepcopy", (held.bind(py),))?
+                    .unbind(),
+            )),
+            None => Ok(None),
+        }
+    };
+    let (style, duration) = {
+        let source = source.borrow();
+        (deep(&source.style)?, deep(&source.duration)?)
+    };
+    if let Some(style) = style {
+        copy.borrow_mut().style = Some(style);
+    }
+    if let Some(duration) = duration {
+        crate::duration::adopt_duration(py, &duration, copy.as_any())?;
+        copy.borrow_mut().duration = Some(duration);
+    }
+    Ok(())
+}
+
+/// music21's `Music21Object.duration`, read: the duration set, or a
+/// `Duration` of nothing made the first time it is asked for.
+#[pyfunction]
+fn duration_of(slf: &Bound<'_, Music21Object>) -> PyResult<Py<PyAny>> {
+    let py = slf.py();
+    if let Some(duration) = &slf.borrow().duration {
+        return Ok(duration.clone_ref(py));
+    }
+    let empty = music21::Duration::new(0.0)
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    let made = crate::duration::Duration::object(py, empty)?;
+    slf.borrow_mut().duration = Some(made.clone_ref(py));
+    Ok(made)
+}
+
+/// music21's `Music21Object.duration`, written: the old duration let go,
+/// the new one told what holds it, and the sites told of the change where
+/// there was a duration before. Anything with no `quarterLength` is no
+/// duration.
+#[pyfunction]
+fn set_duration_of(slf: &Bound<'_, Music21Object>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let py = slf.py();
+    let old = slf.borrow().duration.as_ref().map(|old| old.clone_ref(py));
+    if let Some(old) = &old {
+        let old = old.bind(py);
+        if !crate::duration::is_frozen(old) {
+            old.setattr("client", py.None())?;
+        }
+    }
+    let Ok(length) = value.getattr("quarterLength") else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "this must be a Duration object, not {}",
+            value.str()?
+        )));
+    };
+    let value = value.clone().unbind();
+    slf.borrow_mut().duration = Some(value.clone_ref(py));
+    crate::duration::adopt_duration(py, &value, slf.as_any())?;
+    if old.is_some() {
+        crate::duration::told_sites(slf.as_any(), &length)?;
+    }
+    Ok(())
+}
+
+/// The class an object's `style` is made of: the `_styleClass` its class
+/// names, as a Python subclass of music21's names it, or else the one
+/// music21 gives the wheel's class -- a `TextStyle` for an expression, a
+/// plain `Style` for anything else.
+///
+/// Not a class attribute here, since the wheel reads one as a class's own
+/// choice: a note with none of its own is drawn with a note's style.
+fn style_class<'py>(object: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py = object.py();
+    if let Ok(named) = object.get_type().getattr("_styleClass") {
+        return Ok(named);
+    }
+    if object.is_instance_of::<crate::expressions::Expression>() {
+        return Ok(py.get_type::<crate::style::TextStyle>().into_any());
+    }
+    Ok(py.get_type::<crate::notation::Style>().into_any())
+}
+
+/// Gives `Music21Object` its `duration`, once the module is made.
+///
+/// The `duration` is a Python `property`, as music21's is, rather than an
+/// attribute of the class's own: music21's `Chord` takes the getter of the
+/// one it inherits and puts its own beside the setter.
+pub(crate) fn add_late_members(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let duration = py.import("builtins")?.getattr("property")?.call1((
+        wrap_pyfunction!(duration_of, m)?,
+        wrap_pyfunction!(set_duration_of, m)?,
+        py.None(),
+        "Get and set the duration of this object as a Duration object.",
+    ))?;
+    m.getattr("Music21Object")?.setattr("duration", duration)?;
+    Ok(())
+}
+
 /// The derivation an object has, without making one for an object that has
 /// none: the package's own, or music21's `_derivation`.
 pub(crate) fn derivation_held<'py>(object: &Bound<'py, PyAny>) -> Option<Bound<'py, PyAny>> {
@@ -417,6 +578,7 @@ pub(crate) fn derivation_held<'py>(object: &Bound<'py, PyAny>) -> Option<Bound<'
 /// `deepcopy` does: a derivation via `'__deepcopy__'`, and the groups.
 pub(crate) fn copied_from(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
     carry_groups(source, copy)?;
+    carry_style(source, copy)?;
     crate::derived_from(copy, source, "__deepcopy__")
 }
 

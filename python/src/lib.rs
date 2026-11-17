@@ -81,6 +81,7 @@ pub mod brailletext;
 pub mod brailletranslate;
 pub mod chord;
 pub mod chordtables;
+mod chordtools;
 pub mod clef;
 pub mod clercqtemperley;
 mod common;
@@ -98,6 +99,7 @@ pub mod environment;
 pub mod exceptions21;
 pub mod expressions;
 pub mod extractors;
+mod fbchecker;
 pub mod fbrules;
 pub mod features;
 pub mod figuredbass;
@@ -120,6 +122,7 @@ pub mod makenotation;
 pub mod metadata;
 pub mod meter;
 pub mod midibase;
+mod metertools;
 pub mod midipercussion;
 pub mod naturallanguage;
 pub mod neoriemannian;
@@ -1430,6 +1433,17 @@ def make_class(facade, original):
                 if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
                     namespace.setdefault(name, getattr(original, name))
                 break
+    # Likewise the wheel's `Music21Object`, which keeps a style and a
+    # duration for a class with none of its own: installed, music21's class
+    # keeps them, in the `_style` and `_duration` its own code writes.
+    for name in ('duration', 'style', 'hasStyleInformation'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if (ancestor.__name__ == 'Music21Object'
+                        and ancestor in _facades
+                        and hasattr(original, name)):
+                    namespace.setdefault(name, getattr(original, name))
+                break
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
@@ -1753,6 +1767,11 @@ exceptions![
     (
         "LayoutException",
         layout::LayoutException,
+        Some("music21.layout")
+    ),
+    (
+        "StaffGroupException",
+        layout::StaffGroupException,
         Some("music21.layout")
     ),
     ("TextException", text::TextException, Some("music21.text")),
@@ -2272,6 +2291,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     derivation::register(m)?;
     // Once every class is made: it gives some a second base.
     base::add_bases(m)?;
+    base::add_late_members(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
@@ -2297,7 +2317,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 18] = [
+const BUILT_MODULES: [&str; 21] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2316,6 +2336,9 @@ const BUILT_MODULES: [&str; 18] = [
     "music21.stream.enums",
     "music21.stream.streamStatus",
     "music21.sorting",
+    "music21.chord.tools",
+    "music21.meter.tools",
+    "music21.figuredBass.checker",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2342,6 +2365,9 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.stream.enums" => streamenums::module(py),
         "music21.stream.streamStatus" => streamstatus::module(py),
         "music21.sorting" => sorting::module(py),
+        "music21.chord.tools" => chordtools::module(py),
+        "music21.meter.tools" => metertools::module(py),
+        "music21.figuredBass.checker" => fbchecker::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

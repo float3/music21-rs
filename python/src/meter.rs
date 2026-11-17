@@ -2629,8 +2629,55 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
     )
 }
 
+/// music21's `getMeterTerminal`: the one terminal of this ratio and
+/// weight, the same object each time it is asked for.
+#[pyfunction]
+#[pyo3(name = "getMeterTerminal", signature = (numerator, denominator, weight = 1.0))]
+fn getMeterTerminal(
+    py: Python<'_>,
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+    weight: FloatType,
+) -> PyResult<Py<PyAny>> {
+    let span = RsMeterTerminal::new(numerator, denominator).map_err(meter_error)?;
+    terminal_object(py, span.with_weight(weight))
+}
+
+/// The sequences handed out by `getMeterSequence` so far, each its own
+/// key, so an equal one asked for again is the one handed out before.
+static SEQUENCES: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+/// How many sequences are kept, as music21 keeps its 4096 most recent.
+const SEQUENCES_KEPT: usize = 4096;
+
+/// music21's `getMeterSequence`: a sequence made as `MeterSequence(value,
+/// partitionRequest)` makes one, the same object for the same sequence.
+#[pyfunction]
+#[pyo3(name = "getMeterSequence", signature = (value = None, partitionRequest = None))]
+fn getMeterSequence<'py>(
+    py: Python<'py>,
+    value: Option<&Bound<'py, PyAny>>,
+    partitionRequest: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let class = crate::installed_class(py, "music21.meter.core", "MeterSequence")
+        .unwrap_or_else(|| py.get_type::<MeterSequence>().into_any());
+    let built = class.call1((value, partitionRequest))?;
+    let cache = SEQUENCES.get_or_init(py, || PyDict::new(py).unbind());
+    let cache = cache.bind(py);
+    if let Some(found) = cache.get_item(&built)? {
+        return Ok(found);
+    }
+    if cache.len() >= SEQUENCES_KEPT {
+        cache.clear();
+    }
+    cache.set_item(&built, &built)?;
+    Ok(built)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bestTimeSignature, m)?)?;
+    m.add_function(wrap_pyfunction!(getMeterTerminal, m)?)?;
+    m.add_function(wrap_pyfunction!(getMeterSequence, m)?)?;
     m.add_class::<TimeSignatureBase>()?;
     m.add_class::<TimeSignature>()?;
     m.add_class::<MeterTerminal>()?;

@@ -10926,3 +10926,200 @@ print(grouped, isinstance(grouped, stream.iterator.StreamIterator))
         "[[<music21.clef.BassClef>]] OffsetIterator",
         "<music21.stream.iterator.OffsetIterator for Stream> True",
     ]
+
+
+def test_provided_chord_tools_names_every_chord_step(tmp_path):
+    """Provided, `chord.tools.allChordSteps` keys each step to the first of
+    the chord's own pitches on it, in their order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import chord
+ch = chord.Chord('C4 E4 G4 B4 C5 D5')
+steps = chord.tools.allChordSteps(ch)
+print(steps)
+print(steps[1] is ch.pitches[0], steps[2] is ch.pitches[5])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{1: <music21.pitch.Pitch C4>, 3: <music21.pitch.Pitch E4>, "
+        "5: <music21.pitch.Pitch G4>, 7: <music21.pitch.Pitch B4>, "
+        "2: <music21.pitch.Pitch D5>}",
+        "True True",
+    ]
+
+
+def test_provided_meter_tools_read_meters_as_music21_does(tmp_path):
+    """Provided, `meter.tools` reads meters written as text, refusing what
+    music21 refuses with its exceptions, and divides them in its order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import exceptions21
+from music21.meter import tools
+print(tools.slashToTuple('slow 6/8'))
+print(tools.slashCompoundToFraction('5/8+2/4+x'))
+print(tools.slashMixedToFraction('3+2+5/8+3/4'))
+for bad in ('3+2+5/8+3/4+2+1+4', '3.0/4.0'):
+    try:
+        tools.slashMixedToFraction(bad)
+    except exceptions21.Music21Exception as error:
+        print(type(error).__name__, error)
+print(tools.fractionToSlashMixed(((3, 8), (2, 8), (3, 4))))
+print(tools.fractionSum(((1, 13), (2, 17))), tools.fractionSum(()))
+print(tools.proportionToFraction(0.83333))
+print(tools.divisionOptionsAlgo(3, 128), tools.divisionOptionsPreset(5, 8))
+print(tools.divisionOptionsFractionsDownward(12, 16), tools.validDenominators[-1])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "MeterTerminalTuple(numerator=6, denominator=8, division=<MeterDivision.SLOW>)",
+        "((5, 8), (2, 4))",
+        "(((3, 8), (2, 8), (5, 8), (3, 4)), True)",
+        "MeterException cannot match denominator to numerator in: 3+2+5/8+3/4+2+1+4",
+        'TimeSignatureException Cannot create time signature from "3.0/4.0"',
+        "(('3+2', 8), ('3', 4))",
+        "(43, 221) (0, 1)",
+        "(5, 6)",
+        "(('1/128', '1/128', '1/128'), ('3/128',)) "
+        "(('2/8', '2/8', '1/8'), ('2/8', '1/8', '2/8'))",
+        "('6/8', '3/4') 128",
+    ]
+
+
+def test_a_frozen_duration_cannot_change():
+    """A `FrozenDuration` refuses every write, hashes by its value, is its
+    own copy, and thaws into a `Duration` that can change."""
+    import copy
+
+    fd = m.FrozenDuration(type="half", dots=2)
+    assert fd.quarterLength == 3.5
+    assert repr(fd) == "<music21.duration.FrozenDuration 3.5>"
+    with pytest.raises(TypeError, match="This FrozenDuration instance is immutable."):
+        fd.dots = 1
+    with pytest.raises(TypeError, match="immutable"):
+        fd.splitDotGroups(inPlace=True)
+    assert fd.dots == 2
+    assert copy.deepcopy(fd) is fd
+    assert copy.copy(fd) is fd
+    assert hash(fd) == hash(m.FrozenDuration(type="half", dots=2))
+    assert len({fd, m.FrozenDuration(type="half", dots=2)}) == 1
+    assert fd == m.Duration(3.5)
+
+    thawed = fd.unfreeze()
+    assert type(thawed) is m.Duration
+    thawed.dots = 0
+    assert (thawed.quarterLength, fd.quarterLength) == (2.0, 3.5)
+    halved = m.FrozenDuration(quarterLength=1.0).augmentOrDiminish(0.5)
+    assert type(halved) is m.Duration and halved.quarterLength == 0.5
+
+
+def test_provided_meter_core_shares_its_terminals_and_sequences(tmp_path):
+    """Provided, `meter.core` hands out one terminal per ratio and weight
+    and one sequence per sequence."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import meter
+quarter = meter.core.getMeterTerminal(1, 4)
+print(repr(quarter), meter.core.getMeterTerminal(1, 4) is quarter,
+      meter.core.getMeterTerminal(1, 4, weight=0.5) is quarter)
+four = meter.core.getMeterSequence('4/4', 4)
+print(repr(four), meter.core.getMeterSequence('4/4', 4) is four)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.meter.core.MeterTerminal 1/4> True False",
+        "<music21.meter.core.MeterSequence {1/4+1/4+1/4+1/4}> True",
+    ]
+
+
+def test_a_staff_group_reads_its_symbol_and_barring():
+    """A `StaffGroup` spans the parts given, takes its abbreviation as its
+    name where it has none, and reads its symbol and barring as music21
+    does, refusing what music21 refuses."""
+    p1, p2 = m.Part(), m.Part()
+    group = m.StaffGroup([p1, p2], abbreviation="Mba.", symbol="Brace")
+    assert group.name == "Mba." and group.abbreviation == "Mba."
+    assert group.symbol == "brace" and group.barTogether is True
+    assert len(group.getSpannedElements()) == 2
+    group.barTogether = "no"
+    assert group.barTogether is False
+    group.barTogether = "mensurstrich"
+    assert group.barTogether == "Mensurstrich"
+    group.barTogether = None
+    assert group.barTogether == "Mensurstrich"
+    group.symbol = "none"
+    assert group.symbol is None
+    with pytest.raises(m.StaffGroupException, match="the symbol value Wavy is not acceptable"):
+        group.symbol = "Wavy"
+    with pytest.raises(m.StaffGroupException, match="the bar together value maybe"):
+        group.barTogether = "maybe"
+    assert issubclass(m.StaffGroupException, m.SpannerException)
+
+
+def test_a_staff_group_keeps_the_barring_it_was_built_with():
+    """music21's constructor keeps `barTogether` unread, `None` and all."""
+    assert m.StaffGroup(barTogether="yes").barTogether == "yes"
+    assert m.StaffGroup(barTogether=None).barTogether is None
+
+
+def test_every_music21_object_has_a_style_and_a_duration():
+    """A `Music21Object` with no style or duration of its own makes music21's
+    on first asking: a style of its `_styleClass`, a duration of nothing."""
+    plain = m.Music21Object()
+    assert not plain.hasStyleInformation
+    assert type(plain.style) is m.Style and plain.hasStyleInformation
+    assert plain.duration.quarterLength == 0.0
+    assert plain.duration is plain.duration
+    assert type(m.TextExpression("x").style).__name__ == "TextStyle"
+
+    held = m.Duration(2.0)
+    plain.duration = held
+    assert plain.duration is held and held.client is plain
+    with pytest.raises(TypeError, match="this must be a Duration object, not 3"):
+        plain.duration = 3
+    assert m.Music21Object(quarterLength=1.5).duration.quarterLength == 1.5
+    # music21's `Chord` puts its own getter beside the setter it inherits.
+    assert isinstance(m.ChordBase.duration, property)
+
+
+def test_provided_checker_names_the_parts_breaking_a_rule(tmp_path):
+    """Provided, `figuredBass.checker` names the parts breaking each rule,
+    passing over resting parts, and keeps what it decides in the tables it
+    shares with `figuredBass.possibility`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from fractions import Fraction
+from music21 import note, pitch, stream
+from music21.figuredBass import checker, possibility
+P = pitch.Pitch
+print(checker.voiceCrossing((P('C5'), P('G5'), P('E4'))))
+print(checker.parallelOctaves((P('C4'), P('G3'), P('C3')), (P('D4'), P('A3'), P('D3'))))
+print(checker.hiddenFifths((P('E5'), P('C3')), (P('A5'), P('D3'))))
+possibility.parallelFifthsTable.clear()
+a, b = (P('B4'), P('G3'), P('C3')), (P('A4'), P('A3'), P('D3'))
+print(checker.parallelFifths(a, b), list(possibility.parallelFifthsTable.values()))
+rest = checker.generalNoteToPitch(note.Rest())
+print(checker._isRest(rest), checker.voiceCrossing((P('C4'), rest, P('G4'))))
+part = stream.Part()
+for unused in range(3):
+    part.append(note.Note('C3', quarterLength=Fraction(1, 3)))
+part.append(note.Note('F3'))
+print(sorted(checker.createOffsetMapping(part)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(1, 2)]",
+        "[(1, 3)]",
+        "[(1, 2)]",
+        "[(2, 3)] [True]",
+        "True [(1, 3)]",
+        "[(0.0, Fraction(1, 3)), (Fraction(1, 3), Fraction(2, 3)), "
+        "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
+    ]

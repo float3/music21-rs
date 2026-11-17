@@ -1318,6 +1318,18 @@ mod tests {
     }
 
     #[test]
+    fn every_chord_step_is_its_first_pitch_in_order() {
+        // music21's own example: the ninth's D5 reads as step 2, and the
+        // doubled C5 leaves step 1 with C4.
+        let chord = Chord::new("C4 E4 G4 B4 C5 D5").unwrap();
+        let root = chord.root().unwrap().clone();
+        assert_eq!(
+            chord.all_chord_steps(&root),
+            [(1, 0), (3, 1), (5, 2), (7, 3), (2, 5)]
+        );
+    }
+
+    #[test]
     fn forte_and_interval_vector_constructors_match_music21() {
         let names = |chord: &Chord| chord.pitch_names();
         assert_eq!(

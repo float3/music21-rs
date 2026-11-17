@@ -14,6 +14,7 @@
 //! against upstream by the `meter_parity` fixture.
 
 pub mod sequence;
+pub mod tools;
 
 pub use sequence::{MeterTerminal, OffsetAlign};
 

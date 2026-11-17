@@ -654,6 +654,25 @@ pub enum BarTogether {
 }
 
 impl BarTogether {
+    /// The setting a word names, as music21's `barTogether` setter reads
+    /// it: `yes`, `no`, or `Mensurstrich` in any case.
+    ///
+    /// ```
+    /// use music21::stream::BarTogether;
+    ///
+    /// assert_eq!(BarTogether::from_word("mensurstrich"), Some(BarTogether::Mensurstrich));
+    /// assert_eq!(BarTogether::from_word("Yes"), None);
+    /// ```
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Self> {
+        match word {
+            "yes" => Some(Self::Yes),
+            "no" => Some(Self::No),
+            _ if word.to_lowercase() == "mensurstrich" => Some(Self::Mensurstrich),
+            _ => None,
+        }
+    }
+
     /// The group barline MusicXML writes for it.
     pub fn as_str(self) -> &'static str {
         match self {
