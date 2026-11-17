@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "harte"
-version = "0.13.1"
+version = "0.14.0"
 dependencies = [
  "music21",
  "serde",
@@ -1091,7 +1091,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "music21"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "criterion",
  "fraction",
@@ -1114,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.20.1"
+version = "0.21.0"
 dependencies = [
  "harte",
  "music21",
