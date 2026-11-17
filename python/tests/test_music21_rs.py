@@ -1777,6 +1777,12 @@ def _untraversed(src: pathlib.Path):
 # why no cycle runs through it: Python's collector frees a cycle only where
 # each object in it shows what it holds.
 _UNTRAVERSED = {
+    # RomanText tokens: numbers, text and an open file, none of which
+    # holds the token.
+    "RTChord": "an offset and a length",
+    "RTFile": "an open file and its name",
+    "RTNoChord": "an offset and a length",
+    "RTTagged": "a tag and its text",
     # Tools built over a stream or a score they analyse, search or correct,
     # holding it and their own results; nothing they hold is given a way
     # back to the tool.

@@ -456,6 +456,10 @@ reason = "an alignment over two streams"
 kind = "facade-only"
 reason = "a search over a stream"
 
+[StreamStatus]
+kind = "facade-only"
+reason = "its stream and music21's unread flags; the crate works the known flags out from the stream"
+
 [SubConverter]
 kind = "facade-only"
 reason = "the stream read and the keywords given; the wheel's converter does the reading"

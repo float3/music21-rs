@@ -391,6 +391,11 @@ ALSO = {
     'music21.features.jSymbolic': (
         'Instrument',
     ),
+    'music21.figuredBass.checker': (
+        'OffsetQL',
+        'Possibility',
+        'opFrac',
+    ),
     'music21.figuredBass.realizer': (
         'OffsetQL',
         'Possibility',
