@@ -1205,11 +1205,11 @@ fn sortTuple<'py>(
         Some(site) => Some(site.clone()),
         None => active_site(element),
     };
-    // One of music21's own streams, an installed element standing in it:
-    // music21 knows where.
-    if let Some(site) = &site
-        && site.cast::<Stream>().is_err()
-        && let Ok(base) = crate::real_music21(py, "music21.base")
+    // An installed element is one of music21's own objects, and music21's
+    // streams record where it stands only in music21's sites: music21
+    // knows where.
+    if let Ok(base) = crate::real_music21(py, "music21.base")
+        && element.is_instance(&base.getattr("Music21Object")?)?
     {
         let asked = given.map_or_else(
             || pyo3::types::PyBool::new(py, false).to_owned().into_any(),

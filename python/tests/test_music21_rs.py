@@ -11129,3 +11129,22 @@ print(sorted(checker.createOffsetMapping(part)))
         "[(0.0, Fraction(1, 3)), (Fraction(1, 3), Fraction(2, 3)), "
         "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
     ]
+
+
+def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
+    """Installed, a note music21's own stream holds answers `sortTuple`
+    with the offset it stands at there, as music21's does."""
+    pytest.importorskip("music21.stream")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import note, stream\n"
+        "s = stream.Stream()\n"
+        "n = note.Note()\n"
+        "s.insert(4, n)\n"
+        "print(n.sortTuple().shortRepr(), n.sortTuple() > 3.0)\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split()[0] == "4.0"
+    assert done.stdout.split()[-1] == "True"
