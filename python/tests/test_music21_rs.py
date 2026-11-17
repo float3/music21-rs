@@ -10665,3 +10665,36 @@ print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
         "music21.midi.base cannot putVariableLengthNumber() when number is negative: -1",
         "True",
     ]
+
+
+def test_provided_test_copy_all_copies_each_class_a_module_defines(tmp_path):
+    """Provided, `test.commonTest.testCopyAll` makes each class of the
+    test's module that takes no arguments and copies it, failing the test
+    where a copy fails."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import copy, unittest
+from music21.test.commonTest import testCopyAll
+class Copies:
+    pass
+class Refuses:
+    def __deepcopy__(self, memo):
+        raise ValueError('no')
+class Needs:
+    def __init__(self, x):
+        pass
+class Test(unittest.TestCase):
+    def runTest(self):
+        pass
+case = Test()
+testCopyAll(case, {'Copies': Copies, 'Needs': Needs, '_Refuses': Refuses})
+print('passed')
+try:
+    testCopyAll(case, {'Refuses': Refuses})
+except AssertionError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["passed", "Could not deepcopy obj Refuses: no"]
