@@ -10643,3 +10643,42 @@ print(steps[1] is ch.pitches[0], steps[2] is ch.pitches[5])
         "2: <music21.pitch.Pitch D5>}",
         "True True",
     ]
+
+
+def test_provided_meter_tools_read_meters_as_music21_does(tmp_path):
+    """Provided, `meter.tools` reads meters written as text, refusing what
+    music21 refuses with its exceptions, and divides them in its order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import exceptions21
+from music21.meter import tools
+print(tools.slashToTuple('slow 6/8'))
+print(tools.slashCompoundToFraction('5/8+2/4+x'))
+print(tools.slashMixedToFraction('3+2+5/8+3/4'))
+for bad in ('3+2+5/8+3/4+2+1+4', '3.0/4.0'):
+    try:
+        tools.slashMixedToFraction(bad)
+    except exceptions21.Music21Exception as error:
+        print(type(error).__name__, error)
+print(tools.fractionToSlashMixed(((3, 8), (2, 8), (3, 4))))
+print(tools.fractionSum(((1, 13), (2, 17))), tools.fractionSum(()))
+print(tools.proportionToFraction(0.83333))
+print(tools.divisionOptionsAlgo(3, 128), tools.divisionOptionsPreset(5, 8))
+print(tools.divisionOptionsFractionsDownward(12, 16), tools.validDenominators[-1])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "MeterTerminalTuple(numerator=6, denominator=8, division=<MeterDivision.SLOW>)",
+        "((5, 8), (2, 4))",
+        "(((3, 8), (2, 8), (5, 8), (3, 4)), True)",
+        "MeterException cannot match denominator to numerator in: 3+2+5/8+3/4+2+1+4",
+        'TimeSignatureException Cannot create time signature from "3.0/4.0"',
+        "(('3+2', 8), ('3', 4))",
+        "(43, 221) (0, 1)",
+        "(5, 6)",
+        "(('1/128', '1/128', '1/128'), ('3/128',)) "
+        "(('2/8', '2/8', '1/8'), ('2/8', '1/8', '2/8'))",
+        "('6/8', '3/4') 128",
+    ]
