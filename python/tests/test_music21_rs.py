@@ -10709,3 +10709,24 @@ def test_a_frozen_duration_cannot_change():
     assert (thawed.quarterLength, fd.quarterLength) == (2.0, 3.5)
     halved = m.FrozenDuration(quarterLength=1.0).augmentOrDiminish(0.5)
     assert type(halved) is m.Duration and halved.quarterLength == 0.5
+
+
+def test_provided_meter_core_shares_its_terminals_and_sequences(tmp_path):
+    """Provided, `meter.core` hands out one terminal per ratio and weight
+    and one sequence per sequence."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import meter
+quarter = meter.core.getMeterTerminal(1, 4)
+print(repr(quarter), meter.core.getMeterTerminal(1, 4) is quarter,
+      meter.core.getMeterTerminal(1, 4, weight=0.5) is quarter)
+four = meter.core.getMeterSequence('4/4', 4)
+print(repr(four), meter.core.getMeterSequence('4/4', 4) is four)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.meter.core.MeterTerminal 1/4> True False",
+        "<music21.meter.core.MeterSequence {1/4+1/4+1/4+1/4}> True",
+    ]

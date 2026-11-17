@@ -153,6 +153,10 @@ HOMES = {
     'music21.meter.base': (
         'bestTimeSignature',
     ),
+    'music21.meter.core': (
+        'getMeterSequence',
+        'getMeterTerminal',
+    ),
     'music21.roman': (
         'correctRNAlterationForMinor',
         'correctSuffixForChordQuality',
@@ -289,6 +293,7 @@ ALSO = {
         'DurationException',
         'Editorial',
         'ElementSearch',
+        'FrozenDuration',
         'Music21Exception',
         'OffsetQL',
         'OffsetQLIn',
@@ -436,9 +441,14 @@ ALSO = {
     'music21.meter.base': (
         'MeterDivision',
         'MeterSequence',
+        'getMeterSequence',
+        'getMeterTerminal',
         'opFrac',
+        'proportionToFraction',
+        'slashToTuple',
     ),
     'music21.meter.core': (
+        'FrozenDuration',
         'FrozenObject',
         'MeterException',
         'OffsetQL',
