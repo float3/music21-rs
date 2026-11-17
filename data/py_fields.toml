@@ -352,6 +352,18 @@ reason = "an analysis over a stream"
 kind = "facade-only"
 reason = "two marks and how the change is drawn"
 
+[MidiEvent]
+kind = "facade-only"
+reason = "music21's attributes, any Python object each; the crate reads the type, channel and parameters each time it writes the event's bytes"
+
+[MidiFile]
+kind = "facade-only"
+reason = "music21's open file, format, tracks and ticks; the crate reads them each time it writes the header"
+
+[MidiTrack]
+kind = "facade-only"
+reason = "music21's index, events and data; the crate reads the data into events and writes each event's bytes"
+
 [Music21Object]
 kind = "facade-only"
 reason = "music21's groups and derivation, which no crate value carries"

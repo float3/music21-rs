@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+pub mod base;
 mod score;
 mod write;
 

@@ -10621,3 +10621,47 @@ print(type(data).__name__)
         "registered for it",
         "str",
     ]
+
+
+def test_provided_midi_base_reads_and_writes_a_track(tmp_path):
+    """Provided, `midi.base` reads a track's chunk into delta times and
+    events, writes them back to the same bytes, and reads a file's header
+    and tracks, as music21's does."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import midi
+chunk = (b'MTrk\\x00\\x00\\x00\\x16\\x00\\xff\\x03\\x00\\x00'
+         + b'\\xe0\\x00@\\x00\\x90CZ\\x88\\x00\\x80C\\x00\\x88\\x00\\xff/\\x00')
+mt = midi.MidiTrack(3)
+print(mt.read(chunk), len(mt), mt)
+print(mt.events[3], mt.events[6])
+print(mt.getBytes() == chunk)
+mf = midi.MidiFile()
+mf.tracks = [mt]
+mf.ticksPerQuarterNote = 1024
+read = midi.MidiFile()
+read.readstr(mf.writestr())
+print(read, read.ticksPerQuarterNote, read.tracks[0].events[-1])
+pc = midi.MidiEvent(mt, type=midi.ChannelVoiceMessages.PROGRAM_CHANGE, channel=16)
+print(pc.parseChannelVoiceMessage(bytes([0xCF, 71, 5])), pc, pc.getBytes())
+try:
+    midi.putVariableLengthNumber(-1)
+except midi.MidiException as error:
+    print(type(error).__module__, error)
+print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "b'' 22 <music21.midi.MidiTrack 3 -- 10 events>",
+        "<music21.midi.MidiEvent PITCH_BEND, track=3, channel=1, parameter1=0, parameter2=64> "
+        "<music21.midi.DeltaTime t=1024, track=3>",
+        "True",
+        "<music21.midi.MidiFile 1 track> 1024 "
+        "<music21.midi.MidiEvent END_OF_TRACK, track=0, data=b''>",
+        "b'\\x05' <music21.midi.MidiEvent PROGRAM_CHANGE, track=3, channel=16, data=71> "
+        "b'\\xcfG'",
+        "music21.midi.base cannot putVariableLengthNumber() when number is negative: -1",
+        "True",
+    ]
