@@ -4,8 +4,8 @@
 //! it is open and stops saying it once it is merged or closed. A pull request
 //! closed without merging contributed nothing and leaves the list. A
 //! pull request the contributor has opened on music21 that the list does
-//! not have yet is added, with its title as its description, among the other music21 pull
-//! requests in number order. Issues are never added: an issue can be a
+//! not have yet is added, with its title as its description, among the
+//! other music21 pull requests in number order. Issues are never added: an issue can be a
 //! question rather than a contribution, so which ones belong is left to
 //! whoever edits the list.
 //!
