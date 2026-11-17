@@ -153,10 +153,13 @@ pub mod segment;
 pub mod serial;
 pub mod sieve;
 pub mod sites;
+pub mod sorting;
 pub mod spanner;
 mod spelling;
 pub mod spineparser;
 pub mod stream;
+pub mod streamenums;
+pub mod streamstatus;
 pub mod style;
 pub mod subconverters;
 pub mod tablature;
@@ -2294,7 +2297,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 15] = [
+const BUILT_MODULES: [&str; 18] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2310,6 +2313,9 @@ const BUILT_MODULES: [&str; 15] = [
     "music21.midi.base",
     "music21.test.commonTest",
     "music21.romanText.rtObjects",
+    "music21.stream.enums",
+    "music21.stream.streamStatus",
+    "music21.sorting",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2333,6 +2339,9 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.midi.base" => midibase::module(py),
         "music21.test.commonTest" => commontest::module(py),
         "music21.romanText.rtObjects" => rtobjects::module(py),
+        "music21.stream.enums" => streamenums::module(py),
+        "music21.stream.streamStatus" => streamstatus::module(py),
+        "music21.sorting" => sorting::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

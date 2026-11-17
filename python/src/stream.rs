@@ -322,6 +322,8 @@ pub struct Stream {
     /// music21's `_unlinkedDuration`: a duration set apart from what the
     /// stream holds, which `duration` and `quarterLength` then answer.
     unlinked_duration: Option<Py<PyAny>>,
+    /// music21's `streamStatus`, made on first asking.
+    status: Option<Py<PyAny>>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -713,6 +715,7 @@ impl Stream {
             part_name: None,
             part_abbreviation: None,
             unlinked_duration: None,
+            status: None,
         }
     }
 
@@ -1593,12 +1596,14 @@ impl Stream {
         if let Some(source) = &self.view_of {
             source.visit(&visit)?;
         }
+        visit.call(&self.status)?;
         visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
         self.held_mut().clear();
         self.id = None;
+        self.status = None;
         self.site = None;
         self.view_of = None;
     }
@@ -5023,6 +5028,27 @@ impl Stream {
         })
     }
 
+    /// What this stream knows of its own notation: music21's
+    /// `streamStatus`, made on first asking with this stream its client.
+    #[getter]
+    fn get_streamStatus(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(status) = &slf.borrow().status {
+            return Ok(status.clone_ref(py));
+        }
+        let made = crate::streamstatus::module(py)?
+            .getattr("StreamStatus")?
+            .call1((slf,))?
+            .unbind();
+        slf.borrow_mut().status = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_streamStatus(&mut self, value: Option<Py<PyAny>>) {
+        self.status = value;
+    }
+
     #[pyo3(signature = (memo = None))]
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
@@ -5043,6 +5069,11 @@ impl Stream {
             stream.id = slf.borrow().id.as_ref().map(|id| id.clone_ref(py));
             if let Some(set) = &slf.borrow().unlinked_duration {
                 stream.unlinked_duration = Some(deepcopy.call1((set, memo))?.unbind());
+            }
+            if let Some(status) = &slf.borrow().status {
+                let status = deepcopy.call1((status, memo))?;
+                status.setattr("client", &copied)?;
+                stream.status = Some(status.unbind());
             }
             for (offset, object) in held {
                 let object = deepcopy.call1((object, memo))?;
@@ -9473,8 +9504,128 @@ impl Walked {
     }
 }
 
+impl Walked {
+    /// Another holding the same, filtered the same.
+    fn duplicate(&self, py: Python<'_>) -> Self {
+        let copy = |all: &[Py<PyAny>]| all.iter().map(|one| one.clone_ref(py)).collect();
+        Self {
+            found: self
+                .found
+                .iter()
+                .map(|(offset, object)| (*offset, object.clone_ref(py)))
+                .collect(),
+            holders: copy(&self.holders),
+            kind: self.kind,
+            source: self.source.as_ref().map(|source| source.clone_ref(py)),
+            filters: copy(&self.filters),
+        }
+    }
+}
+
+/// music21's `OffsetIterator`: a stream's elements walked as `iter` walks
+/// them, each step the list of those standing together at one offset.
+#[pyclass(name = "OffsetIterator", module = "music21.stream.iterator", extends = Walked, subclass)]
+pub struct OffsetWalked;
+
+impl OffsetWalked {
+    /// What a walk found, as one of these.
+    fn grouping(py: Python<'_>, walked: Walked) -> PyResult<Bound<'_, Self>> {
+        Bound::new(py, PyClassInitializer::from(walked).add_subclass(Self))
+    }
+}
+
+#[pymethods]
+impl OffsetWalked {
+    /// The elements of `srcStream`, filtered by each of `filterList` in
+    /// turn. The other keywords are music21's, and change nothing here.
+    #[new]
+    #[pyo3(signature = (srcStream, *, filterList = None, restoreActiveSites = true, activeInformation = None, ignoreSorting = false))]
+    fn new(
+        srcStream: &Bound<'_, PyAny>,
+        filterList: Option<&Bound<'_, PyAny>>,
+        restoreActiveSites: bool,
+        activeInformation: Option<&Bound<'_, PyAny>>,
+        ignoreSorting: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let _ = (restoreActiveSites, activeInformation, ignoreSorting);
+        let py = srcStream.py();
+        let walked = srcStream.call_method0("iter")?;
+        let mut walked = walked.cast::<Walked>()?.clone();
+        if let Some(filters) = filterList.filter(|filters| !filters.is_none()) {
+            for filter in filters.try_iter()? {
+                walked = Walked::addFilter(&walked, &filter?, true)?;
+            }
+        }
+        let own = walked.borrow().duplicate(py);
+        Ok(PyClassInitializer::from(own).add_subclass(Self))
+    }
+
+    /// Each run of elements standing at one offset, as a list, in order.
+    fn __iter__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let walked = slf.as_super();
+        let offsets: Vec<f64> = walked.found.iter().map(|(offset, _)| *offset).collect();
+        let groups = PyList::empty(py);
+        for run in music21::stream::iterator::offset_runs(&offsets) {
+            let group = PyList::empty(py);
+            for at in run {
+                if let Some(element) = walked.hand_out(py, at) {
+                    group.append(element)?;
+                }
+            }
+            groups.append(group)?;
+        }
+        groups.as_any().try_iter().map(Bound::into_any)
+    }
+
+    /// The notes and chords among them, grouped the same way.
+    #[getter]
+    fn notes<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().notes(py)?)
+    }
+
+    /// The notes, chords and rests among them, grouped the same way.
+    #[getter]
+    fn notesAndRests<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().notesAndRests(py)?)
+    }
+
+    /// Those answering to one of these classes, grouped the same way.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsByClass<'py>(
+        slf: PyRef<'py, Self>,
+        classFilterList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().getElementsByClass(py, classFilterList)?)
+    }
+
+    /// Those answering to none of these classes, grouped the same way.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsNotOfClass<'py>(
+        slf: PyRef<'py, Self>,
+        classFilterList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(
+            py,
+            slf.as_super().getElementsNotOfClass(py, classFilterList)?,
+        )
+    }
+
+    fn __repr__(slf: PyRef<'_, Self>) -> String {
+        format!(
+            "<music21.stream.iterator.OffsetIterator for {}>",
+            slf.as_super().kind
+        )
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StreamCore>()?;
+    m.add_class::<OffsetWalked>()?;
     m.add_class::<Stream>()?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;

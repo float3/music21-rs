@@ -84,6 +84,13 @@ impl Music21Object {
         self.groups = Some(value);
     }
 
+    /// Where among things at one offset this class sorts: music21's
+    /// `classSortOrder`, 20 for a class that says nothing, as a note does.
+    #[classattr]
+    fn classSortOrder() -> i64 {
+        20
+    }
+
     /// music21's `derivation`: what this was made from and how, a
     /// `Derivation` of nothing until something made it.
     #[getter]
@@ -540,6 +547,110 @@ class Groups(list):
 Groups.__module__ = 'music21.base'
 "#;
 
+/// A new `_SplitTuple` of what is given, as a tuple.
+#[pyfunction]
+fn split_tuple_new<'py>(
+    cls: &Bound<'py, PyAny>,
+    tupEls: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = cls.py();
+    let items = PyTuple::new(py, tupEls.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+    py.get_type::<PyTuple>()
+        .call_method1("__new__", (cls, items))
+}
+
+/// Gives a new `_SplitTuple` its own empty `spannerList`.
+#[pyfunction]
+fn split_tuple_init(slf: &Bound<'_, PyAny>, tupEls: &Bound<'_, PyAny>) -> PyResult<()> {
+    let _ = tupEls;
+    slf.setattr("spannerList", pyo3::types::PyList::empty(slf.py()))
+}
+
+/// Two are equal where both are `_SplitTuple`s holding equal spanners and
+/// equal items.
+#[pyfunction]
+fn split_tuple_eq(slf: &Bound<'_, PyAny>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if !other.is_instance(&slf.get_type())? {
+        return Ok(false);
+    }
+    if !slf
+        .getattr("spannerList")?
+        .eq(other.getattr("spannerList")?)?
+    {
+        return Ok(false);
+    }
+    let tuple = slf.py().get_type::<PyTuple>();
+    tuple.getattr("__eq__")?.call1((slf, other))?.is_truthy()
+}
+
+/// The hash of the items and of which spanner list it holds, so that two
+/// holding equal items and different lists hash apart.
+#[pyfunction]
+fn split_tuple_hash(slf: &Bound<'_, PyAny>) -> PyResult<isize> {
+    let py = slf.py();
+    let items = py
+        .get_type::<PyTuple>()
+        .getattr("__hash__")?
+        .call1((slf,))?;
+    let list = slf.getattr("spannerList")?.as_ptr() as usize;
+    PyTuple::new(py, [items, list.into_pyobject(py)?.into_any()])?.hash()
+}
+
+static SPLIT_TUPLE: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// music21's `_SplitTuple`: the tuple of pieces `splitAtQuarterLength`
+/// hands back, a tuple with a `spannerList` of the spanners the split made.
+pub(crate) fn split_tuple<'py>(m: &Bound<'py, PyModule>) -> PyResult<Bound<'py, PyAny>> {
+    use crate::plumbing::built::{method, new_class, static_method};
+
+    let py = m.py();
+    let class = SPLIT_TUPLE.get_or_try_init(py, || {
+        let as_method = |function: Bound<'py, PyAny>, name: &str| {
+            method(function, "music21.base", "_SplitTuple", name)
+        };
+        let members = vec![
+            (
+                "__new__",
+                static_method(
+                    wrap_pyfunction!(split_tuple_new, m)?.into_any(),
+                    "music21.base",
+                    "_SplitTuple",
+                    "__new__",
+                )?,
+            ),
+            (
+                "__init__",
+                as_method(
+                    wrap_pyfunction!(split_tuple_init, m)?.into_any(),
+                    "__init__",
+                )?,
+            ),
+            (
+                "__eq__",
+                as_method(wrap_pyfunction!(split_tuple_eq, m)?.into_any(), "__eq__")?,
+            ),
+            (
+                "__hash__",
+                as_method(
+                    wrap_pyfunction!(split_tuple_hash, m)?.into_any(),
+                    "__hash__",
+                )?,
+            ),
+        ];
+        let made = new_class(
+            py,
+            "music21.base",
+            "_SplitTuple",
+            "The pieces a split hands back, as a tuple, with the spanners the split \
+             made in its `spannerList`.",
+            vec![py.get_type::<PyTuple>().into_any()],
+            members,
+        )?;
+        Ok::<_, PyErr>(made.unbind())
+    })?;
+    Ok(class.bind(py).clone())
+}
+
 /// The `GroupException` music21 raises for a name that is not a string.
 #[pyfunction]
 fn group_exception(py: Python<'_>, message: String) -> PyResult<PyErr> {
@@ -589,6 +700,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NotRest>()?;
     m.add_class::<ElementWrapper>()?;
     m.add("Groups", own_groups(m.py())?)?;
+    m.add("_SplitTuple", split_tuple(m)?)?;
     Ok(())
 }
 
