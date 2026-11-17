@@ -152,6 +152,9 @@ pub mod search;
 /// Tone rows, twelve-tone matrices and serial transformations.
 pub mod serial;
 pub mod sieve;
+/// What decides which of two things comes first in a stream: music21's
+/// `sorting`.
+pub mod sorting;
 /// Marks joining several notes: slurs.
 pub mod spanner;
 pub(crate) mod statistics;
