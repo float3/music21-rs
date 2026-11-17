@@ -10621,3 +10621,29 @@ print(type(data).__name__)
         "registered for it",
         "str",
     ]
+
+
+def test_provided_base_has_split_tuple_and_class_sort_order(tmp_path):
+    """Provided, `base._SplitTuple` is a tuple whose equality and hash
+    take its spanners in, and `Music21Object.classSortOrder` is 20."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import base
+from music21.base import _SplitTuple
+first = _SplitTuple([1, 2])
+second = _SplitTuple([1, 2])
+print(first, first.spannerList, first == second, first == (1, 2))
+print(hash(first) == hash(second), second < _SplitTuple([1, 3]))
+first.spannerList.append('a spanner')
+print(first == second, first.__class__)
+print(base.Music21Object.classSortOrder)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "(1, 2) [] True False",
+        "False True",
+        "False <class 'music21.base._SplitTuple'>",
+        "20",
+    ]

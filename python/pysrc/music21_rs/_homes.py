@@ -48,6 +48,9 @@ HOMES = {
         'quarterLengthEstimation',
         'smoothFrequencies',
     ),
+    'music21.base': (
+        '_SplitTuple',
+    ),
     'music21.braille.basic': (
         'barlineToBraille',
         'brailleAsciiToBrailleUnicode',
