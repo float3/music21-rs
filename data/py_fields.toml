@@ -380,6 +380,38 @@ reason = "its unpitched notes"
 kind = "facade-only"
 reason = "an answer about where an element stands; its beat duration is a computed answer"
 
+[RTAtom]
+kind = "facade-only"
+reason = "music21's source and measure; the crate sorts the source into an atom's kind"
+
+[RTChord]
+kind = "facade-only"
+reason = "music21's offset and length, which a translator sets; the crate keeps nothing of them"
+
+[RTFile]
+kind = "facade-only"
+reason = "music21's open file and its name, read into a handler"
+
+[RTHandler]
+kind = "facade-only"
+reason = "music21's list of tokens and line count; the crate reads each line's text as it is tokenized"
+
+[RTMeasure]
+kind = "facade-only"
+reason = "music21's measure attributes, read once from the line by the crate"
+
+[RTNoChord]
+kind = "facade-only"
+reason = "music21's offset and length, which a translator sets; the crate keeps nothing of them"
+
+[RTTagged]
+kind = "facade-only"
+reason = "music21's tag and data, split once from the line by the crate"
+
+[RTToken]
+kind = "facade-only"
+reason = "music21's source text and line number; the crate reads the source each time it is asked"
+
 [ScalaData]
 kind = "facade-only"
 reason = "a file's lines, which it writes from the objects"

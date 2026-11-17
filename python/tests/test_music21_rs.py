@@ -10667,6 +10667,51 @@ print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
     ]
 
 
+def test_provided_rtobjects_tokenize_a_roman_text(tmp_path):
+    """Provided, `romanText.rtObjects` reads a RomanText into music21's
+    tokens: tagged lines, measures with their numbers and atoms, beats
+    as floats or fractions, and keys as the wheel's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import meter
+from music21.romanText import rtObjects
+rth = rtObjects.RTHandler()
+rth.process('Title: Test \\n Movement: 1 \\n m1 g;: i b2.66 V/v \\n Movement: 2 \\n m1-2 = m3')
+print(rth.tokens)
+measure = rth.tokens[2]
+print(measure.number, measure.atoms, measure.atoms[0].container is measure)
+print(measure.atoms[0].getKey(), measure.atoms[2].getBeatFloatOrFrac(),
+      measure.atoms[2].getOffset(meter.TimeSignature('6/8')))
+print([len(h) for h in rth.splitByMovement()], rth.definesMovements())
+print(rtObjects.RTMeasure('m17varC vi').variantLetter,
+      rtObjects.RTMeasure('m35-36 = m29-30').getCopyTarget())
+print(rtObjects.reMeasureTag.match('m3-4=m1-2').group(0))
+try:
+    rtObjects.RTHandler().splitAtHeader(['Title: x'])
+except rtObjects.RomanTextException as error:
+    print(type(error).__module__, error.args[0][:21])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.romanText.rtObjects.RTTagged 'Title: Test'>, "
+        "<music21.romanText.rtObjects.RTTagged 'Movement: 1'>, "
+        "<music21.romanText.rtObjects.RTMeasure 1>, "
+        "<music21.romanText.rtObjects.RTTagged 'Movement: 2'>, "
+        "<music21.romanText.rtObjects.RTMeasure 1-2>]",
+        "[1] [<music21.romanText.rtObjects.RTKey 'g;:'>, "
+        "<music21.romanText.rtObjects.RTChord 'i'>, "
+        "<music21.romanText.rtObjects.RTBeat 'b2.66'>, "
+        "<music21.romanText.rtObjects.RTChord 'V/v'>] True",
+        "g minor 8/3 2.5",
+        "[3, 3] True",
+        "C ([29, 30], ['', ''])",
+        "m3-4",
+        "music21.romanText.rtObjects Cannot find the first",
+    ]
+
+
 def test_provided_test_copy_all_copies_each_class_a_module_defines(tmp_path):
     """Provided, `test.commonTest.testCopyAll` makes each class of the
     test's module that takes no arguments and copies it, failing the test

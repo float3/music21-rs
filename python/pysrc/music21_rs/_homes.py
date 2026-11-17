@@ -483,6 +483,9 @@ ALSO = {
     'music21.roman': (
         'Pitch',
     ),
+    'music21.romanText.rtObjects': (
+        'OffsetQL',
+    ),
     'music21.scale': (
         'Direction',
         'Terminus',

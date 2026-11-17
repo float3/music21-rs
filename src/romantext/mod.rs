@@ -15,6 +15,7 @@
 //! what it says.
 
 pub mod clercq_temperley;
+pub mod tokens;
 pub mod tsv;
 
 use crate::bar::{Barline, Ending, RepeatDirection};
