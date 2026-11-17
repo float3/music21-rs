@@ -10780,3 +10780,41 @@ def test_every_music21_object_has_a_style_and_a_duration():
     assert m.Music21Object(quarterLength=1.5).duration.quarterLength == 1.5
     # music21's `Chord` puts its own getter beside the setter it inherits.
     assert isinstance(m.ChordBase.duration, property)
+
+
+def test_provided_checker_names_the_parts_breaking_a_rule(tmp_path):
+    """Provided, `figuredBass.checker` names the parts breaking each rule,
+    passing over resting parts, and keeps what it decides in the tables it
+    shares with `figuredBass.possibility`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from fractions import Fraction
+from music21 import note, pitch, stream
+from music21.figuredBass import checker, possibility
+P = pitch.Pitch
+print(checker.voiceCrossing((P('C5'), P('G5'), P('E4'))))
+print(checker.parallelOctaves((P('C4'), P('G3'), P('C3')), (P('D4'), P('A3'), P('D3'))))
+print(checker.hiddenFifths((P('E5'), P('C3')), (P('A5'), P('D3'))))
+possibility.parallelFifthsTable.clear()
+a, b = (P('B4'), P('G3'), P('C3')), (P('A4'), P('A3'), P('D3'))
+print(checker.parallelFifths(a, b), list(possibility.parallelFifthsTable.values()))
+rest = checker.generalNoteToPitch(note.Rest())
+print(checker._isRest(rest), checker.voiceCrossing((P('C4'), rest, P('G4'))))
+part = stream.Part()
+for unused in range(3):
+    part.append(note.Note('C3', quarterLength=Fraction(1, 3)))
+part.append(note.Note('F3'))
+print(sorted(checker.createOffsetMapping(part)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(1, 2)]",
+        "[(1, 3)]",
+        "[(1, 2)]",
+        "[(2, 3)] [True]",
+        "True [(1, 3)]",
+        "[(0.0, Fraction(1, 3)), (Fraction(1, 3), Fraction(2, 3)), "
+        "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
+    ]
