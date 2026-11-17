@@ -10621,3 +10621,25 @@ print(type(data).__name__)
         "registered for it",
         "str",
     ]
+
+
+def test_provided_chord_tools_names_every_chord_step(tmp_path):
+    """Provided, `chord.tools.allChordSteps` keys each step to the first of
+    the chord's own pitches on it, in their order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import chord
+ch = chord.Chord('C4 E4 G4 B4 C5 D5')
+steps = chord.tools.allChordSteps(ch)
+print(steps)
+print(steps[1] is ch.pitches[0], steps[2] is ch.pitches[5])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{1: <music21.pitch.Pitch C4>, 3: <music21.pitch.Pitch E4>, "
+        "5: <music21.pitch.Pitch G4>, 7: <music21.pitch.Pitch B4>, "
+        "2: <music21.pitch.Pitch D5>}",
+        "True True",
+    ]

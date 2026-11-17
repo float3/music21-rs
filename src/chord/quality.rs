@@ -238,6 +238,22 @@ impl Chord {
         self.chord_step_from(step, root)
     }
 
+    /// Every chord step above `root` the chord has, each with the index of
+    /// the first pitch on it, in the order the pitches come: music21's
+    /// `chord.tools.allChordSteps`. One pass over the pitches, where asking
+    /// [`Self::chord_step_with_root`] for each step would be one per step.
+    #[must_use]
+    pub fn all_chord_steps(&self, root: &Pitch) -> Vec<(u8, usize)> {
+        let mut found: Vec<(u8, usize)> = Vec::new();
+        for (index, pitch) in self.pitch_refs().enumerate() {
+            let step = diatonic_steps_above(root, pitch);
+            if !found.iter().any(|(seen, _)| *seen == step) {
+                found.push((step, index));
+            }
+        }
+        found
+    }
+
     /// The semitone distance from a caller-supplied root to the pitch at the
     /// given chord step: music21's `semitonesFromChordStep(step, testRoot)`.
     pub fn semitones_from_chord_step_with_root(&self, step: u8, root: &Pitch) -> Option<u8> {
