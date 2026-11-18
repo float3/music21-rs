@@ -12012,5 +12012,7 @@ def test_a_chord_symbol_subclass_names_its_own_module():
     class Labelled(m.ChordSymbol):
         pass
 
+    # music21's repr names the class by its qualified name.
     Labelled.__module__ = "music21.tablature"
+    Labelled.__qualname__ = "Labelled"
     assert repr(Labelled("D")).startswith("<music21.tablature.Labelled D")

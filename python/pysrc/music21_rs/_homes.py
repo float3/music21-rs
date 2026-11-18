@@ -450,7 +450,12 @@ ALSO = {
         'DateSingle',
         'DocOrder',
         'OffsetQL',
+        'PropertyDescription',
         'Text',
+        'ValueType',
+    ),
+    'music21.metadata.primitives': (
+        'ValueType',
     ),
     'music21.meter': (
         'MeterException',
@@ -519,6 +524,23 @@ ALSO = {
     'music21.musedata.base40': (
         'Interval',
         'IntervalException',
+    ),
+    'music21.musicxml.m21ToXml': (
+        'AppendSpanners',
+        'OffsetIterator',
+        'opFrac',
+    ),
+    'music21.musicxml.partStaffExporter': (
+        'Comment',
+        'Element',
+        'KeySignature',
+        'M21ObjType',
+        'MusicXMLExportException',
+        'MusicXMLWarning',
+        'StaffGroup',
+        'SubElement',
+        'TimeSignature',
+        'flattenList',
     ),
     'music21.note': (
         'Duration',
