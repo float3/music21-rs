@@ -1014,6 +1014,133 @@ def test_a_flattened_parts_barlines_stand_nowhere_again():
     assert m.objectToBraille(flat) == "⠀⠀⠀⠼⠙⠲⠀⠀⠀\n⠼⠁⠀⠐⠽⠀⠵⠣⠅"
 
 
+def test_a_measures_barlines_sort_by_when_they_were_put_in():
+    """Two measures' final barlines sort by the index each was given when
+    it was put in, as music21's do, not both at index nought."""
+    first, second = m.Measure(), m.Measure()
+    first.rightBarline = m.Barline("final")
+    second.rightBarline = m.Barline("final")
+    early = first.rightBarline.sortTuple(first)
+    late = second.rightBarline.sortTuple(second)
+
+    assert early.atEnd == 1
+    assert early.insertIndex != 0
+    assert early < late
+
+
+def test_a_copied_pitch_keeps_its_groups():
+    """A deep copy of a pitch, or of the note holding it, keeps the
+    groups put on it, as music21's copies do; the copy's list is its
+    own."""
+    import copy
+
+    pitch = m.Pitch("C4")
+    pitch.groups.append("upper")
+    copied = copy.deepcopy(pitch)
+    assert list(copied.groups) == ["upper"]
+    copied.groups.append("lower")
+    assert list(pitch.groups) == ["upper"]
+    note = m.Note("E4")
+    note.pitch.groups.append("alto")
+    assert list(copy.deepcopy(note).pitch.groups) == ["alto"]
+
+
+
+def test_a_stream_is_indexed_by_an_id_as_music21s_is():
+    """`'#id'` finds an element by its id: anywhere below a stream, its
+    first or `None`; among an iterator's own, case aside, or a
+    `KeyError`."""
+    score = m.Score()
+    for name in ("Soprano", "Alto"):
+        part = m.Part()
+        part.id = name
+        score.insert(0, part)
+    deep = m.Measure()
+    deep.id = "deep"
+    score.parts[1].append(deep)
+
+    assert score["#Alto"].id == "Alto"
+    assert score["#deep"] is deep
+    assert score["#missing"] is None
+    assert score.parts["#alto"].id == "Alto"
+    assert score.iter()["#Soprano"].id == "Soprano"
+    with pytest.raises(KeyError):
+        score.iter()["#deep"]
+
+
+def test_a_streams_flattening_is_kept_until_it_changes():
+    """`flatten()` hands back the same stream until the stream, or one it
+    holds, changes, as music21 caches it; so an element reached through
+    it keeps it as its `activeSite`, and sorts after everything at its
+    offset in a tree built before."""
+    score = m.Score()
+    for name in ("upper", "lower"):
+        part = m.Part()
+        part.id = name
+        part.append([m.Note("C4"), m.Note("D4")])
+        score.insert(0, part)
+    tree = score.asTree(flatten=True)
+    first = score.flatten().notes[0]
+    after = tree.getNodeAfter(first.sortTuple())
+    assert after.position.offset == 1.0
+
+    flat = score.flatten()
+    assert score.flatten() is flat
+    score.parts[0].append(m.Note("E4"))
+    refreshed = score.flatten()
+    assert refreshed is not flat
+    assert len(refreshed.notes) == 5
+
+    bar = m.Measure()
+    bar.append(m.Note("F4"))
+    held = m.Part([bar])
+    before = held.flatten()
+    bar.rightBarline = m.Barline("final")
+    assert held.flatten() is not before
+    assert type(held.flatten()[-1]).__name__ == "Barline"
+
+
+def test_a_fermata_is_music21s():
+    """music21's `Fermata`: a normal arc drawn inverted, attached to the
+    last note of a tie, its shape and type set as music21 sets them, any
+    text as a type."""
+    fermata = m.Fermata()
+    assert (fermata.shape, fermata.type, fermata.tieAttach) == ("normal", "inverted", "last")
+    fermata.type = "upright"
+    fermata.shape = "square"
+    assert (fermata.type, fermata.shape) == ("upright", "square")
+    assert "Expression" in fermata.classes
+    assert repr(fermata) == "<music21.expressions.Fermata>"
+    fermata.type = "sideways"
+    assert fermata.type == "sideways"
+
+
+def test_a_fermata_is_copied():
+    """A note carrying a fermata is copied with it, as `makeElement`
+    copies the notes it gathers."""
+    import copy
+
+    fermata = m.Fermata()
+    fermata.type = "upright"
+    copied = copy.deepcopy(fermata)
+    assert copied is not fermata
+    assert (type(copied).__name__, copied.type) == ("Fermata", "upright")
+    assert copy.copy(fermata).type == "upright"
+
+
+def test_a_stream_is_always_sorted_and_sorts_itself():
+    """music21's `isSorted` and `autoSort`: a stream here answers in
+    order whenever it is read, so it says it is sorted, and marking it
+    unsorted, as music21's callers do to force a sort, changes nothing."""
+    stream = m.Stream()
+    stream.insert(2.0, m.Note("D4"))
+    stream.insert(0.0, m.Note("C4"))
+    assert stream.isSorted and stream.autoSort
+    stream.isSorted = False
+    assert stream.isSorted
+    assert [n.name for n in stream] == ["C", "D"]
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
@@ -1863,7 +1990,7 @@ def _struct_fields(src: pathlib.Path):
     """Each #[pyclass] struct's fields, name to type, comments and
     attributes left out, keyed by class name."""
     found = {}
-    for path in sorted(src.glob("*.rs")):
+    for path in sorted(src.rglob("*.rs")):
         text = path.read_text()
         for match in re.finditer(
             r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
@@ -8944,14 +9071,44 @@ def test_timespans_hold_floats_and_a_measures_barline():
     assert triplet.nextStartOffset == 1.3333333333333333
 
 
-def test_what_as_timespans_leaves_unported_says_so():
+def test_as_timespans_unflattened_is_a_tree_of_trees():
+    """music21's `asTimespans(flatten=False)` of a score: a tree holding
+    a tree for each part, each of the part."""
     score, _, _ = _two_part_score()
-    with pytest.raises(NotImplementedError):
-        score.asTimespans(flatten=False)
+    parts = list(score.asTimespans(flatten=False))
+    assert [type(each).__name__ for each in parts] == ["TimespanTree"] * 2
+    assert [each.source for each in parts] == list(score.parts)
+
+
+def test_what_as_timespans_leaves_unported_says_so():
     loose = m.Stream([m.Note("C4"), m.Note("D4")])
     assert len(loose.asTimespans(flatten=False)) == 2
+    score, _, _ = _two_part_score()
+    edited = score.asTimespans()
+    edited.removeTimespan(edited[0])
     with pytest.raises(NotImplementedError):
-        score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)
+        edited.getVerticalityAt(0.0).getPairedMotion()
+
+
+def test_make_element_takes_music21s_keywords():
+    """`copyPitches=False` keeps the score's own pitches, and
+    `addPartIdAsGroup` groups each pitch by the id of its part."""
+    score, _, _ = _two_part_score()
+    verticality = score.asTimespans().getVerticalityAt(0.0)
+    sounding = [span.element.pitch for span in verticality.startTimespans
+                if hasattr(span.element, "pitch")]
+    kept = verticality.makeElement(1.0, copyPitches=False)
+    assert all(any(p is own for own in sounding) for p in kept.pitches)
+    grouped = verticality.makeElement(1.0, addPartIdAsGroup=True)
+    assert sorted(g for n in grouped.notes for g in n.groups) == ["lower", "upper"]
+
+
+def test_a_verticality_names_its_class_as_music21_does():
+    """Asking a verticality for what it lacks names `Verticality`, as
+    music21's AttributeError does."""
+    score, _, _ = _two_part_score()
+    with pytest.raises(AttributeError, match="^'Verticality' object has no attribute 'endTime'$"):
+        score.asTimespans().getVerticalityAt(0.0).endTime
 
 
 def test_a_humdrum_comment_read_standalone_stays_in_the_score():

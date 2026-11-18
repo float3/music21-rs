@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyIndexError, PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
@@ -76,6 +76,43 @@ pyo3::create_exception!(
 /// checking a version on every element would read every element again.
 static LENGTHS: AtomicU64 = AtomicU64::new(0);
 static PRIORITIES: AtomicU64 = AtomicU64::new(0);
+
+/// How many times any stream has changed what it holds -- its elements,
+/// their offsets, its barlines or what stands at its end. A stream's kept
+/// `flatten()` stands only while this and the two counts above stand:
+/// music21 tells a stream's sites when it changes, and one count for
+/// every stream says the same of any stream a stream holds.
+static EDITS: AtomicU64 = AtomicU64::new(0);
+
+/// Tells every stream that some stream has changed what it holds.
+fn stream_edited() {
+    EDITS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The three counts a kept flattening was made at.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Counts {
+    edits: u64,
+    lengths: u64,
+    priorities: u64,
+}
+
+impl Counts {
+    fn now() -> Self {
+        Self {
+            edits: EDITS.load(Ordering::Relaxed),
+            lengths: LENGTHS.load(Ordering::Relaxed),
+            priorities: PRIORITIES.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// A stream's `flatten()`, kept as music21 keeps it in `_cache`, with the
+/// counts it was made at.
+struct KeptFlat {
+    counts: Counts,
+    stream: Py<Stream>,
+}
 
 /// Tells every stream that something it may hold has changed its length.
 pub(crate) fn length_changed() {
@@ -316,6 +353,8 @@ pub struct Stream {
     /// after the right barline, things of no length standing at the end,
     /// in the order given.
     at_end: Vec<Py<PyAny>>,
+    /// The last `flatten()`, while nothing has changed since.
+    flat: Option<KeptFlat>,
     /// What a measure is called and how much of its bar is missing:
     /// music21's `number`, `numberSuffix`, `paddingLeft` and
     /// `paddingRight`, which its `Measure.__init__` gives every measure.
@@ -718,6 +757,7 @@ impl Stream {
             left_barline: None,
             right_barline: None,
             at_end: Vec::new(),
+            flat: None,
             number: 0,
             number_suffix: None,
             padding_left: 0.0,
@@ -885,6 +925,7 @@ impl Stream {
 
     /// Lets go of what was worked out from what is held.
     fn let_go(&mut self) {
+        stream_edited();
         let priorities = PRIORITIES.load(Ordering::Relaxed);
         *locked(&self.derived) = Arc::new(Derived::at(priorities));
     }
@@ -1023,7 +1064,11 @@ impl Stream {
             priority: priority_of(object) as f64,
             order: sort_order(object) as f64,
             not_grace: 1.0,
-            index: 0.0,
+            index: self
+                .site
+                .as_ref()
+                .and_then(|here| crate::sites::index_in(object, here))
+                .unwrap_or(0) as f64,
         })
     }
 
@@ -1689,10 +1734,12 @@ impl Stream {
 
         // music21's `rightBarline` is the first barline at the end.
         if me.right_barline.is_none() && is_barline(item)? {
+            stream_edited();
             me.right_barline = Some(item.clone().unbind());
             me.enter_barline(false);
             return Ok(());
         }
+        stream_edited();
         me.at_end.push(item.clone().unbind());
         if let Some(site) = &me.site {
             let end = me.end(py)?;
@@ -1727,6 +1774,55 @@ impl Stream {
 
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
+    }
+}
+
+/// Whether an element's `id` is the one asked for, as music21's
+/// `IdFilter` asks: equal, or equal once both are lower case.
+fn id_matches(object: &Bound<'_, PyAny>, wanted: &str) -> bool {
+    let Ok(id) = object.getattr("id") else {
+        return false;
+    };
+    let wanted = wanted.to_lowercase();
+    id.extract::<String>()
+        .is_ok_and(|id| id == wanted || id.to_lowercase() == wanted)
+}
+
+/// The first of some elements whose `id` is the one a `'#id'` key asks
+/// for.
+fn first_with_id<'py>(
+    elements: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    key: &str,
+) -> Option<Bound<'py, PyAny>> {
+    let wanted = key.strip_prefix('#').unwrap_or(key);
+    elements
+        .into_iter()
+        .find(|element| id_matches(element, wanted))
+}
+
+impl Stream {
+    /// music21's `stream[query]` for a string: `'#id'` the first element
+    /// with that id at any depth, or `None`; `'.group'` or a class name
+    /// those that answer to it at any depth. A stream standing in for an
+    /// iterator answers as music21's iterator does: the one of its own
+    /// with that id, or a `KeyError`.
+    fn queried<'py>(slf: &Bound<'py, Self>, query: &str) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        if slf.borrow().view_of.is_some() {
+            let elements = slf.borrow().elements(py)?;
+            return first_with_id(elements.iter(), query)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
+        let walked = Self::recurse(slf)?;
+        if let Some((_, id)) = query.rsplit_once('#') {
+            let found: Vec<Bound<'py, PyAny>> = walked.try_iter()?.collect::<PyResult<_>>()?;
+            let found = first_with_id(found, id);
+            return Ok(found.unwrap_or_else(|| py.None().into_bound(py)));
+        }
+        if let Some(group) = query.strip_prefix('.') {
+            return walked.call_method1("getElementsByGroup", (group,));
+        }
+        walked.call_method1("getElementsByClass", (query,))
     }
 }
 
@@ -1786,11 +1882,15 @@ impl Stream {
         for last in &self.at_end {
             visit.call(last)?;
         }
+        if let Some(kept) = &self.flat {
+            visit.call(&kept.stream)?;
+        }
         visit.call(&self.status)?;
         visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
+        self.flat = None;
         self.held_mut().clear();
         self.at_end.clear();
         self.id = None;
@@ -1918,6 +2018,7 @@ impl Stream {
     /// music21 reads one, so `'final'` is a final barline.
     #[setter]
     fn set_leftBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.left_barline = barline_given(value)?;
         self.enter_barline(true);
         Ok(())
@@ -1933,6 +2034,7 @@ impl Stream {
     /// Writes the barline closing this measure.
     #[setter]
     fn set_rightBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.right_barline = barline_given(value)?;
         self.enter_barline(false);
         Ok(())
@@ -2058,6 +2160,7 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.left_barline = None;
             return Ok(());
         }
@@ -2066,10 +2169,12 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.right_barline = None;
             return Ok(());
         }
         if let Some(at) = self.at_end.iter().position(|last| last.bind(py).is(target)) {
+            stream_edited();
             self.at_end.remove(at);
             return Ok(());
         }
@@ -3281,10 +3386,12 @@ impl Stream {
         let made = barline_given(Some(value))?;
         match Self::last_measure(slf)? {
             Some(measure) => {
+                stream_edited();
                 measure.cast::<Stream>()?.borrow_mut().right_barline = made;
             }
             None => slf.borrow_mut().right_barline = made,
         }
+        stream_edited();
         let _ = py;
         Ok(())
     }
@@ -4341,6 +4448,35 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `isSorted`. A stream here answers in order whenever it
+    /// is read, so it is always sorted.
+    #[getter]
+    fn isSorted(&self) -> bool {
+        true
+    }
+
+    /// music21's callers mark a stream unsorted to have it sorted on the
+    /// next read, which here happens anyway: what is given is accepted
+    /// and changes nothing.
+    #[setter]
+    fn set_isSorted(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
+    /// music21's `autoSort`: whether a stream sorts itself when read,
+    /// which a stream here always does.
+    #[getter]
+    fn autoSort(&self) -> bool {
+        true
+    }
+
+    /// Accepted and changes nothing: music21's spanners and freezer turn
+    /// it off on streams they keep, which here are read in order anyway.
+    #[setter]
+    fn set_autoSort(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
     /// music21's `sort`. A stream here answers in order whenever it is
     /// read, so there is nothing to do; `force` is accepted for that.
     #[pyo3(signature = (force = false))]
@@ -4372,11 +4508,15 @@ impl Stream {
     }
 
     fn __getitem__<'py>(
-        &self,
-        py: Python<'py>,
+        slf: &Bound<'py, Self>,
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let elements = self.elements(py)?;
+        let py = slf.py();
+        if let Ok(query) = key.extract::<String>() {
+            return Self::queried(slf, &query);
+        }
+        let me = slf.borrow();
+        let elements = me.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
@@ -4391,13 +4531,31 @@ impl Stream {
             )));
         }
         let found = elements.get_item(at as usize)?;
-        self.reach(&found);
+        me.reach(&found);
         Ok(found)
     }
 
     /// One timeline with the nesting dissolved, holding the same objects at
     /// their offsets from this stream's start.
     fn flatten<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
+
+        // Kept, as music21 keeps it, while no stream has changed since.
+        if let Some(kept) = &slf.borrow().flat
+            && kept.counts == Counts::now()
+        {
+            return Ok(kept.stream.bind(py).clone());
+        }
+        let made = Self::flattened(slf)?;
+        slf.borrow_mut().flat = Some(KeptFlat {
+            counts: Counts::now(),
+            stream: made.clone().unbind(),
+        });
+        Ok(made)
+    }
+
+    /// One timeline with the nesting dissolved, made afresh.
+    fn flattened<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
         let py = slf.py();
         let mut leaves = Vec::new();
         Self::flatten_into(slf, 0.0, &mut leaves)?;
@@ -5380,17 +5538,44 @@ impl Stream {
 
     /// music21's `asTimespans`: every element as a timespan in a
     /// `TimespanTree`, those of the streams held too; `flatten='semiFlat'`
-    /// keeps the streams as timespans of their own, and `classList` keeps
-    /// only elements of those classes.
+    /// keeps the streams as timespans of their own, `flatten=False` makes a
+    /// tree of the trees of the streams held, and `classList` keeps only
+    /// elements of those classes.
     ///
     /// music21 caches the tree on the stream; this reads it afresh.
     #[pyo3(signature = (*, flatten = None, classList = None))]
-    fn asTimespans(
-        slf: &Bound<'_, Self>,
-        flatten: Option<&Bound<'_, PyAny>>,
-        classList: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<crate::tree::TimespanTree> {
-        crate::tree::as_timespans(slf.as_any(), flatten, classList)
+    fn asTimespans<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let flatten = match flatten {
+            Some(flatten) => flatten.clone(),
+            None => pyo3::types::PyBool::new(py, true).to_owned().into_any(),
+        };
+        crate::tree::fromstream::as_timespans_of(slf.as_any(), Some(&flatten), classList)
+    }
+
+    /// music21's `asTree`: the elements in an `ElementTree` by their
+    /// `SortTuple`s, with `groupOffsets` an `OffsetTree` by offset, with
+    /// `useTimespans` a `TimespanTree`; `flatten` reads the streams held
+    /// through. Read afresh each time, as `asTimespans` is.
+    #[pyo3(signature = (*, flatten = None, classList = None, useTimespans = None, groupOffsets = None))]
+    fn asTree<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+        useTimespans: Option<&Bound<'py, PyAny>>,
+        groupOffsets: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::tree::fromstream::as_tree(
+            slf.as_any(),
+            flatten,
+            classList,
+            useTimespans,
+            groupOffsets,
+        )
     }
 
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
@@ -7909,13 +8094,12 @@ fn expressions_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<music21::expression
             out.push(Expression::Ornament(Box::new(read)));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "Fermata"))? {
             let mut fermata = Fermata::new();
-            fermata.set_fermata_type(
-                if text_attribute(&expression, "type").as_deref() == Some("upright") {
-                    FermataType::Upright
-                } else {
-                    FermataType::Inverted
-                },
-            );
+            // music21's default where none is said.
+            let named = text_attribute(&expression, "type");
+            fermata.set_fermata_type(match named.as_deref() {
+                Some(name) => FermataType::from_name(name),
+                None => FermataType::Inverted,
+            });
             fermata.set_shape(text_attribute(&expression, "shape"));
             out.push(Expression::Fermata(fermata));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "ArpeggioMark"))? {
@@ -9760,6 +9944,12 @@ impl Walked {
     /// list for a slice, and its own code asks for one
     /// (`thisStreamIter[3:5]`).
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        if let Ok(query) = index.extract::<String>() {
+            let found = self.found.iter().map(|(_, object)| object.bind(py).clone());
+            return first_with_id(found, &query)
+                .map(Bound::unbind)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
         let count = self.found.len();
         if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
             let read = slice.indices(count as isize)?;

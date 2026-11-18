@@ -1571,11 +1571,83 @@ fn realizeOrnaments<'py>(
     Ok(before)
 }
 
+/// A pause of unmeasured length over a note: music21's
+/// `expressions.Fermata`, drawn upright or inverted.
+///
+/// Not installed over music21's own, which its MusicXML reader and
+/// writer make and read; this is the one a caller with no music21 has.
+#[pyclass(
+    name = "Fermata",
+    module = "music21.expressions",
+    extends = Expression,
+    subclass,
+    skip_from_py_object
+)]
+#[derive(Clone)]
+pub struct Fermata {
+    inner: music21::expressions::Fermata,
+    /// Which note of a tie it goes on: music21's `tieAttach`.
+    #[pyo3(get, set)]
+    tieAttach: String,
+}
+
+#[pymethods]
+impl Fermata {
+    #[new]
+    #[pyo3(signature = (**_keywords))]
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Expression).add_subclass(Self {
+            inner: music21::expressions::Fermata::new(),
+            tieAttach: "last".to_owned(),
+        })
+    }
+
+    /// Which way up it is drawn: `'upright'`, `'inverted'` or any other
+    /// text a caller gave, as music21 keeps it.
+    #[getter]
+    fn get_type(&self) -> &str {
+        self.inner.fermata_type().as_str()
+    }
+
+    #[setter]
+    fn set_type(&mut self, value: &str) {
+        self.inner
+            .set_fermata_type(music21::expressions::FermataType::from_name(value));
+    }
+
+    /// Its shape: `'normal'`, `'angled'` or `'square'`.
+    #[getter]
+    fn shape(&self) -> &str {
+        self.inner.shape().unwrap_or("normal")
+    }
+
+    #[setter]
+    fn set_shape(&mut self, value: String) {
+        self.inner.set_shape(Some(value));
+    }
+
+    fn __repr__(&self) -> &'static str {
+        "<music21.expressions.Fermata>"
+    }
+
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone())
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone()).map(crate::base::shallow)
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(realizeOrnaments, m)?)?;
     m.add_class::<Expression>()?;
     m.add_class::<Ornament>()?;
     m.add_class::<TextExpression>()?;
+    m.add_class::<Fermata>()?;
     m.add_class::<Trill>()?;
     register_kinds(m)
 }

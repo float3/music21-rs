@@ -205,10 +205,6 @@ identifier = { kind = "identity", sync = "read live", why = "music21's id; the c
 sequences = { kind = "identity", sync = "read live", why = "a sequence cannot change; each is handed back only while it still equals the one the meter carries, and assigning one writes its value into the meter" }
 bar_duration = { kind = "identity", sync = "read live", why = "handed back as given only while the meter still carries the length written with it" }
 
-[TimespanTree]
-source = { kind = "identity", sync = "read live", why = "the stream read, handed back and asked for its parts" }
-spans = { kind = "cache", note = "the timespans, in the crate tree's order" }
-
 [TwelveToneMatrix]
 source = { kind = "identity", sync = "read live", why = "the row the matrix was made from, which only its repr reads" }
 
@@ -490,7 +486,7 @@ reason = "pitches and the chords made of them"
 
 [TreeVerticality]
 kind = "facade-only"
-reason = "a tree and the offset asked about"
+reason = "a tree, the offset asked about and the timespans starting, sounding across and stopping there"
 
 [TurnRecognizer]
 kind = "facade-only"
@@ -539,3 +535,58 @@ reason = "the ids of the streams found and music21's empty dictionary of sub-fre
 [NoteworthyTranslator]
 kind = "facade-only"
 reason = "the measures and notes its placing state remembers, by identity"
+
+[AvlNode]
+kind = "facade-only"
+reason = "a position, a payload and the child nodes, all music21's code reaches into"
+
+[AvlTree]
+kind = "facade-only"
+reason = "its root node"
+
+[ElementNode]
+kind = "facade-only"
+reason = "the earliest and latest end under the node, as Python numbers"
+
+[ElementTree]
+kind = "facade-only"
+reason = "the stream it is of, kept weakly, and the trees holding it"
+
+[VerticalityWalk]
+kind = "facade-only"
+reason = "the tree walked and the verticality last handed out"
+
+[VerticalityRuns]
+kind = "facade-only"
+reason = "the walk read, the padding verticality and the run so far"
+
+[CacheMethod]
+kind = "facade-only"
+reason = "the method cached and its cache key"
+
+[Deprecated]
+kind = "facade-only"
+reason = "the method that warns"
+
+[Method]
+kind = "facade-only"
+reason = "the function bound"
+
+[OptionalArgDecorator]
+kind = "facade-only"
+reason = "the decorator wrapped"
+
+[ParenthesesMatch]
+kind = "facade-only"
+reason = "the text matched and where, as music21's dataclass holds them"
+
+[TempAttribute]
+obj = { kind = "identity", sync = "read live", why = "the object the attribute is set on" }
+attribute = { kind = "identity", sync = "read live", why = "the name set" }
+new_val = { kind = "identity", sync = "read live", why = "the value set on entering" }
+stored = { kind = "identity", sync = "read live", why = "the value it had, put back on leaving" }
+
+[SaveAttributes]
+obj = { kind = "identity", sync = "read live", why = "the object whose attributes are put back on leaving" }
+attributes = { kind = "identity", sync = "read live", why = "the names saved" }
+stored = { kind = "identity", sync = "read live", why = "each name and the value it had on entering" }

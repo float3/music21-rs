@@ -645,9 +645,33 @@ ALSO = {
     'music21.tie': (
         'SlottedObjectMixin',
     ),
+    'music21.tree': (
+        'makeExampleScore',
+    ),
+    'music21.tree.core': (
+        'OffsetQLIn',
+        'TreeException',
+    ),
+    'music21.tree.fromStream': (
+        'M21ObjType',
+        'Music21Object',
+        'OffsetQL',
+        'StreamType',
+    ),
+    'music21.tree.node': (
+        'Music21Object',
+        'SortTuple',
+    ),
     'music21.tree.spans': (
         'OffsetQL',
         'OffsetQLIn',
+    ),
+    'music21.tree.toStream': (
+        'TreeException',
+    ),
+    'music21.tree.trees': (
+        'INFINITY',
+        'SortTuple',
     ),
     'music21.tree.verticality': (
         'OffsetQL',

@@ -2151,6 +2151,21 @@ exceptions![
         Some("music21.exceptions21")
     ),
     (
+        "TimespanException",
+        tree::TimespanException,
+        Some("music21.tree.spans")
+    ),
+    (
+        "VerticalityException",
+        tree::verticality::VerticalityException,
+        Some("music21.tree.verticality")
+    ),
+    (
+        "HorizontalityException",
+        tree::analysis::HorizontalityException,
+        Some("music21.tree.analysis")
+    ),
+    (
         "SubConverterException",
         exceptions21::SubConverterException,
         Some("music21.exceptions21")
@@ -2342,7 +2357,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 28] = [
+const BUILT_MODULES: [&str; 31] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2371,6 +2386,9 @@ const BUILT_MODULES: [&str; 28] = [
     "music21.noteworthy.constants",
     "music21.noteworthy.dictionaries",
     "music21.noteworthy.translate",
+    "music21.tree.fromStream",
+    "music21.tree.examples",
+    "music21.tree.toStream",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2403,6 +2421,9 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.figuredBass.checker" => fbchecker::module(py),
         "music21.freezeThaw" => freezethaw::module(py),
         _ if name.starts_with("music21.noteworthy") => noteworthy::module(py, name),
+        "music21.tree.fromStream" => tree::fromstream::module(py),
+        "music21.tree.examples" => tree::examples::module(py),
+        "music21.tree.toStream" => tree::tostream::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

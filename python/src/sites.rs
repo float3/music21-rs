@@ -275,6 +275,16 @@ pub(crate) fn entered(element: &Bound<'_, PyAny>, here: &Here, index: u64, offse
     });
 }
 
+/// The index an element was given when it was put into a stream, if it
+/// stands there.
+pub(crate) fn index_in(element: &Bound<'_, PyAny>, here: &Here) -> Option<u64> {
+    read(element)
+        .entries
+        .into_iter()
+        .find(|(entry, _)| entry.key == here.key)
+        .map(|(_, index)| index)
+}
+
 /// Makes a stream the `activeSite` of an element reached through it.
 pub(crate) fn reached(element: &Bound<'_, PyAny>, here: &Here, offset: f64) {
     let py = element.py();

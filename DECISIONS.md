@@ -330,6 +330,10 @@ each of its sites. held notes and durations are marked
 edit to any held element anywhere makes every stream read its lengths
 again once; music21's own uninstalled objects and Python-written classes
 tell only music21's sites, so they are read afresh each time.
+*added 2026-11-18:* a third count, of edits to any stream's contents,
+barlines and end elements, keys the `flatten()` a stream keeps, as
+music21 keeps it in `_cache`. *costs:* an edit to any stream anywhere
+lets every kept flattening go.
 
 **elements stand on real base classes.** `base.Music21Object`,
 `note.GeneralNote` and `note.NotRest` are pyo3 classes (`base.rs`) that
