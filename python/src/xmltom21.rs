@@ -16,6 +16,7 @@
 
 use music21::musicxml::step;
 
+use crate::musicxml::MusicXMLImportException;
 use crate::subconverters::music21_name;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
@@ -35,17 +36,6 @@ const TUPLET_DEPTH: usize = 7;
 
 static BUILT: PyOnceLock<Py<PyModule>> = PyOnceLock::new();
 
-pyo3::create_exception!(
-    music21_rs_facade,
-    MusicXMLImportException,
-    crate::Music21Exception
-);
-pyo3::create_exception!(
-    music21_rs_facade,
-    MusicXMLWarning,
-    pyo3::exceptions::PyUserWarning
-);
-
 /// A crate error as music21's reader raises it.
 fn import_error(error: music21::Error) -> PyErr {
     MusicXMLImportException::new_err(crate::pitch::message(&error))
@@ -56,7 +46,7 @@ fn written(element: &Bound<'_, PyAny>) -> PyResult<String> {
     let py = element.py();
     let keywords = PyDict::new(py);
     keywords.set_item("encoding", "unicode")?;
-    py.import("xml.etree.ElementTree")?
+    crate::musicxml::element_tree(py)?
         .getattr("tostring")?
         .call((element,), Some(&keywords))?
         .extract()
@@ -466,7 +456,7 @@ impl PartParser {
             false => Some(written(&score_part)?),
         };
         let read = step::read_part(&written(&part)?, score_part.as_deref())
-            .map_err(|error| Self::placed(slf, &error))?;
+            .map_err(|error| Self::placed(slf, &error).unwrap_or_else(|failed| failed))?;
         let mut made = Vec::new();
         for staff in &read {
             made.push(crate::stream::from_crate(py, staff)?);
@@ -793,8 +783,7 @@ impl MeasureParser {
             }
             // Only the notes after the first carry `<chord/>`.
             let copied = py.import("copy")?.call_method1("deepcopy", (&note,))?;
-            let chord = py
-                .import("xml.etree.ElementTree")?
+            let chord = crate::musicxml::element_tree(py)?
                 .getattr("Element")?
                 .call1((CHORD,))?;
             copied.call_method1("insert", (0, chord))?;
@@ -1127,17 +1116,17 @@ impl MeasureParser {
 impl PartParser {
     /// A crate error as music21's `parse` raises it: prefixed with the
     /// part's name and the measure it was met in.
-    fn placed(slf: &Bound<'_, Self>, error: &music21::Error) -> PyErr {
-        let message = crate::pitch::message(error);
+    fn placed(slf: &Bound<'_, Self>, error: &music21::Error) -> PyResult<PyErr> {
+        let raised = MusicXMLImportException::new_err(crate::pitch::message(error));
         let measure = error
             .position()
             .and_then(|position| position.measure.clone())
             .filter(|measure| !measure.is_empty())
             .unwrap_or_else(|| "0".to_string());
-        let name = Self::part_name(slf).unwrap_or_default();
-        MusicXMLImportException::new_err(format!(
-            "In part ({name}), measure ({measure}): {message}"
-        ))
+        let value = raised.value(slf.py());
+        value.setattr("partName", Self::part_name(slf)?)?;
+        value.setattr("measureNumber", measure)?;
+        Ok(raised)
     }
 
     /// The `<part-name>` of the score part, else the part's id.
@@ -1176,7 +1165,7 @@ impl MeasureParser {
              <beat-type>{denominator}</beat-type></time></attributes>"
         );
         let copied = py.import("copy")?.call_method1("deepcopy", (measure,))?;
-        let tree = py.import("xml.etree.ElementTree")?;
+        let tree = crate::musicxml::element_tree(py)?;
         copied.call_method1(
             "insert",
             (0, tree.call_method1("fromstring", (attributes,))?),
@@ -1235,15 +1224,10 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_class::<MusicXMLImporter>()?;
         m.add_class::<PartParser>()?;
         m.add_class::<MeasureParser>()?;
-        for (name, exception) in [
-            (
-                "MusicXMLImportException",
-                py.get_type::<MusicXMLImportException>(),
-            ),
-            ("MusicXMLWarning", py.get_type::<MusicXMLWarning>()),
-        ] {
-            exception.setattr("__module__", "music21.musicxml.xmlObjects")?;
-            m.add(name, exception)?;
+        // The exceptions are `xmlObjects`' own, which that module finishes.
+        let objects = crate::musicxml::objects_module(py)?;
+        for name in ["MusicXMLImportException", "MusicXMLWarning"] {
+            m.add(name, objects.getattr(name)?)?;
         }
         m.add_function(wrap_pyfunction!(clean, &m)?)?;
         m.add_function(wrap_pyfunction!(strippedText, &m)?)?;
