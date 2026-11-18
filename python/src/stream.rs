@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyIndexError, PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
@@ -1731,6 +1731,55 @@ impl Stream {
 
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
+    }
+}
+
+/// Whether an element's `id` is the one asked for, as music21's
+/// `IdFilter` asks: equal, or equal once both are lower case.
+fn id_matches(object: &Bound<'_, PyAny>, wanted: &str) -> bool {
+    let Ok(id) = object.getattr("id") else {
+        return false;
+    };
+    let wanted = wanted.to_lowercase();
+    id.extract::<String>()
+        .is_ok_and(|id| id == wanted || id.to_lowercase() == wanted)
+}
+
+/// The first of some elements whose `id` is the one a `'#id'` key asks
+/// for.
+fn first_with_id<'py>(
+    elements: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    key: &str,
+) -> Option<Bound<'py, PyAny>> {
+    let wanted = key.strip_prefix('#').unwrap_or(key);
+    elements
+        .into_iter()
+        .find(|element| id_matches(element, wanted))
+}
+
+impl Stream {
+    /// music21's `stream[query]` for a string: `'#id'` the first element
+    /// with that id at any depth, or `None`; `'.group'` or a class name
+    /// those that answer to it at any depth. A stream standing in for an
+    /// iterator answers as music21's iterator does: the one of its own
+    /// with that id, or a `KeyError`.
+    fn queried<'py>(slf: &Bound<'py, Self>, query: &str) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        if slf.borrow().view_of.is_some() {
+            let elements = slf.borrow().elements(py)?;
+            return first_with_id(elements.iter(), query)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
+        let walked = Self::recurse(slf)?;
+        if let Some((_, id)) = query.rsplit_once('#') {
+            let found: Vec<Bound<'py, PyAny>> = walked.try_iter()?.collect::<PyResult<_>>()?;
+            let found = first_with_id(found, id);
+            return Ok(found.unwrap_or_else(|| py.None().into_bound(py)));
+        }
+        if let Some(group) = query.strip_prefix('.') {
+            return walked.call_method1("getElementsByGroup", (group,));
+        }
+        walked.call_method1("getElementsByClass", (query,))
     }
 }
 
@@ -4356,11 +4405,15 @@ impl Stream {
     }
 
     fn __getitem__<'py>(
-        &self,
-        py: Python<'py>,
+        slf: &Bound<'py, Self>,
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let elements = self.elements(py)?;
+        let py = slf.py();
+        if let Ok(query) = key.extract::<String>() {
+            return Self::queried(slf, &query);
+        }
+        let me = slf.borrow();
+        let elements = me.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
@@ -4375,7 +4428,7 @@ impl Stream {
             )));
         }
         let found = elements.get_item(at as usize)?;
-        self.reach(&found);
+        me.reach(&found);
         Ok(found)
     }
 
@@ -9761,6 +9814,12 @@ impl Walked {
     /// list for a slice, and its own code asks for one
     /// (`thisStreamIter[3:5]`).
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        if let Ok(query) = index.extract::<String>() {
+            let found = self.found.iter().map(|(_, object)| object.bind(py).clone());
+            return first_with_id(found, &query)
+                .map(Bound::unbind)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
         let count = self.found.len();
         if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
             let read = slice.indices(count as isize)?;

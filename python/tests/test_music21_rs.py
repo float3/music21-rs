@@ -1046,6 +1046,29 @@ def test_a_copied_pitch_keeps_its_groups():
 
 
 
+def test_a_stream_is_indexed_by_an_id_as_music21s_is():
+    """`'#id'` finds an element by its id: anywhere below a stream, its
+    first or `None`; among an iterator's own, case aside, or a
+    `KeyError`."""
+    score = m.Score()
+    for name in ("Soprano", "Alto"):
+        part = m.Part()
+        part.id = name
+        score.insert(0, part)
+    deep = m.Measure()
+    deep.id = "deep"
+    score.parts[1].append(deep)
+
+    assert score["#Alto"].id == "Alto"
+    assert score["#deep"] is deep
+    assert score["#missing"] is None
+    assert score.parts["#alto"].id == "Alto"
+    assert score.iter()["#Soprano"].id == "Soprano"
+    with pytest.raises(KeyError):
+        score.iter()["#deep"]
+
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
