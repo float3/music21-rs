@@ -11129,3 +11129,26 @@ print(sorted(checker.createOffsetMapping(part)))
         "[(0.0, Fraction(1, 3)), (Fraction(1, 3), Fraction(2, 3)), "
         "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
     ]
+
+def test_provided_sites_and_duration_have_music21s_constants(tmp_path):
+    """Provided, `sites.WEAKREF_ACTIVE`, a bare `Sites` and `duration`'s
+    tables are there, as `music21.base` and `music21.beam` use them."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21.sites import WEAKREF_ACTIVE, Sites
+from music21 import duration
+print(WEAKREF_ACTIVE, len(Sites()), Sites().getSiteCount(), Sites().get())
+print(duration.typeFromNumDict[8], duration.typeFromNumDict[0.5], list(duration.typeFromNumDict)[-5:])
+print(duration.typeToDuration['16th'], duration.typeToDuration['zero'], duration.typeFromNumDictKeys[:3])
+print(duration.ordinalTypeFromNum[3], len(duration.ordinalTypeFromNum), duration.defaultTupletNumerators)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True 1 0 [None]",
+        "eighth breve [0.0, 0.5, 0.25, 0.125, 0.0625]",
+        "0.25 0.0 [0.0, 0.0625, 0.125]",
+        "breve 16 (3, 5, 7, 11, 13)",
+    ]
+

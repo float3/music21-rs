@@ -3108,5 +3108,48 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Tuplet>()?;
     m.add_function(wrap_pyfunction!(durationTupleFromQuarterLength, m)?)?;
     m.add_function(wrap_pyfunction!(durationTupleFromTypeDots, m)?)?;
+    add_tables(m)?;
+    Ok(())
+}
+
+/// music21's module-level tables of note values, which its `beam`,
+/// `meter` and `tinyNotation` read: `typeToDuration`, `typeFromNumDict`
+/// (in music21's order, whole to 2048th, then zero, then breve and
+/// longer), its sorted keys, `ordinalTypeFromNum` and the tuplet tables.
+fn add_tables(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+
+    // Every type by its length in quarters, longest first.
+    let to_duration = PyDict::new(py);
+    for kind in RsDurationType::ALL {
+        to_duration.set_item(kind.music21_name(), kind.quarter_length())?;
+    }
+    m.add("typeToDuration", to_duration)?;
+
+    // By type number: whole and shorter, zero, then longer than whole.
+    let (longer, rest) = RsDurationType::ALL.split_at(RsDurationType::Whole.ordinal().unwrap_or(4));
+    let from_number = PyDict::new(py);
+    for kind in rest.iter().chain(longer.iter().rev()) {
+        from_number.set_item(kind.type_number().unwrap_or(0.0), kind.music21_name())?;
+    }
+    let mut keys: Vec<f64> = from_number.keys().extract()?;
+    keys.sort_by(f64::total_cmp);
+    m.add("typeFromNumDict", from_number)?;
+    m.add("typeFromNumDictKeys", keys)?;
+
+    let ordinal: Vec<&str> = RsDurationType::ALL
+        .iter()
+        .filter(|kind| kind.ordinal().is_some())
+        .map(|kind| kind.music21_name())
+        .collect();
+    m.add("ordinalTypeFromNum", ordinal)?;
+    m.add(
+        "defaultTupletNumerators",
+        PyTuple::new(py, music21::duration::TUPLET_NUMERATORS)?,
+    )?;
+    m.add(
+        "POSSIBLE_DOTS_IN_TUPLETS",
+        PyTuple::new(py, music21::duration::TUPLET_DOTS)?,
+    )?;
     Ok(())
 }
