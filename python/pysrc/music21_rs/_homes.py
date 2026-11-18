@@ -450,7 +450,12 @@ ALSO = {
         'DateSingle',
         'DocOrder',
         'OffsetQL',
+        'PropertyDescription',
         'Text',
+        'ValueType',
+    ),
+    'music21.metadata.primitives': (
+        'ValueType',
     ),
     'music21.meter': (
         'MeterException',

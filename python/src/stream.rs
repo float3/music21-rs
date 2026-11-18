@@ -4940,6 +4940,14 @@ impl Stream {
         Ok(())
     }
 
+    /// Moves the stream's own offset onto what it holds, leaving it at
+    /// nought: music21's `transferOffsetToElements`.
+    fn transferOffsetToElements(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let offset: f64 = slf.getattr("offset")?.extract()?;
+        Self::shiftElements(slf, offset, None, None, None)?;
+        slf.setattr("offset", 0.0)
+    }
+
     /// A copy with a measure's one voice dissolved into the measure
     /// itself: music21's `flattenUnnecessaryVoices`, which `force` applies
     /// to every voice however many there are.
@@ -7177,6 +7185,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
             value = value.with_duration(duration);
         }
+        if !stand_ins && let Some(symbol) = numeral_symbol(object, &value)? {
+            return Ok(Some(StreamElement::ChordSymbol(symbol)));
+        }
         return Ok(Some(StreamElement::Chord(value)));
     }
     // music21's own percussion classes, read for a score writer. The walks
@@ -8545,6 +8556,35 @@ fn text_box_value(object: &Bound<'_, PyAny>) -> PyResult<music21::text::TextBox>
     Ok(read)
 }
 
+/// A Roman numeral not written as its chord, as the harmony music21's
+/// `romanNumeralToXml` writes for it: `writeAsChord` false, its key shown
+/// where it `followsKeyChange`.
+fn numeral_symbol(
+    object: &Bound<'_, PyAny>,
+    chord: &music21::Chord,
+) -> PyResult<Option<music21::chordsymbol::ChordSymbol>> {
+    use music21::chordsymbol::{ChordSymbol, KeyDisplay};
+    let Some(numeral) = chord.numeral() else {
+        return Ok(None);
+    };
+    let as_chord = object
+        .getattr("writeAsChord")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(true);
+    if as_chord {
+        return Ok(None);
+    }
+    let display = match object
+        .getattr("followsKeyChange")
+        .and_then(|flag| flag.is_truthy())
+    {
+        Ok(true) => KeyDisplay::Shown,
+        _ => KeyDisplay::Hidden,
+    };
+    ChordSymbol::from_numeral(chord, numeral, display)
+        .map_err(|error| StreamException::new_err(error.to_string()))
+}
+
 /// music21's style of something drawn with text, as the crate keeps it.
 fn text_style_of(style: &Bound<'_, PyAny>) -> PyResult<music21::style::TextStyle> {
     let words = |name: &str| text_attribute(style, name);
@@ -8744,7 +8784,6 @@ fn barline_value(barline: &Bound<'_, PyAny>) -> PyResult<music21::Barline> {
 /// A score's `StaffGroup` spanners, each naming the parts it spans by where
 /// they stand among the score's parts.
 fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()> {
-    use music21::{BarTogether, StaffGroup};
     let py = object.py();
     let Ok(bundle) = object.getattr("spannerBundle") else {
         return Ok(());
@@ -8767,41 +8806,50 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
         return Ok(());
     }
     for group in bundle.call_method1("getByClass", ("StaffGroup",))?.walk()? {
-        let group = group?;
-        let mut positions = Vec::new();
-        for spanned in group.call_method0("getSpannedElements")?.walk()? {
-            let spanned = spanned?;
-            if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
-                positions.push(position);
-            }
-        }
-        let mut read = StaffGroup::new(positions);
-        read.set_name(text_attribute(&group, "name"));
-        read.set_abbreviation(text_attribute(&group, "abbreviation"));
-        read.set_symbol(text_attribute(&group, "symbol").as_deref())
-            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-        let bar_together = group.getattr("barTogether")?;
-        read.set_bar_together(if bar_together.is_none() {
-            None
-        } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
-            Some(if flag.is_true() {
-                BarTogether::Yes
-            } else {
-                BarTogether::No
-            })
-        } else {
-            Some(BarTogether::Mensurstrich)
-        });
-        let hidden = group
-            .getattr("style")
-            .and_then(|style| style.getattr("hideObjectOnPrint"))
-            .map(|hidden| hidden.is_truthy().unwrap_or(false))
-            .unwrap_or(false);
-        read.set_name_hidden(hidden);
-        stream.add_staff_group(read);
+        stream.add_staff_group(staff_group_value(&group?, &parts)?);
     }
     let _ = py;
     Ok(())
+}
+
+/// A music21 `StaffGroup`, naming the parts it spans by where they stand
+/// among `parts`.
+pub(crate) fn staff_group_value(
+    group: &Bound<'_, PyAny>,
+    parts: &[Bound<'_, PyAny>],
+) -> PyResult<music21::StaffGroup> {
+    use music21::{BarTogether, StaffGroup};
+    let mut positions = Vec::new();
+    for spanned in group.call_method0("getSpannedElements")?.walk()? {
+        let spanned = spanned?;
+        if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
+            positions.push(position);
+        }
+    }
+    let mut read = StaffGroup::new(positions);
+    read.set_name(text_attribute(group, "name"));
+    read.set_abbreviation(text_attribute(group, "abbreviation"));
+    read.set_symbol(text_attribute(group, "symbol").as_deref())
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    let bar_together = group.getattr("barTogether")?;
+    read.set_bar_together(if bar_together.is_none() {
+        None
+    } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
+        Some(if flag.is_true() {
+            BarTogether::Yes
+        } else {
+            BarTogether::No
+        })
+    } else {
+        Some(BarTogether::Mensurstrich)
+    });
+    let hidden = group
+        .getattr("style")
+        .and_then(|style| style.getattr("hideObjectOnPrint"))
+        .map(|hidden| hidden.is_truthy().unwrap_or(false))
+        .unwrap_or(false);
+    read.set_name_hidden(hidden);
+    Ok(read)
 }
 
 /// A music21 `Metadata`, name by name in the order music21 keeps them.
@@ -9021,7 +9069,7 @@ fn is_inner_barline(stream: &Bound<'_, PyAny>, element: &Bound<'_, PyAny>) -> Py
 /// A music21 spanner of a kind the crate carries, naming what it joins by
 /// position among `leaves`. One joining anything outside them -- a slur
 /// from one part into another -- is left out.
-fn spanner_value(
+pub(crate) fn spanner_value(
     spanner: &Bound<'_, PyAny>,
     leaves: &[Py<PyAny>],
 ) -> PyResult<Option<music21::Spanner>> {

@@ -125,6 +125,72 @@ pub struct ChordSymbol {
     /// moves a chord's, which stand in for the ones the figure would sound.
     #[cfg_attr(feature = "serde", serde(default))]
     transposed: Option<Vec<Pitch>>,
+    /// The Roman numeral the symbol was read off, where it is written as
+    /// one: MusicXML 4's `<numeral>` in place of a root.
+    #[cfg_attr(feature = "serde", serde(default))]
+    numeral: Option<Box<NumeralFigure>>,
+}
+
+/// Whether a numeral written as a harmony shows its key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum KeyDisplay {
+    /// The key is the one in force: music21's `followsKeyChange` false.
+    Hidden,
+    /// The numeral is the first in a new key, which is shown.
+    Shown,
+}
+
+/// What MusicXML 4 writes of a Roman numeral as a `<numeral>`: music21's
+/// `romanNumeralToXml` with `writeAsChord` off.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NumeralFigure {
+    /// The figure without what follows a slash: music21's `primaryFigure`.
+    pub figure: String,
+    /// The scale degree of the root, one to seven.
+    pub degree: u8,
+    /// The alteration written in front of the numeral, in semitones.
+    pub front_alteration: Option<FloatType>,
+    /// The key's count of sharps, flats negative.
+    pub fifths: IntegerType,
+    /// The mode MusicXML names: `major`, `minor`, or for the sixth and
+    /// seventh degrees of a minor key the form of minor they come from.
+    pub mode: String,
+    /// Whether the key is shown.
+    pub key: KeyDisplay,
+}
+
+impl NumeralFigure {
+    /// The figure of a numeral whose chord has this root, read as music21
+    /// reads it.
+    pub fn of(numeral: &crate::roman::RomanNumeral, root: &Pitch, key: KeyDisplay) -> Self {
+        let figure = numeral.figure();
+        let figure = figure.split('/').next().unwrap_or(figure).to_string();
+        let degree = numeral.degree();
+        let written = numeral.written_accidental();
+        let home = numeral.key();
+        let above_tonic = (IntegerType::from(pitch_class(root))
+            - IntegerType::from(pitch_class(home.tonic_pitch())))
+        .rem_euclid(12);
+        // A minor key's sixth and seventh come in two forms each.
+        let mode = match (home.mode(), degree) {
+            ("major", _) => "major",
+            (_, 6) if above_tonic == 8 => "natural minor",
+            (_, 6) => "melodic minor",
+            (_, 7) if above_tonic == 10 => "natural minor",
+            (_, 7) => "harmonic minor",
+            _ => "minor",
+        };
+        Self {
+            figure,
+            degree,
+            front_alteration: (written != 0).then_some(FloatType::from(written)),
+            fifths: home.sharps(),
+            mode: mode.to_string(),
+            key,
+        }
+    }
 }
 
 /// The length of a symbol nobody has given one: none at all.
@@ -415,6 +481,7 @@ impl ChordSymbol {
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
             transposed: None,
+            numeral: None,
         })
     }
 
@@ -499,6 +566,7 @@ impl ChordSymbol {
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
             transposed: None,
+            numeral: None,
         })
     }
 
@@ -522,6 +590,7 @@ impl ChordSymbol {
             placement: crate::display::Drawn(None),
             lyrics: Vec::new(),
             transposed: None,
+            numeral: None,
         }
     }
 
@@ -583,6 +652,49 @@ impl ChordSymbol {
     pub fn with_duration(mut self, duration: Duration) -> Self {
         self.duration = duration;
         self
+    }
+
+    /// The Roman numeral the symbol is written as, where it is one.
+    pub fn numeral(&self) -> Option<&NumeralFigure> {
+        self.numeral.as_deref()
+    }
+
+    /// The symbol music21's `romanNumeralToXml` writes for a numeral when
+    /// it is not written as its chord: the chord's symbol, written with
+    /// the numeral in place of its root, lasting as long as the chord.
+    /// `None` where no symbol fits the chord.
+    ///
+    /// ```
+    /// use music21::{Key, RomanNumeral};
+    /// use music21::chordsymbol::{ChordSymbol, KeyDisplay};
+    ///
+    /// let numeral = RomanNumeral::new("V7", Key::from_tonic("C")?)?;
+    /// let chord = numeral.to_chord()?;
+    /// let symbol = ChordSymbol::from_numeral(&chord, &numeral, KeyDisplay::Hidden)?.unwrap();
+    /// assert_eq!(symbol.kind(), Some("dominant-seventh"));
+    /// assert_eq!(symbol.numeral().unwrap().degree, 5);
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// What reading a symbol off the chord refuses.
+    pub fn from_numeral(
+        chord: &Chord,
+        numeral: &crate::roman::RomanNumeral,
+        key: KeyDisplay,
+    ) -> Result<Option<Self>> {
+        let Some(mut symbol) = chord_symbol_from_chord(chord)? else {
+            return Ok(None);
+        };
+        let Some(root) = chord.root() else {
+            return Ok(None);
+        };
+        symbol.numeral = Some(Box::new(NumeralFigure::of(numeral, root, key)));
+        if let Some(duration) = chord.duration() {
+            symbol.duration = duration.clone();
+        }
+        Ok(Some(symbol))
     }
 
     /// music21's `chordKind`: the kind the shorthand names, where it is one

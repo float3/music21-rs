@@ -8,8 +8,8 @@ use super::tree::Element;
 use super::{
     ExportOptions, MeasureExporter, PartContext, barline_element, clef_element, credit_element,
     key_element, midi_instrument, page_layout_element, score_element, score_instrument,
-    staff_details_element, staff_layout_element, system_layout_element, time_signature_element,
-    transpose_element,
+    staff_details_element, staff_group_element, staff_layout_element, system_layout_element,
+    time_signature_element, transpose_element,
 };
 use crate::defaults::FloatType;
 use crate::error::Result;
@@ -215,6 +215,20 @@ pub fn layout_xml(layout: &Layout) -> Option<String> {
 /// ```
 pub fn staff_details_xml(staff: &crate::layout::StaffLayout) -> String {
     staff_details_element(staff).dump()
+}
+
+/// What music21's `staffGroupToXmlPartGroup` writes for a staff group:
+/// the `<part-group type="start">`, its number left for the part list to
+/// give it.
+///
+/// ```
+/// use music21::stream::StaffGroup;
+/// use music21::musicxml::part_group_xml;
+///
+/// assert!(part_group_xml(&StaffGroup::new(vec![0, 1])).starts_with("<part-group type=\"start\">"));
+/// ```
+pub fn part_group_xml(group: &crate::stream::StaffGroup) -> String {
+    staff_group_element(group).dump()
 }
 
 #[cfg(test)]
