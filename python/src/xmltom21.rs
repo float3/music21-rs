@@ -268,7 +268,7 @@ fn set_from_tag_text(
     let name = match attributeName {
         Some(name) => name,
         None => {
-            music21::common::stringtools::hyphen_to_camel_case(tag, "").map_err(import_error)?
+            music21::common::stringtools::hyphen_to_camel_case(tag, "-").map_err(import_error)?
         }
     };
     m21El.setattr(name.as_str(), value)
@@ -342,7 +342,7 @@ impl XMLParserBase {
             Some(given) => names_of(given)?,
             None => xml_names
                 .iter()
-                .map(|name| music21::common::stringtools::hyphen_to_camel_case(name, ""))
+                .map(|name| music21::common::stringtools::hyphen_to_camel_case(name, "-"))
                 .collect::<music21::Result<_>>()
                 .map_err(import_error)?,
         };

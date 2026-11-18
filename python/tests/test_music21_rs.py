@@ -12408,3 +12408,24 @@ print(lyric.style.color)
         "'Style' object has no attribute 'justify'",
         "red",
     ]
+
+
+def test_provided_style_attributes_take_their_names_in_camel_case(tmp_path):
+    """Given no music21 names, `setStyleAttributes` and
+    `_setAttributeFromTagText` write each MusicXML name in camel case."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import expressions, pitch
+from music21.musicxml import xmlToM21
+te = expressions.TextExpression('hi')
+xmlToM21.XMLParserBase().setStyleAttributes(EL('<words font-size="9"/>'), te, ('font-size',))
+acc = pitch.Accidental()
+xmlToM21._setAttributeFromTagText(acc, EL('<accidental><alter>-2</alter></accidental>'), 'alter',
+                                  transform=float)
+print(te.style.fontSize, acc.alter)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["9 -2.0"]

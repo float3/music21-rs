@@ -45,7 +45,21 @@ impl Articulation {
                 .getattr(name)?,
         };
         let made = class.call0()?;
-        made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
+        // A bend's interval is held as the object music21 hands back.
+        let bend = match inner.bend_alter() {
+            Some(alter) => Some(
+                py.import("music21_rs")
+                    .or_else(|_| py.import("music21_rs_facade"))?
+                    .getattr("Interval")?
+                    .call1((alter.semitones(),))?
+                    .unbind(),
+            ),
+            None => None,
+        };
+        let mut held = made.extract::<PyRefMut<'_, Self>>()?;
+        held.inner = inner;
+        held.bend_alter = bend;
+        drop(held);
         Ok(made.unbind())
     }
 
