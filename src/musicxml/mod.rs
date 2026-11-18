@@ -14,17 +14,27 @@
 //!
 //! The writer does no file IO; it hands back the document as a string.
 
+mod fragment;
 mod notate;
 mod partstaff;
 mod read;
 mod tree;
 
-pub use read::from_musicxml;
+pub use fragment::{
+    Joined, Surroundings, chord_with_fret_board_xml, element_xml, frame_note_xml, frame_xml,
+    instrument_xml, layout_xml, part_group_xml, score_header_xml, staff_details_xml, transpose_xml,
+};
+pub use partstaff::{
+    Across, STAFF_TAGGED, StaffDifferences, XmlTree, add_staff_tags, add_staff_tags_to_staves,
+    join as join_staves, measure_number_comes_before, move_measure_contents,
+    move_part_staff_contents, process_subsequent_part_staff, set_earliest_attributes_and_clefs,
+};
+pub use read::{from_musicxml, sound_tempo};
 
 use crate::articulations::Articulation;
 use crate::bar::{Barline, Ending, RepeatDirection};
 use crate::chord::Chord;
-use crate::chordsymbol::ChordSymbol;
+use crate::chordsymbol::{ChordSymbol, KeyDisplay, NumeralFigure};
 use crate::clef::Clef;
 use crate::defaults::FloatType;
 use crate::duration::{Duration, DurationType, Tuplet};
@@ -61,6 +71,27 @@ pub const DIVISIONS_PER_QUARTER: FloatType = 10080.0;
 
 /// The MusicXML version written.
 pub const MUSICXML_VERSION: &str = "4.0";
+
+/// music21's `xmlObjects.isValidXSDID`: whether text is an `xsd:ID`, an
+/// XML name with no colon, which an element's `id` attribute has to be.
+///
+/// ```
+/// use music21::musicxml::is_valid_xsd_id;
+///
+/// assert!(is_valid_xsd_id("hel_lo"));
+/// assert!(!is_valid_xsd_id("4sad"));
+/// assert!(!is_valid_xsd_id(""));
+/// ```
+pub fn is_valid_xsd_id(text: &str) -> bool {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
 
 /// What a document says about how it was made, where the score does not say.
 ///
@@ -182,6 +213,31 @@ pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
     ))
 }
 
+/// A copy of a stream, or of an element put in one, with the notation it
+/// leaves unsaid worked out, as [`ExportOptions::make_notation`] works it
+/// out before writing: music21's `GeneralObjectExporter.fromGeneralObject`
+/// and the score's `makeNotation`. What comes back is a score.
+///
+/// ```
+/// use music21::{Duration, Note, Stream, StreamKind};
+/// use music21::musicxml::make_notation;
+///
+/// let mut part = Stream::with_kind(StreamKind::Part);
+/// part.push(Note::from_name("C4")?.with_duration(Duration::new(8.0)?));
+/// let score = make_notation(&part)?;
+/// assert_eq!(score.kind(), StreamKind::Score);
+/// assert_eq!(score.parts()[0].measures().len(), 2);
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A kind of stream music21 writes no score of, and what making the
+/// notation refuses.
+pub fn make_notation(stream: &Stream) -> Result<Stream> {
+    notate::notated(stream)
+}
+
 /// Whether anything in the stream, itself included, says it is at sounding
 /// pitch: nothing else is moved by writing it at written pitch.
 fn holds_sounding_pitch(stream: &Stream) -> bool {
@@ -204,28 +260,9 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     if score.is_empty() {
         return score_element(&empty_score(), options);
     }
-    let parts: Vec<&Stream> = if has_part_like_streams(score) {
-        for event in score.events() {
-            if let StreamElement::Stream(inner) = event.element()
-                && matches!(inner.kind(), StreamKind::Score | StreamKind::Opus)
-            {
-                return Err(export_error(
-                    "Exporting scores nested inside scores is not supported",
-                ));
-            }
-        }
-        score
-            .events()
-            .iter()
-            .filter_map(|event| event.element().as_stream())
-            .filter(|stream| matches!(stream.kind(), StreamKind::Part | StreamKind::PartStaff))
-            .collect()
-    } else {
-        vec![score]
-    };
-
+    let parts = score_parts(score)?;
     let groups = score.staff_groups();
-    let joined = joinable_groups(&parts, groups);
+    let joined = joinable_groups(&parts, groups).into_indices();
     let voice_bases = voice_bases(&parts, groups, &joined);
     let numbered = id_locals(score, &parts);
     let mut shared = Shared::default();
@@ -267,11 +304,7 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
             })
             .collect();
         let staves: Vec<&Stream> = positions.iter().map(|position| parts[*position]).collect();
-        partstaff::join(
-            &mut roots,
-            differs_across(&staves, first_key, same_key),
-            differs_across(&staves, first_meter, same_meter),
-        )?;
+        partstaff::join(&mut roots, staff_differences(&staves))?;
         let first = roots.swap_remove(0);
         if let Some(part) = exported[positions[0]].as_mut() {
             part.part = first;
@@ -311,11 +344,72 @@ struct StaffRole<'a> {
     later: bool,
 }
 
+/// The parts a score is written as: its parts, or the score itself as one
+/// where it holds none.
+fn score_parts(score: &Stream) -> Result<Vec<&Stream>> {
+    if !has_part_like_streams(score) {
+        return Ok(vec![score]);
+    }
+    for event in score.events() {
+        if let StreamElement::Stream(inner) = event.element()
+            && matches!(inner.kind(), StreamKind::Score | StreamKind::Opus)
+        {
+            return Err(export_error(
+                "Exporting scores nested inside scores is not supported",
+            ));
+        }
+    }
+    Ok(score
+        .events()
+        .iter()
+        .filter_map(|event| event.element().as_stream())
+        .filter(|stream| matches!(stream.kind(), StreamKind::Part | StreamKind::PartStaff))
+        .collect())
+}
+
+/// Which of a score's staff groups are written as one part each.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum JoinableGroups {
+    /// These, by index into the score's staff groups.
+    Joined(Vec<usize>),
+    /// Two of the groups that could be joined share a staff, so none is.
+    Overlapping,
+}
+
+impl JoinableGroups {
+    /// The groups joined, by index; none where they overlap.
+    pub fn into_indices(self) -> Vec<usize> {
+        match self {
+            Self::Joined(indices) => indices,
+            Self::Overlapping => Vec::new(),
+        }
+    }
+}
+
+/// music21's `joinableGroups` for a whole score: the staff groups whose
+/// staves are written as one `<part>`.
+///
+/// ```
+/// use music21::{Stream, StreamKind};
+/// use music21::musicxml::{JoinableGroups, joinable_staff_groups};
+///
+/// let score = Stream::with_kind(StreamKind::Score);
+/// assert_eq!(joinable_staff_groups(&score)?, JoinableGroups::Joined(Vec::new()));
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A score nested in the score.
+pub fn joinable_staff_groups(score: &Stream) -> Result<JoinableGroups> {
+    Ok(joinable_groups(&score_parts(score)?, score.staff_groups()))
+}
+
 /// music21's `joinableGroups`: the staff groups whose staves are written as
 /// one part, by index into the score's groups. A group of more than one
 /// `PartStaff`, each with measures; a second group over the same staves is
 /// passed over; and if any two overlap, none is joined.
-fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> Vec<usize> {
+fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> JoinableGroups {
     let mut joinable: Vec<usize> = Vec::new();
     for (index, group) in groups.iter().enumerate() {
         let staves = group.parts();
@@ -340,12 +434,12 @@ fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> Vec<usize> {
     for index in &joinable {
         for position in groups[*index].parts() {
             if seen.contains(position) {
-                return Vec::new();
+                return JoinableGroups::Overlapping;
             }
             seen.push(*position);
         }
     }
-    joinable
+    JoinableGroups::Joined(joinable)
 }
 
 /// music21's `renumberVoicesWithinStaffGroups`: in a group of staves, a voice
@@ -415,6 +509,34 @@ fn first_meter(staff: &Stream) -> Option<&StreamElement> {
     first_of(staff, |element| {
         matches!(element, StreamElement::TimeSignature(_))
     })
+}
+
+/// Which marks a group's staves start with differently: music21's
+/// `isMultiAttribute` for keys and for meters.
+///
+/// ```
+/// use music21::{KeySignature, Stream, StreamKind};
+/// use music21::musicxml::{Across, staff_differences};
+///
+/// let mut upper = Stream::with_kind(StreamKind::PartStaff);
+/// upper.insert(0.0, KeySignature::new(1));
+/// let mut lower = Stream::with_kind(StreamKind::PartStaff);
+/// lower.insert(0.0, KeySignature::new(2));
+/// assert_eq!(staff_differences(&[&upper, &lower]).keys, Across::Different);
+/// assert_eq!(staff_differences(&[&upper, &lower]).meters, Across::Same);
+/// ```
+pub fn staff_differences(staves: &[&Stream]) -> StaffDifferences {
+    let across = |different| {
+        if different {
+            Across::Different
+        } else {
+            Across::Same
+        }
+    };
+    StaffDifferences {
+        keys: across(differs_across(staves, first_key, same_key)),
+        meters: across(differs_across(staves, first_meter, same_meter)),
+    }
 }
 
 /// Whether a later staff's first mark of a kind differs from the first
@@ -742,17 +864,85 @@ fn empty_score() -> Stream {
     score
 }
 
+/// music21's `romanNumeralToXml`: a harmony read off a numeral's chord
+/// has its root and bass taken out and MusicXML 4's `<numeral>` put first.
+fn numeral_in_place_of_root(harmony: &mut Element, figure: &NumeralFigure) {
+    harmony.children_mut().retain(|node| {
+        !matches!(node, tree::Node::Element(element) if matches!(element.tag(), "root" | "bass"))
+    });
+    let mut numeral = Element::new("numeral");
+    let root = numeral.sub("numeral-root");
+    root.set("text", figure.figure.clone());
+    root.set_text(figure.degree.to_string());
+    if let Some(alter) = figure.front_alteration {
+        let written = numeral.sub("numeral-alter");
+        written.set_text(format!("{alter:?}"));
+        written.set("location", "left");
+    }
+    let key = numeral.sub("numeral-key");
+    if figure.key == KeyDisplay::Hidden {
+        key.set("print-object", "no");
+    }
+    key.sub_text("numeral-fifths", figure.fifths.to_string());
+    key.sub_text("numeral-mode", figure.mode.clone());
+    harmony
+        .children_mut()
+        .insert(0, tree::Node::Element(numeral));
+}
+
+/// music21's `fretBoardToXml`: a diagram's strings, the frets it shows,
+/// and a `<frame-note>` for each stopped string, lowest first. Nothing for
+/// a board with no notes.
+fn frame_element(board: &crate::tablature::FretBoard) -> Option<Element> {
+    if board.fret_notes.is_empty() {
+        return None;
+    }
+    let mut frame = Element::new("frame");
+    frame.sub_text("frame-strings", board.strings.to_string());
+    frame.sub_text("frame-frets", board.display_frets.to_string());
+    for note in board.fret_notes_lowest_first() {
+        frame.push(frame_note_element(note));
+    }
+    Some(frame)
+}
+
+/// music21's `fretNoteToXml`: a stopped string's string, fret and finger.
+fn frame_note_element(note: &crate::tablature::FretNote) -> Element {
+    let mut element = Element::new("frame-note");
+    for (tag, value) in [
+        ("string", note.string),
+        ("fret", note.fret),
+        ("fingering", note.fingering),
+    ] {
+        if let Some(value) = value {
+            element.sub_text(tag, value.to_string());
+        }
+    }
+    element
+}
+
 /// music21's `addDividerComment`.
 fn add_divider_comment(root: &mut Element, comment: &str) {
-    let length = comment.chars().count().min(60);
-    let low = (60 - length) / 2;
-    let high = (60 - length).div_ceil(2);
-    root.push_comment(format!(
-        "{} {comment} {}",
-        "=".repeat(low),
-        "=".repeat(high)
-    ));
+    root.push_comment(divider_text(comment));
 }
+
+/// The text of the comment music21's `addDividerComment` writes: the
+/// comment centred in signs that pad it out to sixty characters.
+///
+/// ```
+/// use music21::musicxml::divider_text;
+///
+/// assert_eq!(divider_text("Part 1"), format!("{} Part 1 {}", "=".repeat(27), "=".repeat(27)));
+/// ```
+pub fn divider_text(comment: &str) -> String {
+    let length = comment.chars().count().min(DIVIDER_WIDTH);
+    let low = (DIVIDER_WIDTH - length) / 2;
+    let high = (DIVIDER_WIDTH - length).div_ceil(2);
+    format!("{} {comment} {}", "=".repeat(low), "=".repeat(high))
+}
+
+/// How wide music21 pads a divider comment.
+const DIVIDER_WIDTH: usize = 60;
 
 /// music21's `setTitles`.
 fn set_titles(root: &mut Element, metadata: Option<&Metadata>, options: &ExportOptions) {
@@ -876,12 +1066,22 @@ fn set_defaults(root: &mut Element, score: &Stream) {
             _ => None,
         });
     let defaults = root.sub("defaults");
-    let Some(layout) = first else {
-        let scaling = defaults.sub("scaling");
-        scaling.sub_text("millimeters", "7");
-        scaling.sub_text("tenths", "40");
-        return;
-    };
+    match first {
+        Some(layout) => set_layout_defaults(defaults, layout),
+        None => {
+            let scaling = defaults.sub("scaling");
+            scaling.sub_text("millimeters", "7");
+            scaling.sub_text("tenths", "40");
+        }
+    }
+    if let Some(style) = score.stream_style() {
+        add_style_to_defaults(defaults, style);
+    }
+}
+
+/// What a score layout puts in `<defaults>`: scaling, and its page,
+/// system and staff layouts.
+fn set_layout_defaults(defaults: &mut Element, layout: &crate::layout::ScoreLayout) {
     if layout.scaling_millimeters.is_some() || layout.scaling_tenths.is_some() {
         let said = |value: Option<Tenths>| {
             value.map_or_else(|| "None".to_string(), |value| value.to_string())
@@ -901,19 +1101,66 @@ fn set_defaults(root: &mut Element, score: &Stream) {
     }
 }
 
-/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
-/// and how it is aligned, each as an attribute where the style says it.
-pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) -> Result<()> {
-    for (name, value) in [
-        ("default-x", &style.absolute_x),
-        ("default-y", &style.absolute_y),
-        ("relative-x", &style.relative_x),
-        ("relative-y", &style.relative_y),
+/// music21's `addStyleToXmlDefaults`: a score style's `<appearance>`, its
+/// music and word fonts, and a font and a language for each lyric name.
+fn add_style_to_defaults(defaults: &mut Element, style: &crate::style::StreamStyle) {
+    if let Some(appearance) = appearance_element(style) {
+        defaults.push(appearance);
+    }
+    for (tag, font) in [
+        ("music-font", &style.music_font),
+        ("word-font", &style.word_font),
     ] {
-        if let Some(value) = value {
-            element.set(name, value.to_string());
+        if let Some(font) = font {
+            set_font(defaults.sub(tag), font);
         }
     }
+    for (name, font) in &style.lyric_fonts {
+        let written = defaults.sub("lyric-font");
+        if let Some(font) = font {
+            set_font(written, font);
+        }
+        if let Some(name) = name {
+            written.set("name", name.as_str());
+        }
+    }
+    for (name, language) in &style.lyric_languages {
+        let written = defaults.sub("lyric-language");
+        if let Some(name) = name {
+            written.set("name", name.as_str());
+        }
+        if let Some(language) = language {
+            written.set("xml:lang", language.as_str());
+        }
+    }
+}
+
+/// music21's `styleToXmlAppearance`: a score style's line widths, note
+/// sizes, distances and other appearances. None where it has none, as
+/// MusicXML's `<appearance>` cannot be empty.
+fn appearance_element(style: &crate::style::StreamStyle) -> Option<Element> {
+    if !style.has_appearance() {
+        return None;
+    }
+    let mut appearance = Element::new("appearance");
+    for (listed, tag) in [
+        (&style.line_widths, "line-width"),
+        (&style.note_sizes, "note-size"),
+        (&style.distances, "distance"),
+        (&style.other_appearances, "other-appearance"),
+    ] {
+        for (kind, value) in listed {
+            let written = appearance.sub(tag);
+            written.set("type", kind.as_str());
+            written.set_text(value.to_string());
+        }
+    }
+    Some(appearance)
+}
+
+/// music21's `setFont`: a font's style, size, weight and family. MusicXML's
+/// font-style has no bold, which music21 writes as a weight.
+fn set_font(element: &mut Element, style: &TextStyle) {
     if let Some(font_style) = style.font_style() {
         element.set("font-style", font_style);
     }
@@ -923,7 +1170,6 @@ pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) ->
     if let Some(weight) = style.font_weight() {
         element.set("font-weight", weight);
     }
-    // MusicXML's font-style has no bold, which music21 writes as a weight.
     match style.font_style() {
         Some("bold") => {
             element.set("font-weight", "bold");
@@ -942,6 +1188,22 @@ pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) ->
     {
         element.set("font-family", family.join(","));
     }
+}
+
+/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
+/// and how it is aligned, each as an attribute where the style says it.
+pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) -> Result<()> {
+    for (name, value) in [
+        ("default-x", &style.absolute_x),
+        ("default-y", &style.absolute_y),
+        ("relative-x", &style.relative_x),
+        ("relative-y", &style.relative_y),
+    ] {
+        if let Some(value) = value {
+            element.set(name, value.to_string());
+        }
+    }
+    set_font(element, style);
     if let Some(color) = &style.color {
         element.set("color", normalize_color(color)?);
     }
@@ -1914,7 +2176,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 let mxnote = self.rest_element(rest, offset, Some(position))?;
                 self.root.push(mxnote);
             }
-            StreamElement::Dynamic(dynamic) => self.dynamic_element(dynamic, offset),
+            StreamElement::Dynamic(dynamic) => self.dynamic_element(dynamic, offset)?,
             StreamElement::MetronomeMark(mark) => self.tempo_elements(mark, offset)?,
             StreamElement::MetricModulation(modulation) => {
                 let resolved = self
@@ -2542,6 +2804,9 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 );
             }
         }
+        if let Some(figure) = symbol.numeral() {
+            numeral_in_place_of_root(&mut harmony, figure);
+        }
         if let Some(element) = self.offset_element(offset, true) {
             harmony.push(element);
         }
@@ -2549,20 +2814,20 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
     }
 
     /// music21's `dynamicToXml`.
-    fn dynamic_element(&mut self, dynamic: &Dynamic, offset: FloatType) {
+    fn dynamic_element(&mut self, dynamic: &Dynamic, offset: FloatType) -> Result<()> {
         let mut dynamics = Element::new("dynamics");
         if DYNAMIC_MARKS.contains(&dynamic.value()) {
             dynamics.sub(dynamic_tag(dynamic.value()));
         } else {
             dynamics.sub_text("other-dynamics", dynamic.value());
         }
-        // A dynamic's style starts music21 off at these positions.
-        dynamics.set("default-x", "-36");
-        dynamics.set("default-y", "-80");
+        // music21's `setPrintStyleAlign`: where the style puts it.
+        set_print_style_align(&mut dynamics, dynamic.style())?;
         let mut direction = self.direction(dynamics, dynamic.placement(), offset, true);
         let volume = (dynamic.volume_scalar() * 127.0) as i64;
         direction.sub("sound").set("dynamics", volume.to_string());
         self.root.push(direction);
+        Ok(())
     }
 
     /// music21's `tempoIndicationToXml` for a metronome mark: the mark, and
@@ -2986,44 +3251,22 @@ fn related_spanners(
                 continue;
             }
             let mark = match spanner.kind() {
-                SpannerKind::Ottava => {
-                    let mut shift = Element::new("octave-shift");
-                    shift.set("number", id_local.to_string());
-                    let octave = spanner.shift();
-                    // An `8va` is written `down`: the notes are engraved
-                    // below where they sound.
-                    shift.set(
-                        "type",
-                        match (start, octave.is_some_and(|octave| octave.up())) {
-                            (false, _) => "stop",
-                            (true, true) => "down",
-                            (true, false) => "up",
-                        },
-                    );
-                    if let Some(octave) = octave {
-                        shift.set("size", octave.magnitude().to_string());
-                    }
-                    shift
-                }
+                SpannerKind::Ottava => parameterised("octave-shift", spanner, id_local, start),
                 SpannerKind::Line => {
-                    let mut bracket = Element::new("bracket");
-                    bracket.set("number", id_local.to_string());
+                    let mut bracket = parameterised("bracket", spanner, id_local, start);
                     bracket.set("line-type", spanner.line_type().unwrap_or("solid"));
-                    bracket.set("type", if start { "start" } else { "stop" });
-                    let ends = spanner.ends();
-                    let (tick, height) = if start {
-                        (ends.start, ends.start_height)
-                    } else {
-                        (ends.end, ends.end_height)
-                    };
-                    bracket.set("line-end", tick.as_str());
-                    if let Some(height) = height {
-                        bracket.set("end-length", num_to_int_or_float(height));
-                    }
                     bracket
                 }
-                SpannerKind::PedalMark => pedal_element(spanner, id_local, start),
-                _ => wedge_element(spanner, id_local, start),
+                _ => parameterised(
+                    if spanner.kind() == SpannerKind::PedalMark {
+                        "pedal"
+                    } else {
+                        "wedge"
+                    },
+                    spanner,
+                    id_local,
+                    start,
+                ),
             };
             let mut direction = Element::new("direction");
             if let Some(placement) = spanner.placement() {
@@ -3079,64 +3322,146 @@ fn offset_element_from(
     Some(element)
 }
 
-/// A pedal mark's `<pedal>`, where it goes down or where it comes up:
-/// music21's `_spannerStartParameters` and `_spannerEndParameters`.
-///
-/// MusicXML has no start for any pedal but the sustaining and sostenuto
-/// ones, so music21 writes the soft and silent pedals as a plain start.
-fn pedal_element(spanner: &Spanner, id_local: u32, start: bool) -> Element {
-    let pedal = spanner.pedal().unwrap_or_default();
-    let mut element = Element::new("pedal");
+/// The element a direction spanner writes where it starts or stops,
+/// numbered, with the attributes [`spanner_parameters`] gives it.
+fn parameterised(tag: &'static str, spanner: &Spanner, id_local: u32, start: bool) -> Element {
+    let mut element = Element::new(tag);
     element.set("number", id_local.to_string());
-    let line = pedal.form.is_some_and(PedalForm::has_line);
-    if start {
-        element.set(
-            "type",
-            if pedal.pedal_type == Some(PedalType::Sostenuto) {
-                "sostenuto"
-            } else {
-                "start"
-            },
-        );
-        if pedal.form == Some(PedalForm::Line) {
-            element.set("line", "yes");
-        } else {
-            element.set("sign", "yes");
-        }
-        if pedal.abbreviated {
-            element.set("abbreviated", "yes");
-        }
+    let end = if start {
+        SpannerEnd::Start
     } else {
-        element.set("type", "stop");
-        if line {
-            element.set("line", "yes");
-        } else {
-            element.set("sign", "yes");
-        }
+        SpannerEnd::Stop
+    };
+    for (name, value) in spanner_parameters(spanner, end) {
+        element.set(name, value.to_string());
     }
     element
 }
 
-/// A hairpin's `<wedge>`, where it opens or where it closes: a crescendo
-/// opens from nothing and a diminuendo closes to nothing.
-fn wedge_element(spanner: &Spanner, id_local: u32, start: bool) -> Element {
-    let crescendo = spanner.kind() == SpannerKind::Crescendo;
-    let mut wedge = Element::new("wedge");
-    wedge.set("number", id_local.to_string());
-    wedge.set(
-        "type",
-        match (start, crescendo) {
-            (true, true) => "crescendo",
-            (true, false) => "diminuendo",
-            (false, _) => "stop",
-        },
-    );
-    if start == crescendo {
-        wedge.set("spread", "0");
-    } else if let Some(spread) = spanner.spread() {
-        wedge.set("spread", num_to_int_or_float(spread));
+/// Which end of a spanner is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpannerEnd {
+    /// Where it starts.
+    Start,
+    /// Where it stops.
+    Stop,
+}
+
+/// A value of [`spanner_parameters`]: text, or a number music21 keeps as
+/// one.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SpannerParameter {
+    /// Text, as `yes` or `crescendo`.
+    Text(&'static str),
+    /// A whole number, as an octave line's size.
+    Whole(i64),
+    /// A number with a fraction, as a hairpin's spread may be.
+    Decimal(FloatType),
+}
+
+impl std::fmt::Display for SpannerParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(text) => f.write_str(text),
+            Self::Whole(number) => write!(f, "{number}"),
+            Self::Decimal(number) => f.write_str(&num_to_int_or_float(*number)),
+        }
     }
-    wedge
+}
+
+/// music21's `_spannerStartParameters` and `_spannerEndParameters`: the
+/// attributes an octave line, a bracket line, a hairpin or a pedal mark
+/// writes where it starts or stops. Every other spanner has only its
+/// `type`.
+///
+/// An `8va` starts `down`: the notes are engraved below where they sound.
+/// A crescendo opens from nothing and a diminuendo closes to nothing.
+/// MusicXML has no start for any pedal but the sustaining and sostenuto
+/// ones, so music21 writes the soft and silent pedals as a plain start.
+///
+/// ```
+/// use music21::{Spanner, SpannerKind};
+/// use music21::musicxml::{SpannerEnd, SpannerParameter, spanner_parameters};
+///
+/// let crescendo = Spanner::new(SpannerKind::Crescendo, vec![0, 1]);
+/// let start = spanner_parameters(&crescendo, SpannerEnd::Start);
+/// assert!(start.contains(&("type", SpannerParameter::Text("crescendo"))));
+/// assert!(start.contains(&("spread", SpannerParameter::Whole(0))));
+/// ```
+pub fn spanner_parameters(
+    spanner: &Spanner,
+    end: SpannerEnd,
+) -> Vec<(&'static str, SpannerParameter)> {
+    use SpannerParameter::{Decimal, Text, Whole};
+    let start = end == SpannerEnd::Start;
+    let mut post = vec![("type", Text(if start { "start" } else { "stop" }))];
+    let mut set = |name: &'static str, value: SpannerParameter| match post
+        .iter_mut()
+        .find(|(known, _)| *known == name)
+    {
+        Some(held) => held.1 = value,
+        None => post.push((name, value)),
+    };
+    match spanner.kind() {
+        SpannerKind::Ottava => {
+            let octave = spanner.shift();
+            if let Some(octave) = octave {
+                set("size", Whole(i64::from(octave.magnitude())));
+            }
+            if start {
+                set(
+                    "type",
+                    Text(if octave.is_some_and(|o| o.up()) {
+                        "down"
+                    } else {
+                        "up"
+                    }),
+                );
+            }
+        }
+        SpannerKind::Line => {
+            let ends = spanner.ends();
+            let (tick, height) = if start {
+                (ends.start, ends.start_height)
+            } else {
+                (ends.end, ends.end_height)
+            };
+            set("line-end", Text(tick.as_str()));
+            if let Some(height) = height {
+                set("end-length", Decimal(height));
+            }
+        }
+        kind if kind.is_wedge() => {
+            let crescendo = kind == SpannerKind::Crescendo;
+            if start {
+                set(
+                    "type",
+                    Text(if crescendo { "crescendo" } else { "diminuendo" }),
+                );
+            }
+            if start == crescendo {
+                set("spread", Whole(0));
+            } else if let Some(spread) = spanner.spread() {
+                set("spread", Decimal(spread));
+            }
+        }
+        SpannerKind::PedalMark => {
+            let pedal = spanner.pedal().unwrap_or_default();
+            let lined = match end {
+                SpannerEnd::Start => pedal.form == Some(PedalForm::Line),
+                SpannerEnd::Stop => pedal.form.is_some_and(PedalForm::has_line),
+            };
+            if start && pedal.pedal_type == Some(PedalType::Sostenuto) {
+                set("type", Text("sostenuto"));
+            }
+            set(if lined { "line" } else { "sign" }, Text("yes"));
+            if start && pedal.abbreviated {
+                set("abbreviated", Text("yes"));
+            }
+        }
+        _ => {}
+    }
+    post
 }
 
 /// music21's `objectAttachedSpannersToNotations`: a slur's start on its
@@ -3451,7 +3776,14 @@ fn is_written_as_note(element: &StreamElement) -> bool {
 /// the same number. Three things carry an octave into a document -- a
 /// pitch, a rest's displayed place and an unpitched stroke's -- and each
 /// goes through this.
-fn musicxml_octave(octave: i32) -> i32 {
+///
+/// ```
+/// use music21::musicxml::musicxml_octave;
+///
+/// assert_eq!(musicxml_octave(4), 4);
+/// assert_eq!(musicxml_octave(12), 9);
+/// ```
+pub fn musicxml_octave(octave: i32) -> i32 {
     octave.clamp(0, 9)
 }
 
@@ -3465,7 +3797,13 @@ fn step_and_octave(number: i32) -> (char, i32) {
 
 /// music21's `xmlObjects.fractionToPercent`: a share as a whole percent,
 /// truncated.
-fn fraction_to_percent(share: FloatType) -> String {
+///
+/// ```
+/// use music21::musicxml::fraction_to_percent;
+///
+/// assert_eq!(fraction_to_percent(0.251), "25");
+/// ```
+pub fn fraction_to_percent(share: FloatType) -> String {
     ((share * 100.0) as i64).to_string()
 }
 
@@ -3488,20 +3826,48 @@ fn num_to_int_or_float(value: FloatType) -> String {
     }
 }
 
-/// music21's `typeToMusicXMLType`.
+/// The MusicXML `<type>` a duration of one written value is written as.
 fn musicxml_type(duration_type: DurationType) -> Result<&'static str> {
-    match duration_type {
-        DurationType::Longa => Ok("long"),
-        DurationType::TwentyFortyEighth => Err(export_error(
+    type_to_musicxml(duration_type.music21_name())
+}
+
+/// music21's `typeToMusicXMLType`: the MusicXML `<type>` for a music21
+/// duration type, which is the type itself but for `longa`, written
+/// `long`. The types MusicXML has no value for are refused.
+///
+/// ```
+/// use music21::musicxml::type_to_musicxml;
+///
+/// assert_eq!(type_to_musicxml("longa")?, "long");
+/// assert_eq!(type_to_musicxml("16th")?, "16th");
+/// assert!(type_to_musicxml("duplex-maxima").is_err());
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// `2048th`, `duplex-maxima`, `inexpressible`, `complex` and `zero`, each
+/// with music21's message.
+pub fn type_to_musicxml(value: &str) -> Result<&str> {
+    match value {
+        "longa" => Ok("long"),
+        "2048th" => Err(export_error(
             "Cannot convert \"2048th\" duration to MusicXML (too short).",
         )),
-        DurationType::DuplexMaxima => Err(export_error(
+        "duplex-maxima" => Err(export_error(
             "Cannot convert \"duplex-maxima\" duration to MusicXML (too long).",
         )),
-        DurationType::Zero => Err(export_error(
+        "inexpressible" => Err(export_error(
+            "Cannot convert inexpressible durations to MusicXML.",
+        )),
+        "complex" => Err(export_error(
+            "Cannot convert complex durations to MusicXML. Try exporting with \
+             makeNotation=True or manually running splitAtDurations()",
+        )),
+        "zero" => Err(export_error(
             "Cannot convert durations without types to MusicXML.",
         )),
-        other => Ok(other.music21_name()),
+        other => Ok(other),
     }
 }
 
@@ -3512,13 +3878,8 @@ fn written_type(duration: &Duration) -> Result<(&'static str, u32)> {
     match components.as_slice() {
         [(duration_type, dots)] => Ok((musicxml_type(*duration_type)?, *dots)),
         [] if duration.quarter_length() == 0.0 => musicxml_type(DurationType::Zero).map(|t| (t, 0)),
-        [] => Err(export_error(
-            "Cannot convert inexpressible durations to MusicXML.",
-        )),
-        _ => Err(export_error(
-            "Cannot convert complex durations to MusicXML. Try exporting with \
-             makeNotation=True or manually running splitAtDurations()",
-        )),
+        [] => type_to_musicxml("inexpressible").map(|t| (t, 0)),
+        _ => type_to_musicxml("complex").map(|t| (t, 0)),
     }
 }
 
@@ -3892,7 +4253,9 @@ fn lyric_element(lyric: &Lyric) -> Result<Element> {
 /// The `<key>` for a key or a key signature, and nothing for anything else.
 fn key_element(element: &StreamElement) -> Option<Result<Element>> {
     match element {
-        StreamElement::KeySignature(signature) => Some(key_signature_element(signature, None)),
+        StreamElement::KeySignature(signature) => {
+            Some(key_signature_element(signature, signature.mode()))
+        }
         StreamElement::Key(key) => {
             let mut signature = key.key_signature();
             signature.set_color(key.color().map(str::to_string));
@@ -4018,8 +4381,9 @@ fn transpose_element(interval: &Interval) -> Element {
     element
 }
 
-/// music21's `xmlObjects.DYNAMIC_MARKS`.
-const DYNAMIC_MARKS: [&str; 27] = [
+/// music21's `xmlObjects.DYNAMIC_MARKS`: the marks MusicXML writes as a
+/// `<dynamics>` element of their own name.
+pub const DYNAMIC_MARKS: [&str; 27] = [
     "p",
     "pp",
     "ppp",
@@ -4068,7 +4432,19 @@ fn is_fraction_offset(offset: FloatType) -> bool {
 
 /// music21's `normalizeColor`: a hex colour upper-cased, and a CSS colour
 /// name written as its hex value.
-fn normalize_color(color: &str) -> Result<String> {
+///
+/// ```
+/// use music21::musicxml::normalize_color;
+///
+/// assert_eq!(normalize_color("red")?, "#FF0000");
+/// assert_eq!(normalize_color("#00ff00")?, "#00FF00");
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A name that is not a CSS colour's.
+pub fn normalize_color(color: &str) -> Result<String> {
     if color.is_empty() {
         return Ok(String::new());
     }
@@ -4332,20 +4708,20 @@ mod tests {
         };
         let symbol = pedal(Some(PedalType::Sustain), Some(PedalForm::Symbol));
         assert_eq!(
-            pedal_element(&symbol, 1, true).dump(),
+            parameterised("pedal", &symbol, 1, true).dump(),
             "<pedal number=\"1\" sign=\"yes\" type=\"start\" />"
         );
         assert_eq!(
-            pedal_element(&symbol, 1, false).dump(),
+            parameterised("pedal", &symbol, 1, false).dump(),
             "<pedal number=\"1\" sign=\"yes\" type=\"stop\" />"
         );
         let line = pedal(Some(PedalType::Sostenuto), Some(PedalForm::Line));
         assert_eq!(
-            pedal_element(&line, 2, true).dump(),
+            parameterised("pedal", &line, 2, true).dump(),
             "<pedal line=\"yes\" number=\"2\" type=\"sostenuto\" />"
         );
         assert_eq!(
-            pedal_element(&line, 2, false).dump(),
+            parameterised("pedal", &line, 2, false).dump(),
             "<pedal line=\"yes\" number=\"2\" type=\"stop\" />"
         );
     }
@@ -4895,7 +5271,7 @@ mod tests {
     #[test]
     fn a_dynamic_is_a_direction_with_its_loudness() {
         let root = with_measure(|exporter| {
-            exporter.dynamic_element(&Dynamic::new("ppp"), 1.0);
+            exporter.dynamic_element(&Dynamic::new("ppp"), 1.0).unwrap();
             exporter.root.clone()
         });
         assert_eq!(

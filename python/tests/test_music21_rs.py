@@ -11752,3 +11752,254 @@ print(nwt.positionMeasure, nwt.currentPosition())
         "True 4.0 3.0",
         "None 4.0",
     ]
+
+
+def test_provided_musicxml_exports_as_music21_does(tmp_path):
+    """Provided, `musicxml.m21ToXml` writes a pitch as a whole document,
+    a note alone as the `<note>` its measure writes (appending it, as
+    music21's exporter does), and an empty score as music21's blank
+    page; `xmlObjects` and `helpers` carry music21's names."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import musicxml, note, pitch
+from music21.musicxml import helpers, m21ToXml, xmlObjects
+print({'helpers', 'm21ToXml', 'partStaffExporter', 'xmlObjects'} <= set(musicxml.__all__))
+out = m21ToXml.GeneralObjectExporter(pitch.Pitch('D#4')).parse().decode('utf-8')
+print('<alter>1</alter>' in out, out.count('<measure '))
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.noteToXml(note.Note('E-5', quarterLength=0.5)))
+print(len(MEX.xmlRoot))
+SX = m21ToXml.ScoreExporter()
+print(SX.parse().find('work/work-title').text)
+error = xmlObjects.MusicXMLExportException('too short')
+error.partName = 'Trumpet'
+error.measureNumber = '1'
+print(error, issubclass(m21ToXml.MusicXMLExportException, music21_rs._provide.Music21Exception))
+print(xmlObjects.booleanToYesNo(5), xmlObjects.isValidXSDID('4sad'))
+print(helpers.measureNumberComesBefore('23', '23a'), m21ToXml.typeToMusicXMLType('longa'))
+print([cls.__name__ for cls in m21ToXml.ScoreExporter.__mro__])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "True 1",
+        "<note>",
+        "  <pitch>",
+        "    <step>E</step>",
+        "    <alter>-1</alter>",
+        "    <octave>5</octave>",
+        "  </pitch>",
+        "  <duration>5040</duration>",
+        "  <type>eighth</type>",
+        "  <accidental>flat</accidental>",
+        "</note>",
+        "1",
+        "This Page Intentionally Left Blank",
+        "In part (Trumpet), measure (1): too short True",
+        "yes False",
+        "True long",
+        "['ScoreExporter', 'XMLExporterBase', 'PartStaffExporterMixin', 'object']",
+    ]
+
+
+def test_provided_musicxml_writes_a_dynamics_style_and_a_signatures_mode(tmp_path):
+    """Provided, a dynamic's style moves it as music21 writes it
+    (`relative-y` beside the default place), and a key signature given a
+    mode writes it, as music21's `dynamicToXml` and `keySignatureToXml`
+    docstrings show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, key
+from music21.musicxml import m21ToXml
+ppp = dynamics.Dynamic('ppp')
+ppp.style.relativeY = -10
+MEX = m21ToXml.MeasureExporter()
+print(MEX.dynamicToXml(ppp).find('direction-type/dynamics').attrib)
+ks = key.KeySignature(-3)
+print(getattr(ks, 'mode', None))
+ks.mode = 'major'
+print(MEX.keySignatureToXml(ks).find('mode').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{'default-x': '-36', 'default-y': '-80', 'relative-y': '-10'}",
+        "None",
+        "major",
+    ]
+
+
+def test_provided_musicxml_writes_a_numeral_as_a_harmony(tmp_path):
+    """Provided, a Roman numeral not written as its chord is a MusicXML 4
+    `<harmony>` holding a `<numeral>`, which takes no time: the next one
+    is moved to with a `<forward>`, as music21's
+    `test_roman_musicxml_two_kinds` and `romanNumeralToXml` show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import roman, stream
+from music21.musicxml import m21ToXml
+rn1 = roman.RomanNumeral('I', 'C')
+rn1.duration.type = 'half'
+rn2 = roman.RomanNumeral('V', 'C')
+rn2.duration.type = 'half'
+m = stream.Measure()
+m.insert(0.0, rn1)
+m.insert(2.0, rn2)
+rn1.writeAsChord = False
+rn2.writeAsChord = False
+out = m21ToXml.GeneralObjectExporter().parse(m).decode('utf-8')
+print('<numeral' in out, '<forward>' in out, '<chord' in out, '<rest' in out)
+complexRn = roman.RomanNumeral('#iio65', 'e-')
+complexRn.followsKeyChange = True
+complexRn.writeAsChord = False
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.romanNumeralToXml(complexRn))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True False False",
+        "<harmony>",
+        "  <numeral>",
+        '    <numeral-root text="#iio65">2</numeral-root>',
+        '    <numeral-alter location="left">1.0</numeral-alter>',
+        "    <numeral-key>",
+        "      <numeral-fifths>-6</numeral-fifths>",
+        "      <numeral-mode>minor</numeral-mode>",
+        "    </numeral-key>",
+        "  </numeral>",
+        "  <kind>diminished-seventh</kind>",
+        "  <inversion>1</inversion>",
+        "</harmony>",
+    ]
+
+
+def test_provided_metadata_properties_and_exporter_steps(tmp_path):
+    """Provided, `metadata.properties` holds music21's vocabulary as
+    `PropertyDescription` dataclasses and its lookup tables, and the
+    exporter's style, spanner and staff-group steps answer as music21's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, expressions, layout, spanner, stream
+from music21.metadata import properties
+from music21.musicxml import m21ToXml
+from xml.etree.ElementTree import fromstring as EL
+print(len(properties.STANDARD_PROPERTY_DESCRIPTIONS), properties.UNIQUE_NAME_TO_NAMESPACE_NAME['title'])
+print(properties.MUSIC21_WORK_ID_TO_UNIQUE_NAME['date'], properties.UNIQUE_NAME_TO_VALUE_TYPE['composer'].__name__)
+XB = m21ToXml.XMLExporterBase()
+mx = EL('<text>hi</text>')
+te = expressions.TextExpression('hi!')
+te.style.fontStyle = 'bolditalic'
+XB.setFont(mx, te)
+XB.dump(mx)
+ssp = m21ToXml.MeasureExporter._spannerStartParameters
+print(ssp('Ottava', spanner.Ottava(type='8va')), ssp('DynamicWedge', dynamics.Crescendo()))
+s = stream.Score()
+staves = []
+for name in ('a', 'b'):
+    staff = stream.PartStaff(id=name)
+    staff.insert(0, stream.Measure())
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+print(len(SX.joinableGroups()))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "131 dcterms:title",
+        "dateCreated Contributor",
+        '<text font-style="italic" font-weight="bold">hi</text>',
+        "{'type': 'down', 'size': 8} {'type': 'crescendo', 'spread': 0}",
+        "1",
+    ]
+
+
+def test_provided_musicxml_joins_staves_in_steps_and_writes_frames(tmp_path):
+    """Provided, the part-staff mixin's steps join a piano's staves over
+    ElementTree as the writer joins them, a fret board is a `<frame>`, and
+    a score's `StreamStyle` is written into its `<defaults>`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import clef, layout, meter, note, stream, tablature
+from music21.musicxml import m21ToXml, partStaffExporter
+from xml.etree.ElementTree import fromstring as EL
+s = stream.Score()
+staves = []
+for c in (clef.TrebleClef(), clef.BassClef()):
+    staff = stream.PartStaff()
+    m = stream.Measure(number=1)
+    m.append([c, meter.TimeSignature('4/4'), note.Note(type='whole')])
+    staff.append(m)
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+SX.scorePreliminaries()
+SX.parsePartlikeScore()
+SX.postPartProcess()
+root = SX.xmlRoot
+print(len(SX.partExporterList), len(root.findall('part')), len(root.findall('part/measure/note/staff')))
+print(root.find('part/measure/attributes/staves').text)
+measure = EL('<measure number="3"><note><staff>1</staff></note></measure>')
+try:
+    partStaffExporter.addStaffTags(measure, 2, tagList=['note'])
+except m21ToXml.MusicXMLExportException as error:
+    print(error)
+MEX = m21ToXml.MeasureExporter()
+board = tablature.GuitarFretBoard(fretNotes=[tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)])
+frame = MEX.fretBoardToXml(board)
+print(frame.find('frame-strings').text, [n.find('string').text for n in frame.findall('frame-note')])
+s.style.lineWidths.append(('beam', 5.0))
+print(m21ToXml.ScoreExporter(s).styleToXmlAppearance().find('line-width').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "1 1 2",
+        "2",
+        "In part (), measure (3): Attempted to create a second <staff> tag",
+        "6 ['3', '1']",
+        "5.0",
+    ]
+
+
+def test_provided_pedal_objects_and_chord_with_fret_board(tmp_path):
+    """Provided, music21's pedal objects and `ChordWithFretBoard` exist, and
+    the exporter writes them as music21's `pedalObjectToXml` and
+    `chordWithFretBoardToXml` do."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import expressions, tablature
+from music21.musicxml import m21ToXml
+pm = expressions.PedalMark()
+po = expressions.PedalBounce()
+pm.addSpannedElements(po)
+pm.pedalForm = expressions.PedalForm.Line
+pm.pedalType = expressions.PedalType.Sustain
+print(po, pm.pedalForm.value)
+MEX = m21ToXml.MeasureExporter()
+print(MEX.pedalObjectToXml(po).find('direction-type/pedal').attrib)
+notes = [tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)]
+chord = tablature.ChordWithFretBoard('DM', numStrings=6, fretNotes=notes)
+chord.tuning = tablature.GuitarFretBoard().tuning
+print(chord, chord.getPitches()[-1])
+harmony = MEX.chordWithFretBoardToXml(chord)
+print(harmony.find('kind').text, harmony.find('frame/frame-strings').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.expressions.PedalBounce uninserted> line",
+        "{'line': 'yes', 'type': 'change'}",
+        "<music21.tablature.ChordWithFretBoard DM> F#4",
+        "major 6",
+    ]

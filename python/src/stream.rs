@@ -5078,6 +5078,14 @@ impl Stream {
         Ok(())
     }
 
+    /// Moves the stream's own offset onto what it holds, leaving it at
+    /// nought: music21's `transferOffsetToElements`.
+    fn transferOffsetToElements(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let offset: f64 = slf.getattr("offset")?.extract()?;
+        Self::shiftElements(slf, offset, None, None, None)?;
+        slf.setattr("offset", 0.0)
+    }
+
     /// A copy with a measure's one voice dissolved into the measure
     /// itself: music21's `flattenUnnecessaryVoices`, which `force` applies
     /// to every voice however many there are.
@@ -7316,6 +7324,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
             value = value.with_duration(duration);
         }
+        if !stand_ins && let Some(symbol) = numeral_symbol(object, &value)? {
+            return Ok(Some(StreamElement::ChordSymbol(symbol)));
+        }
         return Ok(Some(StreamElement::Chord(value)));
     }
     // music21's own percussion classes, read for a score writer. The walks
@@ -7379,6 +7390,11 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         let mut value = dynamic.inner.clone();
         drop(dynamic);
         value.set_placement(placement_of(object));
+        // Where its style moves it, where it carries one: a dynamic of
+        // the wheel's own has none, and the crate's starting place stands.
+        if let Ok(style) = object.getattr("style") {
+            value.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(value)));
     }
     if let Ok(key) = object.cast::<crate::key::Key>() {
@@ -8356,6 +8372,9 @@ fn music21_value(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
         let mut dynamic =
             music21::dynamics::Dynamic::new(object.getattr("value")?.extract::<String>()?);
         dynamic.set_placement(placement_of(object));
+        if let Ok(style) = object.getattr("style") {
+            dynamic.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(dynamic)));
     }
     // A metric modulation is two marks, and is asked for before a mark.
@@ -8671,14 +8690,114 @@ fn text_box_value(object: &Bound<'_, PyAny>) -> PyResult<music21::text::TextBox>
     let content = text_attribute(object, "content").unwrap_or_default();
     let mut read = music21::text::TextBox::new(content);
     read.page = whole_of(object, "page").unwrap_or(1);
-    let style = object.getattr("style")?;
-    let words = |name: &str| text_attribute(&style, name);
-    let text = &mut read.style;
-    text.absolute_x = style_value_of(&style, "absoluteX");
-    text.absolute_y = style_value_of(&style, "absoluteY");
-    text.relative_x = style_value_of(&style, "relativeX");
-    text.relative_y = style_value_of(&style, "relativeY");
-    text.font_size = style_value_of(&style, "fontSize");
+    read.style = text_style_of(&object.getattr("style")?)?;
+    Ok(read)
+}
+
+/// A Roman numeral not written as its chord, as the harmony music21's
+/// `romanNumeralToXml` writes for it: `writeAsChord` false, its key shown
+/// where it `followsKeyChange`.
+fn numeral_symbol(
+    object: &Bound<'_, PyAny>,
+    chord: &music21::Chord,
+) -> PyResult<Option<music21::chordsymbol::ChordSymbol>> {
+    use music21::chordsymbol::{ChordSymbol, KeyDisplay};
+    let Some(numeral) = chord.numeral() else {
+        return Ok(None);
+    };
+    let as_chord = object
+        .getattr("writeAsChord")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(true);
+    if as_chord {
+        return Ok(None);
+    }
+    let display = match object
+        .getattr("followsKeyChange")
+        .and_then(|flag| flag.is_truthy())
+    {
+        Ok(true) => KeyDisplay::Shown,
+        _ => KeyDisplay::Hidden,
+    };
+    ChordSymbol::from_numeral(chord, numeral, display)
+        .map_err(|error| StreamException::new_err(error.to_string()))
+}
+
+/// A stream's `StreamStyle`, as the crate keeps it, where it says what a
+/// score's `<defaults>` writes; `None` for a plain `Style`.
+fn stream_style_of(style: &Bound<'_, PyAny>) -> PyResult<Option<music21::style::StreamStyle>> {
+    use music21::style::{StreamStyle, StyleValue};
+    let Ok(line_widths) = style.getattr("lineWidths") else {
+        return Ok(None);
+    };
+    let pairs = |listed: Bound<'_, PyAny>| -> PyResult<Vec<(String, StyleValue)>> {
+        let mut read = Vec::new();
+        for pair in listed.try_iter()? {
+            let (kind, value): (String, Bound<'_, PyAny>) = pair?.extract()?;
+            let value = if value.is_instance_of::<pyo3::types::PyInt>() {
+                StyleValue::Whole(value.extract()?)
+            } else if let Ok(number) = value.extract::<f64>() {
+                StyleValue::Decimal(number)
+            } else {
+                StyleValue::Text(value.str()?.to_string())
+            };
+            read.push((kind, value));
+        }
+        Ok(read)
+    };
+    let font = |name: &str| -> PyResult<Option<music21::style::TextStyle>> {
+        match style.getattr(name) {
+            Ok(font) if !font.is_none() => text_style_of(&font).map(Some),
+            _ => Ok(None),
+        }
+    };
+    let optional = |value: Bound<'_, PyAny>| -> PyResult<Option<String>> {
+        if value.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(value.str()?.to_string()))
+    };
+    let mut lyric_fonts = Vec::new();
+    for pair in style.getattr("lyricFonts")?.try_iter()? {
+        let (name, font): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        let font = if font.is_none() {
+            None
+        } else {
+            Some(text_style_of(&font)?)
+        };
+        lyric_fonts.push((optional(name)?, font));
+    }
+    let mut lyric_languages = Vec::new();
+    for pair in style.getattr("lyricLanguages")?.try_iter()? {
+        let (name, language): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        lyric_languages.push((optional(name)?, optional(language)?));
+    }
+    let read = StreamStyle {
+        line_widths: pairs(line_widths)?,
+        note_sizes: pairs(style.getattr("noteSizes")?)?,
+        distances: pairs(style.getattr("distances")?)?,
+        other_appearances: pairs(style.getattr("otherAppearances")?)?,
+        music_font: font("musicFont")?,
+        word_font: font("wordFont")?,
+        lyric_fonts,
+        lyric_languages,
+    };
+    if read == StreamStyle::default() {
+        return Ok(None);
+    }
+    Ok(Some(read))
+}
+
+/// music21's style of something drawn with text, as the crate keeps it.
+fn text_style_of(style: &Bound<'_, PyAny>) -> PyResult<music21::style::TextStyle> {
+    let words = |name: &str| text_attribute(style, name);
+    let mut read = music21::style::TextStyle::default();
+    let text = &mut read;
+    text.absolute_x = style_value_of(style, "absoluteX");
+    text.absolute_y = style_value_of(style, "absoluteY");
+    text.relative_x = style_value_of(style, "relativeX");
+    text.relative_y = style_value_of(style, "relativeY");
+    text.font_size = style_value_of(style, "fontSize");
     text.color = words("color");
     text.font_family = style
         .getattr("fontFamily")
@@ -8790,6 +8909,7 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
         };
         stream.set_name_hidden(hidden("printPartName"));
         stream.set_abbreviation_hidden(hidden("printPartAbbreviation"));
+        stream.set_stream_style(stream_style_of(&style)?);
     }
     if let Ok(metadata) = object.getattr("metadata")
         && !metadata.is_none()
@@ -8868,7 +8988,6 @@ fn barline_value(barline: &Bound<'_, PyAny>) -> PyResult<music21::Barline> {
 /// A score's `StaffGroup` spanners, each naming the parts it spans by where
 /// they stand among the score's parts.
 fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()> {
-    use music21::{BarTogether, StaffGroup};
     let py = object.py();
     let Ok(bundle) = object.getattr("spannerBundle") else {
         return Ok(());
@@ -8891,41 +9010,50 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
         return Ok(());
     }
     for group in bundle.call_method1("getByClass", ("StaffGroup",))?.walk()? {
-        let group = group?;
-        let mut positions = Vec::new();
-        for spanned in group.call_method0("getSpannedElements")?.walk()? {
-            let spanned = spanned?;
-            if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
-                positions.push(position);
-            }
-        }
-        let mut read = StaffGroup::new(positions);
-        read.set_name(text_attribute(&group, "name"));
-        read.set_abbreviation(text_attribute(&group, "abbreviation"));
-        read.set_symbol(text_attribute(&group, "symbol").as_deref())
-            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-        let bar_together = group.getattr("barTogether")?;
-        read.set_bar_together(if bar_together.is_none() {
-            None
-        } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
-            Some(if flag.is_true() {
-                BarTogether::Yes
-            } else {
-                BarTogether::No
-            })
-        } else {
-            Some(BarTogether::Mensurstrich)
-        });
-        let hidden = group
-            .getattr("style")
-            .and_then(|style| style.getattr("hideObjectOnPrint"))
-            .map(|hidden| hidden.is_truthy().unwrap_or(false))
-            .unwrap_or(false);
-        read.set_name_hidden(hidden);
-        stream.add_staff_group(read);
+        stream.add_staff_group(staff_group_value(&group?, &parts)?);
     }
     let _ = py;
     Ok(())
+}
+
+/// A music21 `StaffGroup`, naming the parts it spans by where they stand
+/// among `parts`.
+pub(crate) fn staff_group_value(
+    group: &Bound<'_, PyAny>,
+    parts: &[Bound<'_, PyAny>],
+) -> PyResult<music21::StaffGroup> {
+    use music21::{BarTogether, StaffGroup};
+    let mut positions = Vec::new();
+    for spanned in group.call_method0("getSpannedElements")?.walk()? {
+        let spanned = spanned?;
+        if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
+            positions.push(position);
+        }
+    }
+    let mut read = StaffGroup::new(positions);
+    read.set_name(text_attribute(group, "name"));
+    read.set_abbreviation(text_attribute(group, "abbreviation"));
+    read.set_symbol(text_attribute(group, "symbol").as_deref())
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    let bar_together = group.getattr("barTogether")?;
+    read.set_bar_together(if bar_together.is_none() {
+        None
+    } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
+        Some(if flag.is_true() {
+            BarTogether::Yes
+        } else {
+            BarTogether::No
+        })
+    } else {
+        Some(BarTogether::Mensurstrich)
+    });
+    let hidden = group
+        .getattr("style")
+        .and_then(|style| style.getattr("hideObjectOnPrint"))
+        .map(|hidden| hidden.is_truthy().unwrap_or(false))
+        .unwrap_or(false);
+    read.set_name_hidden(hidden);
+    Ok(read)
 }
 
 /// A music21 `Metadata`, name by name in the order music21 keeps them.
@@ -9145,7 +9273,7 @@ fn is_inner_barline(stream: &Bound<'_, PyAny>, element: &Bound<'_, PyAny>) -> Py
 /// A music21 spanner of a kind the crate carries, naming what it joins by
 /// position among `leaves`. One joining anything outside them -- a slur
 /// from one part into another -- is left out.
-fn spanner_value(
+pub(crate) fn spanner_value(
     spanner: &Bound<'_, PyAny>,
     leaves: &[Py<PyAny>],
 ) -> PyResult<Option<music21::Spanner>> {
@@ -10216,6 +10344,11 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StreamCore>()?;
     m.add_class::<OffsetWalked>()?;
     m.add_class::<Stream>()?;
+    // A stream is drawn with music21's `StreamStyle`.
+    m.getattr("Stream")?.setattr(
+        "_styleClass",
+        m.py().get_type::<crate::style::StreamStyle>(),
+    )?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;
     // What music21's `System` says of itself, which nothing here reads.
