@@ -190,6 +190,14 @@ impl ClefState {
         }
     }
 
+    /// The step and octave of a staff position under this clef.
+    fn step_and_octave(self, position: IntegerType) -> (char, IntegerType) {
+        let (octave, lowest, steps) = self.table();
+        let from_lowest = position - lowest;
+        let step = steps[usize::try_from(from_lowest.rem_euclid(7)).unwrap_or(0)];
+        (step, octave + from_lowest.div_euclid(7))
+    }
+
     /// music21's `getStepAndOctaveFromPosition` tables: the octave of the
     /// lowest of seven positions, that position, and the steps from it.
     fn table(self) -> (IntegerType, IntegerType, [char; 7]) {
@@ -221,10 +229,7 @@ pub fn staff_positions(clef: &str) -> (IntegerType, IntegerType, [char; 7]) {
 /// C5, and each position up or down is a step.
 #[must_use]
 pub fn step_and_octave(clef: &str, position: IntegerType) -> (char, IntegerType) {
-    let (octave, lowest, steps) = staff_positions(clef);
-    let from_lowest = position - lowest;
-    let step = steps[usize::try_from(from_lowest.rem_euclid(7)).unwrap_or(0)];
-    (step, octave + from_lowest.div_euclid(7))
+    ClefState::named(clef).step_and_octave(position)
 }
 
 /// Something standing in a measure or a voice while the file is read.
@@ -272,6 +277,9 @@ fn highest_time(items: &[Item]) -> FloatType {
 }
 
 struct MeasureBuilt {
+    /// Which measure of the file this is, for the slurs and ties that
+    /// remember where they were left open.
+    id: usize,
     number: IntegerType,
     left: Option<Barline>,
     right: Option<Barline>,
@@ -280,8 +288,9 @@ struct MeasureBuilt {
 }
 
 impl MeasureBuilt {
-    fn new(number: IntegerType) -> Self {
+    fn new(number: IntegerType, id: usize) -> Self {
         Self {
+            id,
             number,
             left: None,
             right: None,
@@ -299,63 +308,28 @@ impl MeasureBuilt {
         self.inserted += 1;
     }
 
-    /// music21's `append`.
-    fn append(&mut self, element: StreamElement, serial: Option<usize>) {
-        let at = highest_time(&self.items);
-        self.insert(at, Content::Element(Box::new(element), serial));
-    }
-
-    fn has_voices(&self) -> bool {
-        self.items
-            .iter()
-            .any(|item| matches!(item.content, Content::Voice(_)))
-    }
-
     /// music21's truth of a stream: whether it holds anything, barlines
     /// included.
     fn holds_anything(&self) -> bool {
         !self.items.is_empty() || self.left.is_some() || self.right.is_some()
     }
 
-    /// Where music21's `getShortestStream` appends: the measure, or the
-    /// shortest of its voices, the first of those equally short.
-    fn append_shortest(&mut self, element: StreamElement, serial: Option<usize>) {
-        if !self.has_voices() {
-            self.append(element, serial);
-            return;
-        }
-        let shortest = sorted_places(&self.items)
+    /// The places of the voices, in music21's order.
+    fn voices(&self) -> Vec<usize> {
+        sorted_places(&self.items)
             .into_iter()
             .filter(|place| matches!(self.items[*place].content, Content::Voice(_)))
-            .min_by(|left, right| {
-                voice_length(&self.items[*left]).total_cmp(&voice_length(&self.items[*right]))
-            });
-        if let Some(place) = shortest
-            && let Content::Voice(voice) = &mut self.items[place].content
-        {
-            append_to_voice(voice, element, serial);
-        }
+            .collect()
     }
 
-    /// Elements starting together where music21's `appendSimultaneous`
-    /// puts them: where the shortest voice ends, each in the next voice
-    /// ending there or a new one -- the notes the measure holds becoming
-    /// its first voice where it has none.
-    fn append_in_voices(&mut self, elements: Vec<(StreamElement, usize)>) {
-        let offset = if self.has_voices() {
-            self.items
-                .iter()
-                .filter(|item| matches!(item.content, Content::Voice(_)))
-                .map(voice_length)
-                .fold(FloatType::INFINITY, FloatType::min)
-        } else {
-            highest_time(&self.items)
-        };
-        if !self.has_voices() {
-            let mut voice = VoiceBuilt {
-                id: 0,
-                items: Vec::new(),
-            };
+    /// music21's `appendSimultaneous`: elements starting together at
+    /// `offset`. Where there are several, or the measure has voices, each
+    /// goes in a voice that is free there, the longest of them first, or a
+    /// new one; the notes the measure holds become its first voice where
+    /// it has none.
+    fn put_together(&mut self, offset: FloatType, elements: Vec<(StreamElement, usize)>) {
+        let mut voices = self.voices();
+        if voices.is_empty() && elements.len() > 1 {
             let notes: Vec<usize> = sorted_places(&self.items)
                 .into_iter()
                 .filter(|place| {
@@ -363,9 +337,19 @@ impl MeasureBuilt {
                         Content::Element(element, _) if is_general_note(element))
                 })
                 .collect();
+            let mut voice = VoiceBuilt {
+                id: 0,
+                items: Vec::new(),
+            };
             for place in &notes {
-                if let Content::Element(element, serial) = &self.items[*place].content {
-                    append_to_voice(&mut voice, (**element).clone(), *serial);
+                let item = &self.items[*place];
+                if let Content::Element(element, serial) = &item.content {
+                    let inserted = voice.items.len();
+                    voice.items.push(Item {
+                        offset: item.offset,
+                        content: Content::Element(element.clone(), *serial),
+                        inserted,
+                    });
                 }
             }
             let mut index = 0;
@@ -375,17 +359,23 @@ impl MeasureBuilt {
                 keep
             });
             self.insert(0.0, Content::Voice(voice));
+            voices = self.voices();
         }
-        let voices: Vec<usize> = sorted_places(&self.items)
-            .into_iter()
-            .filter(|place| matches!(self.items[*place].content, Content::Voice(_)))
+        let mut free: Vec<usize> = voices
+            .iter()
+            .copied()
+            .filter(|place| voice_length(&self.items[*place]) <= offset)
             .collect();
+        free.sort_by(|left, right| {
+            voice_length(&self.items[*right]).total_cmp(&voice_length(&self.items[*left]))
+        });
+        let mut free: std::collections::VecDeque<usize> = free.into();
         let mut count = voices.len();
-        let mut free: std::collections::VecDeque<usize> = voices
-            .into_iter()
-            .filter(|place| voice_length(&self.items[*place]) == offset)
-            .collect();
         for (element, serial) in elements {
+            if count == 0 {
+                self.insert(offset, Content::Element(Box::new(element), Some(serial)));
+                continue;
+            }
             let place = free.pop_front().unwrap_or_else(|| {
                 self.insert(
                     0.0,
@@ -414,16 +404,6 @@ fn voice_length(item: &Item) -> FloatType {
         Content::Voice(voice) => highest_time(&voice.items),
         Content::Element(element, _) => element.quarter_length(),
     }
-}
-
-fn append_to_voice(voice: &mut VoiceBuilt, element: StreamElement, serial: Option<usize>) {
-    let at = highest_time(&voice.items);
-    let inserted = voice.items.len();
-    voice.items.push(Item {
-        offset: at,
-        content: Content::Element(Box::new(element), serial),
-        inserted,
-    });
 }
 
 /// The places of a list's items in music21's order: offset, then class,
@@ -507,9 +487,17 @@ struct Reader {
     metadata: Option<Metadata>,
     clef: ClefState,
     key: KeySignature,
-    within_slur: bool,
-    slur_start: Option<usize>,
-    within_tie: bool,
+    /// Where the next object goes in the measure, once the measure has
+    /// been placed in: music21's `measurePosition`.
+    position: Option<FloatType>,
+    /// How many measures have been begun, which numbers each.
+    measures_begun: usize,
+    /// Slurs begun and not yet joined to the note they run to.
+    open_slurs: Vec<OpenSlur>,
+    /// Ties begun, by the staff step they were begun on, with the measure
+    /// they were begun in (none where carried over a barline) and where
+    /// the tied note ends.
+    tied_steps: Vec<((char, IntegerType), Option<usize>, FloatType)>,
     lyric_position: usize,
     lyrics: Vec<String>,
     /// Accidentals written so far in the measure, by the step and octave
@@ -524,7 +512,7 @@ impl Reader {
         Self {
             parts: Vec::new(),
             part: None,
-            measure: MeasureBuilt::new(0),
+            measure: MeasureBuilt::new(0, 0),
             measure_number: 0,
             ending: 1,
             repeated: Vec::new(),
@@ -532,9 +520,10 @@ impl Reader {
             metadata: None,
             clef: ClefState::Treble,
             key: KeySignature::new(0),
-            within_slur: false,
-            slur_start: None,
-            within_tie: false,
+            position: None,
+            measures_begun: 1,
+            open_slurs: Vec::new(),
+            tied_steps: Vec::new(),
             lyric_position: 0,
             lyrics: Vec::new(),
             accidentals: Vec::new(),
@@ -559,8 +548,7 @@ impl Reader {
             "Clef" => self.clef(attributes)?,
             "Dynamic" => {
                 if let Some(style) = attributes.get("Style") {
-                    self.measure
-                        .append(StreamElement::Dynamic(Dynamic::new(style)), None);
+                    self.at_position(StreamElement::Dynamic(Dynamic::new(style)));
                 }
             }
             "Ending" => self.ending(attributes)?,
@@ -576,12 +564,11 @@ impl Reader {
                 self.lyric_position += 1;
             }
             "Rest" => {
+                let written = attributes.required("Dur")?;
                 let mut rest = Rest::new(Duration::quarter());
+                rest.set_duration(duration_of(written)?);
                 let serial = self.serial();
-                let duration = self.duration(attributes.required("Dur")?, serial)?;
-                rest.set_duration(duration);
-                self.measure
-                    .append_shortest(StreamElement::Rest(rest), Some(serial));
+                self.simultaneous(vec![(StreamElement::Rest(rest), serial, slurred(written))]);
             }
             "SongInfo" => {
                 let mut metadata = Metadata::new();
@@ -611,8 +598,7 @@ impl Reader {
                 } else {
                     Placement::Below
                 }));
-                self.measure
-                    .append(StreamElement::TextExpression(words), None);
+                self.at_position(StreamElement::TextExpression(words));
             }
             "TimeSig" => {
                 let signature = match attributes.required("Signature")? {
@@ -621,8 +607,7 @@ impl Reader {
                     other => other,
                 };
                 let meter = crate::meter::TimeSignature::from_ratio_string(signature)?;
-                self.measure
-                    .append(StreamElement::TimeSignature(meter), None);
+                self.at_position(StreamElement::TimeSignature(meter));
             }
             _ => {}
         }
@@ -646,8 +631,34 @@ impl Reader {
         self.serials - 1
     }
 
+    /// A measure to read into next, numbered `number`.
+    fn begun(&mut self, number: IntegerType) -> MeasureBuilt {
+        self.measures_begun += 1;
+        self.position = None;
+        MeasureBuilt::new(number, self.measures_begun - 1)
+    }
+
+    /// music21's `currentPosition`: the end of what the measure holds the
+    /// first time it is asked in a measure, and then where the last notes
+    /// placed moved it on to.
+    fn current_position(&mut self) -> FloatType {
+        *self
+            .position
+            .get_or_insert_with(|| highest_time(&self.measure.items))
+    }
+
+    /// music21's `insertAtPosition`: a clef, key, dynamic or other mark
+    /// where the next note goes.
+    fn at_position(&mut self, element: StreamElement) {
+        let offset = self.current_position();
+        self.measure
+            .insert(offset, Content::Element(Box::new(element), None));
+    }
+
     fn add_staff(&mut self, attributes: &Attributes) {
         self.new_part();
+        self.open_slurs.clear();
+        self.tied_steps.clear();
         self.key = KeySignature::new(0);
         self.accidentals.clear();
         self.lyrics.clear();
@@ -660,7 +671,8 @@ impl Reader {
     /// music21's `createPart`: the part being read is closed with the
     /// measure it is in, however empty, and a new one begun.
     fn new_part(&mut self) {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(0));
+        let fresh = self.begun(0);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         if let Some(mut part) = self.part.take() {
             part.append(PartItem::Measure(measure));
             self.parts.push(part);
@@ -675,13 +687,24 @@ impl Reader {
 
     /// Closes the measure being read and begins another numbered `number`.
     fn close_measure(&mut self, number: IntegerType) -> Result<()> {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(number));
+        let fresh = self.begun(number);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         self.part()?.append(PartItem::Measure(measure));
         Ok(())
     }
 
     fn bar(&mut self, attributes: &Attributes) -> Result<()> {
         self.accidentals.clear();
+        // A tie running to the barline goes on into the next measure; any
+        // other open tie is dropped.
+        let end = highest_time(&self.measure.items);
+        let here = self.measure.id;
+        self.tied_steps
+            .retain(|(_, measure, tied_end)| *measure == Some(here) && *tied_end == end);
+        for (_, measure, tied_end) in &mut self.tied_steps {
+            *measure = None;
+            *tied_end = 0.0;
+        }
         let Some(style) = attributes.get("Style") else {
             self.close_measure(self.measure_number)?;
             if !self.repeated.is_empty() {
@@ -739,10 +762,7 @@ impl Reader {
             "Fine" => RepeatExpressionKind::Fine,
             _ => return Err(error("Cannot get style from a flow mark")),
         };
-        self.measure.append(
-            StreamElement::RepeatExpression(RepeatExpression::new(kind)),
-            None,
-        );
+        self.at_position(StreamElement::RepeatExpression(RepeatExpression::new(kind)));
         Ok(())
     }
 
@@ -780,7 +800,7 @@ impl Reader {
         if state == ClefState::Percussion {
             clef.set_line(Some(2));
         }
-        self.measure.append(StreamElement::Clef(clef), None);
+        self.at_position(StreamElement::Clef(clef));
         self.clef = state;
         Ok(())
     }
@@ -793,8 +813,7 @@ impl Reader {
             _ => sharps,
         });
         self.key = KeySignature::new(sharps);
-        self.measure
-            .append(StreamElement::KeySignature(self.key.clone()), None);
+        self.at_position(StreamElement::KeySignature(self.key.clone()));
         Ok(())
     }
 
@@ -809,65 +828,42 @@ impl Reader {
         Ok(())
     }
 
-    /// music21's `setDurationForObject`: the length a `Dur` value gives,
-    /// and the slur it begins or ends.
-    fn duration(&mut self, written: &str, serial: usize) -> Result<Duration> {
-        let mut parts = written.split(',');
-        let length = match parts.next().unwrap_or("") {
-            "Whole" => 4.0,
-            "Half" => 2.0,
-            "4th" => 1.0,
-            "8th" => 0.5,
-            "16th" => 0.25,
-            "32nd" => 0.125,
-            "64th" => 0.0625,
-            other => return Err(error(format!("no note length {other}"))),
-        };
-        let mut duration = Duration::new(length)?;
-        let mut slurred = false;
-        for part in written.split(',') {
-            match part {
-                "Grace" => duration = duration.grace_duration(),
-                "Slur" => {
-                    if !self.within_slur {
-                        self.slur_start = Some(serial);
-                    }
-                    slurred = true;
-                }
-                "Dotted" => duration = with_dots(&duration, 1),
-                "DblDotted" => duration = with_dots(&duration, 2),
-                "Triplet" | "Triplet=First" | "Triplet=End" => {
-                    let value = duration
-                        .type_and_dots()
-                        .map_or(DurationType::Quarter, |(value, _)| value);
-                    duration.append_tuplet(Tuplet::new(3, 2, value, 0));
-                }
-                _ => {}
+    /// music21's `setTieFromPitchInfo`: the tie of each note about to go at
+    /// the current position, from its `Pos` value. A position ending `^` is
+    /// tied to the note on the same staff step, under whatever clef, that
+    /// starts where it ends.
+    fn tie_notes(&mut self, notes: &mut [&mut Note], positions: &str, length: FloatType) {
+        let offset = self.current_position();
+        let end = offset + length;
+        let here = self.measure.id;
+        for (note, position) in notes.iter_mut().zip(positions.split(',')) {
+            let tied_on = position.ends_with('^');
+            let Some(place) = first_number(position) else {
+                continue;
+            };
+            let step = self.clef.step_and_octave(place);
+            let mut tied_from = false;
+            if let Some(at) = self
+                .tied_steps
+                .iter()
+                .position(|(tied, _, _)| *tied == step)
+            {
+                let (_, measure, tied_end) = self.tied_steps.remove(at);
+                tied_from = measure.is_none_or(|measure| measure == here) && tied_end == offset;
+            }
+            let kind = match (tied_from, tied_on) {
+                (true, true) => Some(TieType::Continue),
+                (false, true) => Some(TieType::Start),
+                (true, false) => Some(TieType::Stop),
+                (false, false) => None,
+            };
+            if let Some(kind) = kind {
+                note.set_tie(Some(Tie::new(kind)));
+            }
+            if tied_on {
+                self.tied_steps.push((step, Some(here), end));
             }
         }
-        if self.within_slur && !slurred {
-            if let (Some(start), Some(part)) = (self.slur_start, self.part.as_mut()) {
-                part.slurs.push((start, serial));
-            }
-            self.within_slur = false;
-        } else {
-            self.within_slur = slurred;
-        }
-        Ok(duration)
-    }
-
-    /// music21's `setTieFromPitchInfo`: whether a note begins or ends a tie.
-    fn tie(&mut self, position: &str) -> Option<Tie> {
-        if position.ends_with('^') {
-            let begins = !self.within_tie;
-            self.within_tie = true;
-            return begins.then(|| Tie::new(TieType::Start));
-        }
-        if self.within_tie {
-            self.within_tie = false;
-            return Some(Tie::new(TieType::Stop));
-        }
-        None
     }
 
     /// music21's `getPitchFromPositionInfo`: a pitch from one `Pos` value,
@@ -926,34 +922,28 @@ impl Reader {
         let written = attributes.required("Dur")?;
         let position = attributes.required("Pos")?;
         let pitch = self.pitch(position)?;
+        let duration = duration_of(written)?;
+        let length = duration.quarter_length();
         let serial = self.serial();
-        let duration = self.duration(written, serial)?;
-        let tie = self.tie(position);
         let lyric = self.lyric().map(str::to_string);
+        let mut note = Note::from_pitch(pitch.clone()).with_duration(duration.clone());
+        self.tie_notes(&mut [&mut note], position, length);
+        if let Some(lyric) = lyric {
+            note.add_lyric(&lyric, None, false)?;
+        }
         let element = if self.clef == ClefState::Percussion {
             let octave = pitch.octave().unwrap_or(4);
             let step = pitch.step().as_char();
             let mut stroke = Unpitched::displayed_at(step, octave)?;
-            let note = stroke.written_mut();
-            note.set_duration(duration);
-            if tie.is_some() {
-                note.set_tie(tie);
-            }
-            if let Some(lyric) = lyric {
-                note.add_lyric(&lyric, None, false)?;
-            }
+            let written_note = stroke.written_mut();
+            written_note.set_duration(duration);
+            written_note.set_tie(note.tie().cloned());
+            *written_note.lyrics_mut() = note.lyrics().to_vec();
             StreamElement::Unpitched(stroke)
         } else {
-            let mut note = Note::from_pitch(pitch).with_duration(duration);
-            if tie.is_some() {
-                note.set_tie(tie);
-            }
-            if let Some(lyric) = lyric {
-                note.add_lyric(&lyric, None, false)?;
-            }
             StreamElement::Note(note)
         };
-        self.measure.append_shortest(element, Some(serial));
+        self.simultaneous(vec![(element, serial, slurred(written))]);
         Ok(())
     }
 
@@ -977,57 +967,135 @@ impl Reader {
         for (written, position) in &groups {
             chords.push(self.chord_of(written, position)?);
         }
-        self.simultaneous(chords)
+        self.with_lyric(&mut chords[0].0)?;
+        self.simultaneous(chords);
+        Ok(())
     }
 
     /// music21's `translateRestChord`: the chord of `Dur2` and `Pos2`, and a
     /// rest of `Dur` sounding with it.
     fn rest_chord(&mut self, attributes: &Attributes) -> Result<()> {
-        let chord = self.chord_of(attributes.required("Dur2")?, attributes.required("Pos2")?)?;
-        let serial = self.serial();
+        let mut chord =
+            self.chord_of(attributes.required("Dur2")?, attributes.required("Pos2")?)?;
+        let written = attributes.required("Dur")?;
         let mut rest = Rest::new(Duration::quarter());
-        rest.set_duration(self.duration(attributes.required("Dur")?, serial)?);
-        self.simultaneous(vec![chord, (StreamElement::Rest(rest), serial)])
+        rest.set_duration(duration_of(written)?);
+        let serial = self.serial();
+        self.with_lyric(&mut chord.0)?;
+        self.simultaneous(vec![
+            chord,
+            (StreamElement::Rest(rest), serial, slurred(written)),
+        ]);
+        Ok(())
     }
 
     /// music21's `createChord`: one group of a chord's notes.
-    fn chord_of(&mut self, written: &str, position: &str) -> Result<(StreamElement, usize)> {
+    fn chord_of(&mut self, written: &str, position: &str) -> Result<(StreamElement, usize, bool)> {
+        let duration = duration_of(written)?;
+        let length = duration.quarter_length();
         let serial = self.serial();
-        let duration = self.duration(written, serial)?;
         let mut pitches = Vec::new();
         for one in position.split(',') {
             pitches.push(self.pitch(one)?);
         }
         let notes: Vec<Note> = pitches.into_iter().map(Note::from_pitch).collect();
         let mut chord = Chord::new(notes)?.with_duration(duration);
-        if let Some(tie) = self.tie(position) {
-            for note in chord.notes_mut() {
-                note.set_tie(Some(tie.clone()));
-            }
-        }
-        Ok((StreamElement::Chord(chord), serial))
+        let mut notes: Vec<&mut Note> = chord.notes_mut().iter_mut().collect();
+        self.tie_notes(&mut notes, position, length);
+        Ok((StreamElement::Chord(chord), serial, slurred(written)))
     }
 
-    /// music21's `appendSimultaneous`: the first takes the lyric sung now,
-    /// and each goes in a voice of its own where there are more than one.
-    fn simultaneous(&mut self, mut elements: Vec<(StreamElement, usize)>) -> Result<()> {
-        if let Some(lyric) = self.lyric().map(str::to_string) {
-            // The first is always a chord.
-            if let StreamElement::Chord(chord) = &mut elements[0].0 {
-                chord.add_lyric(&lyric, None, false)?;
-            }
-        }
-        if elements.len() == 1 {
-            let (element, serial) = elements.remove(0);
-            self.measure.append_shortest(element, Some(serial));
-        } else {
-            self.measure.append_in_voices(elements);
+    /// music21's `addCurrentLyric`: the syllable sung now, on a chord.
+    fn with_lyric(&self, element: &mut StreamElement) -> Result<()> {
+        if let (Some(lyric), StreamElement::Chord(chord)) = (self.lyric(), element) {
+            chord.add_lyric(lyric, None, false)?;
         }
         Ok(())
     }
 
+    /// music21's `appendSimultaneous`: notes, chords or rests starting
+    /// together at the current position, which then moves on by the
+    /// shortest of them, and the slurs they begin, carry on or end.
+    fn simultaneous(&mut self, elements: Vec<(StreamElement, usize, bool)>) {
+        let offset = self.current_position();
+        let group: Vec<(usize, bool, FloatType)> = elements
+            .iter()
+            .map(|(element, serial, slurred)| (*serial, *slurred, element.quarter_length()))
+            .collect();
+        self.measure.put_together(
+            offset,
+            elements
+                .into_iter()
+                .map(|(element, serial, _)| (element, serial))
+                .collect(),
+        );
+        self.join_slurs(offset, &group);
+        let shortest = group
+            .iter()
+            .map(|(_, _, length)| *length)
+            .fold(FloatType::INFINITY, FloatType::min);
+        self.position = Some(offset + shortest);
+    }
+
+    /// music21's `setSlurs`: a slurred note is slurred to the next note
+    /// starting once it has ended, the one in the same place in its group
+    /// if there is one, else the first slurred one, else the first.
+    /// Slurred notes in a row make one slur.
+    fn join_slurs(&mut self, offset: FloatType, group: &[(usize, bool, FloatType)]) {
+        let here = self.measure.id;
+        let ended: Vec<OpenSlur> = self
+            .open_slurs
+            .iter()
+            .filter(|open| open.measure != here || open.end <= offset)
+            .copied()
+            .collect();
+        let first_slurred = group
+            .iter()
+            .position(|(_, slurred, _)| *slurred)
+            .unwrap_or(0);
+        for (index, (serial, slurred, length)) in group.iter().enumerate() {
+            let mut arriving: Vec<OpenSlur> = ended
+                .iter()
+                .filter(|open| {
+                    let lands = if open.group < group.len() {
+                        open.group
+                    } else {
+                        first_slurred
+                    };
+                    lands == index
+                })
+                .copied()
+                .collect();
+            let end = offset + length;
+            if *slurred && !arriving.is_empty() {
+                let start = arriving.remove(0).start;
+                self.open_slurs.retain(|open| open.start != start);
+                self.open_slurs.push(OpenSlur {
+                    start,
+                    measure: here,
+                    end,
+                    group: index,
+                });
+            } else if *slurred {
+                self.open_slurs.push(OpenSlur {
+                    start: *serial,
+                    measure: here,
+                    end,
+                    group: index,
+                });
+            }
+            for open in arriving {
+                if let Some(part) = self.part.as_mut() {
+                    part.slurs.push((open.start, *serial));
+                }
+                self.open_slurs.retain(|kept| kept.start != open.start);
+            }
+        }
+    }
+
     fn finish(mut self) -> Result<Stream> {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(0));
+        let fresh = self.begun(0);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         let mut part = self
             .part
             .take()
@@ -1059,6 +1127,66 @@ fn with_dots(duration: &Duration, dots: u32) -> Duration {
     dotted.set_grace(duration.grace().cloned());
     dotted.set_expression_is_inferred(duration.expression_is_inferred());
     dotted
+}
+
+/// A slur begun at a note and not yet joined: the note's number, the
+/// measure it is in, where it ends and its place in its group.
+#[derive(Clone, Copy)]
+struct OpenSlur {
+    start: usize,
+    measure: usize,
+    end: FloatType,
+    group: usize,
+}
+
+/// music21's `setDurationForObject`: the length a `Dur` value gives, with
+/// its dots, grace and triplet.
+fn duration_of(written: &str) -> Result<Duration> {
+    let mut parts = written.split(',');
+    let length = match parts.next().unwrap_or("") {
+        "Whole" => 4.0,
+        "Half" => 2.0,
+        "4th" => 1.0,
+        "8th" => 0.5,
+        "16th" => 0.25,
+        "32nd" => 0.125,
+        "64th" => 0.0625,
+        other => return Err(error(format!("no note length {other}"))),
+    };
+    let mut duration = Duration::new(length)?;
+    for part in written.split(',') {
+        match part {
+            "Grace" => duration = duration.grace_duration(),
+            "Dotted" => duration = with_dots(&duration, 1),
+            "DblDotted" => duration = with_dots(&duration, 2),
+            "Triplet" | "Triplet=First" | "Triplet=End" => {
+                let value = duration
+                    .type_and_dots()
+                    .map_or(DurationType::Quarter, |(value, _)| value);
+                duration.append_tuplet(Tuplet::new(3, 2, value, 0));
+            }
+            _ => {}
+        }
+    }
+    Ok(duration)
+}
+
+/// Whether a `Dur` value slurs the note to the next.
+fn slurred(written: &str) -> bool {
+    written.split(',').any(|part| part == "Slur")
+}
+
+/// The staff position in a `Pos` value: its first whole number, as
+/// music21 finds it with `-?\d+`.
+fn first_number(position: &str) -> Option<IntegerType> {
+    let start = position.find(|c: char| c.is_ascii_digit())?;
+    let negative = position[..start].ends_with('-');
+    let digits: String = position[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    let value: IntegerType = digits.parse().ok()?;
+    Some(if negative { -value } else { value })
 }
 
 /// The parts of `Dur` and `Pos` that are numbers, read as Python's `int`.
@@ -1327,5 +1455,233 @@ mod tests {
                 (3.0, 1.0, "B4".to_string()),
             ]
         );
+    }
+
+    /// A part's notes, chords and rests as music21 writes their reprs.
+    fn shown(element: &StreamElement) -> String {
+        match element {
+            StreamElement::Note(note) => format!("Note {}", note.pitch().name()),
+            StreamElement::Chord(chord) => format!(
+                "Chord {}",
+                chord
+                    .notes()
+                    .iter()
+                    .map(|note| note.pitch().name_with_octave())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            _ => "other".to_string(),
+        }
+    }
+
+    fn treble(lines: &[&str]) -> Stream {
+        let mut text = String::from("|AddStaff|\n|Clef|Type:Treble\n");
+        for line in lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        from_noteworthy(&text).unwrap()
+    }
+
+    /// Every slur of the first part, as what it joins.
+    fn slurs(lines: &[&str]) -> Vec<Vec<String>> {
+        let score = treble(lines);
+        let part = &score.parts()[0];
+        let leaves = part.leaves();
+        let mut found: Vec<Vec<String>> = part
+            .spanners()
+            .iter()
+            .map(|slur| {
+                slur.spanned()
+                    .iter()
+                    .map(|place| place.map_or("none".to_string(), |at| shown(leaves[at].1)))
+                    .collect()
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Every note of the first part, with its offset in the part and its tie.
+    fn ties(lines: &[&str]) -> Vec<(String, FloatType, Option<TieType>)> {
+        let score = treble(lines);
+        let part = &score.parts()[0];
+        let mut found = Vec::new();
+        for (offset, element) in part.leaves() {
+            let notes: Vec<&Note> = match element {
+                StreamElement::Note(note) => vec![note],
+                StreamElement::Chord(chord) => chord.notes().iter().collect(),
+                _ => continue,
+            };
+            for note in notes {
+                found.push((
+                    note.pitch().name_with_octave(),
+                    offset,
+                    note.tie().map(Tie::tie_type),
+                ));
+            }
+        }
+        found.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(&right.0)));
+        found
+    }
+
+    fn strings(groups: &[&[&str]]) -> Vec<Vec<String>> {
+        let mut made: Vec<Vec<String>> = groups
+            .iter()
+            .map(|group| group.iter().map(|one| (*one).to_string()).collect())
+            .collect();
+        made.sort();
+        made
+    }
+
+    #[test]
+    fn notes_after_a_group_follow_the_shortest_of_it() {
+        assert_eq!(
+            first_measure(
+                "|Chord|Dur:8th|Pos:-4|Dur2:8th,DblDotted|Pos2:3\n\
+                 |Note|Dur:4th|Pos:-5\n\
+                 |Note|Dur:4th|Pos:-4\n"
+            ),
+            [
+                (0.0, 0.5, "E4".to_string()),
+                (0.0, 0.875, "E5".to_string()),
+                (0.5, 1.0, "D4".to_string()),
+                (1.5, 1.0, "E4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_slur_runs_to_the_next_note_once_it_ends() {
+        assert_eq!(
+            slurs(&[
+                "|RestChord|Dur:Half|Dur2:4th,Slur|Pos2:-1,1",
+                "|Note|Dur:4th|Pos:0"
+            ]),
+            strings(&[&["Chord A4 C5", "Note B"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:Half|Pos:1|Dur2:4th|Pos2:3",
+                "|Note|Dur:4th,Slur|Pos:2",
+                "|Bar|",
+                "|Note|Dur:4th|Pos:4",
+            ]),
+            strings(&[&["Note D", "Note F"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Note|Dur:4th,Slur|Pos:1",
+                "|AddStaff|",
+                "|Clef|Type:Treble",
+                "|Note|Dur:4th|Pos:1",
+            ]),
+            Vec::<Vec<String>>::new()
+        );
+    }
+
+    #[test]
+    fn a_slur_runs_to_the_same_group() {
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:4th,Slur|Pos:1|Dur2:4th,Slur|Pos2:3",
+                "|Chord|Dur:4th|Pos:2|Dur2:4th|Pos2:4",
+            ]),
+            strings(&[&["Chord C5", "Chord D5"], &["Chord E5", "Chord F5"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:4th,Slur|Pos:1|Dur2:4th,Slur|Pos2:3",
+                "|Note|Dur:4th|Pos:2",
+            ]),
+            strings(&[&["Chord C5", "Note D"], &["Chord E5", "Note D"]])
+        );
+    }
+
+    #[test]
+    fn a_tie_follows_its_position_and_pitch() {
+        let start = Some(TieType::Start);
+        let stop = Some(TieType::Stop);
+        let at = |name: &str, offset: FloatType, tie| (name.to_string(), offset, tie);
+        assert_eq!(
+            ties(&[
+                "|Chord|Dur:4th|Pos:1^|Dur2:4th|Pos2:3",
+                "|Chord|Dur:4th|Pos:1|Dur2:4th|Pos2:3"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("E5", 0.0, None),
+                at("C5", 1.0, stop),
+                at("E5", 1.0, None)
+            ]
+        );
+        assert_eq!(
+            ties(&[
+                "|Note|Dur:4th|Pos:-6^",
+                "|Clef|Type:Bass",
+                "|Note|Dur:4th|Pos:6"
+            ]),
+            [at("C4", 0.0, start), at("C4", 1.0, stop)]
+        );
+        assert_eq!(
+            ties(&[
+                "|Note|Dur:4th|Pos:1^",
+                "|Note|Dur:4th|Pos:2",
+                "|Note|Dur:4th|Pos:1"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("D5", 1.0, None),
+                at("C5", 2.0, None)
+            ]
+        );
+        assert_eq!(
+            ties(&["|Note|Dur:Whole|Pos:1^", "|Bar|", "|Note|Dur:Whole|Pos:1"]),
+            [at("C5", 0.0, start), at("C5", 4.0, stop)]
+        );
+        assert_eq!(
+            ties(&[
+                "|Chord|Dur:4th|Pos:1^|Dur2:Half|Pos2:3",
+                "|Bar|",
+                "|Note|Dur:4th|Pos:1"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("E5", 0.0, None),
+                at("C5", 2.0, None)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_direction_goes_where_the_next_note_will() {
+        for line in [
+            "|Dynamic|Style:p|Pos:-8",
+            "|Clef|Type:Bass",
+            "|Key|Signature:F#",
+            "|Text|Text:\"dolce\"|Pos:8",
+        ] {
+            let score = treble(&[
+                "|Chord|Dur:4th|Pos:-1|Dur2:Whole|Pos2:3",
+                line,
+                "|Note|Dur:4th|Pos:1",
+            ]);
+            let measure = &score.parts()[0].measures()[0];
+            let placed: Vec<FloatType> = measure
+                .leaves()
+                .into_iter()
+                .filter(|(_, element)| {
+                    matches!(
+                        element,
+                        StreamElement::Dynamic(_)
+                            | StreamElement::KeySignature(_)
+                            | StreamElement::TextExpression(_)
+                            | StreamElement::Note(_)
+                    ) || matches!(element, StreamElement::Clef(clef) if clef.kind() == ClefKind::BassClef)
+                })
+                .map(|(offset, _)| offset)
+                .collect();
+            assert_eq!(placed, [1.0, 1.0], "{line}");
+        }
     }
 }
