@@ -3255,7 +3255,7 @@ def test_elements_are_found_by_offset_as_music21_finds_them():
     flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
 
     def offsets(found):
-        return [round(flat.elementOffset(e), 4) for e in found.elements]
+        return [round(flat.elementOffset(e), 4) for e in found]
 
     # Under music21's defaults an element is found only where it begins,
     # so the half note at nought is not found at 1.
@@ -7313,23 +7313,16 @@ def test_two_readings_of_a_stream_are_merged_as_variants():
     """Where two readings of one stream differ, what differs is kept as a
     variant, as music21's `variant` module keeps it.
 
-    A variant is music21's own `variant.Variant`, which this package has
-    no class for, so each of these says outright that it needs music21
-    beside it rather than answering a stream with no variants in it."""
+    Without music21 the variants are the package's own `Variant`."""
     one = m.from_tiny_notation("4/4 a4 b c d  e2 f2")
     two = m.from_tiny_notation("4/4 a4 b c e  e2 f2")
     try:
         from music21 import variant as m21variant
     except ImportError:
-        for call in (
-            lambda: m.mergeVariants(one, two, variantName="london"),
-            lambda: m.mergeVariantMeasureStreams(one, two, variantName="london"),
-            lambda: m.mergeVariantsEqualDuration([one, two], ["london"]),
-            lambda: m.addVariant(one, 0.0, two, variantName="london"),
-            lambda: m.makeAllVariantsReplacements(one),
-        ):
-            with pytest.raises(Exception, match="no class for"):
-                call()
+        merged = m.mergeVariants(one, two, variantName="london")
+        found = merged.recurse().getElementsByClass("Variant")
+        assert [type(v) for v in found] == [m.Variant]
+        assert list(found[0].groups) == ["london"]
         return
 
     from music21 import converter
