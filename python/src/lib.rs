@@ -2118,6 +2118,11 @@ exceptions![
         Some("music21.exceptions21")
     ),
     (
+        "StreamIteratorInefficientWarning",
+        stream::StreamIteratorInefficientWarning,
+        Some("music21.stream.iterator")
+    ),
+    (
         "ImmutableStreamException",
         exceptions21::ImmutableStreamException,
         Some("music21.exceptions21")

@@ -1529,6 +1529,16 @@ impl Sites {
 
 #[pymethods]
 impl Sites {
+    /// music21's `Sites(containedById=False)`, standing for no element:
+    /// it holds no site, there being no element for a stream to hold.
+    /// music21's own `Music21Object.__init__` builds one so.
+    #[new]
+    #[pyo3(signature = (containedById = false))]
+    fn new(py: Python<'_>, containedById: bool) -> Self {
+        let _ = containedById;
+        Self { element: py.None() }
+    }
+
     /// The streams, oldest first, `None` among them unless `excludeNone`:
     /// music21's `get`.
     #[pyo3(signature = (*, sortByCreationTime = false, priorityTarget = None, excludeNone = false))]
@@ -1680,6 +1690,9 @@ pub(crate) const MEMBERS: [&str; 19] = [
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<Sites>()?;
+    // music21's switch for holding sites weakly, which `base` imports. The
+    // sites here are always weak.
+    m.add("WEAKREF_ACTIVE", true)?;
     let methods: Vec<(&'static str, Py<PyAny>)> = vec![
         (
             "getOffsetBySite",
