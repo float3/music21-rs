@@ -67,9 +67,10 @@ fn options(py: Python<'_>, notation: Notation) -> PyResult<ExportOptions> {
         .call_method0("today")?
         .call_method0("isoformat")?;
     options.encoding_date = Some(today.extract()?);
-    options.software = crate::defaults::defaults_module(py)?
-        .getattr("software")?
-        .extract()?;
+    let defaults = crate::defaults::defaults_module(py)?;
+    options.software = defaults.getattr("software")?.extract()?;
+    options.default_title = defaults.getattr("title")?.extract()?;
+    options.default_author = defaults.getattr("author")?.extract()?;
     options.make_notation = notation == Notation::Make;
     Ok(options)
 }
@@ -489,6 +490,107 @@ impl XMLExporterBase {
         found.setattr("tag", elName)?;
         Ok(found)
     }
+
+    /// A page layout as its `<page-layout>`.
+    #[pyo3(signature = (pageLayout, mxPageLayoutIn = None))]
+    fn pageLayoutToXmlPageLayout<'py>(
+        &self,
+        pageLayout: &Bound<'py, PyAny>,
+        mxPageLayoutIn: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        layout_element(pageLayout, mxPageLayoutIn)
+    }
+
+    /// A system layout as its `<system-layout>`.
+    #[pyo3(signature = (systemLayout, mxSystemLayoutIn = None))]
+    fn systemLayoutToXmlSystemLayout<'py>(
+        &self,
+        systemLayout: &Bound<'py, PyAny>,
+        mxSystemLayoutIn: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        layout_element(systemLayout, mxSystemLayoutIn)
+    }
+
+    /// A staff layout as its `<staff-layout>`.
+    #[pyo3(signature = (staffLayout, mxStaffLayoutIn = None))]
+    fn staffLayoutToXmlStaffLayout<'py>(
+        &self,
+        staffLayout: &Bound<'py, PyAny>,
+        mxStaffLayoutIn: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        layout_element(staffLayout, mxStaffLayoutIn)
+    }
+
+    /// A page layout as the `<print>` a measure starting with it writes.
+    #[pyo3(signature = (pageLayout, mxPrintIn = None))]
+    fn pageLayoutToXmlPrint<'py>(
+        &self,
+        pageLayout: &Bound<'py, PyAny>,
+        mxPrintIn: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        print_element(pageLayout, mxPrintIn)
+    }
+
+    /// A system layout as the `<print>` a measure starting with it writes.
+    #[pyo3(signature = (systemLayout, mxPrintIn = None))]
+    fn systemLayoutToXmlPrint<'py>(
+        &self,
+        systemLayout: &Bound<'py, PyAny>,
+        mxPrintIn: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        print_element(systemLayout, mxPrintIn)
+    }
+}
+
+/// A page, system or staff layout as the element it writes, its children
+/// and attributes put into `into` where one is given, as music21 fills an
+/// element it is handed.
+fn layout_element<'py>(
+    layout: &Bound<'py, PyAny>,
+    into: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = layout.py();
+    let Some(music21::stream::StreamElement::Layout(value)) =
+        crate::stream::element_written(layout)?
+    else {
+        return Err(MusicXMLExportException::new_err(format!(
+            "{} is no layout",
+            layout.repr()?
+        )));
+    };
+    let text = music21::musicxml::layout_xml(&value).ok_or_else(|| {
+        MusicXMLExportException::new_err("a score layout is written as <defaults>")
+    })?;
+    filled(&parsed(py, &text)?, into)
+}
+
+/// The written element, or `into` given its attributes and children.
+fn filled<'py>(
+    written: &Bound<'py, PyAny>,
+    into: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let Some(into) = into.filter(|given| !given.is_none()) else {
+        return Ok(written.clone());
+    };
+    into.getattr("attrib")?
+        .call_method1("update", (written.getattr("attrib")?,))?;
+    for child in written.try_iter()? {
+        into.call_method1("append", (child?,))?;
+    }
+    Ok(into.clone())
+}
+
+/// The `<print>` a measure starting with this layout writes.
+fn print_element<'py>(
+    layout: &Bound<'py, PyAny>,
+    into: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = layout.py();
+    let measure = lone_measure(&[deep_copy(layout)?])?;
+    let mut part = RsStream::with_kind(music21::stream::StreamKind::Part);
+    part.push(crate::stream::crate_stream(&measure)?);
+    let written = written_in_score(py, part, "print")?;
+    filled(&written, into)
 }
 
 /// music21's `xmlHeader`, as text.
@@ -504,11 +606,104 @@ fn header() -> String {
 // --------------------------------------------------------- ScoreExporter
 
 /// music21's `ScoreExporter`: a score as a `<score-partwise>` element.
+///
+/// `parse` writes the whole score at once. The steps music21 takes on the
+/// way are members too, for a caller that takes them one by one: each
+/// header step adds to the root what writing the score writes there.
 #[pyclass(name = "ScoreExporter", module = "music21.musicxml.m21ToXml", extends = XMLExporterBase, subclass)]
 struct ScoreExporter {
     /// Whether each part's notation is made before it is written.
     #[pyo3(get, set)]
     makeNotation: bool,
+    /// The metadata the header is written from: `None` until
+    /// `setScoreHeader` reads it off the score or its context.
+    #[pyo3(get, set)]
+    scoreMetadata: Py<PyAny>,
+    #[pyo3(get, set)]
+    spannerBundle: Py<PyAny>,
+    #[pyo3(get, set)]
+    meterStream: Py<PyAny>,
+    #[pyo3(get, set)]
+    scoreLayouts: Py<PyAny>,
+    #[pyo3(get, set)]
+    firstScoreLayout: Py<PyAny>,
+    #[pyo3(get, set)]
+    textBoxes: Py<PyAny>,
+    #[pyo3(get, set)]
+    highestTime: f64,
+    #[pyo3(get, set)]
+    refStreamOrTimeRange: Py<PyAny>,
+    #[pyo3(get, set)]
+    partExporterList: Py<PyAny>,
+    #[pyo3(get, set)]
+    parts: Py<PyAny>,
+    /// The `<identification>` written, once `setIdentification` has run.
+    #[pyo3(get, set)]
+    mxIdentification: Py<PyAny>,
+}
+
+/// The score an exporter writes, read into the crate.
+fn exported_stream(slf: &Bound<'_, ScoreExporter>) -> PyResult<RsStream> {
+    let py = slf.py();
+    let stream = slf.as_super().borrow().stream.clone_ref(py);
+    crate::stream::crate_stream(stream.bind(py))
+}
+
+/// What writing the score puts before its parts, element by element, with
+/// the exporter's `scoreMetadata` (or `md`) as its metadata.
+fn header_elements<'py>(
+    slf: &Bound<'py, ScoreExporter>,
+    md: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let py = slf.py();
+    let mut score = exported_stream(slf)?;
+    let held = slf.borrow().scoreMetadata.clone_ref(py);
+    let metadata = md.cloned().unwrap_or_else(|| held.into_bound(py));
+    let metadata = match metadata.is_none() {
+        true => None,
+        false => Some(crate::stream::metadata_value(&metadata)?),
+    };
+    score.set_metadata(metadata);
+    let options = options(py, Notation::AsItStands)?;
+    music21::musicxml::score_header_xml(&score, &options)
+        .map_err(|e| export_error(&e))?
+        .iter()
+        .map(|text| parsed(py, text))
+        .collect()
+}
+
+/// The header elements with one of these tags, in order.
+fn header_tagged<'py>(
+    slf: &Bound<'py, ScoreExporter>,
+    md: Option<&Bound<'py, PyAny>>,
+    tags: &[&str],
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let mut found = Vec::new();
+    for element in header_elements(slf, md)? {
+        let tag: String = element.getattr("tag")?.extract()?;
+        if tags.contains(&tag.as_str()) {
+            found.push(element);
+        }
+    }
+    Ok(found)
+}
+
+/// The one header element with this tag, appended to the root.
+fn header_appended<'py>(slf: &Bound<'py, ScoreExporter>, tag: &str) -> PyResult<Bound<'py, PyAny>> {
+    let found = header_tagged(slf, None, &[tag])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| MusicXMLExportException::new_err(format!("no <{tag}> is written")))?;
+    root_of(slf.as_super()).call_method1("append", (&found,))?;
+    Ok(found)
+}
+
+/// An exporter's root.
+fn root_of<'py>(base: &Bound<'py, XMLExporterBase>) -> Bound<'py, PyAny> {
+    base.borrow()
+        .xmlRoot
+        .clone_ref(base.py())
+        .into_bound(base.py())
 }
 
 #[pymethods]
@@ -524,7 +719,22 @@ impl ScoreExporter {
         base.xmlRoot
             .bind(py)
             .call_method1("set", ("version", music21::musicxml::MUSICXML_VERSION))?;
-        Ok(PyClassInitializer::from(base).add_subclass(Self { makeNotation }))
+        let none = || py.None();
+        let list = || -> PyResult<Py<PyAny>> { Ok(PyList::empty(py).into_any().unbind()) };
+        Ok(PyClassInitializer::from(base).add_subclass(Self {
+            makeNotation,
+            scoreMetadata: none(),
+            spannerBundle: none(),
+            meterStream: none(),
+            scoreLayouts: list()?,
+            firstScoreLayout: none(),
+            textBoxes: list()?,
+            highestTime: 0.0,
+            refStreamOrTimeRange: PyList::new(py, [0.0, 0.0])?.into_any().unbind(),
+            partExporterList: list()?,
+            parts: list()?,
+            mxIdentification: none(),
+        }))
     }
 
     /// The score as a `<score-partwise>` element, which becomes the root;
@@ -532,8 +742,7 @@ impl ScoreExporter {
     fn parse<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let notation = Notation::of(slf.borrow().makeNotation);
-        let stream = slf.as_super().borrow().stream.clone_ref(py);
-        let text = document(py, &crate::stream::crate_stream(stream.bind(py))?, notation)?;
+        let text = document(py, &exported_stream(slf)?, notation)?;
         let root = parsed(py, &text)?;
         slf.as_super().borrow_mut().xmlRoot = root.clone().unbind();
         Ok(root)
@@ -546,6 +755,253 @@ impl ScoreExporter {
         let empty = class(py, "music21.stream", "Score")?.call0()?;
         slf.as_super().borrow_mut().stream = empty.unbind();
         Self::parse(slf)
+    }
+
+    /// Reads off the score what the later steps use: its layouts, its
+    /// meters, its parts and length, its text boxes and its spanners.
+    fn scorePreliminaries(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        Self::setScoreLayouts(slf)?;
+        Self::setMeterStream(slf)?;
+        Self::setPartsAndRefStream(slf)?;
+        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+        let boxes = stream.call_method1("getElementsByClass", ("TextBox",))?;
+        let mut held = slf.borrow_mut();
+        held.textBoxes = PyList::new(py, boxes.try_iter()?.collect::<PyResult<Vec<_>>>()?)?
+            .into_any()
+            .unbind();
+        held.highestTime = 0.0;
+        if held.spannerBundle.is_none(py) {
+            held.spannerBundle = stream.getattr("spannerBundle")?.unbind();
+        }
+        Ok(())
+    }
+
+    /// The score's `ScoreLayout`s, and the first of them.
+    fn setScoreLayouts(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+        let layouts = stream.call_method1("getElementsByClass", ("ScoreLayout",))?;
+        let first = layouts.call_method0("first")?;
+        let listed = PyList::new(py, layouts.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+        let mut held = slf.borrow_mut();
+        held.firstScoreLayout = first.unbind();
+        held.scoreLayouts = listed.into_any().unbind();
+        Ok(())
+    }
+
+    /// The score's meters, a default one where it has none.
+    fn setMeterStream(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+        let keywords = PyDict::new(py);
+        keywords.set_item("searchContext", false)?;
+        keywords.set_item("sortByCreationTime", false)?;
+        keywords.set_item("returnDefault", true)?;
+        let meters = stream
+            .getattr("getTimeSignatures")?
+            .call((), Some(&keywords))?;
+        slf.borrow_mut().meterStream = meters.unbind();
+        Ok(())
+    }
+
+    /// The score's length, from the end of whichever stream in it ends
+    /// last, and its parts. Unlike music21's, it leaves each part's offset
+    /// where it is rather than moving it onto the part's elements.
+    fn setPartsAndRefStream(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+        let mut highest: f64 = slf.borrow().highestTime;
+        for inner in stream
+            .call_method1("getElementsByClass", ("Stream",))?
+            .try_iter()?
+        {
+            let inner = inner?;
+            if is_a(&inner, "Score")? || is_a(&inner, "Opus")? {
+                return Err(MusicXMLExportException::new_err(
+                    "Exporting scores nested inside scores is not supported",
+                ));
+            }
+            let start: f64 = inner.getattr("offset")?.extract()?;
+            let length: f64 = inner.getattr("highestTime")?.extract()?;
+            highest = highest.max(start + length);
+        }
+        let parts: Vec<Bound<'_, PyAny>> = stream
+            .getattr("parts")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        let mut held = slf.borrow_mut();
+        held.highestTime = highest;
+        held.refStreamOrTimeRange = PyList::new(py, [0.0, highest])?.into_any().unbind();
+        held.parts = PyList::new(py, parts)?.into_any().unbind();
+        Ok(())
+    }
+
+    /// A `PartExporter` for each part, each parsed.
+    fn parsePartlikeScore(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let exporters = slf.borrow().partExporterList.clone_ref(py).into_bound(py);
+        if exporters.len()? == 0 {
+            let parts = slf.borrow().parts.clone_ref(py).into_bound(py);
+            let class = py.get_type::<PartExporter>();
+            for part in parts.try_iter()? {
+                let keywords = PyDict::new(py);
+                keywords.set_item("parent", slf)?;
+                exporters.call_method1("append", (class.call((part?,), Some(&keywords))?,))?;
+            }
+        }
+        for exporter in exporters.try_iter()? {
+            exporter?.call_method0("parse")?;
+        }
+        Ok(())
+    }
+
+    /// One `PartExporter` for a score with no parts, parsed.
+    fn parseFlatScore(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py);
+        let keywords = PyDict::new(py);
+        keywords.set_item("parent", slf)?;
+        let exporter = py
+            .get_type::<PartExporter>()
+            .call((stream,), Some(&keywords))?;
+        exporter.call_method0("parse")?;
+        slf.borrow()
+            .partExporterList
+            .bind(py)
+            .call_method1("append", (exporter,))?;
+        Ok(())
+    }
+
+    /// Writes the header, then each part exporter's `<part>` after a
+    /// divider comment.
+    fn postPartProcess(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        Self::setScoreHeader(slf)?;
+        let base = slf.as_super();
+        let exporters = slf.borrow().partExporterList.clone_ref(py).into_bound(py);
+        for (index, exporter) in exporters.try_iter()?.enumerate() {
+            base.borrow()
+                .addDividerComment(py, &format!("Part {}", index + 1))?;
+            let part = exporter?.getattr("xmlRoot")?;
+            root_of(base).call_method1("append", (part,))?;
+        }
+        Ok(())
+    }
+
+    /// The header: titles, identification, defaults, a credit for each
+    /// text box, and the part list, from the metadata of the score or of
+    /// the nearest stream it is in.
+    fn setScoreHeader(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+        slf.borrow_mut().scoreMetadata = getMetadataFromContext(&stream)?.unbind();
+        let root = root_of(slf.as_super());
+        for element in header_elements(slf, None)? {
+            root.call_method1("append", (element,))?;
+        }
+        Ok(())
+    }
+
+    /// The `<work>`, `<movement-number>` and `<movement-title>`, appended.
+    fn setTitles(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let root = root_of(slf.as_super());
+        for element in header_tagged(slf, None, &["work", "movement-number", "movement-title"])? {
+            root.call_method1("append", (element,))?;
+        }
+        Ok(())
+    }
+
+    /// The `<identification>`: who made the score and how it was
+    /// encoded, appended.
+    fn setIdentification<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let found = header_appended(slf, "identification")?;
+        slf.borrow_mut().mxIdentification = found.clone().unbind();
+        Ok(found)
+    }
+
+    /// The `<encoding>`: the date, the software and what is supported,
+    /// appended to the `<identification>` where there is one yet.
+    fn setEncoding<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let identification = header_tagged(slf, None, &["identification"])?
+            .into_iter()
+            .next()
+            .ok_or_else(|| MusicXMLExportException::new_err("no <identification> is written"))?;
+        let encoding = found_in(&identification, "encoding")?;
+        let held = slf.borrow().mxIdentification.clone_ref(py).into_bound(py);
+        if !held.is_none() {
+            held.call_method1("append", (&encoding,))?;
+        }
+        Ok(encoding)
+    }
+
+    /// The `<supports>` the encoding lists.
+    fn getSupports<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
+        let identification = header_tagged(slf, None, &["identification"])?
+            .into_iter()
+            .next()
+            .ok_or_else(|| MusicXMLExportException::new_err("no <identification> is written"))?;
+        all_in(&identification, "encoding/supports")
+    }
+
+    /// The `<defaults>`: scaling and the layouts of the score's first
+    /// `ScoreLayout`, appended.
+    fn setDefaults<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        header_appended(slf, "defaults")
+    }
+
+    /// The `<part-list>`: each part's `<score-part>`, inside the
+    /// `<part-group>`s of the staff groups that bracket them, appended.
+    fn setPartList<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        header_appended(slf, "part-list")
+    }
+
+    /// The `<miscellaneous>` of the metadata's other fields, of `md` or of
+    /// the exporter's `scoreMetadata`; `None` with neither.
+    #[pyo3(signature = (md = None))]
+    fn metadataToMiscellaneous<'py>(
+        slf: &Bound<'py, Self>,
+        md: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let py = slf.py();
+        let md = md.filter(|given| !given.is_none());
+        if md.is_none() && slf.borrow().scoreMetadata.is_none(py) {
+            return Ok(None);
+        }
+        let identification = header_tagged(slf, md, &["identification"])?;
+        let found = match identification.first() {
+            Some(identification) => identification.call_method1("find", ("miscellaneous",))?,
+            None => py.None().into_bound(py),
+        };
+        if !found.is_none() {
+            return Ok(Some(found));
+        }
+        Ok(Some(
+            element_tree(py)?
+                .getattr("Element")?
+                .call1(("miscellaneous",))?,
+        ))
+    }
+
+    /// A text box as the `<credit>` the score writes for it.
+    fn textBoxToXmlCredit<'py>(&self, textBox: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        first_fragment(textBox)
+    }
+
+    /// A contributor as a `<creator>` of its role.
+    fn contributorToXmlCreator<'py>(&self, c: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let py = c.py();
+        let creator = element_tree(py)?.getattr("Element")?.call1(("creator",))?;
+        let role = c.getattr("role")?;
+        if !role.is_none() {
+            creator.call_method1("set", ("type", role.str()?))?;
+        }
+        let name = c.getattr("name")?;
+        if !name.is_none() {
+            creator.setattr("text", name)?;
+        }
+        Ok(creator)
     }
 }
 
@@ -573,6 +1029,33 @@ impl PartExporter {
         Ok(PyClassInitializer::from(base).add_subclass(Self { parent }))
     }
 
+    /// An instrument as its `<score-instrument>`.
+    fn instrumentToXmlScoreInstrument<'py>(
+        &self,
+        i: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (score, _) = music21::musicxml::instrument_xml(&crate::stream::instrument_value(i)?);
+        parsed(i.py(), &score)
+    }
+
+    /// An instrument as its `<midi-instrument>`, its channel and program
+    /// counted from one.
+    fn instrumentToXmlMidiInstrument<'py>(
+        &self,
+        i: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let (_, midi) = music21::musicxml::instrument_xml(&crate::stream::instrument_value(i)?);
+        parsed(i.py(), &midi)
+    }
+
+    /// The part's `<score-part>`: its name, abbreviation and instruments.
+    fn getXmlScorePart<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let stream = slf.as_super().borrow().stream.clone_ref(py);
+        let part = crate::stream::crate_stream(stream.bind(py))?;
+        written_in_score(py, part, "score-part")
+    }
+
     /// The part as the `<part>` its score writes, which becomes the root.
     fn parse<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
@@ -591,8 +1074,15 @@ fn written_in_score<'py>(
     part: RsStream,
     tag: &str,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let mut score = RsStream::with_kind(music21::stream::StreamKind::Score);
-    score.push(part);
+    // A part goes in a score; a stream of measures is written as one.
+    let score = match part.kind() {
+        music21::stream::StreamKind::Part | music21::stream::StreamKind::PartStaff => {
+            let mut score = RsStream::with_kind(music21::stream::StreamKind::Score);
+            score.push(part);
+            score
+        }
+        _ => part,
+    };
     let root = parsed(py, &document(py, &score, Notation::AsItStands)?)?;
     let found = root.call_method1("find", (format!(".//{tag}"),))?;
     if found.is_none() {
@@ -860,6 +1350,35 @@ impl MeasureExporter {
         all_in(&first_fragment(&note)?, "beam")
     }
 
+    /// One beam as its `<beam>`.
+    fn beamToXml<'py>(&self, beamObject: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let py = beamObject.py();
+        let beams = class(py, "music21.beam", "Beams")?.call0()?;
+        beams
+            .getattr("beamsList")?
+            .call_method1("append", (deep_copy(beamObject)?,))?;
+        let duration = class(py, "music21.duration", "Duration")?.call1(("eighth",))?;
+        let note = carrier(py, "duration", &duration)?;
+        note.setattr("beams", beams)?;
+        found_in(&first_fragment(&note)?, "beam")
+    }
+
+    /// A tuplet as the list of `<tuplet>` a note in it writes in its
+    /// notations, which is empty unless the tuplet starts or stops there.
+    #[pyo3(signature = (tuplet, tupletIndex = 1))]
+    fn tupletToXmlTuplet<'py>(
+        &self,
+        tuplet: &Bound<'py, PyAny>,
+        tupletIndex: usize,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let _ = tupletIndex;
+        let py = tuplet.py();
+        let duration = class(py, "music21.duration", "Duration")?.call1(("eighth",))?;
+        duration.call_method1("appendTuplet", (deep_copy(tuplet)?,))?;
+        let note = carrier(py, "duration", &duration)?;
+        all_in(&first_fragment(&note)?, "notations/tuplet")
+    }
+
     /// A tie as the list of `<tie>` it writes.
     fn tieToXmlTie<'py>(&self, m21Tie: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyList>> {
         let note = carrier(m21Tie.py(), "tie", &deep_copy(m21Tie)?)?;
@@ -971,6 +1490,14 @@ impl MeasureExporter {
         appended(slf, fragments(cs)?)
     }
 
+    /// A no-chord symbol as its `<harmony>` of kind `none`.
+    fn noChordToXml<'py>(
+        slf: &Bound<'py, Self>,
+        cs: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        appended(slf, fragments(cs)?)
+    }
+
     /// A clef as its `<clef>`.
     fn clefToXml<'py>(&self, clefObj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         first_fragment(clefObj)
@@ -987,6 +1514,47 @@ impl MeasureExporter {
     /// A meter as its `<time>`.
     fn timeSignatureToXml<'py>(&self, ts: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         first_fragment(ts)
+    }
+
+    /// A transposing interval as its `<transpose>`; the measure's own
+    /// part's transposition where none is given.
+    #[pyo3(signature = (i = None))]
+    fn intervalToXmlTranspose<'py>(
+        slf: &Bound<'py, Self>,
+        i: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let interval = match i.filter(|given| !given.is_none()) {
+            Some(given) => given.clone(),
+            None => {
+                let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
+                let instrument = stream.call_method1("getInstrument", (false,))?;
+                instrument.getattr("transposition")?
+            }
+        };
+        if interval.is_none() {
+            return Err(MusicXMLExportException::new_err(
+                "there is no transposition to write",
+            ));
+        }
+        let value = crate::interval::interval_from_any(&interval)?;
+        parsed(py, &music21::musicxml::transpose_xml(&value))
+    }
+
+    /// A staff layout as its `<staff-details>`.
+    fn staffLayoutToXmlStaffDetails<'py>(
+        &self,
+        staffLayout: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let Some(music21::stream::StreamElement::Layout(music21::layout::Layout::Staff(staff))) =
+            crate::stream::element_written(staffLayout)?
+        else {
+            return Err(MusicXMLExportException::new_err("not a staff layout"));
+        };
+        parsed(
+            staffLayout.py(),
+            &music21::musicxml::staff_details_xml(&staff),
+        )
     }
 
     /// A barline as its `<barline>`, with no location.

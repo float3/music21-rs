@@ -511,7 +511,10 @@ fn isFullMeasureRest(r: &Bound<'_, PyAny>) -> PyResult<bool> {
 /// music21's `synchronizeIdsToM21`: an element's `id` attribute, where it
 /// has one, made the object's `id`.
 #[pyfunction]
-fn synchronizeIdsToM21(element: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+pub(crate) fn synchronizeIdsToM21(
+    element: &Bound<'_, PyAny>,
+    m21Object: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     let found = element.call_method1("get", ("id",))?;
     if found.is_none() || !found.is_truthy()? {
         return Ok(());
@@ -556,7 +559,7 @@ fn attribute_name(xml: &str, given: Option<String>) -> PyResult<String> {
 /// where it has it, set on the object, through `transform` if given.
 #[pyfunction]
 #[pyo3(signature = (m21El, xmlEl, xmlAttributeName, attributeName = None, transform = None))]
-fn setM21AttributeFromAttribute(
+pub(crate) fn setM21AttributeFromAttribute(
     m21El: &Bound<'_, PyAny>,
     xmlEl: &Bound<'_, PyAny>,
     xmlAttributeName: &str,
