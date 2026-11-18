@@ -2261,12 +2261,29 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] useMixedNumerals: bool,
     ) -> PyResult<String> {
         let py = slf.py();
-        let held: Vec<(f64, Py<PyAny>)> = slf
+        let mut held: Vec<(f64, Py<PyAny>)> = slf
             .borrow()
             .sorted()
             .iter()
             .map(|held| (held.offset, held.object.clone_ref(py)))
             .collect();
+
+        // A measure's left barline, which it lists rather than holds, at
+        // nought among what stands there, as music21 holds it.
+        if let Some(left) = slf
+            .borrow()
+            .left_barline
+            .as_ref()
+            .map(|bar| bar.clone_ref(py))
+        {
+            let key = |object: &Bound<'_, PyAny>| (priority_of(object), sort_order(object));
+            let own = key(left.bind(py));
+            let at = held
+                .iter()
+                .position(|(offset, object)| *offset > 0.0 || key(object.bind(py)) > own)
+                .unwrap_or(held.len());
+            held.insert(at, (0.0, left));
+        }
         let written = |value: f64| -> PyResult<String> {
             match useMixedNumerals {
                 true => crate::duration::mixed_numeral(value),
@@ -5907,13 +5924,13 @@ struct Built<'py> {
     leaves: Vec<Option<Py<PyAny>>>,
     /// The repeat brackets of its parts, each with its part, which go in
     /// after the spanners the score puts in its parts.
-    brackets: Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>,
+    brackets: Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>, f64)>,
 }
 
 /// Puts each repeat bracket in its part, at nought.
-fn insert_brackets(brackets: &[(Bound<'_, PyAny>, Bound<'_, PyAny>)]) -> PyResult<()> {
-    for (part, bracket) in brackets {
-        part.call_method1("insert", (0.0, bracket))?;
+fn insert_brackets(brackets: &[(Bound<'_, PyAny>, Bound<'_, PyAny>, f64)]) -> PyResult<()> {
+    for (part, bracket, offset) in brackets {
+        part.call_method1("insert", (*offset, bracket))?;
     }
     Ok(())
 }
@@ -5965,7 +5982,7 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 let built = build_as(py, inner, whose)?;
                 brackets.extend(built.brackets);
                 if let Some(ending) = inner.ending() {
-                    endings.push((ending, built.made.clone()));
+                    endings.push((ending, built.made.clone(), event.offset()));
                 }
                 let first = leaves.len();
                 leaves.extend(built.leaves);
@@ -6065,8 +6082,8 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         }
     }
-    for bracket in repeat_brackets(py, &endings, whose)? {
-        brackets.push((made.clone(), bracket));
+    for (bracket, offset) in repeat_brackets(py, &endings, whose)? {
+        brackets.push((made.clone(), bracket, offset));
     }
     // A score's parts take their brackets once its spanners are in.
     if stream.kind() == StreamKind::Score {
@@ -6136,14 +6153,15 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
 
 /// A `RepeatBracket` over each alternative ending among a part's measures,
 /// from the measure it opens on to the one it closes on, each complete, in
-/// the order they close: what music21's readers put in the part at nought
-/// once the part is read. music21's own class for its streams, this
-/// package's for its own.
+/// the order they close, each with where it goes in the part: at nought,
+/// or where the ending's last measure starts, as the reader that made it
+/// puts it. music21's own class for its streams, this package's for its
+/// own.
 fn repeat_brackets<'py>(
     py: Python<'py>,
-    endings: &[(&music21::Ending, Bound<'py, PyAny>)],
+    endings: &[(&music21::Ending, Bound<'py, PyAny>, f64)],
     whose: Whose,
-) -> PyResult<Vec<Bound<'py, PyAny>>> {
+) -> PyResult<Vec<(Bound<'py, PyAny>, f64)>> {
     let mut made = Vec::new();
     if endings.is_empty() {
         return Ok(made);
@@ -6153,7 +6171,7 @@ fn repeat_brackets<'py>(
         Whose::Wheel => py.get_type::<crate::spanner::RepeatBracket>().into_any(),
     };
     let mut open: Option<Bound<'py, PyAny>> = None;
-    for (ending, measure) in endings {
+    for (ending, measure, offset) in endings {
         let bracket = match open.take() {
             Some(bracket) if !ending.starts() => bracket,
             _ => {
@@ -6169,7 +6187,11 @@ fn repeat_brackets<'py>(
         bracket.call_method1("addSpannedElements", (measure,))?;
         if ending.stops() {
             bracket.setattr("completeStatus", true)?;
-            made.push(bracket);
+            let at = match ending.place() {
+                music21::BracketPlace::PartStart => 0.0,
+                music21::BracketPlace::LastMeasure => *offset,
+            };
+            made.push((bracket, at));
         } else {
             open = Some(bracket);
         }

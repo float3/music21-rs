@@ -11665,3 +11665,36 @@ def test_core_insert_and_elements_changed_are_music21s():
     measure.coreElementsChanged()
     assert measure.elementOffset(note) == 1.0
     assert list(measure.notes) == [note]
+
+
+def test_a_measures_left_barline_is_listed_where_music21_lists_it():
+    """`show('text')` lists a measure's left barline at nought among what
+    stands there, by its sort order, as music21 holds it."""
+    measure = m.Measure()
+    measure.insert(0.0, m.TextExpression("G"))
+    measure.append(m.Note("A4"))
+    measure.leftBarline = m.Barline("regular")
+    lines = measure.recurseRepr().splitlines()
+    assert lines == [
+        "{0.0} <music21.expressions.TextExpression 'G'>",
+        "{0.0} <music21.bar.Barline type=regular>",
+        "{0.0} <music21.note.Note A>",
+    ]
+
+
+def test_a_noteworthy_endings_bracket_stands_where_music21_appends_it():
+    """music21's NoteWorthy reader appends a `RepeatBracket` to the part
+    as the ending's last measure starts; its MusicXML reader puts one at
+    nought."""
+    path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "music21" / "music21" / "noteworthy" / "jingle_v175.nwc"
+    )
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    from music21_rs import converter
+
+    part = converter.parse(str(path)).parts[0]
+    brackets = [e for e in part.elements if type(e).__name__ == "RepeatBracket"]
+    assert [part.elementOffset(bracket) for bracket in brackets] == [28.0]
+    assert [measure.number for measure in brackets[0].getSpannedElements()] == [5, 6]

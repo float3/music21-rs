@@ -201,6 +201,21 @@ pub struct Ending {
     numbers: Vec<u32>,
     starts: bool,
     stops: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    place: BracketPlace,
+}
+
+/// Where in its part music21 puts the `RepeatBracket` over an ending,
+/// which differs by the reader that made it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BracketPlace {
+    /// At the part's start, as its MusicXML reader puts it.
+    #[default]
+    PartStart,
+    /// Where the ending's last measure starts, as its NoteWorthy reader
+    /// appends it before that measure.
+    LastMeasure,
 }
 
 impl Ending {
@@ -212,7 +227,19 @@ impl Ending {
             numbers,
             starts,
             stops,
+            place: BracketPlace::default(),
         }
+    }
+
+    /// The same ending, its bracket put at `place` in the part.
+    pub fn placed(mut self, place: BracketPlace) -> Self {
+        self.place = place;
+        self
+    }
+
+    /// Where music21 puts the bracket over this ending in its part.
+    pub fn place(&self) -> BracketPlace {
+        self.place
     }
 
     /// The times through the ending is played: music21's `numberRange`.
