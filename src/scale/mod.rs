@@ -1,6 +1,7 @@
 use crate::stepname::StepName;
 
 pub mod hexatonicblues;
+pub mod intervalnetwork;
 /// The named scales music21 exposes, realized from a tonic.
 pub(crate) mod realized;
 pub mod scaletype;
