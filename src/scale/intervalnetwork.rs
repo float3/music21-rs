@@ -1808,6 +1808,115 @@ impl ScaleType {
     }
 }
 
+/// The semitone spans that divide the octave evenly, over which a cycle
+/// of whole semitones repeats at the octave.
+const OCTAVE_DIVISORS: [IntegerType; 6] = [1, 2, 3, 4, 6, 12];
+
+/// Semitones in an octave.
+const OCTAVE_SEMITONES: FloatType = 12.0;
+
+/// The steps with the last one respelled so that they climb from C4 to
+/// exactly C5: music21's `_closeOnTonic`. Steps that already do are
+/// returned as they are, and so are steps spanning anything but an octave.
+///
+/// # Errors
+///
+/// A step that cannot move a pitch.
+pub fn close_on_tonic(steps: &[Interval]) -> Result<Vec<Interval>> {
+    let Some((last, before)) = steps.split_last() else {
+        return Ok(Vec::new());
+    };
+    let tonic = Pitch::from_name("C4")?;
+    let mut reached = tonic.clone();
+    for step in before {
+        reached = step.transpose_pitch_with_options(&reached, false, Some(1))?;
+    }
+    let octave = Interval::from_name("P8")?.transpose_pitch(&tonic)?;
+    if last.transpose_pitch(&reached)?.name_with_octave() == octave.name_with_octave() {
+        return Ok(steps.to_vec());
+    }
+    let mut closed = before.to_vec();
+    closed.push(Interval::between_pitches(&reached, &octave)?);
+    Ok(closed)
+}
+
+/// music21's `AbstractCyclicalScale` network: the steps walked both ways.
+/// Whole semitones adding up to a divisor of the octave repeat to fill it,
+/// closed on the tonic, and the network then repeats at the octave.
+///
+/// # Errors
+///
+/// A step that cannot move a pitch.
+pub fn cyclical(steps: &[Interval]) -> Result<IntervalNetwork> {
+    let span: FloatType = steps.iter().map(Interval::semitones).sum();
+    let whole = steps.iter().all(|step| step.semitones().fract() == 0.0);
+    let divides = whole
+        && OCTAVE_DIVISORS
+            .iter()
+            .any(|divisor| (span - FloatType::from(*divisor)).abs() < FloatType::EPSILON);
+
+    let mut network = IntervalNetwork::default();
+    if !divides {
+        network.fill_bidirected(steps);
+        return Ok(network);
+    }
+    let repeats = (OCTAVE_SEMITONES / span) as usize;
+    let filled: Vec<Interval> = steps
+        .iter()
+        .cycle()
+        .take(steps.len() * repeats)
+        .cloned()
+        .collect();
+    network.fill_bidirected(&close_on_tonic(&filled)?);
+    network.octaves = Octaves::Duplicating;
+    Ok(network)
+}
+
+/// music21's `AbstractOctaveRepeatingScale` steps and network: the steps
+/// completed to an octave by the interval left over, or respelled to
+/// close on the tonic where they already span twelve semitones. Steps
+/// past the octave make a network that does not repeat at it.
+///
+/// # Errors
+///
+/// No steps, or a step that cannot move a pitch.
+pub fn octave_repeating(steps: &[Interval]) -> Result<(Vec<Interval>, IntervalNetwork)> {
+    let total = Interval::sum(steps)?;
+    let mut span = total.semitones();
+    let mut completed = steps.to_vec();
+    if span == OCTAVE_SEMITONES && total.short_name() != "P8" {
+        completed = close_on_tonic(steps)?;
+    } else if span != OCTAVE_SEMITONES {
+        let rest = total.complement()?;
+        if rest.semitones() != 0.0 {
+            span += rest.semitones();
+            completed.push(rest);
+        }
+    }
+
+    let mut network = IntervalNetwork::default();
+    network.fill_bidirected(&completed);
+    if span == OCTAVE_SEMITONES {
+        network.octaves = Octaves::Duplicating;
+    }
+    Ok((completed, network))
+}
+
+/// music21's `AbstractWeightedHexatonicBlues`: the minor pentatonic with
+/// the blue note between its fourth and fifth degrees as a second way from
+/// F to G, which a weighted walk takes or passes by.
+///
+/// # Errors
+///
+/// None in practice; the steps are fixed.
+pub fn weighted_hexatonic_blues() -> Result<IntervalNetwork> {
+    let mut network = IntervalNetwork::default();
+    network.fill_table(&BLUES_NODES, &BLUES_EDGES)?;
+    network.octaves = Octaves::Duplicating;
+    network.pathways = Pathways::Weighted;
+    Ok(network)
+}
+
 /// A node of a network written as a table: its id and degree.
 type TableNode = (NodeId, IntegerType);
 
@@ -1919,6 +2028,28 @@ const RAG_MARWA_EDGES: [TableEdge; 14] = [
     ("M2", at(9), at(10), DOWN),
     ("A2", at(10), at(11), DOWN),
     ("m2", at(11), LOW, DOWN),
+];
+
+/// The blues network's nodes: C E- F F# G B- and the octave.
+const BLUES_NODES: [TableNode; 7] = [
+    (LOW, 1),
+    (at(0), 2),
+    (at(1), 3),
+    (at(2), 4),
+    (at(3), 5),
+    (at(4), 6),
+    (HIGH, 7),
+];
+
+/// Every edge both ways; F goes on to G directly or through F#.
+const BLUES_EDGES: [TableEdge; 7] = [
+    ("m3", LOW, at(0), BOTH),
+    ("M2", at(0), at(1), BOTH),
+    ("M2", at(1), at(3), BOTH),
+    ("a1", at(1), at(2), BOTH),
+    ("m2", at(2), at(3), BOTH),
+    ("m3", at(3), at(4), BOTH),
+    ("M2", at(4), HIGH, BOTH),
 ];
 
 #[cfg(test)]
@@ -2069,6 +2200,59 @@ mod tests {
                 (4, "C".to_string())
             ]
         );
+    }
+
+    fn steps(names: &[&str]) -> Vec<Interval> {
+        names
+            .iter()
+            .map(|name| Interval::from_name(name).unwrap())
+            .collect()
+    }
+
+    fn named(steps: &[Interval]) -> Vec<String> {
+        steps.iter().map(Interval::short_name).collect()
+    }
+
+    #[test]
+    fn closing_on_the_tonic_respells_the_last_step() {
+        assert_eq!(
+            named(&close_on_tonic(&steps(&["M3", "M3", "M3"])).unwrap()),
+            ["M3", "M3", "d4"]
+        );
+        assert_eq!(
+            named(&close_on_tonic(&steps(&["m3", "M3", "P4"])).unwrap()),
+            ["m3", "M3", "P4"]
+        );
+    }
+
+    #[test]
+    fn a_cycle_dividing_the_octave_repeats_at_it() {
+        let thirds = cyclical(&steps(&["M3"])).unwrap();
+        assert_eq!(thirds.octaves, Octaves::Duplicating);
+        assert_eq!(thirds.degree_max_unique(), Some(3));
+        assert_eq!(
+            cyclical(&steps(&["P5"])).unwrap().octaves,
+            Octaves::Distinct
+        );
+    }
+
+    #[test]
+    fn octave_repeating_steps_are_completed_to_the_octave() {
+        let (completed, network) = octave_repeating(&steps(&["M3", "m3"])).unwrap();
+        assert_eq!(named(&completed), ["M3", "m3", "P4"]);
+        assert_eq!(network.octaves, Octaves::Duplicating);
+        let (completed, _) = octave_repeating(&steps(&["P8"])).unwrap();
+        assert_eq!(named(&completed), ["P8"]);
+    }
+
+    #[test]
+    fn the_blues_network_branches_at_f() {
+        let network = weighted_hexatonic_blues().unwrap();
+        assert_eq!(network.pathways, Pathways::Weighted);
+        let from_f = network.next_steps(at(1), Direction::Ascending).unwrap();
+        let mut reached: Vec<NodeId> = from_f.into_iter().map(|(_, node)| node).collect();
+        reached.sort_by_key(|node| network.node(*node).unwrap().degree);
+        assert_eq!(reached, [at(2), at(3)]);
     }
 
     #[test]

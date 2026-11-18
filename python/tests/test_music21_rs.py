@@ -11787,3 +11787,169 @@ def test_a_noteworthy_endings_bracket_stands_where_music21_appends_it():
     brackets = [e for e in part.elements if type(e).__name__ == "RepeatBracket"]
     assert [part.elementOffset(bracket) for bracket in brackets] == [28.0]
     assert [measure.number for measure in brackets[0].getSpannedElements()] == [5, 6]
+
+
+def test_provided_spanners_words_and_variants_pickle(tmp_path):
+    """Provided, a stream holding a slur, a text expression and a variant
+    pickles, and the thawed slur joins the thawed stream's own note, as
+    music21's freezing needs."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import copy, pickle
+from music21 import expressions, note, spanner, stream, variant
+s = stream.Stream()
+n = note.Note('D')
+s.insert(0, spanner.Slur([n]))
+s.insert(2, n)
+s.insert(0, expressions.TextExpression('dolce'))
+s.insert(0, variant.Variant([note.Note('E')], name='alt'))
+for thawed in (pickle.loads(pickle.dumps(s)), copy.deepcopy(s)):
+    print(thawed.spanners[0].getFirst() is thawed.notes[0], thawed.notes[0].offset)
+    words = thawed.getElementsByClass(expressions.TextExpression).first()
+    v = thawed.getElementsByClass(variant.Variant).first()
+    print(words.content, v.groups, list(v.notes))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True 2.0",
+        "dolce ['alt'] [<music21.note.Note E>]",
+    ] * 2
+
+
+def test_provided_streams_jsonpickle_with_what_they_hold(tmp_path):
+    """Provided, jsonpickle carries what a stream holds: it takes a stream
+    for a list, having `append` and `__getitem__`, and reads its state
+    rather than its reduction."""
+    jsonpickle = pytest.importorskip("jsonpickle")
+    # The interpreter below has no site-packages; jsonpickle's own
+    # directory is put on its path, and nothing else of it.
+    where = pathlib.Path(jsonpickle.__file__).resolve().parents[1]
+    code = f"""
+import sys
+sys.path.append({str(where)!r})
+import music21_rs
+music21_rs.provide_music21()
+import jsonpickle
+from music21 import note, stream
+s = stream.Stream()
+s.insert(1, note.Note('E'))
+thawed = jsonpickle.decode(jsonpickle.encode(s, keys=True), keys=True)
+print(type(thawed).__name__, list(thawed), thawed[0].offset)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["Stream [<music21.note.Note E>] 1.0"]
+
+
+def test_a_copied_measure_keeps_what_it_says_of_itself():
+    """A deep copy of a measure keeps its number, suffix, padding and
+    barlines, as a pickle of it does; music21's freezing copies the score
+    it freezes."""
+    import copy
+
+    measure = m.Measure(number=7)
+    measure.numberSuffix = "a"
+    measure.paddingLeft = 1.0
+    measure.leftBarline = m.Barline("heavy")
+    measure.append(m.Note("C"))
+    copied = copy.deepcopy(measure)
+    assert (copied.number, copied.numberSuffix, copied.paddingLeft) == (7, "a", 1.0)
+    assert copied.leftBarline.type == "heavy"
+    assert copied.leftBarline is not measure.leftBarline
+    assert [n.name for n in copied.notes] == ["C"]
+
+
+def test_provided_add_variant_takes_measures(tmp_path):
+    """Provided, `addVariant` builds a variant of measures: the package's
+    own streams, music21's not being there to build."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream, variant
+s = stream.Part([stream.Measure([note.Note('C', type='whole')])])
+reading = stream.Stream([stream.Measure([note.Note('D', type='whole')])])
+variant.addVariant(s, 0.0, reading, variantName='alt')
+v = s.getElementsByClass(variant.Variant).first()
+print(v.groups, type(v._stream[0]).__name__, v._stream[0].notes[0].name)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["['alt'] Measure D"]
+
+
+def test_music21s_abstract_scales_build_their_networks():
+    """The subclasses of `AbstractScale` build music21's networks: the
+    diatonic modes compare by network, the cyclical and octave-repeating
+    ones keep their steps, and a concrete scale stands on any of them."""
+    major, ionian = m.AbstractDiatonicScale("major"), m.AbstractDiatonicScale("Ionian")
+    assert major == ionian and major != m.AbstractDiatonicScale("lydian")
+    assert (major.type, ionian.mode, major.octaveDuplicating) == ("Abstract diatonic", "ionian", True)
+    assert m.AbstractOctatonicScale() == m.AbstractOctatonicScale()
+    assert [i.name for i in m.AbstractOctaveRepeatingScale(["M3"]).intervalList] == ["M3", "m6"]
+    assert m.AbstractCyclicalScale(["M3"]).getDegreeMaxUnique() == 3
+    assert not m.AbstractCyclicalScale(["P5"]).octaveDuplicating
+
+    octatonic = m.OctatonicScale("C", mode=2)
+    octatonic.abstract = m.AbstractOctatonicScale(mode=1)
+    assert str(octatonic.pitchFromDegree(2)) == "D-4"
+
+    blues = m.WeightedHexatonicBlues("c4")
+    assert blues.type == "Weighted Hexatonic Blues"
+    assert str(blues.pitchFromDegree(4)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.75)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.25)) == "G4"
+
+
+def test_provided_noteworthy_reads_through_the_crate(tmp_path):
+    """Provided, `music21.noteworthy` has music21's tables, a translator
+    that reads `.nwctxt` lines through the crate and spells staff
+    positions, and a converter with music21's byte readers."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import noteworthy, stream
+from music21.noteworthy import binaryTranslate, constants, dictionaries, translate
+print(constants.ClefNames[1], dictionaries.dictionaryBass[3], noteworthy.translate is not None)
+nwt = translate.NoteworthyTranslator()
+nwt.currentClef = 'BASS'
+print(nwt.getStepAndOctaveFromPosition(3), nwt.getMultiplePitchesFromPositionInfo('1,b3,5^'))
+s = nwt.parseList(['|AddStaff|', '|Clef|Type:Treble', '|Note|Dur:4th|Pos:0'])
+print(type(s).__name__, [n.nameWithOctave for n in s.recurse().notes])
+nwcc = binaryTranslate.NWCConverter()
+nwcc.fileContents = b'\\x02\\x01\\xff\\x00ab\\x00'
+print(nwcc.readLEShort(), nwcc.byteToSignedInt(), nwcc.readToNUL(), nwcc.readToNUL(False), nwcc.parsePosition)
+nwt = translate.NoteworthyTranslator()
+nwt.currentMeasure = stream.Measure()
+nwt.createClef({'Type': 'Bass', 'OctaveShift': 'Octave Down'})
+nwt.translateNote({'Dur': 'Half', 'Pos': '#-3^'})
+print(nwt.currentClef, list(nwt.currentMeasure), nwt.currentPosition(), nwt.tiedSteps)
+nwcc = binaryTranslate.NWCConverter()
+nwcc.version = 201
+nwcc.fileContents = b'\\x00\\x00\\x00\\x03\\x00\\x00\\x00'
+clef = binaryTranslate.NWCObject(parserParent=nwcc)
+clef.parse()
+print(clef.type, clef.dumpMethod(clef), nwcc.parsePosition)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Bass G True",
+        "('G', 3) [<music21.pitch.Pitch E3>, <music21.pitch.Pitch G-3>, <music21.pitch.Pitch B3>]",
+        "Score ['B4']",
+        "258 -1 b'' b'ab' 4",
+        "BASS8dw [<music21.clef.Bass8vbClef>, <music21.note.Note A#>] 2.0 "
+        "{('A', 1): (<music21.stream.Measure 0 offset=0.0>, 2.0)}",
+        "Clef |Clef|Type:Tenor| 7",
+    ]
+
+
+def test_metadata_is_shown_as_music21_shows_it():
+    """music21 gives `Metadata` no repr of its own: it is shown by its
+    address, whatever its title, and a score's `show('text')` lists it
+    so."""
+    import re
+
+    for made in (m.Metadata(), m.Metadata(title="Jingle Bells")):
+        assert re.fullmatch(r"<music21\.metadata\.Metadata object at 0x[0-9a-f]+>", repr(made))

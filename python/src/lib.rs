@@ -64,6 +64,7 @@ macro_rules! middle_class {
     };
 }
 
+pub mod abstractscale;
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -106,6 +107,7 @@ pub mod figuredbass;
 pub mod filters;
 pub mod fixer;
 pub mod formats;
+mod freezethaw;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
@@ -132,6 +134,9 @@ pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
+mod noteworthy;
+mod nwcbinary;
+mod nwctranslate;
 pub mod omrcorrectors;
 pub mod ornamentrecognizer;
 pub mod percussion;
@@ -2283,6 +2288,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     interval::register(m)?;
     harmony::register(m)?;
     scale::register(m)?;
+    abstractscale::register(m)?;
     sieve::register(m)?;
     roman::register(m)?;
     notation::register(m)?;
@@ -2333,7 +2339,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 30] = [
+const BUILT_MODULES: [&str; 36] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2364,6 +2370,12 @@ const BUILT_MODULES: [&str; 30] = [
     "music21.musicxml.xmlSoundParser",
     "music21.metadata.properties",
     "music21.musicxml.xmlToM21",
+    "music21.freezeThaw",
+    "music21.noteworthy",
+    "music21.noteworthy.binaryTranslate",
+    "music21.noteworthy.constants",
+    "music21.noteworthy.dictionaries",
+    "music21.noteworthy.translate",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2402,6 +2414,8 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.xmlSoundParser" => xmlsoundparser::module(py),
         "music21.metadata.properties" => metadataproperties::module(py),
         "music21.musicxml.xmlToM21" => xmltom21::module(py),
+        "music21.freezeThaw" => freezethaw::module(py),
+        _ if name.starts_with("music21.noteworthy") => noteworthy::module(py, name),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

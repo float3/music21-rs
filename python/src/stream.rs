@@ -3762,6 +3762,26 @@ impl Stream {
         Ok(false)
     }
 
+    /// music21's `_elements`: what stands at an offset, in order, a
+    /// measure's left barline first. A new list, so writing to it changes
+    /// nothing.
+    #[getter]
+    fn _elements(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
+        let left = self.left_barline.iter().map(|bar| bar.clone_ref(py));
+        let held = self
+            .sorted()
+            .into_iter()
+            .map(|one| one.object.clone_ref(py));
+        left.chain(held).collect()
+    }
+
+    /// music21's `_endElements`: what is kept at the end, the right
+    /// barline first. A new list, as `_elements` is.
+    #[getter]
+    fn _endElements(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
+        self.end_elements(py)
+    }
+
     /// Every element, those of the streams held too, with where it stands
     /// in this stream, its measure and its beat: what music21 asks an
     /// element's sites for, answered by the stream since the package keeps
@@ -5341,39 +5361,42 @@ impl Stream {
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+        // One memo for everything copied below, so a spanner can be told
+        // the copies of the notes it joins.
+        let made_memo;
+        let memo = match memo.filter(|memo| !memo.is_none()) {
+            Some(memo) => memo,
+            None => {
+                made_memo = PyDict::new(py).into_any();
+                &made_memo
+            }
+        };
+        // What a pickle carries, copied: everything held, the ends, the
+        // stream's own fields and its Python half. The copy is in the memo
+        // first, so what points back at the stream points at the copy.
         let copied = slf.get_type().call0()?;
-        let held: Vec<(f64, Py<PyAny>)> = slf
+        memo.set_item(slf.as_ptr() as usize, &copied)?;
+        let state = deepcopy.call1((Self::frozen(slf)?, memo))?;
+        Self::thaw(copied.cast::<Stream>()?, state.cast::<PyDict>()?)?;
+        let status = copied
+            .cast::<Stream>()?
             .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
-        {
-            let stream = copied.cast::<Stream>()?;
-            let mut stream = stream.borrow_mut();
-            stream.id = slf.borrow().id.as_ref().map(|id| id.clone_ref(py));
-            if let Some(set) = &slf.borrow().unlinked_duration {
-                stream.unlinked_duration = Some(deepcopy.call1((set, memo))?.unbind());
-            }
-            if let Some(status) = &slf.borrow().status {
-                let status = deepcopy.call1((status, memo))?;
-                status.setattr("client", &copied)?;
-                stream.status = Some(status.unbind());
-            }
-            for (offset, object) in held {
-                let object = deepcopy.call1((object, memo))?;
-                stream.put(offset, &object);
-            }
+            .status
+            .as_ref()
+            .map(|held| held.clone_ref(py));
+        if let Some(status) = status {
+            status.bind(py).setattr("client", &copied)?;
         }
-        let at_end: Vec<Py<PyAny>> = slf
-            .borrow()
-            .at_end
-            .iter()
-            .map(|last| last.clone_ref(py))
-            .collect();
-        for last in at_end {
-            let last = deepcopy.call1((last, memo))?;
-            Self::store_at_end(copied.cast::<Stream>()?, &last)?;
+
+        // A spanner copied before the notes it joins still joins the
+        // originals; each joins the copies once all are made.
+        let mut found = Vec::new();
+        let mut holders = Vec::new();
+        Self::recurse_into(copied.cast::<Stream>()?, 0.0, &mut found, &mut holders)?;
+        for (_, object) in found {
+            if let Ok(spanner) = object.bind(py).cast::<crate::spanner::Spanner>() {
+                crate::spanner::Spanner::join_copies(spanner, memo)?;
+            }
         }
         crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
@@ -5399,6 +5422,13 @@ impl Stream {
                 Self::frozen(slf)?.into_any(),
             ],
         )
+    }
+
+    /// The state [`Stream::__reduce__`] carries, for jsonpickle: having
+    /// `append` and `__getitem__`, a stream is a list to it, and a list
+    /// is not reduced but read for its state.
+    fn __getstate__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        Self::frozen(slf)
     }
 
     /// The other end of [`Stream::__reduce__`].

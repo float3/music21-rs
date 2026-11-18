@@ -34,9 +34,8 @@ use crate::scalewrite::{Kind, show_scale, write_scale};
 /// keeps the two lists in step.
 ///
 /// music21's subclasses of `AbstractScale`, `AbstractDiatonicScale` and the
-/// rest, are not here: each builds its network in its constructor, and
-/// this package has only the base class, whose `_net` is built from the
-/// crate's network.
+/// rest, are `abstractscale`'s and are provided, not installed: music21's
+/// own build their networks through its own `intervalNetwork`.
 pub const NAMES: &[&str] = &[
     "Scale",
     "AbstractScale",
@@ -67,6 +66,11 @@ pub const NAMES: &[&str] = &[
     "CyclicalScale",
     "SieveScale",
     "ScalaScale",
+    // The helpers music21's own abstract scales call, which its tests and
+    // docstrings call too; they are `abstractscale`'s.
+    "_closeOnTonic",
+    "_toIntervals",
+    "_intervalListOrMode",
 ];
 
 pyo3::create_exception!(music21_rs_facade, ScaleException, crate::Music21Exception);
@@ -200,6 +204,16 @@ pub struct AbstractScale {
     /// A mode given as a number, as music21's `AbstractOctatonicScale`
     /// keeps the `1` or `2` it was built with.
     numbered_mode: Option<i64>,
+    /// The network one of music21's subclasses builds in its constructor,
+    /// which `_net` hands out and every realization walks.
+    network: Option<Py<PyAny>>,
+    /// The degree the tonic stands on: music21's `tonicDegree`.
+    #[pyo3(get, set)]
+    tonicDegree: i64,
+    /// Whether the network takes one way at every branch: music21's
+    /// `deterministic`, read by nothing here.
+    #[pyo3(get, set)]
+    deterministic: bool,
 }
 
 impl AbstractScale {
@@ -223,6 +237,9 @@ impl AbstractScale {
                     .unwrap_or_default(),
                 unnamed_simplification: unnamed
                     .and_then(|scale| scale.simplification().music21_name()),
+                network: None,
+                tonicDegree: 1,
+                deterministic: true,
             }),
         )?
         .into_any())
@@ -257,6 +274,85 @@ impl AbstractScale {
         Ok(Some(scale))
     }
 
+    /// An abstract scale standing on a network one of music21's subclasses
+    /// built: `scale_type` where the crate has the pattern by name, so a
+    /// concrete scale given it walks the crate's own.
+    pub(crate) fn standing(
+        py: Python<'_>,
+        network: RsNetwork,
+        scale_type: Option<RsScaleType>,
+    ) -> PyResult<Self> {
+        let mut made = Self {
+            scale_type: None,
+            octave_duplicating: true,
+            unnamed_degrees: 0,
+            unnamed_steps: Vec::new(),
+            unnamed_simplification: None,
+            numbered_mode: None,
+            network: None,
+            tonicDegree: 1,
+            deterministic: true,
+        };
+        made.stand(py, network, scale_type)?;
+        Ok(made)
+    }
+
+    /// The initializer a subclass extends.
+    pub(crate) fn initializer(self) -> PyClassInitializer<Self> {
+        crate::base::built(Scale).add_subclass(self)
+    }
+
+    /// Stands this on a network built afresh: music21's `buildNetwork`.
+    pub(crate) fn stand(
+        &mut self,
+        py: Python<'_>,
+        network: RsNetwork,
+        scale_type: Option<RsScaleType>,
+    ) -> PyResult<()> {
+        self.octave_duplicating = network.octaves == NetworkOctaves::Duplicating;
+        self.deterministic =
+            network.pathways == music21::scale::intervalnetwork::Pathways::Deterministic;
+        self.scale_type = scale_type;
+        self.network = Some(crate::intervalnetwork::IntervalNetwork::object(
+            py, network,
+        )?);
+        Ok(())
+    }
+
+    /// The degree the tonic stands on.
+    pub(crate) fn set_tonic_degree(&mut self, degree: i64) {
+        self.tonicDegree = degree;
+    }
+
+    /// The mode a subclass was built in, where it was given as a number.
+    pub(crate) fn set_numbered_mode(&mut self, mode: Option<i64>) {
+        self.numbered_mode = mode;
+    }
+
+    /// `_net`, or music21's complaint that there is none.
+    fn net<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.getattr("_net").map_err(|_| {
+            ScaleException::new_err("no IntervalNetwork is defined by this \"scale\".")
+        })
+    }
+
+    /// A method of `_net` called with these arguments, keywords left
+    /// unsaid where they are `None`, as music21's own defaults then apply.
+    fn on_net<'py>(
+        slf: &Bound<'py, Self>,
+        method: &str,
+        arguments: impl pyo3::call::PyCallArgs<'py>,
+        keywords: &[(&str, Option<&Bound<'py, PyAny>>)],
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let given = PyDict::new(slf.py());
+        for (name, value) in keywords {
+            if let Some(value) = value.filter(|value| !value.is_none()) {
+                given.set_item(name, value)?;
+            }
+        }
+        Self::net(slf)?.call_method(method, arguments, Some(&given))
+    }
+
     /// The pattern named by an abstract scale of any kind — one of these, or
     /// music21's own, which says which it is in its class name.
     pub(crate) fn scale_type_of(value: &Bound<'_, PyAny>) -> Option<RsScaleType> {
@@ -286,6 +382,17 @@ impl AbstractScale {
 
 #[pymethods]
 impl AbstractScale {
+    /// What it holds, shown to Python's collector.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.network)
+    }
+
+    fn __clear__(&mut self) {
+        self.network = None;
+    }
     #[new]
     #[pyo3(signature = (mode = None, *_arguments, **_keywords))]
     fn new(
@@ -304,6 +411,9 @@ impl AbstractScale {
             unnamed_degrees: 0,
             unnamed_steps: Vec::new(),
             unnamed_simplification: None,
+            network: None,
+            tonicDegree: 1,
+            deterministic: true,
         }))
     }
 
@@ -397,9 +507,188 @@ impl AbstractScale {
 
     /// music21's `getDegreeMaxUnique`: how many degrees the pattern has
     /// before it repeats.
-    fn getDegreeMaxUnique(&self) -> usize {
-        self.scale_type
-            .map_or(self.unnamed_degrees, RsScaleType::degree_count)
+    fn getDegreeMaxUnique(&self, py: Python<'_>) -> PyResult<usize> {
+        if let Some(network) = &self.network {
+            return network.bind(py).getattr("degreeMaxUnique")?.extract();
+        }
+        Ok(self
+            .scale_type
+            .map_or(self.unnamed_degrees, RsScaleType::degree_count))
+    }
+
+    /// music21's `getRealization`: the pattern realized from `pitchObj`,
+    /// standing on `stepOfPitch`, over a range.
+    #[pyo3(signature = (pitchObj, stepOfPitch, minPitch = None, maxPitch = None, direction = None, reverse = None))]
+    fn getRealization<'py>(
+        slf: &Bound<'py, Self>,
+        pitchObj: &Bound<'py, PyAny>,
+        stepOfPitch: &Bound<'py, PyAny>,
+        minPitch: Option<&Bound<'py, PyAny>>,
+        maxPitch: Option<&Bound<'py, PyAny>>,
+        direction: Option<&Bound<'py, PyAny>>,
+        reverse: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("minPitch", minPitch),
+            ("maxPitch", maxPitch),
+            ("direction", direction),
+            ("reverse", reverse),
+        ];
+        Self::on_net(slf, "realizePitch", (pitchObj, stepOfPitch), &keywords)
+    }
+
+    /// music21's `getIntervals`: the steps of a realization.
+    #[pyo3(signature = (stepOfPitch = None, minPitch = None, maxPitch = None, direction = None, reverse = None))]
+    fn getIntervals<'py>(
+        slf: &Bound<'py, Self>,
+        stepOfPitch: Option<&Bound<'py, PyAny>>,
+        minPitch: Option<&Bound<'py, PyAny>>,
+        maxPitch: Option<&Bound<'py, PyAny>>,
+        direction: Option<&Bound<'py, PyAny>>,
+        reverse: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("nodeId", stepOfPitch),
+            ("minPitch", minPitch),
+            ("maxPitch", maxPitch),
+            ("direction", direction),
+            ("reverse", reverse),
+        ];
+        Self::on_net(slf, "realizeIntervals", (), &keywords)
+    }
+
+    /// music21's `getPitchFromNodeDegree`: the pitch of a degree, on a
+    /// realization from `pitchReference` standing on `nodeName`.
+    #[pyo3(signature = (pitchReference, nodeName, nodeDegreeTarget, direction = None, minPitch = None, maxPitch = None, equateTermini = None))]
+    #[allow(clippy::too_many_arguments)]
+    fn getPitchFromNodeDegree<'py>(
+        slf: &Bound<'py, Self>,
+        pitchReference: &Bound<'py, PyAny>,
+        nodeName: &Bound<'py, PyAny>,
+        nodeDegreeTarget: &Bound<'py, PyAny>,
+        direction: Option<&Bound<'py, PyAny>>,
+        minPitch: Option<&Bound<'py, PyAny>>,
+        maxPitch: Option<&Bound<'py, PyAny>>,
+        equateTermini: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("direction", direction),
+            ("minPitch", minPitch),
+            ("maxPitch", maxPitch),
+            ("equateTermini", equateTermini),
+        ];
+        Self::on_net(
+            slf,
+            "getPitchFromNodeDegree",
+            (pitchReference, nodeName, nodeDegreeTarget),
+            &keywords,
+        )
+    }
+
+    /// music21's `realizePitchByDegree`: every pitch of the degrees given
+    /// over a range.
+    #[pyo3(signature = (pitchReference, nodeId, nodeDegreeTargets, direction = None, minPitch = None, maxPitch = None))]
+    fn realizePitchByDegree<'py>(
+        slf: &Bound<'py, Self>,
+        pitchReference: &Bound<'py, PyAny>,
+        nodeId: &Bound<'py, PyAny>,
+        nodeDegreeTargets: &Bound<'py, PyAny>,
+        direction: Option<&Bound<'py, PyAny>>,
+        minPitch: Option<&Bound<'py, PyAny>>,
+        maxPitch: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("direction", direction),
+            ("minPitch", minPitch),
+            ("maxPitch", maxPitch),
+        ];
+        Self::on_net(
+            slf,
+            "realizePitchByDegree",
+            (pitchReference, nodeId, nodeDegreeTargets),
+            &keywords,
+        )
+    }
+
+    /// music21's `getRelativeNodeDegree`: the degree `pitchTarget` stands
+    /// on, or `None`.
+    #[pyo3(signature = (pitchReference, nodeName, pitchTarget, comparisonAttribute = None, direction = None, *, randomGenerator = None))]
+    fn getRelativeNodeDegree<'py>(
+        slf: &Bound<'py, Self>,
+        pitchReference: &Bound<'py, PyAny>,
+        nodeName: &Bound<'py, PyAny>,
+        pitchTarget: &Bound<'py, PyAny>,
+        comparisonAttribute: Option<&Bound<'py, PyAny>>,
+        direction: Option<&Bound<'py, PyAny>>,
+        randomGenerator: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        // music21's own default here is the pitch class, not the network's.
+        let compared = match comparisonAttribute {
+            Some(given) => given.clone(),
+            None => pyo3::types::PyString::new(slf.py(), "pitchClass").into_any(),
+        };
+        let keywords = [
+            ("comparisonAttribute", Some(&compared)),
+            ("direction", direction),
+            ("randomGenerator", randomGenerator),
+        ];
+        Self::on_net(
+            slf,
+            "getRelativeNodeDegree",
+            (pitchReference, nodeName, pitchTarget),
+            &keywords,
+        )
+    }
+
+    /// music21's `nextPitch`: the pitch `stepSize` steps on from
+    /// `pitchOrigin`, on a realization from `pitchReference`.
+    #[pyo3(signature = (pitchReference, nodeName, pitchOrigin, direction = None, stepSize = None, getNeighbor = None, *, randomGenerator = None))]
+    #[allow(clippy::too_many_arguments)]
+    fn nextPitch<'py>(
+        slf: &Bound<'py, Self>,
+        pitchReference: &Bound<'py, PyAny>,
+        nodeName: &Bound<'py, PyAny>,
+        pitchOrigin: &Bound<'py, PyAny>,
+        direction: Option<&Bound<'py, PyAny>>,
+        stepSize: Option<&Bound<'py, PyAny>>,
+        getNeighbor: Option<&Bound<'py, PyAny>>,
+        randomGenerator: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("direction", direction),
+            ("stepSize", stepSize),
+            ("getNeighbor", getNeighbor),
+            ("randomGenerator", randomGenerator),
+        ];
+        Self::on_net(
+            slf,
+            "nextPitch",
+            (pitchReference, nodeName, pitchOrigin),
+            &keywords,
+        )
+    }
+
+    /// music21's `getNewTonicPitch`: the pitch of the first degree.
+    #[pyo3(signature = (pitchReference, nodeName, direction = None, minPitch = None, maxPitch = None))]
+    fn getNewTonicPitch<'py>(
+        slf: &Bound<'py, Self>,
+        pitchReference: &Bound<'py, PyAny>,
+        nodeName: &Bound<'py, PyAny>,
+        direction: Option<&Bound<'py, PyAny>>,
+        minPitch: Option<&Bound<'py, PyAny>>,
+        maxPitch: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = [
+            ("direction", direction),
+            ("minPitch", minPitch),
+            ("maxPitch", maxPitch),
+        ];
+        Self::on_net(
+            slf,
+            "getPitchFromNodeDegree",
+            (pitchReference, nodeName, 1),
+            &keywords,
+        )
     }
 
     /// music21's `octaveDuplicating`: whether the pattern repeats at the
@@ -414,6 +703,9 @@ impl AbstractScale {
     /// steps has none.
     #[getter]
     fn _net(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(network) = &self.network {
+            return Ok(network.clone_ref(py));
+        }
         let network = match self.scale_type {
             Some(scale_type) => scale_type.network().map_err(scale_error)?,
             None if self.unnamed_steps.is_empty() => {
@@ -450,9 +742,10 @@ impl AbstractScale {
         }
     }
 
+    /// music21's `name`, which is the `type` a subclass gives.
     #[getter]
-    fn name(&self) -> String {
-        self.r#type()
+    fn name<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        slf.getattr("type")
     }
 
     /// music21's `mode`: a diatonic pattern's mode name, the number an
@@ -472,8 +765,25 @@ impl AbstractScale {
         }
     }
 
-    fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {
-        Self::scale_type_of(other) == self.scale_type
+    /// The same pattern: music21 compares the class, `tonicDegree`,
+    /// `octaveDuplicating` and the network, which for a pattern with no
+    /// network of its own is its name.
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        let Ok(theirs) = other.extract::<PyRef<'_, Self>>() else {
+            return Ok(Self::scale_type_of(other) == slf.borrow().scale_type);
+        };
+        let me = slf.borrow();
+        if me.network.is_none() && theirs.network.is_none() {
+            return Ok(theirs.scale_type == me.scale_type);
+        }
+        if !other.get_type().is(slf.get_type())
+            || me.tonicDegree != theirs.tonicDegree
+            || me.octave_duplicating != theirs.octave_duplicating
+        {
+            return Ok(false);
+        }
+        drop((me, theirs));
+        slf.getattr("_net")?.eq(other.getattr("_net")?)
     }
 
     /// music21's `write`: the pattern written in `fmt` to `fp`, or to a
@@ -661,6 +971,93 @@ impl ConcreteScale {
         }
     }
 
+    /// What `__new__` builds, for a subclass written in Rust.
+    pub(crate) fn initializer(
+        tonic: Option<&Bound<'_, PyAny>>,
+        arguments: &Bound<'_, PyTuple>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Self::new(tonic, arguments, keywords)
+    }
+
+    /// What `__init__` settles, for a subclass written in Rust.
+    pub(crate) fn settle(slf: &Bound<'_, Self>, tonic: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        Self::__init__(slf, tonic, None)
+    }
+
+    /// Stands the scale on an abstract scale of music21's kind, realized
+    /// through its network, under the name `kind`.
+    pub(crate) fn stand_on(slf: &Bound<'_, Self>, pattern: &Bound<'_, PyAny>, kind: &str) {
+        let mut me = slf.borrow_mut();
+        me.abstract_scale = Some(pattern.clone().unbind());
+        me.named_type = Some(kind.to_string());
+        me.named_pattern = false;
+    }
+
+    /// music21's `nextPitch` through an abstract scale's network: a whole
+    /// number as the direction is a count of steps up or down, and a pitch
+    /// off the scale is first moved onto it against the way the step goes.
+    #[allow(clippy::too_many_arguments)]
+    fn foreign_next(
+        &self,
+        py: Python<'_>,
+        pattern: &Bound<'_, PyAny>,
+        origin: &Bound<'_, PyAny>,
+        direction: Option<&Bound<'_, PyAny>>,
+        stepSize: usize,
+        getNeighbor: Option<&Bound<'_, PyAny>>,
+        randomGenerator: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Option<Pitch>> {
+        use music21::scale::intervalnetwork::Direction as RsDirection;
+
+        let counted = direction.and_then(|given| given.extract::<i64>().ok());
+        if counted == Some(0) {
+            return Err(ScaleException::new_err("direction cannot be zero"));
+        }
+        let descending = is_descending(direction);
+        let way = if descending {
+            RsDirection::Descending
+        } else {
+            RsDirection::Ascending
+        };
+        let scalar = counted.map_or(1, i64::unsigned_abs) as usize;
+        let way_object = match counted {
+            Some(_) => crate::intervalnetwork::direction_to_py(py, way)?,
+            None => match direction.filter(|given| !given.is_none()) {
+                Some(given) => given.clone(),
+                None => crate::intervalnetwork::direction_to_py(py, way)?,
+            },
+        };
+        // A plain yes comes onto the scale from the side the step leaves.
+        let neighbor = match getNeighbor.filter(|given| !given.is_none()) {
+            Some(given) if given.extract::<bool>().is_ok_and(|said| !said) => given.clone(),
+            Some(given) if given.extract::<bool>().is_err() => given.clone(),
+            _ => {
+                let against = if descending {
+                    RsDirection::Ascending
+                } else {
+                    RsDirection::Descending
+                };
+                crate::intervalnetwork::direction_to_py(py, against)?
+            }
+        };
+
+        let tonic = Bound::new(py, Pitch::wrap(self.current().tonic().clone(), false))?;
+        let keywords = PyDict::new(py);
+        keywords.set_item("direction", way_object)?;
+        keywords.set_item("stepSize", stepSize * scalar)?;
+        keywords.set_item("getNeighbor", neighbor)?;
+        if let Some(draw) = randomGenerator.filter(|given| !given.is_none()) {
+            keywords.set_item("randomGenerator", draw)?;
+        }
+        let degree = pattern.getattr("tonicDegree")?;
+        let found = pattern.call_method("nextPitch", (tonic, degree, origin), Some(&keywords))?;
+        if found.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(found.extract::<PyRef<'_, Pitch>>()?.clone()))
+    }
+
     /// The scale as it sounds in the direction asked for — a melodic minor
     /// lets its raised degrees fall coming down.
     fn heard(&self, direction: Option<&Bound<'_, PyAny>>) -> PyResult<RsScale> {
@@ -737,6 +1134,10 @@ impl ConcreteScale {
         keywords.set_item("maxPitch", bound(maximum)?)?;
         if let Some(direction) = direction.filter(|value| !value.is_none()) {
             keywords.set_item("direction", direction)?;
+        }
+        // Coming down, music21 hands the realization back highest first.
+        if is_descending(direction) {
+            keywords.set_item("reverse", true)?;
         }
         let realized = pattern.call_method("getRealization", (tonic, degree), Some(&keywords))?;
         let mut pitches = Vec::new();
@@ -1599,14 +2000,18 @@ impl ConcreteScale {
         let Ok(value) = pitch_from_any(other) else {
             return Ok(false);
         };
-        let next = self.nextPitch(
+        let Some(next) = self.nextPitch(
+            py,
             Some(pitchOrigin),
             direction,
             stepSize,
             getNeighbor,
             None,
             None,
-        )?;
+        )?
+        else {
+            return Ok(false);
+        };
         // Compared on whatever music21 was told to compare on: two pitches
         // may share a name and stand an octave apart, and a search for a
         // run of scale steps says so.
@@ -1758,6 +2163,28 @@ impl ConcreteScale {
         randomGenerator: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<Option<usize>> {
+        // A pattern of music21's kind is asked through its own network.
+        if let Some(pattern) = &self.abstract_scale {
+            let py = pitchTarget.py();
+            let pattern = pattern.bind(py);
+            let tonic = Bound::new(py, Pitch::wrap(self.current().tonic().clone(), false))?;
+            let keywords = PyDict::new(py);
+            keywords.set_item("comparisonAttribute", comparisonAttribute)?;
+            if let Some(direction) = direction.filter(|given| !given.is_none()) {
+                keywords.set_item("direction", direction)?;
+            }
+            if let Some(draw) = randomGenerator.filter(|given| !given.is_none()) {
+                keywords.set_item("randomGenerator", draw)?;
+            }
+            let degree = pattern.getattr("tonicDegree")?;
+            return pattern
+                .call_method(
+                    "getRelativeNodeDegree",
+                    (tonic, degree, pitchTarget),
+                    Some(&keywords),
+                )?
+                .extract();
+        }
         let pitch = pitch_from_any(pitchTarget)?;
         let comparison = comparison_of(comparisonAttribute);
         // Read in both directions, a degree is whichever of the two spellings
@@ -1828,15 +2255,32 @@ impl ConcreteScale {
         randomGenerator = None,
         **_keywords
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn nextPitch(
         &self,
+        py: Python<'_>,
         pitchOrigin: Option<&Bound<'_, PyAny>>,
         direction: Option<&Bound<'_, PyAny>>,
         stepSize: usize,
         getNeighbor: Option<&Bound<'_, PyAny>>,
         randomGenerator: Option<&Bound<'_, PyAny>>,
         _keywords: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Pitch> {
+    ) -> PyResult<Option<Pitch>> {
+        // A pattern of music21's kind is walked through its own network.
+        if let Some(pattern) = &self.abstract_scale
+            && let Some(origin) = pitchOrigin.filter(|value| !value.is_none())
+        {
+            let pattern = pattern.bind(py);
+            return self.foreign_next(
+                py,
+                pattern,
+                origin,
+                direction,
+                stepSize,
+                getNeighbor,
+                randomGenerator,
+            );
+        }
         let origin = match pitchOrigin.filter(|value| !value.is_none()) {
             Some(value) => pitch_from_any(value)?,
             None => self.current().tonic().clone(),
@@ -1877,7 +2321,7 @@ impl ConcreteScale {
             }
         };
         moved
-            .map(|pitch| Pitch::wrap(pitch, false))
+            .map(|pitch| Some(Pitch::wrap(pitch, false)))
             .map_err(scale_error)
     }
 
@@ -1981,9 +2425,27 @@ impl ConcreteScale {
     /// music21's `intervalBetweenDegrees`.
     fn intervalBetweenDegrees(
         &self,
+        py: Python<'_>,
         degreeStart: usize,
         degreeEnd: usize,
     ) -> PyResult<crate::interval::Interval> {
+        // A pattern of music21's kind: the pitches of the two degrees, which
+        // a network that branches may not reach.
+        if self.abstract_scale.is_some() {
+            let mut ends = Vec::with_capacity(2);
+            for degree in [degreeStart, degreeEnd] {
+                let degree = i32::try_from(degree).unwrap_or(i32::MAX);
+                let Some(found) = self.pitchFromDegree(py, degree, None, None, None, true)? else {
+                    return Err(ScaleException::new_err(
+                        "cannot get a pitch for scale degree: None",
+                    ));
+                };
+                ends.push(found.inner.clone());
+            }
+            return RsInterval::between_pitches(&ends[0], &ends[1])
+                .map(crate::interval::Interval::wrap)
+                .map_err(scale_error);
+        }
         self.realized()?
             .interval_between_degrees(degreeStart, degreeEnd)
             .map(crate::interval::Interval::wrap)

@@ -185,7 +185,10 @@ pub(crate) fn direction_member<'py>(py: Python<'py>, name: &str) -> PyResult<Bou
     member(py, &DIRECTION, name)
 }
 
-fn direction_to_py(py: Python<'_>, direction: RsDirection) -> PyResult<Bound<'_, PyAny>> {
+pub(crate) fn direction_to_py(
+    py: Python<'_>,
+    direction: RsDirection,
+) -> PyResult<Bound<'_, PyAny>> {
     let name = match direction {
         RsDirection::Bi => "BI",
         RsDirection::Ascending => "ASCENDING",
