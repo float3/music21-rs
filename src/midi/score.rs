@@ -15,7 +15,7 @@ use crate::defaults::{FloatType, IntegerType};
 use crate::duration::Duration;
 use crate::error::FormatErrorKind::{Malformed, Unsupported};
 use crate::error::{Error, Position, Result};
-use crate::instrument::{Instrument, SearchLanguage};
+use crate::instrument::Instrument;
 use crate::key::KeySignature;
 use crate::makenotation::{
     QUANTIZATION_DIVISORS, make_measures_by, make_rests, make_ties, make_voices, op_frac, quantize,
@@ -28,6 +28,9 @@ use crate::pitch::Pitch;
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::tempo::MetronomeMark;
 use crate::volume::Volume;
+
+use super::base::EventType;
+use super::translate::{self, Mode, NoteMark, Source};
 
 fn midi_error(message: impl Into<String>) -> Error {
     Error::midi(message.into())
@@ -258,84 +261,46 @@ struct Timed<'a> {
     event: &'a Event,
 }
 
-/// music21's `getNotesFromEvents`: each note-on with the note-off after it.
-/// Read backwards, so a note-on takes the nearest note-off of its pitch and
-/// channel after it, and one with none after it is dropped.
+/// [`translate::notes_of`] over a track's events.
 fn notes_of(events: &[(u64, Event)]) -> Vec<Timed<'_>> {
-    let mut waiting: HashMap<(u8, u8), u64> = HashMap::new();
-    let mut notes = Vec::new();
-    for (time, event) in events.iter().rev() {
-        if event.is_note_off() {
-            waiting.insert((event.first, event.channel), *time);
-        } else if event.is_note_on()
-            && let Some(off) = waiting.get(&(event.first, event.channel))
-        {
-            notes.push(Timed {
-                on: *time,
-                off: *off,
-                event,
-            });
-        }
-    }
-    notes.reverse();
-    notes
+    let marks: Vec<(u64, NoteMark<(u8, u8)>)> = events
+        .iter()
+        .map(|(time, event)| {
+            let key = (event.first, event.channel);
+            let mark = if event.is_note_off() {
+                NoteMark::Off(key)
+            } else if event.is_note_on() {
+                NoteMark::On(key)
+            } else {
+                NoteMark::Other
+            };
+            (*time, mark)
+        })
+        .collect();
+    translate::notes_of(&marks)
+        .into_iter()
+        .map(|note| Timed {
+            on: note.on,
+            off: note.off,
+            event: &events[note.index].1,
+        })
+        .collect()
 }
 
-/// The instrument a percussion key plays: music21's
-/// `_midiNumberToPercussionInstrument`, which asks its `PercussionMapper`
-/// with `raiseIfUnmapped=False` -- so a key the map says nothing of is a
-/// bare unpitched percussion instrument *keeping that key*, rather than
-/// one that plays no drum at all.
-///
-/// A tambourine read here is headless, as that function makes it: General
-/// MIDI says nothing about a tambourine's head and most files holding one
-/// are rock.
-fn percussion_instrument(pitch: u8) -> Instrument {
-    let mut made = crate::instrument::for_percussion_key_or_unmapped(pitch);
-    made.set_headless(true);
-    made
-}
-
-/// music21's `midiEventToInstrument`.
+/// music21's `midiEventToInstrument`, through [`translate::instrument_of`].
 fn instrument_of(event: &Event) -> Instrument {
-    let mut decoded = String::new();
-    let mut instrument = match event.kind {
-        Kind::ProgramChange if event.channel == 10 => {
-            let mut made = Instrument::of_kind("UnpitchedPercussion").unwrap_or_default();
-            made.set_midi_program(Some(event.first));
-            made
-        }
-        Kind::ProgramChange => {
-            Instrument::from_midi_program(event.first).unwrap_or_else(|_| Instrument::new())
-        }
+    let source = match event.kind {
+        Kind::ProgramChange => Source::Program(event.first),
+        Kind::Meta(kind) => match std::str::from_utf8(&event.data) {
+            Ok(text) => translate::source_of(EventType::Meta(kind), text),
+            Err(_) => Source::Nothing,
+        },
         _ => match std::str::from_utf8(&event.data) {
-            Ok(text) => {
-                decoded = text.split('\0').next().unwrap_or("").trim().to_string();
-                Instrument::from_name(&decoded, SearchLanguage::All)
-                    .unwrap_or_else(|_| Instrument::new())
-            }
-            Err(_) => Instrument::new(),
+            Ok(text) => Source::OtherName(text),
+            Err(_) => Source::Nothing,
         },
     };
-    // Counted from nought, as music21 counts it.
-    instrument.set_midi_channel(event.channel.checked_sub(1));
-    if !decoded.is_empty() {
-        let lower = decoded.to_lowercase();
-        let numbered = |prefix: &str| {
-            let rest = lower.replace(prefix, "");
-            !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
-        };
-        if lower == "instrument" || lower == "inst" || numbered("instrument ") || numbered("inst ")
-        {
-            return instrument;
-        }
-        match event.kind {
-            Kind::Meta(SEQUENCE_TRACK_NAME) => instrument.set_part_name(Some(decoded)),
-            Kind::Meta(INSTRUMENT_NAME) => instrument.set_name(Some(decoded)),
-            _ => {}
-        }
-    }
-    instrument
+    translate::instrument_of(source, event.channel)
 }
 
 /// music21's `getMetaEvents`: the meters, keys, tempos and instruments a
@@ -347,26 +312,22 @@ fn meta_of(events: &[(u64, Event)]) -> Result<Vec<(u64, StreamElement)>> {
         let here = || Position::default().at_tick(*time);
         let element: Option<StreamElement> = match event.kind {
             Kind::Meta(TIME_SIGNATURE) if event.data.len() >= 2 => {
-                let denominator = 2_u32.checked_pow(u32::from(event.data[1])).ok_or_else(|| {
-                    midi_error("a time signature over too large a value").placed(here)
-                })?;
-                Some(TimeSignature::new(u32::from(event.data[0]), denominator)?.into())
+                let (numerator, denominator) =
+                    translate::meter_of(&event.data).ok_or_else(|| {
+                        midi_error("a time signature over too large a value").placed(here)
+                    })?;
+                Some(TimeSignature::new(numerator, denominator)?.into())
             }
-            Kind::Meta(KEY_SIGNATURE) if event.data.len() >= 2 => {
-                let sharps = if event.data[0] > 12 {
-                    IntegerType::from(event.data[0]) - 256
-                } else {
-                    IntegerType::from(event.data[0])
+            Kind::Meta(KEY_SIGNATURE) => translate::key_of(&event.data).map(|(sharps, mode)| {
+                let mode = match mode {
+                    Mode::Minor => "minor",
+                    Mode::Major => "major",
                 };
-                let mode = if event.data[1] == 1 { "minor" } else { "major" };
-                Some(StreamElement::Key(KeySignature::new(sharps).as_key(mode)))
-            }
+                StreamElement::Key(KeySignature::new(sharps).as_key(mode))
+            }),
             Kind::Meta(SET_TEMPO) if event.data.len() >= 3 => {
-                let (micros, _) = number(&event.data, 3)?;
-                if micros == 0 {
-                    return Err(midi_error("a tempo of no time to the quarter").placed(here));
-                }
-                let bpm = (60_000_000.0 / micros as FloatType * 100.0).round_ties_even() / 100.0;
+                let bpm = translate::tempo_of(&event.data)
+                    .ok_or_else(|| midi_error("a tempo of no time to the quarter").placed(here))?;
                 Some(MetronomeMark::new(bpm).into())
             }
             Kind::Meta(INSTRUMENT_NAME | SEQUENCE_TRACK_NAME) => {
@@ -438,7 +399,7 @@ fn stroke_of(pitch: u8) -> Unpitched {
     let mut stroke = Unpitched::new();
     stroke
         .written_mut()
-        .set_stored_instrument(Some(percussion_instrument(pitch)));
+        .set_stored_instrument(Some(translate::percussion_instrument(pitch)));
     stroke
 }
 
@@ -622,6 +583,44 @@ fn track_to_part(
 /// The bytes are the file's own; the library opens no file.
 pub fn from_midi(bytes: &[u8]) -> Result<Stream> {
     let (tracks, per_quarter) = read_file(bytes)?;
+    score_of(&tracks, per_quarter)
+}
+
+/// Reads tracks' data, each after its chunk's tag and length, as a score,
+/// as [`from_midi`] reads a file of them: music21's `midiTracksToStreams`.
+///
+/// # Errors
+///
+/// No tracks, no ticks to a quarter, or what [`from_midi`] refuses.
+pub fn from_tracks(tracks: &[&[u8]], ticks_per_quarter: u16) -> Result<Stream> {
+    let read: Vec<Track> = tracks.iter().map(|data| track_events(data)).collect();
+    score_of(&read, ticks_per(ticks_per_quarter)?)
+}
+
+/// Reads one track's data as a part, alone, with no conductor before it:
+/// music21's `midiTrackToStream`. A track with no notes comes back as a
+/// part holding its meters, keys, tempos and instruments, in no measures.
+///
+/// # Errors
+///
+/// No ticks to a quarter, or what [`from_midi`] refuses.
+pub fn part_from_track(data: &[u8], ticks_per_quarter: u16) -> Result<Stream> {
+    let events = track_events(data);
+    let (part, _) = track_to_part(&events, ticks_per(ticks_per_quarter)?, &[], true)?;
+    Ok(part)
+}
+
+/// Ticks to a quarter as a length, refusing none.
+fn ticks_per(ticks_per_quarter: u16) -> Result<FloatType> {
+    if ticks_per_quarter == 0 {
+        return Err(midi_error("a quarter of no ticks"));
+    }
+    Ok(FloatType::from(ticks_per_quarter))
+}
+
+/// Tracks read as a score: every track with notes a part, the others the
+/// conductor.
+fn score_of(tracks: &[Track], per_quarter: FloatType) -> Result<Stream> {
     if tracks.is_empty() {
         return Err(midi_error("no tracks are defined in this MIDI file."));
     }
