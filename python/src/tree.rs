@@ -23,6 +23,7 @@ pub mod examples;
 pub mod fromstream;
 pub mod makeelement;
 pub mod node;
+pub mod tostream;
 pub mod trees;
 pub mod verticality;
 
