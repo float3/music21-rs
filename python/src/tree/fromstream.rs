@@ -83,6 +83,27 @@ fn held<'py>(stream: &Bound<'py, PyAny>) -> PyResult<Vec<(Bound<'py, PyAny>, Bou
         .collect()
 }
 
+/// A stream's elements in the order music21 stores them: its
+/// `_elements` as they were put in, then its `_endElements`. music21
+/// walks streams in this order to build a tree one element at a time,
+/// which decides the tree's shape.
+fn stored<'py>(
+    stream: &Bound<'py, PyAny>,
+) -> PyResult<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>> {
+    let mut keyed = Vec::new();
+    for (offset, element) in held(stream)? {
+        let position = element.call_method1("sortTuple", (stream,))?;
+        let at_end: i64 = position.getattr("atEnd")?.extract()?;
+        let index: i64 = position.getattr("insertIndex")?.extract()?;
+        keyed.push(((at_end, index), offset, element));
+    }
+    keyed.sort_by_key(|(key, _, _)| *key);
+    Ok(keyed
+        .into_iter()
+        .map(|(_, offset, element)| (offset, element))
+        .collect())
+}
+
 /// A stream's elements sorted by their `SortTuple`s in it, each beside it.
 fn sorted_tuples<'py>(
     stream: &Bound<'py, PyAny>,
@@ -201,7 +222,7 @@ impl<'py> ByClass<'py> {
             .map(|_| self.kind.empty(last))
             .collect::<PyResult<Vec<_>>>()?;
 
-        for (offset, element) in held(stream)? {
+        for (offset, element) in stored(stream)? {
             let offset = op_frac(py, offset.add(initial)?.extract()?)?;
             let nested = is_stream(&element);
             if nested {
@@ -392,7 +413,13 @@ impl<'py> Walk<'_, 'py> {
         initial: &Bound<'py, PyAny>,
     ) -> PyResult<()> {
         let py = stream.py();
-        for (offset, element) in held(stream)? {
+        // music21 sorts the stream it is given, and takes the streams in
+        // it as they are stored.
+        let elements = match stream.is(&self.tree.getattr("source")?) {
+            true => held(stream)?,
+            false => stored(stream)?,
+        };
+        for (offset, element) in elements {
             let offset = op_frac(py, offset.add(initial)?.extract()?)?;
             if is_stream(&element) && self.flattening != Flattening::No {
                 self.put(&element, &element, &offset)?;
