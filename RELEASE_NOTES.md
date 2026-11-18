@@ -1,3 +1,43 @@
+# music21-rs 0.22.0
+
+`harte` 0.15.0 depends on this release.
+
+## breaking changes
+
+- **The wheel's stream filters answer a `StreamIterator`,** as music21's
+  do: `getElementsByClass`, `getElementsNotOfClass`, `getElementsByOffset`,
+  `notes` and `notesAndRests`. Call `.stream()` where a `Stream` is needed;
+  a member only streams have still answers, with music21's
+  `StreamIteratorInefficientWarning`.
+- `scale::Simplification` gains `SimplifyEnharmonic` and
+  `scale::DegreeComparison` gains `Ps` and `NameWithOctave`; both are now
+  `#[non_exhaustive]`, so a `match` on them needs a wildcard arm.
+
+## added
+
+- **Crate:** `scale::intervalnetwork` (music21's `IntervalNetwork`, its
+  nodes, edges and pitch walks) and `ScaleType::network()`;
+  `midi::translate` (ticks, meter, key and tempo bytes, note and chord
+  events, channel plans) shared by the MIDI reader and writer, and the
+  reader's `from_tracks` and `part_from_track`.
+- **`provide_music21()` answers:** `scale.intervalNetwork`,
+  `midi.translate`, `sites.WEAKREF_ACTIVE` and a bare `Sites()`,
+  duration's `typeFromNumDict` and sibling tables, `variant.Variant` and
+  `stream.VariantStorage`. `AbstractScale._net` is the wheel's network.
+- Wheel streams pickle and become the site of what they hold again;
+  `storeAtEnd` keeps any number of zero-length objects and sets each one's
+  `activeSite`.
+
+## fixed
+
+- `show('text')` lists a measure's right barline last, as music21 does.
+- The wheel's Rag Marwa network gave degree 6 where music21 gives 5 and 7.
+- The provided gate rewrites `0x` addresses in expected doctest output, as
+  music21's runner does.
+
+Gate (`xtask music21-suite`, provided side): 1916 of music21's 5276
+passing tests pass, up from 1766; 167 of 217 modules import, up from 163.
+
 # music21-rs 0.21.0
 
 `harte` 0.14.0 depends on this release.

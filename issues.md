@@ -320,15 +320,18 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side at 0.21.0: 1766 of 5276 passing tests,
-    163 of 217 modules importing. Next blockers: `musicxml` (736 tests,
-    14 modules), `mei` (233), `metadata.bundles` (102, corpus cache),
-    `midi.translate` (96), `lily` (77), `abcFormat` (128),
-    `scale.intervalNetwork.IntervalNetwork` (49), `noteworthy` (47),
-    `sites.WEAKREF_ACTIVE` (41), `tree.core` (39), `freezeThaw` (17;
-    provided streams do not pickle). The facade's `storeAtEnd` keeps one
-    barline and sets no `activeSite`. Under the provided harness,
-    doctests showing `0x` addresses fail.
+    music21-suite`'s provided side at 0.22.0: 1916 of 5276 passing tests,
+    167 of 217 modules importing. Next blockers: `musicxml` (803 tests,
+    15 modules; 7 of them need only `m21ToXml.GeneralObjectExporter`,
+    which `stream/tests.py`'s 286 tests import), `mei` (233),
+    `metadata.bundles` (102, corpus cache), `lily` (77), `abcFormat`
+    (128), `noteworthy` (47), `tree.core` (39), `freezeThaw` (17; streams
+    pickle now, so a Rust StreamFreezer/StreamThawer is next), the
+    abstract scale classes and `WeightedHexatonicBlues` (about 19), and
+    `Sites.add` (13). Not ported: `midi.translate`'s
+    `assignPacketsToChannels`, `quantizePost=False` and other quantize
+    divisors; `Variant.replacedElements`. An interval network's `nodes`
+    and `edges` are rebuilt on each read, so editing one changes nothing.
 
 21. **the crate's ports that are copies.** the wheel's `makeNotation`
     `op_frac` and `nearest_multiple` are approximate copies of the
