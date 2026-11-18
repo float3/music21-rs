@@ -21,6 +21,7 @@ pub mod analysis;
 pub mod core;
 pub mod examples;
 pub mod fromstream;
+pub mod makeelement;
 pub mod node;
 pub mod trees;
 pub mod verticality;

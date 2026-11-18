@@ -13,7 +13,7 @@
 
 use std::collections::VecDeque;
 
-use pyo3::exceptions::{PyNotImplementedError, PyStopIteration};
+use pyo3::exceptions::{PyAttributeError, PyNotImplementedError, PyStopIteration};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PySet, PyString, PyTuple};
 
@@ -24,7 +24,7 @@ use super::analysis::Horizontality;
 use super::{ElementTimespan, TimespanTree};
 use crate::duration::op_frac;
 use crate::exceptions21::TreeException;
-use crate::stream::{answers_to_class, element_object, stream_error};
+use crate::stream::{answers_to_class, stream_error};
 
 pyo3::create_exception!(music21_rs_facade, VerticalityException, TreeException);
 
@@ -406,7 +406,7 @@ impl TreeVerticality {
     fn makeElement<'py>(
         &self,
         py: Python<'py>,
-        quarterLength: Option<f64>,
+        quarterLength: Option<&Bound<'py, PyAny>>,
         addTies: bool,
         addPartIdAsGroup: bool,
         removeRedundantPitches: bool,
@@ -414,21 +414,31 @@ impl TreeVerticality {
         gatherExpressions: Option<&Bound<'py, PyAny>>,
         copyPitches: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        refuse_unported(
-            addPartIdAsGroup,
-            gatherArticulations,
-            gatherExpressions,
-            copyPitches,
-        )?;
-        let owner = self.timespans(py)?;
-        let owner = owner.borrow();
-        let tree = owner.crate_tree()?;
-        let made = self
-            .of(py, &tree)?
-            .make_element(quarterLength, addTies, removeRedundantPitches)
-            .map_err(|error| stream_error(&error))?;
-        element_object(py, &made)?
-            .ok_or_else(|| PyNotImplementedError::new_err("makeElement made nothing to hand back"))
+        let length = match quarterLength {
+            Some(length) => length.clone(),
+            None => match self.timeToNextEvent(py)? {
+                Some(length) => length,
+                None => PyFloat::new(py, 1.0).into_any(),
+            },
+        };
+        let options = super::makeelement::Options {
+            add_ties: addTies,
+            group_by_part: addPartIdAsGroup,
+            remove_redundant: removeRedundantPitches,
+            articulations: super::makeelement::Gather::of(gatherArticulations)?,
+            expressions: super::makeelement::Gather::of(gatherExpressions)?,
+            copy_pitches: copyPitches,
+        };
+        let sounding: Vec<Bound<'py, PyAny>> = self.sounding(py)?.iter().collect();
+        let has_pitches = !self.pitch_objects(py)?.is_empty();
+        super::makeelement::make_element(
+            py,
+            self.given.bind(py),
+            length,
+            &sounding,
+            has_pitches,
+            &options,
+        )
     }
 
     /// Each two pairs of `getPairedMotion`, the earlier pair first, as
@@ -512,6 +522,14 @@ impl TreeVerticality {
         Ok(out)
     }
 
+    /// What Python asks for a name the class lacks: music21's
+    /// `AttributeError`, naming the class as music21's does.
+    fn __getattr__(&self, name: &str) -> PyResult<Py<PyAny>> {
+        Err(PyAttributeError::new_err(format!(
+            "'Verticality' object has no attribute '{name}'"
+        )))
+    }
+
     fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
         let mut names = Vec::new();
         for pitch in self.sorted_pitches(py)? {
@@ -523,26 +541,6 @@ impl TreeVerticality {
             names.join(" ")
         ))
     }
-}
-
-/// `makeElement`'s keywords whose other settings are not ported.
-fn refuse_unported(
-    addPartIdAsGroup: bool,
-    gatherArticulations: Option<&Bound<'_, PyAny>>,
-    gatherExpressions: Option<&Bound<'_, PyAny>>,
-    copyPitches: bool,
-) -> PyResult<()> {
-    let single = |given: Option<&Bound<'_, PyAny>>| {
-        given.is_none_or(|said| said.extract::<String>().is_ok_and(|said| said == "single"))
-    };
-    if !addPartIdAsGroup && single(gatherArticulations) && single(gatherExpressions) && copyPitches
-    {
-        return Ok(());
-    }
-    Err(PyNotImplementedError::new_err(
-        "makeElement's addPartIdAsGroup, gatherArticulations, gatherExpressions and \
-         copyPitches are ported at their defaults only",
-    ))
 }
 
 /// music21's `VoiceLeadingQuartet` of four timespans' notes, where all four

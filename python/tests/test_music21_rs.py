@@ -1068,7 +1068,6 @@ def test_a_stream_is_indexed_by_an_id_as_music21s_is():
         score.iter()["#deep"]
 
 
-
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
@@ -9012,12 +9011,31 @@ def test_what_as_timespans_leaves_unported_says_so():
     loose = m.Stream([m.Note("C4"), m.Note("D4")])
     assert len(loose.asTimespans(flatten=False)) == 2
     score, _, _ = _two_part_score()
-    with pytest.raises(NotImplementedError):
-        score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)
     edited = score.asTimespans()
     edited.removeTimespan(edited[0])
     with pytest.raises(NotImplementedError):
-        edited.getVerticalityAt(0.0).makeElement()
+        edited.getVerticalityAt(0.0).getPairedMotion()
+
+
+def test_make_element_takes_music21s_keywords():
+    """`copyPitches=False` keeps the score's own pitches, and
+    `addPartIdAsGroup` groups each pitch by the id of its part."""
+    score, _, _ = _two_part_score()
+    verticality = score.asTimespans().getVerticalityAt(0.0)
+    sounding = [span.element.pitch for span in verticality.startTimespans
+                if hasattr(span.element, "pitch")]
+    kept = verticality.makeElement(1.0, copyPitches=False)
+    assert all(any(p is own for own in sounding) for p in kept.pitches)
+    grouped = verticality.makeElement(1.0, addPartIdAsGroup=True)
+    assert sorted(g for n in grouped.notes for g in n.groups) == ["lower", "upper"]
+
+
+def test_a_verticality_names_its_class_as_music21_does():
+    """Asking a verticality for what it lacks names `Verticality`, as
+    music21's AttributeError does."""
+    score, _, _ = _two_part_score()
+    with pytest.raises(AttributeError, match="^'Verticality' object has no attribute 'endTime'$"):
+        score.asTimespans().getVerticalityAt(0.0).endTime
 
 
 def test_a_humdrum_comment_read_standalone_stays_in_the_score():
