@@ -28,6 +28,11 @@ import music21_rs
 # object is cut off rather than holding up the run.
 TEST_SECONDS = 60
 
+# A memory address in a repr, as music21's `test.testRunner.ADDRESS` finds
+# one; its runner rewrites them in each example's expected output to
+# `0x...`, so an object's address never fails a doctest.
+ADDRESS = re.compile("0x[0-9A-Fa-f]+")
+
 _NOT_PROVIDED = re.compile(r"music21-rs does not provide (\S+?);")
 _NO_MODULE = re.compile(r"No module named '([^']+)'")
 _CANNOT_IMPORT = re.compile(r"cannot import name '([^']+)' from '([^']+)'")
@@ -203,8 +208,11 @@ def gather(module):
             sys.modules[module.__name__] = previous
     flags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
     for example in sorted(examples, key=lambda found: found.name):
-        if example.examples:
-            suite.addTest(doctest.DocTestCase(example, optionflags=flags))
+        if not example.examples:
+            continue
+        for step in example.examples:
+            step.want = ADDRESS.sub("0x...", step.want)
+        suite.addTest(doctest.DocTestCase(example, optionflags=flags))
     return suite
 
 
