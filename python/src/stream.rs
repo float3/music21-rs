@@ -2100,6 +2100,22 @@ impl Stream {
                 lines.push(inner.extract()?);
             }
         }
+
+        // A measure's right barline, which it lists rather than holds,
+        // last and at its end, where music21 holds it.
+        let right = slf
+            .as_any()
+            .getattr("rightBarline")
+            .unwrap_or_else(|_| py.None().into_bound(py));
+        if !right.is_none() {
+            let end: f64 = slf.as_any().getattr("highestTime")?.extract()?;
+            let mut place = written(end)?;
+            if addEndTimes {
+                place = format!("{place} - {place}");
+            }
+            lines.push(format!("{indent}{{{place}}} {}", right.repr()?));
+        }
+
         let joint = match addBreaks {
             true => "\n",
             false => " / ",
