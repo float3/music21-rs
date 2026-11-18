@@ -11546,3 +11546,53 @@ print(len(SX.joinableGroups()))
         "{'type': 'down', 'size': 8} {'type': 'crescendo', 'spread': 0}",
         "1",
     ]
+
+
+def test_provided_musicxml_joins_staves_in_steps_and_writes_frames(tmp_path):
+    """Provided, the part-staff mixin's steps join a piano's staves over
+    ElementTree as the writer joins them, a fret board is a `<frame>`, and
+    a score's `StreamStyle` is written into its `<defaults>`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import clef, layout, meter, note, stream, tablature
+from music21.musicxml import m21ToXml, partStaffExporter
+from xml.etree.ElementTree import fromstring as EL
+s = stream.Score()
+staves = []
+for c in (clef.TrebleClef(), clef.BassClef()):
+    staff = stream.PartStaff()
+    m = stream.Measure(number=1)
+    m.append([c, meter.TimeSignature('4/4'), note.Note(type='whole')])
+    staff.append(m)
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+SX.scorePreliminaries()
+SX.parsePartlikeScore()
+SX.postPartProcess()
+root = SX.xmlRoot
+print(len(SX.partExporterList), len(root.findall('part')), len(root.findall('part/measure/note/staff')))
+print(root.find('part/measure/attributes/staves').text)
+measure = EL('<measure number="3"><note><staff>1</staff></note></measure>')
+try:
+    partStaffExporter.addStaffTags(measure, 2, tagList=['note'])
+except m21ToXml.MusicXMLExportException as error:
+    print(error)
+MEX = m21ToXml.MeasureExporter()
+board = tablature.GuitarFretBoard(fretNotes=[tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)])
+frame = MEX.fretBoardToXml(board)
+print(frame.find('frame-strings').text, [n.find('string').text for n in frame.findall('frame-note')])
+s.style.lineWidths.append(('beam', 5.0))
+print(m21ToXml.ScoreExporter(s).styleToXmlAppearance().find('line-width').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "1 1 2",
+        "2",
+        "In part (), measure (3): Attempted to create a second <staff> tag",
+        "6 ['3', '1']",
+        "5.0",
+    ]

@@ -7,7 +7,12 @@
 //! write an element with neither text nor children as `<tag />`, and escape
 //! text and attribute values the way ElementTree's serializer does.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
+
+/// A tag or an attribute name: one the writer spells out, or one read off
+/// a tree it was handed.
+pub(crate) type Name = Cow<'static, str>;
 
 /// One node of the tree: an element or a comment.
 #[derive(Clone, Debug)]
@@ -20,16 +25,16 @@ pub(crate) enum Node {
 /// and its children.
 #[derive(Clone, Debug)]
 pub(crate) struct Element {
-    tag: &'static str,
-    attributes: Vec<(&'static str, String)>,
+    tag: Name,
+    attributes: Vec<(Name, String)>,
     text: Option<String>,
     children: Vec<Node>,
 }
 
 impl Element {
-    pub(crate) fn new(tag: &'static str) -> Self {
+    pub(crate) fn new(tag: impl Into<Name>) -> Self {
         Self {
-            tag,
+            tag: tag.into(),
             attributes: Vec::new(),
             text: None,
             children: Vec::new(),
@@ -37,14 +42,15 @@ impl Element {
     }
 
     /// An element holding text and nothing else.
-    pub(crate) fn with_text(tag: &'static str, text: impl Into<String>) -> Self {
+    pub(crate) fn with_text(tag: impl Into<Name>, text: impl Into<String>) -> Self {
         let mut element = Self::new(tag);
         element.text = Some(text.into());
         element
     }
 
     /// Sets an attribute, replacing one of the same name where it stands.
-    pub(crate) fn set(&mut self, name: &'static str, value: impl Into<String>) {
+    pub(crate) fn set(&mut self, name: impl Into<Name>, value: impl Into<String>) {
+        let name = name.into();
         let value = value.into();
         match self.attributes.iter_mut().find(|(key, _)| *key == name) {
             Some(slot) => slot.1 = value,
@@ -75,7 +81,7 @@ impl Element {
 
     /// Adds a child and hands it back to be filled in: ElementTree's
     /// `SubElement`.
-    pub(crate) fn sub(&mut self, tag: &'static str) -> &mut Element {
+    pub(crate) fn sub(&mut self, tag: impl Into<Name>) -> &mut Element {
         self.push(Element::new(tag));
         match self.children.last_mut() {
             Some(Node::Element(child)) => child,
@@ -84,7 +90,7 @@ impl Element {
     }
 
     /// Adds a child holding text.
-    pub(crate) fn sub_text(&mut self, tag: &'static str, text: impl Into<String>) {
+    pub(crate) fn sub_text(&mut self, tag: impl Into<Name>, text: impl Into<String>) {
         self.push(Element::with_text(tag, text));
     }
 
@@ -93,15 +99,15 @@ impl Element {
         self.children.len()
     }
 
-    pub(crate) fn tag(&self) -> &'static str {
-        self.tag
+    pub(crate) fn tag(&self) -> &str {
+        &self.tag
     }
 
     /// An attribute's value, where it is set.
     pub(crate) fn get(&self, name: &str) -> Option<&str> {
         self.attributes
             .iter()
-            .find(|(key, _)| *key == name)
+            .find(|(key, _)| key == name)
             .map(|(_, value)| value.as_str())
     }
 
@@ -125,35 +131,6 @@ impl Element {
         })
     }
 
-    /// The child elements, to be changed.
-    pub(crate) fn elements_mut(&mut self) -> impl Iterator<Item = &mut Element> {
-        self.children.iter_mut().filter_map(|node| match node {
-            Node::Element(element) => Some(element),
-            Node::Comment(_) => None,
-        })
-    }
-
-    /// The first child of a tag: ElementTree's `find`.
-    pub(crate) fn find(&self, tag: &str) -> Option<&Element> {
-        self.elements().find(|element| element.tag == tag)
-    }
-
-    /// The same, to be changed.
-    pub(crate) fn find_mut(&mut self, tag: &str) -> Option<&mut Element> {
-        self.elements_mut().find(|element| element.tag == tag)
-    }
-
-    /// Inserts a child before the first child whose tag is among `tags`, or
-    /// at the end if none is: music21's `helpers.insertBeforeElements`.
-    pub(crate) fn insert_before(&mut self, child: Element, tags: &[&str]) {
-        let at = self
-            .children
-            .iter()
-            .position(|node| matches!(node, Node::Element(element) if tags.contains(&element.tag)))
-            .unwrap_or(self.children.len());
-        self.children.insert(at, Node::Element(child));
-    }
-
     /// Writes the element as music21's `dumpString` does.
     pub(crate) fn dump(&self) -> String {
         let mut out = String::new();
@@ -165,10 +142,10 @@ impl Element {
     /// Writes this element followed by the tail music21's `indent` gives it.
     fn write(&self, out: &mut String, level: usize, last: bool) {
         out.push('<');
-        out.push_str(self.tag);
-        let mut attributes: Vec<&(&'static str, String)> = self.attributes.iter().collect();
+        out.push_str(&self.tag);
+        let mut attributes: Vec<&(Name, String)> = self.attributes.iter().collect();
         if attributes.len() > 1 {
-            attributes.sort_by(|left, right| left.0.cmp(right.0));
+            attributes.sort_by(|left, right| left.0.cmp(&right.0));
         }
         for (name, value) in attributes {
             let _ = write!(out, " {name}=\"{}\"", escape_attribute(value));
