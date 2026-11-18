@@ -1097,7 +1097,7 @@ impl Spanner {
             .pedal()
             .and_then(|pedal| pedal.pedal_type);
         match named {
-            Some(kind) => crate::expressions::pedal_enum(py, crate::expressions::PedalEnum::Type)?
+            Some(kind) => crate::pedals::pedal_enum(py, crate::pedals::PedalEnum::Type)?
                 .call1((kind.as_str(),)),
             None => Ok(py.None().into_bound(py)),
         }
@@ -1122,7 +1122,7 @@ impl Spanner {
         only(slf, SpannerKind::PedalMark, "pedalForm")?;
         let form = slf.borrow().inner.pedal().and_then(|pedal| pedal.form);
         match form {
-            Some(form) => crate::expressions::pedal_enum(py, crate::expressions::PedalEnum::Form)?
+            Some(form) => crate::pedals::pedal_enum(py, crate::pedals::PedalEnum::Form)?
                 .call1((form.as_str(),)),
             None => Ok(py.None().into_bound(py)),
         }

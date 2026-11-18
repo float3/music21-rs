@@ -655,7 +655,135 @@ pub(crate) fn part_staff_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>>
             namespace,
         ))?;
         m.add("PartStaffExporterMixin", mixin)?;
+        m.add_function(wrap_pyfunction!(addStaffTags, &m)?)?;
         Ok::<_, PyErr>(m.unbind())
     })?;
     Ok(held.bind(py).clone())
+}
+
+// ------------------------------------------------------ ElementTree trees
+
+/// An `xml.etree.ElementTree` element, as a tree the crate's staff-joining
+/// steps work on. Each child it hands back is the element itself, so what
+/// the steps change is changed in the tree Python holds.
+pub(crate) struct Et(pub(crate) Py<PyAny>);
+
+/// A Python error raised inside a step, as the crate's.
+fn step_error(error: PyErr) -> music21::Error {
+    use music21::error::{FormatError, FormatErrorKind};
+    music21::Error::MusicXml(Box::new(FormatError::new(
+        FormatErrorKind::Invalid,
+        error.to_string(),
+    )))
+}
+
+impl Et {
+    /// Runs a call on the element with the interpreter held.
+    fn call<R>(&self, run: impl FnOnce(&Bound<'_, PyAny>) -> PyResult<R>) -> music21::Result<R> {
+        Python::attach(|py| run(self.0.bind(py))).map_err(step_error)
+    }
+}
+
+impl music21::musicxml::XmlTree for Et {
+    fn tag(&self) -> Option<String> {
+        // A comment's tag is `ElementTree.Comment`, a function.
+        self.call(|element| Ok(element.getattr("tag")?.extract::<String>().ok()))
+            .ok()
+            .flatten()
+    }
+
+    fn attribute(&self, name: &str) -> Option<String> {
+        self.call(|element| element.call_method1("get", (name,))?.extract())
+            .ok()
+            .flatten()
+    }
+
+    fn set_attribute(&mut self, name: &str, value: &str) -> music21::Result<()> {
+        self.call(|element| element.call_method1("set", (name, value)).map(|_| ()))
+    }
+
+    fn text(&self) -> Option<String> {
+        self.call(|element| element.getattr("text")?.extract())
+            .ok()
+            .flatten()
+    }
+
+    fn set_text(&mut self, text: &str) -> music21::Result<()> {
+        self.call(|element| element.setattr("text", text))
+    }
+
+    fn len(&self) -> usize {
+        self.call(|element| element.len()).unwrap_or(0)
+    }
+
+    fn child(&self, index: usize) -> Option<Self> {
+        self.call(|element| Ok(Et(element.get_item(index)?.unbind())))
+            .ok()
+    }
+
+    fn with_child<R>(&mut self, index: usize, change: impl FnOnce(&mut Self) -> R) -> Option<R> {
+        let mut child = self.child(index)?;
+        Some(change(&mut child))
+    }
+
+    fn insert(&mut self, index: usize, child: Self) -> music21::Result<()> {
+        self.call(|element| element.call_method1("insert", (index, child.0)).map(|_| ()))
+    }
+
+    fn remove(&mut self, index: usize) -> music21::Result<()> {
+        self.call(|element| {
+            let child = element.get_item(index)?;
+            element.call_method1("remove", (child,)).map(|_| ())
+        })
+    }
+
+    fn element(&self, tag: &str) -> music21::Result<Self> {
+        Python::attach(|py| {
+            Ok(Et(element_tree(py)?
+                .getattr("Element")?
+                .call1((tag,))?
+                .unbind()))
+        })
+        .map_err(step_error)
+    }
+
+    fn comment(&self, text: &str) -> music21::Result<Self> {
+        Python::attach(|py| {
+            Ok(Et(element_tree(py)?
+                .getattr("Comment")?
+                .call1((text,))?
+                .unbind()))
+        })
+        .map_err(step_error)
+    }
+
+    fn deep_copy(&self) -> music21::Result<Self> {
+        self.call(|element| {
+            let copied = element
+                .py()
+                .import("copy")?
+                .getattr("deepcopy")?
+                .call1((element,))?;
+            Ok(Et(copied.unbind()))
+        })
+    }
+}
+
+/// A step's refusal, as music21's `MusicXMLExportException`.
+pub(crate) fn step_refused(error: &music21::Error) -> PyErr {
+    export_error(error)
+}
+
+/// music21's `addStaffTags`: a `<staff>` in each child of a `<measure>`
+/// whose tag is in `tagList`, before its beams, notations, lyrics and
+/// sound.
+#[pyfunction]
+fn addStaffTags(
+    measure: &Bound<'_, PyAny>,
+    staffNumber: usize,
+    tagList: Vec<String>,
+) -> PyResult<()> {
+    let tags: Vec<&str> = tagList.iter().map(String::as_str).collect();
+    let mut tree = Et(measure.clone().unbind());
+    music21::musicxml::add_staff_tags(&mut tree, staffNumber, &tags).map_err(|e| step_refused(&e))
 }

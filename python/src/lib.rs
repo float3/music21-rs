@@ -139,6 +139,7 @@ mod nwcbinary;
 mod nwctranslate;
 pub mod omrcorrectors;
 pub mod ornamentrecognizer;
+mod pedals;
 pub mod percussion;
 pub mod pitch;
 mod plumbing;
@@ -2306,6 +2307,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     clef::register(m)?;
     articulations::register(m)?;
     expressions::register(m)?;
+    pedals::register(m)?;
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;

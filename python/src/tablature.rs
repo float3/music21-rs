@@ -232,6 +232,64 @@ fn notes_of(given: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<RsFretNote>> {
     Ok(read)
 }
 
+/// Fret notes as a list of this package's.
+fn notes_list<'py, 'a>(
+    py: Python<'py>,
+    notes: impl Iterator<Item = &'a RsFretNote>,
+) -> PyResult<Bound<'py, PyList>> {
+    let out = PyList::empty(py);
+    for note in notes {
+        out.append(Bound::new(py, FretNote::wrap(note.clone()))?)?;
+    }
+    Ok(out)
+}
+
+/// A pitch of the crate's, as the `Pitch` music21 would hand back.
+fn pitch_object(py: Python<'_>, pitch: music21::Pitch) -> PyResult<Py<crate::pitch::Pitch>> {
+    crate::installed_new(
+        py,
+        "music21.pitch",
+        "Pitch",
+        crate::pitch::Pitch::wrap(pitch, false),
+    )
+}
+
+/// A board's tuning as a list of pitches, lowest string first.
+fn tuning_list<'py>(py: Python<'py>, board: &RsFretBoard) -> PyResult<Bound<'py, PyList>> {
+    let out = PyList::empty(py);
+    for pitch in &board.tuning {
+        out.append(pitch_object(py, pitch.clone())?)?;
+    }
+    Ok(out)
+}
+
+/// A tuning given as pitches, or their names.
+fn tuning_of(value: &Bound<'_, PyAny>) -> PyResult<Vec<music21::Pitch>> {
+    if value.is_none() {
+        return Ok(Vec::new());
+    }
+    value
+        .walk()?
+        .map(|pitch| crate::pitch::pitch_from_any(&pitch?))
+        .collect()
+}
+
+/// What a board sounds, string by string, `None` for a string nobody
+/// stops: music21's `getPitches`.
+fn pitches_list<'py>(py: Python<'py>, board: &RsFretBoard) -> PyResult<Bound<'py, PyList>> {
+    let out = PyList::empty(py);
+    let sounded = board
+        .pitches()
+        .map_err(|error| TablatureException::new_err(crate::pitch::message(&error)))?;
+    for pitch in sounded {
+        match pitch {
+            None => out.append(py.None())?,
+            Some(pitch) => out.append(pitch_object(py, pitch)?)?,
+        }
+    }
+    Ok(out)
+}
+
 /// music21's `tablature.FretBoard`: a chord diagram, its strings and the
 /// notes stopping them.
 #[pyclass(
@@ -293,11 +351,7 @@ impl FretBoard {
     /// The notes stopping its strings, in the order they were given.
     #[getter]
     fn fretNotes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let out = PyList::empty(py);
-        for note in &self.inner.fret_notes {
-            out.append(Bound::new(py, FretNote::wrap(note.clone()))?)?;
-        }
-        Ok(out)
+        notes_list(py, self.inner.fret_notes.iter())
     }
 
     #[setter]
@@ -309,16 +363,13 @@ impl FretBoard {
     /// What its open strings are tuned to, lowest first.
     #[getter]
     fn tuning<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let out = PyList::empty(py);
-        for pitch in &self.inner.tuning {
-            out.append(crate::installed_new(
-                py,
-                "music21.pitch",
-                "Pitch",
-                crate::pitch::Pitch::wrap(pitch.clone(), false),
-            )?)?;
-        }
-        Ok(out)
+        tuning_list(py, &self.inner)
+    }
+
+    #[setter]
+    fn set_tuning(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.tuning = tuning_of(value)?;
+        Ok(())
     }
 
     /// The note stopping a string, or nothing where none does: music21's
@@ -332,34 +383,14 @@ impl FretBoard {
     /// Its notes, the lowest string first: music21's
     /// `fretNotesLowestFirst`.
     fn fretNotesLowestFirst<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let out = PyList::empty(py);
-        for note in self.inner.fret_notes_lowest_first() {
-            out.append(Bound::new(py, FretNote::wrap(note.clone()))?)?;
-        }
-        Ok(out)
+        notes_list(py, self.inner.fret_notes_lowest_first().into_iter())
     }
 
     /// What the diagram sounds, each string's open pitch raised by the
     /// fret stopping it and nothing for a string nobody stops: music21's
     /// `getPitches`.
     fn getPitches<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let out = PyList::empty(py);
-        let sounded = self
-            .inner
-            .pitches()
-            .map_err(|error| TablatureException::new_err(crate::pitch::message(&error)))?;
-        for pitch in sounded {
-            match pitch {
-                None => out.append(py.None())?,
-                Some(pitch) => out.append(crate::installed_new(
-                    py,
-                    "music21.pitch",
-                    "Pitch",
-                    crate::pitch::Pitch::wrap(pitch, false),
-                )?)?,
-            }
-        }
-        Ok(out)
+        pitches_list(py, &self.inner)
     }
 
     /// What music21 says this object is.
@@ -411,6 +442,132 @@ impl FretBoard {
     }
 }
 
+/// music21's `ChordWithFretBoard`: a chord symbol with a diagram of where
+/// it is fingered. music21 makes it a `FretBoard` too; here the board is
+/// carried, with the board's members, as a pyclass can have one base with
+/// state.
+#[pyclass(
+    name = "ChordWithFretBoard",
+    module = "music21.tablature",
+    extends = crate::harmony::ChordSymbol,
+    subclass
+)]
+pub struct ChordWithFretBoard {
+    board: RsFretBoard,
+}
+
+#[pymethods]
+impl ChordWithFretBoard {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        py: Python<'_>,
+        _arguments: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(
+            crate::harmony::ChordSymbol::initializer(py)?.add_subclass(Self {
+                board: RsFretBoard::new(6, Vec::new(), 4),
+            }),
+        )
+    }
+
+    /// music21's `ChordWithFretBoard(figure, numStrings=6, fretNotes=None,
+    /// displayFrets=4, **keywords)`: the symbol read from `figure`, the
+    /// rest the board's.
+    #[pyo3(signature = (figure = None, numStrings = 6, fretNotes = None, displayFrets = 4, **keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        figure: Option<&Bound<'_, PyAny>>,
+        numStrings: usize,
+        fretNotes: Option<&Bound<'_, PyAny>>,
+        displayFrets: usize,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let arguments = PyDict::new(py);
+        if let Some(keywords) = keywords {
+            arguments.update(keywords.as_mapping())?;
+        }
+        arguments.set_item("figure", figure)?;
+        py.get_type::<crate::harmony::ChordSymbol>()
+            .getattr("__init__")?
+            .call((slf,), Some(&arguments))?;
+        slf.borrow_mut().board = RsFretBoard::new(numStrings, notes_of(fretNotes)?, displayFrets);
+        Ok(())
+    }
+
+    /// How many strings the board has.
+    #[getter]
+    fn numStrings(&self) -> usize {
+        self.board.strings
+    }
+
+    #[setter]
+    fn set_numStrings(&mut self, value: usize) {
+        self.board.strings = value;
+    }
+
+    /// How many frets the diagram shows.
+    #[getter]
+    fn displayFrets(&self) -> usize {
+        self.board.display_frets
+    }
+
+    #[setter]
+    fn set_displayFrets(&mut self, value: usize) {
+        self.board.display_frets = value;
+    }
+
+    /// The notes stopping the board's strings, in the order given.
+    #[getter]
+    fn fretNotes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        notes_list(py, self.board.fret_notes.iter())
+    }
+
+    #[setter]
+    fn set_fretNotes(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        self.board.fret_notes = notes_of(value)?;
+        Ok(())
+    }
+
+    /// What the open strings are tuned to, lowest first; unset until given.
+    #[getter]
+    fn tuning<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        tuning_list(py, &self.board)
+    }
+
+    #[setter]
+    fn set_tuning(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.board.tuning = tuning_of(value)?;
+        Ok(())
+    }
+
+    /// The note stopping a string, or nothing.
+    fn getFretNoteByString(&self, requestedString: i32) -> Option<FretNote> {
+        self.board
+            .fret_note_by_string(requestedString)
+            .map(|note| FretNote::wrap(note.clone()))
+    }
+
+    /// The notes, the lowest string first.
+    fn fretNotesLowestFirst<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        notes_list(py, self.board.fret_notes_lowest_first().into_iter())
+    }
+
+    /// What the diagram sounds, string by string, `None` for a string
+    /// nobody stops.
+    fn getPitches<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        pitches_list(py, &self.board)
+    }
+
+    /// music21's `getFretNotesFromFigure`, which music21 leaves to do and
+    /// answers `None`.
+    fn getFretNotesFromFigure(&self) -> Option<()> {
+        None
+    }
+}
+
 /// music21's boards of a known instrument, each a `FretBoard` tuned as
 /// that instrument is.
 macro_rules! fret_boards {
@@ -445,6 +602,7 @@ macro_rules! fret_boards {
             m.add_class::<FretNote>()?;
             m.add_class::<FretBoard>()?;
             m.add_class::<FirstFret>()?;
+            m.add_class::<ChordWithFretBoard>()?;
             $(m.add_class::<$class>()?;)*
             Ok(())
         }

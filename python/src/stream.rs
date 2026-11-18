@@ -6670,7 +6670,7 @@ fn element_object_as<'py>(
         .into_bound(py)
         .into_any(),
         StreamElement::PedalObject(mark) if whose == Whose::Wheel => {
-            crate::expressions::PedalObject::object(py, mark.clone())?.into_bound(py)
+            crate::pedals::PedalObject::object(py, mark)?.into_bound(py)
         }
         StreamElement::RehearsalMark(mark) if whose == Whose::Wheel => {
             crate::expressions::RehearsalMark::object(py, mark.clone())?.into_bound(py)
@@ -8621,6 +8621,71 @@ fn numeral_symbol(
         .map_err(|error| StreamException::new_err(error.to_string()))
 }
 
+/// A stream's `StreamStyle`, as the crate keeps it, where it says what a
+/// score's `<defaults>` writes; `None` for a plain `Style`.
+fn stream_style_of(style: &Bound<'_, PyAny>) -> PyResult<Option<music21::style::StreamStyle>> {
+    use music21::style::{StreamStyle, StyleValue};
+    let Ok(line_widths) = style.getattr("lineWidths") else {
+        return Ok(None);
+    };
+    let pairs = |listed: Bound<'_, PyAny>| -> PyResult<Vec<(String, StyleValue)>> {
+        let mut read = Vec::new();
+        for pair in listed.try_iter()? {
+            let (kind, value): (String, Bound<'_, PyAny>) = pair?.extract()?;
+            let value = if value.is_instance_of::<pyo3::types::PyInt>() {
+                StyleValue::Whole(value.extract()?)
+            } else if let Ok(number) = value.extract::<f64>() {
+                StyleValue::Decimal(number)
+            } else {
+                StyleValue::Text(value.str()?.to_string())
+            };
+            read.push((kind, value));
+        }
+        Ok(read)
+    };
+    let font = |name: &str| -> PyResult<Option<music21::style::TextStyle>> {
+        match style.getattr(name) {
+            Ok(font) if !font.is_none() => text_style_of(&font).map(Some),
+            _ => Ok(None),
+        }
+    };
+    let optional = |value: Bound<'_, PyAny>| -> PyResult<Option<String>> {
+        if value.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(value.str()?.to_string()))
+    };
+    let mut lyric_fonts = Vec::new();
+    for pair in style.getattr("lyricFonts")?.try_iter()? {
+        let (name, font): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        let font = if font.is_none() {
+            None
+        } else {
+            Some(text_style_of(&font)?)
+        };
+        lyric_fonts.push((optional(name)?, font));
+    }
+    let mut lyric_languages = Vec::new();
+    for pair in style.getattr("lyricLanguages")?.try_iter()? {
+        let (name, language): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        lyric_languages.push((optional(name)?, optional(language)?));
+    }
+    let read = StreamStyle {
+        line_widths: pairs(line_widths)?,
+        note_sizes: pairs(style.getattr("noteSizes")?)?,
+        distances: pairs(style.getattr("distances")?)?,
+        other_appearances: pairs(style.getattr("otherAppearances")?)?,
+        music_font: font("musicFont")?,
+        word_font: font("wordFont")?,
+        lyric_fonts,
+        lyric_languages,
+    };
+    if read == StreamStyle::default() {
+        return Ok(None);
+    }
+    Ok(Some(read))
+}
+
 /// music21's style of something drawn with text, as the crate keeps it.
 fn text_style_of(style: &Bound<'_, PyAny>) -> PyResult<music21::style::TextStyle> {
     let words = |name: &str| text_attribute(style, name);
@@ -8742,6 +8807,7 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
         };
         stream.set_name_hidden(hidden("printPartName"));
         stream.set_abbreviation_hidden(hidden("printPartAbbreviation"));
+        stream.set_stream_style(stream_style_of(&style)?);
     }
     if let Ok(metadata) = object.getattr("metadata")
         && !metadata.is_none()
@@ -10170,6 +10236,11 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StreamCore>()?;
     m.add_class::<OffsetWalked>()?;
     m.add_class::<Stream>()?;
+    // A stream is drawn with music21's `StreamStyle`.
+    m.getattr("Stream")?.setattr(
+        "_styleClass",
+        m.py().get_type::<crate::style::StreamStyle>(),
+    )?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;
     // What music21's `System` says of itself, which nothing here reads.

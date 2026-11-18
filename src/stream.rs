@@ -821,6 +821,9 @@ struct Labels {
     at_sounding_pitch: Option<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
     measure_numbering: Option<String>,
+    /// How the stream is drawn as a whole. Boxed: most streams carry none.
+    #[cfg_attr(feature = "serde", serde(default))]
+    style: Option<Box<crate::style::StreamStyle>>,
 }
 
 impl Stream {
@@ -987,6 +990,17 @@ impl Stream {
     /// Sets the metadata, or clears it.
     pub fn set_metadata(&mut self, metadata: Option<Metadata>) {
         self.labels.metadata = metadata.map(Box::new);
+    }
+
+    /// How the stream is drawn as a whole: music21's `StreamStyle`, where
+    /// it says anything.
+    pub fn stream_style(&self) -> Option<&crate::style::StreamStyle> {
+        self.labels.style.as_deref()
+    }
+
+    /// Sets how the stream is drawn as a whole, or clears it.
+    pub fn set_stream_style(&mut self, style: Option<crate::style::StreamStyle>) {
+        self.labels.style = style.map(Box::new);
     }
 
     /// The groups a score brackets its parts in, in the order they were

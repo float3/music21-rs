@@ -571,6 +571,12 @@ pub struct ChordSymbol {
 }
 
 impl ChordSymbol {
+    /// A blank symbol, which `__init__` reads its figure into: what a
+    /// subclass builds itself on.
+    pub(crate) fn initializer(py: Python<'_>) -> PyResult<PyClassInitializer<Self>> {
+        Ok(Harmony::on(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
+    }
+
     fn blank(py: Python<'_>) -> Self {
         Self {
             figure: None,
@@ -685,7 +691,7 @@ impl ChordSymbol {
         _arguments: &Bound<'_, PyTuple>,
         _keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        Ok(Harmony::on(Chord::build(py, None, None)?).add_subclass(Self::blank(py)))
+        Self::initializer(py)
     }
 
     fn __traverse__(
@@ -1311,11 +1317,13 @@ impl ChordSymbol {
             summary.push_str(": ");
             summary.push_str(&names.join(" "));
         }
+        // The class's own module: a `ChordWithFretBoard` is tablature's.
         let class = slf.get_type().qualname()?;
+        let module: String = slf.get_type().getattr("__module__")?.extract()?;
         Ok(if summary.is_empty() {
-            format!("<music21.harmony.{class}>")
+            format!("<{module}.{class}>")
         } else {
-            format!("<music21.harmony.{class} {summary}>")
+            format!("<{module}.{class} {summary}>")
         })
     }
 }

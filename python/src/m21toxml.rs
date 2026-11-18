@@ -21,7 +21,8 @@ use music21::musicxml::ExportOptions;
 use music21::stream::Stream as RsStream;
 
 use crate::musicxml::{
-    self as mx, MusicXMLExportException, MusicXMLWarning, dumpString, element_tree, export_error,
+    self as mx, Et, MusicXMLExportException, MusicXMLWarning, dumpString, element_tree,
+    export_error, step_refused,
 };
 
 /// The module music21 keeps these in.
@@ -735,12 +736,13 @@ fn print_element<'py>(
     filled(&written, into)
 }
 
-/// The score style's appearance lists beside the tags they write.
-const APPEARANCES: [(&str, &str); 4] = [
-    ("lineWidths", "line-width"),
-    ("noteSizes", "note-size"),
-    ("distances", "distance"),
-    ("otherAppearances", "other-appearance"),
+/// What a score's style writes in its `<defaults>`.
+const STYLE_DEFAULTS: [&str; 5] = [
+    "appearance",
+    "music-font",
+    "word-font",
+    "lyric-font",
+    "lyric-language",
 ];
 
 /// music21's `%text-formatting` attributes beside the style names they
@@ -1314,42 +1316,134 @@ impl ScoreExporter {
     }
 
     /// Joins the staves of each joinable group into the `<part>` of its
-    /// first: the score is written, its staves joined as the crate's
-    /// writer joins them, and each part exporter takes the `<part>`
-    /// written for it; those of the later staves, joined into the first,
-    /// leave the list.
+    /// first, in music21's steps: staff tags, the later staves' measures
+    /// moved into the first's, the first `<attributes>` given the staves'
+    /// clefs, and the later staves' exporters taken off the list.
     fn joinPartStaffs(slf: &Bound<'_, Self>) -> PyResult<()> {
         let py = slf.py();
         if slf.borrow().groupsToJoin.bind(py).len()? == 0 {
             let groups = Self::joinableGroups(slf)?;
             slf.borrow_mut().groupsToJoin = groups.into_any().unbind();
         }
-        let score = exported_stream(slf)?;
-        let joined = music21::musicxml::joinable_staff_groups(&score)
-            .map_err(|e| export_error(&e))?
-            .into_indices();
-        // The staves after the first of each group are written into it.
-        let later: Vec<usize> = joined
-            .iter()
-            .flat_map(|index| score.staff_groups()[*index].parts().iter().skip(1).copied())
-            .collect();
-        let notation = Notation::of(slf.borrow().makeNotation);
-        let root = parsed(py, &document(py, &score, notation)?)?;
-        let mut written = root.call_method1("findall", ("part",))?.try_iter()?;
+        let groups = slf.borrow().groupsToJoin.clone_ref(py).into_bound(py);
+        for group in groups.try_iter()? {
+            let group = group?;
+            Self::addStaffTagsMultiStaffParts(slf, &group)?;
+            Self::movePartStaffMeasureContents(slf, &group)?;
+            Self::setEarliestAttributesAndClefsPartStaff(slf, &group)?;
+            Self::cleanUpSubsequentPartStaffs(slf, &group)?;
+        }
+        Ok(())
+    }
+
+    /// A `<staff>` in every note, direction, forward and harmony of each
+    /// staff of the group, numbered from one.
+    fn addStaffTagsMultiStaffParts(
+        slf: &Bound<'_, Self>,
+        group: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let mut roots = group_roots(slf, group)?;
+        music21::musicxml::add_staff_tags_to_staves(&mut roots).map_err(|e| step_refused(&e))
+    }
+
+    /// Every later staff's measures moved into the first staff's.
+    fn movePartStaffMeasureContents(
+        slf: &Bound<'_, Self>,
+        group: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let mut roots = group_roots(slf, group)?;
+        music21::musicxml::move_part_staff_contents(&mut roots).map_err(|e| step_refused(&e))
+    }
+
+    /// The first staff's first `<attributes>` told how many staves there
+    /// are and given a clef for each, and a key and a meter for each where
+    /// the staves start differently.
+    fn setEarliestAttributesAndClefsPartStaff(
+        slf: &Bound<'_, Self>,
+        group: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let mut roots = group_roots(slf, group)?;
+        let staves: Vec<RsStream> = staves_of(group)?
+            .try_iter()?
+            .map(|staff| crate::stream::crate_stream(&staff?))
+            .collect::<PyResult<_>>()?;
+        let held: Vec<&RsStream> = staves.iter().collect();
+        let differences = music21::musicxml::staff_differences(&held);
+        music21::musicxml::set_earliest_attributes_and_clefs(&mut roots, differences)
+            .map_err(|e| step_refused(&e))
+    }
+
+    /// The exporters of the group's later staves taken off the list, their
+    /// contents now in the first's `<part>`.
+    fn cleanUpSubsequentPartStaffs(
+        slf: &Bound<'_, Self>,
+        group: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let mut later = Vec::new();
+        for staff in staves_of(group)?.try_iter()?.skip(1) {
+            later.push(Self::getRootForPartStaff(slf, &staff?)?);
+        }
         let exporters = slf.borrow().partExporterList.clone_ref(py).into_bound(py);
         let kept = PyList::empty(py);
-        for (index, exporter) in exporters.try_iter()?.enumerate() {
+        for exporter in exporters.try_iter()? {
             let exporter = exporter?;
-            if later.contains(&index) {
-                continue;
+            let root = exporter.getattr("xmlRoot")?;
+            if !later.iter().any(|gone| gone.is(&root)) {
+                kept.append(exporter)?;
             }
-            if let Some(part) = written.next() {
-                exporter.setattr("xmlRoot", part?)?;
-            }
-            kept.append(exporter)?;
         }
         slf.borrow_mut().partExporterList = kept.into_any().unbind();
         Ok(())
+    }
+
+    /// Moves each measure of `source` into the measure of `target` of the
+    /// same number, on staff `staffNum`; the measures `target` has no
+    /// number for come back by where they go, each after its divider.
+    fn processSubsequentPartStaff<'py>(
+        &self,
+        target: &Bound<'py, PyAny>,
+        source: &Bound<'py, PyAny>,
+        staffNum: usize,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let py = target.py();
+        let mut into = Et(target.clone().unbind());
+        let from = Et(source.clone().unbind());
+        let insertions =
+            music21::musicxml::process_subsequent_part_staff(&mut into, &from, staffNum)
+                .map_err(|e| step_refused(&e))?;
+        let found = PyDict::new(py);
+        for (at, nodes) in insertions {
+            let nodes: Vec<Py<PyAny>> = nodes.into_iter().map(|node| node.0).collect();
+            found.set_item(at, PyList::new(py, nodes)?)?;
+        }
+        Ok(found)
+    }
+
+    /// Moves what `measure` holds into `otherMeasure`, behind a `<backup>`
+    /// to its start, its voices numbered on and its mid-measure clefs told
+    /// staff `staffNumber`.
+    #[staticmethod]
+    fn moveMeasureContents(
+        measure: &Bound<'_, PyAny>,
+        otherMeasure: &Bound<'_, PyAny>,
+        staffNumber: usize,
+    ) -> PyResult<()> {
+        // Refused here as music21 says it, with the elements' reprs.
+        let is_measure = |element: &Bound<'_, PyAny>| -> PyResult<bool> {
+            element.getattr("tag")?.eq("measure")
+        };
+        if !is_measure(measure)? || !is_measure(otherMeasure)? {
+            return Err(MusicXMLExportException::new_err(format!(
+                "moveMeasureContents() called on {} and {} (not measures).",
+                measure.repr()?,
+                otherMeasure.repr()?
+            )));
+        }
+        let from = Et(measure.clone().unbind());
+        let mut into = Et(otherMeasure.clone().unbind());
+        music21::musicxml::move_measure_contents(&from, &mut into, staffNumber)
+            .map_err(|e| step_refused(&e))
     }
 
     /// The `<part>` a part exporter wrote for a staff, found by the staff
@@ -1422,73 +1516,27 @@ impl ScoreExporter {
     }
 
     /// The score style's line widths, note sizes, distances and other
-    /// appearances as an `<appearance>`; `None` where it has none.
+    /// appearances as the `<appearance>` its `<defaults>` writes; `None`
+    /// where it has none.
     fn styleToXmlAppearance<'py>(slf: &Bound<'py, Self>) -> PyResult<Option<Bound<'py, PyAny>>> {
-        let py = slf.py();
-        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
-        let style = stream.getattr("style")?;
-        let tree = element_tree(py)?;
-        let appearance = tree.getattr("Element")?.call1(("appearance",))?;
-        for (property, tag) in APPEARANCES {
-            let Ok(listed) = style.getattr(property) else {
-                continue;
-            };
-            for pair in listed.try_iter()? {
-                let (kind, value): (Bound<'py, PyAny>, Bound<'py, PyAny>) = pair?.extract()?;
-                let written = tree.getattr("SubElement")?.call1((&appearance, tag))?;
-                written.call_method1("set", ("type", kind))?;
-                written.setattr("text", value.str()?)?;
-            }
-        }
-        if appearance.len()? == 0 {
+        let defaults = header_tagged(slf, None, &["defaults"])?;
+        let Some(defaults) = defaults.first() else {
             return Ok(None);
-        }
-        Ok(Some(appearance))
+        };
+        let found = defaults.call_method1("find", ("appearance",))?;
+        Ok((!found.is_none()).then_some(found))
     }
 
-    /// Adds to a `<defaults>` the score style's `<appearance>`, its music
-    /// and word fonts, and a `<lyric-font>` and `<lyric-language>` for each
-    /// it names.
+    /// Adds to a `<defaults>` what the score style puts there: its
+    /// `<appearance>`, its music and word fonts, and a `<lyric-font>` and
+    /// `<lyric-language>` for each lyric name.
     fn addStyleToXmlDefaults(slf: &Bound<'_, Self>, mxDefaults: &Bound<'_, PyAny>) -> PyResult<()> {
-        let py = slf.py();
-        let stream = slf.as_super().borrow().stream.clone_ref(py).into_bound(py);
-        if !stream.getattr("hasStyleInformation")?.is_truthy()? {
-            return Ok(());
-        }
-        if let Some(appearance) = Self::styleToXmlAppearance(slf)? {
-            mxDefaults.call_method1("append", (appearance,))?;
-        }
-        let style = stream.getattr("style")?;
-        let sub = element_tree(py)?.getattr("SubElement")?;
-        for (property, tag) in [("musicFont", "music-font"), ("wordFont", "word-font")] {
-            let Ok(font) = style.getattr(property) else {
-                continue;
-            };
-            if !font.is_none() {
-                set_font(&sub.call1((mxDefaults, tag))?, &font)?;
-            }
-        }
-        if let Ok(fonts) = style.getattr("lyricFonts") {
-            for pair in fonts.try_iter()? {
-                let (name, font): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
-                let written = sub.call1((mxDefaults, "lyric-font"))?;
-                if !font.is_none() {
-                    set_font(&written, &font)?;
-                }
-                if !name.is_none() {
-                    written.call_method1("set", ("name", name))?;
-                }
-            }
-        }
-        if let Ok(languages) = style.getattr("lyricLanguages") {
-            for pair in languages.try_iter()? {
-                let (kind, language): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
-                let written = sub.call1((mxDefaults, "lyric-language"))?;
-                if !kind.is_none() {
-                    written.call_method1("set", ("name", kind))?;
-                }
-                if !language.is_none() {
-                    written.call_method1("set", ("xml:lang", language))?;
+        for defaults in header_tagged(slf, None, &["defaults"])? {
+            for child in defaults.try_iter()? {
+                let child = child?;
+                let tag: String = child.getattr("tag")?.extract()?;
+                if STYLE_DEFAULTS.contains(&tag.as_str()) {
+                    mxDefaults.call_method1("append", (child,))?;
                 }
             }
         }
@@ -1576,6 +1624,23 @@ impl PartExporter {
         slf.as_super().borrow_mut().xmlRoot = found.clone().unbind();
         Ok(found)
     }
+}
+
+/// The staves a staff group spans.
+fn staves_of<'py>(group: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    group.call_method0("getSpannedElements")
+}
+
+/// The `<part>` each staff of a group was written as, in order.
+fn group_roots(slf: &Bound<'_, ScoreExporter>, group: &Bound<'_, PyAny>) -> PyResult<Vec<Et>> {
+    staves_of(group)?
+        .try_iter()?
+        .map(|staff| {
+            Ok(Et(
+                ScoreExporter::getRootForPartStaff(slf, &staff?)?.unbind()
+            ))
+        })
+        .collect()
 }
 
 /// The first element of this tag in the document a part makes when it
@@ -1677,11 +1742,42 @@ fn fragments<'py>(object: &Bound<'py, PyAny>) -> PyResult<Vec<Bound<'py, PyAny>>
         Some(site) if is_a(&site, "Measure")? => Some(crate::stream::crate_stream(&site)?),
         _ => None,
     };
-    let offset: f64 = match &measure {
-        Some(_) => object.getattr("offset")?.extract()?,
-        None => 0.0,
+    let offset: f64 = object
+        .getattr("offset")
+        .and_then(|offset| offset.extract())
+        .unwrap_or(0.0);
+
+    // The spanners joining it, and where it stands in each.
+    let mut held = Vec::new();
+    if let Ok(sites) = object.call_method0("getSpannerSites") {
+        for site in sites.try_iter()? {
+            let site = site?;
+            let joined: Vec<Bound<'py, PyAny>> = site
+                .call_method0("getSpannedElements")?
+                .try_iter()?
+                .collect::<PyResult<_>>()?;
+            let Some(index) = joined.iter().position(|one| one.is(object)) else {
+                continue;
+            };
+            if let Some(spanner) = crate::stream::spanner_value(&site, &[])? {
+                held.push((spanner, index, joined.len()));
+            }
+        }
+    }
+    let spanners: Vec<music21::musicxml::Joined<'_>> = held
+        .iter()
+        .map(|(spanner, index, count)| music21::musicxml::Joined {
+            spanner,
+            index: *index,
+            count: *count,
+        })
+        .collect();
+    let around = music21::musicxml::Surroundings {
+        measure: measure.as_ref(),
+        offset,
+        spanners: &spanners,
     };
-    music21::musicxml::element_xml(&element, measure.as_ref(), offset)
+    music21::musicxml::element_xml(&element, &around)
         .map_err(|e| export_error(&e))?
         .iter()
         .map(|text| parsed(py, text))
@@ -2104,10 +2200,78 @@ impl MeasureExporter {
         )
     }
 
+    /// A pedal's bounce or gap as the `<direction>` its pedal mark draws
+    /// it with, appended; `None` where no pedal mark holds it.
+    fn pedalObjectToXml<'py>(
+        slf: &Bound<'py, Self>,
+        po: &Bound<'py, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let written = fragments(po)?;
+        if written.is_empty() {
+            return Ok(None);
+        }
+        appended(slf, written).map(Some)
+    }
+
+    /// A stopped string as its `<frame-note>`.
+    fn fretNoteToXml<'py>(&self, fretNote: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let note = fret_note_value(fretNote)?;
+        parsed(fretNote.py(), &music21::musicxml::frame_note_xml(&note))
+    }
+
+    /// A chord diagram as its `<frame>`, lowest string first; `None` for
+    /// one with no notes.
+    fn fretBoardToXml<'py>(
+        &self,
+        fretBoard: &Bound<'py, PyAny>,
+    ) -> PyResult<Option<Bound<'py, PyAny>>> {
+        let mut notes = Vec::new();
+        for note in fretBoard.getattr("fretNotes")?.try_iter()? {
+            notes.push(fret_note_value(&note?)?);
+        }
+        let board = music21::tablature::FretBoard::new(
+            fretBoard.getattr("numStrings")?.extract()?,
+            notes,
+            fretBoard.getattr("displayFrets")?.extract()?,
+        );
+        music21::musicxml::frame_xml(&board)
+            .map(|text| parsed(fretBoard.py(), &text))
+            .transpose()
+    }
+
+    /// A chord symbol with a diagram as its `<harmony>`, the `<frame>` at
+    /// its end.
+    fn chordWithFretBoardToXml<'py>(
+        slf: &Bound<'py, Self>,
+        cwf: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let harmony = Self::chordSymbolToXml(slf, cwf)?;
+        if let Some(frame) = slf.borrow().fretBoardToXml(cwf)? {
+            harmony.call_method1("append", (frame,))?;
+        }
+        Ok(harmony)
+    }
+
     /// A barline as its `<barline>`, with no location.
     fn barlineToXml<'py>(&self, barObject: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         first_fragment(barObject)
     }
+}
+
+/// A fret note of music21's, as the crate's.
+fn fret_note_value(note: &Bound<'_, PyAny>) -> PyResult<music21::tablature::FretNote> {
+    let read = |name: &str| -> PyResult<Option<i32>> {
+        let value = note.getattr(name)?;
+        if value.is_none() {
+            return Ok(None);
+        }
+        value.extract().map(Some)
+    };
+    Ok(music21::tablature::FretNote::new(
+        read("string")?,
+        read("fret")?,
+        read("fingering")?,
+    ))
 }
 
 /// The `<note>` for a note, or for the `index`th note of a chord.

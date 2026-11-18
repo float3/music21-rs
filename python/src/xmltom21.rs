@@ -1781,7 +1781,7 @@ impl MeasureParser {
 
         // The pedal's bounces and gaps, into the measure.
         for (uid, at, mark) in read.marks {
-            let made = crate::expressions::PedalObject::object(py, mark)?;
+            let made = crate::pedals::PedalObject::object(py, &mark)?;
             holder.borrow_mut().joinable.push((uid, made.clone_ref(py)));
             Self::insertCoreAndRef(
                 slf,

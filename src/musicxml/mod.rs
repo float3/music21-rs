@@ -22,10 +22,14 @@ pub mod step;
 mod tree;
 
 pub use fragment::{
-    element_xml, instrument_xml, layout_xml, part_group_xml, score_header_xml, staff_details_xml,
-    transpose_xml,
+    Joined, Surroundings, chord_with_fret_board_xml, element_xml, frame_note_xml, frame_xml,
+    instrument_xml, layout_xml, part_group_xml, score_header_xml, staff_details_xml, transpose_xml,
 };
-pub use partstaff::measure_number_comes_before;
+pub use partstaff::{
+    Across, STAFF_TAGGED, StaffDifferences, XmlTree, add_staff_tags, add_staff_tags_to_staves,
+    join as join_staves, measure_number_comes_before, move_measure_contents,
+    move_part_staff_contents, process_subsequent_part_staff, set_earliest_attributes_and_clefs,
+};
 pub use read::{from_musicxml, sound_tempo};
 
 use crate::articulations::Articulation;
@@ -301,11 +305,7 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
             })
             .collect();
         let staves: Vec<&Stream> = positions.iter().map(|position| parts[*position]).collect();
-        partstaff::join(
-            &mut roots,
-            differs_across(&staves, first_key, same_key),
-            differs_across(&staves, first_meter, same_meter),
-        )?;
+        partstaff::join(&mut roots, staff_differences(&staves))?;
         let first = roots.swap_remove(0);
         if let Some(part) = exported[positions[0]].as_mut() {
             part.part = first;
@@ -510,6 +510,34 @@ fn first_meter(staff: &Stream) -> Option<&StreamElement> {
     first_of(staff, |element| {
         matches!(element, StreamElement::TimeSignature(_))
     })
+}
+
+/// Which marks a group's staves start with differently: music21's
+/// `isMultiAttribute` for keys and for meters.
+///
+/// ```
+/// use music21::{KeySignature, Stream, StreamKind};
+/// use music21::musicxml::{Across, staff_differences};
+///
+/// let mut upper = Stream::with_kind(StreamKind::PartStaff);
+/// upper.insert(0.0, KeySignature::new(1));
+/// let mut lower = Stream::with_kind(StreamKind::PartStaff);
+/// lower.insert(0.0, KeySignature::new(2));
+/// assert_eq!(staff_differences(&[&upper, &lower]).keys, Across::Different);
+/// assert_eq!(staff_differences(&[&upper, &lower]).meters, Across::Same);
+/// ```
+pub fn staff_differences(staves: &[&Stream]) -> StaffDifferences {
+    let across = |different| {
+        if different {
+            Across::Different
+        } else {
+            Across::Same
+        }
+    };
+    StaffDifferences {
+        keys: across(differs_across(staves, first_key, same_key)),
+        meters: across(differs_across(staves, first_meter, same_meter)),
+    }
 }
 
 /// Whether a later staff's first mark of a kind differs from the first
@@ -863,6 +891,37 @@ fn numeral_in_place_of_root(harmony: &mut Element, figure: &NumeralFigure) {
         .insert(0, tree::Node::Element(numeral));
 }
 
+/// music21's `fretBoardToXml`: a diagram's strings, the frets it shows,
+/// and a `<frame-note>` for each stopped string, lowest first. Nothing for
+/// a board with no notes.
+fn frame_element(board: &crate::tablature::FretBoard) -> Option<Element> {
+    if board.fret_notes.is_empty() {
+        return None;
+    }
+    let mut frame = Element::new("frame");
+    frame.sub_text("frame-strings", board.strings.to_string());
+    frame.sub_text("frame-frets", board.display_frets.to_string());
+    for note in board.fret_notes_lowest_first() {
+        frame.push(frame_note_element(note));
+    }
+    Some(frame)
+}
+
+/// music21's `fretNoteToXml`: a stopped string's string, fret and finger.
+fn frame_note_element(note: &crate::tablature::FretNote) -> Element {
+    let mut element = Element::new("frame-note");
+    for (tag, value) in [
+        ("string", note.string),
+        ("fret", note.fret),
+        ("fingering", note.fingering),
+    ] {
+        if let Some(value) = value {
+            element.sub_text(tag, value.to_string());
+        }
+    }
+    element
+}
+
 /// music21's `addDividerComment`.
 fn add_divider_comment(root: &mut Element, comment: &str) {
     root.push_comment(divider_text(comment));
@@ -1008,12 +1067,22 @@ fn set_defaults(root: &mut Element, score: &Stream) {
             _ => None,
         });
     let defaults = root.sub("defaults");
-    let Some(layout) = first else {
-        let scaling = defaults.sub("scaling");
-        scaling.sub_text("millimeters", "7");
-        scaling.sub_text("tenths", "40");
-        return;
-    };
+    match first {
+        Some(layout) => set_layout_defaults(defaults, layout),
+        None => {
+            let scaling = defaults.sub("scaling");
+            scaling.sub_text("millimeters", "7");
+            scaling.sub_text("tenths", "40");
+        }
+    }
+    if let Some(style) = score.stream_style() {
+        add_style_to_defaults(defaults, style);
+    }
+}
+
+/// What a score layout puts in `<defaults>`: scaling, and its page,
+/// system and staff layouts.
+fn set_layout_defaults(defaults: &mut Element, layout: &crate::layout::ScoreLayout) {
     if layout.scaling_millimeters.is_some() || layout.scaling_tenths.is_some() {
         let said = |value: Option<Tenths>| {
             value.map_or_else(|| "None".to_string(), |value| value.to_string())
@@ -1033,19 +1102,66 @@ fn set_defaults(root: &mut Element, score: &Stream) {
     }
 }
 
-/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
-/// and how it is aligned, each as an attribute where the style says it.
-pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) -> Result<()> {
-    for (name, value) in [
-        ("default-x", &style.absolute_x),
-        ("default-y", &style.absolute_y),
-        ("relative-x", &style.relative_x),
-        ("relative-y", &style.relative_y),
+/// music21's `addStyleToXmlDefaults`: a score style's `<appearance>`, its
+/// music and word fonts, and a font and a language for each lyric name.
+fn add_style_to_defaults(defaults: &mut Element, style: &crate::style::StreamStyle) {
+    if let Some(appearance) = appearance_element(style) {
+        defaults.push(appearance);
+    }
+    for (tag, font) in [
+        ("music-font", &style.music_font),
+        ("word-font", &style.word_font),
     ] {
-        if let Some(value) = value {
-            element.set(name, value.to_string());
+        if let Some(font) = font {
+            set_font(defaults.sub(tag), font);
         }
     }
+    for (name, font) in &style.lyric_fonts {
+        let written = defaults.sub("lyric-font");
+        if let Some(font) = font {
+            set_font(written, font);
+        }
+        if let Some(name) = name {
+            written.set("name", name.as_str());
+        }
+    }
+    for (name, language) in &style.lyric_languages {
+        let written = defaults.sub("lyric-language");
+        if let Some(name) = name {
+            written.set("name", name.as_str());
+        }
+        if let Some(language) = language {
+            written.set("xml:lang", language.as_str());
+        }
+    }
+}
+
+/// music21's `styleToXmlAppearance`: a score style's line widths, note
+/// sizes, distances and other appearances. None where it has none, as
+/// MusicXML's `<appearance>` cannot be empty.
+fn appearance_element(style: &crate::style::StreamStyle) -> Option<Element> {
+    if !style.has_appearance() {
+        return None;
+    }
+    let mut appearance = Element::new("appearance");
+    for (listed, tag) in [
+        (&style.line_widths, "line-width"),
+        (&style.note_sizes, "note-size"),
+        (&style.distances, "distance"),
+        (&style.other_appearances, "other-appearance"),
+    ] {
+        for (kind, value) in listed {
+            let written = appearance.sub(tag);
+            written.set("type", kind.as_str());
+            written.set_text(value.to_string());
+        }
+    }
+    Some(appearance)
+}
+
+/// music21's `setFont`: a font's style, size, weight and family. MusicXML's
+/// font-style has no bold, which music21 writes as a weight.
+fn set_font(element: &mut Element, style: &TextStyle) {
     if let Some(font_style) = style.font_style() {
         element.set("font-style", font_style);
     }
@@ -1055,7 +1171,6 @@ pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) ->
     if let Some(weight) = style.font_weight() {
         element.set("font-weight", weight);
     }
-    // MusicXML's font-style has no bold, which music21 writes as a weight.
     match style.font_style() {
         Some("bold") => {
             element.set("font-weight", "bold");
@@ -1074,6 +1189,22 @@ pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) ->
     {
         element.set("font-family", family.join(","));
     }
+}
+
+/// music21's `setPrintStyleAlign`: where text stands, its font and colour,
+/// and how it is aligned, each as an attribute where the style says it.
+pub(crate) fn set_print_style_align(element: &mut Element, style: &TextStyle) -> Result<()> {
+    for (name, value) in [
+        ("default-x", &style.absolute_x),
+        ("default-y", &style.absolute_y),
+        ("relative-x", &style.relative_x),
+        ("relative-y", &style.relative_y),
+    ] {
+        if let Some(value) = value {
+            element.set(name, value.to_string());
+        }
+    }
+    set_font(element, style);
     if let Some(color) = &style.color {
         element.set("color", normalize_color(color)?);
     }

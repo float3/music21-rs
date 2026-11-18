@@ -53,6 +53,10 @@ impl std::fmt::Display for StyleValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Whole(whole) => write!(f, "{whole}"),
+            // Python writes a whole float with its point.
+            Self::Decimal(value) if value.is_finite() && value.fract() == 0.0 => {
+                write!(f, "{value:.1}")
+            }
             Self::Decimal(value) => write!(f, "{value}"),
             Self::Text(text) => f.write_str(text),
         }
@@ -209,6 +213,39 @@ fn checked(
     }
 }
 
+/// How a whole score is drawn, past what its layouts say: music21's
+/// `StreamStyle`, the part MusicXML's `<defaults>` writes.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StreamStyle {
+    /// Line widths by what they draw, in tenths: `lineWidths`.
+    pub line_widths: Vec<(String, StyleValue)>,
+    /// Note sizes by kind, as percentages: `noteSizes`.
+    pub note_sizes: Vec<(String, StyleValue)>,
+    /// Distances by what they separate, in tenths: `distances`.
+    pub distances: Vec<(String, StyleValue)>,
+    /// Any other appearance by its type: `otherAppearances`.
+    pub other_appearances: Vec<(String, StyleValue)>,
+    /// The font music is set in: `musicFont`.
+    pub music_font: Option<TextStyle>,
+    /// The font words are set in: `wordFont`.
+    pub word_font: Option<TextStyle>,
+    /// A font for the lyrics of each name: `lyricFonts`.
+    pub lyric_fonts: Vec<(Option<String>, Option<TextStyle>)>,
+    /// A language for the lyrics of each name: `lyricLanguages`.
+    pub lyric_languages: Vec<(Option<String>, Option<String>)>,
+}
+
+impl StreamStyle {
+    /// Whether it says anything MusicXML's `<appearance>` writes.
+    pub fn has_appearance(&self) -> bool {
+        !(self.line_widths.is_empty()
+            && self.note_sizes.is_empty()
+            && self.distances.is_empty()
+            && self.other_appearances.is_empty())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +273,14 @@ mod tests {
         assert!(style.set_font_style(Some("oblique")).is_err());
         style.set_font_weight(Some("BOLD")).unwrap();
         assert_eq!(style.font_weight(), Some("bold"));
+    }
+
+    /// Python writes a whole `float` with its point: music21's
+    /// `<line-width type="beam">5.0</line-width>`.
+    #[test]
+    fn a_whole_decimal_is_written_with_its_point() {
+        assert_eq!(StyleValue::Decimal(5.0).to_string(), "5.0");
+        assert_eq!(StyleValue::Decimal(0.1).to_string(), "0.1");
+        assert_eq!(StyleValue::Whole(75).to_string(), "75");
     }
 }
