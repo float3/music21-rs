@@ -264,11 +264,14 @@ provided module takes every name, private ones too, and its `__all__`;
 module built this way is not on `music21_rs` itself, only provided.
 
 **a provided module is music21's public surface, not its parser's
-insides.** music21's tests reach into `mei`, `musicxml`, `abcFormat`,
-`lily` and `musedata.translate` internals; those are not provided, nor
-`graph` (matplotlib's layer) or `tree.core` (another design). a stream
-iterator's filters apply when `addFilter` is called, not lazily.
-*costs:* music21's tests of those modules fail on the provided side.
+insides.** music21's tests reach into `mei`, `abcFormat`, `lily` and
+`musedata.translate` internals; those are not provided, nor `graph`
+(matplotlib's layer). a stream iterator's filters apply when `addFilter`
+is called, not lazily. *costs:* music21's tests of those modules fail on
+the provided side. *reversed in part 2026-11-18 by the maintainer:*
+`musicxml` is provided in full (`m21ToXml`, `xmlToM21`, its helpers),
+over the crate's MusicXML reader and writer, as it blocks 803 of the
+gate's tests; `tree.core` and `tree.trees` are ported too.
 
 **a stream's filters answer a `StreamIterator`, as music21's do.**
 `getElementsByClass`, `getElementsNotOfClass`, `getElementsByOffset`,
