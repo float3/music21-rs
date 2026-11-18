@@ -524,6 +524,12 @@ ALSO = {
         'Duration',
         'Pitch',
     ),
+    'music21.noteworthy.translate': (
+        'Music21Exception',
+        'OffsetQL',
+        'dictionaries',
+        'opFrac',
+    ),
     'music21.pitch': (
         'SlottedObjectMixin',
         'StepName',
