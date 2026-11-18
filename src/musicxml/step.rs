@@ -23,7 +23,10 @@
 //! ```
 
 use super::read;
-pub use super::read::{ActiveTuplets, Encoding, FitAsked, MeasureFit, measure_fit};
+pub use super::read::{
+    ActiveTuplets, DirectionTypeRead, Encoding, FitAsked, MeasureFit, SpannerId, SpannerState,
+    measure_fit,
+};
 use crate::articulations::Articulation;
 use crate::bar::Barline;
 use crate::clef::Clef;
@@ -137,6 +140,21 @@ pub fn read_technical(text: &str) -> Result<Option<Articulation>> {
 /// a repeat in the direction written.
 pub fn read_barline(text: &str) -> Result<Barline> {
     read::barline_of(&element(text, "barline")?)
+}
+
+/// music21's `xmlDirectionTypeToSpanners`: one `<wedge>`, `<bracket>`,
+/// `<dashes>`, `<octave-shift>` or `<pedal>`, read within `state`, which
+/// keeps the spanners from one to the next. One that ends a spanner joins
+/// `last`, a uid of the state's, to it; a pedal's bounces and gaps stand
+/// at `offset` on `staff`.
+pub fn read_direction_type(
+    text: &str,
+    staff: i32,
+    offset: crate::defaults::FloatType,
+    last: Option<usize>,
+    state: &mut SpannerState,
+) -> Result<DirectionTypeRead> {
+    read::direction_type_within(&Xml::parse(text)?, staff, offset, last, state)
 }
 
 /// music21's `getStaffNumber`: the staff an element is written on, nought
@@ -370,6 +388,65 @@ mod tests {
                 .to_string()
                 .contains("22 does not map to a valid instrument!")
         );
+    }
+
+    #[test]
+    fn a_spanner_begun_in_one_reading_ends_in_the_next() {
+        let mut state = SpannerState::default();
+        let note = state.new_uid();
+        let begun = read_direction_type(
+            "<wedge type=\"crescendo\" number=\"2\"/>",
+            0,
+            0.0,
+            Some(note),
+            &mut state,
+        )
+        .unwrap();
+        assert_eq!(begun.started.len(), 1);
+        let wedge = begun.started[0];
+        assert!(!state.spanner(wedge).unwrap().complete());
+        let ended = read_direction_type(
+            "<wedge type=\"stop\" number=\"2\"/>",
+            0,
+            0.0,
+            Some(note),
+            &mut state,
+        )
+        .unwrap();
+        assert!(ended.started.is_empty());
+        assert!(state.spanner(wedge).unwrap().complete());
+        assert_eq!(state.joined(wedge), &[note]);
+    }
+
+    #[test]
+    fn a_pedal_puts_its_bounces_and_gaps_where_they_are_read() {
+        let mut state = SpannerState::default();
+        let pedal = |text: &str, offset, state: &mut SpannerState| {
+            read_direction_type(text, 1, offset, None, state).unwrap()
+        };
+        let begun = pedal(
+            "<pedal type=\"sostenuto\" sign=\"yes\" number=\"2\"/>",
+            0.5,
+            &mut state,
+        );
+        assert_eq!(begun.started.len(), 1);
+        assert!(
+            pedal(
+                "<pedal type=\"resume\" line=\"yes\" number=\"2\"/>",
+                0.5,
+                &mut state
+            )
+            .marks
+            .is_empty()
+        );
+        let bounce = pedal(
+            "<pedal type=\"change\" line=\"yes\" number=\"2\"/>",
+            1.0,
+            &mut state,
+        );
+        assert_eq!(bounce.marks.len(), 1);
+        assert_eq!(bounce.marks[0].1, 1.0);
+        assert_eq!(state.joined(begun.started[0]), &[bounce.marks[0].0]);
     }
 
     #[test]

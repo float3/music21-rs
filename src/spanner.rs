@@ -384,6 +384,34 @@ pub enum PedalForm {
     SymbolLine,
 }
 
+/// music21's `expressions.PedalType`, member by member.
+pub const PEDAL_TYPE: &[crate::common::enums::Member] = &[
+    (
+        "Sustain",
+        crate::common::enums::MemberValue::Text("sustain"),
+    ),
+    (
+        "Sostenuto",
+        crate::common::enums::MemberValue::Text("sostenuto"),
+    ),
+    ("Soft", crate::common::enums::MemberValue::Text("soft")),
+    ("Silent", crate::common::enums::MemberValue::Text("silent")),
+];
+
+/// music21's `expressions.PedalForm`, member by member.
+pub const PEDAL_FORM: &[crate::common::enums::Member] = &[
+    ("Line", crate::common::enums::MemberValue::Text("line")),
+    ("Symbol", crate::common::enums::MemberValue::Text("symbol")),
+    (
+        "SymbolAlt",
+        crate::common::enums::MemberValue::Text("symbolalt"),
+    ),
+    (
+        "SymbolLine",
+        crate::common::enums::MemberValue::Text("symbolline"),
+    ),
+];
+
 /// A pedal mark's pedal and how it is drawn: music21's `pedalType`,
 /// `pedalForm` and `abbreviated`, the first two of which a score need not
 /// say.

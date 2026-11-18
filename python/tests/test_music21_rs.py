@@ -12004,3 +12004,44 @@ print(type(unp).__name__, unp.percMapPitch)
         "[(True, '22 does not map to a valid instrument!')]",
         "UnpitchedPercussion 22",
     ]
+
+
+def test_provided_direction_types_build_spanners_between_calls(tmp_path):
+    """`xmlDirectionTypeToSpanners` keeps a part's spanners from one call to
+    the next, as music21's spanner bundle does: a wedge begun, then ended
+    on the last note; a bracket's heights; a pedal's bounce and gaps."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import note
+from music21.musicxml.xmlToM21 import MeasureParser
+MP = MeasureParser()
+n1 = note.Note('D4')
+MP.nLast = n1
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="crescendo" number="2"/>')))
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="stop" number="2"/>')), list(MP.spannerBundle))
+mp = MeasureParser()
+line = mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="start" line-end="down" end-length="12.5" number="1"></bracket>'))[0]
+mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="stop" line-end="down" end-length="12.5" number="1"></bracket>'))
+print(line.startHeight, line.endHeight)
+MP = MeasureParser()
+MP.nLast = n1
+pedal = MP.xmlDirectionTypeToSpanners(EL('<pedal type="sostenuto" sign="yes" number="2"/>'), 1, 0.5)[0]
+for kind, at in (('resume', 0.5), ('change', 1.0), ('discontinue', 2.0), ('resume', 3.5), ('stop', 4.0)):
+    MP.xmlDirectionTypeToSpanners(EL(f'<pedal type="{kind}" line="yes" number="2"/>'), 1, at)
+print(pedal.pedalForm, pedal.getFirst(), pedal.getLast() is n1)
+print(MP.stream.elements)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.dynamics.Crescendo>]",
+        "[] [<music21.dynamics.Crescendo <music21.note.Note D>>]",
+        "12.5 12.5",
+        "symbolline <music21.expressions.PedalBounce at 1.0> True",
+        "(<music21.expressions.PedalBounce at 1.0>, <music21.expressions.PedalGapStart at 2.0>,"
+        " <music21.expressions.PedalGapEnd at 3.5>)",
+    ]

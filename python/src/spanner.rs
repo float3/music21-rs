@@ -1085,6 +1085,60 @@ impl Spanner {
         Ok(me.inner.shift().is_some_and(|shift| shift.transposing()))
     }
 
+    /// Which pedal a pedal mark holds: music21's `pedalType`, a member of
+    /// `PedalType`, or `None` where nothing says.
+    #[getter]
+    fn pedalType<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        only(slf, SpannerKind::PedalMark, "pedalType")?;
+        let named = slf
+            .borrow()
+            .inner
+            .pedal()
+            .and_then(|pedal| pedal.pedal_type);
+        match named {
+            Some(kind) => crate::expressions::pedal_enum(py, crate::expressions::PedalEnum::Type)?
+                .call1((kind.as_str(),)),
+            None => Ok(py.None().into_bound(py)),
+        }
+    }
+
+    #[setter]
+    fn set_pedalType(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        only(slf, SpannerKind::PedalMark, "pedalType")?;
+        let named = pedal_name(value)?;
+        let mut me = slf.borrow_mut();
+        let mut pedal = me.inner.pedal().unwrap_or_default();
+        pedal.pedal_type = named.as_deref().and_then(music21::PedalType::from_name);
+        me.inner.set_pedal(Some(pedal));
+        Ok(())
+    }
+
+    /// How a pedal mark is drawn: music21's `pedalForm`, a member of
+    /// `PedalForm`, or `None` where nothing says.
+    #[getter]
+    fn pedalForm<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        only(slf, SpannerKind::PedalMark, "pedalForm")?;
+        let form = slf.borrow().inner.pedal().and_then(|pedal| pedal.form);
+        match form {
+            Some(form) => crate::expressions::pedal_enum(py, crate::expressions::PedalEnum::Form)?
+                .call1((form.as_str(),)),
+            None => Ok(py.None().into_bound(py)),
+        }
+    }
+
+    #[setter]
+    fn set_pedalForm(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        only(slf, SpannerKind::PedalMark, "pedalForm")?;
+        let named = pedal_name(value)?;
+        let mut me = slf.borrow_mut();
+        let mut pedal = me.inner.pedal().unwrap_or_default();
+        pedal.form = named.as_deref().and_then(music21::PedalForm::from_name);
+        me.inner.set_pedal(Some(pedal));
+        Ok(())
+    }
+
     /// How many measures a rest of several lasts: music21's `numRests`,
     /// the number it was given or else how many rests it joins.
     #[getter]
@@ -1872,6 +1926,19 @@ fn module_of(kind: SpannerKind) -> &'static str {
         | SpannerKind::PedalMark => "music21.expressions",
         SpannerKind::Neume => "music21.volpiano",
         _ => "music21.spanner",
+    }
+}
+
+/// The value of a pedal enum's member, or of its name given as text.
+fn pedal_name(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+    let Some(given) = value.filter(|given| !given.is_none()) else {
+        return Ok(None);
+    };
+    match given.getattr("value") {
+        Ok(member) if !given.is_instance_of::<pyo3::types::PyString>() => {
+            member.extract().map(Some)
+        }
+        _ => given.extract().map(Some),
     }
 }
 

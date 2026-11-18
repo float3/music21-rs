@@ -483,6 +483,10 @@ reason = "the text and numbers of a TSV row"
 kind = "facade-only"
 reason = "the text and numbers of a TSV row"
 
+[SpannerHolder]
+kind = "facade-only"
+reason = "the objects made for what a crate spanner state builds, by the uids it knows them by"
+
 [TextBox]
 kind = "facade-only"
 reason = "a style and a place"

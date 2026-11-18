@@ -567,8 +567,11 @@ pub fn measure_fit(asked: &FitAsked) -> MeasureFit {
 
 // ----------------------------------------------------------------- importer
 
-#[derive(Default)]
-struct Importer {
+/// The spanners a reading is building, which outlive one element: the
+/// state music21 keeps in its `spannerBundle`. A reading of one element
+/// at a time keeps it between elements, as music21's parsers do.
+#[derive(Clone, Debug, Default)]
+pub struct SpannerState {
     spanners: Vec<Building>,
     /// The spanners waiting for the next note, chord or rest, which becomes
     /// the first thing the one at the front joins.
@@ -577,7 +580,104 @@ struct Importer {
     /// where each stands in `spanners`: one finished in a part may still be
     /// handed the first note of the next by the queue.
     finished: Vec<usize>,
+    /// The last uid given to anything read.
     next_uid: usize,
+    /// Where each pedal mark began, for a `resume` at that very place:
+    /// music21's `pedalToStartOffset`.
+    pedal_starts: Vec<(usize, FloatType)>,
+}
+
+/// A spanner a [`SpannerState`] is building, by where it stands there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SpannerId(usize);
+
+impl SpannerState {
+    /// A new uid, for something read outside this state -- a note -- that
+    /// a spanner may then join.
+    pub fn new_uid(&mut self) -> usize {
+        self.next_uid += 1;
+        self.next_uid
+    }
+
+    /// The spanner as built so far, standing in no stream: what it says of
+    /// itself, and whether its end has been read.
+    pub fn spanner(&self, id: SpannerId) -> Option<Spanner> {
+        let building = self.spanners.get(id.0)?;
+        let mut spanner = building.finish(&|_| None);
+        spanner.set_complete(building.complete);
+        Some(spanner)
+    }
+
+    /// The uids of what the spanner joins, in order.
+    pub fn joined(&self, id: SpannerId) -> &[usize] {
+        self.spanners
+            .get(id.0)
+            .map_or(&[], |building| building.uids.as_slice())
+    }
+
+    /// Every spanner the state holds, in the order they were begun.
+    pub fn ids(&self) -> impl Iterator<Item = SpannerId> {
+        (0..self.spanners.len()).map(SpannerId)
+    }
+}
+
+/// What one direction type read: the spanners it began, and the pedal's
+/// bounces and gaps it put in the measure, each with its uid and offset.
+#[derive(Clone, Debug, Default)]
+pub struct DirectionTypeRead {
+    /// The spanners begun, in order.
+    pub started: Vec<SpannerId>,
+    /// Each pedal bounce or gap put in, with its uid and offset.
+    pub marks: Vec<(usize, FloatType, PedalObject)>,
+}
+
+/// music21's `xmlDirectionTypeToSpanners`: a wedge, bracket, dashes,
+/// octave shift or pedal, read within `state`; one that ends a spanner
+/// joins `last` to it, where given.
+pub(super) fn direction_type_within(
+    element: &Xml,
+    staff: i32,
+    total: FloatType,
+    last: Option<usize>,
+    state: &mut SpannerState,
+) -> Result<DirectionTypeRead> {
+    let mut importer = Importer {
+        state: std::mem::take(state),
+        ..Importer::default()
+    };
+    let part = Xml::parse("<part id=\"P1\"/>")?;
+    let score_part = Xml::parse("<score-part id=\"P1\"/>")?;
+    let measure = Xml::parse("<measure/>")?;
+    let read = {
+        let mut part_parser = PartParser::new(&mut importer, &part, &score_part, "P1");
+        let mut parser = MeasureParser::new(&mut part_parser, &measure);
+        parser.last_note = last;
+        parser.pedal_starts = std::mem::take(&mut parser.part.importer.state.pedal_starts);
+        let started = parser.direction_spanners(element, staff, total);
+        parser.part.importer.state.pedal_starts = std::mem::take(&mut parser.pedal_starts);
+        let marks = parser
+            .measure
+            .items
+            .iter()
+            .filter_map(|item| match (&item.element, item.uid) {
+                (StreamElement::PedalObject(mark), Some(uid)) => {
+                    Some((uid, item.offset, mark.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        started.map(|started| DirectionTypeRead {
+            started: started.into_iter().map(SpannerId).collect(),
+            marks,
+        })
+    };
+    *state = importer.state;
+    read
+}
+
+#[derive(Default)]
+struct Importer {
+    state: SpannerState,
     finale: bool,
     /// The tuplets the first part starts inside, for a measure read on its
     /// own after others: music21's `PartParser.activeTuplets`.
@@ -610,8 +710,7 @@ struct BuiltPart {
 
 impl Importer {
     fn uid(&mut self) -> usize {
-        self.next_uid += 1;
-        self.next_uid
+        self.state.new_uid()
     }
 
     /// music21's `xmlRootToScore`.
@@ -712,15 +811,17 @@ impl Importer {
 
         // Whatever was completed and never put into a part goes into the
         // score, an arpeggio across parts among them.
-        for building in &mut self.spanners {
+        for building in &mut self.state.spanners {
             if building.kind == SpannerKind::ArpeggioMark {
                 building.complete = true;
             }
         }
-        let late: Vec<usize> = (0..self.spanners.len())
-            .filter(|index| self.spanners[*index].complete && !self.spanners[*index].placed)
+        let late: Vec<usize> = (0..self.state.spanners.len())
+            .filter(|index| {
+                self.state.spanners[*index].complete && !self.state.spanners[*index].placed
+            })
             .collect();
-        self.finished.extend(late);
+        self.state.finished.extend(late);
 
         // The credits sort before the parts, as music21 sorts its text boxes,
         // and stand before the parts' leaves where spanners count them.
@@ -747,8 +848,8 @@ impl Importer {
             assembled.add_staff_group(group);
         }
         let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
-        for index in &self.finished {
-            assembled.add_spanner(self.spanners[*index].finish(&position_of));
+        for index in &self.state.finished {
+            assembled.add_spanner(self.state.spanners[*index].finish(&position_of));
         }
         Ok(assembled)
     }
@@ -1006,7 +1107,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest else {
             return;
         };
-        self.importer.spanners[index].add(uid);
+        self.importer.state.spanners[index].add(uid);
         self.multi_rests_left -= 1;
         if self.multi_rests_left == 0 {
             self.end_multi_rest();
@@ -1023,7 +1124,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest.take() else {
             return;
         };
-        let building = &mut self.importer.spanners[index];
+        let building = &mut self.importer.state.spanners[index];
         if building.uids.is_empty() {
             return;
         }
@@ -1070,7 +1171,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         // those in as it was completed.
         let mut ours: Vec<usize> = std::mem::take(&mut self.multi_rests);
         for pass in [false, true] {
-            for (index, building) in self.importer.spanners.iter_mut().enumerate() {
+            for (index, building) in self.importer.state.spanners.iter_mut().enumerate() {
                 let ottava = building.kind == SpannerKind::Ottava;
                 if building.complete && !building.placed && ottava == pass {
                     building.placed = true;
@@ -1078,7 +1179,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 }
             }
         }
-        self.importer.finished.extend(ours);
+        self.importer.state.finished.extend(ours);
 
         if self.max_staves > 1 {
             self.separate_staves()
@@ -1883,8 +1984,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         self.part.end_multi_rest();
         let mut building = Building::new(SpannerKind::MultiMeasureRest, None);
         building.use_symbols = multiple.get("use-symbols") == Some("yes");
-        self.part.importer.spanners.push(building);
-        self.part.multi_rest = Some(self.part.importer.spanners.len() - 1);
+        self.part.importer.state.spanners.push(building);
+        self.part.multi_rest = Some(self.part.importer.state.spanners.len() - 1);
         self.part.multi_rests_left = i64::from(count);
         Ok(())
     }
@@ -2058,7 +2159,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// Spanners that knew an element by one number know it by another.
     fn rename(&mut self, from: usize, to: usize) {
-        for building in &mut self.part.importer.spanners {
+        for building in &mut self.part.importer.state.spanners {
             let mut renamed: Vec<usize> = Vec::new();
             for uid in &building.uids {
                 let uid = if *uid == from { to } else { *uid };
@@ -2073,8 +2174,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `freePendingSpannedElementAssignment`.
     fn free_pending(&mut self, uid: usize) {
         let importer = &mut *self.part.importer;
-        if let Some(index) = importer.pending.pop_front() {
-            importer.spanners[index].add_first(uid);
+        if let Some(index) = importer.state.pending.pop_front() {
+            importer.state.spanners[index].add_first(uid);
         }
     }
 
@@ -2746,7 +2847,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     .iter()
                     .find(|(held, _)| *held == key)
                     .map(|(_, index)| *index);
-                let spanners = &mut self.part.importer.spanners;
+                let spanners = &mut self.part.importer.state.spanners;
                 let index = found.unwrap_or_else(|| {
                     let mut building = Building::new(SpannerKind::ArpeggioMark, Some(number));
                     building.arpeggio = kind;
@@ -2756,7 +2857,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 if found.is_none() {
                     self.part.arpeggios.push((key, index));
                 }
-                self.part.importer.spanners[index].add(uid);
+                self.part.importer.state.spanners[index].add(uid);
             }
         }
         for ornaments in notations.find_all("ornaments") {
@@ -2770,7 +2871,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     "tremolo" if matches!(mark.get("type"), Some("start" | "stop")) => {
                         let index =
                             self.one_spanner(mark, Some(uid), SpannerKind::TremoloSpanner, false);
-                        self.part.importer.spanners[index].marks = tremolo_marks(mark)?;
+                        self.part.importer.state.spanners[index].marks = tremolo_marks(mark)?;
                     }
                     _ => {}
                 }
@@ -2778,7 +2879,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         }
         for slur in notations.find_all("slur") {
             let index = self.one_spanner(slur, Some(uid), SpannerKind::Slur, false);
-            let building = &mut self.part.importer.spanners[index];
+            let building = &mut self.part.importer.state.spanners[index];
             if let Some(line_type) = slur.get("line-type") {
                 building.line_type = Some(line_type.to_string());
             }
@@ -2789,7 +2890,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         for tag in ["glissando", "slide"] {
             for written in notations.find_all(tag) {
                 let index = self.one_spanner(written, Some(uid), SpannerKind::Glissando, false);
-                let building = &mut self.part.importer.spanners[index];
+                let building = &mut self.part.importer.state.spanners[index];
                 if tag == "slide" {
                     building.slide = SlideType::Continuous;
                 }
@@ -2819,7 +2920,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         allow_duplicates: bool,
     ) -> usize {
         let id = element.get("number");
-        let spanners = &mut self.part.importer.spanners;
+        let spanners = &mut self.part.importer.state.spanners;
         let found = spanners
             .iter()
             .position(|held| held.kind == kind && !held.complete && held.id_local.as_deref() == id);
@@ -2905,7 +3006,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 // music21 warns and carries on when one cannot be read.
                 if let Ok(made) = self.direction_spanners(specific, staff, total) {
                     for index in made {
-                        let building = &mut self.part.importer.spanners[index];
+                        let building = &mut self.part.importer.state.spanners[index];
                         if let Some(placement) = placement_of(specific) {
                             building.placement = Some(placement);
                         }
@@ -3005,11 +3106,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 match kind {
                     Some(kind) => {
                         let index = self.one_spanner(element, None, kind, true);
-                        self.part.importer.pending.push_back(index);
+                        self.part.importer.state.pending.push_back(index);
                         made.push(index);
                     }
                     None => {
-                        let spanners = &mut self.part.importer.spanners;
+                        let spanners = &mut self.part.importer.state.spanners;
                         let index = open(spanners, &SpannerKind::is_wedge)
                             .ok_or_else(|| import_error("Error in getting DynamicWedges"))?;
                         spanners[index].complete = true;
@@ -3028,9 +3129,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                 };
                 let height = element.get("end-length").and_then(parse_float);
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some("start") => {
                         let mut building = Building::new(SpannerKind::Line, id);
@@ -3078,9 +3179,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "octave-shift" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(direction @ ("up" | "down")) => {
                         let size = element.get("size").and_then(parse_int).unwrap_or(8);
@@ -3125,9 +3226,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "pedal" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(kind @ ("start" | "sostenuto")) => {
                         let mut building = Building::new(SpannerKind::PedalMark, id);
@@ -3200,7 +3301,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// joined by the pedal mark it belongs to.
     fn pedal_object(&mut self, kind: PedalObjectKind, pedal: usize, staff: i32, total: FloatType) {
         let uid = self.insert(total, staff, PedalObject::new(kind));
-        self.part.importer.spanners[pedal].add(uid);
+        self.part.importer.state.spanners[pedal].add(uid);
     }
 
     /// music21's `xmlHarmony` and `xmlToChordSymbol`.

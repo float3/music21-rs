@@ -13,9 +13,10 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
+use pyo3::sync::PyOnceLock;
 
 use crate::Walkable;
-use pyo3::types::{PyDict, PyList, PyString, PyTuple};
+use pyo3::types::{PyDict, PyList, PyModule, PyString, PyTuple};
 
 use music21::expressions::{
     Ornament as RsOrnament, OrnamentDelay, OrnamentKind, Realization,
@@ -23,7 +24,8 @@ use music21::expressions::{
 };
 use music21::{
     Duration as RsDuration, Interval as RsInterval, IntervalDirection,
-    KeySignature as RsKeySignature, Note as RsNote, Pitch as RsPitch,
+    KeySignature as RsKeySignature, Note as RsNote, PedalObject as RsPedalObject, PedalObjectKind,
+    Pitch as RsPitch,
 };
 
 use crate::pitch::{Pitch, accidental_from_any, pitch_from_any};
@@ -1678,6 +1680,132 @@ impl RehearsalMark {
     }
 }
 
+/// music21's `expressions.PedalObject`: a point in a pedal mark where the
+/// pedal does something, the base of its bounce and gaps.
+#[pyclass(
+    name = "PedalObject",
+    module = "music21.expressions",
+    extends = crate::base::Music21Object,
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
+pub struct PedalObject {
+    /// Which of the three it is, and its placement; `None` for the bare
+    /// base music21 has, which is none of them.
+    inner: Option<RsPedalObject>,
+}
+
+impl PedalObject {
+    /// The object for one of the crate's: of the class its kind names.
+    pub(crate) fn object(py: Python<'_>, inner: RsPedalObject) -> PyResult<Py<PyAny>> {
+        let class = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr(inner.kind().class_name())?;
+        let made = class.call0()?;
+        made.cast::<PedalObject>()?.borrow_mut().inner = Some(inner);
+        Ok(made.unbind())
+    }
+
+    fn of_kind(kind: Option<PedalObjectKind>) -> PyClassInitializer<Self> {
+        crate::base::built(Self {
+            inner: kind.map(RsPedalObject::new),
+        })
+    }
+}
+
+#[pymethods]
+impl PedalObject {
+    #[new]
+    #[pyo3(signature = (**_keywords))]
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        Self::of_kind(None)
+    }
+
+    /// Which side of the staff it is drawn on, where said.
+    #[getter]
+    fn get_placement(&self) -> Option<&'static str> {
+        self.inner
+            .as_ref()
+            .and_then(RsPedalObject::placement)
+            .map(|placement| placement.as_str())
+    }
+
+    #[setter]
+    fn set_placement(&mut self, value: Option<&str>) -> PyResult<()> {
+        let placement = match value.filter(|said| !said.is_empty()) {
+            Some(said) => Some(
+                music21::notation::Placement::from_name(said)
+                    .map_err(|error| ExpressionException::new_err(crate::pitch::message(&error)))?,
+            ),
+            None => None,
+        };
+        if let Some(inner) = &mut self.inner {
+            inner.set_placement(placement);
+        }
+        Ok(())
+    }
+
+    /// music21's `_reprInternal`: where it stands, or `uninserted`.
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let name = slf.get_type().name()?.to_string();
+        let site = slf.getattr("activeSite")?;
+        let at = match site.is_none() {
+            true => "uninserted".to_string(),
+            false => format!("at {}", slf.getattr("offset")?.repr()?),
+        };
+        Ok(format!("<music21.expressions.{name} {at}>"))
+    }
+}
+
+macro_rules! pedal_objects {
+    ($(($class:ident, $name:literal, $kind:expr, $doc:literal)),* $(,)?) => {
+        $(
+            #[doc = $doc]
+            #[pyclass(name = $name, module = "music21.expressions", extends = PedalObject, subclass)]
+            pub struct $class;
+
+            #[pymethods]
+            impl $class {
+                #[new]
+                #[pyo3(signature = (**_keywords))]
+                fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+                    PedalObject::of_kind(Some($kind)).add_subclass(Self)
+                }
+            }
+        )*
+
+        /// Adds the pedal object classes to a module.
+        fn register_pedal_objects(m: &Bound<'_, PyModule>) -> PyResult<()> {
+            m.add_class::<PedalObject>()?;
+            $(m.add_class::<$class>()?;)*
+            Ok(())
+        }
+    };
+}
+
+pedal_objects!(
+    (
+        PedalBounce,
+        "PedalBounce",
+        PedalObjectKind::Bounce,
+        "music21's `PedalBounce`: the pedal let up and put down at once."
+    ),
+    (
+        PedalGapStart,
+        "PedalGapStart",
+        PedalObjectKind::GapStart,
+        "music21's `PedalGapStart`: where the pedal line stops being drawn."
+    ),
+    (
+        PedalGapEnd,
+        "PedalGapEnd",
+        PedalObjectKind::GapEnd,
+        "music21's `PedalGapEnd`: where the pedal line is drawn again."
+    ),
+);
+
 /// How many ornaments `realizeOrnaments` plays out before it stops, as
 /// music21's `loopBuster` does.
 const MOST_ORNAMENTS: usize = 100;
@@ -1742,12 +1870,71 @@ fn realizeOrnaments<'py>(
     Ok(before)
 }
 
+/// music21's `PedalType` and `PedalForm`, built once on `StrEnum`.
+static PEDAL_ENUMS: PyOnceLock<(Py<PyAny>, Py<PyAny>)> = PyOnceLock::new();
+
+/// music21's `PedalType`, or `PedalForm` where `form`.
+pub(crate) fn pedal_enum(py: Python<'_>, which: PedalEnum) -> PyResult<Bound<'_, PyAny>> {
+    let held = PEDAL_ENUMS.get_or_try_init(py, || {
+        let base = crate::plumbing::str_enum(py)?;
+        let build = |name: &str, doc: &str, members: &[music21::common::enums::Member]| {
+            let values = members
+                .iter()
+                .map(|(member, value)| match value {
+                    music21::common::enums::MemberValue::Text(text) => {
+                        (*member, PyString::new(py, text).into_any())
+                    }
+                    music21::common::enums::MemberValue::Bool(flag) => (
+                        *member,
+                        pyo3::types::PyBool::new(py, *flag).to_owned().into_any(),
+                    ),
+                })
+                .collect();
+            crate::plumbing::built::new_class(
+                py,
+                "music21.expressions",
+                name,
+                doc,
+                vec![base.clone()],
+                values,
+            )
+            .map(Bound::unbind)
+        };
+        Ok::<_, PyErr>((
+            build(
+                "PedalType",
+                "Which pedal a pedal mark holds.",
+                music21::spanner::PEDAL_TYPE,
+            )?,
+            build(
+                "PedalForm",
+                "How a pedal mark is drawn.",
+                music21::spanner::PEDAL_FORM,
+            )?,
+        ))
+    })?;
+    Ok(match which {
+        PedalEnum::Type => held.0.bind(py).clone(),
+        PedalEnum::Form => held.1.bind(py).clone(),
+    })
+}
+
+/// Which of the pedal enums: music21's `PedalType` or `PedalForm`.
+#[derive(Clone, Copy)]
+pub(crate) enum PedalEnum {
+    Type,
+    Form,
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(realizeOrnaments, m)?)?;
+    m.add("PedalType", pedal_enum(m.py(), PedalEnum::Type)?)?;
+    m.add("PedalForm", pedal_enum(m.py(), PedalEnum::Form)?)?;
     m.add_class::<Expression>()?;
     m.add_class::<Ornament>()?;
     m.add_class::<TextExpression>()?;
     m.add_class::<RehearsalMark>()?;
+    register_pedal_objects(m)?;
     m.add_class::<Trill>()?;
     register_kinds(m)
 }

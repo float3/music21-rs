@@ -678,6 +678,88 @@ fn layout_into<'py>(
     Ok(py.None().into_bound(py))
 }
 
+/// The spanners a part's measure parsers are building, kept between one
+/// direction and the next as music21's `spannerBundle` keeps them: the
+/// crate's state, with the objects made for what it builds.
+#[pyclass(name = "_SpannerState", module = "music21.musicxml.xmlToM21")]
+pub struct SpannerHolder {
+    state: step::SpannerState,
+    /// Each object a spanner may join, by the uid the state knows it by.
+    joinable: Vec<(usize, Py<PyAny>)>,
+    /// The object made for each spanner, with how many of what it joins
+    /// the object has been given.
+    made: Vec<(step::SpannerId, Py<PyAny>, usize)>,
+}
+
+impl SpannerHolder {
+    /// The uid an object is known by, given one where it has none.
+    fn uid_of(&mut self, py: Python<'_>, object: &Bound<'_, PyAny>) -> usize {
+        if let Some((uid, _)) = self
+            .joinable
+            .iter()
+            .find(|(_, held)| held.bind(py).is(object))
+        {
+            return *uid;
+        }
+        let uid = self.state.new_uid();
+        self.joinable.push((uid, object.clone().unbind()));
+        uid
+    }
+
+    /// Each object made brought up to what the state now says of its
+    /// spanner: what it says of itself, whether it is complete, and what
+    /// it has joined since.
+    fn sync(&mut self, py: Python<'_>) -> PyResult<()> {
+        for (id, object, given) in &mut self.made {
+            let object = object.bind(py);
+            let Some(read) = self.state.spanner(*id) else {
+                continue;
+            };
+            let complete = read.complete();
+            object.cast::<crate::spanner::Spanner>()?.borrow_mut().inner = read;
+            object.setattr("completeStatus", complete)?;
+            let joined = self.state.joined(*id);
+            for uid in &joined[*given..] {
+                if let Some((_, held)) = self.joinable.iter().find(|(known, _)| known == uid) {
+                    object.call_method1("addSpannedElements", (held.bind(py),))?;
+                }
+            }
+            *given = joined.len();
+        }
+        Ok(())
+    }
+}
+
+#[pymethods]
+impl SpannerHolder {
+    #[new]
+    fn new() -> Self {
+        Self {
+            state: step::SpannerState::default(),
+            joinable: Vec::new(),
+            made: Vec::new(),
+        }
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for (_, held) in &self.joinable {
+            visit.call(held)?;
+        }
+        for (_, held, _) in &self.made {
+            visit.call(held)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.joinable.clear();
+        self.made.clear();
+    }
+}
+
 /// music21's `MusicXMLImporter`: a whole document, read into `stream`.
 #[pyclass(
     name = "MusicXMLImporter",
@@ -897,6 +979,10 @@ impl PartParser {
             ("staffReferenceList", PyList::empty(py).into_any()),
             ("maxStaves", 1_i32.into_pyobject(py)?.into_any()),
             ("arpeggioSpanners", PyDict::new(py).into_any()),
+            (
+                "_spannerState",
+                Bound::new(py, SpannerHolder::new())?.into_any(),
+            ),
         ] {
             slf.setattr(name, value)?;
         }
@@ -1649,6 +1735,65 @@ impl MeasureParser {
         Ok(())
     }
 
+    /// music21's `xmlDirectionTypeToSpanners`: a `<wedge>`, `<bracket>`,
+    /// `<dashes>`, `<octave-shift>` or `<pedal>` read into the part's
+    /// spanners, and the spanners it begins handed back. One that ends a
+    /// spanner joins `nLast` to it; a pedal's bounces and gaps go in the
+    /// measure at `totalOffset` on `staffKey`.
+    #[pyo3(signature = (mxObj, staffKey = None, totalOffset = None))]
+    fn xmlDirectionTypeToSpanners<'py>(
+        slf: &Bound<'py, Self>,
+        mxObj: &Bound<'py, PyAny>,
+        staffKey: Option<i32>,
+        totalOffset: Option<f64>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        let py = slf.py();
+        let holder = slf.getattr("parent")?.getattr("_spannerState")?;
+        let holder = holder.cast::<SpannerHolder>()?;
+        let last = slf.getattr("nLast")?;
+        let staff = staffKey.unwrap_or(NO_STAFF_ASSIGNED);
+        let offset = totalOffset.unwrap_or(0.0);
+        let read = {
+            let mut held = holder.borrow_mut();
+            let last = match last.is_none() {
+                true => None,
+                false => Some(held.uid_of(py, &last)),
+            };
+            step::read_direction_type(&written(mxObj)?, staff, offset, last, &mut held.state)
+                .map_err(import_error)?
+        };
+
+        // The spanners begun, into the part's bundle.
+        let begun = PyList::empty(py);
+        let bundle = slf.getattr("spannerBundle")?;
+        for id in read.started {
+            let made = {
+                let held = holder.borrow();
+                let Some(spanner) = held.state.spanner(id) else {
+                    continue;
+                };
+                crate::spanner::Spanner::object(py, &spanner, Vec::new())?
+            };
+            holder.borrow_mut().made.push((id, made.clone_ref(py), 0));
+            bundle.call_method1("append", (made.bind(py),))?;
+            begun.append(made)?;
+        }
+
+        // The pedal's bounces and gaps, into the measure.
+        for (uid, at, mark) in read.marks {
+            let made = crate::expressions::PedalObject::object(py, mark)?;
+            holder.borrow_mut().joinable.push((uid, made.clone_ref(py)));
+            Self::insertCoreAndRef(
+                slf,
+                &at.into_pyobject(py)?.into_any(),
+                &staff.into_pyobject(py)?.into_any(),
+                made.bind(py),
+            )?;
+        }
+        holder.borrow_mut().sync(py)?;
+        Ok(begun)
+    }
+
     /// music21's `xmlTechnicalToArticulation`: one mark of `<technical>`.
     fn xmlTechnicalToArticulation(
         slf: &Bound<'_, Self>,
@@ -1977,6 +2122,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_class::<MusicXMLImporter>()?;
         m.add_class::<PartParser>()?;
         m.add_class::<MeasureParser>()?;
+        m.add_class::<SpannerHolder>()?;
         // The exceptions are `xmlObjects`' own, which that module finishes.
         let objects = crate::musicxml::objects_module(py)?;
         for name in ["MusicXMLImportException", "MusicXMLWarning"] {

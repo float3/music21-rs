@@ -6669,6 +6669,9 @@ fn element_object_as<'py>(
         )?
         .into_bound(py)
         .into_any(),
+        StreamElement::PedalObject(mark) if whose == Whose::Wheel => {
+            crate::expressions::PedalObject::object(py, mark.clone())?.into_bound(py)
+        }
         StreamElement::RehearsalMark(mark) if whose == Whose::Wheel => {
             crate::expressions::RehearsalMark::object(py, mark.clone())?.into_bound(py)
         }
