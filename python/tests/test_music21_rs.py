@@ -11596,3 +11596,37 @@ print(m21ToXml.ScoreExporter(s).styleToXmlAppearance().find('line-width').text)
         "6 ['3', '1']",
         "5.0",
     ]
+
+
+def test_provided_pedal_objects_and_chord_with_fret_board(tmp_path):
+    """Provided, music21's pedal objects and `ChordWithFretBoard` exist, and
+    the exporter writes them as music21's `pedalObjectToXml` and
+    `chordWithFretBoardToXml` do."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import expressions, tablature
+from music21.musicxml import m21ToXml
+pm = expressions.PedalMark()
+po = expressions.PedalBounce()
+pm.addSpannedElements(po)
+pm.pedalForm = expressions.PedalForm.Line
+pm.pedalType = expressions.PedalType.Sustain
+print(po, pm.pedalForm.value)
+MEX = m21ToXml.MeasureExporter()
+print(MEX.pedalObjectToXml(po).find('direction-type/pedal').attrib)
+notes = [tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)]
+chord = tablature.ChordWithFretBoard('DM', numStrings=6, fretNotes=notes)
+chord.tuning = tablature.GuitarFretBoard().tuning
+print(chord, chord.getPitches()[-1])
+harmony = MEX.chordWithFretBoardToXml(chord)
+print(harmony.find('kind').text, harmony.find('frame/frame-strings').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.expressions.PedalBounce uninserted> line",
+        "{'line': 'yes', 'type': 'change'}",
+        "<music21.tablature.ChordWithFretBoard DM> F#4",
+        "major 6",
+    ]
