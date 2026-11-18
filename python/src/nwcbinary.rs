@@ -444,9 +444,17 @@ impl NWCConverter {
 /// `common.fileTools.MAX_UNCOMPRESSED_BYTES`, read where music21 keeps it
 /// so that a caller who changes it is heard.
 fn inflate_limit(py: Python<'_>) -> PyResult<usize> {
-    let module = py
-        .import("music21.common.fileTools")
-        .or_else(|_| crate::common::module(py, "music21.common.fileTools"))?;
+    // music21's own where it is already loaded; importing it here would
+    // load all of music21 just to read one number.
+    let loaded = py
+        .import("sys")?
+        .getattr("modules")?
+        .get_item("music21.common.fileTools")
+        .ok();
+    let module = match loaded {
+        Some(module) => module,
+        None => crate::common::module(py, "music21.common.fileTools")?.into_any(),
+    };
     module.getattr("MAX_UNCOMPRESSED_BYTES")?.extract()
 }
 

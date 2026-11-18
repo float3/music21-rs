@@ -79,12 +79,14 @@ impl Music21Object {
             made.bind(py).setattr("quarterLength", length)?;
             duration = Some(made);
         }
-        Ok(PyClassInitializer::from(ProtoM21Object).add_subclass(Self {
-            groups,
-            derivation: None,
-            style: None,
-            duration,
-        }))
+        Ok(
+            PyClassInitializer::from(ProtoM21Object::default()).add_subclass(Self {
+                groups,
+                derivation: None,
+                style: None,
+                duration,
+            }),
+        )
     }
 
     /// music21's `groups`: the names of the groups this belongs to, as a
@@ -605,7 +607,7 @@ impl Footing for PyAny {
 
 impl Footing for ProtoM21Object {
     fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
-        PyClassInitializer::from(ProtoM21Object).add_subclass(value)
+        PyClassInitializer::from(ProtoM21Object::default()).add_subclass(value)
     }
 }
 
@@ -647,6 +649,7 @@ const MULTIPLE_BASES: &[(&str, &[&str])] = &[
     ("FrettedPluck", &["FretIndication", "Fingering"]),
     ("RepeatExpression", &["RepeatMark", "Expression"]),
     ("Repeat", &["RepeatMark", "Barline"]),
+    ("ChordWithFretBoard", &["ChordSymbol", "FretBoard"]),
 ];
 
 /// Gives the classes music21 builds on more than one base the rest of
@@ -704,6 +707,11 @@ class Groups(list):
             if mine.lower() != theirs.lower():
                 return False
         return True
+
+    def __reduce__(self):
+        # Rebuilt from its names by the package's `_groups`, which every
+        # build can import; the class's own name is music21's.
+        return (_groups, (list(self),))
 
 
 Groups.__module__ = 'music21.base'
@@ -834,9 +842,34 @@ pub(crate) fn own_groups(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
                 c"music21_rs_groups",
             )?;
             module.add_function(wrap_pyfunction!(group_exception, &module)?)?;
+            module.add("_groups", groups_rebuilder(py)?)?;
             Ok::<_, PyErr>(module.getattr("Groups")?.unbind())
         })
         .map(|class| class.bind(py).clone())
+}
+
+/// A `Groups` holding these names: what a pickled one is read back with.
+#[pyfunction]
+#[pyo3(name = "_groups")]
+fn rebuilt_groups<'py>(py: Python<'py>, names: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    let made = own_groups(py)?.call0()?;
+    for name in names {
+        made.call_method1("append", (name,))?;
+    }
+    Ok(made)
+}
+
+static GROUPS_REBUILDER: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// `_groups`, made once, and named by the package it is reached from.
+pub(crate) fn groups_rebuilder(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    GROUPS_REBUILDER
+        .get_or_try_init(py, || {
+            let made = wrap_pyfunction!(rebuilt_groups, py)?.into_any();
+            made.setattr("__module__", crate::package_name(py))?;
+            Ok::<_, PyErr>(made.unbind())
+        })
+        .map(|made| made.bind(py).clone())
 }
 
 /// The `Groups` a new element is given: music21's own where music21 has
@@ -862,6 +895,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NotRest>()?;
     m.add_class::<ElementWrapper>()?;
     m.add("Groups", own_groups(m.py())?)?;
+    m.add("_groups", groups_rebuilder(m.py())?)?;
     m.add("_SplitTuple", split_tuple(m)?)?;
     Ok(())
 }

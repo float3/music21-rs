@@ -12429,3 +12429,16 @@ print(te.style.fontSize, acc.alter)
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == ["9 -2.0"]
+
+
+def test_a_pickle_names_the_thawing_function_by_the_package():
+    """A pickle names `_thawed` by the package, `music21_rs`, which every
+    build has, not by the extension module inside the wheel: one written by
+    the wheel is read back where the crate is linked in under that name."""
+    import pickle
+
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    data = pickle.dumps(s)
+    assert b"music21_rs.music21_rs" not in data
+    assert pickle.loads(data)[0].nameWithOctave == "C4"
