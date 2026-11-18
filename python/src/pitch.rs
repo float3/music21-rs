@@ -6,7 +6,7 @@
 use pyo3::prelude::*;
 
 use crate::Walkable;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyString};
 
 use music21::{
     Accidental as RsAccidental, AccidentalDisplayOptions, Interval, Microtone as RsMicrotone,
@@ -2282,17 +2282,31 @@ impl Pitch {
     /// bare facade would not equal the original.
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
-        _memo: &Bound<'py, PyAny>,
+        memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().clone();
         let made = crate::copy_as_same_type(slf, copied)?;
         Self::copy_accidental(slf, &made)?;
+
+        // What a caller put on the pitch -- its `groups` among them --
+        // lives in its `__dict__`, copied as Python copies one.
+        let deepcopy = slf.py().import("copy")?.getattr("deepcopy")?;
+        for (name, value) in slf.getattr("__dict__")?.cast_into::<PyDict>()?.iter() {
+            made.setattr(
+                name.cast_into::<PyString>()?,
+                deepcopy.call1((value, memo))?,
+            )?;
+        }
         Ok(made)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let copied = slf.borrow().clone();
-        crate::copy_as_same_type(slf, copied)
+        let made = crate::copy_as_same_type(slf, copied)?;
+        for (name, value) in slf.getattr("__dict__")?.cast_into::<PyDict>()?.iter() {
+            made.setattr(name.cast_into::<PyString>()?, value)?;
+        }
+        Ok(made)
     }
 }
 

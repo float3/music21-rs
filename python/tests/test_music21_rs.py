@@ -1028,6 +1028,24 @@ def test_a_measures_barlines_sort_by_when_they_were_put_in():
     assert early < late
 
 
+def test_a_copied_pitch_keeps_its_groups():
+    """A deep copy of a pitch, or of the note holding it, keeps the
+    groups put on it, as music21's copies do; the copy's list is its
+    own."""
+    import copy
+
+    pitch = m.Pitch("C4")
+    pitch.groups.append("upper")
+    copied = copy.deepcopy(pitch)
+    assert list(copied.groups) == ["upper"]
+    copied.groups.append("lower")
+    assert list(pitch.groups) == ["upper"]
+    note = m.Note("E4")
+    note.pitch.groups.append("alto")
+    assert list(copy.deepcopy(note).pitch.groups) == ["alto"]
+
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
