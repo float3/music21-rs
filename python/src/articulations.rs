@@ -764,5 +764,12 @@ articulation_kinds!(
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Articulation>()?;
-    register_kinds(m)
+    register_kinds(m)?;
+    // Drawn as music21 draws them: with text, and a slide as a line.
+    let py = m.py();
+    py.get_type::<Articulation>()
+        .setattr("_styleClass", py.get_type::<crate::style::TextStyle>())?;
+    py.get_type::<IndeterminateSlide>()
+        .setattr("_styleClass", py.get_type::<crate::style::LineStyle>())?;
+    Ok(())
 }

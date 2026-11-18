@@ -542,6 +542,14 @@ ALSO = {
         'TimeSignature',
         'flattenList',
     ),
+    'music21.musicxml.xmlToM21': (
+        'MIDIPercussionException',
+        'OffsetSpecial',
+        'OrnamentDelay',
+        'PercussionMapper',
+        'nearestMultiple',
+        'opFrac',
+    ),
     'music21.note': (
         'Duration',
         'Pitch',

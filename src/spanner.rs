@@ -72,6 +72,28 @@ impl SpannerKind {
         }
     }
 
+    /// Every kind, in the order music21 lists their classes.
+    pub const ALL: [Self; 13] = [
+        Self::Slur,
+        Self::Crescendo,
+        Self::Diminuendo,
+        Self::Ottava,
+        Self::Line,
+        Self::PedalMark,
+        Self::TrillExtension,
+        Self::ArpeggioMark,
+        Self::Glissando,
+        Self::TremoloSpanner,
+        Self::Neume,
+        Self::MultiMeasureRest,
+        Self::RepeatBracket,
+    ];
+
+    /// The kind music21's class of this name is, where it is one.
+    pub fn from_class_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.class_name() == name)
+    }
+
     /// The class spanners of this kind are counted with where music21 numbers
     /// them for a score: a crescendo and a diminuendo are both hairpins,
     /// `DynamicWedge`, and share their numbers.

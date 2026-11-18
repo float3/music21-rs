@@ -31,6 +31,9 @@ const NO_STAFF_ASSIGNED: i32 = 0;
 /// The tag joining a note to the chord of the note before it.
 const CHORD: &str = "chord";
 
+/// The articulations MusicXML draws as a line: music21's slides.
+const SLIDES: [&str; 4] = ["doit", "falloff", "plop", "scoop"];
+
 /// How many tuplets deep music21 keeps track of at once.
 const TUPLET_DEPTH: usize = 7;
 
@@ -241,6 +244,65 @@ fn float_or_int<'py>(py: Python<'py>, strObj: Option<&str>) -> PyResult<Bound<'p
         return Ok((value as i64).into_pyobject(py)?.into_any());
     }
     Ok(value.into_pyobject(py)?.into_any())
+}
+
+/// music21's `_setAttributeFromTagText`: the text of the element's first
+/// `tag` child, where it has some, set on the object as `attributeName`,
+/// or the tag in camel case, after `transform` where given.
+#[pyfunction]
+#[pyo3(name = "_setAttributeFromTagText", signature = (m21El, xmlEl, tag, attributeName = None, *, transform = None))]
+fn set_from_tag_text(
+    m21El: &Bound<'_, PyAny>,
+    xmlEl: &Bound<'_, PyAny>,
+    tag: &str,
+    attributeName: Option<String>,
+    transform: Option<&Bound<'_, PyAny>>,
+) -> PyResult<()> {
+    let Some(value) = tag_text(xmlEl, tag)? else {
+        return Ok(());
+    };
+    let value = match transform.filter(|given| !given.is_none()) {
+        Some(transform) => transform.call1((value,))?,
+        None => value,
+    };
+    let name = match attributeName {
+        Some(name) => name,
+        None => {
+            music21::common::stringtools::hyphen_to_camel_case(tag, "").map_err(import_error)?
+        }
+    };
+    m21El.setattr(name.as_str(), value)
+}
+
+/// music21's `_addMetadataItemFromTagText`: the text of the element's
+/// first `tag` child, where it has some, added to the metadata under
+/// `mdUniqueName`.
+#[pyfunction]
+#[pyo3(name = "_addMetadataItemFromTagText")]
+fn add_from_tag_text(
+    m21md: &Bound<'_, PyAny>,
+    xmlEl: &Bound<'_, PyAny>,
+    tag: &str,
+    mdUniqueName: &str,
+) -> PyResult<()> {
+    let Some(value) = tag_text(xmlEl, tag)? else {
+        return Ok(());
+    };
+    m21md.call_method1("add", (mdUniqueName, value))?;
+    Ok(())
+}
+
+/// The text of an element's first `tag` child, where it has any.
+fn tag_text<'py>(element: &Bound<'py, PyAny>, tag: &str) -> PyResult<Option<Bound<'py, PyAny>>> {
+    let found = element.call_method1("find", (tag,))?;
+    if found.is_none() {
+        return Ok(None);
+    }
+    let text = found.getattr("text")?;
+    if text.is_none() || text.extract::<String>().is_ok_and(|text| text.is_empty()) {
+        return Ok(None);
+    }
+    Ok(Some(text))
 }
 
 // ------------------------------------------------------------------ classes
@@ -860,6 +922,74 @@ impl MusicXMLImporter {
         Ok(slf.getattr("stream")?.unbind())
     }
 
+    /// music21's `styleFromXmlDefaults`: the appearance, fonts and lyric
+    /// languages a `<defaults>` gives, into the score's style.
+    fn styleFromXmlDefaults(slf: &Bound<'_, Self>, mxDefaults: &Bound<'_, PyAny>) -> PyResult<()> {
+        let read = step::read_defaults_style(&written(mxDefaults)?).map_err(import_error)?;
+        crate::text::stream_style_into(&slf.getattr("stream")?.getattr("style")?, &read)
+    }
+
+    /// music21's `xmlAppearanceToStyle`: an `<appearance>`'s line widths,
+    /// note sizes, distances and other appearances, into the score's style.
+    fn xmlAppearanceToStyle(
+        slf: &Bound<'_, Self>,
+        mxAppearance: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let read = step::read_appearance(&written(mxAppearance)?).map_err(import_error)?;
+        crate::text::stream_style_into(&slf.getattr("stream")?.getattr("style")?, &read)
+    }
+
+    /// music21's `xmlCreditToTextBox`: a `<credit>` as a text box.
+    fn xmlCreditToTextBox<'py>(
+        slf: &Bound<'py, Self>,
+        mxCredit: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let read = step::read_credit(&written(mxCredit)?).map_err(import_error)?;
+        crate::text::text_box_of(&music21_name(py, "music21.text", "TextBox")?, &read)
+    }
+
+    /// music21's `creatorToContributor`: a `<creator>` as a contributor,
+    /// or written into the one given.
+    #[pyo3(signature = (creator, inputM21 = None))]
+    fn creatorToContributor<'py>(
+        slf: &Bound<'py, Self>,
+        creator: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let read = step::read_creator(&written(creator)?).map_err(import_error)?;
+        let (made, returned) = match inputM21.filter(|given| !given.is_none()) {
+            Some(given) => (given.clone(), py.None().into_bound(py)),
+            None => {
+                let made = music21_name(py, "music21.metadata", "Contributor")?.call0()?;
+                (made.clone(), made)
+            }
+        };
+        if let Some(role) = read.role() {
+            made.setattr("role", role)?;
+        }
+        if creator.getattr("text")?.is_none() {
+            return Ok(returned);
+        }
+        made.setattr("name", read.text())?;
+        Ok(returned)
+    }
+
+    /// music21's `rightsToCopyright`: a `<rights>` as a copyright.
+    fn rightsToCopyright<'py>(
+        slf: &Bound<'py, Self>,
+        rights: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let read = step::read_rights(&written(rights)?).map_err(import_error)?;
+        let keywords = PyDict::new(py);
+        if let Some(role) = read.role() {
+            keywords.set_item("role", role)?;
+        }
+        music21_name(py, "music21.metadata", "Copyright")?.call((read.text(),), Some(&keywords))
+    }
+
     /// music21's `processEncoding`: the programs an `<encoding>` names
     /// added to `md`'s software, and what it says the document marks.
     fn processEncoding(
@@ -1380,6 +1510,35 @@ impl MeasureParser {
         slf.setattr("numberSuffix", measure.getattr("numberSuffix")?)
     }
 
+    /// music21's `updateVoiceInformation`: the voices the measure's notes
+    /// are written in, and a voice in the measure for each where there
+    /// are several.
+    fn updateVoiceInformation(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let measure = slf.getattr("mxMeasure")?;
+        if measure.is_none() {
+            return Ok(());
+        }
+        let ids = step::read_voice_ids(&written(&measure)?).map_err(import_error)?;
+        let indices = slf.getattr("voiceIndices")?;
+        for id in &ids {
+            indices.call_method1("add", (id,))?;
+        }
+        if ids.len() < 2 {
+            return Ok(());
+        }
+        let voice = music21_name(py, "music21.stream", "Voice")?;
+        let by_id = slf.getattr("voicesById")?;
+        let stream = slf.getattr("stream")?;
+        for id in &ids {
+            let made = voice.call0()?;
+            made.setattr("id", id)?;
+            stream.call_method1("coreInsert", (0.0, &made))?;
+            by_id.set_item(id, made)?;
+        }
+        slf.setattr("useVoices", true)
+    }
+
     /// music21's `xmlBackup`: the position in the measure moved back.
     fn xmlBackup(slf: &Bound<'_, Self>, mxObj: &Bound<'_, PyAny>) -> PyResult<()> {
         Self::moved(slf, mxObj, -1.0)
@@ -1643,9 +1802,14 @@ impl MeasureParser {
 
         // Written into the lyric given, which music21 hands nothing back for.
         let made = made.bind(py);
-        copy_members(made, given, &["text", "syllabic", "number", "identifier"])?;
+        copy_members(made, given, &["text", "syllabic", "number"])?;
+        // music21 answers the number for an identifier never given.
+        let identifier = made.getattr("identifier")?;
+        if identifier.is_instance_of::<PyString>() {
+            given.setattr("identifier", identifier)?;
+        }
         let components = made.getattr("components")?;
-        if components.len()? > 0 {
+        if !components.is_none() && components.len()? > 0 {
             given.setattr("components", components)?;
         }
         copy_members(
@@ -1686,10 +1850,19 @@ impl MeasureParser {
     /// music21's `xmlToArticulation`: one mark of `<articulations>`.
     fn xmlToArticulation(slf: &Bound<'_, Self>, mxObj: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        match step::read_articulation(&written(mxObj)?).map_err(import_error)? {
-            Some(read) => crate::articulations::Articulation::object(py, read),
-            None => Ok(py.None()),
+        let Some(read) = step::read_articulation(&written(mxObj)?).map_err(import_error)? else {
+            return Ok(py.None());
+        };
+        let made = crate::articulations::Articulation::object(py, read)?;
+
+        // Drawn as written: where it stands, and a slide's line.
+        let bound = made.bind(py);
+        XMLParserBase::setPrintStyle(mxObj, bound)?;
+        let tag: String = mxObj.getattr("tag")?.extract()?;
+        if SLIDES.contains(&tag.as_str()) {
+            XMLParserBase::setLineStyle(mxObj, bound)?;
         }
+        Ok(made)
     }
 
     /// music21's `xmlOrnamentToExpression`: one mark of `<ornaments>`, as
@@ -1721,6 +1894,7 @@ impl MeasureParser {
         mxNotations: &Bound<'_, PyAny>,
         n: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
+        Self::xmlNotationsToSpanners(slf, mxNotations, n)?;
         let note = Self::marked_note(slf, &written(mxNotations)?)?;
         for member in ["articulations", "expressions"] {
             let read = note.getattr(member)?;
@@ -1748,50 +1922,74 @@ impl MeasureParser {
         totalOffset: Option<f64>,
     ) -> PyResult<Bound<'py, PyList>> {
         let py = slf.py();
-        let holder = slf.getattr("parent")?.getattr("_spannerState")?;
-        let holder = holder.cast::<SpannerHolder>()?;
-        let last = slf.getattr("nLast")?;
         let staff = staffKey.unwrap_or(NO_STAFF_ASSIGNED);
-        let offset = totalOffset.unwrap_or(0.0);
-        let read = {
-            let mut held = holder.borrow_mut();
-            let last = match last.is_none() {
-                true => None,
-                false => Some(held.uid_of(py, &last)),
-            };
-            step::read_direction_type(&written(mxObj)?, staff, offset, last, &mut held.state)
-                .map_err(import_error)?
+        let step = step::SpannerStep::DirectionType {
+            staff,
+            offset: totalOffset.unwrap_or(0.0),
         };
+        let last = slf.getattr("nLast")?;
+        let read = Self::spanner_step(slf, mxObj, Some(&last), step, staff)?;
+        PyList::new(py, read)
+    }
 
-        // The spanners begun, into the part's bundle.
-        let begun = PyList::empty(py);
-        let bundle = slf.getattr("spannerBundle")?;
-        for id in read.started {
-            let made = {
-                let held = holder.borrow();
-                let Some(spanner) = held.state.spanner(id) else {
-                    continue;
-                };
-                crate::spanner::Spanner::object(py, &spanner, Vec::new())?
-            };
-            holder.borrow_mut().made.push((id, made.clone_ref(py), 0));
-            bundle.call_method1("append", (made.bind(py),))?;
-            begun.append(made)?;
-        }
+    /// music21's `xmlNotationsToSpanners`: the slurs, wavy lines,
+    /// tremolos, glissandos and arpeggios a `<notations>` joins `n` to.
+    fn xmlNotationsToSpanners(
+        slf: &Bound<'_, Self>,
+        mxNotations: &Bound<'_, PyAny>,
+        n: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let step = step::SpannerStep::Notations;
+        Self::spanner_step(slf, mxNotations, Some(n), step, NO_STAFF_ASSIGNED)?;
+        Ok(())
+    }
 
-        // The pedal's bounces and gaps, into the measure.
-        for (uid, at, mark) in read.marks {
-            let made = crate::pedals::PedalObject::object(py, &mark)?;
-            holder.borrow_mut().joinable.push((uid, made.clone_ref(py)));
-            Self::insertCoreAndRef(
-                slf,
-                &at.into_pyobject(py)?.into_any(),
-                &staff.into_pyobject(py)?.into_any(),
-                made.bind(py),
-            )?;
+    /// music21's `xmlOneSpanner`: the open spanner of `spannerClass` and
+    /// the element's number, or a new one, with `target` joined to it.
+    #[pyo3(signature = (mxObj, target, spannerClass, *, allowDuplicateIds = false))]
+    fn xmlOneSpanner<'py>(
+        slf: &Bound<'py, Self>,
+        mxObj: &Bound<'py, PyAny>,
+        target: Option<&Bound<'py, PyAny>>,
+        spannerClass: &Bound<'py, PyAny>,
+        allowDuplicateIds: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let name: String = spannerClass.getattr("__name__")?.extract()?;
+        let kind = music21::SpannerKind::from_class_name(&name).ok_or_else(|| {
+            MusicXMLImportException::new_err(format!("{name} is not a spanner read here"))
+        })?;
+        let duplicates = match allowDuplicateIds {
+            true => step::DuplicateIds::Allow,
+            false => step::DuplicateIds::Join,
+        };
+        let step = step::SpannerStep::One { kind, duplicates };
+        let read = Self::spanner_step(slf, mxObj, target, step, NO_STAFF_ASSIGNED)?;
+        Ok(read
+            .into_iter()
+            .next()
+            .map_or_else(|| py.None().into_bound(py), |made| made.into_bound(py)))
+    }
+
+    /// music21's `xmlToTremolo`: a `<tremolo>` on one note as a tremolo
+    /// on it, or one starting or stopping as the spanner between notes.
+    fn xmlToTremolo<'py>(
+        slf: &Bound<'py, Self>,
+        mxTremolo: &Bound<'py, PyAny>,
+        n: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let kind: Option<String> = mxTremolo.call_method1("get", ("type",))?.extract()?;
+        if matches!(kind.as_deref(), Some("start" | "stop")) {
+            let class = py.get_type::<crate::spanner::TremoloSpanner>().into_any();
+            return Self::xmlOneSpanner(slf, mxTremolo, Some(n), &class, false);
         }
-        holder.borrow_mut().sync(py)?;
-        Ok(begun)
+        let tremolo = Self::xmlOrnamentToExpression(slf, mxTremolo, None)?;
+        if !tremolo.is_none() {
+            n.getattr("expressions")?
+                .call_method1("append", (&tremolo,))?;
+        }
+        Ok(tremolo)
     }
 
     /// music21's `xmlTechnicalToArticulation`: one mark of `<technical>`.
@@ -1800,7 +1998,8 @@ impl MeasureParser {
         mxObj: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         let py = slf.py();
-        match step::read_technical(&written(mxObj)?).map_err(import_error)? {
+        let divisions = f64::from(divisions_of(slf.as_any())?.unwrap_or(1).max(1));
+        match step::read_technical(&written(mxObj)?, divisions).map_err(import_error)? {
             Some(read) => crate::articulations::Articulation::object(py, read),
             None => Ok(py.None()),
         }
@@ -1833,6 +2032,27 @@ impl MeasureParser {
     ) -> PyResult<Bound<'py, PyAny>> {
         let read = step::read_key(&written(mxKey)?).map_err(import_error)?;
         object_of(slf.py(), &read)
+    }
+
+    /// music21's `nonTraditionalKeySignature`: a `<key>` of steps and
+    /// their alterations.
+    fn nonTraditionalKeySignature<'py>(
+        slf: &Bound<'py, Self>,
+        mxKey: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let read = step::read_non_traditional_key(&written(mxKey)?).map_err(import_error)?;
+        object_of(slf.py(), &music21::StreamElement::KeySignature(read))
+    }
+
+    /// music21's `mxKeyOctaves`: the octaves a `<key>`'s `<key-octave>`s
+    /// put `ks`'s altered pitches in.
+    #[staticmethod]
+    fn mxKeyOctaves(mxKey: &Bound<'_, PyAny>, ks: &Bound<'_, PyAny>) -> PyResult<()> {
+        let held = ks.cast::<crate::key::KeySignature>()?;
+        let mut signature = held.borrow().signature.clone();
+        step::read_key_octaves(&written(mxKey)?, &mut signature).map_err(import_error)?;
+        held.borrow_mut().signature = signature;
+        Ok(())
     }
 
     /// music21's `handleKeySignature`: a `<key>` put in the measure.
@@ -2029,6 +2249,69 @@ impl PartParser {
 }
 
 impl MeasureParser {
+    /// One spanner-reading step within the part's state, `target` the note
+    /// it joins or ends a spanner with: the spanners it begins go into the
+    /// part's bundle, the pedal's marks into the measure on `staff`, and
+    /// every spanner made so far is brought up to date. What the step
+    /// hands back is handed back as objects.
+    fn spanner_step(
+        slf: &Bound<'_, Self>,
+        element: &Bound<'_, PyAny>,
+        target: Option<&Bound<'_, PyAny>>,
+        step: step::SpannerStep,
+        staff: i32,
+    ) -> PyResult<Vec<Py<PyAny>>> {
+        let py = slf.py();
+        let holder = slf.getattr("parent")?.getattr("_spannerState")?;
+        let holder = holder.cast::<SpannerHolder>()?;
+        let read = {
+            let mut held = holder.borrow_mut();
+            let target = target
+                .filter(|given| !given.is_none())
+                .map(|given| held.uid_of(py, given));
+            step::read_spanners(&written(element)?, target, step, &mut held.state)
+                .map_err(import_error)?
+        };
+
+        // The spanners begun, into the part's bundle.
+        let bundle = slf.getattr("spannerBundle")?;
+        for id in &read.started {
+            let made = {
+                let held = holder.borrow();
+                let Some(spanner) = held.state.spanner(*id) else {
+                    continue;
+                };
+                crate::spanner::Spanner::object(py, &spanner, Vec::new())?
+            };
+            holder.borrow_mut().made.push((*id, made.clone_ref(py), 0));
+            bundle.call_method1("append", (made.bind(py),))?;
+        }
+
+        // The pedal's bounces and gaps, into the measure.
+        for (uid, at, mark) in &read.marks {
+            let made = crate::pedals::PedalObject::object(py, mark)?;
+            holder
+                .borrow_mut()
+                .joinable
+                .push((*uid, made.clone_ref(py)));
+            Self::insertCoreAndRef(
+                slf,
+                &at.into_pyobject(py)?.into_any(),
+                &staff.into_pyobject(py)?.into_any(),
+                made.bind(py),
+            )?;
+        }
+        holder.borrow_mut().sync(py)?;
+
+        let held = holder.borrow();
+        Ok(read
+            .returned
+            .iter()
+            .filter_map(|id| held.made.iter().find(|(made, _, _)| made == id))
+            .map(|(_, made, _)| made.clone_ref(py))
+            .collect())
+    }
+
     /// A quarter note on C4 carrying `notations`, read as the reader reads
     /// the note they are written on.
     fn marked_note<'py>(slf: &Bound<'py, Self>, notations: &str) -> PyResult<Bound<'py, PyAny>> {
@@ -2132,6 +2415,8 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(wrap_pyfunction!(strippedText, &m)?)?;
         m.add_function(wrap_pyfunction!(musicXMLTypeToType, &m)?)?;
         m.add_function(wrap_pyfunction!(float_or_int, &m)?)?;
+        m.add_function(wrap_pyfunction!(set_from_tag_text, &m)?)?;
+        m.add_function(wrap_pyfunction!(add_from_tag_text, &m)?)?;
         m.add("NO_STAFF_ASSIGNED", NO_STAFF_ASSIGNED)?;
         Ok::<_, PyErr>(m.unbind())
     })?;

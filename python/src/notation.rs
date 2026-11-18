@@ -1912,6 +1912,15 @@ impl Style {
         crate::base::built(Self)
     }
 
+    /// A member no style of this class has, refused as Python refuses one
+    /// on music21's own style: by the class's bare name.
+    fn __getattr__(slf: &Bound<'_, Self>, name: &str) -> PyResult<Py<PyAny>> {
+        let class = slf.get_type().name()?;
+        Err(pyo3::exceptions::PyAttributeError::new_err(format!(
+            "'{class}' object has no attribute '{name}'"
+        )))
+    }
+
     #[classattr]
     fn size(py: Python<'_>) -> Py<PyAny> {
         py.None()

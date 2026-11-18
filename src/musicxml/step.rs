@@ -24,8 +24,8 @@
 
 use super::read;
 pub use super::read::{
-    ActiveTuplets, DirectionTypeRead, Encoding, FitAsked, MeasureFit, SpannerId, SpannerState,
-    measure_fit,
+    ActiveTuplets, DuplicateIds, Encoding, FitAsked, MeasureFit, SpannerId, SpannerState,
+    SpannerStep, SpannersRead, measure_fit,
 };
 use crate::articulations::Articulation;
 use crate::bar::Barline;
@@ -33,11 +33,15 @@ use crate::clef::Clef;
 use crate::defaults::IntegerType;
 use crate::error::{Error, Result};
 use crate::interval::Interval;
+use crate::key::KeySignature;
 use crate::layout::{PageLayout, StaffLayout, SystemLayout};
+use crate::metadata::MetadataValue;
 use crate::meter::TimeSignature;
 use crate::notation::{Beams, Lyric, Tie};
 use crate::pitch::{Accidental, Pitch};
 use crate::stream::{Stream, StreamElement};
+use crate::style::StreamStyle;
+use crate::text::TextBox;
 use crate::xml::Xml;
 
 /// The score a lone measure or part is read inside: one part, with no name.
@@ -65,6 +69,27 @@ pub fn read_clef(text: &str) -> Result<Clef> {
 /// where it names a mode.
 pub fn read_key(text: &str) -> Result<StreamElement> {
     read::key_signature(&element(text, "key")?)
+}
+
+/// music21's `updateVoiceInformation`: the voices a `<measure>`'s notes
+/// and forwards are written in, sorted.
+pub fn read_voice_ids(text: &str) -> Result<Vec<String>> {
+    Ok(read::voice_ids(&element(text, "measure")?))
+}
+
+/// music21's `nonTraditionalKeySignature`: a `<key>` of steps and their
+/// alterations, its octaves read too.
+pub fn read_non_traditional_key(text: &str) -> Result<KeySignature> {
+    let written = element(text, "key")?;
+    let mut signature = read::non_traditional_key(&written)?;
+    read::key_octaves(&written, &mut signature)?;
+    Ok(signature)
+}
+
+/// music21's `mxKeyOctaves`: the octaves a `<key>`'s `<key-octave>`s put
+/// `signature`'s altered pitches in.
+pub fn read_key_octaves(text: &str, signature: &mut KeySignature) -> Result<()> {
+    read::key_octaves(&element(text, "key")?, signature)
 }
 
 /// music21's `xmlToTimeSignature`: a `<time>`; `None` for one that only
@@ -131,9 +156,13 @@ pub fn read_articulation(text: &str) -> Result<Option<Articulation>> {
 }
 
 /// music21's `xmlTechnicalToArticulation`: one mark of `<technical>`,
-/// `None` for one music21 does not know.
-pub fn read_technical(text: &str) -> Result<Option<Articulation>> {
-    Ok(read::technical_of(&Xml::parse(text)?))
+/// `None` for one music21 does not know; a bend's release is read in
+/// `divisions` to the quarter.
+pub fn read_technical(
+    text: &str,
+    divisions: crate::defaults::FloatType,
+) -> Result<Option<Articulation>> {
+    Ok(read::technical_of(&Xml::parse(text)?, divisions))
 }
 
 /// music21's `xmlToBarline` and `xmlToRepeat`: what a `<barline>` draws,
@@ -142,19 +171,45 @@ pub fn read_barline(text: &str) -> Result<Barline> {
     read::barline_of(&element(text, "barline")?)
 }
 
-/// music21's `xmlDirectionTypeToSpanners`: one `<wedge>`, `<bracket>`,
-/// `<dashes>`, `<octave-shift>` or `<pedal>`, read within `state`, which
-/// keeps the spanners from one to the next. One that ends a spanner joins
-/// `last`, a uid of the state's, to it; a pedal's bounces and gaps stand
-/// at `offset` on `staff`.
-pub fn read_direction_type(
+/// One of music21's spanner-reading steps on an element -- a direction
+/// type, a `<notations>`, or one slur or other spanner mark -- within
+/// `state`, which keeps the spanners from one to the next. `target`, a
+/// uid of the state's, is the note it joins or ends a spanner with.
+pub fn read_spanners(
     text: &str,
-    staff: i32,
-    offset: crate::defaults::FloatType,
-    last: Option<usize>,
+    target: Option<usize>,
+    step: SpannerStep,
     state: &mut SpannerState,
-) -> Result<DirectionTypeRead> {
-    read::direction_type_within(&Xml::parse(text)?, staff, offset, last, state)
+) -> Result<SpannersRead> {
+    read::spanners_within(&Xml::parse(text)?, target, step, state)
+}
+
+/// music21's `creatorToContributor`: a `<creator>`, its type its role.
+pub fn read_creator(text: &str) -> Result<MetadataValue> {
+    Ok(read::creator_value(&element(text, "creator")?))
+}
+
+/// music21's `rightsToCopyright`: a `<rights>`, its type its role.
+pub fn read_rights(text: &str) -> Result<MetadataValue> {
+    Ok(read::rights_value(&element(text, "rights")?))
+}
+
+/// music21's `xmlCreditToTextBox`: a `<credit>`.
+pub fn read_credit(text: &str) -> Result<TextBox> {
+    read::text_box(&element(text, "credit")?)
+}
+
+/// music21's `styleFromXmlDefaults`: the appearance, fonts and lyric
+/// languages a `<defaults>` gives.
+pub fn read_defaults_style(text: &str) -> Result<StreamStyle> {
+    read::stream_style(&element(text, "defaults")?)
+}
+
+/// music21's `xmlAppearanceToStyle`: an `<appearance>`.
+pub fn read_appearance(text: &str) -> Result<StreamStyle> {
+    let mut style = StreamStyle::default();
+    read::read_appearance(&element(text, "appearance")?, &mut style);
+    Ok(style)
 }
 
 /// music21's `getStaffNumber`: the staff an element is written on, nought
@@ -394,22 +449,26 @@ mod tests {
     fn a_spanner_begun_in_one_reading_ends_in_the_next() {
         let mut state = SpannerState::default();
         let note = state.new_uid();
-        let begun = read_direction_type(
+        let begun = read_spanners(
             "<wedge type=\"crescendo\" number=\"2\"/>",
-            0,
-            0.0,
             Some(note),
+            SpannerStep::DirectionType {
+                staff: 0,
+                offset: 0.0,
+            },
             &mut state,
         )
         .unwrap();
         assert_eq!(begun.started.len(), 1);
         let wedge = begun.started[0];
         assert!(!state.spanner(wedge).unwrap().complete());
-        let ended = read_direction_type(
+        let ended = read_spanners(
             "<wedge type=\"stop\" number=\"2\"/>",
-            0,
-            0.0,
             Some(note),
+            SpannerStep::DirectionType {
+                staff: 0,
+                offset: 0.0,
+            },
             &mut state,
         )
         .unwrap();
@@ -422,7 +481,13 @@ mod tests {
     fn a_pedal_puts_its_bounces_and_gaps_where_they_are_read() {
         let mut state = SpannerState::default();
         let pedal = |text: &str, offset, state: &mut SpannerState| {
-            read_direction_type(text, 1, offset, None, state).unwrap()
+            read_spanners(
+                text,
+                None,
+                SpannerStep::DirectionType { staff: 1, offset },
+                state,
+            )
+            .unwrap()
         };
         let begun = pedal(
             "<pedal type=\"sostenuto\" sign=\"yes\" number=\"2\"/>",
@@ -447,6 +512,108 @@ mod tests {
         assert_eq!(bounce.marks.len(), 1);
         assert_eq!(bounce.marks[0].1, 1.0);
         assert_eq!(state.joined(begun.started[0]), &[bounce.marks[0].0]);
+    }
+
+    #[test]
+    fn defaults_give_a_scores_appearance_fonts_and_lyric_languages() {
+        let style = read_defaults_style(
+            "<defaults><appearance><line-width type=\"beam\">5</line-width>\
+             <other-appearance type=\"sharps\">dotted</other-appearance></appearance>\
+             <music-font font-family=\"Maestro, Opus\" font-weight=\"bold\"/>\
+             <lyric-language name=\"verse\" xml:lang=\"fr\"/>\
+             <lyric-language name=\"chorus\"/></defaults>",
+        )
+        .unwrap();
+        assert_eq!(style.line_widths[0].0, "beam");
+        assert_eq!(
+            style.other_appearances[0].1,
+            crate::style::StyleValue::Text("dotted".to_string())
+        );
+        let font = style.music_font.unwrap();
+        assert_eq!(
+            font.font_family,
+            Some(vec!["Maestro".to_string(), "Opus".to_string()])
+        );
+        assert_eq!(
+            style.lyric_languages,
+            vec![
+                (Some("verse".to_string()), Some("fr".to_string())),
+                (Some("chorus".to_string()), Some("en".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_bend_and_a_harmonic_say_how_they_are_played() {
+        let bend = read_technical(
+            "<bend><bend-alter>-1</bend-alter><pre-bend/><with-bar>dip</with-bar>\
+             <release offset=\"2\"/></bend>",
+            4.0,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(bend.bend_alter().map(|alter| alter.semitones()), Some(-1.0));
+        assert!(bend.pre_bend());
+        assert_eq!(bend.with_bar(), Some("dip"));
+        assert_eq!(bend.release(), Some(0.5));
+        let harmonic = read_technical("<harmonic><artificial/><sounding-pitch/></harmonic>", 1.0)
+            .unwrap()
+            .unwrap();
+        assert_eq!(harmonic.harmonic_type(), Some("artificial"));
+        assert_eq!(harmonic.pitch_type(), Some("sounding"));
+    }
+
+    #[test]
+    fn a_keys_octaves_place_its_altered_pitches() {
+        let mut signature = KeySignature::new(-4);
+        read_key_octaves(
+            "<key><fifths>-4</fifths><key-octave number=\"1\">3</key-octave>\
+             <key-octave number=\"4\">3</key-octave></key>",
+            &mut signature,
+        )
+        .unwrap();
+        let names: Vec<String> = signature
+            .altered_pitches()
+            .unwrap()
+            .iter()
+            .map(Pitch::name_with_octave)
+            .collect();
+        assert_eq!(names, ["Bb3", "Eb", "Ab", "Db3"]);
+        let sharp = read_non_traditional_key(
+            "<key><key-step>G</key-step><key-alter>1</key-alter>\
+             <key-accidental>sharp</key-accidental></key>",
+        )
+        .unwrap();
+        assert_eq!(sharp.altered_pitches().unwrap()[0].name(), "G#");
+    }
+
+    #[test]
+    fn a_slur_begun_on_one_note_ends_on_another() {
+        let mut state = SpannerState::default();
+        let (first, second) = (state.new_uid(), state.new_uid());
+        let begun = read_spanners(
+            "<notations><slur type=\"start\" number=\"1\"/></notations>",
+            Some(first),
+            SpannerStep::Notations,
+            &mut state,
+        )
+        .unwrap();
+        assert_eq!(begun.started.len(), 1);
+        let one = SpannerStep::One {
+            kind: crate::spanner::SpannerKind::Slur,
+            duplicates: DuplicateIds::Join,
+        };
+        let ended = read_spanners(
+            "<slur type=\"stop\" number=\"1\"/>",
+            Some(second),
+            one,
+            &mut state,
+        )
+        .unwrap();
+        assert_eq!(ended.returned, begun.started);
+        assert!(ended.started.is_empty());
+        assert_eq!(state.joined(begun.started[0]), &[first, second]);
+        assert!(state.spanner(begun.started[0]).unwrap().complete());
     }
 
     #[test]

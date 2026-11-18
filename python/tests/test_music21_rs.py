@@ -5623,7 +5623,7 @@ def test_words_are_read_off_a_score_and_stood_on_its_page():
     # A text box stands where it is told and keeps the style it is drawn
     # with, so writing into that style is writing into the box's.
     box = m.TextBox("Hello there, this is long", 250, 1000)
-    assert repr(box) == '<music21.text.TextBox "Hello ther...">'
+    assert repr(box) == "<music21.text.TextBox 'Hello ther...'>"
     assert (box.page, box.style.absoluteX, box.style.absoluteY) == (1, 250, 1000)
     assert (box.style.alignVertical, box.style.alignHorizontal) == ("top", "center")
     box.style.fontSize = 40
@@ -12348,4 +12348,63 @@ print(MP.stream.elements)
         "symbolline <music21.expressions.PedalBounce at 1.0> True",
         "(<music21.expressions.PedalBounce at 1.0>, <music21.expressions.PedalGapStart at 2.0>,"
         " <music21.expressions.PedalGapEnd at 3.5>)",
+    ]
+
+
+def test_provided_xmltom21_reads_notation_spanners_keys_voices_and_credits(tmp_path):
+    """The rest of music21's per-element steps: slurs and tremolos kept
+    between notes, a key's octaves and steps, a measure's voices, credits
+    and rights, bends and harmonics, and styles drawn as music21's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import base, expressions, key, note, spanner
+from music21.musicxml.xmlToM21 import MeasureParser, MusicXMLImporter, XMLParserBase
+MP = MeasureParser()
+n1, n2 = note.Note('C4'), note.Note('D4')
+MP.xmlNotationsToSpanners(EL('<notations><slur type="start" number="1"/></notations>'), n1)
+slur = MP.xmlOneSpanner(EL('<slur type="stop" number="1"/>'), n2, spanner.Slur)
+print(slur, slur.completeStatus, len(MP.spannerBundle))
+print(MP.xmlToTremolo(EL('<tremolo type="start">2</tremolo>'), n1))
+ks = key.KeySignature(-4)
+MP.mxKeyOctaves(EL('<key><fifths>-4</fifths><key-octave number="1">3</key-octave></key>'), ks)
+print(ks.alteredPitches[0])
+print(MP.nonTraditionalKeySignature(EL('<key><key-step>G</key-step><key-alter>1</key-alter>'
+                                       '<key-accidental>sharp</key-accidental></key>')))
+MP = MeasureParser()
+MP.mxMeasure = EL('<measure><note><voice>1</voice></note><forward><voice>2</voice></forward></measure>')
+MP.updateVoiceInformation()
+print(sorted(MP.voiceIndices), MP.useVoices, len(MP.stream))
+MI = MusicXMLImporter()
+print(repr(MI.creatorToContributor(EL('<creator type="composer">Beethoven, Ludwig van</creator>'))))
+print(repr(MI.rightsToCopyright(EL('<rights type="owner">CC-SA-BY</rights>'))))
+print(repr(MI.xmlCreditToTextBox(EL('<credit><credit-words/></credit>'))))
+a = MP.xmlTechnicalToArticulation(EL('<bend><bend-alter>-1</bend-alter><with-bar>dip</with-bar></bend>'))
+print(a.withBar, MP.xmlTechnicalToArticulation(EL('<harmonic><sounding-pitch/></harmonic>')).pitchType)
+a = MP.xmlToArticulation(EL('<doit dash-length="2" line-shape="curved"/>'))
+print(a.style.dashLength, a.style.lineShape)
+try:
+    base.Music21Object().style.justify
+except AttributeError as error:
+    print(error)
+lyric = note.Lyric()
+MP.xmlToLyric(EL('<lyric color="red"><text>word</text></lyric>'), lyric)
+print(lyric.style.color)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.spanner.Slur <music21.note.Note C><music21.note.Note D>> True 1",
+        "<music21.expressions.TremoloSpanner <music21.note.Note C>>",
+        "B-3",
+        "<music21.key.KeySignature of pitches: [G#]>",
+        "['1', '2'] True 2",
+        "<music21.metadata.primitives.Contributor composer:Beethoven, Ludwig van>",
+        "<music21.metadata.primitives.Copyright CC-SA-BY>",
+        "<music21.text.TextBox ''>",
+        "dip sounding",
+        "2 curved",
+        "'Style' object has no attribute 'justify'",
+        "red",
     ]

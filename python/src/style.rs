@@ -402,11 +402,42 @@ plain_style!(
     "BezierStyle",
     "music21's `style.BezierStyle`: the bezier points of a curve, as MusicXML gives them."
 );
-plain_style!(
-    LineStyle,
-    "LineStyle",
-    "music21's `style.LineStyle`: the shape and type of a line, and its dashes."
-);
+/// music21's `style.LineStyle`: the shape and type of a line, and its
+/// dashes, each nothing until said.
+#[pyclass(name = "LineStyle", module = "music21.style", extends = Style, subclass)]
+pub struct LineStyle;
+
+#[pymethods]
+impl LineStyle {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        _arguments: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(LineStyle)
+    }
+
+    #[classattr]
+    fn lineShape(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    fn lineType(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    fn dashLength(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+
+    #[classattr]
+    fn spaceLength(py: Python<'_>) -> Py<PyAny> {
+        py.None()
+    }
+}
 plain_style!(
     BeamStyle,
     "BeamStyle",
