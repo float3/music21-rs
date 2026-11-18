@@ -320,7 +320,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side at 0.22.0: 1916 of 5276 passing tests,
+    music21-suite`'s provided side at 0.21.0: 1916 of 5276 passing tests,
     167 of 217 modules importing. Next blockers: `musicxml` (803 tests,
     15 modules; 7 of them need only `m21ToXml.GeneralObjectExporter`,
     which `stream/tests.py`'s 286 tests import), `mei` (233),

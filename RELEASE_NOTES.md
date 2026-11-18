@@ -1,6 +1,6 @@
-# music21-rs 0.22.0
+# music21-rs 0.21.0
 
-`harte` 0.15.0 depends on this release.
+`harte` 0.14.0 depends on this release.
 
 ## breaking changes
 
@@ -15,51 +15,42 @@
 
 ## added
 
-- **Crate:** `scale::intervalnetwork` (music21's `IntervalNetwork`, its
-  nodes, edges and pitch walks) and `ScaleType::network()`;
-  `midi::translate` (ticks, meter, key and tempo bytes, note and chord
-  events, channel plans) shared by the MIDI reader and writer, and the
-  reader's `from_tracks` and `part_from_track`.
-- **`provide_music21()` answers:** `scale.intervalNetwork`,
-  `midi.translate`, `sites.WEAKREF_ACTIVE` and a bare `Sites()`,
-  duration's `typeFromNumDict` and sibling tables, `variant.Variant` and
+- **Crate:** public `midi::base` (MIDI events, tracks and headers as
+  bytes), `midi::translate` (ticks, meter, key and tempo bytes, note and
+  chord events, channel plans; shared by the MIDI reader and writer, whose
+  `from_tracks` and `part_from_track` are new), `romantext::tokens`
+  (RomanText's tokenizing steps), `scale::intervalnetwork` (music21's
+  `IntervalNetwork`) and `ScaleType::network()`, `meter::tools`,
+  `figuredbass::checker`, `sorting` (how a SortTuple compares and
+  combines), `stream::enums`, `stream::iterator` and `stream::status`;
+  `Chord::all_chord_steps` and `BarTogether::from_word`.
+- **`provide_music21()` answers more of music21:** `midi.base`,
+  `midi.translate`, `romanText.rtObjects`, `scale.intervalNetwork`,
+  `test.commonTest.testCopyAll`, `stream.enums`, `stream.streamStatus`,
+  `sorting`, `stream.iterator.OffsetIterator`, `base._SplitTuple`,
+  `chord.tools`, `meter.tools`, meter.core's `getMeterTerminal` and
+  `getMeterSequence`, `duration.FrozenDuration` and `typeFromNumDict` with
+  its sibling tables, `layout.StaffGroup`, `figuredBass.checker`,
+  `sites.WEAKREF_ACTIVE` and a bare `Sites()`, `variant.Variant` and
   `stream.VariantStorage`. `AbstractScale._net` is the wheel's network.
+- Every wheel `Music21Object` answers `classSortOrder`, `sortTuple()`,
+  `style` and `duration`; `StaffLayout` has `staffType`.
 - Wheel streams pickle and become the site of what they hold again;
   `storeAtEnd` keeps any number of zero-length objects and sets each one's
   `activeSite`.
 
 ## fixed
 
+- Installed, an element in one of music21's streams answers `sortTuple`
+  with its offset there, not 0.
 - `show('text')` lists a measure's right barline last, as music21 does.
 - The wheel's Rag Marwa network gave degree 6 where music21 gives 5 and 7.
+- `xtask contributed-back` drops pull requests closed without merging.
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
 Gate (`xtask music21-suite`, provided side): 1916 of music21's 5276
-passing tests pass, up from 1766; 167 of 217 modules import, up from 163.
-
-# music21-rs 0.21.0
-
-`harte` 0.14.0 depends on this release.
-
-## added
-
-- **Crate:** public `midi::base` (MIDI events, tracks and headers as
-  bytes), `romantext::tokens` (RomanText's tokenizing steps),
-  `meter::tools`, `figuredbass::checker`, `sorting` (how a SortTuple
-  compares and combines), `stream::enums`, `stream::iterator` and
-  `stream::status`; `Chord::all_chord_steps` and `BarTogether::from_word`.
-- **`provide_music21()` answers more of music21:** `midi.base`,
-  `romanText.rtObjects`, `test.commonTest.testCopyAll`, `stream.enums`,
-  `stream.streamStatus`, `sorting`, `stream.iterator.OffsetIterator`,
-  `base._SplitTuple`, `chord.tools`, `meter.tools`, meter.core's
-  `getMeterTerminal` and `getMeterSequence`, `duration.FrozenDuration`,
-  `layout.StaffGroup` and `figuredBass.checker`.
-- Every wheel `Music21Object` answers `classSortOrder`, `sortTuple()`,
-  `style` and `duration`; `StaffLayout` has `staffType`.
-
-Gate (`xtask music21-suite`, provided side): 1766 of music21's 5276
-passing tests pass, up from 1298; 163 of 217 modules import, up from 151.
+passing tests pass, up from 1298; 167 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
 

@@ -378,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "harte"
-version = "0.15.0"
+version = "0.14.0"
 dependencies = [
  "music21",
  "thiserror",
@@ -769,7 +769,7 @@ dependencies = [
 
 [[package]]
 name = "music21"
-version = "0.22.0"
+version = "0.21.0"
 dependencies = [
  "fraction",
  "itertools",
@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "music21-rs-python"
-version = "0.22.0"
+version = "0.21.0"
 dependencies = [
  "harte",
  "music21",

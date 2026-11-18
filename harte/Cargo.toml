@@ -11,14 +11,14 @@ readme = "README.md"
 exclude = ["python/"]
 repository = "https://github.com/float3/music21-rs"
 rust-version = "1.90"
-version = "0.15.0"
+version = "0.14.0"
 
 [features]
 default = []
 serde = ["dep:serde", "music21/serde"]
 
 [dependencies]
-music21 = { path = "..", version = "0.22.0" }
+music21 = { path = "..", version = "0.21.0" }
 serde = { version = "1.0.228", optional = true, features = ["derive"] }
 thiserror = "2.0.17"
 

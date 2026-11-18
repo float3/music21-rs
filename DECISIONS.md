@@ -275,7 +275,7 @@ iterator's filters apply when `addFilter` is called, not lazily.
 `notes` and `notesAndRests` hand back an iterator whose `stream()` builds
 the source's class; a member only streams have still answers, with
 music21's `StreamIteratorInefficientWarning`. *decided 2026-11-18,* for
-0.22.0: music21's tests call `.stream()` on what the filters return.
+0.21.0: music21's tests call `.stream()` on what the filters return.
 *costs:* code that took the result for a `Stream` calls `.stream()`.
 
 **a pyo3 class takes a second base only where it adds no layout.**
