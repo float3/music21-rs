@@ -112,8 +112,8 @@ impl Spanner {
             .iter()
             .map(|object| object.clone_ref(py))
             .collect();
-        let Ok(class) = crate::real_music21(py, "music21.stream")
-            .and_then(|module| module.getattr("SpannerStorage"))
+        let Some(Ok(class)) = crate::loaded_music21(py, "music21.stream")
+            .map(|module| module.getattr("SpannerStorage"))
         else {
             return Self::own_storage(slf, &held);
         };

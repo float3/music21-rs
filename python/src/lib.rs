@@ -598,6 +598,23 @@ pub(crate) fn real_music21<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'
     Ok(module)
 }
 
+/// music21's own module of this name where music21 is already loaded,
+/// and not one `provide_music21` built. Asking costs no import: a wheel
+/// standing alone must not load music21 just to see whether it could.
+pub(crate) fn loaded_music21<'py>(py: Python<'py>, name: &str) -> Option<Bound<'py, PyModule>> {
+    let module = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .get_item(name)
+        .ok()?;
+    if is_provided(&module) {
+        return None;
+    }
+    module.cast_into::<PyModule>().ok()
+}
+
 /// Whether a module is one `provide_music21` built rather than music21's.
 fn is_provided(module: &Bound<'_, PyAny>) -> bool {
     module
