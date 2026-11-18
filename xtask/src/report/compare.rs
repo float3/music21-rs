@@ -117,6 +117,9 @@ fn metrics(report: &Report) -> Vec<Metric> {
             continue;
         }
         let ran = suite.passed + suite.failed;
+        if ran == 0 {
+            continue;
+        }
         passed += suite.passed;
         total += ran;
         found.push(share_of(
@@ -302,6 +305,16 @@ mod tests {
         assert!(
             text.contains("| Suite: parity | 90.00% (9 of 10) | 90.00% (9 of 10) | ±0 | ±0 pp |")
         );
+    }
+
+    /// A suite that ran no tests says nothing, and gets no row.
+    #[test]
+    fn a_suite_that_ran_nothing_is_left_out() {
+        let mut head = report("head", 100, 9);
+        head.suites[0].passed = 0;
+        head.suites[0].failed = 0;
+        let text = comment(&head, None);
+        assert!(!text.contains("Suite: parity"), "{text}");
     }
 
     #[test]
