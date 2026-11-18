@@ -26,6 +26,7 @@ pub use super::realized::Scale;
 /// common spelling of each note.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Simplification {
     /// Spell literally, however many accidentals that takes.
     Exact,
@@ -601,6 +602,7 @@ pub(super) const MAX_RANGE_OCTAVES: usize = 12;
 /// `comparisonAttribute`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DegreeComparison {
     /// By sounding note, so `E#` matches the `F` of C major.
     PitchClass,

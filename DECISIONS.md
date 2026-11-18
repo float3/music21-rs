@@ -270,6 +270,14 @@ insides.** music21's tests reach into `mei`, `musicxml`, `abcFormat`,
 iterator's filters apply when `addFilter` is called, not lazily.
 *costs:* music21's tests of those modules fail on the provided side.
 
+**a stream's filters answer a `StreamIterator`, as music21's do.**
+`getElementsByClass`, `getElementsNotOfClass`, `getElementsByOffset`,
+`notes` and `notesAndRests` hand back an iterator whose `stream()` builds
+the source's class; a member only streams have still answers, with
+music21's `StreamIteratorInefficientWarning`. *decided 2026-11-18,* for
+0.22.0: music21's tests call `.stream()` on what the filters return.
+*costs:* code that took the result for a `Stream` calls `.stream()`.
+
 **a pyo3 class takes a second base only where it adds no layout.**
 music21's middle classes (`ChordBase`, `StreamCore`) and articulations'
 several bases are given by `__bases__` assignment, which Python allows
@@ -302,10 +310,7 @@ a rewrite every such caller would have to make. *costs:* a weak reference
 and a table row for every element ever put in a stream, and a lookup in
 that table on every put and every element handed out; every element class
 carries `weakref`; a stream built in Rust is a site only once it is a
-Python object, so each place that builds one has to make it one; the
-streams standing in for music21's iterators (`notes`,
-`getElementsByClass`, `getElementsByOffset`) are no sites of what they
-hold and hand it out as the stream they were picked from's; there are
+Python object, so each place that builds one has to make it one; there are
 references back to what holds an element, though weak ones, and one
 object can stand in two streams at two offsets. derivations are still not
 kept, so a search does not follow one, a spanner is no site of what it
@@ -654,7 +659,8 @@ and each runner's job takes as long as all its versions do.
 
 **growing enums and every options struct are `#[non_exhaustive]`.**
 `StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,
-`TuningSystem`, `ScaleType`, `stream::Analysis` and every `*Options`
+`TuningSystem`, `ScaleType`, `Simplification`, `DegreeComparison`,
+`stream::Analysis` and every `*Options`
 struct. A new variant or field then stops being a breaking change.
 *debated 2026-11-01:* thirteen breaking-change sections in five weeks were
 mostly variants and fields added. *costs:* a caller's `match` needs a
