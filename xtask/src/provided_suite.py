@@ -9,11 +9,15 @@ what it could not import is the blocker. A module that imports has the names
 the provider gives its module put over its own, as `install_into_music21`
 does to an installed music21, and its `Test` class and docstrings are run.
 A module the provider has nothing for runs music21's own code, which is not
-music21-rs: its passes are kept apart.
+music21-rs: its passes are kept apart. music21's test data (`testFiles`,
+`testPrimitive`), which the provider does not answer for, is read from
+music21's source wherever a module imports it.
 """
 
 import doctest
 import importlib
+import importlib.abc
+import importlib.util
 import os
 import re
 import signal
@@ -106,7 +110,7 @@ def module_files(root, only):
             name = dotted_name(root, path)
             if only and not any(part in name for part in only):
                 continue
-            with open(path, encoding="utf-8") as handle:
+            with open(path, encoding="utf-8-sig") as handle:
                 source = handle.read()
             if "unittest" in source or ">>>" in source:
                 found.append((name, path, source))
@@ -175,6 +179,29 @@ def provided_names(name):
     return {
         key: value for key, value in vars(provided).items() if not key.startswith("_")
     }
+
+
+# music21's modules that hold test data, scores as text, rather than code.
+TEST_DATA = ("testFiles", "testPrimitive")
+
+
+class TestData(importlib.abc.MetaPathFinder):
+    """Finds music21's test data in its source, where the provider, which
+    raises for every module of music21's it lacks, does not answer."""
+
+    def __init__(self, root, provider):
+        self.root = root
+        self.provider = provider
+
+    def find_spec(self, fullname, path=None, target=None):
+        if not fullname.startswith("music21.") or fullname in self.provider.contents:
+            return None
+        if fullname.rpartition(".")[2] not in TEST_DATA:
+            return None
+        file = os.path.join(self.root, *fullname.split(".")) + ".py"
+        if not os.path.isfile(file):
+            return None
+        return importlib.util.spec_from_file_location(fullname, file)
 
 
 def is_test_module(name):
@@ -288,6 +315,10 @@ def package_globals(music21):
 def run(root, only):
     """Every module's record, music21 answered by the provider throughout."""
     music21_rs.provide_music21()
+    provider = next(
+        finder for finder in sys.meta_path if hasattr(finder, "contents")
+    )
+    sys.meta_path.insert(0, TestData(root, provider))
     import music21
 
     package_names = package_globals(music21)
