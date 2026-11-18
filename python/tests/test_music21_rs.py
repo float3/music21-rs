@@ -1100,7 +1100,6 @@ def test_a_streams_flattening_is_kept_until_it_changes():
     assert type(held.flatten()[-1]).__name__ == "Barline"
 
 
-
 def test_a_fermata_is_music21s():
     """music21's `Fermata`: a normal arc drawn inverted, attached to the
     last note of a tie, its shape and type set as music21 sets them."""
@@ -1114,6 +1113,18 @@ def test_a_fermata_is_music21s():
     with pytest.raises(ValueError):
         fermata.type = "sideways"
 
+
+def test_a_stream_is_always_sorted_and_sorts_itself():
+    """music21's `isSorted` and `autoSort`: a stream here answers in
+    order whenever it is read, so it says it is sorted, and marking it
+    unsorted, as music21's callers do to force a sort, changes nothing."""
+    stream = m.Stream()
+    stream.insert(2.0, m.Note("D4"))
+    stream.insert(0.0, m.Note("C4"))
+    assert stream.isSorted and stream.autoSort
+    stream.isSorted = False
+    assert stream.isSorted
+    assert [n.name for n in stream] == ["C", "D"]
 
 
 def test_a_measures_barlines_are_found_where_they_are_listed():

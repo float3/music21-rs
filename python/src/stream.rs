@@ -4428,6 +4428,35 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `isSorted`. A stream here answers in order whenever it
+    /// is read, so it is always sorted.
+    #[getter]
+    fn isSorted(&self) -> bool {
+        true
+    }
+
+    /// music21's callers mark a stream unsorted to have it sorted on the
+    /// next read, which here happens anyway: what is given is accepted
+    /// and changes nothing.
+    #[setter]
+    fn set_isSorted(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
+    /// music21's `autoSort`: whether a stream sorts itself when read,
+    /// which a stream here always does.
+    #[getter]
+    fn autoSort(&self) -> bool {
+        true
+    }
+
+    /// Accepted and changes nothing: music21's spanners and freezer turn
+    /// it off on streams they keep, which here are read in order anyway.
+    #[setter]
+    fn set_autoSort(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
     /// music21's `sort`. A stream here answers in order whenever it is
     /// read, so there is nothing to do; `force` is accepted for that.
     #[pyo3(signature = (force = false))]
