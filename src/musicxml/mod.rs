@@ -21,7 +21,8 @@ mod read;
 mod tree;
 
 pub use fragment::{
-    element_xml, instrument_xml, layout_xml, score_header_xml, staff_details_xml, transpose_xml,
+    element_xml, instrument_xml, layout_xml, part_group_xml, score_header_xml, staff_details_xml,
+    transpose_xml,
 };
 pub use partstaff::measure_number_comes_before;
 pub use read::{from_musicxml, sound_tempo};
@@ -29,7 +30,7 @@ pub use read::{from_musicxml, sound_tempo};
 use crate::articulations::Articulation;
 use crate::bar::{Barline, Ending, RepeatDirection};
 use crate::chord::Chord;
-use crate::chordsymbol::ChordSymbol;
+use crate::chordsymbol::{ChordSymbol, KeyDisplay, NumeralFigure};
 use crate::clef::Clef;
 use crate::defaults::FloatType;
 use crate::duration::{Duration, DurationType, Tuplet};
@@ -255,28 +256,9 @@ fn score_element(score: &Stream, options: &ExportOptions) -> Result<Element> {
     if score.is_empty() {
         return score_element(&empty_score(), options);
     }
-    let parts: Vec<&Stream> = if has_part_like_streams(score) {
-        for event in score.events() {
-            if let StreamElement::Stream(inner) = event.element()
-                && matches!(inner.kind(), StreamKind::Score | StreamKind::Opus)
-            {
-                return Err(export_error(
-                    "Exporting scores nested inside scores is not supported",
-                ));
-            }
-        }
-        score
-            .events()
-            .iter()
-            .filter_map(|event| event.element().as_stream())
-            .filter(|stream| matches!(stream.kind(), StreamKind::Part | StreamKind::PartStaff))
-            .collect()
-    } else {
-        vec![score]
-    };
-
+    let parts = score_parts(score)?;
     let groups = score.staff_groups();
-    let joined = joinable_groups(&parts, groups);
+    let joined = joinable_groups(&parts, groups).into_indices();
     let voice_bases = voice_bases(&parts, groups, &joined);
     let numbered = id_locals(score, &parts);
     let mut shared = Shared::default();
@@ -362,11 +344,72 @@ struct StaffRole<'a> {
     later: bool,
 }
 
+/// The parts a score is written as: its parts, or the score itself as one
+/// where it holds none.
+fn score_parts(score: &Stream) -> Result<Vec<&Stream>> {
+    if !has_part_like_streams(score) {
+        return Ok(vec![score]);
+    }
+    for event in score.events() {
+        if let StreamElement::Stream(inner) = event.element()
+            && matches!(inner.kind(), StreamKind::Score | StreamKind::Opus)
+        {
+            return Err(export_error(
+                "Exporting scores nested inside scores is not supported",
+            ));
+        }
+    }
+    Ok(score
+        .events()
+        .iter()
+        .filter_map(|event| event.element().as_stream())
+        .filter(|stream| matches!(stream.kind(), StreamKind::Part | StreamKind::PartStaff))
+        .collect())
+}
+
+/// Which of a score's staff groups are written as one part each.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum JoinableGroups {
+    /// These, by index into the score's staff groups.
+    Joined(Vec<usize>),
+    /// Two of the groups that could be joined share a staff, so none is.
+    Overlapping,
+}
+
+impl JoinableGroups {
+    /// The groups joined, by index; none where they overlap.
+    pub fn into_indices(self) -> Vec<usize> {
+        match self {
+            Self::Joined(indices) => indices,
+            Self::Overlapping => Vec::new(),
+        }
+    }
+}
+
+/// music21's `joinableGroups` for a whole score: the staff groups whose
+/// staves are written as one `<part>`.
+///
+/// ```
+/// use music21::{Stream, StreamKind};
+/// use music21::musicxml::{JoinableGroups, joinable_staff_groups};
+///
+/// let score = Stream::with_kind(StreamKind::Score);
+/// assert_eq!(joinable_staff_groups(&score)?, JoinableGroups::Joined(Vec::new()));
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A score nested in the score.
+pub fn joinable_staff_groups(score: &Stream) -> Result<JoinableGroups> {
+    Ok(joinable_groups(&score_parts(score)?, score.staff_groups()))
+}
+
 /// music21's `joinableGroups`: the staff groups whose staves are written as
 /// one part, by index into the score's groups. A group of more than one
 /// `PartStaff`, each with measures; a second group over the same staves is
 /// passed over; and if any two overlap, none is joined.
-fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> Vec<usize> {
+fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> JoinableGroups {
     let mut joinable: Vec<usize> = Vec::new();
     for (index, group) in groups.iter().enumerate() {
         let staves = group.parts();
@@ -391,12 +434,12 @@ fn joinable_groups(parts: &[&Stream], groups: &[StaffGroup]) -> Vec<usize> {
     for index in &joinable {
         for position in groups[*index].parts() {
             if seen.contains(position) {
-                return Vec::new();
+                return JoinableGroups::Overlapping;
             }
             seen.push(*position);
         }
     }
-    joinable
+    JoinableGroups::Joined(joinable)
 }
 
 /// music21's `renumberVoicesWithinStaffGroups`: in a group of staves, a voice
@@ -791,6 +834,32 @@ fn empty_score() -> Stream {
     metadata.add_text("title", "This Page Intentionally Left Blank");
     score.set_metadata(Some(metadata));
     score
+}
+
+/// music21's `romanNumeralToXml`: a harmony read off a numeral's chord
+/// has its root and bass taken out and MusicXML 4's `<numeral>` put first.
+fn numeral_in_place_of_root(harmony: &mut Element, figure: &NumeralFigure) {
+    harmony.children_mut().retain(|node| {
+        !matches!(node, tree::Node::Element(element) if matches!(element.tag(), "root" | "bass"))
+    });
+    let mut numeral = Element::new("numeral");
+    let root = numeral.sub("numeral-root");
+    root.set("text", figure.figure.clone());
+    root.set_text(figure.degree.to_string());
+    if let Some(alter) = figure.front_alteration {
+        let written = numeral.sub("numeral-alter");
+        written.set_text(format!("{alter:?}"));
+        written.set("location", "left");
+    }
+    let key = numeral.sub("numeral-key");
+    if figure.key == KeyDisplay::Hidden {
+        key.set("print-object", "no");
+    }
+    key.sub_text("numeral-fifths", figure.fifths.to_string());
+    key.sub_text("numeral-mode", figure.mode.clone());
+    harmony
+        .children_mut()
+        .insert(0, tree::Node::Element(numeral));
 }
 
 /// music21's `addDividerComment`.
@@ -2604,6 +2673,9 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 );
             }
         }
+        if let Some(figure) = symbol.numeral() {
+            numeral_in_place_of_root(&mut harmony, figure);
+        }
         if let Some(element) = self.offset_element(offset, true) {
             harmony.push(element);
         }
@@ -3048,44 +3120,22 @@ fn related_spanners(
                 continue;
             }
             let mark = match spanner.kind() {
-                SpannerKind::Ottava => {
-                    let mut shift = Element::new("octave-shift");
-                    shift.set("number", id_local.to_string());
-                    let octave = spanner.shift();
-                    // An `8va` is written `down`: the notes are engraved
-                    // below where they sound.
-                    shift.set(
-                        "type",
-                        match (start, octave.is_some_and(|octave| octave.up())) {
-                            (false, _) => "stop",
-                            (true, true) => "down",
-                            (true, false) => "up",
-                        },
-                    );
-                    if let Some(octave) = octave {
-                        shift.set("size", octave.magnitude().to_string());
-                    }
-                    shift
-                }
+                SpannerKind::Ottava => parameterised("octave-shift", spanner, id_local, start),
                 SpannerKind::Line => {
-                    let mut bracket = Element::new("bracket");
-                    bracket.set("number", id_local.to_string());
+                    let mut bracket = parameterised("bracket", spanner, id_local, start);
                     bracket.set("line-type", spanner.line_type().unwrap_or("solid"));
-                    bracket.set("type", if start { "start" } else { "stop" });
-                    let ends = spanner.ends();
-                    let (tick, height) = if start {
-                        (ends.start, ends.start_height)
-                    } else {
-                        (ends.end, ends.end_height)
-                    };
-                    bracket.set("line-end", tick.as_str());
-                    if let Some(height) = height {
-                        bracket.set("end-length", num_to_int_or_float(height));
-                    }
                     bracket
                 }
-                SpannerKind::PedalMark => pedal_element(spanner, id_local, start),
-                _ => wedge_element(spanner, id_local, start),
+                _ => parameterised(
+                    if spanner.kind() == SpannerKind::PedalMark {
+                        "pedal"
+                    } else {
+                        "wedge"
+                    },
+                    spanner,
+                    id_local,
+                    start,
+                ),
             };
             let mut direction = Element::new("direction");
             if let Some(placement) = spanner.placement() {
@@ -3141,64 +3191,146 @@ fn offset_element_from(
     Some(element)
 }
 
-/// A pedal mark's `<pedal>`, where it goes down or where it comes up:
-/// music21's `_spannerStartParameters` and `_spannerEndParameters`.
-///
-/// MusicXML has no start for any pedal but the sustaining and sostenuto
-/// ones, so music21 writes the soft and silent pedals as a plain start.
-fn pedal_element(spanner: &Spanner, id_local: u32, start: bool) -> Element {
-    let pedal = spanner.pedal().unwrap_or_default();
-    let mut element = Element::new("pedal");
+/// The element a direction spanner writes where it starts or stops,
+/// numbered, with the attributes [`spanner_parameters`] gives it.
+fn parameterised(tag: &'static str, spanner: &Spanner, id_local: u32, start: bool) -> Element {
+    let mut element = Element::new(tag);
     element.set("number", id_local.to_string());
-    let line = pedal.form.is_some_and(PedalForm::has_line);
-    if start {
-        element.set(
-            "type",
-            if pedal.pedal_type == Some(PedalType::Sostenuto) {
-                "sostenuto"
-            } else {
-                "start"
-            },
-        );
-        if pedal.form == Some(PedalForm::Line) {
-            element.set("line", "yes");
-        } else {
-            element.set("sign", "yes");
-        }
-        if pedal.abbreviated {
-            element.set("abbreviated", "yes");
-        }
+    let end = if start {
+        SpannerEnd::Start
     } else {
-        element.set("type", "stop");
-        if line {
-            element.set("line", "yes");
-        } else {
-            element.set("sign", "yes");
-        }
+        SpannerEnd::Stop
+    };
+    for (name, value) in spanner_parameters(spanner, end) {
+        element.set(name, value.to_string());
     }
     element
 }
 
-/// A hairpin's `<wedge>`, where it opens or where it closes: a crescendo
-/// opens from nothing and a diminuendo closes to nothing.
-fn wedge_element(spanner: &Spanner, id_local: u32, start: bool) -> Element {
-    let crescendo = spanner.kind() == SpannerKind::Crescendo;
-    let mut wedge = Element::new("wedge");
-    wedge.set("number", id_local.to_string());
-    wedge.set(
-        "type",
-        match (start, crescendo) {
-            (true, true) => "crescendo",
-            (true, false) => "diminuendo",
-            (false, _) => "stop",
-        },
-    );
-    if start == crescendo {
-        wedge.set("spread", "0");
-    } else if let Some(spread) = spanner.spread() {
-        wedge.set("spread", num_to_int_or_float(spread));
+/// Which end of a spanner is written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpannerEnd {
+    /// Where it starts.
+    Start,
+    /// Where it stops.
+    Stop,
+}
+
+/// A value of [`spanner_parameters`]: text, or a number music21 keeps as
+/// one.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SpannerParameter {
+    /// Text, as `yes` or `crescendo`.
+    Text(&'static str),
+    /// A whole number, as an octave line's size.
+    Whole(i64),
+    /// A number with a fraction, as a hairpin's spread may be.
+    Decimal(FloatType),
+}
+
+impl std::fmt::Display for SpannerParameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(text) => f.write_str(text),
+            Self::Whole(number) => write!(f, "{number}"),
+            Self::Decimal(number) => f.write_str(&num_to_int_or_float(*number)),
+        }
     }
-    wedge
+}
+
+/// music21's `_spannerStartParameters` and `_spannerEndParameters`: the
+/// attributes an octave line, a bracket line, a hairpin or a pedal mark
+/// writes where it starts or stops. Every other spanner has only its
+/// `type`.
+///
+/// An `8va` starts `down`: the notes are engraved below where they sound.
+/// A crescendo opens from nothing and a diminuendo closes to nothing.
+/// MusicXML has no start for any pedal but the sustaining and sostenuto
+/// ones, so music21 writes the soft and silent pedals as a plain start.
+///
+/// ```
+/// use music21::{Spanner, SpannerKind};
+/// use music21::musicxml::{SpannerEnd, SpannerParameter, spanner_parameters};
+///
+/// let crescendo = Spanner::new(SpannerKind::Crescendo, vec![0, 1]);
+/// let start = spanner_parameters(&crescendo, SpannerEnd::Start);
+/// assert!(start.contains(&("type", SpannerParameter::Text("crescendo"))));
+/// assert!(start.contains(&("spread", SpannerParameter::Whole(0))));
+/// ```
+pub fn spanner_parameters(
+    spanner: &Spanner,
+    end: SpannerEnd,
+) -> Vec<(&'static str, SpannerParameter)> {
+    use SpannerParameter::{Decimal, Text, Whole};
+    let start = end == SpannerEnd::Start;
+    let mut post = vec![("type", Text(if start { "start" } else { "stop" }))];
+    let mut set = |name: &'static str, value: SpannerParameter| match post
+        .iter_mut()
+        .find(|(known, _)| *known == name)
+    {
+        Some(held) => held.1 = value,
+        None => post.push((name, value)),
+    };
+    match spanner.kind() {
+        SpannerKind::Ottava => {
+            let octave = spanner.shift();
+            if let Some(octave) = octave {
+                set("size", Whole(i64::from(octave.magnitude())));
+            }
+            if start {
+                set(
+                    "type",
+                    Text(if octave.is_some_and(|o| o.up()) {
+                        "down"
+                    } else {
+                        "up"
+                    }),
+                );
+            }
+        }
+        SpannerKind::Line => {
+            let ends = spanner.ends();
+            let (tick, height) = if start {
+                (ends.start, ends.start_height)
+            } else {
+                (ends.end, ends.end_height)
+            };
+            set("line-end", Text(tick.as_str()));
+            if let Some(height) = height {
+                set("end-length", Decimal(height));
+            }
+        }
+        kind if kind.is_wedge() => {
+            let crescendo = kind == SpannerKind::Crescendo;
+            if start {
+                set(
+                    "type",
+                    Text(if crescendo { "crescendo" } else { "diminuendo" }),
+                );
+            }
+            if start == crescendo {
+                set("spread", Whole(0));
+            } else if let Some(spread) = spanner.spread() {
+                set("spread", Decimal(spread));
+            }
+        }
+        SpannerKind::PedalMark => {
+            let pedal = spanner.pedal().unwrap_or_default();
+            let lined = match end {
+                SpannerEnd::Start => pedal.form == Some(PedalForm::Line),
+                SpannerEnd::Stop => pedal.form.is_some_and(PedalForm::has_line),
+            };
+            if start && pedal.pedal_type == Some(PedalType::Sostenuto) {
+                set("type", Text("sostenuto"));
+            }
+            set(if lined { "line" } else { "sign" }, Text("yes"));
+            if start && pedal.abbreviated {
+                set("abbreviated", Text("yes"));
+            }
+        }
+        _ => {}
+    }
+    post
 }
 
 /// music21's `objectAttachedSpannersToNotations`: a slur's start on its
@@ -4445,20 +4577,20 @@ mod tests {
         };
         let symbol = pedal(Some(PedalType::Sustain), Some(PedalForm::Symbol));
         assert_eq!(
-            pedal_element(&symbol, 1, true).dump(),
+            parameterised("pedal", &symbol, 1, true).dump(),
             "<pedal number=\"1\" sign=\"yes\" type=\"start\" />"
         );
         assert_eq!(
-            pedal_element(&symbol, 1, false).dump(),
+            parameterised("pedal", &symbol, 1, false).dump(),
             "<pedal number=\"1\" sign=\"yes\" type=\"stop\" />"
         );
         let line = pedal(Some(PedalType::Sostenuto), Some(PedalForm::Line));
         assert_eq!(
-            pedal_element(&line, 2, true).dump(),
+            parameterised("pedal", &line, 2, true).dump(),
             "<pedal line=\"yes\" number=\"2\" type=\"sostenuto\" />"
         );
         assert_eq!(
-            pedal_element(&line, 2, false).dump(),
+            parameterised("pedal", &line, 2, false).dump(),
             "<pedal line=\"yes\" number=\"2\" type=\"stop\" />"
         );
     }

@@ -11457,3 +11457,92 @@ print(MEX.keySignatureToXml(ks).find('mode').text)
         "None",
         "major",
     ]
+
+
+def test_provided_musicxml_writes_a_numeral_as_a_harmony(tmp_path):
+    """Provided, a Roman numeral not written as its chord is a MusicXML 4
+    `<harmony>` holding a `<numeral>`, which takes no time: the next one
+    is moved to with a `<forward>`, as music21's
+    `test_roman_musicxml_two_kinds` and `romanNumeralToXml` show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import roman, stream
+from music21.musicxml import m21ToXml
+rn1 = roman.RomanNumeral('I', 'C')
+rn1.duration.type = 'half'
+rn2 = roman.RomanNumeral('V', 'C')
+rn2.duration.type = 'half'
+m = stream.Measure()
+m.insert(0.0, rn1)
+m.insert(2.0, rn2)
+rn1.writeAsChord = False
+rn2.writeAsChord = False
+out = m21ToXml.GeneralObjectExporter().parse(m).decode('utf-8')
+print('<numeral' in out, '<forward>' in out, '<chord' in out, '<rest' in out)
+complexRn = roman.RomanNumeral('#iio65', 'e-')
+complexRn.followsKeyChange = True
+complexRn.writeAsChord = False
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.romanNumeralToXml(complexRn))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True False False",
+        "<harmony>",
+        "  <numeral>",
+        '    <numeral-root text="#iio65">2</numeral-root>',
+        '    <numeral-alter location="left">1.0</numeral-alter>',
+        "    <numeral-key>",
+        "      <numeral-fifths>-6</numeral-fifths>",
+        "      <numeral-mode>minor</numeral-mode>",
+        "    </numeral-key>",
+        "  </numeral>",
+        "  <kind>diminished-seventh</kind>",
+        "  <inversion>1</inversion>",
+        "</harmony>",
+    ]
+
+
+def test_provided_metadata_properties_and_exporter_steps(tmp_path):
+    """Provided, `metadata.properties` holds music21's vocabulary as
+    `PropertyDescription` dataclasses and its lookup tables, and the
+    exporter's style, spanner and staff-group steps answer as music21's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, expressions, layout, spanner, stream
+from music21.metadata import properties
+from music21.musicxml import m21ToXml
+from xml.etree.ElementTree import fromstring as EL
+print(len(properties.STANDARD_PROPERTY_DESCRIPTIONS), properties.UNIQUE_NAME_TO_NAMESPACE_NAME['title'])
+print(properties.MUSIC21_WORK_ID_TO_UNIQUE_NAME['date'], properties.UNIQUE_NAME_TO_VALUE_TYPE['composer'].__name__)
+XB = m21ToXml.XMLExporterBase()
+mx = EL('<text>hi</text>')
+te = expressions.TextExpression('hi!')
+te.style.fontStyle = 'bolditalic'
+XB.setFont(mx, te)
+XB.dump(mx)
+ssp = m21ToXml.MeasureExporter._spannerStartParameters
+print(ssp('Ottava', spanner.Ottava(type='8va')), ssp('DynamicWedge', dynamics.Crescendo()))
+s = stream.Score()
+staves = []
+for name in ('a', 'b'):
+    staff = stream.PartStaff(id=name)
+    staff.insert(0, stream.Measure())
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+print(len(SX.joinableGroups()))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "131 dcterms:title",
+        "dateCreated Contributor",
+        '<text font-style="italic" font-weight="bold">hi</text>',
+        "{'type': 'down', 'size': 8} {'type': 'crescendo', 'spread': 0}",
+        "1",
+    ]
