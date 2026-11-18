@@ -11535,3 +11535,13 @@ print(clef.type, clef.dumpMethod(clef), nwcc.parsePosition)
         "{('A', 1): (<music21.stream.Measure 0 offset=0.0>, 2.0)}",
         "Clef |Clef|Type:Tenor| 7",
     ]
+
+
+def test_metadata_is_shown_as_music21_shows_it():
+    """music21 gives `Metadata` no repr of its own: it is shown by its
+    address, whatever its title, and a score's `show('text')` lists it
+    so."""
+    import re
+
+    for made in (m.Metadata(), m.Metadata(title="Jingle Bells")):
+        assert re.fullmatch(r"<music21\.metadata\.Metadata object at 0x[0-9a-f]+>", repr(made))
