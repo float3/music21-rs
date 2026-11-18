@@ -497,6 +497,22 @@ ALSO = {
     'music21.midi.base': (
         'HexEnum',
     ),
+    'music21.midi.translate': (
+        'ChannelVoiceMessages',
+        'Conductor',
+        'DeltaTime',
+        'MetaEvents',
+        'MidiEvent',
+        'MidiFile',
+        'MidiTrack',
+        'PercussionMapper',
+        'UnpitchedPercussion',
+        'deduplicate',
+        'getNumber',
+        'opFrac',
+        'putNumber',
+        'putNumbersAsList',
+    ),
     'music21.musedata': (
         'OffsetQL',
     ),

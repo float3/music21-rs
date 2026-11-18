@@ -94,6 +94,10 @@ classes = { kind = "identity", sync = "read live", why = "extractor classes hand
 tuplets = { kind = "identity", sync = "written_value" }
 client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
 
+[Edge]
+interval = { kind = "identity", sync = "read live", why = "the interval given, handed back as itself; the crate edge keeps its name" }
+id = { kind = "identity", sync = "read live", why = "the id given, handed back as itself; the crate edge keeps it as a number" }
+
 [FiguredBassLine]
 key = { kind = "identity", sync = "FiguredBassLine::current", why = "its sharps are written; the figures stay counted in the scale the line was made with, as music21's do" }
 time = { kind = "identity", sync = "FiguredBassLine::current" }

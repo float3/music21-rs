@@ -1781,6 +1781,9 @@ _UNTRAVERSED = {
     # RomanText tokens: numbers, text and an open file, none of which
     # holds the token.
     "RTChord": "an offset and a length",
+    # An interval network's edge: the interval and id it was given, which
+    # hold nothing of the edge.
+    "Edge": "an interval and an id",
     "RTFile": "an open file and its name",
     "RTNoChord": "an offset and a length",
     "RTTagged": "a tag and its text",
