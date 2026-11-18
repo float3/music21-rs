@@ -1379,6 +1379,25 @@ impl FermataType {
             Self::Inverted => "inverted",
         }
     }
+
+    /// Reads the name music21 and MusicXML give it.
+    ///
+    /// ```
+    /// use music21::expressions::FermataType;
+    ///
+    /// assert_eq!(FermataType::from_name("upright")?, FermataType::Upright);
+    /// assert!(FermataType::from_name("sideways").is_err());
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn from_name(name: &str) -> Result<Self> {
+        match name {
+            "upright" => Ok(Self::Upright),
+            "inverted" => Ok(Self::Inverted),
+            other => Err(Error::Value(format!(
+                "a fermata is drawn \"upright\" or \"inverted\", not '{other}'"
+            ))),
+        }
+    }
 }
 
 /// A pause of unmeasured length over a note: music21's `Fermata`.

@@ -1101,6 +1101,21 @@ def test_a_streams_flattening_is_kept_until_it_changes():
 
 
 
+def test_a_fermata_is_music21s():
+    """music21's `Fermata`: a normal arc drawn inverted, attached to the
+    last note of a tie, its shape and type set as music21 sets them."""
+    fermata = m.Fermata()
+    assert (fermata.shape, fermata.type, fermata.tieAttach) == ("normal", "inverted", "last")
+    fermata.type = "upright"
+    fermata.shape = "square"
+    assert (fermata.type, fermata.shape) == ("upright", "square")
+    assert "Expression" in fermata.classes
+    assert repr(fermata) == "<music21.expressions.Fermata>"
+    with pytest.raises(ValueError):
+        fermata.type = "sideways"
+
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
