@@ -137,6 +137,10 @@ pub struct KeySignature {
     accidentals_apply_only_to_octave: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     color: Option<String>,
+    /// A mode given the signature by hand, as music21 lets one be set on
+    /// any of its signatures, which MusicXML writes beside the count.
+    #[cfg_attr(feature = "serde", serde(default))]
+    mode: Option<String>,
 }
 
 /// A key signature as it was saved before the count was always a count:
@@ -151,6 +155,8 @@ struct SavedKeySignature {
     accidentals_apply_only_to_octave: bool,
     #[serde(default)]
     color: Option<String>,
+    #[serde(default)]
+    mode: Option<String>,
 }
 
 #[cfg(feature = "serde")]
@@ -162,6 +168,7 @@ impl From<SavedKeySignature> for KeySignature {
             altered: saved.altered,
             accidentals_apply_only_to_octave: saved.accidentals_apply_only_to_octave,
             color: saved.color,
+            mode: saved.mode,
         }
     }
 }
@@ -182,6 +189,7 @@ impl KeySignature {
             altered: None,
             accidentals_apply_only_to_octave: false,
             color: None,
+            mode: None,
         }
     }
 
@@ -193,6 +201,18 @@ impl KeySignature {
     /// Sets the colour the signature is drawn in.
     pub fn set_color(&mut self, color: Option<String>) {
         self.color = color;
+    }
+
+    /// The mode given the signature by hand, if any: music21's `mode`,
+    /// which a signature has only once it is set. A [`crate::Key`] has
+    /// its own.
+    pub fn mode(&self) -> Option<&str> {
+        self.mode.as_deref()
+    }
+
+    /// Gives the signature a mode, which does not change its count.
+    pub fn set_mode(&mut self, mode: Option<String>) {
+        self.mode = mode;
     }
 
     /// Creates a non-traditional key signature from the pitches it alters:

@@ -7227,6 +7227,11 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         let mut value = dynamic.inner.clone();
         drop(dynamic);
         value.set_placement(placement_of(object));
+        // Where its style moves it, where it carries one: a dynamic of
+        // the wheel's own has none, and the crate's starting place stands.
+        if let Ok(style) = object.getattr("style") {
+            value.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(value)));
     }
     if let Ok(key) = object.cast::<crate::key::Key>() {
@@ -8205,6 +8210,9 @@ fn music21_value(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
         let mut dynamic =
             music21::dynamics::Dynamic::new(object.getattr("value")?.extract::<String>()?);
         dynamic.set_placement(placement_of(object));
+        if let Ok(style) = object.getattr("style") {
+            dynamic.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(dynamic)));
     }
     // A metric modulation is two marks, and is asked for before a mark.
@@ -8520,14 +8528,20 @@ fn text_box_value(object: &Bound<'_, PyAny>) -> PyResult<music21::text::TextBox>
     let content = text_attribute(object, "content").unwrap_or_default();
     let mut read = music21::text::TextBox::new(content);
     read.page = whole_of(object, "page").unwrap_or(1);
-    let style = object.getattr("style")?;
-    let words = |name: &str| text_attribute(&style, name);
-    let text = &mut read.style;
-    text.absolute_x = style_value_of(&style, "absoluteX");
-    text.absolute_y = style_value_of(&style, "absoluteY");
-    text.relative_x = style_value_of(&style, "relativeX");
-    text.relative_y = style_value_of(&style, "relativeY");
-    text.font_size = style_value_of(&style, "fontSize");
+    read.style = text_style_of(&object.getattr("style")?)?;
+    Ok(read)
+}
+
+/// music21's style of something drawn with text, as the crate keeps it.
+fn text_style_of(style: &Bound<'_, PyAny>) -> PyResult<music21::style::TextStyle> {
+    let words = |name: &str| text_attribute(style, name);
+    let mut read = music21::style::TextStyle::default();
+    let text = &mut read;
+    text.absolute_x = style_value_of(style, "absoluteX");
+    text.absolute_y = style_value_of(style, "absoluteY");
+    text.relative_x = style_value_of(style, "relativeX");
+    text.relative_y = style_value_of(style, "relativeY");
+    text.font_size = style_value_of(style, "fontSize");
     text.color = words("color");
     text.font_family = style
         .getattr("fontFamily")

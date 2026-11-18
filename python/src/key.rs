@@ -207,6 +207,18 @@ impl KeySignature {
         Ok(crate::base::built(Self::of(sharps)))
     }
 
+    /// A mode given the signature by hand, which a MusicXML key writes
+    /// beside its count; `None` until one is set. A `Key` has its own.
+    #[getter]
+    fn mode(&self) -> Option<String> {
+        self.signature.mode().map(str::to_string)
+    }
+
+    #[setter]
+    fn set_mode(&mut self, value: Option<String>) {
+        self.signature.set_mode(value);
+    }
+
     /// The number of sharps, negative for flats. Always an `int`, a
     /// non-traditional signature's too (see `isNonTraditional`).
     #[getter]
