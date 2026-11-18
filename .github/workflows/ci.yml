@@ -1136,11 +1136,10 @@ jobs:
   report:
     name: Build Report
     runs-on: ubuntu-latest
-    # Only a push measures the report: a pull request's `site` job already
-    # runs the feature half, which is the part that can fail on a code change,
-    # and the rest re-runs every suite this workflow has just run as jobs of
-    # its own. It is never published from a pull request either.
-    if: github.event_name == 'push'
+    # A push measures the report to publish it; a pull request measures it
+    # for `pr-numbers` to compare with its base's. It is never published from
+    # a pull request.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
       # The report builds every suite instrumented for coverage, and twice
       # the runner vanished mid-build with no log, as one does when its disk
@@ -1275,13 +1274,81 @@ jobs:
           path: target/reports
 
       - name: Stage the report for later sites
+        if: github.event_name == 'push'
         run: cp -R target/reports published-report
 
+      # Also what a pull request's `pr-numbers` compares against: the report
+      # of the commit it would merge into.
       - name: Save the report for later sites
+        if: github.event_name == 'push'
         uses: actions/cache/save@v6
         with:
           path: published-report
           key: report-${{ github.sha }}
+
+  # The report's numbers beside the base's, as one comment on the pull
+  # request that each later run edits: coverage, ported members, music21's
+  # docstrings, music21's suite on music21-rs alone, every test suite and the
+  # median speedup, each with its absolute and percentage-point change.
+  pr-numbers:
+    name: Numbers on the Pull Request
+    runs-on: ubuntu-latest
+    needs: report
+    if: ${{ !cancelled() && needs.report.result == 'success' && github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xtask-numbers
+
+      - name: Download the report
+        uses: actions/download-artifact@v8
+        with:
+          name: report
+          path: head-report
+
+      # The base commit's report, saved by its push run; failing that, the
+      # newest saved one, whose commit the comment names.
+      - name: Restore the base's report
+        uses: actions/cache/restore@v6
+        with:
+          path: published-report
+          key: report-${{ github.event.pull_request.base.sha }}
+          restore-keys: report-
+
+      - name: Compare
+        run: |
+          base=()
+          [[ -f published-report/report.json ]] && base=(--base published-report/report.json)
+          cargo run --release -p xtask -- pr-numbers --head head-report/report.json "${base[@]}" --out numbers.md
+          cat numbers.md >> "$GITHUB_STEP_SUMMARY"
+
+      # One comment per pull request: found by its marker and edited, or
+      # posted. A fork's token cannot write; the step summary still has it.
+      - name: Comment
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          marker='<!-- music21-rs-numbers -->'
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@numbers.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@numbers.md >/dev/null
+          fi
 
   pages-report:
     name: Publish Site With Report

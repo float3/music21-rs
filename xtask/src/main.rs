@@ -172,6 +172,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             let options = report::parse_options(&workspace_root, &args[2..])?;
             report::report(&workspace_root, &options)
         }
+        Some("pr-numbers") => {
+            let rest = &args[2..];
+            let head = flag_value(rest, "--head").ok_or("pr-numbers needs --head report.json")?;
+            let out = flag_value(rest, "--out").ok_or("pr-numbers needs --out comment.md")?;
+            let base = flag_value(rest, "--base").map(PathBuf::from);
+            report::compare::run(base.as_deref(), Path::new(&head), Path::new(&out))
+        }
         Some("-h") | Some("--help") | None => {
             print_help();
             Ok(())
@@ -207,6 +214,9 @@ fn print_help() {
     eprintln!("  cargo run --release -p xtask -- contributed-back [--check]");
     eprintln!(
         "  cargo run --release -p xtask --features python -- music21-suite [--parallel] [--only a,b] [--sides music21_rs_wheel,music21_rs_provided] [--profile] [--route-converters musicxml,midi]"
+    );
+    eprintln!(
+        "  cargo run --release -p xtask -- pr-numbers --head report.json [--base report.json] --out comment.md"
     );
     eprintln!("  cargo run --release -p xtask -- emit-report-script");
     eprintln!("  cargo run --release -p xtask -- verify-report-script");

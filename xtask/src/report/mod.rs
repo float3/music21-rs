@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use crate::facade::{self, Facade};
 use crate::surface::{self, BeyondModule};
 
+pub(crate) mod compare;
 mod features;
 mod html;
 mod suites;
