@@ -515,3 +515,11 @@ reason = "verticalities"
 [Walked]
 kind = "facade-only"
 reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"
+
+[StreamFreezeThawBase]
+kind = "facade-only"
+reason = "the stream frozen or thawed"
+
+[StreamFreezer]
+kind = "facade-only"
+reason = "the ids of the streams found and music21's empty dictionary of sub-freezers"

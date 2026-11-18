@@ -11379,3 +11379,94 @@ def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
     assert done.returncode == 0, done.stderr
     assert done.stdout.split()[0] == "4.0"
     assert done.stdout.split()[-1] == "True"
+
+
+def test_provided_spanners_words_and_variants_pickle(tmp_path):
+    """Provided, a stream holding a slur, a text expression and a variant
+    pickles, and the thawed slur joins the thawed stream's own note, as
+    music21's freezing needs."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import copy, pickle
+from music21 import expressions, note, spanner, stream, variant
+s = stream.Stream()
+n = note.Note('D')
+s.insert(0, spanner.Slur([n]))
+s.insert(2, n)
+s.insert(0, expressions.TextExpression('dolce'))
+s.insert(0, variant.Variant([note.Note('E')], name='alt'))
+for thawed in (pickle.loads(pickle.dumps(s)), copy.deepcopy(s)):
+    print(thawed.spanners[0].getFirst() is thawed.notes[0], thawed.notes[0].offset)
+    words = thawed.getElementsByClass(expressions.TextExpression).first()
+    v = thawed.getElementsByClass(variant.Variant).first()
+    print(words.content, v.groups, list(v.notes))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True 2.0",
+        "dolce ['alt'] [<music21.note.Note E>]",
+    ] * 2
+
+
+def test_provided_streams_jsonpickle_with_what_they_hold(tmp_path):
+    """Provided, jsonpickle carries what a stream holds: it takes a stream
+    for a list, having `append` and `__getitem__`, and reads its state
+    rather than its reduction."""
+    jsonpickle = pytest.importorskip("jsonpickle")
+    # The interpreter below has no site-packages; jsonpickle's own
+    # directory is put on its path, and nothing else of it.
+    where = pathlib.Path(jsonpickle.__file__).resolve().parents[1]
+    code = f"""
+import sys
+sys.path.append({str(where)!r})
+import music21_rs
+music21_rs.provide_music21()
+import jsonpickle
+from music21 import note, stream
+s = stream.Stream()
+s.insert(1, note.Note('E'))
+thawed = jsonpickle.decode(jsonpickle.encode(s, keys=True), keys=True)
+print(type(thawed).__name__, list(thawed), thawed[0].offset)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["Stream [<music21.note.Note E>] 1.0"]
+
+
+def test_a_copied_measure_keeps_what_it_says_of_itself():
+    """A deep copy of a measure keeps its number, suffix, padding and
+    barlines, as a pickle of it does; music21's freezing copies the score
+    it freezes."""
+    import copy
+
+    measure = m.Measure(number=7)
+    measure.numberSuffix = "a"
+    measure.paddingLeft = 1.0
+    measure.leftBarline = m.Barline("heavy")
+    measure.append(m.Note("C"))
+    copied = copy.deepcopy(measure)
+    assert (copied.number, copied.numberSuffix, copied.paddingLeft) == (7, "a", 1.0)
+    assert copied.leftBarline.type == "heavy"
+    assert copied.leftBarline is not measure.leftBarline
+    assert [n.name for n in copied.notes] == ["C"]
+
+
+def test_provided_add_variant_takes_measures(tmp_path):
+    """Provided, `addVariant` builds a variant of measures: the package's
+    own streams, music21's not being there to build."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream, variant
+s = stream.Part([stream.Measure([note.Note('C', type='whole')])])
+reading = stream.Stream([stream.Measure([note.Note('D', type='whole')])])
+variant.addVariant(s, 0.0, reading, variantName='alt')
+v = s.getElementsByClass(variant.Variant).first()
+print(v.groups, type(v._stream[0]).__name__, v._stream[0].notes[0].name)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["['alt'] Measure D"]
+

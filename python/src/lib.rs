@@ -106,6 +106,7 @@ pub mod figuredbass;
 pub mod filters;
 pub mod fixer;
 pub mod formats;
+mod freezethaw;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
@@ -2328,7 +2329,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 22] = [
+const BUILT_MODULES: [&str; 23] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2351,6 +2352,7 @@ const BUILT_MODULES: [&str; 22] = [
     "music21.chord.tools",
     "music21.meter.tools",
     "music21.figuredBass.checker",
+    "music21.freezeThaw",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2381,6 +2383,7 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.chord.tools" => chordtools::module(py),
         "music21.meter.tools" => metertools::module(py),
         "music21.figuredBass.checker" => fbchecker::module(py),
+        "music21.freezeThaw" => freezethaw::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

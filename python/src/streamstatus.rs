@@ -11,7 +11,7 @@
 
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
-use pyo3::types::PyModule;
+use pyo3::types::{PyDict, PyModule, PyTuple};
 
 /// The module music21 keeps this in.
 const MODULE: &str = "music21.stream.streamStatus";
@@ -66,6 +66,19 @@ impl StreamStatus {
         }
     }
 
+    /// What music21 keeps and reads none of, by its attribute names.
+    fn kept(&self) -> [(&'static str, &Option<Py<PyAny>>); 7] {
+        [
+            ("_concertPitch", &self._concertPitch),
+            ("_dirty", &self._dirty),
+            ("_enharmonics", &self._enharmonics),
+            ("_measures", &self._measures),
+            ("_ornaments", &self._ornaments),
+            ("_rests", &self._rests),
+            ("_ties", &self._ties),
+        ]
+    }
+
     /// Everything the stream holds at any depth that is one of `class`.
     fn recursed<'py>(&self, py: Python<'py>, class: &str) -> PyResult<Bound<'py, PyAny>> {
         self.client_of(py)?
@@ -112,6 +125,43 @@ impl StreamStatus {
             _rests: copy(&self._rests),
             _ties: copy(&self._ties),
         }
+    }
+
+    /// How a status is pickled: made blank, then given what it knows under
+    /// music21's own attribute names, the stream it serves among them.
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let blank = PyTuple::new(py, [py.None()])?;
+        PyTuple::new(
+            py,
+            [
+                slf.get_type().into_any(),
+                blank.into_any(),
+                Self::__getstate__(slf)?.into_any(),
+            ],
+        )
+    }
+
+    fn __getstate__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        let me = slf.borrow();
+        let state = PyDict::new(py);
+        state.set_item("client", &me.client)?;
+        state.set_item("_accidentals", me._accidentals)?;
+        state.set_item("_beams", me._beams)?;
+        state.set_item("_tuplets", me._tuplets)?;
+        for (name, value) in me.kept() {
+            state.set_item(name, value)?;
+        }
+        Ok(state)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        for (name, value) in state.iter() {
+            slf.as_any()
+                .setattr(name.extract::<String>()?.as_str(), value)?;
+        }
+        Ok(())
     }
 
     /// Whether any pitch the stream holds has an accidental whose display

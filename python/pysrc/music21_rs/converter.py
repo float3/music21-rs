@@ -43,10 +43,14 @@ from . import music21_rs as _wheel
 __all__ = [
     "ConverterException",
     "ConverterFileException",
+    "freeze",
+    "freezeStr",
     "parse",
     "parseData",
     "parseFile",
     "parseURL",
+    "thaw",
+    "thawStr",
     "toData",
 ]
 
@@ -579,3 +583,35 @@ def __getattr__(name):
     if name in _EXCEPTIONS:
         return _exception(name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _freeze_thaw():
+    """music21's `freezeThaw`, which the wheel builds."""
+    return _wheel._music21_module("music21.freezeThaw")
+
+
+def freeze(streamObj, fmt=None, fp=None, fastButUnsafe=False, zipType="zlib"):
+    """music21's `freeze`: the stream written to `fp`, or to a new file in
+    music21's temporary directory, and the path written."""
+    freezer = _freeze_thaw().StreamFreezer(streamObj, fastButUnsafe=fastButUnsafe)
+    return freezer.write(fmt=fmt, fp=fp, zipType=zipType)
+
+
+def thaw(fp, zipType="zlib"):
+    """music21's `thaw`: the stream `freeze` wrote to `fp`."""
+    thawer = _freeze_thaw().StreamThawer()
+    thawer.open(fp, zipType=zipType)
+    return thawer.stream
+
+
+def freezeStr(streamObj, fmt=None):
+    """music21's `freezeStr`: the stream written out, as bytes for a
+    pickle and as text for jsonpickle."""
+    return _freeze_thaw().StreamFreezer(streamObj).writeStr(fmt=fmt)
+
+
+def thawStr(strData):
+    """music21's `thawStr`: the stream `freezeStr` wrote."""
+    thawer = _freeze_thaw().StreamThawer()
+    thawer.openStr(strData)
+    return thawer.stream

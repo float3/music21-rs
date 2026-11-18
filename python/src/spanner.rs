@@ -142,6 +142,31 @@ impl Spanner {
         Ok(())
     }
 
+    /// Joins, in place of each object it joins, that object's copy in a
+    /// `deepcopy` memo, where there is one.
+    pub(crate) fn join_copies(slf: &Bound<'_, Self>, memo: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let mut changed = false;
+        {
+            let mut me = slf.borrow_mut();
+            for spanned in &mut me.spanned {
+                let key = spanned.bind(py).as_ptr() as usize;
+                if let Some(copy) = memo
+                    .call_method1("get", (key,))?
+                    .into_any()
+                    .extract::<Option<Py<PyAny>>>()?
+                {
+                    *spanned = copy;
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            Self::refresh_storage(slf)?;
+        }
+        Ok(())
+    }
+
     /// The package's own `SpannerStorage` over these: the one it has,
     /// refilled, or a new one.
     fn own_storage(slf: &Bound<'_, Self>, held: &[Py<PyAny>]) -> PyResult<()> {
@@ -470,6 +495,42 @@ impl Spanner {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         Self::__deepcopy__(slf, None).map(crate::base::shallow)
+    }
+
+    /// music21 freezes a score by pickling it. The kind lives in Rust and
+    /// the joined objects in a list the pickle carries, so a thawed slur
+    /// joins the thawed stream's own notes; the storage is rebuilt.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let me = slf.borrow();
+            let spanned = me.spanned.iter().map(|one| one.clone_ref(py));
+            extra.set_item("spanned", PyList::new(py, spanned)?)?;
+            extra.set_item("idLocal", me.idLocal.as_ref())?;
+        }
+        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsSpanner>(slf, state)?;
+        {
+            let mut me = slf.borrow_mut();
+            if let Some(inner) = inner {
+                me.inner = inner;
+            }
+            if let Some(extra) = extra {
+                let extra = extra.bind(py);
+                if let Ok(spanned) = extra.get_item("spanned") {
+                    me.spanned = spanned.extract()?;
+                }
+                if let Ok(id) = extra.get_item("idLocal") {
+                    me.idLocal = (!id.is_none()).then(|| id.unbind());
+                }
+            }
+        }
+        Self::refresh_storage(slf)
     }
 
     /// What music21 compares two spanners by: its own
