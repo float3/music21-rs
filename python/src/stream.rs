@@ -77,6 +77,43 @@ pyo3::create_exception!(
 static LENGTHS: AtomicU64 = AtomicU64::new(0);
 static PRIORITIES: AtomicU64 = AtomicU64::new(0);
 
+/// How many times any stream has changed what it holds -- its elements,
+/// their offsets, its barlines or what stands at its end. A stream's kept
+/// `flatten()` stands only while this and the two counts above stand:
+/// music21 tells a stream's sites when it changes, and one count for
+/// every stream says the same of any stream a stream holds.
+static EDITS: AtomicU64 = AtomicU64::new(0);
+
+/// Tells every stream that some stream has changed what it holds.
+fn stream_edited() {
+    EDITS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The three counts a kept flattening was made at.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Counts {
+    edits: u64,
+    lengths: u64,
+    priorities: u64,
+}
+
+impl Counts {
+    fn now() -> Self {
+        Self {
+            edits: EDITS.load(Ordering::Relaxed),
+            lengths: LENGTHS.load(Ordering::Relaxed),
+            priorities: PRIORITIES.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// A stream's `flatten()`, kept as music21 keeps it in `_cache`, with the
+/// counts it was made at.
+struct KeptFlat {
+    counts: Counts,
+    stream: Py<Stream>,
+}
+
 /// Tells every stream that something it may hold has changed its length.
 pub(crate) fn length_changed() {
     LENGTHS.fetch_add(1, Ordering::Relaxed);
@@ -316,6 +353,8 @@ pub struct Stream {
     /// after the right barline, things of no length standing at the end,
     /// in the order given.
     at_end: Vec<Py<PyAny>>,
+    /// The last `flatten()`, while nothing has changed since.
+    flat: Option<KeptFlat>,
     /// What a measure is called and how much of its bar is missing:
     /// music21's `number`, `numberSuffix`, `paddingLeft` and
     /// `paddingRight`, which its `Measure.__init__` gives every measure.
@@ -718,6 +757,7 @@ impl Stream {
             left_barline: None,
             right_barline: None,
             at_end: Vec::new(),
+            flat: None,
             number: 0,
             number_suffix: None,
             padding_left: 0.0,
@@ -885,6 +925,7 @@ impl Stream {
 
     /// Lets go of what was worked out from what is held.
     fn let_go(&mut self) {
+        stream_edited();
         let priorities = PRIORITIES.load(Ordering::Relaxed);
         *locked(&self.derived) = Arc::new(Derived::at(priorities));
     }
@@ -1693,10 +1734,12 @@ impl Stream {
 
         // music21's `rightBarline` is the first barline at the end.
         if me.right_barline.is_none() && is_barline(item)? {
+            stream_edited();
             me.right_barline = Some(item.clone().unbind());
             me.enter_barline(false);
             return Ok(());
         }
+        stream_edited();
         me.at_end.push(item.clone().unbind());
         if let Some(site) = &me.site {
             let end = me.end(py)?;
@@ -1839,11 +1882,15 @@ impl Stream {
         for last in &self.at_end {
             visit.call(last)?;
         }
+        if let Some(kept) = &self.flat {
+            visit.call(&kept.stream)?;
+        }
         visit.call(&self.status)?;
         visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
+        self.flat = None;
         self.held_mut().clear();
         self.at_end.clear();
         self.id = None;
@@ -1971,6 +2018,7 @@ impl Stream {
     /// music21 reads one, so `'final'` is a final barline.
     #[setter]
     fn set_leftBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.left_barline = barline_given(value)?;
         self.enter_barline(true);
         Ok(())
@@ -1986,6 +2034,7 @@ impl Stream {
     /// Writes the barline closing this measure.
     #[setter]
     fn set_rightBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.right_barline = barline_given(value)?;
         self.enter_barline(false);
         Ok(())
@@ -2111,6 +2160,7 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.left_barline = None;
             return Ok(());
         }
@@ -2119,10 +2169,12 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.right_barline = None;
             return Ok(());
         }
         if let Some(at) = self.at_end.iter().position(|last| last.bind(py).is(target)) {
+            stream_edited();
             self.at_end.remove(at);
             return Ok(());
         }
@@ -3334,10 +3386,12 @@ impl Stream {
         let made = barline_given(Some(value))?;
         match Self::last_measure(slf)? {
             Some(measure) => {
+                stream_edited();
                 measure.cast::<Stream>()?.borrow_mut().right_barline = made;
             }
             None => slf.borrow_mut().right_barline = made,
         }
+        stream_edited();
         let _ = py;
         Ok(())
     }
@@ -4435,6 +4489,24 @@ impl Stream {
     /// One timeline with the nesting dissolved, holding the same objects at
     /// their offsets from this stream's start.
     fn flatten<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
+
+        // Kept, as music21 keeps it, while no stream has changed since.
+        if let Some(kept) = &slf.borrow().flat
+            && kept.counts == Counts::now()
+        {
+            return Ok(kept.stream.bind(py).clone());
+        }
+        let made = Self::flattened(slf)?;
+        slf.borrow_mut().flat = Some(KeptFlat {
+            counts: Counts::now(),
+            stream: made.clone().unbind(),
+        });
+        Ok(made)
+    }
+
+    /// One timeline with the nesting dissolved, made afresh.
+    fn flattened<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
         let py = slf.py();
         let mut leaves = Vec::new();
         Self::flatten_into(slf, 0.0, &mut leaves)?;

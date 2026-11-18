@@ -1068,6 +1068,39 @@ def test_a_stream_is_indexed_by_an_id_as_music21s_is():
         score.iter()["#deep"]
 
 
+def test_a_streams_flattening_is_kept_until_it_changes():
+    """`flatten()` hands back the same stream until the stream, or one it
+    holds, changes, as music21 caches it; so an element reached through
+    it keeps it as its `activeSite`, and sorts after everything at its
+    offset in a tree built before."""
+    score = m.Score()
+    for name in ("upper", "lower"):
+        part = m.Part()
+        part.id = name
+        part.append([m.Note("C4"), m.Note("D4")])
+        score.insert(0, part)
+    tree = score.asTree(flatten=True)
+    first = score.flatten().notes[0]
+    after = tree.getNodeAfter(first.sortTuple())
+    assert after.position.offset == 1.0
+
+    flat = score.flatten()
+    assert score.flatten() is flat
+    score.parts[0].append(m.Note("E4"))
+    refreshed = score.flatten()
+    assert refreshed is not flat
+    assert len(refreshed.notes) == 5
+
+    bar = m.Measure()
+    bar.append(m.Note("F4"))
+    held = m.Part([bar])
+    before = held.flatten()
+    bar.rightBarline = m.Barline("final")
+    assert held.flatten() is not before
+    assert type(held.flatten()[-1]).__name__ == "Barline"
+
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
