@@ -12003,3 +12003,14 @@ print(harmony.find('kind').text, harmony.find('frame/frame-strings').text)
         "<music21.tablature.ChordWithFretBoard DM> F#4",
         "major 6",
     ]
+
+
+def test_a_chord_symbol_subclass_names_its_own_module():
+    """A subclass of `ChordSymbol` shows the module it lives in, as music21's
+    repr does, rather than `music21.harmony`."""
+
+    class Labelled(m.ChordSymbol):
+        pass
+
+    Labelled.__module__ = "music21.tablature"
+    assert repr(Labelled("D")).startswith("<music21.tablature.Labelled D")
