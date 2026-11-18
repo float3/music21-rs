@@ -57,7 +57,7 @@ impl Music21Object {
     /// `groups` keyword. Whatever else is given is for a subclass.
     #[new]
     #[pyo3(signature = (*_arguments, **keywords))]
-    fn new(
+    pub(crate) fn new(
         _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {

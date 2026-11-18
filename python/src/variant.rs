@@ -7,23 +7,13 @@
 //! variant refined to the runs that really differ, and every variant made
 //! a replacement rather than an insertion or a deletion.
 //!
-//! **`Variant` itself stays music21's, and that is the honest line.** Its
-//! own members are readings of, or delegations to, the stream it holds --
-//! `containedHighestTime`, `replacementQuarterLength`, `lengthType`,
-//! `getElementIds`, `__len__`, `show` and the rest -- so a facade for it
-//! would carry almost nothing of the crate. What the crate carries is the
-//! *module functions*, and those are what is swapped here;
-//! `replacedElements` and `removeReplacedElementsFromStream`, the two
-//! members of the class that are the crate's, want a reading of a stream's
-//! objects by top-level event, which the wheel has not got yet.
-//!
-//! **A variant is read and built as music21's own.** The package has no
-//! class for one, so `stream::variant_value` reads music21's -- its
-//! contents, its groups and how much it replaces -- and
-//! `stream::variant_object` builds one again. Without music21 beside it
-//! there is no class to build, and a stream built without it would quietly
-//! have no variants at all -- which is the whole of what these answer --
-//! so each asks for the class first and says outright that it needs it.
+//! **`Variant` is the package's too.** Where music21 is installed its own
+//! class answers, as `stream::variant_object` asks for it first; where
+//! `provide_music21` stands in for music21 there is no other, and code
+//! written for music21 builds and reads variants all the same. Its members
+//! are music21's: a `VariantStorage` holding the reading, every member it
+//! does not have read off that stream, and no length of its own in the
+//! stream holding it unless `exposeTime` says so.
 //!
 //! **`inPlace=True` is answered here, where it is refused everywhere else
 //! in this package.** Elsewhere an edit answers a new stream, because a
@@ -41,7 +31,9 @@
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
 
+use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyTuple};
 
 use music21::variant::{
     add_variant, make_all_variants_replacements, merge_part_as_ossia,
@@ -65,6 +57,304 @@ pub const NAMES: &[&str] = &[
 ];
 
 pyo3::create_exception!(music21_rs_facade, VariantException, crate::Music21Exception);
+
+/// music21's `Variant`: another reading of a stretch of a stream, held in
+/// a `VariantStorage` and standing in the stream it is another reading of
+/// with no length of its own.
+#[pyclass(name = "Variant", module = "music21.variant", extends = crate::base::Music21Object, subclass, dict, weakref)]
+pub struct Variant {
+    /// The reading: music21's `_stream`.
+    stream: Py<PyAny>,
+    /// The length of the stretch it replaces, where one was said: music21's
+    /// `_replacementQuarterLength`.
+    #[pyo3(get, set)]
+    _replacementQuarterLength: Option<Py<PyAny>>,
+    /// Whether `highestTime` and `highestOffset` answer the reading's
+    /// rather than nought: music21's `exposeTime`.
+    #[pyo3(get, set)]
+    exposeTime: bool,
+}
+
+#[pymethods]
+impl Variant {
+    /// music21's `Variant(givenElements=None, name=None,
+    /// givenElementsBehavior=OFFSETS, **keywords)`: the elements go into
+    /// the reading, and `name` into `groups`.
+    #[new]
+    #[pyo3(signature = (givenElements = None, name = None, givenElementsBehavior = None, **keywords))]
+    fn new(
+        py: Python<'_>,
+        givenElements: Option<&Bound<'_, PyAny>>,
+        name: Option<&Bound<'_, PyAny>>,
+        givenElementsBehavior: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let _ = name;
+        let given = PyDict::new(py);
+        if let Some(behavior) = givenElementsBehavior.filter(|behavior| !behavior.is_none()) {
+            given.set_item("givenElementsBehavior", behavior)?;
+        }
+        let stream = py
+            .get_type::<crate::stream::VariantStorage>()
+            .call((givenElements,), Some(&given))?
+            .unbind();
+        let variant = Self {
+            stream,
+            _replacementQuarterLength: None,
+            exposeTime: false,
+        };
+        Ok(crate::base::Music21Object::new(&PyTuple::empty(py), keywords)?.add_subclass(variant))
+    }
+
+    /// Puts `name` into `groups`, which is the base's and so not there to
+    /// write in `__new__`.
+    #[pyo3(signature = (givenElements = None, name = None, *_arguments, **_keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        givenElements: Option<&Bound<'_, PyAny>>,
+        name: Option<&Bound<'_, PyAny>>,
+        _arguments: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let _ = givenElements;
+        if let Some(name) = name.filter(|name| !name.is_none()) {
+            slf.getattr("groups")?.call_method1("append", (name,))?;
+        }
+        Ok(())
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.stream)?;
+        visit.call(&self._replacementQuarterLength)
+    }
+
+    /// Sorts before a stream at the same offset, as music21's does.
+    #[classattr]
+    fn classSortOrder() -> i64 {
+        VARIANT_SORT_ORDER
+    }
+
+    /// A variant is no stream, as music21's `Music21Object` says, though
+    /// it reads every other member off one.
+    #[classattr]
+    fn isStream() -> bool {
+        false
+    }
+
+    /// The reading: music21's `_stream`.
+    #[getter]
+    fn _stream(&self, py: Python<'_>) -> Py<PyAny> {
+        self.stream.clone_ref(py)
+    }
+
+    /// The reading: music21's `containedSite`.
+    #[getter]
+    fn containedSite(&self, py: Python<'_>) -> Py<PyAny> {
+        self.stream.clone_ref(py)
+    }
+
+    /// Every member the variant has not got, read off the reading, but for
+    /// `flat`, `pitches` and Python's own names, which music21 keeps off
+    /// it so a walk does not go into the variant.
+    fn __getattr__(&self, py: Python<'_>, attr: &str) -> PyResult<Py<PyAny>> {
+        if attr == "flat" || attr == "pitches" || attr.starts_with("__") {
+            return Err(PyAttributeError::new_err(attr.to_owned()));
+        }
+        Ok(self.stream.bind(py).getattr(attr)?.unbind())
+    }
+
+    fn __getitem__(&self, py: Python<'_>, key: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        Ok(self.stream.bind(py).get_item(key)?.unbind())
+    }
+
+    fn __len__(&self, py: Python<'_>) -> PyResult<usize> {
+        self.stream.bind(py).len()
+    }
+
+    fn __iter__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self.stream.bind(py).try_iter()?.into_any().unbind())
+    }
+
+    /// `object of length 8.0`.
+    fn _reprInternal(&self, py: Python<'_>) -> PyResult<String> {
+        Ok(format!(
+            "object of length {}",
+            self.containedHighestTime(py)?.bind(py).str()?
+        ))
+    }
+
+    /// Python's `id` of each element of the reading: music21's
+    /// `getElementIds`.
+    fn getElementIds(&self, py: Python<'_>) -> PyResult<Vec<usize>> {
+        let mut ids = Vec::new();
+        for element in self.stream.bind(py).getattr("elements")?.try_iter()? {
+            ids.push(element?.as_ptr() as usize);
+        }
+        Ok(ids)
+    }
+
+    /// Puts `new` where `old` stands in the reading, `old` being the
+    /// object or Python's `id` of it: music21's `replaceElement`, which a
+    /// copy calls with the copied elements.
+    fn replaceElement(
+        &self,
+        py: Python<'_>,
+        old: &Bound<'_, PyAny>,
+        new: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        if old.is_none() {
+            return Ok(());
+        }
+        let stream = self.stream.bind(py);
+        let keywords = PyDict::new(py);
+        keywords.set_item("allDerived", false)?;
+        let Ok(id) = old.extract::<usize>() else {
+            stream.call_method("replace", (old, new), Some(&keywords))?;
+            return Ok(());
+        };
+        for element in stream.getattr("elements")?.try_iter()? {
+            let element = element?;
+            if element.as_ptr() as usize == id {
+                stream.call_method("replace", (element, new), Some(&keywords))?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    /// Nought, so the variant takes no time in the stream holding it,
+    /// unless `exposeTime`: music21's `highestTime`.
+    #[getter]
+    fn highestTime(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.exposed(py, "highestTime")
+    }
+
+    /// The same for `highestOffset`.
+    #[getter]
+    fn highestOffset(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.exposed(py, "highestOffset")
+    }
+
+    /// Shows the reading: music21's `show`.
+    #[pyo3(signature = (fmt = None, app = None))]
+    fn show(
+        &self,
+        py: Python<'_>,
+        fmt: Option<&Bound<'_, PyAny>>,
+        app: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let keywords = PyDict::new(py);
+        keywords.set_item("fmt", fmt)?;
+        keywords.set_item("app", app)?;
+        self.stream
+            .bind(py)
+            .call_method("show", (), Some(&keywords))?;
+        Ok(())
+    }
+
+    /// Where the reading ends: music21's `containedHighestTime`.
+    #[getter]
+    fn containedHighestTime(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self.stream.bind(py).getattr("highestTime")?.unbind())
+    }
+
+    /// Where the reading's last element starts: music21's
+    /// `containedHighestOffset`.
+    #[getter]
+    fn containedHighestOffset(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(self.stream.bind(py).getattr("highestOffset")?.unbind())
+    }
+
+    /// The length of the stretch this replaces: the one set, or the
+    /// reading's own: music21's `replacementQuarterLength`.
+    #[getter]
+    fn get_replacementQuarterLength(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        if let Some(said) = &self._replacementQuarterLength {
+            return Ok(said.clone_ref(py));
+        }
+        Ok(self
+            .stream
+            .bind(py)
+            .getattr("duration")?
+            .getattr("quarterLength")?
+            .unbind())
+    }
+
+    #[setter]
+    fn set_replacementQuarterLength(&mut self, value: Option<Py<PyAny>>) {
+        self._replacementQuarterLength = value;
+    }
+
+    /// The same, under its old name: music21's `replacementDuration`.
+    ///
+    /// * Deprecated in v11: use `replacementQuarterLength`.
+    #[getter]
+    fn get_replacementDuration(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.get_replacementQuarterLength(py)
+    }
+
+    #[setter]
+    fn set_replacementDuration(
+        &mut self,
+        py: Python<'_>,
+        value: Option<Py<PyAny>>,
+    ) -> PyResult<()> {
+        crate::warn_deprecated(
+            py,
+            "'replacementDuration' is deprecated as of v11 and will be removed in v12; use \
+             the synonym replacementQuarterLength instead.",
+        )?;
+        self._replacementQuarterLength = value;
+        Ok(())
+    }
+
+    /// `'deletion'` where the reading is shorter than what it replaces,
+    /// `'elongation'` where longer, `'replacement'` otherwise: music21's
+    /// `lengthType`.
+    #[getter]
+    fn lengthType(&self, py: Python<'_>) -> PyResult<&'static str> {
+        let replaced: f64 = self
+            .get_replacementQuarterLength(py)?
+            .bind(py)
+            .call_method0("__float__")?
+            .extract()?;
+        let contained: f64 = self
+            .containedHighestTime(py)?
+            .bind(py)
+            .call_method0("__float__")?
+            .extract()?;
+        Ok(length_type(replaced - contained))
+    }
+}
+
+impl Variant {
+    /// The reading's member, where `exposeTime`, and nought otherwise.
+    fn exposed(&self, py: Python<'_>, member: &str) -> PyResult<Py<PyAny>> {
+        if self.exposeTime {
+            return Ok(self.stream.bind(py).getattr(member)?.unbind());
+        }
+        Ok(0.0_f64.into_pyobject(py)?.into_any().unbind())
+    }
+}
+
+/// music21's `Stream.classSortOrder` less two: a variant sorts before the
+/// streams at its offset.
+const VARIANT_SORT_ORDER: i64 = -22;
+
+/// music21's `lengthType` for how much longer the stretch replaced is than
+/// the reading.
+fn length_type(difference: f64) -> &'static str {
+    if difference > 0.0 {
+        return "deletion";
+    }
+    if difference < 0.0 {
+        return "elongation";
+    }
+    "replacement"
+}
 
 error_into!(pub(crate) variant_error, VariantException);
 
@@ -91,8 +381,7 @@ fn variants_written(s: &Bound<'_, PyAny>, made: &RsStream) -> PyResult<()> {
     }
     for event in made.events() {
         if let StreamElement::Variant(variant) = event.element() {
-            let built = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?
-                .ok_or_else(no_class)?;
+            let built = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?;
             s.call_method1("insert", (event.offset(), built))?;
         }
     }
@@ -165,7 +454,6 @@ pub fn add_variant_py(
         }
     }
     let replacementQuarterLength = replacementQuarterLength.or(replacementDuration);
-    needs_variant_class(py)?;
     let mut stream = read(s)?;
     let contents = match sVariant.filter(|given| !given.is_none()) {
         Some(given) => Some(read(given)?),
@@ -196,8 +484,7 @@ pub fn add_variant_py(
     let Some((offset, variant)) = added else {
         return Ok(());
     };
-    let made = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?
-        .ok_or_else(no_class)?;
+    let made = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?;
     s.call_method1("insert", (offset, made))?;
     Ok(())
 }
@@ -206,27 +493,6 @@ pub fn add_variant_py(
 const REPLACEMENT_DURATION_DEPRECATED: &str = "addVariant()'s 'replacementDuration' keyword \
      was renamed to 'replacementQuarterLength' in v10.3; 'replacementDuration' is deprecated \
      and will be removed in v12.";
-
-/// That music21 is there to be asked for its `Variant` class, which every
-/// one of these needs: the answer is made of variants, and a stream built
-/// without the class would quietly have none.
-fn needs_variant_class(py: Python<'_>) -> PyResult<()> {
-    if crate::real_music21(py, "music21.variant")
-        .and_then(|module| module.getattr("Variant"))
-        .is_err()
-    {
-        return Err(no_class());
-    }
-    Ok(())
-}
-
-/// What a wheel with no music21 beside it says for a variant.
-fn no_class() -> PyErr {
-    VariantException::new_err(
-        "a variant is music21's own `variant.Variant`, which this package has no class \
-         for: these functions need music21 beside it",
-    )
-}
 
 /// music21's `mergeVariants`: two readings of one stream merged, what
 /// differs kept as a variant.
@@ -239,7 +505,6 @@ pub fn merge_variants_py<'py>(
     variantName: String,
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(streamX.py())?;
     let made =
         merge_variants(&read(streamX)?, &read(streamY)?, &variantName).map_err(variant_error)?;
     if inPlace {
@@ -259,7 +524,6 @@ pub fn merge_variant_scores_py<'py>(
     variantName: String,
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(aScore.py())?;
     let made = merge_variant_scores(&read(aScore)?, &read(vScore)?, &variantName)
         .map_err(variant_error)?;
     if inPlace {
@@ -280,7 +544,6 @@ pub fn merge_variant_measure_streams_py<'py>(
     variantName: String,
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(streamX.py())?;
     let made = merge_variant_measure_streams(&read(streamX)?, &read(streamY)?, &variantName)
         .map_err(variant_error)?;
     if inPlace {
@@ -301,7 +564,6 @@ pub fn merge_variants_equal_duration_py<'py>(
     variantNames: Vec<String>,
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(py)?;
     let mut read_streams = Vec::new();
     for stream in streams.walk()? {
         read_streams.push(read(&stream?)?);
@@ -336,7 +598,6 @@ pub fn merge_part_as_ossia_py<'py>(
     #[pyo3(from_py_with = crate::truthy)] compareByMeasureNumber: bool,
     #[pyo3(from_py_with = crate::truthy)] recurseInMeasures: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(mainPart.py())?;
     let made = merge_part_as_ossia(
         &read(mainPart)?,
         &read(ossiaPart)?,
@@ -362,7 +623,6 @@ pub fn refine_variant_py<'py>(
     sVariant: &Bound<'py, PyAny>,
     #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
-    needs_variant_class(s.py())?;
     let mut stream = read(s)?;
     let at = variant_place(s, sVariant, &stream)?;
     refine_variant(&mut stream, at).map_err(variant_error)?;
@@ -424,7 +684,6 @@ pub fn make_all_variants_replacements_py<'py>(
     // both branches of its test `continue`, which its own source marks
     // `# huh????` -- so a stream asked for by name comes back exactly as it
     // was, which is what its own example prints.
-    needs_variant_class(streamWithVariants.py())?;
     if variantNames.is_some() {
         let py = streamWithVariants.py();
         if inPlace {
@@ -447,6 +706,7 @@ pub fn make_all_variants_replacements_py<'py>(
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Variant>()?;
     m.add_function(wrap_pyfunction!(add_variant_py, m)?)?;
     m.add_function(wrap_pyfunction!(merge_variants_py, m)?)?;
     m.add_function(wrap_pyfunction!(merge_variant_scores_py, m)?)?;

@@ -1332,17 +1332,18 @@ def test_store_at_end_keeps_a_barline_as_the_right_one():
     assert repeat.direction == "start"
 
 
-def test_store_at_end_refuses_what_it_cannot_keep():
-    """A length music21 refuses too; a second barline, or anything that is
-    not one, music21 keeps and the package does not."""
+def test_store_at_end_keeps_what_has_no_length():
+    """A length is refused, as music21 refuses it; a second barline and a
+    clef are kept, the first barline being the `rightBarline`."""
     line = m.Stream()
     with pytest.raises(m.StreamException, match="non-zero Duration"):
         line.storeAtEnd(m.Note("C"))
-    line.storeAtEnd(m.Barline())
+    first = m.Barline()
+    line.storeAtEnd(first)
     for other in (m.Barline("double"), m.TrebleClef()):
-        with pytest.raises(m.StreamException, match="not ported to music21-rs$"):
-            line.storeAtEnd(other)
-    assert len(line.getElementsByClass("Barline")) == 1
+        line.storeAtEnd(other)
+    assert len(line.getElementsByClass("Barline")) == 2
+    assert line.rightBarline is first
 
 
 def test_placed_answers_where_each_element_stands():
@@ -3281,8 +3282,8 @@ def test_a_stream_is_asked_what_classes_it_holds():
     assert flat.hasElementOfClass("Clef")
     assert not flat.hasElementOfClass("Dynamic")
     # The clef, the meter and the measure's final barline, as music21.
-    assert len(flat.getElementsNotOfClass("Note").elements) == 3
-    assert len(flat.getElementsByClass("Note").elements) == 3
+    assert len(flat.getElementsNotOfClass("Note")) == 3
+    assert len(flat.getElementsByClass("Note")) == 3
 
 
 def test_a_stream_answers_for_its_pitches_and_its_staff():
@@ -4495,7 +4496,7 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
         line.insert(float(at), element)
 
     def count(name):
-        return len(line.getElementsByClass(name).elements)
+        return len(line.getElementsByClass(name))
 
     # The leaves of music21's hierarchy, which the class names alone answer.
     assert (count("Note"), count("Rest"), count("Dynamic")) == (1, 1, 1)
@@ -4510,7 +4511,7 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
     assert count("TimeSignatureBase") == 1
     assert count("Music21Object") == 9
     # A list of classes takes anything answering to one of them.
-    assert len(line.getElementsByClass(["Clef", "NotRest"]).elements) == 4
+    assert len(line.getElementsByClass(["Clef", "NotRest"])) == 4
     assert sorted(
         type(e).__name__ for e in line.getElementsNotOfClass("GeneralNote")
     ) == ["Dynamic", "KeySignature", "MetronomeMark", "TimeSignature", "TrebleClef"]
@@ -4521,10 +4522,10 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
     # else the stream holds.
     holder = m.Part()
     holder.insert(0.0, m.Measure())
-    assert len(holder.getElementsByClass("Music21Object").elements) == 1
-    assert len(holder.getElementsByClass("Stream").elements) == 1
-    assert len(holder.getElementsByClass("Measure").elements) == 1
-    assert len(holder.getElementsByClass("Voice").elements) == 0
+    assert len(holder.getElementsByClass("Music21Object")) == 1
+    assert len(holder.getElementsByClass("Stream")) == 1
+    assert len(holder.getElementsByClass("Measure")) == 1
+    assert len(holder.getElementsByClass("Voice")) == 0
 
 
 def test_a_thing_says_what_it_is_as_music21_says_it():
@@ -4581,7 +4582,7 @@ def test_a_thing_says_what_it_is_as_music21_says_it():
     # And what a thing says it is, a filter finds it by.
     line = m.Stream()
     line.insert(0.0, m.Key("G"))
-    assert len(line.getElementsByClass("Scale").elements) == 1
+    assert len(line.getElementsByClass("Scale")) == 1
 
 
 def test_the_overlaps_in_a_stream_are_gathered_by_offset():
@@ -11130,6 +11131,7 @@ print(sorted(checker.createOffsetMapping(part)))
         "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
     ]
 
+
 def test_provided_sites_and_duration_have_music21s_constants(tmp_path):
     """Provided, `sites.WEAKREF_ACTIVE`, a bare `Sites` and `duration`'s
     tables are there, as `music21.base` and `music21.beam` use them."""
@@ -11152,3 +11154,131 @@ print(duration.ordinalTypeFromNum[3], len(duration.ordinalTypeFromNum), duration
         "breve 16 (3, 5, 7, 11, 13)",
     ]
 
+
+def test_provided_store_at_end_keeps_any_number_and_sets_the_site(tmp_path):
+    """Provided, `storeAtEnd` keeps a barline and a clef at the end, each
+    with the stream as its `activeSite`, as music21's `_endElements` do."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, clef, note, stream
+s = stream.Stream()
+s.insert(0, note.Note('C'))
+s.insert(2, note.Note('F'))
+r, c = bar.Repeat('end'), clef.TrebleClef()
+s.storeAtEnd(r)
+s.storeAtEnd(c)
+print(r.activeSite is s, c.activeSite is s, s.isAtEnd(c), c in s, s.elementOffset(c))
+for group in stream.iterator.OffsetIterator(s):
+    print(group)
+print(list(stream.iterator.OffsetIterator(s).getElementsByClass(clef.Clef)))
+s.remove(c)
+print(c in s, s.isAtEnd(r))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True True 3.0",
+        "[<music21.note.Note C>]",
+        "[<music21.note.Note F>]",
+        "[<music21.bar.Repeat direction=end>, <music21.clef.TrebleClef>]",
+        "[[<music21.clef.TrebleClef>]]",
+        "False True",
+    ]
+
+
+def test_provided_stream_filters_answer_iterators(tmp_path):
+    """Provided, a stream's `getElementsByClass`, `notes` and their kin
+    answer music21's `StreamIterator`, whose `stream()` gathers them back
+    with the derivation music21 gives, the end kept at the end."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, note, stream
+s = stream.Part()
+s.insert(0, note.Note('C'))
+s.append(note.Rest())
+s.append(note.Note('D'))
+b = bar.Barline()
+s.storeAtEnd(b)
+f = s.getElementsByClass(note.Note)
+print(type(f).__name__, len(f), f[1].activeSite is s)
+s2 = f.stream()
+print(type(s2).__name__, s2.derivation.method, s2.derivation.origin is s, [e.offset for e in s2])
+print(s.notesAndRests.stream().derivation.method, len(s.notes), s.getElementsNotOfClass(note.Rest).stream().derivation.method)
+s4 = s.iter().getElementsByClass(bar.Barline).stream()
+print(s4.isAtEnd(b))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "StreamIterator 2 True",
+        "Part getElementsByClass True [0.0, 2.0]",
+        "notesAndRests 2 getElementsNotOfClass",
+        "True",
+    ]
+
+
+def test_provided_streams_pickle_with_what_they_hold(tmp_path):
+    """Provided, a score pickles and reads back with its parts, measures,
+    notes, barlines and what is kept at the end, each where it stood, as
+    music21's freezing needs."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import pickle
+from music21 import bar, clef, meter, note, stream
+s = stream.Score(id='sc')
+p = stream.Part()
+m = stream.Measure(number=3)
+m.append(meter.TimeSignature('3/4'))
+m.append(note.Note('C', quarterLength=3))
+m.rightBarline = bar.Barline('final')
+m.storeAtEnd(clef.BassClef())
+p.append(m)
+s.insert(0, p)
+s2 = pickle.loads(pickle.dumps(s))
+m2 = s2.parts[0].getElementsByClass('Measure')[0]
+n = m2.notes[0]
+print(type(s2).__name__, s2.id, m2.number, n, n.getOffsetBySite(m2), n.measureNumber)
+print(m2.rightBarline, list(m2.iter()), m2.isAtEnd(m2.iter()[-1]))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Score sc 3 <music21.note.Note C> 0.0 3",
+        "<music21.bar.Barline type=final> [<music21.meter.TimeSignature 3/4>, "
+        "<music21.note.Note C>, <music21.bar.Barline type=final>, <music21.clef.BassClef>] True",
+    ]
+
+
+def test_provided_variant_is_music21s(tmp_path):
+    """Provided, `variant.Variant` holds its reading in a
+    `VariantStorage`, takes no time in the stream holding it, and is what
+    `addVariant` builds."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream, variant
+v = variant.Variant(name='paris')
+v.repeatAppend(note.Note(), 8)
+print(len(v.notes), v.highestTime, v.containedHighestTime, v.duration, v.isStream, v.groups)
+s = stream.Stream()
+s.append(v)
+s.append(note.Note())
+print(s.highestTime, list(s.iter()), v.activeSite is s)
+v.replacementQuarterLength = 4.0
+print(v.lengthType, type(v.containedSite).__name__, v.classSortOrder)
+s2 = stream.Stream([note.Note('C'), note.Note('D')])
+variant.addVariant(s2, 1.0, stream.Stream([note.Note('E')]), variantName='alt')
+found = s2.getElementsByClass(variant.Variant).first()
+print(found, found.groups, found.getOffsetBySite(s2))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "8 0.0 8.0 <music21.duration.Duration 0.0> False ['paris']",
+        "1.0 [<music21.variant.Variant object of length 8.0>, <music21.note.Note C>] True",
+        "elongation VariantStorage -22",
+        "<music21.variant.Variant object of length 2.0> ['alt'] 1.0",
+    ]
