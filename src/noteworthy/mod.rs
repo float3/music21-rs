@@ -7,8 +7,13 @@
 //! first, as music21 does.
 
 mod binary;
+pub mod placement;
 
-pub use binary::{from_nwc, nwc_lines};
+pub use binary::{
+    ALTERATION_TEXTS, BAR_STYLES, CLEF_NAMES, DURATION_VALUES, FLAT_MASK, MIDI_INSTRUMENTS, Member,
+    NwcFont, NwcHeader, NwcObject, NwcReader, NwcStaff, OCTAVE_SHIFT_NAMES, Object, SHARP_MASK,
+    dump_lines, from_nwc, nwc_lines,
+};
 
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
 use crate::chord::Chord;
@@ -22,7 +27,7 @@ use crate::instrument::Instrument;
 use crate::interval::Interval;
 use crate::key::KeySignature;
 use crate::metadata::{Metadata, MetadataValue};
-use crate::notation::{Placement, Tie, TieType};
+use crate::notation::{Placement as Side, Tie, TieType};
 use crate::note::Note;
 use crate::percussion::Unpitched;
 use crate::pitch::Pitch;
@@ -32,6 +37,8 @@ use crate::rest::Rest;
 use crate::spanner::Spanner;
 use crate::stream::{Stream, StreamElement, StreamKind};
 use crate::tempo::MetronomeMark;
+
+use placement::{Placement, Placing};
 
 fn error(message: impl Into<String>) -> Error {
     Error::noteworthy(message.into())
@@ -170,6 +177,46 @@ enum ClefState {
 }
 
 impl ClefState {
+    /// The clef music21's reader keeps as `currentClef`: `TREBLE`,
+    /// `TREBLE8dw`, `TREBLE8up`, `BASS`, `BASS8dw`, `BASS8up`, `ALTO`,
+    /// `TENOR` or `PERCUSSION`; anything else is read as treble.
+    fn named(name: &str) -> Self {
+        match name {
+            "TREBLE8dw" => Self::TrebleDown,
+            "TREBLE8up" => Self::TrebleUp,
+            "BASS" => Self::Bass,
+            "PERCUSSION" => Self::Percussion,
+            "BASS8dw" => Self::BassDown,
+            "BASS8up" => Self::BassUp,
+            "ALTO" => Self::Alto,
+            "TENOR" => Self::Tenor,
+            _ => Self::Treble,
+        }
+    }
+
+    /// The name music21's reader keeps for this clef as `currentClef`.
+    fn music21_name(self) -> &'static str {
+        match self {
+            Self::Treble => "TREBLE",
+            Self::TrebleDown => "TREBLE8dw",
+            Self::TrebleUp => "TREBLE8up",
+            Self::Bass => "BASS",
+            Self::BassDown => "BASS8dw",
+            Self::BassUp => "BASS8up",
+            Self::Alto => "ALTO",
+            Self::Tenor => "TENOR",
+            Self::Percussion => "PERCUSSION",
+        }
+    }
+
+    /// The step and octave of a staff position under this clef.
+    fn step_and_octave(self, position: IntegerType) -> (char, IntegerType) {
+        let (octave, lowest, steps) = self.table();
+        let from_lowest = position - lowest;
+        let step = steps[usize::try_from(from_lowest.rem_euclid(7)).unwrap_or(0)];
+        (step, octave + from_lowest.div_euclid(7))
+    }
+
     /// music21's `getStepAndOctaveFromPosition` tables: the octave of the
     /// lowest of seven positions, that position, and the steps from it.
     fn table(self) -> (IntegerType, IntegerType, [char; 7]) {
@@ -185,6 +232,23 @@ impl ClefState {
             Self::Treble => (5, 1, TREBLE),
         }
     }
+}
+
+/// The positions of a staff under a clef, as music21's
+/// `noteworthy.dictionaries` lays them out: the octave of the lowest of
+/// seven positions, that position, and the steps from it. The clef is
+/// named as music21's reader keeps it (`TREBLE`, `BASS8dw`, `ALTO`, ...).
+#[must_use]
+pub fn staff_positions(clef: &str) -> (IntegerType, IntegerType, [char; 7]) {
+    ClefState::named(clef).table()
+}
+
+/// The step and octave of a staff position under a clef: music21's
+/// `getStepAndOctaveFromPosition`. Position 1 under the treble clef is
+/// C5, and each position up or down is a step.
+#[must_use]
+pub fn step_and_octave(clef: &str, position: IntegerType) -> (char, IntegerType) {
+    ClefState::named(clef).step_and_octave(position)
 }
 
 /// Something standing in a measure or a voice while the file is read.
@@ -232,6 +296,9 @@ fn highest_time(items: &[Item]) -> FloatType {
 }
 
 struct MeasureBuilt {
+    /// Which measure of the file this is, for the slurs and ties that
+    /// remember where they were left open.
+    id: usize,
     number: IntegerType,
     left: Option<Barline>,
     right: Option<Barline>,
@@ -240,8 +307,9 @@ struct MeasureBuilt {
 }
 
 impl MeasureBuilt {
-    fn new(number: IntegerType) -> Self {
+    fn new(number: IntegerType, id: usize) -> Self {
         Self {
+            id,
             number,
             left: None,
             right: None,
@@ -259,113 +327,165 @@ impl MeasureBuilt {
         self.inserted += 1;
     }
 
-    /// music21's `append`.
-    fn append(&mut self, element: StreamElement, serial: Option<usize>) {
-        let at = highest_time(&self.items);
-        self.insert(at, Content::Element(Box::new(element), serial));
-    }
-
-    fn has_voices(&self) -> bool {
-        self.items
-            .iter()
-            .any(|item| matches!(item.content, Content::Voice(_)))
-    }
-
     /// music21's truth of a stream: whether it holds anything, barlines
     /// included.
     fn holds_anything(&self) -> bool {
         !self.items.is_empty() || self.left.is_some() || self.right.is_some()
     }
 
-    /// Where music21's `getShortestStream` appends: the measure, or the
-    /// shortest of its voices, the first of those equally short.
-    fn append_shortest(&mut self, element: StreamElement, serial: Option<usize>) {
-        if !self.has_voices() {
-            self.append(element, serial);
-            return;
-        }
-        let shortest = sorted_places(&self.items)
+    /// The places of the voices, in music21's order.
+    fn voices(&self) -> Vec<usize> {
+        sorted_places(&self.items)
             .into_iter()
             .filter(|place| matches!(self.items[*place].content, Content::Voice(_)))
-            .min_by(|left, right| {
-                voice_length(&self.items[*left]).total_cmp(&voice_length(&self.items[*right]))
-            });
-        if let Some(place) = shortest
-            && let Content::Voice(voice) = &mut self.items[place].content
-        {
-            append_to_voice(voice, element, serial);
-        }
+            .collect()
+    }
+}
+
+/// An element being placed, with its number among the notes, chords and
+/// rests read.
+type Placed = (StreamElement, Option<usize>);
+
+/// The measure being read and the part's slurs, as the placing
+/// algorithm sees them: a measure is its number, a voice its place among
+/// the measure's items, a note its number.
+struct Built<'a> {
+    measure: &'a mut MeasureBuilt,
+    slurs: Option<&'a mut Vec<(usize, usize)>>,
+}
+
+impl Placing for Built<'_> {
+    type Measure = usize;
+    type Voice = usize;
+    type Element = Placed;
+    type Handle = usize;
+    type Error = Error;
+
+    fn copy_measure(&self, measure: &usize) -> usize {
+        *measure
     }
 
-    /// Elements starting together where music21's `appendSimultaneous`
-    /// puts them: where the shortest voice ends, each in the next voice
-    /// ending there or a new one -- the notes the measure holds becoming
-    /// its first voice where it has none.
-    fn append_in_voices(&mut self, elements: Vec<(StreamElement, usize)>) {
-        let offset = if self.has_voices() {
-            self.items
-                .iter()
-                .filter(|item| matches!(item.content, Content::Voice(_)))
-                .map(voice_length)
-                .fold(FloatType::INFINITY, FloatType::min)
-        } else {
-            highest_time(&self.items)
+    fn copy_handle(&self, handle: &usize) -> usize {
+        *handle
+    }
+
+    fn same_measure(&self, first: &usize, second: &usize) -> bool {
+        first == second
+    }
+
+    fn same_handle(&self, first: &usize, second: &usize) -> bool {
+        first == second
+    }
+
+    fn handle(&self, element: &Placed) -> Result<usize> {
+        element
+            .1
+            .ok_or_else(|| error("a note placed with no number"))
+    }
+
+    fn highest_time(&self, _measure: &usize) -> Result<FloatType> {
+        Ok(highest_time(&self.measure.items))
+    }
+
+    fn length(&self, element: &Placed) -> Result<FloatType> {
+        Ok(element.0.quarter_length())
+    }
+
+    fn voices(&self, _measure: &usize) -> Result<Vec<usize>> {
+        Ok(self.measure.voices())
+    }
+
+    fn voice_end(&self, voice: &usize) -> Result<FloatType> {
+        Ok(voice_length(&self.measure.items[*voice]))
+    }
+
+    fn gather_voice(&mut self, _measure: &usize) -> Result<usize> {
+        let measure = &mut *self.measure;
+        let notes: Vec<usize> = sorted_places(&measure.items)
+            .into_iter()
+            .filter(|place| {
+                matches!(&measure.items[*place].content,
+                    Content::Element(element, _) if is_general_note(element))
+            })
+            .collect();
+        let mut voice = VoiceBuilt {
+            id: 0,
+            items: Vec::new(),
         };
-        if !self.has_voices() {
-            let mut voice = VoiceBuilt {
-                id: 0,
-                items: Vec::new(),
-            };
-            let notes: Vec<usize> = sorted_places(&self.items)
-                .into_iter()
-                .filter(|place| {
-                    matches!(&self.items[*place].content,
-                        Content::Element(element, _) if is_general_note(element))
-                })
-                .collect();
-            for place in &notes {
-                if let Content::Element(element, serial) = &self.items[*place].content {
-                    append_to_voice(&mut voice, (**element).clone(), *serial);
-                }
-            }
-            let mut index = 0;
-            self.items.retain(|_| {
-                let keep = !notes.contains(&index);
-                index += 1;
-                keep
-            });
-            self.insert(0.0, Content::Voice(voice));
-        }
-        let voices: Vec<usize> = sorted_places(&self.items)
-            .into_iter()
-            .filter(|place| matches!(self.items[*place].content, Content::Voice(_)))
-            .collect();
-        let mut count = voices.len();
-        let mut free: std::collections::VecDeque<usize> = voices
-            .into_iter()
-            .filter(|place| voice_length(&self.items[*place]) == offset)
-            .collect();
-        for (element, serial) in elements {
-            let place = free.pop_front().unwrap_or_else(|| {
-                self.insert(
-                    0.0,
-                    Content::Voice(VoiceBuilt {
-                        id: count,
-                        items: Vec::new(),
-                    }),
-                );
-                count += 1;
-                self.items.len() - 1
-            });
-            if let Content::Voice(voice) = &mut self.items[place].content {
+        for place in &notes {
+            let item = &measure.items[*place];
+            if let Content::Element(element, serial) = &item.content {
                 let inserted = voice.items.len();
                 voice.items.push(Item {
-                    offset,
-                    content: Content::Element(Box::new(element), Some(serial)),
+                    offset: item.offset,
+                    content: Content::Element(element.clone(), *serial),
                     inserted,
                 });
             }
         }
+        let mut index = 0;
+        measure.items.retain(|_| {
+            let keep = !notes.contains(&index);
+            index += 1;
+            keep
+        });
+        measure.insert(0.0, Content::Voice(voice));
+        Ok(measure.items.len() - 1)
+    }
+
+    fn new_voice(&mut self, _measure: &usize, id: usize) -> Result<usize> {
+        self.measure.insert(
+            0.0,
+            Content::Voice(VoiceBuilt {
+                id,
+                items: Vec::new(),
+            }),
+        );
+        Ok(self.measure.items.len() - 1)
+    }
+
+    fn insert(&mut self, _measure: &usize, offset: FloatType, element: Placed) -> Result<()> {
+        let (element, serial) = element;
+        self.measure
+            .insert(offset, Content::Element(Box::new(element), serial));
+        Ok(())
+    }
+
+    fn insert_in(&mut self, voice: &usize, offset: FloatType, element: Placed) -> Result<()> {
+        let (element, serial) = element;
+        if let Content::Voice(voice) = &mut self.measure.items[*voice].content {
+            let inserted = voice.items.len();
+            voice.items.push(Item {
+                offset,
+                content: Content::Element(Box::new(element), serial),
+                inserted,
+            });
+        }
+        Ok(())
+    }
+
+    fn set_ties(&mut self, element: &mut Placed, ties: &[Option<TieType>]) -> Result<()> {
+        let notes: Vec<&mut Note> = match &mut element.0 {
+            StreamElement::Note(note) => vec![note],
+            StreamElement::Unpitched(stroke) => vec![stroke.written_mut()],
+            StreamElement::Chord(chord) => chord.notes_mut().iter_mut().collect(),
+            _ => Vec::new(),
+        };
+        for (note, tie) in notes.into_iter().zip(ties) {
+            if let Some(kind) = tie {
+                note.set_tie(Some(Tie::new(*kind)));
+            }
+        }
+        Ok(())
+    }
+
+    fn slur(&mut self, _measure: &usize, start: &usize, end: &usize) -> Result<()> {
+        let slurs = self
+            .slurs
+            .as_mut()
+            .ok_or_else(|| error("a slur before the first staff"))?;
+        slurs.push((*start, *end));
+        Ok(())
     }
 }
 
@@ -374,16 +494,6 @@ fn voice_length(item: &Item) -> FloatType {
         Content::Voice(voice) => highest_time(&voice.items),
         Content::Element(element, _) => element.quarter_length(),
     }
-}
-
-fn append_to_voice(voice: &mut VoiceBuilt, element: StreamElement, serial: Option<usize>) {
-    let at = highest_time(&voice.items);
-    let inserted = voice.items.len();
-    voice.items.push(Item {
-        offset: at,
-        content: Content::Element(Box::new(element), serial),
-        inserted,
-    });
 }
 
 /// The places of a list's items in music21's order: offset, then class,
@@ -467,9 +577,11 @@ struct Reader {
     metadata: Option<Metadata>,
     clef: ClefState,
     key: KeySignature,
-    within_slur: bool,
-    slur_start: Option<usize>,
-    within_tie: bool,
+    /// How many measures have been begun, which numbers each.
+    measures_begun: usize,
+    /// Where the next object goes, and the slurs and ties left open, by
+    /// measure number and note number.
+    placement: Placement<usize, usize>,
     lyric_position: usize,
     lyrics: Vec<String>,
     /// Accidentals written so far in the measure, by the step and octave
@@ -484,7 +596,7 @@ impl Reader {
         Self {
             parts: Vec::new(),
             part: None,
-            measure: MeasureBuilt::new(0),
+            measure: MeasureBuilt::new(0, 0),
             measure_number: 0,
             ending: 1,
             repeated: Vec::new(),
@@ -492,9 +604,8 @@ impl Reader {
             metadata: None,
             clef: ClefState::Treble,
             key: KeySignature::new(0),
-            within_slur: false,
-            slur_start: None,
-            within_tie: false,
+            measures_begun: 1,
+            placement: Placement::default(),
             lyric_position: 0,
             lyrics: Vec::new(),
             accidentals: Vec::new(),
@@ -519,8 +630,7 @@ impl Reader {
             "Clef" => self.clef(attributes)?,
             "Dynamic" => {
                 if let Some(style) = attributes.get("Style") {
-                    self.measure
-                        .append(StreamElement::Dynamic(Dynamic::new(style)), None);
+                    self.at_position(StreamElement::Dynamic(Dynamic::new(style)))?;
                 }
             }
             "Ending" => self.ending(attributes)?,
@@ -536,12 +646,14 @@ impl Reader {
                 self.lyric_position += 1;
             }
             "Rest" => {
+                let written = attributes.required("Dur")?;
                 let mut rest = Rest::new(Duration::quarter());
+                rest.set_duration(duration_of(written)?);
                 let serial = self.serial();
-                let duration = self.duration(attributes.required("Dur")?, serial)?;
-                rest.set_duration(duration);
-                self.measure
-                    .append_shortest(StreamElement::Rest(rest), Some(serial));
+                self.simultaneous(vec![(
+                    (StreamElement::Rest(rest), Some(serial)),
+                    slurred(written),
+                )])?;
             }
             "SongInfo" => {
                 let mut metadata = Metadata::new();
@@ -567,22 +679,16 @@ impl Reader {
                 let mut words = TextExpression::new(attributes.required("Text")?);
                 let position: IntegerType = number(attributes.required("Pos")?)?;
                 words.set_placement(Some(if position < 0 {
-                    Placement::Above
+                    Side::Above
                 } else {
-                    Placement::Below
+                    Side::Below
                 }));
-                self.measure
-                    .append(StreamElement::TextExpression(words), None);
+                self.at_position(StreamElement::TextExpression(words))?;
             }
             "TimeSig" => {
-                let signature = match attributes.required("Signature")? {
-                    "AllaBreve" => "2/2",
-                    "Common" => "4/4",
-                    other => other,
-                };
+                let signature = meter_ratio(attributes.required("Signature")?);
                 let meter = crate::meter::TimeSignature::from_ratio_string(signature)?;
-                self.measure
-                    .append(StreamElement::TimeSignature(meter), None);
+                self.at_position(StreamElement::TimeSignature(meter))?;
             }
             _ => {}
         }
@@ -606,8 +712,36 @@ impl Reader {
         self.serials - 1
     }
 
+    /// A measure to read into next, numbered `number`.
+    fn begun(&mut self, number: IntegerType) -> MeasureBuilt {
+        self.measures_begun += 1;
+        MeasureBuilt::new(number, self.measures_begun - 1)
+    }
+
+    /// The measure being read and the part's slurs, as [`Placing`] asks
+    /// for them.
+    fn built(&mut self) -> (Built<'_>, &mut Placement<usize, usize>) {
+        let slurs = self.part.as_mut().map(|part| &mut part.slurs);
+        (
+            Built {
+                measure: &mut self.measure,
+                slurs,
+            },
+            &mut self.placement,
+        )
+    }
+
+    /// music21's `insertAtPosition`: a clef, key, dynamic or other mark
+    /// where the next note goes.
+    fn at_position(&mut self, element: StreamElement) -> Result<()> {
+        let id = self.measure.id;
+        let (mut built, placement) = self.built();
+        placement.mark(&mut built, &id, (element, None))
+    }
+
     fn add_staff(&mut self, attributes: &Attributes) {
         self.new_part();
+        self.placement.new_staff();
         self.key = KeySignature::new(0);
         self.accidentals.clear();
         self.lyrics.clear();
@@ -620,7 +754,8 @@ impl Reader {
     /// music21's `createPart`: the part being read is closed with the
     /// measure it is in, however empty, and a new one begun.
     fn new_part(&mut self) {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(0));
+        let fresh = self.begun(0);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         if let Some(mut part) = self.part.take() {
             part.append(PartItem::Measure(measure));
             self.parts.push(part);
@@ -635,13 +770,19 @@ impl Reader {
 
     /// Closes the measure being read and begins another numbered `number`.
     fn close_measure(&mut self, number: IntegerType) -> Result<()> {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(number));
+        let fresh = self.begun(number);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         self.part()?.append(PartItem::Measure(measure));
         Ok(())
     }
 
     fn bar(&mut self, attributes: &Attributes) -> Result<()> {
         self.accidentals.clear();
+        // A tie running to the barline goes on into the next measure; any
+        // other open tie is dropped.
+        let id = self.measure.id;
+        let (built, placement) = self.built();
+        placement.barline(&built, &id)?;
         let Some(style) = attributes.get("Style") else {
             self.close_measure(self.measure_number)?;
             if !self.repeated.is_empty() {
@@ -655,24 +796,19 @@ impl Reader {
             let spanned = std::mem::take(&mut self.repeated);
             self.endings.push((spanned, self.ending));
         }
-        match style {
-            "MasterRepeatOpen" | "LocalRepeatOpen" => {
+        match bar_style(style)? {
+            BarStyle::RepeatOpen => {
                 self.close_measure(0)?;
                 self.measure.left = Some(Barline::repeat(RepeatDirection::Start, None));
             }
-            "MasterRepeatClose" | "LocalRepeatClose" => {
+            BarStyle::RepeatClose => {
                 self.measure.right = Some(Barline::repeat(RepeatDirection::End, None));
                 self.close_measure(0)?;
             }
-            "Double" | "SectionOpen" | "SectionClose" => {
-                self.measure.right = Some(Barline::new(match style {
-                    "Double" => BarlineType::Double,
-                    "SectionOpen" => BarlineType::HeavyLight,
-                    _ => BarlineType::Final,
-                }));
+            BarStyle::Closing(kind) => {
+                self.measure.right = Some(Barline::new(kind));
                 self.close_measure(0)?;
             }
-            other => return Err(error(format!("cannot find a style {other} in our list"))),
         }
         self.measure.number = self.measure_number;
         self.measure_number += 1;
@@ -691,70 +827,21 @@ impl Reader {
     }
 
     fn flow(&mut self, attributes: &Attributes) -> Result<()> {
-        let kind = match attributes.required("Style")? {
-            "DCalFine" => RepeatExpressionKind::DaCapoAlFine,
-            "Coda" | "ToCoda" => RepeatExpressionKind::Coda,
-            "Segno" => RepeatExpressionKind::Segno,
-            "DSalCoda" => RepeatExpressionKind::DalSegnoAlCoda,
-            "Fine" => RepeatExpressionKind::Fine,
-            _ => return Err(error("Cannot get style from a flow mark")),
-        };
-        self.measure.append(
-            StreamElement::RepeatExpression(RepeatExpression::new(kind)),
-            None,
-        );
+        let kind = flow_kind(attributes.required("Style")?)?;
+        self.at_position(StreamElement::RepeatExpression(RepeatExpression::new(kind)))?;
         Ok(())
     }
 
     fn clef(&mut self, attributes: &Attributes) -> Result<()> {
-        let shift = match attributes.get("OctaveShift") {
-            None => 0,
-            Some("Octave Down") => -1,
-            Some("Octave Up") => 1,
-            Some(other) => {
-                return Err(error(format!(
-                    "Did not get a proper octave shift from {other}"
-                )));
-            }
-        };
-        let kind = attributes.required("Type")?;
-        let (clef, state) = match (kind, shift) {
-            ("Treble", 0) => (ClefKind::TrebleClef, ClefState::Treble),
-            ("Treble", -1) => (ClefKind::Treble8vbClef, ClefState::TrebleDown),
-            ("Treble", _) => (ClefKind::Treble8vaClef, ClefState::TrebleUp),
-            ("Bass", 0) => (ClefKind::BassClef, ClefState::Bass),
-            ("Bass", -1) => (ClefKind::Bass8vbClef, ClefState::BassDown),
-            ("Bass", _) => (ClefKind::Bass8vaClef, ClefState::BassUp),
-            ("Alto", 0) => (ClefKind::AltoClef, ClefState::Alto),
-            ("Alto", _) => return Err(error("cannot shift octaves on an alto clef")),
-            ("Tenor", 0) => (ClefKind::TenorClef, ClefState::Tenor),
-            ("Tenor", _) => return Err(error("cannot shift octaves on a tenor clef")),
-            ("Percussion", _) => (ClefKind::PercussionClef, ClefState::Percussion),
-            (other, _) => {
-                return Err(error(format!(
-                    "Did not find a proper clef in type, {other}"
-                )));
-            }
-        };
-        let mut clef = Clef::of_kind(clef);
-        if state == ClefState::Percussion {
-            clef.set_line(Some(2));
-        }
-        self.measure.append(StreamElement::Clef(clef), None);
+        let (clef, state) = clef_of(attributes.required("Type")?, attributes.get("OctaveShift"))?;
+        self.at_position(StreamElement::Clef(clef))?;
         self.clef = state;
         Ok(())
     }
 
     fn key(&mut self, attributes: &Attributes) -> Result<()> {
-        let signature = attributes.required("Signature")?;
-        let sharps = signature.chars().fold(0, |sharps, mark| match mark {
-            '#' => sharps + 1,
-            'b' => sharps - 1,
-            _ => sharps,
-        });
-        self.key = KeySignature::new(sharps);
-        self.measure
-            .append(StreamElement::KeySignature(self.key.clone()), None);
+        self.key = KeySignature::new(key_sharps(attributes.required("Signature")?));
+        self.at_position(StreamElement::KeySignature(self.key.clone()))?;
         Ok(())
     }
 
@@ -769,65 +856,20 @@ impl Reader {
         Ok(())
     }
 
-    /// music21's `setDurationForObject`: the length a `Dur` value gives,
-    /// and the slur it begins or ends.
-    fn duration(&mut self, written: &str, serial: usize) -> Result<Duration> {
-        let mut parts = written.split(',');
-        let length = match parts.next().unwrap_or("") {
-            "Whole" => 4.0,
-            "Half" => 2.0,
-            "4th" => 1.0,
-            "8th" => 0.5,
-            "16th" => 0.25,
-            "32nd" => 0.125,
-            "64th" => 0.0625,
-            other => return Err(error(format!("no note length {other}"))),
-        };
-        let mut duration = Duration::new(length)?;
-        let mut slurred = false;
-        for part in written.split(',') {
-            match part {
-                "Grace" => duration = duration.grace_duration(),
-                "Slur" => {
-                    if !self.within_slur {
-                        self.slur_start = Some(serial);
-                    }
-                    slurred = true;
-                }
-                "Dotted" => duration = with_dots(&duration, 1),
-                "DblDotted" => duration = with_dots(&duration, 2),
-                "Triplet" | "Triplet=First" | "Triplet=End" => {
-                    let value = duration
-                        .type_and_dots()
-                        .map_or(DurationType::Quarter, |(value, _)| value);
-                    duration.append_tuplet(Tuplet::new(3, 2, value, 0));
-                }
-                _ => {}
-            }
-        }
-        if self.within_slur && !slurred {
-            if let (Some(start), Some(part)) = (self.slur_start, self.part.as_mut()) {
-                part.slurs.push((start, serial));
-            }
-            self.within_slur = false;
-        } else {
-            self.within_slur = slurred;
-        }
-        Ok(duration)
-    }
-
-    /// music21's `setTieFromPitchInfo`: whether a note begins or ends a tie.
-    fn tie(&mut self, position: &str) -> Option<Tie> {
-        if position.ends_with('^') {
-            let begins = !self.within_tie;
-            self.within_tie = true;
-            return begins.then(|| Tie::new(TieType::Start));
-        }
-        if self.within_tie {
-            self.within_tie = false;
-            return Some(Tie::new(TieType::Stop));
-        }
-        None
+    /// music21's `setTieFromPitchInfo`: the ties of an element about to go
+    /// at the current position, from its `Pos` value, each note's staff
+    /// step under the clef in force and whether it ends `^`.
+    fn tied(&mut self, element: &mut Placed, positions: &str) -> Result<()> {
+        let steps: Vec<((char, IntegerType), bool)> = positions
+            .split(',')
+            .filter_map(|position| {
+                let place = first_number(position)?;
+                Some((self.clef.step_and_octave(place), position.ends_with('^')))
+            })
+            .collect();
+        let id = self.measure.id;
+        let (mut built, placement) = self.built();
+        placement.tie(&mut built, &id, element, &steps)
     }
 
     /// music21's `getPitchFromPositionInfo`: a pitch from one `Pos` value,
@@ -886,35 +928,27 @@ impl Reader {
         let written = attributes.required("Dur")?;
         let position = attributes.required("Pos")?;
         let pitch = self.pitch(position)?;
+        let duration = duration_of(written)?;
         let serial = self.serial();
-        let duration = self.duration(written, serial)?;
-        let tie = self.tie(position);
         let lyric = self.lyric().map(str::to_string);
+        let mut note = Note::from_pitch(pitch.clone()).with_duration(duration.clone());
+        if let Some(lyric) = lyric {
+            note.add_lyric(&lyric, None, false)?;
+        }
         let element = if self.clef == ClefState::Percussion {
             let octave = pitch.octave().unwrap_or(4);
             let step = pitch.step().as_char();
             let mut stroke = Unpitched::displayed_at(step, octave)?;
-            let note = stroke.written_mut();
-            note.set_duration(duration);
-            if tie.is_some() {
-                note.set_tie(tie);
-            }
-            if let Some(lyric) = lyric {
-                note.add_lyric(&lyric, None, false)?;
-            }
+            let written_note = stroke.written_mut();
+            written_note.set_duration(duration);
+            *written_note.lyrics_mut() = note.lyrics().to_vec();
             StreamElement::Unpitched(stroke)
         } else {
-            let mut note = Note::from_pitch(pitch).with_duration(duration);
-            if tie.is_some() {
-                note.set_tie(tie);
-            }
-            if let Some(lyric) = lyric {
-                note.add_lyric(&lyric, None, false)?;
-            }
             StreamElement::Note(note)
         };
-        self.measure.append_shortest(element, Some(serial));
-        Ok(())
+        let mut element = (element, Some(serial));
+        self.tied(&mut element, position)?;
+        self.simultaneous(vec![(element, slurred(written))])
     }
 
     /// music21's `translateChord`: a chord for each `Dur` and the `Pos`
@@ -937,57 +971,60 @@ impl Reader {
         for (written, position) in &groups {
             chords.push(self.chord_of(written, position)?);
         }
+        self.with_lyric(&mut chords[0].0.0)?;
         self.simultaneous(chords)
     }
 
     /// music21's `translateRestChord`: the chord of `Dur2` and `Pos2`, and a
     /// rest of `Dur` sounding with it.
     fn rest_chord(&mut self, attributes: &Attributes) -> Result<()> {
-        let chord = self.chord_of(attributes.required("Dur2")?, attributes.required("Pos2")?)?;
-        let serial = self.serial();
+        let mut chord =
+            self.chord_of(attributes.required("Dur2")?, attributes.required("Pos2")?)?;
+        let written = attributes.required("Dur")?;
         let mut rest = Rest::new(Duration::quarter());
-        rest.set_duration(self.duration(attributes.required("Dur")?, serial)?);
-        self.simultaneous(vec![chord, (StreamElement::Rest(rest), serial)])
+        rest.set_duration(duration_of(written)?);
+        let serial = self.serial();
+        self.with_lyric(&mut chord.0.0)?;
+        self.simultaneous(vec![
+            chord,
+            ((StreamElement::Rest(rest), Some(serial)), slurred(written)),
+        ])
     }
 
     /// music21's `createChord`: one group of a chord's notes.
-    fn chord_of(&mut self, written: &str, position: &str) -> Result<(StreamElement, usize)> {
+    fn chord_of(&mut self, written: &str, position: &str) -> Result<(Placed, bool)> {
+        let duration = duration_of(written)?;
         let serial = self.serial();
-        let duration = self.duration(written, serial)?;
         let mut pitches = Vec::new();
         for one in position.split(',') {
             pitches.push(self.pitch(one)?);
         }
         let notes: Vec<Note> = pitches.into_iter().map(Note::from_pitch).collect();
-        let mut chord = Chord::new(notes)?.with_duration(duration);
-        if let Some(tie) = self.tie(position) {
-            for note in chord.notes_mut() {
-                note.set_tie(Some(tie.clone()));
-            }
-        }
-        Ok((StreamElement::Chord(chord), serial))
+        let chord = Chord::new(notes)?.with_duration(duration);
+        let mut element = (StreamElement::Chord(chord), Some(serial));
+        self.tied(&mut element, position)?;
+        Ok((element, slurred(written)))
     }
 
-    /// music21's `appendSimultaneous`: the first takes the lyric sung now,
-    /// and each goes in a voice of its own where there are more than one.
-    fn simultaneous(&mut self, mut elements: Vec<(StreamElement, usize)>) -> Result<()> {
-        if let Some(lyric) = self.lyric().map(str::to_string) {
-            // The first is always a chord.
-            if let StreamElement::Chord(chord) = &mut elements[0].0 {
-                chord.add_lyric(&lyric, None, false)?;
-            }
-        }
-        if elements.len() == 1 {
-            let (element, serial) = elements.remove(0);
-            self.measure.append_shortest(element, Some(serial));
-        } else {
-            self.measure.append_in_voices(elements);
+    /// music21's `addCurrentLyric`: the syllable sung now, on a chord.
+    fn with_lyric(&self, element: &mut StreamElement) -> Result<()> {
+        if let (Some(lyric), StreamElement::Chord(chord)) = (self.lyric(), element) {
+            chord.add_lyric(lyric, None, false)?;
         }
         Ok(())
     }
 
+    /// music21's `appendSimultaneous`: notes, chords or rests starting
+    /// together at the current position, each with whether it is slurred.
+    fn simultaneous(&mut self, elements: Vec<(Placed, bool)>) -> Result<()> {
+        let id = self.measure.id;
+        let (mut built, placement) = self.built();
+        placement.place(&mut built, &id, elements)
+    }
+
     fn finish(mut self) -> Result<Stream> {
-        let measure = std::mem::replace(&mut self.measure, MeasureBuilt::new(0));
+        let fresh = self.begun(0);
+        let measure = std::mem::replace(&mut self.measure, fresh);
         let mut part = self
             .part
             .take()
@@ -1021,6 +1058,173 @@ fn with_dots(duration: &Duration, dots: u32) -> Duration {
     dotted
 }
 
+/// music21's `createClef`: the clef a `Type` and `OctaveShift` name, and
+/// the name music21's reader keeps for it as `currentClef`.
+///
+/// # Errors
+///
+/// An octave shift or clef music21 does not know, or a shifted alto or
+/// tenor clef.
+pub fn clef_named(kind: &str, shift: Option<&str>) -> Result<(Clef, &'static str)> {
+    let (clef, state) = clef_of(kind, shift)?;
+    Ok((clef, state.music21_name()))
+}
+
+fn clef_of(kind: &str, shift: Option<&str>) -> Result<(Clef, ClefState)> {
+    let shift = match shift {
+        None => 0,
+        Some("Octave Down") => -1,
+        Some("Octave Up") => 1,
+        Some(other) => {
+            return Err(error(format!(
+                "Did not get a proper octave shift from {other}"
+            )));
+        }
+    };
+    let (clef, state) = match (kind, shift) {
+        ("Treble", 0) => (ClefKind::TrebleClef, ClefState::Treble),
+        ("Treble", -1) => (ClefKind::Treble8vbClef, ClefState::TrebleDown),
+        ("Treble", _) => (ClefKind::Treble8vaClef, ClefState::TrebleUp),
+        ("Bass", 0) => (ClefKind::BassClef, ClefState::Bass),
+        ("Bass", -1) => (ClefKind::Bass8vbClef, ClefState::BassDown),
+        ("Bass", _) => (ClefKind::Bass8vaClef, ClefState::BassUp),
+        ("Alto", 0) => (ClefKind::AltoClef, ClefState::Alto),
+        ("Alto", _) => return Err(error("cannot shift octaves on an alto clef")),
+        ("Tenor", 0) => (ClefKind::TenorClef, ClefState::Tenor),
+        ("Tenor", _) => return Err(error("cannot shift octaves on a tenor clef")),
+        ("Percussion", _) => (ClefKind::PercussionClef, ClefState::Percussion),
+        (other, _) => {
+            return Err(error(format!(
+                "Did not find a proper clef in type, {other}"
+            )));
+        }
+    };
+    let mut clef = Clef::of_kind(clef);
+    if state == ClefState::Percussion {
+        clef.set_line(Some(2));
+    }
+    Ok((clef, state))
+}
+
+/// music21's `createKey`: sharps less flats in a `Signature` value.
+#[must_use]
+pub fn key_sharps(signature: &str) -> IntegerType {
+    signature.chars().fold(0, |sharps, mark| match mark {
+        '#' => sharps + 1,
+        'b' => sharps - 1,
+        _ => sharps,
+    })
+}
+
+/// music21's `createTimeSignature`: a `Signature` value as a ratio.
+#[must_use]
+pub fn meter_ratio(signature: &str) -> &str {
+    match signature {
+        "AllaBreve" => "2/2",
+        "Common" => "4/4",
+        other => other,
+    }
+}
+
+/// music21's `createOtherRepetitions`: the mark a flow `Style` names.
+///
+/// # Errors
+///
+/// A style music21 does not know.
+pub fn flow_kind(style: &str) -> Result<RepeatExpressionKind> {
+    match style {
+        "DCalFine" => Ok(RepeatExpressionKind::DaCapoAlFine),
+        "Coda" | "ToCoda" => Ok(RepeatExpressionKind::Coda),
+        "Segno" => Ok(RepeatExpressionKind::Segno),
+        "DSalCoda" => Ok(RepeatExpressionKind::DalSegnoAlCoda),
+        "Fine" => Ok(RepeatExpressionKind::Fine),
+        _ => Err(error(format!("Cannot get style from {style}"))),
+    }
+}
+
+/// What a barline `Style` does to the measure: music21's
+/// `createBarlines`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BarStyle {
+    /// The next measure opens with a start repeat.
+    RepeatOpen,
+    /// The measure closes with an end repeat.
+    RepeatClose,
+    /// The measure closes with a barline of this kind.
+    Closing(BarlineType),
+}
+
+/// The barline a `Style` names.
+///
+/// # Errors
+///
+/// A style music21 does not know.
+pub fn bar_style(style: &str) -> Result<BarStyle> {
+    match style {
+        "MasterRepeatOpen" | "LocalRepeatOpen" => Ok(BarStyle::RepeatOpen),
+        "MasterRepeatClose" | "LocalRepeatClose" => Ok(BarStyle::RepeatClose),
+        "Double" => Ok(BarStyle::Closing(BarlineType::Double)),
+        "SectionOpen" => Ok(BarStyle::Closing(BarlineType::HeavyLight)),
+        "SectionClose" => Ok(BarStyle::Closing(BarlineType::Final)),
+        other => Err(error(format!("cannot find a style {other} in our list"))),
+    }
+}
+
+/// music21's `setDurationForObject`: the length a `Dur` value gives, with
+/// its dots, grace and triplet.
+///
+/// # Errors
+///
+/// A length music21 does not know.
+pub fn duration_of(written: &str) -> Result<Duration> {
+    let mut parts = written.split(',');
+    let length = match parts.next().unwrap_or("") {
+        "Whole" => 4.0,
+        "Half" => 2.0,
+        "4th" => 1.0,
+        "8th" => 0.5,
+        "16th" => 0.25,
+        "32nd" => 0.125,
+        "64th" => 0.0625,
+        other => return Err(error(format!("no note length {other}"))),
+    };
+    let mut duration = Duration::new(length)?;
+    for part in written.split(',') {
+        match part {
+            "Grace" => duration = duration.grace_duration(),
+            "Dotted" => duration = with_dots(&duration, 1),
+            "DblDotted" => duration = with_dots(&duration, 2),
+            "Triplet" | "Triplet=First" | "Triplet=End" => {
+                let value = duration
+                    .type_and_dots()
+                    .map_or(DurationType::Quarter, |(value, _)| value);
+                duration.append_tuplet(Tuplet::new(3, 2, value, 0));
+            }
+            _ => {}
+        }
+    }
+    Ok(duration)
+}
+
+/// Whether a `Dur` value slurs the note to the next.
+fn slurred(written: &str) -> bool {
+    written.split(',').any(|part| part == "Slur")
+}
+
+/// The staff position in a `Pos` value: its first whole number, as
+/// music21 finds it with `-?\d+`.
+#[must_use]
+pub fn first_number(position: &str) -> Option<IntegerType> {
+    let start = position.find(|c: char| c.is_ascii_digit())?;
+    let negative = position[..start].ends_with('-');
+    let digits: String = position[start..]
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    let value: IntegerType = digits.parse().ok()?;
+    Some(if negative { -value } else { value })
+}
+
 /// The parts of `Dur` and `Pos` that are numbers, read as Python's `int`.
 fn number<T: std::str::FromStr>(text: &str) -> Result<T> {
     text.trim()
@@ -1030,7 +1234,8 @@ fn number<T: std::str::FromStr>(text: &str) -> Result<T> {
 
 /// music21's `createLyrics`: a verse split into the syllables sung to each
 /// note, a syllable after a hyphen written with one before it.
-fn lyrics(text: &str) -> Vec<String> {
+#[must_use]
+pub fn lyrics(text: &str) -> Vec<String> {
     let text = text
         .trim_matches('"')
         .replace("\r\n", " ")
@@ -1149,6 +1354,15 @@ fn assemble(part: PartBuilt, index: usize, endings: &[(Vec<Place>, u32)]) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_position_is_a_step_and_octave_under_its_clef() {
+        assert_eq!(step_and_octave("BASS", 3), ('G', 3));
+        assert_eq!(step_and_octave("TREBLE", 1), ('C', 5));
+        assert_eq!(step_and_octave("TREBLE", 0), ('B', 4));
+        assert_eq!(step_and_octave("TREBLE", -6), ('C', 4));
+        assert_eq!(step_and_octave("TENOR", 2), ('C', 4));
+    }
 
     #[test]
     fn a_refusal_says_its_line() {
@@ -1278,5 +1492,233 @@ mod tests {
                 (3.0, 1.0, "B4".to_string()),
             ]
         );
+    }
+
+    /// A part's notes, chords and rests as music21 writes their reprs.
+    fn shown(element: &StreamElement) -> String {
+        match element {
+            StreamElement::Note(note) => format!("Note {}", note.pitch().name()),
+            StreamElement::Chord(chord) => format!(
+                "Chord {}",
+                chord
+                    .notes()
+                    .iter()
+                    .map(|note| note.pitch().name_with_octave())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            _ => "other".to_string(),
+        }
+    }
+
+    fn treble(lines: &[&str]) -> Stream {
+        let mut text = String::from("|AddStaff|\n|Clef|Type:Treble\n");
+        for line in lines {
+            text.push_str(line);
+            text.push('\n');
+        }
+        from_noteworthy(&text).unwrap()
+    }
+
+    /// Every slur of the first part, as what it joins.
+    fn slurs(lines: &[&str]) -> Vec<Vec<String>> {
+        let score = treble(lines);
+        let part = &score.parts()[0];
+        let leaves = part.leaves();
+        let mut found: Vec<Vec<String>> = part
+            .spanners()
+            .iter()
+            .map(|slur| {
+                slur.spanned()
+                    .iter()
+                    .map(|place| place.map_or("none".to_string(), |at| shown(leaves[at].1)))
+                    .collect()
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    /// Every note of the first part, with its offset in the part and its tie.
+    fn ties(lines: &[&str]) -> Vec<(String, FloatType, Option<TieType>)> {
+        let score = treble(lines);
+        let part = &score.parts()[0];
+        let mut found = Vec::new();
+        for (offset, element) in part.leaves() {
+            let notes: Vec<&Note> = match element {
+                StreamElement::Note(note) => vec![note],
+                StreamElement::Chord(chord) => chord.notes().iter().collect(),
+                _ => continue,
+            };
+            for note in notes {
+                found.push((
+                    note.pitch().name_with_octave(),
+                    offset,
+                    note.tie().map(Tie::tie_type),
+                ));
+            }
+        }
+        found.sort_by(|left, right| left.1.total_cmp(&right.1).then(left.0.cmp(&right.0)));
+        found
+    }
+
+    fn strings(groups: &[&[&str]]) -> Vec<Vec<String>> {
+        let mut made: Vec<Vec<String>> = groups
+            .iter()
+            .map(|group| group.iter().map(|one| (*one).to_string()).collect())
+            .collect();
+        made.sort();
+        made
+    }
+
+    #[test]
+    fn notes_after_a_group_follow_the_shortest_of_it() {
+        assert_eq!(
+            first_measure(
+                "|Chord|Dur:8th|Pos:-4|Dur2:8th,DblDotted|Pos2:3\n\
+                 |Note|Dur:4th|Pos:-5\n\
+                 |Note|Dur:4th|Pos:-4\n"
+            ),
+            [
+                (0.0, 0.5, "E4".to_string()),
+                (0.0, 0.875, "E5".to_string()),
+                (0.5, 1.0, "D4".to_string()),
+                (1.5, 1.0, "E4".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_slur_runs_to_the_next_note_once_it_ends() {
+        assert_eq!(
+            slurs(&[
+                "|RestChord|Dur:Half|Dur2:4th,Slur|Pos2:-1,1",
+                "|Note|Dur:4th|Pos:0"
+            ]),
+            strings(&[&["Chord A4 C5", "Note B"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:Half|Pos:1|Dur2:4th|Pos2:3",
+                "|Note|Dur:4th,Slur|Pos:2",
+                "|Bar|",
+                "|Note|Dur:4th|Pos:4",
+            ]),
+            strings(&[&["Note D", "Note F"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Note|Dur:4th,Slur|Pos:1",
+                "|AddStaff|",
+                "|Clef|Type:Treble",
+                "|Note|Dur:4th|Pos:1",
+            ]),
+            Vec::<Vec<String>>::new()
+        );
+    }
+
+    #[test]
+    fn a_slur_runs_to_the_same_group() {
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:4th,Slur|Pos:1|Dur2:4th,Slur|Pos2:3",
+                "|Chord|Dur:4th|Pos:2|Dur2:4th|Pos2:4",
+            ]),
+            strings(&[&["Chord C5", "Chord D5"], &["Chord E5", "Chord F5"]])
+        );
+        assert_eq!(
+            slurs(&[
+                "|Chord|Dur:4th,Slur|Pos:1|Dur2:4th,Slur|Pos2:3",
+                "|Note|Dur:4th|Pos:2",
+            ]),
+            strings(&[&["Chord C5", "Note D"], &["Chord E5", "Note D"]])
+        );
+    }
+
+    #[test]
+    fn a_tie_follows_its_position_and_pitch() {
+        let start = Some(TieType::Start);
+        let stop = Some(TieType::Stop);
+        let at = |name: &str, offset: FloatType, tie| (name.to_string(), offset, tie);
+        assert_eq!(
+            ties(&[
+                "|Chord|Dur:4th|Pos:1^|Dur2:4th|Pos2:3",
+                "|Chord|Dur:4th|Pos:1|Dur2:4th|Pos2:3"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("E5", 0.0, None),
+                at("C5", 1.0, stop),
+                at("E5", 1.0, None)
+            ]
+        );
+        assert_eq!(
+            ties(&[
+                "|Note|Dur:4th|Pos:-6^",
+                "|Clef|Type:Bass",
+                "|Note|Dur:4th|Pos:6"
+            ]),
+            [at("C4", 0.0, start), at("C4", 1.0, stop)]
+        );
+        assert_eq!(
+            ties(&[
+                "|Note|Dur:4th|Pos:1^",
+                "|Note|Dur:4th|Pos:2",
+                "|Note|Dur:4th|Pos:1"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("D5", 1.0, None),
+                at("C5", 2.0, None)
+            ]
+        );
+        assert_eq!(
+            ties(&["|Note|Dur:Whole|Pos:1^", "|Bar|", "|Note|Dur:Whole|Pos:1"]),
+            [at("C5", 0.0, start), at("C5", 4.0, stop)]
+        );
+        assert_eq!(
+            ties(&[
+                "|Chord|Dur:4th|Pos:1^|Dur2:Half|Pos2:3",
+                "|Bar|",
+                "|Note|Dur:4th|Pos:1"
+            ]),
+            [
+                at("C5", 0.0, start),
+                at("E5", 0.0, None),
+                at("C5", 2.0, None)
+            ]
+        );
+    }
+
+    #[test]
+    fn a_direction_goes_where_the_next_note_will() {
+        for line in [
+            "|Dynamic|Style:p|Pos:-8",
+            "|Clef|Type:Bass",
+            "|Key|Signature:F#",
+            "|Text|Text:\"dolce\"|Pos:8",
+        ] {
+            let score = treble(&[
+                "|Chord|Dur:4th|Pos:-1|Dur2:Whole|Pos2:3",
+                line,
+                "|Note|Dur:4th|Pos:1",
+            ]);
+            let measure = &score.parts()[0].measures()[0];
+            let placed: Vec<FloatType> = measure
+                .leaves()
+                .into_iter()
+                .filter(|(_, element)| {
+                    matches!(
+                        element,
+                        StreamElement::Dynamic(_)
+                            | StreamElement::KeySignature(_)
+                            | StreamElement::TextExpression(_)
+                            | StreamElement::Note(_)
+                    ) || matches!(element, StreamElement::Clef(clef) if clef.kind() == ClefKind::BassClef)
+                })
+                .map(|(offset, _)| offset)
+                .collect();
+            assert_eq!(placed, [1.0, 1.0], "{line}");
+        }
     }
 }

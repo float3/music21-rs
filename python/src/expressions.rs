@@ -1492,6 +1492,19 @@ impl TextExpression {
     fn __eq__(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
+
+    /// music21 freezes a score by pickling it, and copies one through the
+    /// same reduction; the words live in Rust where neither can see them.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Some(inner) = crate::unpickled::<_, RsTextExpression>(slf, state)? {
+            slf.borrow_mut().inner = inner;
+        }
+        Ok(())
+    }
 }
 
 /// How many ornaments `realizeOrnaments` plays out before it stops, as

@@ -45,14 +45,19 @@ pub fn nwc_lines(bytes: &[u8]) -> Result<Vec<String>> {
             "a compressed .nwc file: inflate the zlib stream after its first six bytes first",
         ));
     }
-    let mut reader = Bytes {
-        data: bytes,
-        at: 0,
-        version: 200,
-        alterations: Vec::new(),
-    };
+    let mut reader = NwcReader::new(bytes, 200);
     let header = reader.header()?;
-    let mut lines = Vec::new();
+    let mut staves = Vec::new();
+    for _ in 0..header.number_of_staves {
+        staves.push(reader.staff()?);
+    }
+    Ok(dump_lines(&header, &staves))
+}
+
+/// music21's `dumpToNWCText`: the title and author, then each staff's
+/// lines.
+#[must_use]
+pub fn dump_lines(header: &NwcHeader, staves: &[NwcStaff]) -> Vec<String> {
     let mut info = String::new();
     if !header.title.is_empty() {
         info.push_str("|SongInfo|Title:");
@@ -62,12 +67,11 @@ pub fn nwc_lines(bytes: &[u8]) -> Result<Vec<String>> {
         info.push_str("|Author:");
         info.push_str(&latin1(&header.author));
     }
-    lines.push(info);
-    for _ in 0..header.staves {
-        let staff = reader.staff()?;
-        lines.extend(staff);
+    let mut lines = vec![info];
+    for staff in staves {
+        lines.extend(staff.dump());
     }
-    Ok(lines)
+    lines
 }
 
 /// Bytes read as latin-1, as music21 decodes every string in the file.
@@ -86,13 +90,13 @@ fn python_index<T: Copy>(table: &[T], index: i32) -> Option<T> {
 }
 
 /// music21's `constants.ClefNames`.
-const CLEF_NAMES: [&str; 5] = ["Treble", "Bass", "Alto", "Tenor", "Percussion"];
+pub const CLEF_NAMES: [&str; 5] = ["Treble", "Bass", "Alto", "Tenor", "Percussion"];
 
 /// music21's `constants.OctaveShiftNames`.
-const OCTAVE_SHIFT_NAMES: [Option<&str>; 3] = [None, Some("Octave Up"), Some("Octave Down")];
+pub const OCTAVE_SHIFT_NAMES: [Option<&str>; 3] = [None, Some("Octave Up"), Some("Octave Down")];
 
 /// music21's `constants.FlatMask`.
-const FLAT_MASK: [(u8, &str); 8] = [
+pub const FLAT_MASK: [(u8, &str); 8] = [
     (0x00, ""),
     (0x02, "Bb"),
     (0x12, "Bb,Eb"),
@@ -104,7 +108,7 @@ const FLAT_MASK: [(u8, &str); 8] = [
 ];
 
 /// music21's `constants.SharpMask`.
-const SHARP_MASK: [(u8, &str); 8] = [
+pub const SHARP_MASK: [(u8, &str); 8] = [
     (0x00, ""),
     (0x20, "F#"),
     (0x24, "F#,C#"),
@@ -117,10 +121,10 @@ const SHARP_MASK: [(u8, &str); 8] = [
 
 /// music21's `constants.AlterationTexts`: `x` is a double sharp, `v` a
 /// double flat.
-const ALTERATION_TEXTS: [&str; 6] = ["#", "b", "n", "x", "v", ""];
+pub const ALTERATION_TEXTS: [&str; 6] = ["#", "b", "n", "x", "v", ""];
 
 /// music21's `constants.BarStyles`.
-const BAR_STYLES: [&str; 8] = [
+pub const BAR_STYLES: [&str; 8] = [
     "Single",
     "Double",
     "SectionOpen",
@@ -132,10 +136,10 @@ const BAR_STYLES: [&str; 8] = [
 ];
 
 /// music21's `constants.DurationValues`.
-const DURATION_VALUES: [&str; 7] = ["Whole", "Half", "4th", "8th", "16th", "32nd", "64th"];
+pub const DURATION_VALUES: [&str; 7] = ["Whole", "Half", "4th", "8th", "16th", "32nd", "64th"];
 
 /// music21's `constants.MidiInstruments`, the General MIDI names by program.
-const MIDI_INSTRUMENTS: [&str; 128] = [
+pub const MIDI_INSTRUMENTS: [&str; 128] = [
     "Acoustic Grand Piano",
     "Bright Acoustic Piano",
     "Electric Grand Piano",
@@ -266,50 +270,216 @@ const MIDI_INSTRUMENTS: [&str; 128] = [
     "Gunshot",
 ];
 
-/// What the header says that the lines are written from.
-struct Header {
-    title: Vec<u8>,
-    author: Vec<u8>,
-    staves: u8,
+/// A font the header names: music21's `FontDict`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NwcFont {
+    /// Its name, `Times New Roman` where the file gives none.
+    pub name: Vec<u8>,
+    /// Regular, bold, italic or both, as the file numbers them.
+    pub style: u8,
+    /// Its size in points, 12 where the file gives none.
+    pub size: u8,
+    /// Its character set.
+    pub charset: u8,
 }
 
-/// One object of a staff, as much of it as is written out.
-enum Object {
-    /// Read past and written as nothing.
-    Silent,
+/// What a file's header says: music21's `NWCConverter.parseHeader`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub struct NwcHeader {
+    pub version: u32,
+    pub user: Vec<u8>,
+    pub title: Vec<u8>,
+    pub author: Vec<u8>,
+    pub lyricist: Vec<u8>,
+    pub copyright1: Vec<u8>,
+    pub copyright2: Vec<u8>,
+    pub comment: Vec<u8>,
+    pub extend_last_system: u8,
+    pub increase_note_spacing: u8,
+    pub measure_numbers: u8,
+    pub measure_start: i32,
+    pub margins: Vec<u8>,
+    pub group_visibility: Vec<u8>,
+    pub allow_layering: u8,
+    pub notation_typeface: Vec<u8>,
+    pub staff_height: i32,
+    pub fonts: Vec<NwcFont>,
+    pub title_page_info: u8,
+    pub staff_labels: u8,
+    pub page_number_start: i32,
+    pub number_of_staves: u8,
+}
+
+/// A staff and its objects: music21's `NWCStaff`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[allow(missing_docs)]
+pub struct NwcStaff {
+    pub name: Vec<u8>,
+    pub label: Vec<u8>,
+    pub instrument_name: Vec<u8>,
+    pub group: Vec<u8>,
+    pub lines: u8,
+    pub layer_with_next_staff: Option<i32>,
+    /// Semitones up, where the file says; music21 writes `None` otherwise.
+    pub transposition: Option<i32>,
+    pub part_volume: Option<i32>,
+    pub stereo_pan: Option<i32>,
+    pub color: u8,
+    pub align_syllable: Option<i32>,
+    pub number_of_lyrics: i32,
+    pub lyric_alignment: i32,
+    pub staff_offset: i32,
+    /// Each verse's syllables.
+    pub lyrics: Vec<Vec<Vec<u8>>>,
+    pub number_of_objects: i32,
+    pub objects: Vec<NwcObject>,
+}
+
+impl NwcStaff {
+    /// music21's `NWCStaff.dump`: the staff and its instrument as text
+    /// lines, then each object that writes one.
+    #[must_use]
+    pub fn dump(&self) -> Vec<String> {
+        let instrument = if self.instrument_name.is_empty() {
+            "Acoustic Grand Piano".to_string()
+        } else {
+            latin1(&self.instrument_name)
+        };
+        let label = if self.label.is_empty() {
+            instrument.clone()
+        } else {
+            latin1(&self.label)
+        };
+        let mut lines = vec![format!("|AddStaff|Name:{label}")];
+        let mut staff_instrument = format!("|StaffInstrument|Name:{instrument}");
+        if let Some(patch) = MIDI_INSTRUMENTS.iter().position(|name| *name == instrument) {
+            staff_instrument.push_str(&format!("|Patch:{patch}"));
+        }
+        staff_instrument.push_str(&format!(
+            "|Trans:{}",
+            self.transposition
+                .map_or("None".to_string(), |semitones| semitones.to_string())
+        ));
+        lines.push(staff_instrument);
+        lines.extend(
+            self.objects
+                .iter()
+                .map(NwcObject::line)
+                .filter(|line| !line.is_empty()),
+        );
+        lines
+    }
+}
+
+/// One object of a staff: music21's `NWCObject`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NwcObject {
+    /// Whether and where it is shown; nought before version 1.70.
+    pub visible: u8,
+    /// What it is.
+    pub body: Object,
+}
+
+impl NwcObject {
+    /// music21's `type`: the name of the method that read it.
+    #[must_use]
+    pub fn type_name(&self) -> &'static str {
+        match &self.body {
+            Object::Silent(name) => name,
+            Object::Clef { .. } => "Clef",
+            Object::Key(_) => "KeySig",
+            Object::Bar(_) => "Barline",
+            Object::Ending(_) => "Ending",
+            Object::TimeSig(..) => "TimeSig",
+            Object::Tempo(_) => "Tempo",
+            Object::Note(_) => "Note",
+            Object::Rest(_) => "Rest",
+            Object::Chord { .. } => "NoteChordMember",
+            Object::RestChord { .. } => "RestChordMember",
+            Object::Text(..) => "Text",
+        }
+    }
+
+    /// music21's `dumpMethod`: the text line, or nothing.
+    #[must_use]
+    pub fn line(&self) -> String {
+        self.body.line()
+    }
+}
+
+/// What an object is, as much of it as is written out.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Object {
+    /// Read past and written as nothing, with music21's `type` for it.
+    Silent(&'static str),
+    /// A clef by name, with its octave shift.
     Clef {
+        /// Its name in `CLEF_NAMES`.
         name: Option<&'static str>,
+        /// Its octave shift in `OCTAVE_SHIFT_NAMES`.
         shift: Option<&'static str>,
     },
+    /// A key signature's `Signature` text.
     Key(&'static str),
+    /// A barline by its style's number in `BAR_STYLES`.
     Bar(u8),
+    /// An ending by its number.
     Ending(u8),
+    /// A meter's numerator and denominator.
     TimeSig(i32, i64),
+    /// A tempo in beats a minute.
     Tempo(i32),
+    /// A note.
     Note(Member),
+    /// A rest's `Dur` text.
     Rest(String),
-    /// A chord's notes.
-    Chord(Vec<Member>),
-    /// A rest's length and the notes sounding with it.
-    RestChord {
+    /// A chord's notes, and the stem length its bytes give.
+    Chord {
+        /// Its notes.
         members: Vec<Member>,
+        /// Its stem length.
+        stem_length: u8,
+    },
+    /// A rest's `Dur` text and the notes sounding with it.
+    RestChord {
+        /// The notes.
+        members: Vec<Member>,
+        /// The rest's length.
         rest: String,
     },
+    /// Words and their staff position.
     Text(Vec<u8>, i32),
 }
 
-/// A note as a chord writes it: its `Dur` and its `Pos`.
-#[derive(Clone)]
-struct Member {
-    duration: String,
-    position: String,
+/// A note as a chord or a staff holds it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Member {
+    /// Its `Dur` text: music21's `durationStr`.
+    pub duration: String,
+    /// Its staff position: music21's `pos`.
+    pub position: i32,
+    /// The alteration in force there: music21's `alterationStr`.
+    pub alteration: String,
+    /// `^` where it is tied on: music21's `tieInfo`.
+    pub tie: &'static str,
+    /// Its stem length.
+    pub stem_length: u8,
+}
+
+impl Member {
+    /// Its `Pos` text: alteration, position and tie.
+    #[must_use]
+    pub fn pos_text(&self) -> String {
+        format!("{}{}{}", self.alteration, self.position, self.tie)
+    }
 }
 
 impl Object {
     /// music21's `dumpMethod`: the text line, or nothing.
     fn line(&self) -> String {
         match self {
-            Self::Silent => String::new(),
+            Self::Silent(_) => String::new(),
             Self::Clef { name, shift } => {
                 let mut line = "|Clef|".to_string();
                 if let Some(name) = name {
@@ -335,24 +505,28 @@ impl Object {
                 format!("|TimeSig|Signature:{numerator}/{denominator}")
             }
             Self::Tempo(value) => format!("|Tempo|Tempo:{value}"),
-            Self::Note(member) => format!("|Note|Dur:{}|Pos:{}|", member.duration, member.position),
+            Self::Note(member) => {
+                format!("|Note|Dur:{}|Pos:{}|", member.duration, member.pos_text())
+            }
             Self::Rest(duration) => format!("|Rest|Dur:{duration}|"),
-            Self::Chord(members) => {
+            Self::Chord { members, .. } => {
                 let mut line = "|Chord".to_string();
-                for (index, (duration, positions)) in by_duration(members).iter().enumerate() {
-                    let suffix = if index == 0 { "" } else { "2" };
-                    line.push_str(&format!("|Dur{suffix}:{duration}|Pos{suffix}:{positions}"));
-                }
-                line
-            }
-            Self::RestChord { members, rest } if members.is_empty() => format!("|Rest|Dur:{rest}"),
-            Self::RestChord { members, rest } => {
-                let mut line = format!("|RestChord|Dur:{rest}");
                 for (duration, positions) in by_duration(members) {
-                    line.push_str(&format!("|Dur2:{duration}|Pos2:{positions}"));
+                    line.push_str(&format!("|Dur:{duration}|Pos:{positions}"));
                 }
                 line
             }
+            Self::RestChord { members, rest } => match members.first() {
+                None => format!("|Rest|Dur:{rest}"),
+                Some(first) => {
+                    let positions: Vec<String> = members.iter().map(Member::pos_text).collect();
+                    format!(
+                        "|RestChord|Dur:{rest}|Dur2:{}|Pos2:{}",
+                        first.duration,
+                        positions.join(",")
+                    )
+                }
+            },
             Self::Text(text, position) => {
                 format!("|Text|Text:{}|Pos:{position}", latin1(text))
             }
@@ -360,17 +534,62 @@ impl Object {
     }
 }
 
-/// music21's `NWCConverter`: the file and where it has got to in it.
-struct Bytes<'a> {
+/// The stem length music21 gives a note or chord whose bytes name none.
+const DEFAULT_STEM: u8 = 7;
+
+/// The bit of a note's or chord's last byte that says a stem length follows.
+const STEM_FOLLOWS: u8 = 0x40;
+
+/// The music21 `type` of each object kind, by the number the file gives.
+const OBJECT_TYPES: [&str; 19] = [
+    "Clef",
+    "KeySig",
+    "Barline",
+    "Ending",
+    "Instrument",
+    "TimeSig",
+    "Tempo",
+    "Dynamic",
+    "Note",
+    "Rest",
+    "NoteChordMember",
+    "Pedal",
+    "FlowDir",
+    "MPC",
+    "TempoVariation",
+    "DynamicVariation",
+    "Performance",
+    "Text",
+    "RestChordMember",
+];
+
+/// music21's `NWCConverter` as a reader: the file, where it has got to in
+/// it, its version, and the alteration last written on each staff
+/// position, by the position modulo seven, until a barline.
+#[derive(Clone, Debug)]
+pub struct NwcReader<'a> {
     data: &'a [u8],
-    at: usize,
-    version: u32,
-    /// The alteration last written on each staff position, by the position
-    /// modulo seven, until a barline.
-    alterations: Vec<(i32, String)>,
+    /// Where the next read starts: music21's `parsePosition`.
+    pub at: usize,
+    /// The file's version, as music21 numbers it: 175 for 1.75.
+    pub version: u32,
+    /// music21's `currentAlterations`.
+    pub alterations: Vec<(i32, String)>,
 }
 
-impl Bytes<'_> {
+impl<'a> NwcReader<'a> {
+    /// A reader over a file's (inflated) bytes, at its start, taken to be
+    /// of `version` until its header says.
+    #[must_use]
+    pub fn new(data: &'a [u8], version: u32) -> Self {
+        Self {
+            data,
+            at: 0,
+            version,
+            alterations: Vec::new(),
+        }
+    }
+
     fn ended() -> crate::error::Error {
         error("the file ends before its last object")
     }
@@ -433,8 +652,13 @@ impl Bytes<'_> {
         }
     }
 
-    /// `parseHeader`, with `fileVersion` read where music21 reads it.
-    fn header(&mut self) -> Result<Header> {
+    /// music21's `parseHeader`, with `fileVersion` read where music21
+    /// reads it. The version read is kept.
+    ///
+    /// # Errors
+    ///
+    /// A file that ends inside its header.
+    pub fn header(&mut self) -> Result<NwcHeader> {
         self.at = 45;
         self.version = match self.short()? {
             0x0114 => 120,
@@ -448,37 +672,46 @@ impl Bytes<'_> {
             // Most likely a newer version.
             _ => 201,
         };
+        let mut header = NwcHeader {
+            version: self.version,
+            ..NwcHeader::default()
+        };
         self.skip(4);
-        let _user = self.until_nul();
+        header.user = self.until_nul();
         let _unknown = self.until_nul();
         self.skip(10);
-        let title = self.until_nul();
-        let author = self.until_nul();
+        header.title = self.until_nul();
+        header.author = self.until_nul();
         if self.version >= 200 {
-            let _lyricist = self.until_nul();
+            header.lyricist = self.until_nul();
         }
-        let _copyright = self.until_nul();
-        let _second_copyright = self.until_nul();
-        let _comment = self.until_nul();
-        let _extend_last_system = self.byte()?;
-        let _increase_note_spacing = self.byte()?;
+        header.copyright1 = self.until_nul();
+        header.copyright2 = self.until_nul();
+        header.comment = self.until_nul();
+        header.extend_last_system = self.byte()?;
+        header.increase_note_spacing = self.byte()?;
         self.take(5);
-        let _measure_numbers = self.byte()?;
+        header.measure_numbers = self.byte()?;
         self.take(1);
-        let _measure_start = self.short()?;
-        if self.version >= 130 {
-            let _margins = self.until_nul();
-        }
+        header.measure_start = self.short()?;
+        header.margins = if self.version >= 130 {
+            self.until_nul()
+        } else {
+            b"0.0 0.0 0.0 0.0".to_vec()
+        };
         let _unused = self.byte()?;
         self.take(2);
+        header.allow_layering = 1;
         if self.version >= 130 {
-            self.take(32);
-            let _allow_layering = self.byte()?;
+            header.group_visibility = self.take(32);
+            header.allow_layering = self.byte()?;
         }
-        if self.version >= 200 {
-            let _typeface = self.until_nul();
-        }
-        let _staff_height = self.short()?;
+        header.notation_typeface = if self.version >= 200 {
+            self.until_nul()
+        } else {
+            b"Maestro".to_vec()
+        };
+        header.staff_height = self.short()?;
         let fonts = if self.version > 170 {
             12
         } else if self.version > 130 {
@@ -489,90 +722,53 @@ impl Bytes<'_> {
         self.past_nuls();
         self.skip(2);
         for _ in 0..fonts {
-            let _name = self.until_nul();
-            let _style = self.byte()?;
-            let _size = self.byte()?;
+            let mut font = NwcFont {
+                name: self.until_nul(),
+                style: self.byte()?,
+                size: self.byte()?,
+                charset: 0,
+            };
             let _unused = self.byte()?;
-            let _charset = self.byte()?;
+            font.charset = self.byte()?;
+            if font.name.is_empty() {
+                font.name = b"Times New Roman".to_vec();
+            }
+            if font.size == 0 {
+                font.size = 12;
+            }
+            header.fonts.push(font);
         }
-        let _title_page = self.byte()?;
-        let _staff_labels = self.byte()?;
-        let _page_number_start = self.short()?;
+        header.title_page_info = self.byte()?;
+        header.staff_labels = self.byte()?;
+        header.page_number_start = self.short()?;
         if self.version >= 200 {
             self.skip(1);
         }
-        let staves = self.byte()?;
+        header.number_of_staves = self.byte()?;
         self.skip(1);
-        Ok(Header {
-            title,
-            author,
-            staves,
-        })
+        Ok(header)
     }
 
-    /// One staff, `NWCStaff.parse`, written out as `NWCStaff.dump` writes
-    /// it.
-    fn staff(&mut self) -> Result<Vec<String>> {
-        let _name = self.until_nul();
-        let mut label = Vec::new();
-        let mut instrument = Vec::new();
-        if self.version >= 200 {
-            label = self.until_nul();
-            instrument = self.until_nul();
-        }
-        let _group = self.until_nul();
-        let mut transposition = None;
-        let mut lyrics = 0;
-        if self.version >= 200 {
-            self.skip(27);
-            let _lines = self.byte()?;
-            let _layer_with_next = self.short()?;
-            transposition = Some(self.short()?);
-            let _volume = self.short()?;
-            let _pan = self.short()?;
-            let _color = self.byte()?;
-            let _align_syllable = self.short()?;
-            lyrics = self.short()?;
-        } else if self.version == 175 {
-            self.skip(11);
-            let patch = usize::from(self.byte()?);
-            let index = if patch > 0 && patch < MIDI_INSTRUMENTS.len() {
-                patch - 1
-            } else {
-                0
-            };
-            instrument = MIDI_INSTRUMENTS[index].bytes().collect();
-            self.skip(10);
-            transposition = Some(self.signed()?);
-            self.skip(6);
-            let _align_syllable = self.short()?;
-            lyrics = self.short()?;
-        }
-        if lyrics > 0 {
-            let _alignment = self.short()?;
-            let _offset = self.short()?;
-        }
+    /// music21's `NWCStaff.parse`: a staff's header, its verses and its
+    /// objects.
+    ///
+    /// # Errors
+    ///
+    /// A file that ends inside the staff, or an object music21 cannot read.
+    pub fn staff(&mut self) -> Result<NwcStaff> {
+        let mut staff = self.staff_header()?;
+        staff.lyrics = self.staff_lyrics(staff.number_of_lyrics)?;
+        (staff.number_of_objects, staff.objects) = self.staff_objects()?;
+        Ok(staff)
+    }
 
-        // `parseLyrics`: read past, as music21 writes none of them out.
-        for _ in 0..lyrics {
-            let size = self.short().unwrap_or(0);
-            if size > 0 {
-                let _length = self.short()?;
-                let start = self.at;
-                let _junk = self.short()?;
-                for _ in 0..1000 {
-                    if self.until_nul().is_empty() {
-                        break;
-                    }
-                }
-                self.at = start.saturating_add_signed(size as isize);
-            }
-        }
-        if lyrics > 0 {
-            let _junk = self.short()?;
-        }
-        let _junk = self.short()?;
-
+    /// `NWCStaff.parseObjects`: how many objects the staff says it has,
+    /// and the objects.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::staff`].
+    pub fn staff_objects(&mut self) -> Result<(i32, Vec<NwcObject>)> {
         let mut count = self.short()?;
         if self.version > 150 {
             count -= 2;
@@ -581,95 +777,112 @@ impl Bytes<'_> {
         for _ in 0..count.max(0) {
             objects.push(self.object()?);
         }
-
-        let instrument = if instrument.is_empty() {
-            "Acoustic Grand Piano".to_string()
-        } else {
-            latin1(&instrument)
-        };
-        let label = if label.is_empty() {
-            instrument.clone()
-        } else {
-            latin1(&label)
-        };
-        let mut lines = vec![format!("|AddStaff|Name:{label}")];
-        let mut staff_instrument = format!("|StaffInstrument|Name:{instrument}");
-        if let Some(patch) = MIDI_INSTRUMENTS.iter().position(|name| *name == instrument) {
-            staff_instrument.push_str(&format!("|Patch:{patch}"));
-        }
-        staff_instrument.push_str(&format!(
-            "|Trans:{}",
-            transposition.map_or("None".to_string(), |semitones| semitones.to_string())
-        ));
-        lines.push(staff_instrument);
-        lines.extend(
-            objects
-                .iter()
-                .map(Object::line)
-                .filter(|line| !line.is_empty()),
-        );
-        Ok(lines)
+        Ok((count, objects))
     }
 
-    /// `NWCObject.parse`: an object of the type its first short names.
-    fn object(&mut self) -> Result<Object> {
-        let kind = self.short()?;
-        if !(0..19).contains(&kind) {
-            return Err(error(format!(
-                "Cannot translate objectType: {kind}; max is 19"
-            )));
+    /// `NWCStaff.parseHeader`: a staff's names, settings and how many
+    /// verses it has.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::staff`].
+    pub fn staff_header(&mut self) -> Result<NwcStaff> {
+        let mut staff = NwcStaff {
+            name: self.until_nul(),
+            ..NwcStaff::default()
+        };
+        if self.version >= 200 {
+            staff.label = self.until_nul();
+            staff.instrument_name = self.until_nul();
         }
-        if self.version >= 170 {
-            let _visible = self.byte()?;
+        staff.group = self.until_nul();
+        if self.version >= 200 {
+            self.skip(27);
+            staff.lines = self.byte()?;
+            staff.layer_with_next_staff = Some(self.short()?);
+            staff.transposition = Some(self.short()?);
+            staff.part_volume = Some(self.short()?);
+            staff.stereo_pan = Some(self.short()?);
+            staff.color = self.byte()?;
+            staff.align_syllable = Some(self.short()?);
+            staff.number_of_lyrics = self.short()?;
+        } else if self.version == 175 {
+            self.skip(11);
+            let patch = usize::from(self.byte()?);
+            let index = if patch > 0 && patch < MIDI_INSTRUMENTS.len() {
+                patch - 1
+            } else {
+                0
+            };
+            staff.instrument_name = MIDI_INSTRUMENTS[index].bytes().collect();
+            self.skip(10);
+            staff.transposition = Some(self.signed()?);
+            self.skip(6);
+            staff.align_syllable = Some(self.short()?);
+            staff.number_of_lyrics = self.short()?;
         }
-        Ok(match kind {
-            0 => {
-                let clef = self.short()?;
-                let shift = self.short()?;
-                let clef_count = i32::try_from(CLEF_NAMES.len()).unwrap_or(0);
-                let shift_count = i32::try_from(OCTAVE_SHIFT_NAMES.len()).unwrap_or(0);
-                Object::Clef {
-                    name: if clef < clef_count {
-                        Some(
-                            python_index(&CLEF_NAMES, clef)
-                                .ok_or_else(|| error(format!("no clef numbered {clef}")))?,
-                        )
-                    } else {
-                        None
-                    },
-                    shift: if shift < shift_count {
-                        python_index(&OCTAVE_SHIFT_NAMES, shift)
-                            .ok_or_else(|| error(format!("no octave shift numbered {shift}")))?
-                    } else {
-                        None
-                    },
+        if staff.number_of_lyrics > 0 {
+            staff.lyric_alignment = self.short()?;
+            staff.staff_offset = self.short()?;
+        }
+        Ok(staff)
+    }
+
+    /// `NWCStaff.parseLyrics`: each verse's syllables.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::staff`].
+    pub fn staff_lyrics(&mut self, verses: i32) -> Result<Vec<Vec<Vec<u8>>>> {
+        let mut lyrics = Vec::new();
+        for _ in 0..verses {
+            let size = self.short().unwrap_or(0);
+            if size <= 0 {
+                continue;
+            }
+            let _length = self.short()?;
+            let start = self.at;
+            let _junk = self.short()?;
+            let mut syllables = Vec::new();
+            for _ in 0..1000 {
+                let syllable = self.until_nul();
+                if syllable.is_empty() {
+                    break;
                 }
+                syllables.push(syllable);
             }
-            1 => {
-                let flats = self.byte()?;
-                self.skip(1);
-                let sharps = self.byte()?;
-                self.skip(7);
-                let mask = |table: &[(u8, &'static str)], key: u8| {
-                    table
-                        .iter()
-                        .find(|(known, _)| *known == key)
-                        .map(|(_, text)| *text)
-                };
-                Object::Key(
-                    if flats > 0
-                        && let Some(text) = mask(&FLAT_MASK, flats)
-                    {
-                        text
-                    } else if sharps > 0
-                        && let Some(text) = mask(&SHARP_MASK, sharps)
-                    {
-                        text
-                    } else {
-                        ""
-                    },
-                )
-            }
+            self.at = start.saturating_add_signed(size as isize);
+            lyrics.push(syllables);
+        }
+        if verses > 0 {
+            let _junk = self.short()?;
+        }
+        let _junk = self.short()?;
+        Ok(lyrics)
+    }
+
+    /// music21's `NWCObject.parse`: an object of the type its first short
+    /// names.
+    ///
+    /// # Errors
+    ///
+    /// An object of a kind music21 does not know, a file that ends inside
+    /// it, or a note or rest in a file older than music21 reads.
+    pub fn object(&mut self) -> Result<NwcObject> {
+        let kind = self.short()?;
+        let Some(name) = usize::try_from(kind)
+            .ok()
+            .and_then(|kind| OBJECT_TYPES.get(kind))
+        else {
+            return Err(error(format!(
+                "Cannot translate objectType: {kind}; max is {}",
+                OBJECT_TYPES.len()
+            )));
+        };
+        let visible = if self.version >= 170 { self.byte()? } else { 0 };
+        let body = match kind {
+            0 => self.clef()?,
+            1 => self.key()?,
             2 => {
                 let style = self.byte()?;
                 let _repeats = self.byte()?;
@@ -683,7 +896,7 @@ impl Bytes<'_> {
             }
             4 => {
                 self.skip(8);
-                Object::Silent
+                Object::Silent(name)
             }
             5 => {
                 let numerator = self.short()?;
@@ -712,7 +925,7 @@ impl Bytes<'_> {
                     let _velocity = self.short()?;
                     let _volume = self.short()?;
                 }
-                Object::Silent
+                Object::Silent(name)
             }
             8 => Object::Note(self.note()?),
             9 => {
@@ -724,19 +937,25 @@ impl Bytes<'_> {
                 let _offset = self.short()?;
                 Object::Rest(duration_text(duration, &data, None)?)
             }
-            10 => Object::Chord(self.chord()?.0),
+            10 => {
+                let (members, _, stem_length) = self.chord()?;
+                Object::Chord {
+                    members,
+                    stem_length,
+                }
+            }
             11 => {
                 if self.version >= 170 {
                     self.take(3);
                 }
-                Object::Silent
+                Object::Silent(name)
             }
             12 => {
                 if self.version >= 170 {
                     self.take(2);
                 }
                 let _style = self.short()?;
-                Object::Silent
+                Object::Silent(name)
             }
             13 => {
                 self.take(2);
@@ -745,11 +964,11 @@ impl Bytes<'_> {
                 } else {
                     self.take(31);
                 }
-                Object::Silent
+                Object::Silent(name)
             }
             14 => {
                 self.take(4);
-                Object::Silent
+                Object::Silent(name)
             }
             15 | 16 => {
                 let _position = self.byte()?;
@@ -757,7 +976,7 @@ impl Bytes<'_> {
                     let _placement = self.byte()?;
                 }
                 let _style = self.byte()?;
-                Object::Silent
+                Object::Silent(name)
             }
             17 => {
                 let position = self.signed()?;
@@ -765,29 +984,83 @@ impl Bytes<'_> {
                 let _font = self.byte()?;
                 Object::Text(self.until_nul(), position)
             }
-            _ => {
-                // Only a file of version 1.75 writes a rest chord as it
-                // writes a chord; the others give the rest's length, its
-                // five bytes and its offset, then how many notes follow.
-                let (members, data) = if 170 < self.version && self.version < 200 {
-                    self.chord()?
-                } else {
-                    let data = self.take(8);
-                    let notes = usize::try_from(self.short()?).unwrap_or(0);
-                    (self.members(notes)?, data)
-                };
-                let duration = *data.first().ok_or_else(Self::ended)?;
-                let rest_data = data.get(1..6).ok_or_else(Self::ended)?;
-                Object::RestChord {
-                    members,
-                    rest: duration_text(duration, rest_data, None)?,
-                }
-            }
+            _ => self.rest_chord()?,
+        };
+        Ok(NwcObject { visible, body })
+    }
+
+    /// `clef`: its type and octave shift, named where music21 has a name.
+    fn clef(&mut self) -> Result<Object> {
+        let clef = self.short()?;
+        let shift = self.short()?;
+        let clef_count = i32::try_from(CLEF_NAMES.len()).unwrap_or(0);
+        let shift_count = i32::try_from(OCTAVE_SHIFT_NAMES.len()).unwrap_or(0);
+        let name = if clef < clef_count {
+            Some(
+                python_index(&CLEF_NAMES, clef)
+                    .ok_or_else(|| error(format!("no clef numbered {clef}")))?,
+            )
+        } else {
+            None
+        };
+        let shift = if shift < shift_count {
+            python_index(&OCTAVE_SHIFT_NAMES, shift)
+                .ok_or_else(|| error(format!("no octave shift numbered {shift}")))?
+        } else {
+            None
+        };
+        Ok(Object::Clef { name, shift })
+    }
+
+    /// `keySig`: the flats written, else the sharps.
+    fn key(&mut self) -> Result<Object> {
+        let flats = self.byte()?;
+        self.skip(1);
+        let sharps = self.byte()?;
+        self.skip(7);
+        let mask = |table: &[(u8, &'static str)], key: u8| {
+            table
+                .iter()
+                .find(|(known, _)| *known == key)
+                .map(|(_, text)| *text)
+        };
+        let signature = if flats > 0
+            && let Some(text) = mask(&FLAT_MASK, flats)
+        {
+            text
+        } else if sharps > 0
+            && let Some(text) = mask(&SHARP_MASK, sharps)
+        {
+            text
+        } else {
+            ""
+        };
+        Ok(Object::Key(signature))
+    }
+
+    /// `restChordMember`: a rest's bytes and the notes sounding with it.
+    /// Only a file of version 1.75 writes one as it writes a chord; the
+    /// others give the rest's length, its five bytes and its offset, then
+    /// how many notes follow.
+    fn rest_chord(&mut self) -> Result<Object> {
+        let (members, data) = if 170 < self.version && self.version < 200 {
+            let (members, data, _) = self.chord()?;
+            (members, data)
+        } else {
+            let data = self.take(8);
+            let notes = usize::try_from(self.short()?).unwrap_or(0);
+            (self.members(notes)?, data)
+        };
+        let duration = *data.first().ok_or_else(Self::ended)?;
+        let rest_data = data.get(1..6).ok_or_else(Self::ended)?;
+        Ok(Object::RestChord {
+            members,
+            rest: duration_text(duration, rest_data, None)?,
         })
     }
 
     /// `note`: a note's length, its position on the staff with the
-    /// alteration in force there, and whether it is tied on.
+    /// alteration in force there, whether it is tied on, and its stem.
     fn note(&mut self) -> Result<Member> {
         if self.version < 170 {
             return Err(error("a note in a file older than version 1.70"));
@@ -800,9 +1073,11 @@ impl Bytes<'_> {
         if self.version <= 170 {
             self.take(2);
         }
-        if self.version >= 200 && second & 0x40 != 0 {
-            let _stem = self.byte()?;
-        }
+        let stem_length = if self.version >= 200 && second & STEM_FOLLOWS != 0 {
+            self.byte()?
+        } else {
+            DEFAULT_STEM
+        };
         let duration = duration_text(duration, &data, Some(&attributes))?;
         let mut alteration = ALTERATION_TEXTS
             .get(usize::from(second & 0x07))
@@ -827,12 +1102,16 @@ impl Bytes<'_> {
         };
         Ok(Member {
             duration,
-            position: format!("{alteration}{position}{tie}"),
+            position,
+            alteration,
+            tie,
+            stem_length,
         })
     }
 
-    /// `noteChordMember`: the chord's own bytes and its notes.
-    fn chord(&mut self) -> Result<(Vec<Member>, Vec<u8>)> {
+    /// `noteChordMember`: the chord's notes, its own bytes and its stem
+    /// length.
+    fn chord(&mut self) -> Result<(Vec<Member>, Vec<u8>, u8)> {
         let mut notes = 0;
         let data = if self.version <= 170 {
             let data = self.take(12);
@@ -845,26 +1124,30 @@ impl Bytes<'_> {
         } else {
             self.take(8)
         };
+        let mut stem_length = DEFAULT_STEM;
         if self.version >= 200 {
-            if data.get(7).ok_or_else(Self::ended)? & 0x40 != 0 {
-                let _stem = self.byte()?;
+            if data.get(7).ok_or_else(Self::ended)? & STEM_FOLLOWS != 0 {
+                stem_length = self.byte()?;
             }
             notes = usize::try_from(self.short()?).unwrap_or(0);
         }
-        Ok((self.members(notes)?, data))
+        Ok((self.members(notes)?, data, stem_length))
     }
 
     /// `_readChordNotes`: the notes of a chord.
     fn members(&mut self, notes: usize) -> Result<Vec<Member>> {
         let mut members = Vec::new();
         for _ in 0..notes {
-            match self.object()? {
+            match self.object()?.body {
                 Object::Note(member) => members.push(member),
                 // A rest is written at position nought, as music21's
                 // object starts out.
                 Object::Rest(duration) => members.push(Member {
                     duration,
-                    position: "0".to_string(),
+                    position: 0,
+                    alteration: String::new(),
+                    tie: "",
+                    stem_length: 0,
                 }),
                 _ => return Err(error("a chord holding something other than a note")),
             }
@@ -873,17 +1156,18 @@ impl Bytes<'_> {
     }
 }
 
-/// `_positionsByDuration`: a chord's notes grouped by length, in the order
-/// each length first appears, with their positions joined.
+/// A chord's notes grouped by length, in the order each length first
+/// appears, with their positions joined, as music21's chord `dump` writes
+/// them.
 fn by_duration(members: &[Member]) -> Vec<(&str, String)> {
-    let mut groups: Vec<(&str, Vec<&str>)> = Vec::new();
+    let mut groups: Vec<(&str, Vec<String>)> = Vec::new();
     for member in members {
         match groups
             .iter_mut()
             .find(|(duration, _)| *duration == member.duration)
         {
-            Some((_, positions)) => positions.push(&member.position),
-            None => groups.push((&member.duration, vec![&member.position])),
+            Some((_, positions)) => positions.push(member.pos_text()),
+            None => groups.push((&member.duration, vec![member.pos_text()])),
         }
     }
     groups
@@ -902,12 +1186,12 @@ fn duration_text(duration: u8, data: &[u8], attributes: Option<&[u8]>) -> Result
         .to_string();
     let (dots, grace) = match attributes {
         Some(attributes) => (
-            *attributes.first().ok_or_else(Bytes::ended)?,
-            attributes.get(1).ok_or_else(Bytes::ended)? & 0x20,
+            *attributes.first().ok_or_else(NwcReader::ended)?,
+            attributes.get(1).ok_or_else(NwcReader::ended)? & 0x20,
         ),
-        None => (*data.get(3).ok_or_else(Bytes::ended)?, 0),
+        None => (*data.get(3).ok_or_else(NwcReader::ended)?, 0),
     };
-    let triplet = data.get(1).ok_or_else(Bytes::ended)? & 0x0c;
+    let triplet = data.get(1).ok_or_else(NwcReader::ended)? & 0x0c;
     if dots & 0x01 != 0 {
         text.push_str(",DblDotted");
     } else if dots & 0x04 != 0 {
@@ -941,13 +1225,7 @@ mod tests {
     }
 
     fn read(data: &[u8]) -> String {
-        let mut bytes = Bytes {
-            data,
-            at: 0,
-            version: 201,
-            alterations: Vec::new(),
-        };
-        bytes.object().unwrap().line()
+        NwcReader::new(data, 201).object().unwrap().line()
     }
 
     #[test]
@@ -970,16 +1248,22 @@ mod tests {
 
     #[test]
     fn a_chord_groups_its_notes_by_length() {
-        let member = |duration: &str, position: &str| Member {
+        let member = |duration: &str, position: i32, alteration: &str, tie| Member {
             duration: duration.to_string(),
-            position: position.to_string(),
+            position,
+            alteration: alteration.to_string(),
+            tie,
+            stem_length: DEFAULT_STEM,
         };
-        let chord = Object::Chord(vec![
-            member("4th", "1"),
-            member("Half", "3"),
-            member("4th", "#5^"),
-        ]);
-        assert_eq!(chord.line(), "|Chord|Dur:4th|Pos:1,#5^|Dur2:Half|Pos2:3");
+        let chord = Object::Chord {
+            members: vec![
+                member("4th", 1, "", ""),
+                member("Half", 3, "", ""),
+                member("4th", 5, "#", "^"),
+            ],
+            stem_length: DEFAULT_STEM,
+        };
+        assert_eq!(chord.line(), "|Chord|Dur:4th|Pos:1,#5^|Dur:Half|Pos:3");
     }
 
     #[test]
@@ -994,6 +1278,23 @@ mod tests {
             read(&[18, 0, 0, 1, 0, 0, 0, 0x04, 0, 0, 0, 0, 0]),
             "|Rest|Dur:Half,Dotted"
         );
+    }
+
+    #[test]
+    fn a_version_two_chord_may_give_its_stem_length() {
+        // The last of the chord's eight bytes flags a stem length, which
+        // comes before the count; a treble clef follows the two notes.
+        let mut data = vec![10, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0x40, 5, 2, 0];
+        for position in [0u8, (-2i8) as u8] {
+            data.extend([8, 0, 0, 2, 0, 0, 0, 0, 0, position, 5]);
+        }
+        data.extend([0, 0, 0, 0, 0, 0, 0]);
+        let mut reader = NwcReader::new(&data, 201);
+        let chord = reader.object().unwrap();
+        assert_eq!(chord.type_name(), "NoteChordMember");
+        assert!(matches!(chord.body, Object::Chord { stem_length: 5, .. }));
+        assert_eq!(reader.object().unwrap().type_name(), "Clef");
+        assert_eq!(reader.at, data.len());
     }
 
     #[test]

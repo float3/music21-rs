@@ -608,12 +608,13 @@ impl Metadata {
         ))
     }
 
-    /// The title, as music21 writes it in a repr.
-    fn __repr__(&self) -> String {
-        match self.inner.title() {
-            Some(title) => format!("<music21.metadata.Metadata {title}>"),
-            None => "<music21.metadata.Metadata>".to_string(),
-        }
+    /// music21's repr, which `Metadata` takes from `Music21Object`: its
+    /// address.
+    fn __repr__(slf: &Bound<'_, Self>) -> String {
+        format!(
+            "<music21.metadata.Metadata object at 0x{:x}>",
+            slf.as_ptr() as usize
+        )
     }
 
     fn __eq__(&self, other: &Self) -> bool {

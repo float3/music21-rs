@@ -144,6 +144,70 @@ impl Variant {
         false
     }
 
+    /// How a variant is pickled and copied: rebuilt blank as its own
+    /// class, then given its reading and what it says of itself.
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let class = slf.get_type();
+        let thaw = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr("_thawed")?;
+        let named = (class.getattr("__module__")?, class.getattr("__qualname__")?);
+        PyTuple::new(
+            py,
+            [
+                thaw,
+                named.into_pyobject(py)?.into_any(),
+                Self::__getstate__(slf)?.into_any(),
+            ],
+        )
+    }
+
+    /// The state [`Variant::__reduce__`] carries, which jsonpickle reads
+    /// directly: a variant has `append` and `__getitem__`, so it takes one
+    /// for a list.
+    fn __getstate__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        let state = PyDict::new(py);
+        {
+            let me = slf.borrow();
+            state.set_item("stream", me.stream.bind(py))?;
+            state.set_item("replacementQuarterLength", &me._replacementQuarterLength)?;
+            state.set_item("exposeTime", me.exposeTime)?;
+        }
+        state.set_item("groups", slf.getattr("groups")?)?;
+        let own = slf.getattr("__dict__")?.call_method0("copy")?;
+        for never in ["_derivation", "_activeSite"] {
+            if own.contains(never)? {
+                own.set_item(never, py.None())?;
+            }
+        }
+        state.set_item("__dict__", own)?;
+        Ok(state)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        if let Some(stream) = state.get_item("stream")? {
+            slf.borrow_mut().stream = stream.unbind();
+        }
+        if let Some(length) = state.get_item("replacementQuarterLength")? {
+            slf.borrow_mut()._replacementQuarterLength =
+                (!length.is_none()).then(|| length.unbind());
+        }
+        if let Some(exposed) = state.get_item("exposeTime")? {
+            slf.borrow_mut().exposeTime = exposed.extract()?;
+        }
+        if let Some(groups) = state.get_item("groups")? {
+            slf.setattr("groups", groups)?;
+        }
+        if let Some(carried) = state.get_item("__dict__")? {
+            slf.getattr("__dict__")?
+                .call_method1("update", (carried,))?;
+        }
+        Ok(())
+    }
+
     /// The reading: music21's `_stream`.
     #[getter]
     fn _stream(&self, py: Python<'_>) -> Py<PyAny> {
@@ -381,7 +445,7 @@ fn variants_written(s: &Bound<'_, PyAny>, made: &RsStream) -> PyResult<()> {
     }
     for event in made.events() {
         if let StreamElement::Variant(variant) = event.element() {
-            let built = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?;
+            let built = crate::stream::variant_object(py, variant, whose_streams(s))?;
             s.call_method1("insert", (event.offset(), built))?;
         }
     }
@@ -484,9 +548,19 @@ pub fn add_variant_py(
     let Some((offset, variant)) = added else {
         return Ok(());
     };
-    let made = crate::stream::variant_object(py, variant, crate::stream::Whose::Music21)?;
+    let made = crate::stream::variant_object(py, variant, whose_streams(s))?;
     s.call_method1("insert", (offset, made))?;
     Ok(())
+}
+
+/// Whose streams a variant put into `s` is built of: the package's in a
+/// stream of the package's, which is all there is where music21 is
+/// provided, and music21's in one of music21's.
+fn whose_streams(s: &Bound<'_, PyAny>) -> crate::stream::Whose {
+    if s.cast::<crate::stream::Stream>().is_ok() {
+        return crate::stream::Whose::Wheel;
+    }
+    crate::stream::Whose::Music21
 }
 
 /// What music21 says for `addVariant`'s old keyword.
