@@ -344,7 +344,7 @@ fn to_lilypond(score: &Bound<'_, PyAny>, version: (u32, u32)) -> PyResult<String
 /// `from_noteworthy` reads them. A compressed file is inflated first, as
 /// music21 inflates one.
 #[pyfunction]
-fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
     let inflated: Vec<u8>;
     let data = if data.starts_with(b"[NWZ]\x00") {
         inflated = py

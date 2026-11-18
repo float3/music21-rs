@@ -86,13 +86,13 @@ fn python_index<T: Copy>(table: &[T], index: i32) -> Option<T> {
 }
 
 /// music21's `constants.ClefNames`.
-const CLEF_NAMES: [&str; 5] = ["Treble", "Bass", "Alto", "Tenor", "Percussion"];
+pub const CLEF_NAMES: [&str; 5] = ["Treble", "Bass", "Alto", "Tenor", "Percussion"];
 
 /// music21's `constants.OctaveShiftNames`.
-const OCTAVE_SHIFT_NAMES: [Option<&str>; 3] = [None, Some("Octave Up"), Some("Octave Down")];
+pub const OCTAVE_SHIFT_NAMES: [Option<&str>; 3] = [None, Some("Octave Up"), Some("Octave Down")];
 
 /// music21's `constants.FlatMask`.
-const FLAT_MASK: [(u8, &str); 8] = [
+pub const FLAT_MASK: [(u8, &str); 8] = [
     (0x00, ""),
     (0x02, "Bb"),
     (0x12, "Bb,Eb"),
@@ -104,7 +104,7 @@ const FLAT_MASK: [(u8, &str); 8] = [
 ];
 
 /// music21's `constants.SharpMask`.
-const SHARP_MASK: [(u8, &str); 8] = [
+pub const SHARP_MASK: [(u8, &str); 8] = [
     (0x00, ""),
     (0x20, "F#"),
     (0x24, "F#,C#"),
@@ -117,10 +117,10 @@ const SHARP_MASK: [(u8, &str); 8] = [
 
 /// music21's `constants.AlterationTexts`: `x` is a double sharp, `v` a
 /// double flat.
-const ALTERATION_TEXTS: [&str; 6] = ["#", "b", "n", "x", "v", ""];
+pub const ALTERATION_TEXTS: [&str; 6] = ["#", "b", "n", "x", "v", ""];
 
 /// music21's `constants.BarStyles`.
-const BAR_STYLES: [&str; 8] = [
+pub const BAR_STYLES: [&str; 8] = [
     "Single",
     "Double",
     "SectionOpen",
@@ -132,10 +132,10 @@ const BAR_STYLES: [&str; 8] = [
 ];
 
 /// music21's `constants.DurationValues`.
-const DURATION_VALUES: [&str; 7] = ["Whole", "Half", "4th", "8th", "16th", "32nd", "64th"];
+pub const DURATION_VALUES: [&str; 7] = ["Whole", "Half", "4th", "8th", "16th", "32nd", "64th"];
 
 /// music21's `constants.MidiInstruments`, the General MIDI names by program.
-const MIDI_INSTRUMENTS: [&str; 128] = [
+pub const MIDI_INSTRUMENTS: [&str; 128] = [
     "Acoustic Grand Piano",
     "Bright Acoustic Piano",
     "Electric Grand Piano",

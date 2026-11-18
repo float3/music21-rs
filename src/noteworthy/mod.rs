@@ -8,7 +8,10 @@
 
 mod binary;
 
-pub use binary::{from_nwc, nwc_lines};
+pub use binary::{
+    ALTERATION_TEXTS, BAR_STYLES, CLEF_NAMES, DURATION_VALUES, FLAT_MASK, MIDI_INSTRUMENTS,
+    OCTAVE_SHIFT_NAMES, SHARP_MASK, from_nwc, nwc_lines,
+};
 
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
 use crate::chord::Chord;
@@ -170,6 +173,23 @@ enum ClefState {
 }
 
 impl ClefState {
+    /// The clef music21's reader keeps as `currentClef`: `TREBLE`,
+    /// `TREBLE8dw`, `TREBLE8up`, `BASS`, `BASS8dw`, `BASS8up`, `ALTO`,
+    /// `TENOR` or `PERCUSSION`; anything else is read as treble.
+    fn named(name: &str) -> Self {
+        match name {
+            "TREBLE8dw" => Self::TrebleDown,
+            "TREBLE8up" => Self::TrebleUp,
+            "BASS" => Self::Bass,
+            "PERCUSSION" => Self::Percussion,
+            "BASS8dw" => Self::BassDown,
+            "BASS8up" => Self::BassUp,
+            "ALTO" => Self::Alto,
+            "TENOR" => Self::Tenor,
+            _ => Self::Treble,
+        }
+    }
+
     /// music21's `getStepAndOctaveFromPosition` tables: the octave of the
     /// lowest of seven positions, that position, and the steps from it.
     fn table(self) -> (IntegerType, IntegerType, [char; 7]) {
@@ -185,6 +205,26 @@ impl ClefState {
             Self::Treble => (5, 1, TREBLE),
         }
     }
+}
+
+/// The positions of a staff under a clef, as music21's
+/// `noteworthy.dictionaries` lays them out: the octave of the lowest of
+/// seven positions, that position, and the steps from it. The clef is
+/// named as music21's reader keeps it (`TREBLE`, `BASS8dw`, `ALTO`, ...).
+#[must_use]
+pub fn staff_positions(clef: &str) -> (IntegerType, IntegerType, [char; 7]) {
+    ClefState::named(clef).table()
+}
+
+/// The step and octave of a staff position under a clef: music21's
+/// `getStepAndOctaveFromPosition`. Position 1 under the treble clef is
+/// C5, and each position up or down is a step.
+#[must_use]
+pub fn step_and_octave(clef: &str, position: IntegerType) -> (char, IntegerType) {
+    let (octave, lowest, steps) = staff_positions(clef);
+    let from_lowest = position - lowest;
+    let step = steps[usize::try_from(from_lowest.rem_euclid(7)).unwrap_or(0)];
+    (step, octave + from_lowest.div_euclid(7))
 }
 
 /// Something standing in a measure or a voice while the file is read.
@@ -1149,6 +1189,15 @@ fn assemble(part: PartBuilt, index: usize, endings: &[(Vec<Place>, u32)]) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_position_is_a_step_and_octave_under_its_clef() {
+        assert_eq!(step_and_octave("BASS", 3), ('G', 3));
+        assert_eq!(step_and_octave("TREBLE", 1), ('C', 5));
+        assert_eq!(step_and_octave("TREBLE", 0), ('B', 4));
+        assert_eq!(step_and_octave("TREBLE", -6), ('C', 4));
+        assert_eq!(step_and_octave("TENOR", 2), ('C', 4));
+    }
 
     #[test]
     fn a_refusal_says_its_line() {

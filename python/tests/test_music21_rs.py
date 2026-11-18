@@ -11492,3 +11492,32 @@ def test_music21s_abstract_scales_build_their_networks():
     assert str(blues.pitchFromDegree(4)) == "F#4"
     assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.75)) == "F#4"
     assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.25)) == "G4"
+
+
+def test_provided_noteworthy_reads_through_the_crate(tmp_path):
+    """Provided, `music21.noteworthy` has music21's tables, a translator
+    that reads `.nwctxt` lines through the crate and spells staff
+    positions, and a converter with music21's byte readers."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import noteworthy, stream
+from music21.noteworthy import binaryTranslate, constants, dictionaries, translate
+print(constants.ClefNames[1], dictionaries.dictionaryBass[3], noteworthy.translate is not None)
+nwt = translate.NoteworthyTranslator()
+nwt.currentClef = 'BASS'
+print(nwt.getStepAndOctaveFromPosition(3), nwt.getMultiplePitchesFromPositionInfo('1,b3,5^'))
+s = nwt.parseList(['|AddStaff|', '|Clef|Type:Treble', '|Note|Dur:4th|Pos:0'])
+print(type(s).__name__, [n.nameWithOctave for n in s.recurse().notes])
+nwcc = binaryTranslate.NWCConverter()
+nwcc.fileContents = b'\\x02\\x01\\xff\\x00ab\\x00'
+print(nwcc.readLEShort(), nwcc.byteToSignedInt(), nwcc.readToNUL(), nwcc.readToNUL(False), nwcc.parsePosition)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Bass G True",
+        "('G', 3) [<music21.pitch.Pitch E3>, <music21.pitch.Pitch G-3>, <music21.pitch.Pitch B3>]",
+        "Score ['B4']",
+        "258 -1 b'' b'ab' 4",
+    ]
