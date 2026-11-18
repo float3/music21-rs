@@ -196,7 +196,7 @@ pub use analysis::{
 };
 pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
 pub use articulations::{Articulation, ArticulationKind};
-pub use bar::{Barline, BarlineType, Ending, RepeatDirection};
+pub use bar::{Barline, BarlineType, BracketPlace, Ending, RepeatDirection};
 pub use chord::{
     Chord, ChordResolutionSuggestion, ChordTableAddress, GuitarFingering, GuitarStringFingering,
     GuitarTuning, GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,

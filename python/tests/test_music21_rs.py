@@ -9936,7 +9936,7 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.mei', 'from music21 import musicxml'):
+for statement in ('import music21.mei', 'from music21 import lily'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
@@ -9947,7 +9947,7 @@ print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         "music21-rs does not provide music21.mei",
-        "music21-rs does not provide music21.musicxml",
+        "music21-rs does not provide music21.lily",
         "False True",
     ]
 
@@ -12016,3 +12016,336 @@ def test_a_chord_symbol_subclass_names_its_own_module():
     Labelled.__module__ = "music21.tablature"
     Labelled.__qualname__ = "Labelled"
     assert repr(Labelled("D")).startswith("<music21.tablature.Labelled D")
+
+
+def test_provided_xmltom21_reads_one_element_at_a_time(tmp_path):
+    """music21's `MeasureParser` steps read an ElementTree element each, a
+    measure whole, and a part with its name in what it refuses."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import clef
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, PartParser, MusicXMLImportException,
+)
+mp = MeasureParser()
+c = mp.xmlToClef(EL('<clef><sign>G</sign><line>2</line>'
+                    '<clef-octave-change>-1</clef-octave-change></clef>'))
+print(isinstance(c, clef.Treble8vbClef))
+print(mp.xmlToPitch(EL('<note><pitch><step>E</step><alter>-1</alter>'
+                       '<octave>4</octave></pitch></note>')))
+mp = MeasureParser(EL('<measure number="12b"><note><rest/><duration>40320</duration></note></measure>'))
+mp.parse()
+print(mp.restAndNoteCount['rest'], mp.fullMeasureRest, mp.measureNumber, mp.numberSuffix)
+mp = MeasureParser()
+mp.lastClefs[1] = clef.Treble8vbClef()
+r = mp.xmlToRest(EL('<note><rest><display-step>B</display-step>'
+                    '<display-octave>3</display-octave></rest>'
+                    '<duration>5</duration><type>eighth</type></note>'))
+print(r.stepShift)
+pp = PartParser(mxPart=EL('<part><measure><note><type>thirty-tooth</type></note></measure></part>'),
+                mxScorePart=EL('<score-part><part-name>Elec.</part-name></score-part>'))
+try:
+    pp.parse()
+except MusicXMLImportException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "E-4",
+        "1 True 12 b",
+        "0",
+        "In part (Elec.), measure (0): found unknown MusicXML type: thirty-tooth",
+    ]
+
+
+def test_make_beams_in_place_beams_the_notes_held():
+    """`makeBeams(inPlace=True)` beams the stream's own notes and hands
+    back nothing, as music21's does."""
+    measure = m.Measure()
+    first = m.Note(64, quarterLength=0.25)
+    second = m.Note(67, quarterLength=0.25)
+    measure.append(m.TabClef())
+    measure.append(m.TimeSignature("4/4"))
+    measure.append(first)
+    measure.append(second)
+    assert measure.makeBeams(inPlace=True) is None
+    assert first.stemDirection == "down"
+    assert [beam.type for beam in first.beams] == ["start", "start"]
+    assert [beam.type for beam in second.beams] == ["stop", "stop"]
+
+
+def test_repeat_bracket_numbers_as_music21_does():
+    """`spanner.RepeatBracket` keeps the endings it marks in `numberRange`
+    and writes them back as music21 does."""
+    measure = m.Measure()
+    bracket = m.RepeatBracket(measure, number=1)
+    assert bracket.number == "1"
+    assert bracket.getSpannedElements() == [measure]
+    bracket.number = "1-3"
+    assert bracket.numberRange == [1, 2, 3]
+    bracket.number = [2, 3]
+    assert bracket.number == "2, 3"
+    bracket.number = "1, 2, 3"
+    assert bracket.number == "1-3"
+    bracket.number = "1, 2, 3, 7"
+    assert bracket.number == "1, 2, 3, 7"
+    assert m.RepeatBracket().numberRange == [0]
+    assert m.RepeatBracket().number == ""
+    with pytest.raises(m.SpannerException):
+        bracket.number = "x"
+
+
+def test_a_chord_symbol_read_keeps_inversion_placement_and_steps():
+    """A `<harmony>` read keeps where it is drawn, its added steps and
+    its inversion, as music21's reader does."""
+    harmony = (
+        '<harmony placement="below"><root><root-step>C</root-step></root>'
+        "<kind>major</kind><inversion>1</inversion>"
+        "<degree><degree-value>9</degree-value><degree-alter>0</degree-alter>"
+        "<degree-type>add</degree-type></degree></harmony>"
+    )
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes>" + harmony + "<note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    symbol = m.from_musicxml(document).recurse().getElementsByClass(m.ChordSymbol).first()
+    assert symbol.placement == "below"
+    assert symbol.inversion() == 1
+    assert [step.degree for step in symbol.getChordStepModifications()] == [9]
+
+
+def test_a_score_read_keeps_its_staff_groups_and_system_breaks():
+    """A score read keeps its `<part-group>` as a `StaffGroup` among its
+    elements and each `<print new-system>` as a `SystemLayout` in its
+    measure, as music21's reader does: bwv66.6 has one and eight."""
+    corpus = pathlib.Path(__file__).resolve().parents[2] / "music21" / "music21" / "corpus"
+    path = corpus / "bach" / "bwv66.6.mxl"
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    import zipfile
+
+    with zipfile.ZipFile(path) as archive:
+        name = next(n for n in archive.namelist() if not n.startswith("META"))
+        score = m.from_musicxml(archive.read(name).decode("utf-8"))
+    groups = [e for e in score.elements if type(e).__name__ == "StaffGroup"]
+    assert len(groups) == 1
+    assert len(groups[0].getSpannedElements()) == 4
+    layouts = [e for e in score.recurse() if type(e).__name__ == "SystemLayout"]
+    assert len(layouts) == 8
+    assert all(layout.isNew for layout in layouts)
+
+
+def test_provided_xmltom21_keeps_state_and_style_between_steps(tmp_path):
+    """music21's parsers carry tuplets from one note to the next, read an
+    encoding, layouts and the style attributes of any element, and keep
+    a part's last measure, as music21's docstrings show."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import base, duration, expressions, metadata, meter, note, stream
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, MusicXMLImporter, PartParser, MusicXMLWarning, XMLParserBase,
+)
+def tupletNote(kind):
+    return EL('<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>'
+              '<type>eighth</type><time-modification><actual-notes>3</actual-notes>'
+              '<normal-notes>2</normal-notes></time-modification>'
+              f'<notations><tuplet type="{kind}"/></notations></note>')
+MP = MeasureParser()
+print([MP.xmlToTuplets(tupletNote(kind))[0].type for kind in ('start', 'stop')])
+XP = XMLParserBase()
+m21Obj = base.Music21Object()
+XP.setStyleAttributes(EL('<a x="20.1" y="10.0" z="yes" />'), m21Obj, ('w', 'x', 'y', 'z'),
+                      ('justify', 'absoluteX', 'absoluteY', 'hideObjectOnPrint'))
+print(m21Obj.style.absoluteX, m21Obj.style.absoluteY, m21Obj.style.hideObjectOnPrint)
+te = expressions.TextExpression('hi!')
+XP.setFont(EL('<text font-family="Courier,monospaced" font-size="24" font-weight="bold" />'), te)
+print(te.style.fontFamily, te.style.fontSize, te.style.fontWeight)
+n = note.Note('C#4')
+XP.setPrintObject(EL('<note print-object="no"/>'), n)
+print(n.style.hideObjectOnPrint)
+pl = MP.xmlPrintToPageLayout(EL('<print new-page="yes" page-number="5"><page-layout>'
+                                '<page-height>4000</page-height></page-layout></print>'))
+print(pl.isNew, pl.pageNumber, pl.pageHeight)
+sl = MP.xmlPrintToSystemLayout(EL('<print new-system="yes"><system-layout>'
+                                  '<system-distance>55</system-distance></system-layout></print>'))
+print(sl.isNew, sl.distance)
+MI = MusicXMLImporter()
+md = metadata.Metadata()
+MI.processEncoding(EL('<encoding><software>Finale v26.3 for Mac</software>'
+                      '<supports attribute="new-page" element="print" type="yes" value="yes"/>'
+                      '</encoding>'), md)
+print(MI.applyFinaleWorkarounds, MI.definesExplicitSystemBreaks, MI.definesExplicitPageBreaks,
+      'Finale v26.3 for Mac' in md.software)
+pp = PartParser()
+m = stream.Measure(number=4)
+m.numberSuffix = 'b'
+pp.setLastMeasureInfo(m)
+print(pp.lastMeasureNumber, pp.lastNumberSuffix, pp.lastTimeSignature)
+m = stream.Measure([meter.TimeSignature('6/8'), note.Note(duration=duration.Duration(3 + 3 / 480))])
+pp = PartParser()
+pp.lastMeasureOffset = 21.0
+pp.setLastMeasureInfo(m)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    pp.adjustTimeAttributesFromMeasure(m)
+print(pp.lastMeasureOffset, [w.category is MusicXMLWarning for w in caught])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['start', 'stop']",
+        "20.1 10 True",
+        "['Courier', 'monospaced'] 24 bold",
+        "True",
+        "True 5 4000",
+        "True 55",
+        "True False True True",
+        "4 b <music21.meter.TimeSignature 4/4>",
+        "24.0 [True]",
+    ]
+
+
+def test_core_insert_and_elements_changed_are_music21s():
+    """music21's readers put elements in with `coreInsert` and then call
+    `coreElementsChanged`; a stream here takes both."""
+    measure = m.Measure()
+    note = m.Note("D4")
+    measure.coreInsert(1.0, note)
+    measure.coreElementsChanged()
+    assert measure.elementOffset(note) == 1.0
+    assert list(measure.notes) == [note]
+
+
+def test_a_measures_left_barline_is_listed_where_music21_lists_it():
+    """`show('text')` lists a measure's left barline at nought among what
+    stands there, by its sort order, as music21 holds it."""
+    measure = m.Measure()
+    measure.insert(0.0, m.TextExpression("G"))
+    measure.append(m.Note("A4"))
+    measure.leftBarline = m.Barline("regular")
+    lines = measure.recurseRepr().splitlines()
+    assert lines == [
+        "{0.0} <music21.expressions.TextExpression 'G'>",
+        "{0.0} <music21.bar.Barline type=regular>",
+        "{0.0} <music21.note.Note A>",
+    ]
+
+
+def test_a_noteworthy_endings_bracket_stands_where_music21_appends_it():
+    """music21's NoteWorthy reader appends a `RepeatBracket` to the part
+    as the ending's last measure starts; its MusicXML reader puts one at
+    nought."""
+    path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "music21" / "music21" / "noteworthy" / "jingle_v175.nwc"
+    )
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    from music21_rs import converter
+
+    part = converter.parse(str(path)).parts[0]
+    brackets = [e for e in part.elements if type(e).__name__ == "RepeatBracket"]
+    assert [part.elementOffset(bracket) for bracket in brackets] == [28.0]
+    assert [measure.number for measure in brackets[0].getSpannedElements()] == [5, 6]
+
+
+def test_a_rehearsal_mark_counts_on_as_music21s_does():
+    """`expressions.RehearsalMark` keeps its content as given and counts on
+    in the numbering it reads in; a score read keeps its marks."""
+    assert repr(m.RehearsalMark("B")) == "<music21.expressions.RehearsalMark 'B'>"
+    assert m.RehearsalMark("Z").nextContent() == "AA"
+    assert m.RehearsalMark("IV").nextContent() == "V"
+    assert m.RehearsalMark(7).nextContent() == 8
+    assert m.RehearsalMark("I", numbering="alphabetical").nextContent() == "J"
+    assert m.RehearsalMark("IV", numbering="roman").nextMark().numbering == "roman"
+    assert m.RehearsalMark._getNumberingFromContent("CI") == "roman"
+    with pytest.raises(m.ExpressionException):
+        m.RehearsalMark("A", numbering="greek")
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes><direction><direction-type><rehearsal>A</rehearsal>"
+        "</direction-type></direction><note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    marks = m.from_musicxml(document).recurse().getElementsByClass(m.RehearsalMark)
+    assert [mark.content for mark in marks] == ["A"]
+
+
+def test_provided_xmltom21_warns_of_a_key_outside_the_percussion_map(tmp_path):
+    """A `<midi-unpitched>` key outside General MIDI's map is read as a bare
+    unpitched instrument with a `MusicXMLWarning`, as music21 warns."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21.musicxml.xmlToM21 import PartParser, MusicXMLWarning
+scorePart = EL('<score-part id="P4"><part-name>Hi-Hat Rim</part-name>'
+               '<score-instrument id="P4-I23"><instrument-name>Hi-Hat Rim</instrument-name>'
+               '</score-instrument><midi-instrument id="P4-I23"><midi-channel>10</midi-channel>'
+               '<midi-unpitched>23</midi-unpitched></midi-instrument></score-part>')
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    unp = PartParser().getDefaultInstrument(scorePart)
+print([(w.category is MusicXMLWarning, str(w.message)) for w in caught])
+print(type(unp).__name__, unp.percMapPitch)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(True, '22 does not map to a valid instrument!')]",
+        "UnpitchedPercussion 22",
+    ]
+
+
+def test_provided_direction_types_build_spanners_between_calls(tmp_path):
+    """`xmlDirectionTypeToSpanners` keeps a part's spanners from one call to
+    the next, as music21's spanner bundle does: a wedge begun, then ended
+    on the last note; a bracket's heights; a pedal's bounce and gaps."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import note
+from music21.musicxml.xmlToM21 import MeasureParser
+MP = MeasureParser()
+n1 = note.Note('D4')
+MP.nLast = n1
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="crescendo" number="2"/>')))
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="stop" number="2"/>')), list(MP.spannerBundle))
+mp = MeasureParser()
+line = mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="start" line-end="down" end-length="12.5" number="1"></bracket>'))[0]
+mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="stop" line-end="down" end-length="12.5" number="1"></bracket>'))
+print(line.startHeight, line.endHeight)
+MP = MeasureParser()
+MP.nLast = n1
+pedal = MP.xmlDirectionTypeToSpanners(EL('<pedal type="sostenuto" sign="yes" number="2"/>'), 1, 0.5)[0]
+for kind, at in (('resume', 0.5), ('change', 1.0), ('discontinue', 2.0), ('resume', 3.5), ('stop', 4.0)):
+    MP.xmlDirectionTypeToSpanners(EL(f'<pedal type="{kind}" line="yes" number="2"/>'), 1, at)
+print(pedal.pedalForm, pedal.getFirst(), pedal.getLast() is n1)
+print(MP.stream.elements)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.dynamics.Crescendo>]",
+        "[] [<music21.dynamics.Crescendo <music21.note.Note D>>]",
+        "12.5 12.5",
+        "symbolline <music21.expressions.PedalBounce at 1.0> True",
+        "(<music21.expressions.PedalBounce at 1.0>, <music21.expressions.PedalGapStart at 2.0>,"
+        " <music21.expressions.PedalGapEnd at 3.5>)",
+    ]

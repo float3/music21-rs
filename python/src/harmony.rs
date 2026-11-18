@@ -253,6 +253,23 @@ impl ChordStepModification {
     }
 }
 
+/// What a read chord symbol says besides its notes, put on the object
+/// made for it: its added or altered steps, sounded as music21's reader
+/// sounds them, and where it is drawn.
+pub(crate) fn finish_read(made: &Bound<'_, PyAny>, symbol: &RsChordSymbol) -> PyResult<()> {
+    let py = made.py();
+    for modification in symbol.chord_step_modifications() {
+        made.call_method1(
+            "addChordStepModification",
+            (ChordStepModification::object(py, modification)?,),
+        )?;
+    }
+    if let Some(placement) = symbol.placement() {
+        made.setattr("placement", placement.as_str())?;
+    }
+    Ok(())
+}
+
 /// The crate's value of a modification, whichever class holds it: one of
 /// these, or music21's own, which its MusicXML reader builds.
 fn modification_value(value: &Bound<'_, PyAny>) -> PyResult<RsChordStepModification> {

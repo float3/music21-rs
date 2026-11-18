@@ -107,7 +107,32 @@ pub fn from_musicxml(document: &str) -> Result<Stream> {
         ))
         .of_kind(FormatErrorKind::Unsupported));
     }
-    Importer::default().score(&root)
+    score_of(&root)
+}
+
+/// A `<score-partwise>` already read as XML, read as a score.
+pub(super) fn score_of(root: &Xml) -> Result<Stream> {
+    Importer::default().score(root)
+}
+
+/// A `<score-partwise>` read as a score, with what music21 warns of as
+/// it reads it.
+pub(super) fn score_warned(root: &Xml) -> Result<(Stream, Vec<Error>)> {
+    let mut importer = Importer::default();
+    let read = importer.score(root)?;
+    Ok((read, importer.warnings))
+}
+
+/// The same, its first part starting inside `tuplets`, which are left as
+/// the last part ends.
+pub(super) fn score_within(root: &Xml, tuplets: &mut ActiveTuplets) -> Result<Stream> {
+    let mut importer = Importer {
+        tuplets_before: Some(*tuplets),
+        ..Importer::default()
+    };
+    let read = importer.score(root);
+    *tuplets = importer.tuplets_after;
+    read
 }
 
 // ------------------------------------------------------------------ numbers
@@ -442,27 +467,111 @@ struct Bracket {
 /// music21's `RepeatBracket.number` setter: nothing at all is nought,
 /// which is written as no number; otherwise `1`, `1, 2` or `1-3`.
 fn bracket_numbers(text: &str) -> Vec<u32> {
-    if text.is_empty() {
-        return vec![0];
-    }
-    let number = |piece: &str| piece.trim().parse::<u32>().ok();
-    let read = if let Some((low, high)) = text.split_once('-') {
-        number(low)
-            .zip(number(high))
-            .map(|(low, high)| (low..=high).collect())
-    } else if text.contains(',') {
-        text.split(',').map(number).collect::<Option<Vec<u32>>>()
-    } else {
-        number(text).map(|number| vec![number])
-    };
     // music21 falls back to a first ending where it cannot read one.
-    read.unwrap_or_else(|| vec![1])
+    Ending::numbers_from_text(text).unwrap_or_else(|_| vec![1])
+}
+
+// ------------------------------------------------------------- measure fit
+
+/// What is known of a measure as it goes into its part.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FitAsked {
+    /// Where its contents end, in quarters: music21's `highestTime`.
+    pub highest: FloatType,
+    /// How long a bar of its meter is.
+    pub bar_length: FloatType,
+    /// Whether it holds a note or a rest.
+    pub has_notes: bool,
+    /// Whether it opens the part: nothing before it took any time.
+    pub at_start: bool,
+    /// Whether the measure before it was cut short.
+    pub last_was_short: bool,
+}
+
+/// How a measure sits in its part: music21's
+/// `adjustTimeAttributesFromMeasure`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MeasureFit {
+    /// How far the next measure starts after this one.
+    pub shift: FloatType,
+    /// The padding of a pickup, where it is one.
+    pub padding_left: Option<FloatType>,
+    /// What a measure cut short lacks at its end.
+    pub padding_right: Option<FloatType>,
+    /// Whether an empty measure is filled with a bar's rest.
+    pub fill_with_rest: bool,
+    /// Whether it is overfull by an amount music21 takes for a mistake,
+    /// and so takes the bar's length instead; music21 warns then.
+    pub overfull_ignored: bool,
+    /// Whether the next measure follows one cut short.
+    pub last_was_short: bool,
+}
+
+/// Decides how a measure sits in its part, as music21's
+/// `adjustTimeAttributesFromMeasure` does.
+pub fn measure_fit(asked: &FitAsked) -> MeasureFit {
+    let FitAsked {
+        highest,
+        bar_length,
+        has_notes,
+        at_start,
+        last_was_short,
+    } = *asked;
+    let mut fit = MeasureFit {
+        shift: highest,
+        last_was_short,
+        ..MeasureFit::default()
+    };
+
+    // Full, or overfull by a round amount or by a lot, keeps its length.
+    if highest == bar_length {
+        return fit;
+    }
+    if highest > bar_length {
+        let difference = highest - bar_length;
+        let near = |unit: FloatType| {
+            let multiple = (difference / unit).round() * unit;
+            (difference - multiple).abs() < 1e-6
+        };
+        if !(difference > 0.5 || near(0.0625) || near(1.0 / 12.0)) {
+            fit.shift = bar_length;
+            fit.overfull_ignored = true;
+        }
+        return fit;
+    }
+
+    // An empty measure some writers leave the rest out of.
+    if highest == 0.0 && !has_notes {
+        fit.shift = bar_length;
+        fit.fill_with_rest = true;
+        fit.last_was_short = false;
+        return fit;
+    }
+
+    // A short measure is a pickup where it opens the part or follows
+    // another short one, and is cut short at its end otherwise. music21
+    // pads a pickup as `padAsAnacrusis` does, by the share of the bar it
+    // lacks, and a short measure by what it lacks, unsnapped.
+    let anacrusis = op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
+    if at_start {
+        fit.padding_left = Some(anacrusis);
+    } else if last_was_short {
+        fit.padding_left = Some(anacrusis);
+        fit.last_was_short = false;
+    } else {
+        fit.padding_right = Some(bar_length - op_frac(highest));
+        fit.last_was_short = true;
+    }
+    fit
 }
 
 // ----------------------------------------------------------------- importer
 
-#[derive(Default)]
-struct Importer {
+/// The spanners a reading is building, which outlive one element: the
+/// state music21 keeps in its `spannerBundle`. A reading of one element
+/// at a time keeps it between elements, as music21's parsers do.
+#[derive(Clone, Debug, Default)]
+pub struct SpannerState {
     spanners: Vec<Building>,
     /// The spanners waiting for the next note, chord or rest, which becomes
     /// the first thing the one at the front joins.
@@ -471,9 +580,117 @@ struct Importer {
     /// where each stands in `spanners`: one finished in a part may still be
     /// handed the first note of the next by the queue.
     finished: Vec<usize>,
+    /// The last uid given to anything read.
     next_uid: usize,
-    finale: bool,
+    /// Where each pedal mark began, for a `resume` at that very place:
+    /// music21's `pedalToStartOffset`.
+    pedal_starts: Vec<(usize, FloatType)>,
 }
+
+/// A spanner a [`SpannerState`] is building, by where it stands there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SpannerId(usize);
+
+impl SpannerState {
+    /// A new uid, for something read outside this state -- a note -- that
+    /// a spanner may then join.
+    pub fn new_uid(&mut self) -> usize {
+        self.next_uid += 1;
+        self.next_uid
+    }
+
+    /// The spanner as built so far, standing in no stream: what it says of
+    /// itself, and whether its end has been read.
+    pub fn spanner(&self, id: SpannerId) -> Option<Spanner> {
+        let building = self.spanners.get(id.0)?;
+        let mut spanner = building.finish(&|_| None);
+        spanner.set_complete(building.complete);
+        Some(spanner)
+    }
+
+    /// The uids of what the spanner joins, in order.
+    pub fn joined(&self, id: SpannerId) -> &[usize] {
+        self.spanners
+            .get(id.0)
+            .map_or(&[], |building| building.uids.as_slice())
+    }
+
+    /// Every spanner the state holds, in the order they were begun.
+    pub fn ids(&self) -> impl Iterator<Item = SpannerId> {
+        (0..self.spanners.len()).map(SpannerId)
+    }
+}
+
+/// What one direction type read: the spanners it began, and the pedal's
+/// bounces and gaps it put in the measure, each with its uid and offset.
+#[derive(Clone, Debug, Default)]
+pub struct DirectionTypeRead {
+    /// The spanners begun, in order.
+    pub started: Vec<SpannerId>,
+    /// Each pedal bounce or gap put in, with its uid and offset.
+    pub marks: Vec<(usize, FloatType, PedalObject)>,
+}
+
+/// music21's `xmlDirectionTypeToSpanners`: a wedge, bracket, dashes,
+/// octave shift or pedal, read within `state`; one that ends a spanner
+/// joins `last` to it, where given.
+pub(super) fn direction_type_within(
+    element: &Xml,
+    staff: i32,
+    total: FloatType,
+    last: Option<usize>,
+    state: &mut SpannerState,
+) -> Result<DirectionTypeRead> {
+    let mut importer = Importer {
+        state: std::mem::take(state),
+        ..Importer::default()
+    };
+    let part = Xml::parse("<part id=\"P1\"/>")?;
+    let score_part = Xml::parse("<score-part id=\"P1\"/>")?;
+    let measure = Xml::parse("<measure/>")?;
+    let read = {
+        let mut part_parser = PartParser::new(&mut importer, &part, &score_part, "P1");
+        let mut parser = MeasureParser::new(&mut part_parser, &measure);
+        parser.last_note = last;
+        parser.pedal_starts = std::mem::take(&mut parser.part.importer.state.pedal_starts);
+        let started = parser.direction_spanners(element, staff, total);
+        parser.part.importer.state.pedal_starts = std::mem::take(&mut parser.pedal_starts);
+        let marks = parser
+            .measure
+            .items
+            .iter()
+            .filter_map(|item| match (&item.element, item.uid) {
+                (StreamElement::PedalObject(mark), Some(uid)) => {
+                    Some((uid, item.offset, mark.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        started.map(|started| DirectionTypeRead {
+            started: started.into_iter().map(SpannerId).collect(),
+            marks,
+        })
+    };
+    *state = importer.state;
+    read
+}
+
+#[derive(Default)]
+struct Importer {
+    state: SpannerState,
+    finale: bool,
+    /// The tuplets the first part starts inside, for a measure read on its
+    /// own after others: music21's `PartParser.activeTuplets`.
+    tuplets_before: Option<ActiveTuplets>,
+    /// The tuplets the last part read was left inside.
+    tuplets_after: ActiveTuplets,
+    /// What music21 warns of as it reads, in order.
+    warnings: Vec<Error>,
+}
+
+/// The tuplets a part is inside, by number: music21's `activeTuplets`,
+/// nought being the one a note's `<time-modification>` alone implies.
+pub type ActiveTuplets = [Option<Tuplet>; 7];
 
 struct PartGroup<'a> {
     element: &'a Xml,
@@ -493,12 +710,11 @@ struct BuiltPart {
 
 impl Importer {
     fn uid(&mut self) -> usize {
-        self.next_uid += 1;
-        self.next_uid
+        self.state.new_uid()
     }
 
     /// music21's `xmlRootToScore`.
-    fn score(mut self, root: &Xml) -> Result<Stream> {
+    fn score(&mut self, root: &Xml) -> Result<Stream> {
         let metadata = self.metadata(root);
         let defaults = root.find("defaults").map(score_layout);
         let credits = root
@@ -521,7 +737,7 @@ impl Importer {
                 continue;
             };
             let first = built.len();
-            let staves = PartParser::new(&mut self, part, score_part, &id).parse()?;
+            let staves = PartParser::new(self, part, score_part, &id).parse()?;
             let name = staves
                 .first()
                 .and_then(|staff| staff.stream.name().map(str::to_string));
@@ -595,15 +811,17 @@ impl Importer {
 
         // Whatever was completed and never put into a part goes into the
         // score, an arpeggio across parts among them.
-        for building in &mut self.spanners {
+        for building in &mut self.state.spanners {
             if building.kind == SpannerKind::ArpeggioMark {
                 building.complete = true;
             }
         }
-        let late: Vec<usize> = (0..self.spanners.len())
-            .filter(|index| self.spanners[*index].complete && !self.spanners[*index].placed)
+        let late: Vec<usize> = (0..self.state.spanners.len())
+            .filter(|index| {
+                self.state.spanners[*index].complete && !self.state.spanners[*index].placed
+            })
             .collect();
-        self.finished.extend(late);
+        self.state.finished.extend(late);
 
         // The credits sort before the parts, as music21 sorts its text boxes,
         // and stand before the parts' leaves where spanners count them.
@@ -630,8 +848,8 @@ impl Importer {
             assembled.add_staff_group(group);
         }
         let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
-        for index in &self.finished {
-            assembled.add_spanner(self.spanners[*index].finish(&position_of));
+        for index in &self.state.finished {
+            assembled.add_spanner(self.state.spanners[*index].finish(&position_of));
         }
         Ok(assembled)
     }
@@ -696,17 +914,10 @@ impl Importer {
             );
         }
         if let Some(encoding) = identification.find("encoding") {
-            let mut found = false;
-            for software in encoding.find_all("software") {
-                let text = software.stripped();
-                if text.is_empty() {
-                    continue;
-                }
-                if !found && text.contains("Finale") {
-                    self.finale = true;
-                }
-                found = true;
-                metadata.add_text("software", text);
+            let read = encoding_of(encoding);
+            self.finale = read.finale;
+            for software in &read.software {
+                metadata.add_text("software", software);
             }
         }
         if let Some(miscellaneous) = identification.find("miscellaneous") {
@@ -725,6 +936,46 @@ impl Importer {
         }
         metadata
     }
+}
+
+/// What an `<encoding>` says of the program that wrote the document.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Encoding {
+    /// Each `<software>` named, in order.
+    pub software: Vec<String>,
+    /// Whether the first program named is Finale, whose mistakes music21
+    /// works around: its `applyFinaleWorkarounds`.
+    pub finale: bool,
+    /// Whether the document says where every system starts: music21's
+    /// `definesExplicitSystemBreaks`.
+    pub system_breaks: bool,
+    /// Whether it says where every page starts: music21's
+    /// `definesExplicitPageBreaks`.
+    pub page_breaks: bool,
+}
+
+/// music21's `processEncoding`.
+pub(super) fn encoding_of(encoding: &Xml) -> Encoding {
+    let mut read = Encoding::default();
+    for software in encoding.find_all("software") {
+        let text = software.stripped();
+        if text.is_empty() {
+            continue;
+        }
+        if read.software.is_empty() && text.contains("Finale") {
+            read.finale = true;
+        }
+        read.software.push(text.to_string());
+    }
+    for supports in encoding.find_all("supports") {
+        let value = supports.get("value").or_else(|| supports.get("type"));
+        match (supports.get("attribute"), value) {
+            (Some("new-system"), Some("yes")) => read.system_breaks = true,
+            (Some("new-page"), Some("yes")) => read.page_breaks = true,
+            _ => {}
+        }
+    }
+    read
 }
 
 /// music21's `parsePartList`: each `<score-part>` by id, and the groups.
@@ -790,7 +1041,7 @@ struct PartParser<'a, 'x> {
     last_measure_number: IntegerType,
     last_number_suffix: Option<String>,
     last_clefs: Vec<(i32, Clef)>,
-    active_tuplets: [Option<Tuplet>; 7],
+    active_tuplets: ActiveTuplets,
     first_measure_parsed: bool,
     /// music21's `PartParser.atSoundingPitch`: a part is at sounding pitch
     /// until a `<transpose>` says otherwise.
@@ -817,6 +1068,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     .any(|staves| parse_int(staves.stripped()).is_some_and(|count| count > 1))
             })
         });
+        let active_tuplets = importer.tuplets_before.take().unwrap_or_default();
         Self {
             importer,
             part,
@@ -838,7 +1090,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             last_measure_number: 0,
             last_number_suffix: None,
             last_clefs: Vec::new(),
-            active_tuplets: Default::default(),
+            active_tuplets,
             first_measure_parsed: false,
             at_sounding_pitch: true,
             arpeggios: Vec::new(),
@@ -855,7 +1107,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest else {
             return;
         };
-        self.importer.spanners[index].add(uid);
+        self.importer.state.spanners[index].add(uid);
         self.multi_rests_left -= 1;
         if self.multi_rests_left == 0 {
             self.end_multi_rest();
@@ -872,7 +1124,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest.take() else {
             return;
         };
-        let building = &mut self.importer.spanners[index];
+        let building = &mut self.importer.state.spanners[index];
         if building.uids.is_empty() {
             return;
         }
@@ -898,6 +1150,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         }
         self.remove_finale_ending_rest(last_forward);
         self.end_multi_rest();
+        self.importer.tuplets_after = self.active_tuplets;
 
         // Endings, from the brackets over the measures.
         for bracket in &self.brackets {
@@ -918,7 +1171,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         // those in as it was completed.
         let mut ours: Vec<usize> = std::mem::take(&mut self.multi_rests);
         for pass in [false, true] {
-            for (index, building) in self.importer.spanners.iter_mut().enumerate() {
+            for (index, building) in self.importer.state.spanners.iter_mut().enumerate() {
                 let ottava = building.kind == SpannerKind::Ottava;
                 if building.complete && !building.placed && ottava == pass {
                     building.placed = true;
@@ -926,7 +1179,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 }
             }
         }
-        self.importer.finished.extend(ours);
+        self.importer.state.finished.extend(ours);
 
         if self.max_staves > 1 {
             self.separate_staves()
@@ -1047,6 +1300,10 @@ impl<'a, 'x> PartParser<'a, 'x> {
             if !unpitched_text.is_empty() {
                 unpitched = true;
                 let pitch = adjusted(unpitched_text).unwrap_or(0);
+                // music21 warns of a key outside the General MIDI map.
+                if let Err(error) = crate::instrument::for_percussion_key(pitch) {
+                    self.importer.warnings.push(error);
+                }
                 instrument = Some(percussion_instrument(pitch));
             } else if !program_text.is_empty() {
                 let mut read = adjusted(program_text)
@@ -1206,26 +1463,19 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let index = self.measures.len();
 
         // music21's `adjustTimeAttributesFromMeasure`.
-        let highest = measure.highest_time();
         let has_notes = measure
             .items
             .iter()
             .chain(measure.voices.iter().flat_map(|voice| &voice.items))
             .any(Item::is_note_or_rest);
-        let shift = if highest == bar_length {
-            highest
-        } else if highest > bar_length {
-            let difference = highest - bar_length;
-            let near = |unit: FloatType| {
-                let multiple = (difference / unit).round() * unit;
-                (difference - multiple).abs() < 1e-6
-            };
-            if difference > 0.5 || near(0.0625) || near(1.0 / 12.0) {
-                highest
-            } else {
-                bar_length
-            }
-        } else if highest == 0.0 && !has_notes {
+        let fit = measure_fit(&FitAsked {
+            highest: measure.highest_time(),
+            bar_length,
+            has_notes,
+            at_start: self.last_measure_offset == 0.0,
+            last_was_short: self.last_measure_was_short,
+        });
+        if fit.fill_with_rest {
             // Some writers leave the rest out of an empty measure.
             let uid = self.importer.uid();
             measure.items.push(Item {
@@ -1235,32 +1485,15 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 uid: Some(uid),
                 element: Rest::new(Duration::new(bar_length)?).into(),
             });
-            self.last_measure_was_short = false;
-            bar_length
-        } else {
-            // A short measure is a pickup where it opens the part or follows
-            // another short one, and is cut short at its end otherwise.
-            // music21 pads a pickup as `padAsAnacrusis` does, by the share
-            // of the bar it lacks, and a short measure by what it lacks,
-            // unsnapped.
-            let anacrusis = || op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
-            if self.last_measure_offset == 0.0 {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                }
-            } else if self.last_measure_was_short {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                    self.last_measure_was_short = false;
-                }
-            } else {
-                if highest < bar_length {
-                    measure.padding_right = bar_length - op_frac(highest);
-                }
-                self.last_measure_was_short = highest < bar_length;
-            }
-            highest
-        };
+        }
+        if let Some(padding) = fit.padding_left {
+            measure.padding_left = padding;
+        }
+        if let Some(padding) = fit.padding_right {
+            measure.padding_right = padding;
+        }
+        self.last_measure_was_short = fit.last_was_short;
+        let shift = fit.shift;
         self.last_measure_offset += shift;
         self.measures.push(measure);
         Ok(finale_forward.map(|_| (index, !use_voices)))
@@ -1751,8 +1984,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         self.part.end_multi_rest();
         let mut building = Building::new(SpannerKind::MultiMeasureRest, None);
         building.use_symbols = multiple.get("use-symbols") == Some("yes");
-        self.part.importer.spanners.push(building);
-        self.part.multi_rest = Some(self.part.importer.spanners.len() - 1);
+        self.part.importer.state.spanners.push(building);
+        self.part.multi_rest = Some(self.part.importer.state.spanners.len() - 1);
         self.part.multi_rests_left = i64::from(count);
         Ok(())
     }
@@ -1768,26 +2001,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             || print.find("page-layout").is_some();
         let system = says("new-system") || print.find("system-layout").is_some();
         if page {
-            let mut read = PageLayout {
-                is_new: print.get("new-page").map(|value| value == "yes"),
-                page_number: print
-                    .get("page-number")
-                    .and_then(|value| value.trim().parse().ok()),
-                ..PageLayout::default()
-            };
-            if let Some(written) = print.find("page-layout") {
-                read_page_layout(written, &mut read);
-            }
+            let read = print_page_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::Page(read)));
         }
         if system || !page {
-            let mut read = SystemLayout {
-                is_new: print.get("new-system").map(|value| value == "yes"),
-                ..SystemLayout::default()
-            };
-            if let Some(written) = print.find("system-layout") {
-                read_system_layout(written, &mut read);
-            }
+            let read = print_system_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::System(read)));
         }
         for written in print.find_all("staff-layout") {
@@ -1941,7 +2159,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// Spanners that knew an element by one number know it by another.
     fn rename(&mut self, from: usize, to: usize) {
-        for building in &mut self.part.importer.spanners {
+        for building in &mut self.part.importer.state.spanners {
             let mut renamed: Vec<usize> = Vec::new();
             for uid in &building.uids {
                 let uid = if *uid == from { to } else { *uid };
@@ -1956,8 +2174,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `freePendingSpannedElementAssignment`.
     fn free_pending(&mut self, uid: usize) {
         let importer = &mut *self.part.importer;
-        if let Some(index) = importer.pending.pop_front() {
-            importer.spanners[index].add_first(uid);
+        if let Some(index) = importer.state.pending.pop_front() {
+            importer.state.spanners[index].add_first(uid);
         }
     }
 
@@ -2629,7 +2847,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     .iter()
                     .find(|(held, _)| *held == key)
                     .map(|(_, index)| *index);
-                let spanners = &mut self.part.importer.spanners;
+                let spanners = &mut self.part.importer.state.spanners;
                 let index = found.unwrap_or_else(|| {
                     let mut building = Building::new(SpannerKind::ArpeggioMark, Some(number));
                     building.arpeggio = kind;
@@ -2639,7 +2857,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 if found.is_none() {
                     self.part.arpeggios.push((key, index));
                 }
-                self.part.importer.spanners[index].add(uid);
+                self.part.importer.state.spanners[index].add(uid);
             }
         }
         for ornaments in notations.find_all("ornaments") {
@@ -2653,7 +2871,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     "tremolo" if matches!(mark.get("type"), Some("start" | "stop")) => {
                         let index =
                             self.one_spanner(mark, Some(uid), SpannerKind::TremoloSpanner, false);
-                        self.part.importer.spanners[index].marks = tremolo_marks(mark)?;
+                        self.part.importer.state.spanners[index].marks = tremolo_marks(mark)?;
                     }
                     _ => {}
                 }
@@ -2661,7 +2879,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         }
         for slur in notations.find_all("slur") {
             let index = self.one_spanner(slur, Some(uid), SpannerKind::Slur, false);
-            let building = &mut self.part.importer.spanners[index];
+            let building = &mut self.part.importer.state.spanners[index];
             if let Some(line_type) = slur.get("line-type") {
                 building.line_type = Some(line_type.to_string());
             }
@@ -2672,7 +2890,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         for tag in ["glissando", "slide"] {
             for written in notations.find_all(tag) {
                 let index = self.one_spanner(written, Some(uid), SpannerKind::Glissando, false);
-                let building = &mut self.part.importer.spanners[index];
+                let building = &mut self.part.importer.state.spanners[index];
                 if tag == "slide" {
                     building.slide = SlideType::Continuous;
                 }
@@ -2702,7 +2920,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         allow_duplicates: bool,
     ) -> usize {
         let id = element.get("number");
-        let spanners = &mut self.part.importer.spanners;
+        let spanners = &mut self.part.importer.state.spanners;
         let found = spanners
             .iter()
             .position(|held| held.kind == kind && !held.complete && held.id_local.as_deref() == id);
@@ -2788,7 +3006,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 // music21 warns and carries on when one cannot be read.
                 if let Ok(made) = self.direction_spanners(specific, staff, total) {
                     for index in made {
-                        let building = &mut self.part.importer.spanners[index];
+                        let building = &mut self.part.importer.state.spanners[index];
                         if let Some(placement) = placement_of(specific) {
                             building.placement = Some(placement);
                         }
@@ -2888,11 +3106,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 match kind {
                     Some(kind) => {
                         let index = self.one_spanner(element, None, kind, true);
-                        self.part.importer.pending.push_back(index);
+                        self.part.importer.state.pending.push_back(index);
                         made.push(index);
                     }
                     None => {
-                        let spanners = &mut self.part.importer.spanners;
+                        let spanners = &mut self.part.importer.state.spanners;
                         let index = open(spanners, &SpannerKind::is_wedge)
                             .ok_or_else(|| import_error("Error in getting DynamicWedges"))?;
                         spanners[index].complete = true;
@@ -2911,9 +3129,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                 };
                 let height = element.get("end-length").and_then(parse_float);
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some("start") => {
                         let mut building = Building::new(SpannerKind::Line, id);
@@ -2961,9 +3179,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "octave-shift" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(direction @ ("up" | "down")) => {
                         let size = element.get("size").and_then(parse_int).unwrap_or(8);
@@ -3008,9 +3226,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "pedal" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(kind @ ("start" | "sostenuto")) => {
                         let mut building = Building::new(SpannerKind::PedalMark, id);
@@ -3083,7 +3301,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// joined by the pedal mark it belongs to.
     fn pedal_object(&mut self, kind: PedalObjectKind, pedal: usize, staff: i32, total: FloatType) {
         let uid = self.insert(total, staff, PedalObject::new(kind));
-        self.part.importer.spanners[pedal].add(uid);
+        self.part.importer.state.spanners[pedal].add(uid);
     }
 
     /// music21's `xmlHarmony` and `xmlToChordSymbol`.
@@ -3168,6 +3386,18 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 symbol.add_chord_step_modification(modification);
             }
         }
+        // An inversion with no bass written puts that chord note in the
+        // bass, as music21's `ChordSymbol(inversion=...)` does.
+        let inversion = parse_int(harmony.child_text("inversion")).unwrap_or(0);
+        if inversion > 0 && symbol.bass().is_none() && !symbol.is_no_chord() {
+            let pitches = symbol.pitches()?;
+            if let Some(bass) = usize::try_from(inversion)
+                .ok()
+                .and_then(|at| pitches.get(at))
+            {
+                symbol.set_bass(Some(bass.clone()));
+            }
+        }
         symbol.set_placement(placement_of(harmony));
         let offset = self.offset + self.offset_of(harmony);
         self.insert(offset, staff_number(harmony), symbol);
@@ -3176,40 +3406,13 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// music21's `xmlBarline`.
     fn barline(&mut self, element: &'x Xml) -> Result<()> {
-        let style = element.child_text("bar-style");
         let right = matches!(element.get("location"), Some("right") | None);
-        let barline = match element.find("repeat") {
-            Some(repeat) => {
-                let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
-                    Some("forward") => RepeatDirection::Start,
-                    Some("backward") => RepeatDirection::End,
-                    Some(other) => {
-                        return Err(import_error(format!(
-                            "cannot handle mx direction format: {other}"
-                        )));
-                    }
-                    None => return Err(import_error("Repeat sign direction is required")),
-                };
-                // A repeat closing a measure ends the passage, whatever the
-                // file says; only an end says how many times.
-                let direction = if right { RepeatDirection::End } else { written };
-                let times = repeat
-                    .get("times")
-                    .and_then(parse_int)
-                    .map(|times| times.max(0) as u32)
-                    .filter(|_| written == RepeatDirection::End);
-                // The sign is drawn as its direction draws it, not as the
-                // file's bar style says.
-                Barline::repeat(direction, times)
-            }
-            None => {
-                let mut barline = Barline::default();
-                if !style.is_empty() {
-                    barline.set_bar_type(BarlineType::from_name(style)?);
-                }
-                barline
-            }
-        };
+        let mut barline = barline_of(element)?;
+        // A repeat closing a measure ends the passage, whatever the file
+        // says.
+        if right && barline.repeat_direction() == Some(RepeatDirection::Start) {
+            barline = Barline::repeat(RepeatDirection::End, None);
+        }
 
         if let Some(ending) = element.find("ending") {
             let index = self.part.measures.len();
@@ -3282,6 +3485,43 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     }
 }
 
+/// music21's `xmlToRepeat` and `xmlToBarline`: what a `<barline>` draws,
+/// a repeat in the direction it is written.
+pub(super) fn barline_of(element: &Xml) -> Result<Barline> {
+    let style = element.child_text("bar-style");
+    let barline = match element.find("repeat") {
+        Some(repeat) => {
+            let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
+                Some("forward") => RepeatDirection::Start,
+                Some("backward") => RepeatDirection::End,
+                Some(other) => {
+                    return Err(import_error(format!(
+                        "cannot handle mx direction format: {other}"
+                    )));
+                }
+                None => return Err(import_error("Repeat sign direction is required")),
+            };
+            // Only an end says how many times.
+            let times = repeat
+                .get("times")
+                .and_then(parse_int)
+                .map(|times| times.max(0) as u32)
+                .filter(|_| written == RepeatDirection::End);
+            // The sign is drawn as its direction draws it, not as the
+            // file's bar style says.
+            Barline::repeat(written, times)
+        }
+        None => {
+            let mut barline = Barline::default();
+            if !style.is_empty() {
+                barline.set_bar_type(BarlineType::from_name(style)?);
+            }
+            barline
+        }
+    };
+    Ok(barline)
+}
+
 /// General MIDI's drum for a key as the instrument music21 has for it:
 /// its `PercussionMapper.midiPitchToInstrument`, and a bare unpitched
 /// instrument carrying the key where the map names nothing -- which is
@@ -3350,7 +3590,7 @@ fn tenths(element: &Xml, tag: &str) -> Option<Tenths> {
 }
 
 /// music21's `xmlPageLayoutToPageLayout`.
-fn read_page_layout(written: &Xml, read: &mut PageLayout) {
+pub(super) fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     if let Some(height) = tenths(written, "page-height") {
         read.page_height = Some(height);
     }
@@ -3371,8 +3611,35 @@ fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     }
 }
 
+/// music21's `xmlPrintToPageLayout`: the page a `<print>` starts.
+pub(super) fn print_page_layout(print: &Xml) -> PageLayout {
+    let mut read = PageLayout {
+        is_new: print.get("new-page").map(|value| value == "yes"),
+        page_number: print
+            .get("page-number")
+            .and_then(|value| value.trim().parse().ok()),
+        ..PageLayout::default()
+    };
+    if let Some(written) = print.find("page-layout") {
+        read_page_layout(written, &mut read);
+    }
+    read
+}
+
+/// music21's `xmlPrintToSystemLayout`: the system a `<print>` starts.
+pub(super) fn print_system_layout(print: &Xml) -> SystemLayout {
+    let mut read = SystemLayout {
+        is_new: print.get("new-system").map(|value| value == "yes"),
+        ..SystemLayout::default()
+    };
+    if let Some(written) = print.find("system-layout") {
+        read_system_layout(written, &mut read);
+    }
+    read
+}
+
 /// music21's `xmlSystemLayoutToSystemLayout`.
-fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
+pub(super) fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
     if let Some(margins) = written.find("system-margins") {
         for (tag, place) in [
             ("top-margin", &mut read.top_margin),
@@ -3394,7 +3661,7 @@ fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
 }
 
 /// music21's `xmlStaffLayoutToStaffLayout`.
-fn staff_layout(written: &Xml) -> StaffLayout {
+pub(super) fn staff_layout(written: &Xml) -> StaffLayout {
     StaffLayout {
         distance: tenths(written, "staff-distance"),
         staff_number: written
@@ -3560,7 +3827,7 @@ fn score_layout(defaults: &Xml) -> ScoreLayout {
 }
 
 /// music21's `getStaffNumber`.
-fn staff_number(element: &Xml) -> i32 {
+pub(super) fn staff_number(element: &Xml) -> i32 {
     match element.tag.as_str() {
         "harmony" | "forward" | "note" | "direction" => {
             parse_int(element.child_text("staff")).unwrap_or(NO_STAFF)
@@ -3577,7 +3844,7 @@ fn staff_number(element: &Xml) -> i32 {
 }
 
 /// music21's `xmlToPitch`.
-fn pitch_of(note: &Xml) -> Result<Pitch> {
+pub(super) fn pitch_of(note: &Xml) -> Result<Pitch> {
     let Some(written) = note.find("pitch") else {
         return Pitch::from_name("C4");
     };
@@ -3613,7 +3880,7 @@ fn pitch_of(note: &Xml) -> Result<Pitch> {
 }
 
 /// music21's `xmlToAccidental`.
-fn accidental_of(written: &Xml) -> Result<Accidental> {
+pub(super) fn accidental_of(written: &Xml) -> Result<Accidental> {
     let name = written.stripped().to_lowercase();
     let name = match name.as_str() {
         "quarter-sharp" => "half-sharp",
@@ -3639,7 +3906,7 @@ fn accidental_of(written: &Xml) -> Result<Accidental> {
 }
 
 /// music21's `xmlToBeams`.
-fn beams_of(written: &[&Xml]) -> Result<Beams> {
+pub(super) fn beams_of(written: &[&Xml]) -> Result<Beams> {
     let mut beams = Beams::new();
     for (index, beam) in written.iter().enumerate() {
         let text = beam.text().map_or("begin", str::trim);
@@ -3663,7 +3930,7 @@ fn beams_of(written: &[&Xml]) -> Result<Beams> {
 }
 
 /// music21's `xmlToTie`.
-fn tie_of(note: &Xml) -> Option<Tie> {
+pub(super) fn tie_of(note: &Xml) -> Option<Tie> {
     let types: Vec<&str> = note
         .find_all("tie")
         .filter_map(|tie| tie.get("type"))
@@ -3697,87 +3964,93 @@ fn tie_of(note: &Xml) -> Option<Tie> {
     Some(tie)
 }
 
-/// music21's `updateLyricsFromList` and `xmlToLyric`.
-fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
+/// music21's `updateLyricsFromList`: each `<lyric>` read, one numbered
+/// nought taking its place among them.
+pub(super) fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
     let mut out = Vec::new();
-    let mut current = 1;
-    for lyric in written {
-        let texts: Vec<&Xml> = lyric.find_all("text").collect();
-        let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
-        let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
-        let mut read = Lyric::unsung();
-        if texts.is_empty() {
-            // A lyric that only extends one: music21 hands back a bare one.
-            out.push(read);
-            current += 1;
-            continue;
-        }
-        if texts.len() == 1 {
-            if let Some(text) = texts[0].text() {
-                read.set_text(text.trim());
-            }
-            if let Some(syllabic) = syllabics.first()
-                && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
-            {
-                read.set_syllabic(syllabic);
-            }
-        } else if texts.len() > 1 {
-            let mut components = Vec::new();
-            for (index, text) in texts.iter().enumerate() {
-                let mut component = Lyric::unsung();
-                if let Some(text) = text.text() {
-                    component.set_text(text.trim());
-                }
-                if let Some(syllabic) = syllabics.get(index) {
-                    if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
-                        component.set_syllabic(syllabic);
-                    }
-                    if index >= 1
-                        && let Some(elision) = elisions.get(index - 1)
-                    {
-                        component.set_elision_before(elision.text().unwrap_or(""));
-                    }
-                }
-                components.push(component);
-            }
-            read.set_components(components);
-        }
-        match lyric.get("number") {
-            Some(number) => match number.trim().parse::<IntegerType>() {
-                Ok(number) => read.set_number(number),
-                Err(_) => {
-                    read.set_number(0);
-                    read.set_identifier(Some(number.to_string()));
-                }
-            },
-            None => read.set_number(0),
-        }
-        if let Some(name) = lyric.get("name") {
-            read.set_identifier(Some(name.to_string()));
-        }
-        if let Some(justify) = lyric.get("justify") {
-            read.set_justify(Some(Justification::from_name(justify)?));
-        }
-        if let Some(placement) = lyric.get("placement") {
-            read.set_placement(Placement::from_name(placement).ok());
-        }
-        if lyric.get("print-object") == Some("no") {
-            read.set_hidden(true);
-        }
-        if let Some(color) = lyric.get("color") {
-            read.set_color(Some(color.to_string()));
-        }
-        if read.number() == 0 {
-            read.set_number(current);
+    for (place, lyric) in written.enumerate() {
+        let mut read = lyric_of(lyric)?;
+        // A bare lyric, which only extends one, keeps its number.
+        let sung = lyric.find("text").is_some();
+        if sung && read.number() == 0 {
+            read.set_number(IntegerType::try_from(place + 1).unwrap_or(IntegerType::MAX));
         }
         out.push(read);
-        current += 1;
     }
     Ok(out)
 }
 
+/// music21's `xmlToLyric`: one `<lyric>`, numbered nought where it says
+/// no number.
+pub(super) fn lyric_of(lyric: &Xml) -> Result<Lyric> {
+    let texts: Vec<&Xml> = lyric.find_all("text").collect();
+    let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
+    let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
+    let mut read = Lyric::unsung();
+    if texts.is_empty() {
+        // A lyric that only extends one: music21 hands back a bare one.
+        return Ok(read);
+    }
+    if texts.len() == 1 {
+        if let Some(text) = texts[0].text() {
+            read.set_text(text.trim());
+        }
+        if let Some(syllabic) = syllabics.first()
+            && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
+        {
+            read.set_syllabic(syllabic);
+        }
+    } else if texts.len() > 1 {
+        let mut components = Vec::new();
+        for (index, text) in texts.iter().enumerate() {
+            let mut component = Lyric::unsung();
+            if let Some(text) = text.text() {
+                component.set_text(text.trim());
+            }
+            if let Some(syllabic) = syllabics.get(index) {
+                if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
+                    component.set_syllabic(syllabic);
+                }
+                if index >= 1
+                    && let Some(elision) = elisions.get(index - 1)
+                {
+                    component.set_elision_before(elision.text().unwrap_or(""));
+                }
+            }
+            components.push(component);
+        }
+        read.set_components(components);
+    }
+    match lyric.get("number") {
+        Some(number) => match number.trim().parse::<IntegerType>() {
+            Ok(number) => read.set_number(number),
+            Err(_) => {
+                read.set_number(0);
+                read.set_identifier(Some(number.to_string()));
+            }
+        },
+        None => read.set_number(0),
+    }
+    if let Some(name) = lyric.get("name") {
+        read.set_identifier(Some(name.to_string()));
+    }
+    if let Some(justify) = lyric.get("justify") {
+        read.set_justify(Some(Justification::from_name(justify)?));
+    }
+    if let Some(placement) = lyric.get("placement") {
+        read.set_placement(Placement::from_name(placement).ok());
+    }
+    if lyric.get("print-object") == Some("no") {
+        read.set_hidden(true);
+    }
+    if let Some(color) = lyric.get("color") {
+        read.set_color(Some(color.to_string()));
+    }
+    Ok(read)
+}
+
 /// music21's `xmlToArticulation`.
-fn articulation_of(mark: &Xml) -> Option<Articulation> {
+pub(super) fn articulation_of(mark: &Xml) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "accent" => "Accent",
         "strong-accent" => "StrongAccent",
@@ -3818,7 +4091,7 @@ fn articulation_of(mark: &Xml) -> Option<Articulation> {
 }
 
 /// music21's `xmlTechnicalToArticulation`.
-fn technical_of(mark: &Xml) -> Option<Articulation> {
+pub(super) fn technical_of(mark: &Xml) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "up-bow" => "UpBow",
         "down-bow" => "DownBow",
@@ -3885,7 +4158,7 @@ fn technical_of(mark: &Xml) -> Option<Articulation> {
 /// music21's `xmlToTempoIndication`, for a mark with one note value.
 /// music21's `xmlToTempoIndication`: a `<metronome>` is a tempo mark, or
 /// with two note values a metric modulation, placed as its direction says.
-fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
+pub(super) fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
     let mut referents: Vec<Duration> = Vec::new();
     let mut numbers: Vec<FloatType> = Vec::new();
     for child in &written.children {
@@ -3941,7 +4214,7 @@ fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElemen
 }
 
 /// music21's `xmlToTimeSignature`.
-fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
+pub(super) fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
     if written.find("senza-misura").is_some() {
         return Err(import_error(
             "reading a senza misura time signature is not supported yet",
@@ -3980,7 +4253,7 @@ fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
 }
 
 /// music21's `xmlToClef`.
-fn clef_of(written: &Xml) -> Result<Clef> {
+pub(super) fn clef_of(written: &Xml) -> Result<Clef> {
     let sign = written.child_text("sign");
     let mut clef = if matches!(
         sign.to_lowercase().as_str(),
@@ -4004,7 +4277,7 @@ fn clef_of(written: &Xml) -> Result<Clef> {
 
 /// music21's `xmlToKeySignature`: a key where the mode is said and is one
 /// music21 knows, a signature otherwise.
-fn key_signature(written: &Xml) -> Result<StreamElement> {
+pub(super) fn key_signature(written: &Xml) -> Result<StreamElement> {
     let color = written.get("color").map(str::to_string);
     if written.find("fifths").is_none() {
         let mut steps = Vec::new();
@@ -4049,7 +4322,7 @@ fn key_signature(written: &Xml) -> Result<StreamElement> {
 }
 
 /// music21's `xmlTransposeToInterval`.
-fn transpose_interval(written: &Xml) -> Result<Interval> {
+pub(super) fn transpose_interval(written: &Xml) -> Result<Interval> {
     let mut diatonic = written
         .find("diatonic")
         .and_then(|d| parse_int(d.stripped()));
@@ -4688,6 +4961,25 @@ mod tests {
             .expect("the measure holds a rest");
         assert_eq!(rest.color(), Some("#FF0000"));
         assert!(written_back(&read).contains("<note color=\"#FF0000\">"));
+    }
+
+    #[test]
+    fn a_chord_symbols_inversion_puts_that_note_in_the_bass() {
+        let read = from_musicxml(&score(&format!(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>\
+             <harmony><root><root-step>C</root-step></root><kind>major</kind>\
+             <inversion>1</inversion></harmony>{NOTE}</measure>"
+        )))
+        .unwrap();
+        let leaves = read.leaves();
+        let symbol = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::ChordSymbol(symbol) => Some(symbol),
+                _ => None,
+            })
+            .expect("the measure holds a chord symbol");
+        assert_eq!(symbol.bass().map(Pitch::name), Some("E".to_string()));
     }
 
     #[test]

@@ -41,7 +41,11 @@ const FILE_ANSWERS: &str = "_wheelFileAnswers";
 
 /// A name of music21's, from the provided module where `provide_music21`
 /// is answering, else from the wheel itself.
-fn music21_name<'py>(py: Python<'py>, module: &str, name: &str) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn music21_name<'py>(
+    py: Python<'py>,
+    module: &str,
+    name: &str,
+) -> PyResult<Bound<'py, PyAny>> {
     if let Ok(found) = py.import(module).and_then(|module| module.getattr(name)) {
         return Ok(found);
     }

@@ -122,6 +122,9 @@ tonic_object = { kind = "identity", sync = "current" }
 components = { kind = "identity", sync = "synced" }
 style = { kind = "identity", sync = "synced" }
 
+[RehearsalMark]
+content = { kind = "identity", sync = "set_content", why = "the content as given, a number or text; the setter writes its text into the value" }
+
 [MeterSequence]
 parts = { kind = "identity", sync = "read live", why = "a sequence cannot change, so its parts are the objects it was made of, standing for the spans it holds" }
 
@@ -475,6 +478,10 @@ reason = "the text and numbers of a TSV row"
 [TabChordV2]
 kind = "facade-only"
 reason = "the text and numbers of a TSV row"
+
+[SpannerHolder]
+kind = "facade-only"
+reason = "the objects made for what a crate spanner state builds, by the uids it knows them by"
 
 [TextBox]
 kind = "facade-only"

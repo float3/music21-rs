@@ -15,7 +15,7 @@ pub use binary::{
     dump_lines, from_nwc, nwc_lines,
 };
 
-use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
+use crate::bar::{Barline, BarlineType, BracketPlace, Ending, RepeatDirection};
 use crate::chord::Chord;
 use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
@@ -1298,11 +1298,12 @@ fn assemble(part: PartBuilt, index: usize, endings: &[(Vec<Place>, u32)]) -> Str
                 if let Some((spanned, number)) = endings.iter().find(|(spanned, _)| {
                     spanned.first() == Some(&here) || spanned.last() == Some(&here)
                 }) {
-                    measure.set_ending(Some(Ending::new(
+                    let ending = Ending::new(
                         vec![*number],
                         spanned.first() == Some(&here),
                         spanned.last() == Some(&here),
-                    )));
+                    );
+                    measure.set_ending(Some(ending.placed(BracketPlace::LastMeasure)));
                 }
                 for place in sorted_places(&built.items) {
                     let item = &built.items[place];

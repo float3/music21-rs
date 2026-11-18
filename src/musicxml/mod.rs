@@ -18,6 +18,7 @@ mod fragment;
 mod notate;
 mod partstaff;
 mod read;
+pub mod step;
 mod tree;
 
 pub use fragment::{

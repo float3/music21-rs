@@ -13,7 +13,7 @@ use pyo3::PyClass;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
-use music21::spanner::{PedalForm, PedalType};
+use music21::spanner::{PedalForm, PedalObject as RsPedalObject, PedalType};
 
 use crate::base::Music21Object;
 
@@ -39,6 +39,39 @@ impl crate::base::Footing for PedalObject {
     fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
         Music21Object::under(PedalObject { placement: None }).add_subclass(value)
     }
+}
+
+impl PedalObject {
+    /// The object for one of the crate's: of the class its kind names.
+    pub(crate) fn object(py: Python<'_>, inner: &RsPedalObject) -> PyResult<Py<PyAny>> {
+        let made = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr(inner.kind().class_name())?
+            .call0()?;
+        made.cast::<PedalObject>()?.borrow_mut().placement = inner
+            .placement()
+            .map(|placement| placement.as_str().to_string());
+        Ok(made.unbind())
+    }
+}
+
+/// music21's `PedalType`, or `PedalForm`, as this package registers it.
+pub(crate) fn pedal_enum(py: Python<'_>, which: PedalEnum) -> PyResult<Bound<'_, PyAny>> {
+    let name = match which {
+        PedalEnum::Type => "PedalType",
+        PedalEnum::Form => "PedalForm",
+    };
+    py.import("music21_rs")
+        .or_else(|_| py.import("music21_rs_facade"))?
+        .getattr(name)
+}
+
+/// Which of the pedal enums: music21's `PedalType` or `PedalForm`.
+#[derive(Clone, Copy)]
+pub(crate) enum PedalEnum {
+    Type,
+    Form,
 }
 
 #[pymethods]
