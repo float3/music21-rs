@@ -729,6 +729,7 @@ ALSO = {
 NO_HOME = (
     'Placed',
     '_HarteLabel',
+    '_groups',
     '_music21_module',
     '_thawed',
     'from_abc',
