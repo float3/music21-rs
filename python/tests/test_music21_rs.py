@@ -8976,7 +8976,7 @@ def test_what_as_timespans_leaves_unported_says_so():
     edited = score.asTimespans()
     edited.removeTimespan(edited[0])
     with pytest.raises(NotImplementedError):
-        edited.getVerticalityAt(0.0)
+        edited.getVerticalityAt(0.0).makeElement()
 
 
 def test_a_humdrum_comment_read_standalone_stays_in_the_score():

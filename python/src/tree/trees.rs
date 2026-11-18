@@ -1022,14 +1022,13 @@ impl OffsetTree {
         Ok(out)
     }
 
-    /// What starts, stops and sounds across an offset. Only a timespan
-    /// tree read from a stream answers it.
-    fn getVerticalityAt(slf: &Bound<'_, Self>, offset: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        let _ = (slf, offset);
-        Err(PyNotImplementedError::new_err(
-            "a verticality of an OffsetTree is not ported to music21-rs; \
-             a TimespanTree read by asTimespans() has them",
-        ))
+    /// What starts, stops and sounds across an offset, as the tree now
+    /// stands.
+    fn getVerticalityAt<'py>(
+        slf: &Bound<'py, Self>,
+        offset: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, crate::tree::verticality::TreeVerticality>> {
+        crate::tree::verticality::verticality_at(slf.as_any(), offset)
     }
 
     /// The offsets more than one element starts at, each with a list of

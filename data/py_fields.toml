@@ -486,7 +486,7 @@ reason = "pitches and the chords made of them"
 
 [TreeVerticality]
 kind = "facade-only"
-reason = "a tree and the offset asked about"
+reason = "a tree, the offset asked about and the timespans starting, sounding across and stopping there"
 
 [TurnRecognizer]
 kind = "facade-only"
@@ -527,6 +527,14 @@ reason = "the earliest and latest end under the node, as Python numbers"
 [ElementTree]
 kind = "facade-only"
 reason = "the stream it is of, kept weakly, and the trees holding it"
+
+[VerticalityWalk]
+kind = "facade-only"
+reason = "the tree walked and the verticality last handed out"
+
+[VerticalityRuns]
+kind = "facade-only"
+reason = "the walk read, the padding verticality and the run so far"
 
 [CacheMethod]
 kind = "facade-only"

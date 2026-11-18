@@ -2143,6 +2143,16 @@ exceptions![
         Some("music21.tree.spans")
     ),
     (
+        "VerticalityException",
+        tree::verticality::VerticalityException,
+        Some("music21.tree.verticality")
+    ),
+    (
+        "HorizontalityException",
+        tree::analysis::HorizontalityException,
+        Some("music21.tree.analysis")
+    ),
+    (
         "SubConverterException",
         exceptions21::SubConverterException,
         Some("music21.exceptions21")
