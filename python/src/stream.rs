@@ -5354,17 +5354,44 @@ impl Stream {
 
     /// music21's `asTimespans`: every element as a timespan in a
     /// `TimespanTree`, those of the streams held too; `flatten='semiFlat'`
-    /// keeps the streams as timespans of their own, and `classList` keeps
-    /// only elements of those classes.
+    /// keeps the streams as timespans of their own, `flatten=False` makes a
+    /// tree of the trees of the streams held, and `classList` keeps only
+    /// elements of those classes.
     ///
     /// music21 caches the tree on the stream; this reads it afresh.
     #[pyo3(signature = (*, flatten = None, classList = None))]
-    fn asTimespans(
-        slf: &Bound<'_, Self>,
-        flatten: Option<&Bound<'_, PyAny>>,
-        classList: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<crate::tree::TimespanTree> {
-        crate::tree::as_timespans(slf.as_any(), flatten, classList)
+    fn asTimespans<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let flatten = match flatten {
+            Some(flatten) => flatten.clone(),
+            None => pyo3::types::PyBool::new(py, true).to_owned().into_any(),
+        };
+        crate::tree::fromstream::as_timespans_of(slf.as_any(), Some(&flatten), classList)
+    }
+
+    /// music21's `asTree`: the elements in an `ElementTree` by their
+    /// `SortTuple`s, with `groupOffsets` an `OffsetTree` by offset, with
+    /// `useTimespans` a `TimespanTree`; `flatten` reads the streams held
+    /// through. Read afresh each time, as `asTimespans` is.
+    #[pyo3(signature = (*, flatten = None, classList = None, useTimespans = None, groupOffsets = None))]
+    fn asTree<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+        useTimespans: Option<&Bound<'py, PyAny>>,
+        groupOffsets: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::tree::fromstream::as_tree(
+            slf.as_any(),
+            flatten,
+            classList,
+            useTimespans,
+            groupOffsets,
+        )
     }
 
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {

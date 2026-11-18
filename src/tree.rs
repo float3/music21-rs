@@ -20,6 +20,8 @@
 //! # Ok::<(), music21::Error>(())
 //! ```
 
+pub mod core;
+
 use crate::{
     chord::Chord,
     defaults::{FloatType, IntegerType},

@@ -205,10 +205,6 @@ identifier = { kind = "identity", sync = "read live", why = "music21's id; the c
 sequences = { kind = "identity", sync = "read live", why = "a sequence cannot change; each is handed back only while it still equals the one the meter carries, and assigning one writes its value into the meter" }
 bar_duration = { kind = "identity", sync = "read live", why = "handed back as given only while the meter still carries the length written with it" }
 
-[TimespanTree]
-source = { kind = "identity", sync = "read live", why = "the stream read, handed back and asked for its parts" }
-spans = { kind = "cache", note = "the timespans, in the crate tree's order" }
-
 [TwelveToneMatrix]
 source = { kind = "identity", sync = "read live", why = "the row the matrix was made from, which only its repr reads" }
 

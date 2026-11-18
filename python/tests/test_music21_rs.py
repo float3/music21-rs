@@ -8958,14 +8958,25 @@ def test_timespans_hold_floats_and_a_measures_barline():
     assert triplet.nextStartOffset == 1.3333333333333333
 
 
-def test_what_as_timespans_leaves_unported_says_so():
+def test_as_timespans_unflattened_is_a_tree_of_trees():
+    """music21's `asTimespans(flatten=False)` of a score: a tree holding
+    a tree for each part, each of the part."""
     score, _, _ = _two_part_score()
-    with pytest.raises(NotImplementedError):
-        score.asTimespans(flatten=False)
+    parts = list(score.asTimespans(flatten=False))
+    assert [type(each).__name__ for each in parts] == ["TimespanTree"] * 2
+    assert [each.source for each in parts] == list(score.parts)
+
+
+def test_what_as_timespans_leaves_unported_says_so():
     loose = m.Stream([m.Note("C4"), m.Note("D4")])
     assert len(loose.asTimespans(flatten=False)) == 2
+    score, _, _ = _two_part_score()
     with pytest.raises(NotImplementedError):
         score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)
+    edited = score.asTimespans()
+    edited.removeTimespan(edited[0])
+    with pytest.raises(NotImplementedError):
+        edited.getVerticalityAt(0.0)
 
 
 def test_a_humdrum_comment_read_standalone_stays_in_the_score():
