@@ -69,11 +69,44 @@ fn divisions_of(slf: &Bound<'_, PyAny>) -> PyResult<Option<i32>> {
     Ok(Some(divisions.extract::<f64>()?.round() as i32))
 }
 
-/// A measure's text read with the parser's divisions, as this package's
-/// `Measure`.
+/// A measure's text read with the parser's divisions, inside the tuplets
+/// the parser is in, as this package's `Measure`. The tuplets the measure
+/// leaves open are the parser's from then on, as music21's `activeTuplets`
+/// carry from one note to the next.
 fn read_measure<'py>(slf: &Bound<'py, PyAny>, text: &str) -> PyResult<Bound<'py, PyAny>> {
-    let read = step::read_measure(text, divisions_of(slf)?).map_err(import_error)?;
-    crate::stream::from_crate(slf.py(), &read)
+    let py = slf.py();
+    let active = slf.getattr("activeTuplets")?;
+    let mut context = step::MeasureContext {
+        divisions: divisions_of(slf)?,
+        ..step::MeasureContext::default()
+    };
+    for (place, held) in context.tuplets.iter_mut().enumerate() {
+        let Ok(given) = active.get_item(place) else {
+            break;
+        };
+        if let Ok(tuplet) = given.extract::<PyRef<'_, crate::duration::Tuplet>>() {
+            *held = Some(tuplet.value());
+        }
+    }
+    let read = step::read_measure(text, &mut context).map_err(import_error)?;
+
+    // What is left open, written back into the parser's own list.
+    for (place, held) in context.tuplets.iter().enumerate() {
+        let object = match held {
+            Some(tuplet) => crate::installed_new(
+                py,
+                "music21.duration",
+                "Tuplet",
+                crate::duration::Tuplet::wrap(*tuplet),
+            )?
+            .into_any(),
+            None => py.None(),
+        };
+        if active.set_item(place, object).is_err() {
+            break;
+        }
+    }
+    crate::stream::from_crate(py, &read)
 }
 
 /// The elements of a measure, its voices' included, that are one of
@@ -229,6 +262,402 @@ impl XMLParserBase {
         let _ = (args, kwargs);
         Self
     }
+
+    /// music21's `setStyleAttributes`: each of the element's attributes in
+    /// `musicXMLNames` written to the object's style under the name in
+    /// `m21Names` beside it, or its own name in camel case; a number as a
+    /// number, `yes` and `no` as booleans where music21 reads them so.
+    #[staticmethod]
+    #[pyo3(signature = (mxObject, m21Object, musicXMLNames, m21Names = None))]
+    fn setStyleAttributes(
+        mxObject: &Bound<'_, PyAny>,
+        m21Object: &Bound<'_, PyAny>,
+        musicXMLNames: &Bound<'_, PyAny>,
+        m21Names: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let xml_names = names_of(musicXMLNames)?;
+        let m21_names = match m21Names.filter(|names| !names.is_none()) {
+            Some(given) => names_of(given)?,
+            None => xml_names
+                .iter()
+                .map(|name| music21::common::stringtools::hyphen_to_camel_case(name, ""))
+                .collect::<music21::Result<_>>()
+                .map_err(import_error)?,
+        };
+        set_style(mxObject, m21Object, &xml_names, &m21_names)
+    }
+
+    /// music21's `setTextFormatting`: justification, decoration, rotation,
+    /// spacing, language, direction and enclosure, then the print style.
+    #[staticmethod]
+    fn setTextFormatting(
+        mxObject: &Bound<'_, PyAny>,
+        m21Object: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        set_style(mxObject, m21Object, TEXT_FORMATTING.0, TEXT_FORMATTING.1)?;
+        Self::setPrintStyleAlign(mxObject, m21Object)
+    }
+
+    /// music21's `setLineStyle`: a line's shape, type and dashes.
+    #[staticmethod]
+    fn setLineStyle(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        let line_type = mxObject.call_method1("get", ("line-type",))?;
+        if m21Object.hasattr("lineType")? && !line_type.is_none() {
+            m21Object.setattr("lineType", line_type)?;
+        }
+        set_style(mxObject, m21Object, LINE_STYLE.0, LINE_STYLE.1)
+    }
+
+    /// music21's `setPrintObject`: `print-object="no"` hides the object.
+    #[staticmethod]
+    fn setPrintObject(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        let said: Option<String> = mxObject.call_method1("get", ("print-object",))?.extract()?;
+        if said.as_deref() != Some("no") {
+            return Ok(());
+        }
+        if m21Object.hasattr("style")? {
+            return m21Object
+                .getattr("style")?
+                .setattr("hideObjectOnPrint", true);
+        }
+        // A slotted object takes none.
+        let _ = m21Object.setattr("hideObjectOnPrint", true);
+        Ok(())
+    }
+
+    /// music21's `setPrintStyleAlign`: the print style, then the alignment.
+    #[staticmethod]
+    fn setPrintStyleAlign(
+        mxObject: &Bound<'_, PyAny>,
+        m21Object: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        Self::setPrintStyle(mxObject, m21Object)?;
+        set_style(mxObject, m21Object, ALIGN.0, ALIGN.1)
+    }
+
+    /// music21's `setPrintStyle`: position, font and colour.
+    #[staticmethod]
+    fn setPrintStyle(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        Self::setPosition(mxObject, m21Object)?;
+        Self::setFont(mxObject, m21Object)?;
+        Self::setColor(mxObject, m21Object)
+    }
+
+    /// music21's `setColor`.
+    #[staticmethod]
+    fn setColor(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        set_style(mxObject, m21Object, &["color"], &["color"])
+    }
+
+    /// music21's `setFont`: family, style, size and weight.
+    #[staticmethod]
+    fn setFont(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        set_style(mxObject, m21Object, FONT.0, FONT.1)
+    }
+
+    /// music21's `setPosition`: the default and relative positions.
+    #[staticmethod]
+    fn setPosition(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        set_style(mxObject, m21Object, POSITION.0, POSITION.1)
+    }
+
+    /// music21's `setPlacement`: on the object where it has a
+    /// `placement`, else on its style.
+    #[staticmethod]
+    fn setPlacement(mxObject: &Bound<'_, PyAny>, m21Object: &Bound<'_, PyAny>) -> PyResult<()> {
+        let placement = mxObject.call_method1("get", ("placement",))?;
+        if placement.is_none() {
+            return Ok(());
+        }
+        if m21Object.hasattr("placement")? {
+            return m21Object.setattr("placement", placement);
+        }
+        m21Object.getattr("style")?.setattr("placement", placement)
+    }
+
+    /// music21's `setEditorial`: a `<footnote>` or `<level>` kept as an
+    /// editorial comment, a footnote where there is one.
+    #[staticmethod]
+    fn setEditorial(mxObj: &Bound<'_, PyAny>, m21Obj: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = mxObj.py();
+        let footnote = mxObj.call_method1("find", ("footnote",))?;
+        let level = mxObj.call_method1("find", ("level",))?;
+        if footnote.is_none() && level.is_none() {
+            return Ok(());
+        }
+        let comment = music21_name(py, "music21.editorial", "Comment")?.call0()?;
+        if !footnote.is_none() {
+            comment.setattr("text", footnote.getattr("text")?)?;
+            comment.setattr("isFootnote", true)?;
+            Self::setTextFormatting(&footnote, &comment)?;
+        }
+        if !level.is_none() {
+            comment.setattr("levelInformation", level.getattr("text")?)?;
+            let reference: Option<String> = level.call_method1("get", ("reference",))?.extract()?;
+            if reference.as_deref() == Some("yes") {
+                comment.setattr("isReference", true)?;
+            }
+        }
+        let list = match comment.getattr("isFootnote")?.is_truthy()? {
+            true => "footnotes",
+            false => "comments",
+        };
+        m21Obj
+            .getattr("editorial")?
+            .getattr(list)?
+            .call_method1("append", (comment,))?;
+        Ok(())
+    }
+
+    /// music21's `xmlPrintToPageLayout`: the page a `<print>` starts.
+    #[staticmethod]
+    #[pyo3(signature = (mxPrint, inputM21 = None))]
+    fn xmlPrintToPageLayout<'py>(
+        mxPrint: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let read = step::read_print_page(&written(mxPrint)?).map_err(import_error)?;
+        layout_into(
+            mxPrint.py(),
+            music21::layout::Layout::Page(read),
+            inputM21,
+            PAGE_LAYOUT,
+        )
+    }
+
+    /// music21's `xmlPageLayoutToPageLayout`: a `<page-layout>`.
+    #[staticmethod]
+    #[pyo3(signature = (mxPageLayout, inputM21 = None))]
+    fn xmlPageLayoutToPageLayout<'py>(
+        mxPageLayout: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let read = step::read_page_layout(&written(mxPageLayout)?).map_err(import_error)?;
+        layout_into(
+            mxPageLayout.py(),
+            music21::layout::Layout::Page(read),
+            inputM21,
+            PAGE_LAYOUT,
+        )
+    }
+
+    /// music21's `xmlPrintToSystemLayout`: the system a `<print>` starts.
+    #[staticmethod]
+    #[pyo3(signature = (mxPrint, inputM21 = None))]
+    fn xmlPrintToSystemLayout<'py>(
+        mxPrint: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let read = step::read_print_system(&written(mxPrint)?).map_err(import_error)?;
+        layout_into(
+            mxPrint.py(),
+            music21::layout::Layout::System(read),
+            inputM21,
+            SYSTEM_LAYOUT,
+        )
+    }
+
+    /// music21's `xmlSystemLayoutToSystemLayout`: a `<system-layout>`.
+    #[staticmethod]
+    #[pyo3(signature = (mxSystemLayout, inputM21 = None))]
+    fn xmlSystemLayoutToSystemLayout<'py>(
+        mxSystemLayout: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let read = step::read_system_layout(&written(mxSystemLayout)?).map_err(import_error)?;
+        layout_into(
+            mxSystemLayout.py(),
+            music21::layout::Layout::System(read),
+            inputM21,
+            SYSTEM_LAYOUT,
+        )
+    }
+
+    /// music21's `xmlStaffLayoutToStaffLayout`: a `<staff-layout>`, kept
+    /// too under its staff and place where the parser keeps them.
+    #[pyo3(signature = (mxStaffLayout, inputM21 = None))]
+    fn xmlStaffLayoutToStaffLayout<'py>(
+        slf: &Bound<'py, Self>,
+        mxStaffLayout: &Bound<'py, PyAny>,
+        inputM21: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let read = step::read_staff_layout(&written(mxStaffLayout)?).map_err(import_error)?;
+        let number = read.staff_number;
+        let made = layout_into(
+            py,
+            music21::layout::Layout::Staff(read),
+            inputM21,
+            STAFF_LAYOUT,
+        )?;
+        let target = match inputM21.filter(|given| !given.is_none()) {
+            Some(given) => given.clone(),
+            None => made.clone(),
+        };
+        if slf.hasattr("staffLayoutObjects")? && slf.hasattr("offsetMeasureNote")? {
+            let key = (number.unwrap_or(1), slf.getattr("offsetMeasureNote")?);
+            slf.getattr("staffLayoutObjects")?.set_item(key, target)?;
+        }
+        Ok(made)
+    }
+}
+
+/// The names music21 maps from MusicXML attributes onto a style, as
+/// (MusicXML's, music21's), for each group of attributes.
+type StyleNames = (&'static [&'static str], &'static [&'static str]);
+
+/// MusicXML's `%text-formatting`, less the print style.
+const TEXT_FORMATTING: StyleNames = (
+    &[
+        "justify",
+        "text-decoration",
+        "text-rotation",
+        "letter-spacing",
+        "line-height",
+        "lang",
+        "text-direction",
+        "enclosure",
+    ],
+    &[
+        "justify",
+        "textDecoration",
+        "textRotation",
+        "letterSpacing",
+        "lineHeight",
+        "language",
+        "textDirection",
+        "enclosure",
+    ],
+);
+
+/// MusicXML's `%line-shape`, `%line-type` and `%dashed-formatting`.
+const LINE_STYLE: StyleNames = (
+    &["line-shape", "line-type", "dash-length", "space-length"],
+    &["lineShape", "lineType", "dashLength", "spaceLength"],
+);
+
+/// MusicXML's `%halign` and `%valign`.
+const ALIGN: StyleNames = (&["valign", "halign"], &["alignVertical", "alignHorizontal"]);
+
+/// MusicXML's `%font`.
+const FONT: StyleNames = (
+    &["font-family", "font-style", "font-size", "font-weight"],
+    &["fontFamily", "fontStyle", "fontSize", "fontWeight"],
+);
+
+/// MusicXML's `%position`.
+const POSITION: StyleNames = (
+    &["default-x", "default-y", "relative-x", "relative-y"],
+    &["absoluteX", "absoluteY", "relativeX", "relativeY"],
+);
+
+/// The style members music21 reads `yes` and `no` into: its
+/// `xmlObjects.STYLE_ATTRIBUTES_YES_NO_TO_BOOL`.
+const YES_NO_STYLE: &[&str] = &["hideObjectOnPrint"];
+
+/// What a page, system and staff layout read put on one given to fill.
+const PAGE_LAYOUT: &[&str] = &[
+    "isNew",
+    "pageNumber",
+    "pageHeight",
+    "pageWidth",
+    "topMargin",
+    "bottomMargin",
+    "leftMargin",
+    "rightMargin",
+];
+const SYSTEM_LAYOUT: &[&str] = &[
+    "isNew",
+    "distance",
+    "topDistance",
+    "topMargin",
+    "bottomMargin",
+    "leftMargin",
+    "rightMargin",
+];
+const STAFF_LAYOUT: &[&str] = &["distance", "staffNumber"];
+
+/// A name or names given, as a list.
+fn names_of(given: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    if let Ok(name) = given.extract::<String>() {
+        return Ok(vec![name]);
+    }
+    given.try_iter()?.map(|name| name?.extract()).collect()
+}
+
+/// music21's `setStyleAttributes` over names already paired.
+fn set_style<S: AsRef<str>>(
+    mxObject: &Bound<'_, PyAny>,
+    m21Object: &Bound<'_, PyAny>,
+    xml_names: &[S],
+    m21_names: &[S],
+) -> PyResult<()> {
+    let py = mxObject.py();
+    if !mxObject.getattr("attrib")?.is_truthy()? {
+        return Ok(());
+    }
+    let style_class = music21_name(py, "music21.style", "Style")?;
+    let mut style = match m21Object.is_instance(&style_class)? {
+        true => Some(m21Object.clone()),
+        false => None,
+    };
+    for (xml_name, m21_name) in xml_names.iter().zip(m21_names) {
+        let (xml_name, m21_name) = (xml_name.as_ref(), m21_name.as_ref());
+        let value: Option<String> = mxObject.call_method1("get", (xml_name,))?.extract()?;
+        let Some(value) = value else {
+            continue;
+        };
+        let read = style_value(py, m21_name, &value)?;
+        if style.is_none() {
+            style = Some(m21Object.getattr("style")?);
+        }
+        if let Some(style) = &style {
+            style.setattr(m21_name, read)?;
+        }
+    }
+    Ok(())
+}
+
+/// An attribute's text as music21 writes it to a style: `yes` or `no` as
+/// a boolean where music21 reads one, a number as an `int` where whole,
+/// anything else as written.
+fn style_value<'py>(py: Python<'py>, name: &str, text: &str) -> PyResult<Bound<'py, PyAny>> {
+    if YES_NO_STYLE.contains(&name) {
+        return Ok(pyo3::types::PyBool::new(py, text == "yes")
+            .to_owned()
+            .into_any());
+    }
+    let Ok(number) = text.trim().parse::<f64>() else {
+        return Ok(PyString::new(py, text).into_any());
+    };
+    match music21::common::numbertools::num_to_int_or_float(number) {
+        Ok(music21::common::numbertools::IntOrFloat::Int(whole)) => {
+            Ok(whole.into_pyobject(py)?.into_any())
+        }
+        _ => Ok(number.into_pyobject(py)?.into_any()),
+    }
+}
+
+/// A layout read, handed back as a new object, or written into the one
+/// given: `members` are copied where the reading gave them.
+fn layout_into<'py>(
+    py: Python<'py>,
+    read: music21::layout::Layout,
+    inputM21: Option<&Bound<'py, PyAny>>,
+    members: &[&str],
+) -> PyResult<Bound<'py, PyAny>> {
+    let classes = crate::layout::classes_from(py, false)?;
+    let made = crate::layout::layout_object(&classes, &read)?;
+    let Some(given) = inputM21.filter(|given| !given.is_none()) else {
+        return Ok(made);
+    };
+    for member in members {
+        let value = made.getattr(*member)?;
+        if !value.is_none() {
+            given.setattr(*member, value)?;
+        }
+    }
+    Ok(py.None().into_bound(py))
 }
 
 /// music21's `MusicXMLImporter`: a whole document, read into `stream`.
@@ -329,6 +758,29 @@ impl MusicXMLImporter {
         slf.setattr("xmlRoot", mxScore)?;
         Self::read_into(slf, &written(mxScore)?)?;
         Ok(slf.getattr("stream")?.unbind())
+    }
+
+    /// music21's `processEncoding`: the programs an `<encoding>` names
+    /// added to `md`'s software, and what it says the document marks.
+    fn processEncoding(
+        slf: &Bound<'_, Self>,
+        encoding: &Bound<'_, PyAny>,
+        md: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let read = step::read_encoding(&written(encoding)?).map_err(import_error)?;
+        for software in &read.software {
+            md.call_method1("add", ("software", software))?;
+        }
+        if read.finale {
+            slf.setattr("applyFinaleWorkarounds", true)?;
+        }
+        if read.system_breaks {
+            slf.setattr("definesExplicitSystemBreaks", true)?;
+        }
+        if read.page_breaks {
+            slf.setattr("definesExplicitPageBreaks", true)?;
+        }
+        Ok(())
     }
 
     /// music21's `isRecognizableMetadataKey`: whether a `<miscellaneous-field>`
@@ -472,6 +924,125 @@ impl PartParser {
             }
         }
         Ok(())
+    }
+
+    /// music21's `setLastMeasureInfo`: the measure's number, suffix and
+    /// meter kept for the next; a 4/4 where no meter has been met.
+    fn setLastMeasureInfo(slf: &Bound<'_, Self>, m: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        // A measure numbered as the last keeps the last suffix, so that
+        // Finale's X1, X2 do not pile up.
+        let number = m.getattr("number")?;
+        if !number.eq(slf.getattr("lastMeasureNumber")?)? {
+            slf.setattr("lastMeasureNumber", number)?;
+            slf.setattr("lastNumberSuffix", m.getattr("numberSuffix")?)?;
+        }
+        let meter = m.getattr("timeSignature")?;
+        if !meter.is_none() {
+            return slf.setattr("lastTimeSignature", meter);
+        }
+        if slf.getattr("lastTimeSignature")?.is_none() {
+            let common = music21_name(py, "music21.meter", "TimeSignature")?.call1(("4/4",))?;
+            slf.setattr("lastTimeSignature", common)?;
+        }
+        Ok(())
+    }
+
+    /// music21's `adjustTimeAttributesFromMeasure`: the measure padded as
+    /// a pickup or a measure cut short, an empty one filled with a rest,
+    /// and the next measure's offset moved on past it.
+    fn adjustTimeAttributesFromMeasure(
+        slf: &Bound<'_, Self>,
+        m: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let meter = slf.getattr("lastTimeSignature")?;
+        let bar_length: f64 = match meter.is_none() {
+            true => 4.0,
+            false => meter
+                .getattr("barDuration")?
+                .getattr("quarterLength")?
+                .extract()?,
+        };
+        let mut has_notes = false;
+        for element in m
+            .call_method0("recurse")?
+            .getattr("notesAndRests")?
+            .try_iter()?
+        {
+            if !element?.getattr("classes")?.contains("Harmony")? {
+                has_notes = true;
+                break;
+            }
+        }
+        let last_offset: f64 = slf.getattr("lastMeasureOffset")?.extract()?;
+        let fit = step::measure_fit(&step::FitAsked {
+            highest: m.getattr("highestTime")?.extract()?,
+            bar_length,
+            has_notes,
+            at_start: last_offset == 0.0,
+            last_was_short: slf.getattr("lastMeasureWasShort")?.is_truthy()?,
+        });
+
+        if fit.overfull_ignored {
+            let message = format!(
+                "Warning: measure {} in part {}is overfull: {} > {bar_length},assuming {} is correct.",
+                m.getattr("number")?,
+                slf.getattr("stream")?.getattr("partName")?,
+                m.getattr("highestTime")?,
+                fit.shift,
+            );
+            py.import("warnings")?.call_method1(
+                "warn",
+                (
+                    message,
+                    py.get_type::<crate::musicxml::MusicXMLWarning>(),
+                    2,
+                ),
+            )?;
+        }
+        if fit.fill_with_rest {
+            let keywords = PyDict::new(py);
+            keywords.set_item("quarterLength", bar_length)?;
+            let rest = music21_name(py, "music21.note", "Rest")?.call((), Some(&keywords))?;
+            m.call_method1("insert", (0.0, rest))?;
+        }
+        if let Some(padding) = fit.padding_left {
+            m.setattr("paddingLeft", padding)?;
+        }
+        if let Some(padding) = fit.padding_right {
+            m.setattr("paddingRight", padding)?;
+        }
+        slf.setattr("lastMeasureWasShort", fit.last_was_short)?;
+        slf.setattr("lastMeasureOffset", last_offset + fit.shift)
+    }
+
+    /// music21's `getDefaultInstrument`: the instrument a `<score-part>`
+    /// names, read as the reader reads it for a part.
+    #[pyo3(signature = (mxScorePart = None))]
+    fn getDefaultInstrument<'py>(
+        slf: &Bound<'py, Self>,
+        mxScorePart: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let score_part = match mxScorePart.filter(|given| !given.is_none()) {
+            Some(given) => given.clone(),
+            None => slf.getattr("mxScorePart")?,
+        };
+        let score_part = match score_part.is_none() {
+            true => None,
+            false => Some(written(&score_part)?),
+        };
+        let read = step::read_part("<part><measure/></part>", score_part.as_deref())
+            .map_err(import_error)?;
+        for part in &read {
+            let made = crate::stream::from_crate(py, part)?;
+            let found = first_of(&made, "Instrument")?;
+            if !found.is_none() {
+                return Ok(found);
+            }
+        }
+        music21_name(py, "music21.instrument", "Instrument")?.call0()
     }
 
     /// music21's `xmlMeasureToMeasure`: one `<measure>` read and appended
@@ -962,6 +1533,49 @@ impl MeasureParser {
         }
     }
 
+    /// music21's `xmlOrnamentToExpression`: one mark of `<ornaments>`, as
+    /// read on a note of its own; `None` for one music21 does not know.
+    #[pyo3(signature = (mxObj, *, taggedNote = None))]
+    fn xmlOrnamentToExpression<'py>(
+        slf: &Bound<'py, Self>,
+        mxObj: &Bound<'py, PyAny>,
+        taggedNote: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let _ = taggedNote;
+        let notations = format!(
+            "<notations><ornaments>{}</ornaments></notations>",
+            written(mxObj)?
+        );
+        let note = Self::marked_note(slf, &notations)?;
+        let expressions = note.getattr("expressions")?;
+        if expressions.len()? == 0 {
+            return Ok(py.None().into_bound(py));
+        }
+        expressions.get_item(0)
+    }
+
+    /// music21's `xmlNotations`: what a `<notations>` marks -- the
+    /// articulations, ornaments and other expressions -- put on `n`.
+    fn xmlNotations(
+        slf: &Bound<'_, Self>,
+        mxNotations: &Bound<'_, PyAny>,
+        n: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let note = Self::marked_note(slf, &written(mxNotations)?)?;
+        for member in ["articulations", "expressions"] {
+            let read = note.getattr(member)?;
+            if read.len()? == 0 {
+                continue;
+            }
+            let held = n.getattr(member)?;
+            for mark in read.try_iter()? {
+                held.call_method1("append", (mark?,))?;
+            }
+        }
+        Ok(())
+    }
+
     /// music21's `xmlTechnicalToArticulation`: one mark of `<technical>`.
     fn xmlTechnicalToArticulation(
         slf: &Bound<'_, Self>,
@@ -1143,6 +1757,17 @@ impl PartParser {
 }
 
 impl MeasureParser {
+    /// A quarter note on C4 carrying `notations`, read as the reader reads
+    /// the note they are written on.
+    fn marked_note<'py>(slf: &Bound<'py, Self>, notations: &str) -> PyResult<Bound<'py, PyAny>> {
+        let note = format!(
+            "<attributes><divisions>1</divisions></attributes><note><pitch><step>C</step>\
+             <octave>4</octave></pitch><duration>1</duration><type>quarter</type>{notations}</note>"
+        );
+        let measure = read_measure(slf.as_any(), &in_measure(&[note]))?;
+        first_of(&measure, "GeneralNote")
+    }
+
     /// A `<measure>` read under the part's last time signature, which
     /// decides how long a rest filling it is, where it sets none itself.
     fn in_context<'py>(

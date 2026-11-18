@@ -992,9 +992,12 @@ fn staff_object<'py>(
     keywords.set_item("staffNumber", staff.staff_number)?;
     keywords.set_item("staffLines", staff.staff_lines)?;
     keywords.set_item("hidden", staff.hidden)?;
-    let kind = module
-        .getattr("StaffType")?
-        .call1((staff.staff_type.as_str(),))?;
+    // music21's `layout` carries its `StaffType`; this package's is the
+    // one `stream.enums` holds.
+    let kind = match module.getattr("StaffType") {
+        Ok(class) => class.call1((staff.staff_type.as_str(),))?,
+        Err(_) => crate::streamenums::staff_type(py, staff.staff_type.as_str())?,
+    };
     keywords.set_item("staffType", kind)?;
     let made = module.getattr("StaffLayout")?.call((), Some(&keywords))?;
     // As music21's reader sets it, past the constructor's `float`: a

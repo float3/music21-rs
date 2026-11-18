@@ -16,18 +16,20 @@
 //! let measure = step::read_measure(
 //!     "<measure><note><pitch><step>D</step><octave>5</octave></pitch>\
 //!      <duration>2</duration><type>half</type></note></measure>",
-//!     Some(2),
+//!     &mut step::MeasureContext::with_divisions(2),
 //! )?;
 //! assert_eq!(measure.pitches()[0].name_with_octave(), "D5");
 //! # Ok::<(), music21::Error>(())
 //! ```
 
 use super::read;
+pub use super::read::{ActiveTuplets, Encoding, FitAsked, MeasureFit, measure_fit};
 use crate::articulations::Articulation;
 use crate::clef::Clef;
 use crate::defaults::IntegerType;
 use crate::error::{Error, Result};
 use crate::interval::Interval;
+use crate::layout::{PageLayout, StaffLayout, SystemLayout};
 use crate::meter::TimeSignature;
 use crate::notation::{Beams, Lyric, Tie};
 use crate::pitch::{Accidental, Pitch};
@@ -127,11 +129,65 @@ pub fn read_staff(text: &str) -> Result<i32> {
     Ok(read::staff_number(&Xml::parse(text)?))
 }
 
-/// music21's `MeasureParser.parse`: a `<measure>`, read with `divisions`
-/// to the quarter where it sets none of its own.
-pub fn read_measure(text: &str, divisions: Option<IntegerType>) -> Result<Stream> {
+/// music21's `processEncoding`: an `<encoding>`.
+pub fn read_encoding(text: &str) -> Result<Encoding> {
+    Ok(read::encoding_of(&element(text, "encoding")?))
+}
+
+/// music21's `xmlPrintToPageLayout`: the page a `<print>` starts.
+pub fn read_print_page(text: &str) -> Result<PageLayout> {
+    Ok(read::print_page_layout(&element(text, "print")?))
+}
+
+/// music21's `xmlPrintToSystemLayout`: the system a `<print>` starts.
+pub fn read_print_system(text: &str) -> Result<SystemLayout> {
+    Ok(read::print_system_layout(&element(text, "print")?))
+}
+
+/// music21's `xmlPageLayoutToPageLayout`: a `<page-layout>`.
+pub fn read_page_layout(text: &str) -> Result<PageLayout> {
+    let mut read = PageLayout::default();
+    read::read_page_layout(&element(text, "page-layout")?, &mut read);
+    Ok(read)
+}
+
+/// music21's `xmlSystemLayoutToSystemLayout`: a `<system-layout>`.
+pub fn read_system_layout(text: &str) -> Result<SystemLayout> {
+    let mut read = SystemLayout::default();
+    read::read_system_layout(&element(text, "system-layout")?, &mut read);
+    Ok(read)
+}
+
+/// music21's `xmlStaffLayoutToStaffLayout`: a `<staff-layout>`.
+pub fn read_staff_layout(text: &str) -> Result<StaffLayout> {
+    Ok(read::staff_layout(&element(text, "staff-layout")?))
+}
+
+/// What a `<measure>` read on its own is read within: what music21's
+/// `MeasureParser` takes from the measures before it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MeasureContext {
+    /// The divisions to the quarter, where the measure sets none.
+    pub divisions: Option<IntegerType>,
+    /// The tuplets it starts inside, which reading leaves as it ends.
+    pub tuplets: ActiveTuplets,
+}
+
+impl MeasureContext {
+    /// A measure read with `divisions` to the quarter, inside no tuplet.
+    pub fn with_divisions(divisions: IntegerType) -> Self {
+        Self {
+            divisions: Some(divisions),
+            ..Self::default()
+        }
+    }
+}
+
+/// music21's `MeasureParser.parse`: a `<measure>`, read within `context`,
+/// whose tuplets it leaves as the measure ends.
+pub fn read_measure(text: &str, context: &mut MeasureContext) -> Result<Stream> {
     let mut measure = element(text, "measure")?;
-    if let Some(divisions) = divisions {
+    if let Some(divisions) = context.divisions {
         let attributes = Xml::parse(&format!(
             "<attributes><divisions>{divisions}</divisions></attributes>"
         ))?;
@@ -143,7 +199,7 @@ pub fn read_measure(text: &str, divisions: Option<IntegerType>) -> Result<Stream
     if let Some(part) = root.children.iter_mut().find(|child| child.tag == "part") {
         part.children.push(measure);
     }
-    let score = read::score_of(&root)?;
+    let score = read::score_within(&root, &mut context.tuplets)?;
     let measure = score
         .parts()
         .first()
@@ -193,7 +249,7 @@ mod tests {
     fn a_measure_takes_the_divisions_given() {
         let measure = read_measure(
             "<measure><note><rest/><duration>40320</duration></note></measure>",
-            Some(10080),
+            &mut MeasureContext::with_divisions(10080),
         )
         .unwrap();
         assert_eq!(measure.end_offset(), 4.0);
@@ -212,6 +268,67 @@ mod tests {
         )
         .unwrap();
         assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn an_encoding_says_who_wrote_it_and_what_it_marks() {
+        let read = read_encoding(
+            "<encoding><software>Finale v26.3 for Mac</software>\
+             <supports attribute=\"new-system\" element=\"print\" type=\"yes\" value=\"no\"/>\
+             <supports attribute=\"new-page\" element=\"print\" type=\"yes\"/></encoding>",
+        )
+        .unwrap();
+        assert!(read.finale);
+        assert!(!read.system_breaks);
+        assert!(read.page_breaks);
+        assert_eq!(read.software, vec!["Finale v26.3 for Mac".to_string()]);
+    }
+
+    #[test]
+    fn a_print_starts_a_page_and_a_system() {
+        let print = "<print new-page=\"yes\" page-number=\"5\"><page-layout>\
+                     <page-height>4000</page-height></page-layout>\
+                     <system-layout><system-distance>55</system-distance></system-layout></print>";
+        let page = read_print_page(print).unwrap();
+        assert_eq!(page.is_new, Some(true));
+        assert_eq!(page.page_number, Some(5));
+        let system = read_print_system(print).unwrap();
+        assert_eq!(system.is_new, None);
+        assert!(system.distance.is_some());
+    }
+
+    #[test]
+    fn a_tuplet_started_in_one_reading_stops_in_the_next() {
+        let note = |notations: &str| {
+            format!(
+                "<measure><note><pitch><step>C</step><octave>4</octave></pitch>\
+                 <duration>1</duration><type>eighth</type><time-modification>\
+                 <actual-notes>3</actual-notes><normal-notes>2</normal-notes>\
+                 </time-modification>{notations}</note></measure>"
+            )
+        };
+        let mut context = MeasureContext::with_divisions(3);
+        let tuplet_type = |measure: &Stream| {
+            measure.notes()[0].1.duration().expect("a note").tuplets()[0].tuplet_type()
+        };
+        let started = read_measure(
+            &note("<notations><tuplet type=\"start\"/></notations>"),
+            &mut context,
+        )
+        .unwrap();
+        assert_eq!(
+            tuplet_type(&started),
+            Some(crate::duration::TupletType::Start)
+        );
+        let stopped = read_measure(
+            &note("<notations><tuplet type=\"stop\"/></notations>"),
+            &mut context,
+        )
+        .unwrap();
+        assert_eq!(
+            tuplet_type(&stopped),
+            Some(crate::duration::TupletType::Stop)
+        );
     }
 
     #[test]

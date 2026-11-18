@@ -226,6 +226,11 @@ impl Tuplet {
         }
     }
 
+    /// The crate's tuplet this one is.
+    pub(crate) fn value(&self) -> RsTuplet {
+        self.inner
+    }
+
     /// A written value as music21's tuplet setters take one: `None`, a
     /// `DurationTuple`, a `Duration`, a type name, or a `(type, dots)` pair.
     fn written_value(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<(RsDurationType, u32)>> {

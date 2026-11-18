@@ -115,6 +115,18 @@ pub(super) fn score_of(root: &Xml) -> Result<Stream> {
     Importer::default().score(root)
 }
 
+/// The same, its first part starting inside `tuplets`, which are left as
+/// the last part ends.
+pub(super) fn score_within(root: &Xml, tuplets: &mut ActiveTuplets) -> Result<Stream> {
+    let mut importer = Importer {
+        tuplets_before: Some(*tuplets),
+        ..Importer::default()
+    };
+    let read = importer.score(root);
+    *tuplets = importer.tuplets_after;
+    read
+}
+
 // ------------------------------------------------------------------ numbers
 
 /// A number snapped to the nearest fraction music21 would hold it as:
@@ -451,6 +463,100 @@ fn bracket_numbers(text: &str) -> Vec<u32> {
     Ending::numbers_from_text(text).unwrap_or_else(|_| vec![1])
 }
 
+// ------------------------------------------------------------- measure fit
+
+/// What is known of a measure as it goes into its part.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FitAsked {
+    /// Where its contents end, in quarters: music21's `highestTime`.
+    pub highest: FloatType,
+    /// How long a bar of its meter is.
+    pub bar_length: FloatType,
+    /// Whether it holds a note or a rest.
+    pub has_notes: bool,
+    /// Whether it opens the part: nothing before it took any time.
+    pub at_start: bool,
+    /// Whether the measure before it was cut short.
+    pub last_was_short: bool,
+}
+
+/// How a measure sits in its part: music21's
+/// `adjustTimeAttributesFromMeasure`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MeasureFit {
+    /// How far the next measure starts after this one.
+    pub shift: FloatType,
+    /// The padding of a pickup, where it is one.
+    pub padding_left: Option<FloatType>,
+    /// What a measure cut short lacks at its end.
+    pub padding_right: Option<FloatType>,
+    /// Whether an empty measure is filled with a bar's rest.
+    pub fill_with_rest: bool,
+    /// Whether it is overfull by an amount music21 takes for a mistake,
+    /// and so takes the bar's length instead; music21 warns then.
+    pub overfull_ignored: bool,
+    /// Whether the next measure follows one cut short.
+    pub last_was_short: bool,
+}
+
+/// Decides how a measure sits in its part, as music21's
+/// `adjustTimeAttributesFromMeasure` does.
+pub fn measure_fit(asked: &FitAsked) -> MeasureFit {
+    let FitAsked {
+        highest,
+        bar_length,
+        has_notes,
+        at_start,
+        last_was_short,
+    } = *asked;
+    let mut fit = MeasureFit {
+        shift: highest,
+        last_was_short,
+        ..MeasureFit::default()
+    };
+
+    // Full, or overfull by a round amount or by a lot, keeps its length.
+    if highest == bar_length {
+        return fit;
+    }
+    if highest > bar_length {
+        let difference = highest - bar_length;
+        let near = |unit: FloatType| {
+            let multiple = (difference / unit).round() * unit;
+            (difference - multiple).abs() < 1e-6
+        };
+        if !(difference > 0.5 || near(0.0625) || near(1.0 / 12.0)) {
+            fit.shift = bar_length;
+            fit.overfull_ignored = true;
+        }
+        return fit;
+    }
+
+    // An empty measure some writers leave the rest out of.
+    if highest == 0.0 && !has_notes {
+        fit.shift = bar_length;
+        fit.fill_with_rest = true;
+        fit.last_was_short = false;
+        return fit;
+    }
+
+    // A short measure is a pickup where it opens the part or follows
+    // another short one, and is cut short at its end otherwise. music21
+    // pads a pickup as `padAsAnacrusis` does, by the share of the bar it
+    // lacks, and a short measure by what it lacks, unsnapped.
+    let anacrusis = op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
+    if at_start {
+        fit.padding_left = Some(anacrusis);
+    } else if last_was_short {
+        fit.padding_left = Some(anacrusis);
+        fit.last_was_short = false;
+    } else {
+        fit.padding_right = Some(bar_length - op_frac(highest));
+        fit.last_was_short = true;
+    }
+    fit
+}
+
 // ----------------------------------------------------------------- importer
 
 #[derive(Default)]
@@ -465,7 +571,16 @@ struct Importer {
     finished: Vec<usize>,
     next_uid: usize,
     finale: bool,
+    /// The tuplets the first part starts inside, for a measure read on its
+    /// own after others: music21's `PartParser.activeTuplets`.
+    tuplets_before: Option<ActiveTuplets>,
+    /// The tuplets the last part read was left inside.
+    tuplets_after: ActiveTuplets,
 }
+
+/// The tuplets a part is inside, by number: music21's `activeTuplets`,
+/// nought being the one a note's `<time-modification>` alone implies.
+pub type ActiveTuplets = [Option<Tuplet>; 7];
 
 struct PartGroup<'a> {
     element: &'a Xml,
@@ -490,7 +605,7 @@ impl Importer {
     }
 
     /// music21's `xmlRootToScore`.
-    fn score(mut self, root: &Xml) -> Result<Stream> {
+    fn score(&mut self, root: &Xml) -> Result<Stream> {
         let metadata = self.metadata(root);
         let defaults = root.find("defaults").map(score_layout);
         let credits = root
@@ -513,7 +628,7 @@ impl Importer {
                 continue;
             };
             let first = built.len();
-            let staves = PartParser::new(&mut self, part, score_part, &id).parse()?;
+            let staves = PartParser::new(self, part, score_part, &id).parse()?;
             let name = staves
                 .first()
                 .and_then(|staff| staff.stream.name().map(str::to_string));
@@ -688,17 +803,10 @@ impl Importer {
             );
         }
         if let Some(encoding) = identification.find("encoding") {
-            let mut found = false;
-            for software in encoding.find_all("software") {
-                let text = software.stripped();
-                if text.is_empty() {
-                    continue;
-                }
-                if !found && text.contains("Finale") {
-                    self.finale = true;
-                }
-                found = true;
-                metadata.add_text("software", text);
+            let read = encoding_of(encoding);
+            self.finale = read.finale;
+            for software in &read.software {
+                metadata.add_text("software", software);
             }
         }
         if let Some(miscellaneous) = identification.find("miscellaneous") {
@@ -717,6 +825,46 @@ impl Importer {
         }
         metadata
     }
+}
+
+/// What an `<encoding>` says of the program that wrote the document.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Encoding {
+    /// Each `<software>` named, in order.
+    pub software: Vec<String>,
+    /// Whether the first program named is Finale, whose mistakes music21
+    /// works around: its `applyFinaleWorkarounds`.
+    pub finale: bool,
+    /// Whether the document says where every system starts: music21's
+    /// `definesExplicitSystemBreaks`.
+    pub system_breaks: bool,
+    /// Whether it says where every page starts: music21's
+    /// `definesExplicitPageBreaks`.
+    pub page_breaks: bool,
+}
+
+/// music21's `processEncoding`.
+pub(super) fn encoding_of(encoding: &Xml) -> Encoding {
+    let mut read = Encoding::default();
+    for software in encoding.find_all("software") {
+        let text = software.stripped();
+        if text.is_empty() {
+            continue;
+        }
+        if read.software.is_empty() && text.contains("Finale") {
+            read.finale = true;
+        }
+        read.software.push(text.to_string());
+    }
+    for supports in encoding.find_all("supports") {
+        let value = supports.get("value").or_else(|| supports.get("type"));
+        match (supports.get("attribute"), value) {
+            (Some("new-system"), Some("yes")) => read.system_breaks = true,
+            (Some("new-page"), Some("yes")) => read.page_breaks = true,
+            _ => {}
+        }
+    }
+    read
 }
 
 /// music21's `parsePartList`: each `<score-part>` by id, and the groups.
@@ -782,7 +930,7 @@ struct PartParser<'a, 'x> {
     last_measure_number: IntegerType,
     last_number_suffix: Option<String>,
     last_clefs: Vec<(i32, Clef)>,
-    active_tuplets: [Option<Tuplet>; 7],
+    active_tuplets: ActiveTuplets,
     first_measure_parsed: bool,
     /// music21's `PartParser.atSoundingPitch`: a part is at sounding pitch
     /// until a `<transpose>` says otherwise.
@@ -809,6 +957,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     .any(|staves| parse_int(staves.stripped()).is_some_and(|count| count > 1))
             })
         });
+        let active_tuplets = importer.tuplets_before.take().unwrap_or_default();
         Self {
             importer,
             part,
@@ -830,7 +979,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             last_measure_number: 0,
             last_number_suffix: None,
             last_clefs: Vec::new(),
-            active_tuplets: Default::default(),
+            active_tuplets,
             first_measure_parsed: false,
             at_sounding_pitch: true,
             arpeggios: Vec::new(),
@@ -890,6 +1039,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         }
         self.remove_finale_ending_rest(last_forward);
         self.end_multi_rest();
+        self.importer.tuplets_after = self.active_tuplets;
 
         // Endings, from the brackets over the measures.
         for bracket in &self.brackets {
@@ -1198,26 +1348,19 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let index = self.measures.len();
 
         // music21's `adjustTimeAttributesFromMeasure`.
-        let highest = measure.highest_time();
         let has_notes = measure
             .items
             .iter()
             .chain(measure.voices.iter().flat_map(|voice| &voice.items))
             .any(Item::is_note_or_rest);
-        let shift = if highest == bar_length {
-            highest
-        } else if highest > bar_length {
-            let difference = highest - bar_length;
-            let near = |unit: FloatType| {
-                let multiple = (difference / unit).round() * unit;
-                (difference - multiple).abs() < 1e-6
-            };
-            if difference > 0.5 || near(0.0625) || near(1.0 / 12.0) {
-                highest
-            } else {
-                bar_length
-            }
-        } else if highest == 0.0 && !has_notes {
+        let fit = measure_fit(&FitAsked {
+            highest: measure.highest_time(),
+            bar_length,
+            has_notes,
+            at_start: self.last_measure_offset == 0.0,
+            last_was_short: self.last_measure_was_short,
+        });
+        if fit.fill_with_rest {
             // Some writers leave the rest out of an empty measure.
             let uid = self.importer.uid();
             measure.items.push(Item {
@@ -1227,32 +1370,15 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 uid: Some(uid),
                 element: Rest::new(Duration::new(bar_length)?).into(),
             });
-            self.last_measure_was_short = false;
-            bar_length
-        } else {
-            // A short measure is a pickup where it opens the part or follows
-            // another short one, and is cut short at its end otherwise.
-            // music21 pads a pickup as `padAsAnacrusis` does, by the share
-            // of the bar it lacks, and a short measure by what it lacks,
-            // unsnapped.
-            let anacrusis = || op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
-            if self.last_measure_offset == 0.0 {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                }
-            } else if self.last_measure_was_short {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                    self.last_measure_was_short = false;
-                }
-            } else {
-                if highest < bar_length {
-                    measure.padding_right = bar_length - op_frac(highest);
-                }
-                self.last_measure_was_short = highest < bar_length;
-            }
-            highest
-        };
+        }
+        if let Some(padding) = fit.padding_left {
+            measure.padding_left = padding;
+        }
+        if let Some(padding) = fit.padding_right {
+            measure.padding_right = padding;
+        }
+        self.last_measure_was_short = fit.last_was_short;
+        let shift = fit.shift;
         self.last_measure_offset += shift;
         self.measures.push(measure);
         Ok(finale_forward.map(|_| (index, !use_voices)))
@@ -1760,26 +1886,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             || print.find("page-layout").is_some();
         let system = says("new-system") || print.find("system-layout").is_some();
         if page {
-            let mut read = PageLayout {
-                is_new: print.get("new-page").map(|value| value == "yes"),
-                page_number: print
-                    .get("page-number")
-                    .and_then(|value| value.trim().parse().ok()),
-                ..PageLayout::default()
-            };
-            if let Some(written) = print.find("page-layout") {
-                read_page_layout(written, &mut read);
-            }
+            let read = print_page_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::Page(read)));
         }
         if system || !page {
-            let mut read = SystemLayout {
-                is_new: print.get("new-system").map(|value| value == "yes"),
-                ..SystemLayout::default()
-            };
-            if let Some(written) = print.find("system-layout") {
-                read_system_layout(written, &mut read);
-            }
+            let read = print_system_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::System(read)));
         }
         for written in print.find_all("staff-layout") {
@@ -3354,7 +3465,7 @@ fn tenths(element: &Xml, tag: &str) -> Option<Tenths> {
 }
 
 /// music21's `xmlPageLayoutToPageLayout`.
-fn read_page_layout(written: &Xml, read: &mut PageLayout) {
+pub(super) fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     if let Some(height) = tenths(written, "page-height") {
         read.page_height = Some(height);
     }
@@ -3375,8 +3486,35 @@ fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     }
 }
 
+/// music21's `xmlPrintToPageLayout`: the page a `<print>` starts.
+pub(super) fn print_page_layout(print: &Xml) -> PageLayout {
+    let mut read = PageLayout {
+        is_new: print.get("new-page").map(|value| value == "yes"),
+        page_number: print
+            .get("page-number")
+            .and_then(|value| value.trim().parse().ok()),
+        ..PageLayout::default()
+    };
+    if let Some(written) = print.find("page-layout") {
+        read_page_layout(written, &mut read);
+    }
+    read
+}
+
+/// music21's `xmlPrintToSystemLayout`: the system a `<print>` starts.
+pub(super) fn print_system_layout(print: &Xml) -> SystemLayout {
+    let mut read = SystemLayout {
+        is_new: print.get("new-system").map(|value| value == "yes"),
+        ..SystemLayout::default()
+    };
+    if let Some(written) = print.find("system-layout") {
+        read_system_layout(written, &mut read);
+    }
+    read
+}
+
 /// music21's `xmlSystemLayoutToSystemLayout`.
-fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
+pub(super) fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
     if let Some(margins) = written.find("system-margins") {
         for (tag, place) in [
             ("top-margin", &mut read.top_margin),
@@ -3398,7 +3536,7 @@ fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
 }
 
 /// music21's `xmlStaffLayoutToStaffLayout`.
-fn staff_layout(written: &Xml) -> StaffLayout {
+pub(super) fn staff_layout(written: &Xml) -> StaffLayout {
     StaffLayout {
         distance: tenths(written, "staff-distance"),
         staff_number: written
