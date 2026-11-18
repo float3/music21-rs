@@ -11548,3 +11548,24 @@ def test_a_chord_symbol_read_keeps_inversion_placement_and_steps():
     assert symbol.placement == "below"
     assert symbol.inversion() == 1
     assert [step.degree for step in symbol.getChordStepModifications()] == [9]
+
+
+def test_a_score_read_keeps_its_staff_groups_and_system_breaks():
+    """A score read keeps its `<part-group>` as a `StaffGroup` among its
+    elements and each `<print new-system>` as a `SystemLayout` in its
+    measure, as music21's reader does: bwv66.6 has one and eight."""
+    corpus = pathlib.Path(__file__).resolve().parents[2] / "music21" / "music21" / "corpus"
+    path = corpus / "bach" / "bwv66.6.mxl"
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    import zipfile
+
+    with zipfile.ZipFile(path) as archive:
+        name = next(n for n in archive.namelist() if not n.startswith("META"))
+        score = m.from_musicxml(archive.read(name).decode("utf-8"))
+    groups = [e for e in score.elements if type(e).__name__ == "StaffGroup"]
+    assert len(groups) == 1
+    assert len(groups[0].getSpannedElements()) == 4
+    layouts = [e for e in score.recurse() if type(e).__name__ == "SystemLayout"]
+    assert len(layouts) == 8
+    assert all(layout.isNew for layout in layouts)

@@ -157,6 +157,20 @@ impl ScoreLayout {
                         made.inner.scaling_millimeters = read_tenths(Some(&value))?;
                     }
                     "scalingTenths" => made.inner.scaling_tenths = read_tenths(Some(&value))?,
+                    // The layouts it starts with, as music21's constructor
+                    // takes them.
+                    "pageLayout" if !value.is_none() => made.pageLayout = Some(value.extract()?),
+                    "systemLayout" if !value.is_none() => {
+                        made.systemLayout = Some(value.extract()?);
+                    }
+                    "staffLayoutList" if !value.is_none() => {
+                        made.staffLayoutList = pyo3::types::PyList::new(
+                            py,
+                            value.try_iter()?.collect::<PyResult<Vec<_>>>()?,
+                        )?
+                        .unbind();
+                    }
+                    "pageLayout" | "systemLayout" | "staffLayoutList" => {}
                     other => {
                         return Err(LayoutException::new_err(format!(
                             "a score layout here says nothing of {other}"
@@ -883,16 +897,26 @@ fn read_staff_type(value: &Bound<'_, PyAny>) -> PyResult<StaffType> {
         .ok_or_else(|| LayoutException::new_err(format!("no staff is of the type {said}")))
 }
 
-/// A crate layout as music21's own object, for a score built into
-/// music21's streams: music21's reader makes its own, which nothing
-/// installed stands in for. A measurement nobody gave stays `None`.
-pub(crate) fn music21_object<'py>(
-    py: Python<'py>,
+/// Where the layout classes are found: music21's own `layout` for a score
+/// built into music21's streams, which its reader makes and nothing
+/// installed stands in for, and this package for its own.
+pub(crate) fn classes_from(py: Python<'_>, music21: bool) -> PyResult<Bound<'_, PyModule>> {
+    match music21 {
+        true => py.import("music21.layout"),
+        false => py.import("music21_rs"),
+    }
+}
+
+/// A crate layout as an object of the classes `module` holds. A
+/// measurement nobody gave stays `None`.
+pub(crate) fn layout_object<'py>(
+    module: &Bound<'py, PyModule>,
     layout: &music21::layout::Layout,
 ) -> PyResult<Bound<'py, PyAny>> {
     use music21::layout::Layout;
 
-    let module = py.import("music21.layout")?;
+    let py = module.py();
+    let module = module.clone();
     let keywords = PyDict::new(py);
     let made = match layout {
         Layout::Score(score) => {
@@ -985,19 +1009,19 @@ fn staff_object<'py>(
     Ok(made)
 }
 
-/// A crate staff group as music21's own `StaffGroup` over `parts`, the
-/// parts it groups as already built.
-pub(crate) fn music21_staff_group<'py>(
-    py: Python<'py>,
+/// A crate staff group as a `StaffGroup` of the classes `module` holds,
+/// over `parts`, the parts it groups as already built.
+pub(crate) fn staff_group_object<'py>(
+    module: &Bound<'py, PyModule>,
     group: &music21::stream::StaffGroup,
     parts: Vec<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let py = module.py();
     let keywords = PyDict::new(py);
     keywords.set_item("name", group.name())?;
     keywords.set_item("abbreviation", group.abbreviation())?;
     keywords.set_item("symbol", group.symbol())?;
-    let made = py
-        .import("music21.layout")?
+    let made = module
         .getattr("StaffGroup")?
         .call((pyo3::types::PyTuple::new(py, parts)?,), Some(&keywords))?;
     // Not through the constructor, which keeps what it is given as given.

@@ -6081,15 +6081,16 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     if stream.kind() == StreamKind::Score {
         insert_brackets(&std::mem::take(&mut brackets))?;
     }
-    // music21's own staff groups, which its reader puts in the score.
-    if whose == Whose::Music21 {
+    // The staff groups, which music21's reader puts in the score.
+    if !stream.staff_groups().is_empty() {
+        let classes = crate::layout::classes_from(py, whose == Whose::Music21)?;
         for group in stream.staff_groups() {
             let grouped = group
                 .parts()
                 .iter()
                 .filter_map(|place| parts.get(*place).map(|(part, _)| part.clone()))
                 .collect();
-            let made_group = crate::layout::music21_staff_group(py, group, grouped)?;
+            let made_group = crate::layout::staff_group_object(&classes, group, grouped)?;
             made.call_method1("insert", (0.0, made_group))?;
         }
     }
@@ -6601,8 +6602,9 @@ fn element_object_as<'py>(
         .into_any(),
         // music21's own, which its reader makes and nothing installed
         // stands in for.
-        StreamElement::Layout(layout) if whose == Whose::Music21 => {
-            crate::layout::music21_object(py, layout)?
+        StreamElement::Layout(layout) => {
+            let classes = crate::layout::classes_from(py, whose == Whose::Music21)?;
+            crate::layout::layout_object(&classes, layout)?
         }
         StreamElement::TextBox(text_box) if whose == Whose::Music21 => {
             crate::text::music21_object(py, text_box)?
@@ -6624,7 +6626,6 @@ fn element_object_as<'py>(
         | StreamElement::RehearsalMark(_)
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
-        | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
         | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
         // A kind added to the crate since has no class here yet either.
