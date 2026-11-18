@@ -1114,6 +1114,19 @@ def test_a_fermata_is_music21s():
         fermata.type = "sideways"
 
 
+def test_a_fermata_is_copied():
+    """A note carrying a fermata is copied with it, as `makeElement`
+    copies the notes it gathers."""
+    import copy
+
+    fermata = m.Fermata()
+    fermata.type = "upright"
+    copied = copy.deepcopy(fermata)
+    assert copied is not fermata
+    assert (type(copied).__name__, copied.type) == ("Fermata", "upright")
+    assert copy.copy(fermata).type == "upright"
+
+
 def test_a_stream_is_always_sorted_and_sorts_itself():
     """music21's `isSorted` and `autoSort`: a stream here answers in
     order whenever it is read, so it says it is sorted, and marking it

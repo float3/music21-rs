@@ -1570,6 +1570,7 @@ fn realizeOrnaments<'py>(
     subclass,
     skip_from_py_object
 )]
+#[derive(Clone)]
 pub struct Fermata {
     inner: music21::expressions::Fermata,
     /// Which note of a tie it goes on: music21's `tieAttach`.
@@ -1615,6 +1616,17 @@ impl Fermata {
 
     fn __repr__(&self) -> &'static str {
         "<music21.expressions.Fermata>"
+    }
+
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone())
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone()).map(crate::base::shallow)
     }
 }
 
