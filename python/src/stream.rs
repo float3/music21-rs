@@ -1728,6 +1728,23 @@ impl Stream {
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
     }
+
+    /// Whether an index is a class, or a list or tuple of nothing but
+    /// classes: what music21 searches for rather than counts to.
+    fn is_class_key(key: &Bound<'_, PyAny>) -> PyResult<bool> {
+        if key.is_instance_of::<pyo3::types::PyType>() {
+            return Ok(true);
+        }
+        if !key.is_instance_of::<PyList>() && !key.is_instance_of::<PyTuple>() {
+            return Ok(false);
+        }
+        for item in key.try_iter()? {
+            if !item?.is_instance_of::<pyo3::types::PyType>() {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
 }
 
 #[pymethods]
@@ -4352,17 +4369,32 @@ impl Stream {
     }
 
     fn __getitem__<'py>(
-        &self,
-        py: Python<'py>,
+        slf: &Bound<'py, Self>,
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let elements = self.elements(py)?;
+        let py = slf.py();
+        // A class, or classes, finds them anywhere inside, as music21's
+        // `s[note.Note]` does.
+        if Self::is_class_key(key)? {
+            return slf
+                .call_method0("recurse")?
+                .call_method1("getElementsByClass", (key,));
+        }
+        let this = slf.borrow();
+        let elements = this.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
-        let index: isize = key
-            .extract()
-            .map_err(|_| PyTypeError::new_err("a stream is indexed by a number or a slice"))?;
+        let index: isize = key.extract().map_err(|_| {
+            PyTypeError::new_err(format!(
+                "Streams can get items by int, slice, class, class iterable, or string \
+                 query; got {}",
+                key.get_type()
+                    .repr()
+                    .map(|repr| repr.to_string())
+                    .unwrap_or_default()
+            ))
+        })?;
         let length = elements.len() as isize;
         let at = if index < 0 { index + length } else { index };
         if at < 0 || at >= length {
@@ -4371,7 +4403,7 @@ impl Stream {
             )));
         }
         let found = elements.get_item(at as usize)?;
-        self.reach(&found);
+        this.reach(&found);
         Ok(found)
     }
 
@@ -5101,13 +5133,39 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] setStemDirections: bool,
         #[pyo3(from_py_with = crate::truthy)] failOnNoTimeSignature: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        refuse_unported(false, false, inPlace)?;
         if !setStemDirections || failOnNoTimeSignature {
             return Err(StreamException::new_err(
                 "setStemDirections=False and failOnNoTimeSignature=True are not supported here: beaming always points a group's stems, and a stream with no meter is left unbeamed",
             ));
         }
-        remade(slf, Some("makeBeams"), music21::makenotation::make_beams)
+        let made = remade(slf, Some("makeBeams"), music21::makenotation::make_beams)?;
+        if !inPlace {
+            return Ok(made);
+        }
+
+        // In place: the beamed copy's beams and stems put on the stream's
+        // own notes, which it holds in the same order.
+        let py = slf.py();
+        let held: Vec<_> = slf
+            .call_method0("recurse")?
+            .getattr("notes")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        let beamed: Vec<_> = made
+            .call_method0("recurse")?
+            .getattr("notes")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        if held.len() != beamed.len() {
+            return Err(StreamException::new_err(
+                "makeBeams changed what the stream holds",
+            ));
+        }
+        for (own, copy) in held.iter().zip(&beamed) {
+            own.setattr("beams", copy.getattr("beams")?)?;
+            own.setattr("stemDirection", copy.getattr("stemDirection")?)?;
+        }
+        Ok(py.None().into_bound(py))
     }
 
     /// A copy with each accidental's showing decided: music21's
@@ -6016,10 +6074,8 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         }
     }
-    if whose == Whose::Music21 {
-        for bracket in music21_repeat_brackets(py, &endings)? {
-            brackets.push((made.clone(), bracket));
-        }
+    for bracket in repeat_brackets(py, &endings, whose)? {
+        brackets.push((made.clone(), bracket));
     }
     // A score's parts take their brackets once its spanners are in.
     if stream.kind() == StreamKind::Score {
@@ -6086,19 +6142,24 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     })
 }
 
-/// music21's own `RepeatBracket` over each alternative ending among a
-/// part's measures, from the measure it opens on to the one it closes on,
-/// each complete, in the order they close: what its readers put in the
-/// part at nought once the part is read.
-fn music21_repeat_brackets<'py>(
+/// A `RepeatBracket` over each alternative ending among a part's measures,
+/// from the measure it opens on to the one it closes on, each complete, in
+/// the order they close: what music21's readers put in the part at nought
+/// once the part is read. music21's own class for its streams, this
+/// package's for its own.
+fn repeat_brackets<'py>(
     py: Python<'py>,
     endings: &[(&music21::Ending, Bound<'py, PyAny>)],
+    whose: Whose,
 ) -> PyResult<Vec<Bound<'py, PyAny>>> {
     let mut made = Vec::new();
     if endings.is_empty() {
         return Ok(made);
     }
-    let class = crate::real_music21(py, "music21.spanner")?.getattr("RepeatBracket")?;
+    let class = match whose {
+        Whose::Music21 => crate::real_music21(py, "music21.spanner")?.getattr("RepeatBracket")?,
+        Whose::Wheel => py.get_type::<crate::spanner::RepeatBracket>().into_any(),
+    };
     let mut open: Option<Bound<'py, PyAny>> = None;
     for (ending, measure) in endings {
         let bracket = match open.take() {

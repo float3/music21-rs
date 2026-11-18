@@ -46,6 +46,10 @@ pub enum SpannerKind {
     /// Rests of several measures drawn as one: music21's
     /// `MultiMeasureRest`.
     MultiMeasureRest,
+    /// The measures of an alternative ending, a first or second time bar:
+    /// music21's `RepeatBracket`. A measure read or written keeps its
+    /// ending as a `bar::Ending`; this is the bracket built by hand.
+    RepeatBracket,
 }
 
 impl SpannerKind {
@@ -64,6 +68,7 @@ impl SpannerKind {
             Self::TremoloSpanner => "TremoloSpanner",
             Self::Neume => "Neume",
             Self::MultiMeasureRest => "MultiMeasureRest",
+            Self::RepeatBracket => "RepeatBracket",
         }
     }
 

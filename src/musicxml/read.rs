@@ -433,21 +433,8 @@ struct Bracket {
 /// music21's `RepeatBracket.number` setter: nothing at all is nought,
 /// which is written as no number; otherwise `1`, `1, 2` or `1-3`.
 fn bracket_numbers(text: &str) -> Vec<u32> {
-    if text.is_empty() {
-        return vec![0];
-    }
-    let number = |piece: &str| piece.trim().parse::<u32>().ok();
-    let read = if let Some((low, high)) = text.split_once('-') {
-        number(low)
-            .zip(number(high))
-            .map(|(low, high)| (low..=high).collect())
-    } else if text.contains(',') {
-        text.split(',').map(number).collect::<Option<Vec<u32>>>()
-    } else {
-        number(text).map(|number| vec![number])
-    };
     // music21 falls back to a first ending where it cannot read one.
-    read.unwrap_or_else(|| vec![1])
+    Ending::numbers_from_text(text).unwrap_or_else(|_| vec![1])
 }
 
 // ----------------------------------------------------------------- importer

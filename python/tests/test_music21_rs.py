@@ -11473,3 +11473,56 @@ except MusicXMLImportException as error:
         "0",
         "In part (Elec.), measure (0): found unknown MusicXML type: thirty-tooth",
     ]
+
+
+def test_stream_is_indexed_by_class():
+    """music21's `s[note.Note]` is `s.recurse().getElementsByClass(note.Note)`,
+    and a list of classes finds each; anything else is a TypeError."""
+    part = m.Part()
+    measure = m.Measure()
+    measure.append(m.Note("C4"))
+    measure.append(m.Rest())
+    measure.append(m.Note("E4"))
+    part.append(measure)
+    assert [n.nameWithOctave for n in part[m.Note]] == ["C4", "E4"]
+    assert len(part[[m.Note, m.Rest]]) == 3
+    assert part[m.Measure].first() is measure
+    with pytest.raises(TypeError):
+        part[0.5]
+
+
+def test_make_beams_in_place_beams_the_notes_held():
+    """`makeBeams(inPlace=True)` beams the stream's own notes and hands
+    back nothing, as music21's does."""
+    measure = m.Measure()
+    first = m.Note(64, quarterLength=0.25)
+    second = m.Note(67, quarterLength=0.25)
+    measure.append(m.TabClef())
+    measure.append(m.TimeSignature("4/4"))
+    measure.append(first)
+    measure.append(second)
+    assert measure.makeBeams(inPlace=True) is None
+    assert first.stemDirection == "down"
+    assert [beam.type for beam in first.beams] == ["start", "start"]
+    assert [beam.type for beam in second.beams] == ["stop", "stop"]
+
+
+def test_repeat_bracket_numbers_as_music21_does():
+    """`spanner.RepeatBracket` keeps the endings it marks in `numberRange`
+    and writes them back as music21 does."""
+    measure = m.Measure()
+    bracket = m.RepeatBracket(measure, number=1)
+    assert bracket.number == "1"
+    assert bracket.getSpannedElements() == [measure]
+    bracket.number = "1-3"
+    assert bracket.numberRange == [1, 2, 3]
+    bracket.number = [2, 3]
+    assert bracket.number == "2, 3"
+    bracket.number = "1, 2, 3"
+    assert bracket.number == "1-3"
+    bracket.number = "1, 2, 3, 7"
+    assert bracket.number == "1, 2, 3, 7"
+    assert m.RepeatBracket().numberRange == [0]
+    assert m.RepeatBracket().number == ""
+    with pytest.raises(m.SpannerException):
+        bracket.number = "x"

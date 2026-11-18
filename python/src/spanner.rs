@@ -1165,7 +1165,16 @@ impl Spanner {
         }
         // music21's `Ottava._reprInternal` says the shift and whether the
         // notes under it are written where they sound.
-        let said = if kind == SpannerKind::Ottava {
+        let said = if kind == SpannerKind::RepeatBracket {
+            // music21's `RepeatBracket._reprInternal`: what is shown, or
+            // the numbers.
+            let shown = slf.getattr("overrideDisplay")?;
+            let shown: String = match shown.is_none() {
+                true => slf.getattr("number")?.extract()?,
+                false => shown.str()?.to_string(),
+            };
+            format!("{shown} ")
+        } else if kind == SpannerKind::Ottava {
             let shift = slf.borrow().inner.shift();
             let transposing = if shift.is_some_and(|shift| shift.transposing()) {
                 "transposing"
@@ -1830,6 +1839,78 @@ fn drawn_with_a_line(slf: &Bound<'_, Spanner>, member: &str) -> PyResult<()> {
     only(slf, SpannerKind::Line, member)
 }
 
+/// music21's `spanner.RepeatBracket`: the measures of an alternative
+/// ending, numbered for the times through it is played.
+#[pyclass(name = "RepeatBracket", module = "music21.spanner", extends = Spanner, subclass)]
+pub struct RepeatBracket;
+
+#[pymethods]
+impl RepeatBracket {
+    #[new]
+    #[pyo3(signature = (*_spannedElements, **_keywords))]
+    fn new(
+        _spannedElements: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Spanner::of_kind(SpannerKind::RepeatBracket)).add_subclass(Self))
+    }
+
+    /// The measures joined, then `number` and `overrideDisplay` kept as
+    /// music21 keeps them.
+    #[pyo3(signature = (*spannedElements, number = None, overrideDisplay = None, **keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        spannedElements: &Bound<'_, PyTuple>,
+        number: Option<&Bound<'_, PyAny>>,
+        overrideDisplay: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        Spanner::__init__(slf.as_super(), spannedElements, keywords)?;
+        slf.setattr("numberRange", PyList::empty(py))?;
+        slf.setattr(
+            "overrideDisplay",
+            overrideDisplay.map_or_else(|| py.None(), |given| given.clone().unbind()),
+        )?;
+        match number {
+            Some(given) => Self::set_number(slf, given),
+            None => Self::set_number(slf, &0_i32.into_pyobject(py)?.into_any()),
+        }
+    }
+
+    /// The numbers as text: `1-3` for a run, `2, 3` or `1, 2, 7` else,
+    /// empty for none.
+    #[getter]
+    fn number(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let numbers: Vec<u32> = slf.getattr("numberRange")?.extract()?;
+        Ok(music21::bar::Ending::numbers_label(&numbers))
+    }
+
+    /// A number, numbers, or text naming them, `'1-3'` or `'1, 2'`.
+    #[setter(number)]
+    fn set_number(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let refused = || {
+            SpannerException::new_err(format!(
+                "number for RepeatBracket must be a number, not {}",
+                value
+                    .repr()
+                    .map(|shown| shown.to_string())
+                    .unwrap_or_default()
+            ))
+        };
+        let numbers: Vec<u32> = if let Ok(text) = value.extract::<String>() {
+            music21::bar::Ending::numbers_from_text(&text).map_err(|_| refused())?
+        } else if let Ok(number) = value.extract::<u32>() {
+            vec![number]
+        } else if let Ok(numbers) = value.extract::<Vec<u32>>() {
+            numbers
+        } else {
+            return Err(refused());
+        };
+        slf.setattr("numberRange", numbers)
+    }
+}
+
 /// music21's `dynamics.DynamicWedge`: what a crescendo and a diminuendo
 /// both are, a hairpin.
 #[pyclass(name = "DynamicWedge", module = "music21.dynamics", extends = Spanner, subclass)]
@@ -1880,12 +1961,13 @@ macro_rules! spanner_kinds {
             m.add_class::<Spanner>()?;
             m.add_class::<SpannerBundle>()?;
             m.add_class::<DynamicWedge>()?;
+            m.add_class::<RepeatBracket>()?;
             $(m.add_class::<$class>()?;)*
             Ok(())
         }
 
         /// The names this module hands out beside the exception.
-        pub const CLASS_NAMES: &[&str] = &["Spanner", "SpannerBundle", $($name),*];
+        pub const CLASS_NAMES: &[&str] = &["Spanner", "SpannerBundle", "RepeatBracket", $($name),*];
     };
 }
 
