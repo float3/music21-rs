@@ -11429,3 +11429,31 @@ print([cls.__name__ for cls in m21ToXml.ScoreExporter.__mro__])
         "True long",
         "['ScoreExporter', 'XMLExporterBase', 'PartStaffExporterMixin', 'object']",
     ]
+
+
+def test_provided_musicxml_writes_a_dynamics_style_and_a_signatures_mode(tmp_path):
+    """Provided, a dynamic's style moves it as music21 writes it
+    (`relative-y` beside the default place), and a key signature given a
+    mode writes it, as music21's `dynamicToXml` and `keySignatureToXml`
+    docstrings show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, key
+from music21.musicxml import m21ToXml
+ppp = dynamics.Dynamic('ppp')
+ppp.style.relativeY = -10
+MEX = m21ToXml.MeasureExporter()
+print(MEX.dynamicToXml(ppp).find('direction-type/dynamics').attrib)
+ks = key.KeySignature(-3)
+print(getattr(ks, 'mode', None))
+ks.mode = 'major'
+print(MEX.keySignatureToXml(ks).find('mode').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{'default-x': '-36', 'default-y': '-80', 'relative-y': '-10'}",
+        "None",
+        "major",
+    ]

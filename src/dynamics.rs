@@ -12,6 +12,7 @@ use crate::{
     display::Drawn,
     error::{Error, Result},
     notation::Placement,
+    style::{StyleValue, TextStyle},
 };
 
 /// The marks music21 lists, softest first: its `shortNames`.
@@ -119,6 +120,19 @@ pub struct Dynamic {
     volume_scalar: Option<FloatType>,
     #[cfg_attr(feature = "serde", serde(default))]
     placement: Drawn<Option<Placement>>,
+    /// Where it is drawn, as music21's `style` says.
+    /// Boxed, as a dynamic is held by value in enums that are mostly small.
+    #[cfg_attr(feature = "serde", serde(default = "default_style"))]
+    style: Box<TextStyle>,
+}
+
+/// Where music21 starts every dynamic off: 36 tenths left of its note and
+/// 80 below the top line, which lines it up under a sixteenth.
+fn default_style() -> Box<TextStyle> {
+    let mut style = TextStyle::default();
+    style.absolute_x = Some(StyleValue::Whole(-36));
+    style.absolute_y = Some(StyleValue::Whole(-80));
+    Box::new(style)
 }
 
 impl Dynamic {
@@ -129,7 +143,19 @@ impl Dynamic {
             value: value.into(),
             volume_scalar: None,
             placement: Drawn(None),
+            style: default_style(),
         }
+    }
+
+    /// Where it is drawn: music21's `style`, which starts at 36 tenths to
+    /// the left and 80 down.
+    pub fn style(&self) -> &TextStyle {
+        &self.style
+    }
+
+    /// Says where it is drawn.
+    pub fn set_style(&mut self, style: TextStyle) {
+        *self.style = style;
     }
 
     /// Which side of the staff it is written on, where the score says.

@@ -150,6 +150,20 @@ fn op_frac(value: FloatType) -> FloatType {
     if negative { -snapped } else { snapped }
 }
 
+/// music21's `setSoundTempo`: the quarters a minute a `<sound>`'s `tempo`
+/// attribute plays at, or `None` for one that is nought or no number,
+/// which sets no tempo.
+///
+/// ```
+/// use music21::musicxml::sound_tempo;
+///
+/// assert_eq!(sound_tempo("128"), Some(128.0));
+/// assert_eq!(sound_tempo("0"), None);
+/// ```
+pub fn sound_tempo(tempo: &str) -> Option<FloatType> {
+    parse_float(tempo).filter(|qpm| *qpm != 0.0)
+}
+
 fn parse_float(text: &str) -> Option<FloatType> {
     text.trim().parse::<FloatType>().ok()
 }
@@ -2740,11 +2754,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `setSoundTempo`: how fast the music is played, where no
     /// mark says.
     fn sound_tempo(&mut self, sound: &Xml, direction: Option<&Xml>, staff: i32, total: FloatType) {
-        let Some(tempo) = sound
-            .get("tempo")
-            .and_then(parse_float)
-            .filter(|qpm| *qpm != 0.0)
-        else {
+        let Some(tempo) = sound.get("tempo").and_then(sound_tempo) else {
             return;
         };
         let mut mark = MetronomeMark::default().with_number_sounding(tempo);

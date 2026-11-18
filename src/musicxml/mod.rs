@@ -20,9 +20,11 @@ mod partstaff;
 mod read;
 mod tree;
 
-pub use fragment::element_xml;
+pub use fragment::{
+    element_xml, instrument_xml, layout_xml, score_header_xml, staff_details_xml, transpose_xml,
+};
 pub use partstaff::measure_number_comes_before;
-pub use read::from_musicxml;
+pub use read::{from_musicxml, sound_tempo};
 
 use crate::articulations::Articulation;
 use crate::bar::{Barline, Ending, RepeatDirection};
@@ -1974,7 +1976,7 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
                 let mxnote = self.rest_element(rest, offset, Some(position))?;
                 self.root.push(mxnote);
             }
-            StreamElement::Dynamic(dynamic) => self.dynamic_element(dynamic, offset),
+            StreamElement::Dynamic(dynamic) => self.dynamic_element(dynamic, offset)?,
             StreamElement::MetronomeMark(mark) => self.tempo_elements(mark, offset)?,
             StreamElement::MetricModulation(modulation) => {
                 let resolved = self
@@ -2609,20 +2611,20 @@ impl<'a, 'b> MeasureExporter<'a, 'b> {
     }
 
     /// music21's `dynamicToXml`.
-    fn dynamic_element(&mut self, dynamic: &Dynamic, offset: FloatType) {
+    fn dynamic_element(&mut self, dynamic: &Dynamic, offset: FloatType) -> Result<()> {
         let mut dynamics = Element::new("dynamics");
         if DYNAMIC_MARKS.contains(&dynamic.value()) {
             dynamics.sub(dynamic_tag(dynamic.value()));
         } else {
             dynamics.sub_text("other-dynamics", dynamic.value());
         }
-        // A dynamic's style starts music21 off at these positions.
-        dynamics.set("default-x", "-36");
-        dynamics.set("default-y", "-80");
+        // music21's `setPrintStyleAlign`: where the style puts it.
+        set_print_style_align(&mut dynamics, dynamic.style())?;
         let mut direction = self.direction(dynamics, dynamic.placement(), offset, true);
         let volume = (dynamic.volume_scalar() * 127.0) as i64;
         direction.sub("sound").set("dynamics", volume.to_string());
         self.root.push(direction);
+        Ok(())
     }
 
     /// music21's `tempoIndicationToXml` for a metronome mark: the mark, and
@@ -3988,7 +3990,9 @@ fn lyric_element(lyric: &Lyric) -> Result<Element> {
 /// The `<key>` for a key or a key signature, and nothing for anything else.
 fn key_element(element: &StreamElement) -> Option<Result<Element>> {
     match element {
-        StreamElement::KeySignature(signature) => Some(key_signature_element(signature, None)),
+        StreamElement::KeySignature(signature) => {
+            Some(key_signature_element(signature, signature.mode()))
+        }
         StreamElement::Key(key) => {
             let mut signature = key.key_signature();
             signature.set_color(key.color().map(str::to_string));
@@ -5004,7 +5008,7 @@ mod tests {
     #[test]
     fn a_dynamic_is_a_direction_with_its_loudness() {
         let root = with_measure(|exporter| {
-            exporter.dynamic_element(&Dynamic::new("ppp"), 1.0);
+            exporter.dynamic_element(&Dynamic::new("ppp"), 1.0).unwrap();
             exporter.root.clone()
         });
         assert_eq!(
