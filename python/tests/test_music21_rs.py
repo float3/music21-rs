@@ -1014,6 +1014,20 @@ def test_a_flattened_parts_barlines_stand_nowhere_again():
     assert m.objectToBraille(flat) == "⠀⠀⠀⠼⠙⠲⠀⠀⠀\n⠼⠁⠀⠐⠽⠀⠵⠣⠅"
 
 
+def test_a_measures_barlines_sort_by_when_they_were_put_in():
+    """Two measures' final barlines sort by the index each was given when
+    it was put in, as music21's do, not both at index nought."""
+    first, second = m.Measure(), m.Measure()
+    first.rightBarline = m.Barline("final")
+    second.rightBarline = m.Barline("final")
+    early = first.rightBarline.sortTuple(first)
+    late = second.rightBarline.sortTuple(second)
+
+    assert early.atEnd == 1
+    assert early.insertIndex != 0
+    assert early < late
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""

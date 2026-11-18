@@ -1023,7 +1023,11 @@ impl Stream {
             priority: priority_of(object) as f64,
             order: sort_order(object) as f64,
             not_grace: 1.0,
-            index: 0.0,
+            index: self
+                .site
+                .as_ref()
+                .and_then(|here| crate::sites::index_in(object, here))
+                .unwrap_or(0) as f64,
         })
     }
 
