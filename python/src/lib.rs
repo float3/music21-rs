@@ -615,6 +615,17 @@ pub(crate) fn loaded_music21<'py>(py: Python<'py>, name: &str) -> Option<Bound<'
     module.cast_into::<PyModule>().ok()
 }
 
+/// The package pickles reach this one's helpers through, set as the
+/// module registers: `music21_rs` for the wheel's `music21_rs.music21_rs`
+/// and for the crate linked in as `music21_rs`, the facade's own name under
+/// `python-parity`.
+static PACKAGE_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The name [`PACKAGE_NAME`] holds, `music21_rs` before registration.
+pub(crate) fn package_name(_py: Python<'_>) -> &'static str {
+    PACKAGE_NAME.get().map_or("music21_rs", String::as_str)
+}
+
 /// Whether a module is one `provide_music21` built rather than music21's.
 fn is_provided(module: &Bound<'_, PyAny>) -> bool {
     module
@@ -2263,6 +2274,11 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // First, so every helper registered below is named by it.
+    let module_name = m.name()?.to_string();
+    let top = module_name.split('.').next().unwrap_or("music21_rs");
+    let _ = PACKAGE_NAME.set(top.to_owned());
+
     prebase::register(m)?;
     base::register(m)?;
     pitch::register(m)?;
@@ -2363,7 +2379,11 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // own module out of this one, and a score frozen under that harness --
     // which is what `corpus.parse` does on the way back out -- names
     // `_thawed` on whichever of the two modules is present.
-    m.add_function(wrap_pyfunction!(thawed, m)?)?;
+    // Named by the package, not by the extension inside the wheel, so a
+    // pickle the wheel writes reads back where the crate is linked in.
+    let thaw = wrap_pyfunction!(thawed, m)?;
+    thaw.setattr("__module__", package_name(m.py()))?;
+    m.add_function(thaw)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
     // `common` first: where two of these have a name, `provide_music21`
     // places `common`'s wherever music21 imports it.

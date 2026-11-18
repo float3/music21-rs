@@ -708,6 +708,11 @@ class Groups(list):
                 return False
         return True
 
+    def __reduce__(self):
+        # Rebuilt from its names by the package's `_groups`, which every
+        # build can import; the class's own name is music21's.
+        return (_groups, (list(self),))
+
 
 Groups.__module__ = 'music21.base'
 "#;
@@ -837,9 +842,34 @@ pub(crate) fn own_groups(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
                 c"music21_rs_groups",
             )?;
             module.add_function(wrap_pyfunction!(group_exception, &module)?)?;
+            module.add("_groups", groups_rebuilder(py)?)?;
             Ok::<_, PyErr>(module.getattr("Groups")?.unbind())
         })
         .map(|class| class.bind(py).clone())
+}
+
+/// A `Groups` holding these names: what a pickled one is read back with.
+#[pyfunction]
+#[pyo3(name = "_groups")]
+fn rebuilt_groups<'py>(py: Python<'py>, names: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    let made = own_groups(py)?.call0()?;
+    for name in names {
+        made.call_method1("append", (name,))?;
+    }
+    Ok(made)
+}
+
+static GROUPS_REBUILDER: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// `_groups`, made once, and named by the package it is reached from.
+pub(crate) fn groups_rebuilder(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    GROUPS_REBUILDER
+        .get_or_try_init(py, || {
+            let made = wrap_pyfunction!(rebuilt_groups, py)?.into_any();
+            made.setattr("__module__", crate::package_name(py))?;
+            Ok::<_, PyErr>(made.unbind())
+        })
+        .map(|made| made.bind(py).clone())
 }
 
 /// The `Groups` a new element is given: music21's own where music21 has
@@ -865,6 +895,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NotRest>()?;
     m.add_class::<ElementWrapper>()?;
     m.add("Groups", own_groups(m.py())?)?;
+    m.add("_groups", groups_rebuilder(m.py())?)?;
     m.add("_SplitTuple", split_tuple(m)?)?;
     Ok(())
 }

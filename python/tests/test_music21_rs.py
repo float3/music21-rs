@@ -12349,3 +12349,16 @@ print(MP.stream.elements)
         "(<music21.expressions.PedalBounce at 1.0>, <music21.expressions.PedalGapStart at 2.0>,"
         " <music21.expressions.PedalGapEnd at 3.5>)",
     ]
+
+
+def test_a_pickle_names_the_thawing_function_by_the_package():
+    """A pickle names `_thawed` by the package, `music21_rs`, which every
+    build has, not by the extension module inside the wheel: one written by
+    the wheel is read back where the crate is linked in under that name."""
+    import pickle
+
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    data = pickle.dumps(s)
+    assert b"music21_rs.music21_rs" not in data
+    assert pickle.loads(data)[0].nameWithOctave == "C4"
