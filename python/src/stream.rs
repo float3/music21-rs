@@ -1728,23 +1728,6 @@ impl Stream {
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
     }
-
-    /// Whether an index is a class, or a list or tuple of nothing but
-    /// classes: what music21 searches for rather than counts to.
-    fn is_class_key(key: &Bound<'_, PyAny>) -> PyResult<bool> {
-        if key.is_instance_of::<pyo3::types::PyType>() {
-            return Ok(true);
-        }
-        if !key.is_instance_of::<PyList>() && !key.is_instance_of::<PyTuple>() {
-            return Ok(false);
-        }
-        for item in key.try_iter()? {
-            if !item?.is_instance_of::<pyo3::types::PyType>() {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
 }
 
 #[pymethods]
@@ -4338,6 +4321,29 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `coreInsert`: `insert`, which here keeps the stream in
+    /// order as it goes, so nothing waits for `coreElementsChanged`.
+    #[pyo3(signature = (offset, element, *, ignoreSort = false, setActiveSite = true))]
+    fn coreInsert(
+        slf: &Bound<'_, Self>,
+        offset: &Bound<'_, PyAny>,
+        element: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] ignoreSort: bool,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
+    ) -> PyResult<()> {
+        let _ = (ignoreSort, setActiveSite);
+        slf.call_method1("insert", (offset, element))?;
+        Ok(())
+    }
+
+    /// music21's `coreElementsChanged`. A stream here is up to date after
+    /// every change, so there is nothing to do; music21's keywords are
+    /// accepted for that.
+    #[pyo3(signature = (**keywords))]
+    fn coreElementsChanged(&self, keywords: Option<&Bound<'_, PyDict>>) {
+        let _ = keywords;
+    }
+
     /// music21's `sort`. A stream here answers in order whenever it is
     /// read, so there is nothing to do; `force` is accepted for that.
     #[pyo3(signature = (force = false))]
@@ -4369,32 +4375,17 @@ impl Stream {
     }
 
     fn __getitem__<'py>(
-        slf: &Bound<'py, Self>,
+        &self,
+        py: Python<'py>,
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let py = slf.py();
-        // A class, or classes, finds them anywhere inside, as music21's
-        // `s[note.Note]` does.
-        if Self::is_class_key(key)? {
-            return slf
-                .call_method0("recurse")?
-                .call_method1("getElementsByClass", (key,));
-        }
-        let this = slf.borrow();
-        let elements = this.elements(py)?;
+        let elements = self.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
-        let index: isize = key.extract().map_err(|_| {
-            PyTypeError::new_err(format!(
-                "Streams can get items by int, slice, class, class iterable, or string \
-                 query; got {}",
-                key.get_type()
-                    .repr()
-                    .map(|repr| repr.to_string())
-                    .unwrap_or_default()
-            ))
-        })?;
+        let index: isize = key
+            .extract()
+            .map_err(|_| PyTypeError::new_err("a stream is indexed by a number or a slice"))?;
         let length = elements.len() as isize;
         let at = if index < 0 { index + length } else { index };
         if at < 0 || at >= length {
@@ -4403,7 +4394,7 @@ impl Stream {
             )));
         }
         let found = elements.get_item(at as usize)?;
-        this.reach(&found);
+        self.reach(&found);
         Ok(found)
     }
 

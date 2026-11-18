@@ -11503,22 +11503,6 @@ except MusicXMLImportException as error:
     ]
 
 
-def test_stream_is_indexed_by_class():
-    """music21's `s[note.Note]` is `s.recurse().getElementsByClass(note.Note)`,
-    and a list of classes finds each; anything else is a TypeError."""
-    part = m.Part()
-    measure = m.Measure()
-    measure.append(m.Note("C4"))
-    measure.append(m.Rest())
-    measure.append(m.Note("E4"))
-    part.append(measure)
-    assert [n.nameWithOctave for n in part[m.Note]] == ["C4", "E4"]
-    assert len(part[[m.Note, m.Rest]]) == 3
-    assert part[m.Measure].first() is measure
-    with pytest.raises(TypeError):
-        part[0.5]
-
-
 def test_make_beams_in_place_beams_the_notes_held():
     """`makeBeams(inPlace=True)` beams the stream's own notes and hands
     back nothing, as music21's does."""
@@ -11597,3 +11581,87 @@ def test_a_score_read_keeps_its_staff_groups_and_system_breaks():
     layouts = [e for e in score.recurse() if type(e).__name__ == "SystemLayout"]
     assert len(layouts) == 8
     assert all(layout.isNew for layout in layouts)
+
+
+def test_provided_xmltom21_keeps_state_and_style_between_steps(tmp_path):
+    """music21's parsers carry tuplets from one note to the next, read an
+    encoding, layouts and the style attributes of any element, and keep
+    a part's last measure, as music21's docstrings show."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import base, duration, expressions, metadata, meter, note, stream
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, MusicXMLImporter, PartParser, MusicXMLWarning, XMLParserBase,
+)
+def tupletNote(kind):
+    return EL('<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>'
+              '<type>eighth</type><time-modification><actual-notes>3</actual-notes>'
+              '<normal-notes>2</normal-notes></time-modification>'
+              f'<notations><tuplet type="{kind}"/></notations></note>')
+MP = MeasureParser()
+print([MP.xmlToTuplets(tupletNote(kind))[0].type for kind in ('start', 'stop')])
+XP = XMLParserBase()
+m21Obj = base.Music21Object()
+XP.setStyleAttributes(EL('<a x="20.1" y="10.0" z="yes" />'), m21Obj, ('w', 'x', 'y', 'z'),
+                      ('justify', 'absoluteX', 'absoluteY', 'hideObjectOnPrint'))
+print(m21Obj.style.absoluteX, m21Obj.style.absoluteY, m21Obj.style.hideObjectOnPrint)
+te = expressions.TextExpression('hi!')
+XP.setFont(EL('<text font-family="Courier,monospaced" font-size="24" font-weight="bold" />'), te)
+print(te.style.fontFamily, te.style.fontSize, te.style.fontWeight)
+n = note.Note('C#4')
+XP.setPrintObject(EL('<note print-object="no"/>'), n)
+print(n.style.hideObjectOnPrint)
+pl = MP.xmlPrintToPageLayout(EL('<print new-page="yes" page-number="5"><page-layout>'
+                                '<page-height>4000</page-height></page-layout></print>'))
+print(pl.isNew, pl.pageNumber, pl.pageHeight)
+sl = MP.xmlPrintToSystemLayout(EL('<print new-system="yes"><system-layout>'
+                                  '<system-distance>55</system-distance></system-layout></print>'))
+print(sl.isNew, sl.distance)
+MI = MusicXMLImporter()
+md = metadata.Metadata()
+MI.processEncoding(EL('<encoding><software>Finale v26.3 for Mac</software>'
+                      '<supports attribute="new-page" element="print" type="yes" value="yes"/>'
+                      '</encoding>'), md)
+print(MI.applyFinaleWorkarounds, MI.definesExplicitSystemBreaks, MI.definesExplicitPageBreaks,
+      'Finale v26.3 for Mac' in md.software)
+pp = PartParser()
+m = stream.Measure(number=4)
+m.numberSuffix = 'b'
+pp.setLastMeasureInfo(m)
+print(pp.lastMeasureNumber, pp.lastNumberSuffix, pp.lastTimeSignature)
+m = stream.Measure([meter.TimeSignature('6/8'), note.Note(duration=duration.Duration(3 + 3 / 480))])
+pp = PartParser()
+pp.lastMeasureOffset = 21.0
+pp.setLastMeasureInfo(m)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    pp.adjustTimeAttributesFromMeasure(m)
+print(pp.lastMeasureOffset, [w.category is MusicXMLWarning for w in caught])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['start', 'stop']",
+        "20.1 10 True",
+        "['Courier', 'monospaced'] 24 bold",
+        "True",
+        "True 5 4000",
+        "True 55",
+        "True False True True",
+        "4 b <music21.meter.TimeSignature 4/4>",
+        "24.0 [True]",
+    ]
+
+
+def test_core_insert_and_elements_changed_are_music21s():
+    """music21's readers put elements in with `coreInsert` and then call
+    `coreElementsChanged`; a stream here takes both."""
+    measure = m.Measure()
+    note = m.Note("D4")
+    measure.coreInsert(1.0, note)
+    measure.coreElementsChanged()
+    assert measure.elementOffset(note) == 1.0
+    assert list(measure.notes) == [note]
