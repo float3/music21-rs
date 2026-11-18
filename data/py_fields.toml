@@ -511,3 +511,50 @@ reason = "verticalities"
 [Walked]
 kind = "facade-only"
 reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"
+
+[AvlNode]
+kind = "facade-only"
+reason = "a position, a payload and the child nodes, all music21's code reaches into"
+
+[AvlTree]
+kind = "facade-only"
+reason = "its root node"
+
+[ElementNode]
+kind = "facade-only"
+reason = "the earliest and latest end under the node, as Python numbers"
+
+[ElementTree]
+kind = "facade-only"
+reason = "the stream it is of, kept weakly, and the trees holding it"
+
+[CacheMethod]
+kind = "facade-only"
+reason = "the method cached and its cache key"
+
+[Deprecated]
+kind = "facade-only"
+reason = "the method that warns"
+
+[Method]
+kind = "facade-only"
+reason = "the function bound"
+
+[OptionalArgDecorator]
+kind = "facade-only"
+reason = "the decorator wrapped"
+
+[ParenthesesMatch]
+kind = "facade-only"
+reason = "the text matched and where, as music21's dataclass holds them"
+
+[TempAttribute]
+obj = { kind = "identity", sync = "read live", why = "the object the attribute is set on" }
+attribute = { kind = "identity", sync = "read live", why = "the name set" }
+new_val = { kind = "identity", sync = "read live", why = "the value set on entering" }
+stored = { kind = "identity", sync = "read live", why = "the value it had, put back on leaving" }
+
+[SaveAttributes]
+obj = { kind = "identity", sync = "read live", why = "the object whose attributes are put back on leaving" }
+attributes = { kind = "identity", sync = "read live", why = "the names saved" }
+stored = { kind = "identity", sync = "read live", why = "each name and the value it had on entering" }

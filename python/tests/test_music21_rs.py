@@ -1877,7 +1877,7 @@ def _struct_fields(src: pathlib.Path):
     """Each #[pyclass] struct's fields, name to type, comments and
     attributes left out, keyed by class name."""
     found = {}
-    for path in sorted(src.glob("*.rs")):
+    for path in sorted(src.rglob("*.rs")):
         text = path.read_text()
         for match in re.finditer(
             r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
