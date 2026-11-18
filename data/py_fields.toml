@@ -516,6 +516,18 @@ reason = "verticalities"
 kind = "facade-only"
 reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"
 
+[AbstractDiatonicScale]
+kind = "facade-only"
+reason = "the mode name it was given"
+
+[AbstractOctatonicScale]
+kind = "facade-only"
+reason = "the mode it was given"
+
+[AbstractScale]
+kind = "facade-only"
+reason = "the interval network a subclass built, handed out as _net and walked through it"
+
 [StreamFreezeThawBase]
 kind = "facade-only"
 reason = "the stream frozen or thawed"

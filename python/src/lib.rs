@@ -64,6 +64,7 @@ macro_rules! middle_class {
     };
 }
 
+pub mod abstractscale;
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -2279,6 +2280,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     interval::register(m)?;
     harmony::register(m)?;
     scale::register(m)?;
+    abstractscale::register(m)?;
     sieve::register(m)?;
     roman::register(m)?;
     notation::register(m)?;

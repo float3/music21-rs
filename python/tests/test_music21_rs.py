@@ -11470,3 +11470,25 @@ print(v.groups, type(v._stream[0]).__name__, v._stream[0].notes[0].name)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == ["['alt'] Measure D"]
 
+
+def test_music21s_abstract_scales_build_their_networks():
+    """The subclasses of `AbstractScale` build music21's networks: the
+    diatonic modes compare by network, the cyclical and octave-repeating
+    ones keep their steps, and a concrete scale stands on any of them."""
+    major, ionian = m.AbstractDiatonicScale("major"), m.AbstractDiatonicScale("Ionian")
+    assert major == ionian and major != m.AbstractDiatonicScale("lydian")
+    assert (major.type, ionian.mode, major.octaveDuplicating) == ("Abstract diatonic", "ionian", True)
+    assert m.AbstractOctatonicScale() == m.AbstractOctatonicScale()
+    assert [i.name for i in m.AbstractOctaveRepeatingScale(["M3"]).intervalList] == ["M3", "m6"]
+    assert m.AbstractCyclicalScale(["M3"]).getDegreeMaxUnique() == 3
+    assert not m.AbstractCyclicalScale(["P5"]).octaveDuplicating
+
+    octatonic = m.OctatonicScale("C", mode=2)
+    octatonic.abstract = m.AbstractOctatonicScale(mode=1)
+    assert str(octatonic.pitchFromDegree(2)) == "D-4"
+
+    blues = m.WeightedHexatonicBlues("c4")
+    assert blues.type == "Weighted Hexatonic Blues"
+    assert str(blues.pitchFromDegree(4)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.75)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.25)) == "G4"
