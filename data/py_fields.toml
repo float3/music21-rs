@@ -535,3 +535,7 @@ reason = "the stream frozen or thawed"
 [StreamFreezer]
 kind = "facade-only"
 reason = "the ids of the streams found and music21's empty dictionary of sub-freezers"
+
+[NoteworthyTranslator]
+kind = "facade-only"
+reason = "the measures and notes its placing state remembers, by identity"

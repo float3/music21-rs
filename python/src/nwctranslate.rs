@@ -16,6 +16,8 @@ use std::path::PathBuf;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
+use music21::notation::TieType;
+use music21::noteworthy::placement::{Placement, Placing};
 use music21::noteworthy::{
     BarStyle, clef_named, duration_of, first_number, flow_kind, key_sharps, lyrics, meter_ratio,
     step_and_octave,
@@ -56,13 +58,6 @@ fn translate_error(error: music21::Error) -> PyErr {
     NoteworthyTranslateException::new_err(crate::pitch::message(&error))
 }
 
-/// music21's `opFrac` of a sum.
-fn op_frac<'py>(value: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    crate::common::module(value.py(), "music21.common.numberTools")?
-        .getattr("opFrac")?
-        .call1((value,))
-}
-
 /// An attribute of a line, as music21 reads `attributes['Name']`.
 fn required<'py>(attributes: &Bound<'py, PyAny>, name: &str) -> PyResult<Bound<'py, PyAny>> {
     attributes.get_item(name)
@@ -85,14 +80,95 @@ fn optional<'py>(
     subclass,
     dict
 )]
-pub struct NoteworthyTranslator;
+pub struct NoteworthyTranslator {
+    /// Where the next object goes, and the slurs and ties left open: the
+    /// crate's placing state, over the Python measures and notes.
+    placement: Placement<Py<PyAny>, Py<PyAny>>,
+}
 
 #[pymethods]
 impl NoteworthyTranslator {
     #[new]
     #[pyo3(signature = (*_arguments, **_keywords))]
     fn new(_arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self
+        Self {
+            placement: Placement::default(),
+        }
+    }
+
+    /// The measures and notes the placing state holds, shown to Python's
+    /// collector.
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        if let Some((measure, _)) = &self.placement.position {
+            visit.call(measure)?;
+        }
+        for open in &self.placement.open_slurs {
+            visit.call(&open.start)?;
+            visit.call(&open.measure)?;
+        }
+        for tied in &self.placement.tied_steps {
+            visit.call(&tied.measure)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.placement = Placement::default();
+    }
+
+    /// music21's `positionMeasure`: the measure placed in last.
+    #[getter]
+    fn positionMeasure(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+        self.placement
+            .position
+            .as_ref()
+            .map(|(measure, _)| measure.clone_ref(py))
+    }
+
+    /// music21's `measurePosition`: where the next object goes in it.
+    #[getter]
+    fn measurePosition<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let offset = self
+            .placement
+            .position
+            .as_ref()
+            .map_or(0.0, |(_, offset)| *offset);
+        crate::duration::op_frac(py, offset)
+    }
+
+    /// music21's `openSlurs`: each slur begun and not yet joined, as the
+    /// note it starts at, its measure, where that note ends and its place
+    /// in its group.
+    #[getter]
+    fn openSlurs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let made = PyList::empty(py);
+        for open in &self.placement.open_slurs {
+            made.append((
+                open.start.clone_ref(py),
+                open.measure.clone_ref(py),
+                crate::duration::op_frac(py, open.end)?,
+                open.group,
+            ))?;
+        }
+        Ok(made)
+    }
+
+    /// music21's `tiedSteps`: each tie begun, by its staff step, with its
+    /// measure (none where carried over a barline) and where it ends.
+    #[getter]
+    fn tiedSteps<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let made = PyDict::new(py);
+        for tied in &self.placement.tied_steps {
+            let measure = tied.measure.as_ref().map(|measure| measure.clone_ref(py));
+            made.set_item(
+                (tied.step.0.to_string(), tied.step.1),
+                (measure, crate::duration::op_frac(py, tied.end)?),
+            )?;
+        }
+        Ok(made)
     }
 
     /// music21's starting state: no part yet, an empty measure and score,
@@ -108,10 +184,6 @@ impl NoteworthyTranslator {
         slf.setattr("score", streams("Score")?)?;
         slf.setattr("currentClef", TREBLE)?;
         slf.setattr("currentKey", key_signature(py, 0)?)?;
-        slf.setattr("openSlurs", PyList::empty(py))?;
-        slf.setattr("tiedSteps", PyDict::new(py))?;
-        slf.setattr("positionMeasure", py.None())?;
-        slf.setattr("measurePosition", 0.0)?;
         slf.setattr("lyricPosition", 0)?;
         slf.setattr("lyrics", PyList::empty(py))?;
         slf.setattr("activeAccidentals", PyDict::new(py))?;
@@ -189,47 +261,22 @@ impl NoteworthyTranslator {
         noteOrChord: &Bound<'_, PyAny>,
         pitchInfo: &str,
     ) -> PyResult<()> {
-        let py = slf.py();
-        let offset = Self::currentPosition(slf)?;
-        let end = op_frac(&offset.add(noteOrChord.getattr("quarterLength")?)?)?;
-        let notes: Vec<Bound<'_, PyAny>> =
-            if noteOrChord.is_instance(&class(py, "music21.chord", "Chord")?)? {
-                noteOrChord.walk()?.collect::<PyResult<_>>()?
-            } else {
-                vec![noteOrChord.clone()]
-            };
-        let tied_steps = slf.getattr("tiedSteps")?;
-        let measure = slf.getattr("currentMeasure")?;
-        let tie = class(py, "music21.tie", "Tie")?;
-        for (note, position) in notes.iter().zip(pitchInfo.split(',')) {
-            let tied_on = position.ends_with('^');
+        let clef: String = slf.getattr("currentClef")?.extract()?;
+        let mut steps = Vec::new();
+        for position in pitchInfo.split(',') {
             let place = first_number(position).ok_or_else(|| {
                 pyo3::exceptions::PyAttributeError::new_err(
                     "'NoneType' object has no attribute 'group'",
                 )
             })?;
-            let step = Self::getStepAndOctaveFromPosition(slf, place)?;
-            let mut tied_from = false;
-            if tied_steps.contains(&step)? {
-                let held = tied_steps.call_method1("pop", (&step,))?;
-                let (tied_measure, tied_end) = (held.get_item(0)?, held.get_item(1)?);
-                tied_from = (tied_measure.is_none() || tied_measure.is(&measure))
-                    && tied_end.eq(&offset)?;
-            }
-            let kind = match (tied_from, tied_on) {
-                (true, true) => Some("continue"),
-                (false, true) => Some("start"),
-                (true, false) => Some("stop"),
-                (false, false) => None,
-            };
-            if let Some(kind) = kind {
-                note.setattr("tie", tie.call1((kind,))?)?;
-            }
-            if tied_on {
-                tied_steps.set_item(&step, (&measure, &end))?;
-            }
+            steps.push((step_and_octave(&clef, place), position.ends_with('^')));
         }
-        Ok(())
+        let measure = slf.getattr("currentMeasure")?.unbind();
+        let mut streams = Streams::new(slf.py())?;
+        let mut element = noteOrChord.clone();
+        slf.borrow_mut()
+            .placement
+            .tie(&mut streams, &measure, &mut element, &steps)
     }
 
     /// music21's `getPitchFromPositionInfo`: a `Pos:` value's pitch, its
@@ -401,169 +448,52 @@ impl NoteworthyTranslator {
     /// of them. Where several start together, or a voice still sounds, each
     /// goes in a voice free there, the longest first, or a new one.
     fn appendSimultaneous(slf: &Bound<'_, Self>, generalNotes: &Bound<'_, PyAny>) -> PyResult<()> {
-        let py = slf.py();
-        let given: Vec<(Bound<'_, PyAny>, String)> = generalNotes
-            .walk()?
-            .map(|pair| pair?.extract())
-            .collect::<PyResult<_>>()?;
-        let measure = slf.getattr("currentMeasure")?;
-        let offset = Self::currentPosition(slf)?;
-        let voice_class = class(py, "music21.stream", "Voice")?;
-
-        // The notes the measure holds become its first voice, where it has
-        // none and several are coming.
-        let mut voices: Vec<Bound<'_, PyAny>> = measure
-            .getattr("voices")?
-            .walk()?
-            .collect::<PyResult<_>>()?;
-        if voices.is_empty() && given.len() > 1 {
-            let keywords = PyDict::new(py);
-            keywords.set_item("id", 0)?;
-            let first = voice_class.call((), Some(&keywords))?;
-            let general = class(py, "music21.note", "GeneralNote")?;
-            let held: Vec<Bound<'_, PyAny>> = measure
-                .call_method1("getElementsByClass", (general,))?
-                .walk()?
-                .collect::<PyResult<_>>()?;
-            let mut placed = Vec::with_capacity(held.len());
-            for note in &held {
-                placed.push((note.getattr("offset")?, note.clone()));
-            }
-            for (_, note) in &placed {
-                measure.call_method1("remove", (note,))?;
-            }
-            for (at, note) in placed {
-                first.call_method1("insert", (at, note))?;
-            }
-            measure.call_method1("insert", (0, &first))?;
-            voices.push(first);
+        let mut elements = Vec::new();
+        for pair in generalNotes.walk()? {
+            let (note, duration_info): (Bound<'_, PyAny>, String) = pair?.extract()?;
+            elements.push((note, duration_info.split(',').any(|part| part == SLUR)));
         }
-
-        // Free voices, the longest first.
-        let mut free = Vec::new();
-        for voice in &voices {
-            let end = voice.getattr("highestTime")?;
-            if end.le(&offset)? {
-                free.push((end.extract::<f64>()?, voice.clone()));
-            }
-        }
-        free.sort_by(|left, right| right.0.total_cmp(&left.0));
-        let mut free: std::collections::VecDeque<Bound<'_, PyAny>> =
-            free.into_iter().map(|(_, voice)| voice).collect();
-        let had_voices = !voices.is_empty();
-        for (note, _) in &given {
-            if !had_voices {
-                measure.call_method1("insert", (&offset, note))?;
-                continue;
-            }
-            let voice = match free.pop_front() {
-                Some(voice) => voice,
-                None => {
-                    let keywords = PyDict::new(py);
-                    keywords.set_item("id", voices.len())?;
-                    let made = voice_class.call((), Some(&keywords))?;
-                    measure.call_method1("insert", (0, &made))?;
-                    voices.push(made.clone());
-                    made
-                }
-            };
-            voice.call_method1("insert", (&offset, note))?;
-        }
-
-        let slurred = PyList::empty(py);
-        let mut shortest: Option<Bound<'_, PyAny>> = None;
-        for (note, duration_info) in &given {
-            let slurs = duration_info.split(',').any(|part| part == SLUR);
-            slurred.append((note, slurs))?;
-            let length = note.getattr("quarterLength")?;
-            let shorter = match &shortest {
-                Some(known) => length.lt(known)?,
-                None => true,
-            };
-            if shorter {
-                shortest = Some(length);
-            }
-        }
-        Self::setSlurs(slf, &slurred.into_any())?;
-        if let Some(shortest) = shortest {
-            slf.setattr("measurePosition", op_frac(&offset.add(shortest)?)?)?;
-        }
-        Ok(())
+        let measure = slf.getattr("currentMeasure")?.unbind();
+        let mut streams = Streams::new(slf.py())?;
+        slf.borrow_mut()
+            .placement
+            .place(&mut streams, &measure, elements)
     }
 
     /// music21's `setSlurs`: slurs begun, carried on or ended at notes just
-    /// placed together, each with whether it is slurred. A slurred note is
-    /// slurred to the next note starting once it has ended: the one in the
-    /// same place in its group, else the first slurred one, else the first.
+    /// placed together, each with whether it is slurred.
     fn setSlurs(slf: &Bound<'_, Self>, generalNotes: &Bound<'_, PyAny>) -> PyResult<()> {
-        let py = slf.py();
-        let group: Vec<(Bound<'_, PyAny>, bool)> = generalNotes
-            .walk()?
-            .map(|pair| pair?.extract())
-            .collect::<PyResult<_>>()?;
-        let offset = Self::currentPosition(slf)?;
-        let measure = slf.getattr("currentMeasure")?;
-        let open: Vec<Bound<'_, PyAny>> =
-            slf.getattr("openSlurs")?.walk()?.collect::<PyResult<_>>()?;
-        let mut ended = Vec::new();
-        for slur in open {
-            if !slur.get_item(1)?.is(&measure) || slur.get_item(2)?.le(&offset)? {
-                ended.push(slur);
-            }
+        let mut group = Vec::new();
+        for pair in generalNotes.walk()? {
+            let (note, slurred): (Bound<'_, PyAny>, bool) = pair?.extract()?;
+            let length: f64 = note.getattr("quarterLength")?.extract()?;
+            group.push((note.unbind(), slurred, length));
         }
-        let first_slurred = group.iter().position(|(_, slurred)| *slurred).unwrap_or(0);
-        let slur_class = class(py, "music21.spanner", "Slur")?;
-
-        for (index, (note, slurred)) in group.iter().enumerate() {
-            let mut arriving = Vec::new();
-            for slur in &ended {
-                let lands: usize = slur.get_item(3)?.extract()?;
-                let lands = if lands < group.len() {
-                    lands
-                } else {
-                    first_slurred
-                };
-                if lands == index {
-                    arriving.push(slur.clone());
-                }
-            }
-            let end = op_frac(&offset.add(note.getattr("quarterLength")?)?)?;
-            if *slurred && !arriving.is_empty() {
-                let start = arriving.remove(0).get_item(0)?;
-                Self::forget_slur(slf, &start)?;
-                slf.getattr("openSlurs")?
-                    .call_method1("append", ((&start, &measure, &end, index),))?;
-            } else if *slurred {
-                slf.getattr("openSlurs")?
-                    .call_method1("append", ((note, &measure, &end, index),))?;
-            }
-            for slur in arriving {
-                let start = slur.get_item(0)?;
-                measure.call_method1("append", (slur_class.call1((&start, note))?,))?;
-                Self::forget_slur(slf, &start)?;
-            }
-        }
-        Ok(())
+        let measure = slf.getattr("currentMeasure")?.unbind();
+        let mut streams = Streams::new(slf.py())?;
+        slf.borrow_mut()
+            .placement
+            .slurs(&mut streams, &measure, &group)
     }
 
     /// music21's `currentPosition`: the end of the measure's contents when
     /// first asked in a measure, then where notes placed moved it on to.
     fn currentPosition<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        let measure = slf.getattr("currentMeasure")?;
-        if !slf.getattr("positionMeasure")?.is(&measure) {
-            slf.setattr("positionMeasure", &measure)?;
-            slf.setattr("measurePosition", measure.getattr("highestTime")?)?;
-        }
-        slf.getattr("measurePosition")
+        let py = slf.py();
+        let measure = slf.getattr("currentMeasure")?.unbind();
+        let streams = Streams::new(py)?;
+        let offset = slf.borrow_mut().placement.position(&streams, &measure)?;
+        crate::duration::op_frac(py, offset)
     }
 
     /// music21's `insertAtPosition`: a clef, key, dynamic or other mark at
     /// the current position.
     fn insertAtPosition(slf: &Bound<'_, Self>, element: &Bound<'_, PyAny>) -> PyResult<()> {
-        let offset = Self::currentPosition(slf)?;
-        slf.getattr("currentMeasure")?
-            .call_method1("insert", (offset, element))?;
-        Ok(())
+        let measure = slf.getattr("currentMeasure")?.unbind();
+        let mut streams = Streams::new(slf.py())?;
+        slf.borrow_mut()
+            .placement
+            .mark(&mut streams, &measure, element.clone())
     }
 
     /// music21's `translateRest`: a rest at the current position.
@@ -631,16 +561,9 @@ impl NoteworthyTranslator {
         let py = slf.py();
         slf.setattr("activeAccidentals", PyDict::new(py))?;
         let measure = slf.getattr("currentMeasure")?;
-        let measure_end = measure.getattr("highestTime")?;
-        let carried = PyDict::new(py);
-        for pair in slf.getattr("tiedSteps")?.call_method0("items")?.walk()? {
-            let pair = pair?;
-            let (step, held) = (pair.get_item(0)?, pair.get_item(1)?);
-            if held.get_item(0)?.is(&measure) && held.get_item(1)?.eq(&measure_end)? {
-                carried.set_item(step, (py.None(), 0.0))?;
-            }
-        }
-        slf.setattr("tiedSteps", carried)?;
+        let streams = Streams::new(py)?;
+        let held = measure.clone().unbind();
+        slf.borrow_mut().placement.barline(&streams, &held)?;
 
         let measure_class = class(py, "music21.stream", "Measure")?;
         let part = slf.getattr("currentPart")?;
@@ -752,8 +675,7 @@ impl NoteworthyTranslator {
     fn createStaff(slf: &Bound<'_, Self>, attributes: &Bound<'_, PyAny>) -> PyResult<()> {
         let py = slf.py();
         Self::createPart(slf)?;
-        slf.setattr("openSlurs", PyList::empty(py))?;
-        slf.setattr("tiedSteps", PyDict::new(py))?;
+        slf.borrow_mut().placement.new_staff();
         slf.setattr("currentKey", key_signature(py, 0)?)?;
         slf.setattr("activeAccidentals", PyDict::new(py))?;
         slf.setattr("lyrics", PyList::empty(py))?;
@@ -895,17 +817,160 @@ impl NoteworthyTranslator {
             _ => Ok(()),
         }
     }
+}
 
-    /// Every open slur begun at `start` dropped.
-    fn forget_slur(slf: &Bound<'_, Self>, start: &Bound<'_, PyAny>) -> PyResult<()> {
-        let kept = PyList::empty(slf.py());
-        for slur in slf.getattr("openSlurs")?.walk()? {
-            let slur = slur?;
-            if !slur.get_item(0)?.is(start) {
-                kept.append(slur)?;
-            }
+/// The Python streams and notes the translator places into, as the
+/// crate's placing algorithm sees them: measures and placed notes by
+/// identity.
+struct Streams<'py> {
+    py: Python<'py>,
+    voice: Bound<'py, PyAny>,
+    general: Bound<'py, PyAny>,
+    chord: Bound<'py, PyAny>,
+    tie: Bound<'py, PyAny>,
+    slur: Bound<'py, PyAny>,
+}
+
+impl<'py> Streams<'py> {
+    fn new(py: Python<'py>) -> PyResult<Self> {
+        Ok(Self {
+            py,
+            voice: class(py, "music21.stream", "Voice")?,
+            general: class(py, "music21.note", "GeneralNote")?,
+            chord: class(py, "music21.chord", "Chord")?,
+            tie: class(py, "music21.tie", "Tie")?,
+            slur: class(py, "music21.spanner", "Slur")?,
+        })
+    }
+
+    /// A voice numbered `id`.
+    fn voice_numbered(&self, id: usize) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = PyDict::new(self.py);
+        keywords.set_item("id", id)?;
+        self.voice.call((), Some(&keywords))
+    }
+}
+
+impl<'py> Placing for Streams<'py> {
+    type Measure = Py<PyAny>;
+    type Voice = Bound<'py, PyAny>;
+    type Element = Bound<'py, PyAny>;
+    type Handle = Py<PyAny>;
+    type Error = PyErr;
+
+    fn copy_measure(&self, measure: &Py<PyAny>) -> Py<PyAny> {
+        measure.clone_ref(self.py)
+    }
+
+    fn copy_handle(&self, handle: &Py<PyAny>) -> Py<PyAny> {
+        handle.clone_ref(self.py)
+    }
+
+    fn same_measure(&self, first: &Py<PyAny>, second: &Py<PyAny>) -> bool {
+        first.is(second)
+    }
+
+    fn same_handle(&self, first: &Py<PyAny>, second: &Py<PyAny>) -> bool {
+        first.is(second)
+    }
+
+    fn handle(&self, element: &Bound<'py, PyAny>) -> PyResult<Py<PyAny>> {
+        Ok(element.clone().unbind())
+    }
+
+    fn highest_time(&self, measure: &Py<PyAny>) -> PyResult<f64> {
+        measure.bind(self.py).getattr("highestTime")?.extract()
+    }
+
+    fn length(&self, element: &Bound<'py, PyAny>) -> PyResult<f64> {
+        element.getattr("quarterLength")?.extract()
+    }
+
+    fn voices(&self, measure: &Py<PyAny>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+        measure.bind(self.py).getattr("voices")?.walk()?.collect()
+    }
+
+    fn voice_end(&self, voice: &Bound<'py, PyAny>) -> PyResult<f64> {
+        voice.getattr("highestTime")?.extract()
+    }
+
+    fn gather_voice(&mut self, measure: &Py<PyAny>) -> PyResult<Bound<'py, PyAny>> {
+        let measure = measure.bind(self.py);
+        let first = self.voice_numbered(0)?;
+        let held: Vec<Bound<'py, PyAny>> = measure
+            .call_method1("getElementsByClass", (&self.general,))?
+            .walk()?
+            .collect::<PyResult<_>>()?;
+        let mut placed = Vec::with_capacity(held.len());
+        for note in held {
+            placed.push((note.getattr("offset")?, note));
         }
-        slf.setattr("openSlurs", kept)
+        for (_, note) in &placed {
+            measure.call_method1("remove", (note,))?;
+        }
+        for (at, note) in placed {
+            first.call_method1("insert", (at, note))?;
+        }
+        measure.call_method1("insert", (0, &first))?;
+        Ok(first)
+    }
+
+    fn new_voice(&mut self, measure: &Py<PyAny>, id: usize) -> PyResult<Bound<'py, PyAny>> {
+        let made = self.voice_numbered(id)?;
+        measure.bind(self.py).call_method1("insert", (0, &made))?;
+        Ok(made)
+    }
+
+    fn insert(
+        &mut self,
+        measure: &Py<PyAny>,
+        offset: f64,
+        element: Bound<'py, PyAny>,
+    ) -> PyResult<()> {
+        let offset = crate::duration::op_frac(self.py, offset)?;
+        measure
+            .bind(self.py)
+            .call_method1("insert", (offset, element))?;
+        Ok(())
+    }
+
+    fn insert_in(
+        &mut self,
+        voice: &Bound<'py, PyAny>,
+        offset: f64,
+        element: Bound<'py, PyAny>,
+    ) -> PyResult<()> {
+        let offset = crate::duration::op_frac(self.py, offset)?;
+        voice.call_method1("insert", (offset, element))?;
+        Ok(())
+    }
+
+    fn set_ties(
+        &mut self,
+        element: &mut Bound<'py, PyAny>,
+        ties: &[Option<TieType>],
+    ) -> PyResult<()> {
+        let notes: Vec<Bound<'py, PyAny>> = if element.is_instance(&self.chord)? {
+            element.walk()?.collect::<PyResult<_>>()?
+        } else {
+            vec![element.clone()]
+        };
+        for (note, tie) in notes.iter().zip(ties) {
+            let kind = match tie {
+                Some(TieType::Start) => "start",
+                Some(TieType::Stop) => "stop",
+                Some(TieType::Continue) => "continue",
+                _ => continue,
+            };
+            note.setattr("tie", self.tie.call1((kind,))?)?;
+        }
+        Ok(())
+    }
+
+    fn slur(&mut self, measure: &Py<PyAny>, start: &Py<PyAny>, end: &Py<PyAny>) -> PyResult<()> {
+        let made = self.slur.call1((start.bind(self.py), end.bind(self.py)))?;
+        measure.bind(self.py).call_method1("append", (made,))?;
+        Ok(())
     }
 }
 
