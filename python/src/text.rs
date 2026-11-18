@@ -254,15 +254,19 @@ impl TextBox {
     }
 
     /// music21's `_reprInternal`: the words, cut at ten characters.
-    fn __repr__(&self) -> String {
-        match &self.content {
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        // The words as Python writes a string, cut short past ten.
+        let quoted = |text: String| -> PyResult<String> {
+            Ok(pyo3::types::PyString::new(py, &text).repr()?.to_string())
+        };
+        Ok(match &self.content {
             None => "<music21.text.TextBox>".to_string(),
             Some(content) if content.chars().count() > 10 => {
                 let short: String = content.chars().take(10).collect();
-                format!("<music21.text.TextBox {:?}>", format!("{short}..."))
+                format!("<music21.text.TextBox {}>", quoted(format!("{short}..."))?)
             }
-            Some(content) => format!("<music21.text.TextBox {content:?}>"),
-        }
+            Some(content) => format!("<music21.text.TextBox {}>", quoted(content.clone())?),
+        })
     }
 
     fn __deepcopy__<'py>(
@@ -561,10 +565,16 @@ pub(crate) fn music21_object<'py>(
     py: Python<'py>,
     text_box: &rs::TextBox,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let made = py
-        .import("music21.text")?
-        .getattr("TextBox")?
-        .call1((text_box.content.as_str(),))?;
+    text_box_of(&py.import("music21.text")?.getattr("TextBox")?, text_box)
+}
+
+/// A crate text box as an object of `class`, music21's or this package's.
+pub(crate) fn text_box_of<'py>(
+    class: &Bound<'py, PyAny>,
+    text_box: &rs::TextBox,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = class.py();
+    let made = class.call1((text_box.content.as_str(),))?;
     made.setattr("page", text_box.page)?;
     let style = made.getattr("style")?;
     music21_style(py, &style, &text_box.style)?;
@@ -629,6 +639,64 @@ pub(crate) fn music21_style(
     }
     if let Some(align) = read.align_vertical() {
         style.setattr("alignVertical", align)?;
+    }
+    Ok(())
+}
+
+/// Writes what a crate stream style says into a `StreamStyle` object,
+/// after what it holds already, as music21's reader appends to it.
+pub(crate) fn stream_style_into(
+    style: &Bound<'_, PyAny>,
+    read: &music21::style::StreamStyle,
+) -> PyResult<()> {
+    let py = style.py();
+    let value = |said: &music21::style::StyleValue| -> PyResult<Py<PyAny>> {
+        Ok(match said {
+            music21::style::StyleValue::Whole(whole) => {
+                whole.into_pyobject(py)?.into_any().unbind()
+            }
+            music21::style::StyleValue::Decimal(number) => {
+                number.into_pyobject(py)?.into_any().unbind()
+            }
+            music21::style::StyleValue::Text(text) => text.into_pyobject(py)?.into_any().unbind(),
+        })
+    };
+    for (member, pairs) in [
+        ("lineWidths", &read.line_widths),
+        ("noteSizes", &read.note_sizes),
+        ("distances", &read.distances),
+        ("otherAppearances", &read.other_appearances),
+    ] {
+        let held = style.getattr(member)?;
+        for (kind, said) in pairs {
+            held.call_method1("append", ((kind, value(said)?),))?;
+        }
+    }
+
+    // Each font a `TextStyle` of its own.
+    let text_style = crate::subconverters::music21_name(py, "music21.style", "TextStyle")?;
+    let font = |read: &music21::style::TextStyle| -> PyResult<Bound<'_, PyAny>> {
+        let made = text_style.call0()?;
+        music21_style(py, &made, read)?;
+        Ok(made)
+    };
+    if let Some(read) = &read.music_font {
+        style.setattr("musicFont", font(read)?)?;
+    }
+    if let Some(read) = &read.word_font {
+        style.setattr("wordFont", font(read)?)?;
+    }
+    let fonts = style.getattr("lyricFonts")?;
+    for (name, read) in &read.lyric_fonts {
+        let made = match read {
+            Some(read) => font(read)?.unbind(),
+            None => py.None(),
+        };
+        fonts.call_method1("append", ((name, made),))?;
+    }
+    let languages = style.getattr("lyricLanguages")?;
+    for pair in &read.lyric_languages {
+        languages.call_method1("append", (pair.clone(),))?;
     }
     Ok(())
 }

@@ -6343,6 +6343,10 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     if let Some(at) = stream.at_sounding_pitch() {
         made.setattr("atSoundingPitch", at)?;
     }
+    // What a score's defaults say of how it is drawn.
+    if let Some(style) = stream.stream_style() {
+        crate::text::stream_style_into(&made.getattr("style")?, style)?;
+    }
     match stream.kind() {
         StreamKind::Measure => {
             // Through music21's own setters, which put them among the

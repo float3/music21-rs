@@ -806,6 +806,19 @@ impl DateSelection {
     }
 }
 
+/// A metadata primitive's repr as music21's `ProtoM21Object` writes one:
+/// `<module.Class what>`, these classes standing outside that base.
+fn repr_of(object: &Bound<'_, PyAny>) -> PyResult<String> {
+    let class = object.get_type();
+    let module: String = class.getattr("__module__")?.extract()?;
+    let inside: String = object.call_method0("_reprInternal")?.str()?.to_string();
+    let name = class.qualname()?;
+    if inside.is_empty() {
+        return Ok(format!("<{module}.{name}>"));
+    }
+    Ok(format!("<{module}.{name} {inside}>"))
+}
+
 /// music21's `metadata.Text`: one piece of text with the language it is
 /// written in.
 #[pyclass(
@@ -925,6 +938,11 @@ impl Text {
 
     fn _reprInternal(&self) -> String {
         self.inner.data().to_string()
+    }
+
+    /// music21's repr: the class and what `_reprInternal` says.
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        repr_of(slf.as_any())
     }
 
     /// music21 compares a text with a text of its own class alone, and
@@ -1388,6 +1406,11 @@ impl Contributor {
             self.inner.role().unwrap_or(""),
             self.name().unwrap_or_default()
         )
+    }
+
+    /// music21's repr: the class and what `_reprInternal` says.
+    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
+        repr_of(slf.as_any())
     }
 
     /// music21 compares the role, every name, and the two dates.
