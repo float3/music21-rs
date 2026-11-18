@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
 use music21::notation::TieType;
-use music21::noteworthy::placement::{Placement, Placing};
+use music21::noteworthy::placement::{OpenSlur, Placement, Placing, TiedStep};
 use music21::noteworthy::{
     BarStyle, clef_named, duration_of, first_number, flow_kind, key_sharps, lyrics, meter_ratio,
     step_and_octave,
@@ -102,9 +102,7 @@ impl NoteworthyTranslator {
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
-        if let Some((measure, _)) = &self.placement.position {
-            visit.call(measure)?;
-        }
+        visit.call(&self.placement.position_measure)?;
         for open in &self.placement.open_slurs {
             visit.call(&open.start)?;
             visit.call(&open.measure)?;
@@ -121,29 +119,34 @@ impl NoteworthyTranslator {
 
     /// music21's `positionMeasure`: the measure placed in last.
     #[getter]
-    fn positionMeasure(&self, py: Python<'_>) -> Option<Py<PyAny>> {
+    fn get_positionMeasure(&self, py: Python<'_>) -> Option<Py<PyAny>> {
         self.placement
-            .position
+            .position_measure
             .as_ref()
-            .map(|(measure, _)| measure.clone_ref(py))
+            .map(|measure| measure.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_positionMeasure(&mut self, value: Option<Py<PyAny>>) {
+        self.placement.position_measure = value;
     }
 
     /// music21's `measurePosition`: where the next object goes in it.
     #[getter]
-    fn measurePosition<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        let offset = self
-            .placement
-            .position
-            .as_ref()
-            .map_or(0.0, |(_, offset)| *offset);
-        crate::duration::op_frac(py, offset)
+    fn get_measurePosition<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        crate::duration::op_frac(py, self.placement.measure_position)
+    }
+
+    #[setter]
+    fn set_measurePosition(&mut self, value: f64) {
+        self.placement.measure_position = value;
     }
 
     /// music21's `openSlurs`: each slur begun and not yet joined, as the
     /// note it starts at, its measure, where that note ends and its place
     /// in its group.
     #[getter]
-    fn openSlurs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+    fn get_openSlurs<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let made = PyList::empty(py);
         for open in &self.placement.open_slurs {
             made.append((
@@ -159,7 +162,7 @@ impl NoteworthyTranslator {
     /// music21's `tiedSteps`: each tie begun, by its staff step, with its
     /// measure (none where carried over a barline) and where it ends.
     #[getter]
-    fn tiedSteps<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+    fn get_tiedSteps<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let made = PyDict::new(py);
         for tied in &self.placement.tied_steps {
             let measure = tied.measure.as_ref().map(|measure| measure.clone_ref(py));
@@ -169,6 +172,46 @@ impl NoteworthyTranslator {
             )?;
         }
         Ok(made)
+    }
+
+    /// Open slurs as music21 lists them: `(start, measure, end, group)`.
+    #[setter]
+    fn set_openSlurs(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut open = Vec::new();
+        for slur in value.walk()? {
+            let (start, measure, end, group): (Py<PyAny>, Py<PyAny>, f64, usize) =
+                slur?.extract()?;
+            open.push(OpenSlur {
+                start,
+                measure,
+                end,
+                group,
+            });
+        }
+        self.placement.open_slurs = open;
+        Ok(())
+    }
+
+    /// Ties begun as music21 keeps them: `{(step, octave): (measure or
+    /// None, end)}`.
+    #[setter]
+    fn set_tiedSteps(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let mut tied = Vec::new();
+        for pair in value.call_method0("items")?.walk()? {
+            let pair = pair?;
+            let (step, octave): (String, i32) = pair.get_item(0)?.extract()?;
+            let (measure, end): (Option<Py<PyAny>>, f64) = pair.get_item(1)?.extract()?;
+            let step = step.chars().next().ok_or_else(|| {
+                pyo3::exceptions::PyValueError::new_err("a tied step needs a step name")
+            })?;
+            tied.push(TiedStep {
+                step: (step, octave),
+                measure,
+                end,
+            });
+        }
+        self.placement.tied_steps = tied;
+        Ok(())
     }
 
     /// music21's starting state: no part yet, an empty measure and score,

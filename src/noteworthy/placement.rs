@@ -107,8 +107,11 @@ pub struct TiedStep<M> {
 /// `measurePosition`, `openSlurs` and `tiedSteps`.
 #[derive(Clone, Debug)]
 pub struct Placement<M, H> {
-    /// The measure placed in last, and where the next object goes in it.
-    pub position: Option<(M, FloatType)>,
+    /// The measure placed in last: music21's `positionMeasure`.
+    pub position_measure: Option<M>,
+    /// Where the next object goes in it: music21's `measurePosition`.
+    /// Read only while the measure placed in is `position_measure`.
+    pub measure_position: FloatType,
     /// Slurs begun and not yet joined.
     pub open_slurs: Vec<OpenSlur<M, H>>,
     /// Ties begun.
@@ -118,7 +121,8 @@ pub struct Placement<M, H> {
 impl<M, H> Default for Placement<M, H> {
     fn default() -> Self {
         Self {
-            position: None,
+            position_measure: None,
+            measure_position: 0.0,
             open_slurs: Vec::new(),
             tied_steps: Vec::new(),
         }
@@ -137,14 +141,14 @@ impl<M, H> Placement<M, H> {
     where
         T: Placing<Measure = M, Handle = H>,
     {
-        if let Some((placed, offset)) = &self.position
+        if let Some(placed) = &self.position_measure
             && music.same_measure(placed, measure)
         {
-            return Ok(*offset);
+            return Ok(self.measure_position);
         }
-        let offset = music.highest_time(measure)?;
-        self.position = Some((music.copy_measure(measure), offset));
-        Ok(offset)
+        self.measure_position = music.highest_time(measure)?;
+        self.position_measure = Some(music.copy_measure(measure));
+        Ok(self.measure_position)
     }
 
     /// music21's `insertAtPosition`: a mark where the next note goes.
@@ -275,7 +279,7 @@ impl<M, H> Placement<M, H> {
             .map(|(_, _, length)| *length)
             .fold(FloatType::INFINITY, FloatType::min);
         if shortest.is_finite() {
-            self.position = Some((music.copy_measure(measure), offset + shortest));
+            self.measure_position = offset + shortest;
         }
         Ok(())
     }

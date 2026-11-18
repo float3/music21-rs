@@ -11545,3 +11545,36 @@ def test_metadata_is_shown_as_music21_shows_it():
 
     for made in (m.Metadata(), m.Metadata(title="Jingle Bells")):
         assert re.fullmatch(r"<music21\.metadata\.Metadata object at 0x[0-9a-f]+>", repr(made))
+
+
+def test_provided_noteworthy_translator_state_is_settable(tmp_path):
+    """Provided, code written for music21 sets the translator's placing
+    state directly, as music21's own `createStaff` does, and the
+    translator goes on from what it was set to."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream
+from music21.noteworthy import translate
+nwt = translate.NoteworthyTranslator()
+m = stream.Measure()
+nwt.currentMeasure = m
+nwt.translateNote({'Dur': '4th', 'Pos': '1^'})
+nwt.tiedSteps = {}
+nwt.openSlurs = []
+nwt.translateNote({'Dur': '4th', 'Pos': '1'})
+print(nwt.tiedSteps, nwt.openSlurs, [n.tie for n in m.notes])
+nwt.positionMeasure = m
+nwt.measurePosition = 3.0
+nwt.translateRest({'Dur': '4th'})
+print(nwt.positionMeasure is m, nwt.measurePosition, m.notesAndRests.last().offset)
+nwt.positionMeasure = None
+print(nwt.positionMeasure, nwt.currentPosition())
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{} [] [<music21.tie.Tie start>, None]",
+        "True 4.0 3.0",
+        "None 4.0",
+    ]
