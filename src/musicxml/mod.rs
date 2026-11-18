@@ -14,11 +14,14 @@
 //!
 //! The writer does no file IO; it hands back the document as a string.
 
+mod fragment;
 mod notate;
 mod partstaff;
 mod read;
 mod tree;
 
+pub use fragment::element_xml;
+pub use partstaff::measure_number_comes_before;
 pub use read::from_musicxml;
 
 use crate::articulations::Articulation;
@@ -61,6 +64,27 @@ pub const DIVISIONS_PER_QUARTER: FloatType = 10080.0;
 
 /// The MusicXML version written.
 pub const MUSICXML_VERSION: &str = "4.0";
+
+/// music21's `xmlObjects.isValidXSDID`: whether text is an `xsd:ID`, an
+/// XML name with no colon, which an element's `id` attribute has to be.
+///
+/// ```
+/// use music21::musicxml::is_valid_xsd_id;
+///
+/// assert!(is_valid_xsd_id("hel_lo"));
+/// assert!(!is_valid_xsd_id("4sad"));
+/// assert!(!is_valid_xsd_id(""));
+/// ```
+pub fn is_valid_xsd_id(text: &str) -> bool {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || first == '_') {
+        return false;
+    }
+    chars.all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
 
 /// What a document says about how it was made, where the score does not say.
 ///
@@ -180,6 +204,31 @@ pub fn to_musicxml(score: &Stream, options: &ExportOptions) -> Result<String> {
          \"http://www.musicxml.org/dtds/partwise.dtd\">\n{}",
         root.dump()
     ))
+}
+
+/// A copy of a stream, or of an element put in one, with the notation it
+/// leaves unsaid worked out, as [`ExportOptions::make_notation`] works it
+/// out before writing: music21's `GeneralObjectExporter.fromGeneralObject`
+/// and the score's `makeNotation`. What comes back is a score.
+///
+/// ```
+/// use music21::{Duration, Note, Stream, StreamKind};
+/// use music21::musicxml::make_notation;
+///
+/// let mut part = Stream::with_kind(StreamKind::Part);
+/// part.push(Note::from_name("C4")?.with_duration(Duration::new(8.0)?));
+/// let score = make_notation(&part)?;
+/// assert_eq!(score.kind(), StreamKind::Score);
+/// assert_eq!(score.parts()[0].measures().len(), 2);
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A kind of stream music21 writes no score of, and what making the
+/// notation refuses.
+pub fn make_notation(stream: &Stream) -> Result<Stream> {
+    notate::notated(stream)
 }
 
 /// Whether anything in the stream, itself included, says it is at sounding
@@ -744,15 +793,26 @@ fn empty_score() -> Stream {
 
 /// music21's `addDividerComment`.
 fn add_divider_comment(root: &mut Element, comment: &str) {
-    let length = comment.chars().count().min(60);
-    let low = (60 - length) / 2;
-    let high = (60 - length).div_ceil(2);
-    root.push_comment(format!(
-        "{} {comment} {}",
-        "=".repeat(low),
-        "=".repeat(high)
-    ));
+    root.push_comment(divider_text(comment));
 }
+
+/// The text of the comment music21's `addDividerComment` writes: the
+/// comment centred in signs that pad it out to sixty characters.
+///
+/// ```
+/// use music21::musicxml::divider_text;
+///
+/// assert_eq!(divider_text("Part 1"), format!("{} Part 1 {}", "=".repeat(27), "=".repeat(27)));
+/// ```
+pub fn divider_text(comment: &str) -> String {
+    let length = comment.chars().count().min(DIVIDER_WIDTH);
+    let low = (DIVIDER_WIDTH - length) / 2;
+    let high = (DIVIDER_WIDTH - length).div_ceil(2);
+    format!("{} {comment} {}", "=".repeat(low), "=".repeat(high))
+}
+
+/// How wide music21 pads a divider comment.
+const DIVIDER_WIDTH: usize = 60;
 
 /// music21's `setTitles`.
 fn set_titles(root: &mut Element, metadata: Option<&Metadata>, options: &ExportOptions) {
@@ -3451,7 +3511,14 @@ fn is_written_as_note(element: &StreamElement) -> bool {
 /// the same number. Three things carry an octave into a document -- a
 /// pitch, a rest's displayed place and an unpitched stroke's -- and each
 /// goes through this.
-fn musicxml_octave(octave: i32) -> i32 {
+///
+/// ```
+/// use music21::musicxml::musicxml_octave;
+///
+/// assert_eq!(musicxml_octave(4), 4);
+/// assert_eq!(musicxml_octave(12), 9);
+/// ```
+pub fn musicxml_octave(octave: i32) -> i32 {
     octave.clamp(0, 9)
 }
 
@@ -3465,7 +3532,13 @@ fn step_and_octave(number: i32) -> (char, i32) {
 
 /// music21's `xmlObjects.fractionToPercent`: a share as a whole percent,
 /// truncated.
-fn fraction_to_percent(share: FloatType) -> String {
+///
+/// ```
+/// use music21::musicxml::fraction_to_percent;
+///
+/// assert_eq!(fraction_to_percent(0.251), "25");
+/// ```
+pub fn fraction_to_percent(share: FloatType) -> String {
     ((share * 100.0) as i64).to_string()
 }
 
@@ -3488,20 +3561,48 @@ fn num_to_int_or_float(value: FloatType) -> String {
     }
 }
 
-/// music21's `typeToMusicXMLType`.
+/// The MusicXML `<type>` a duration of one written value is written as.
 fn musicxml_type(duration_type: DurationType) -> Result<&'static str> {
-    match duration_type {
-        DurationType::Longa => Ok("long"),
-        DurationType::TwentyFortyEighth => Err(export_error(
+    type_to_musicxml(duration_type.music21_name())
+}
+
+/// music21's `typeToMusicXMLType`: the MusicXML `<type>` for a music21
+/// duration type, which is the type itself but for `longa`, written
+/// `long`. The types MusicXML has no value for are refused.
+///
+/// ```
+/// use music21::musicxml::type_to_musicxml;
+///
+/// assert_eq!(type_to_musicxml("longa")?, "long");
+/// assert_eq!(type_to_musicxml("16th")?, "16th");
+/// assert!(type_to_musicxml("duplex-maxima").is_err());
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// `2048th`, `duplex-maxima`, `inexpressible`, `complex` and `zero`, each
+/// with music21's message.
+pub fn type_to_musicxml(value: &str) -> Result<&str> {
+    match value {
+        "longa" => Ok("long"),
+        "2048th" => Err(export_error(
             "Cannot convert \"2048th\" duration to MusicXML (too short).",
         )),
-        DurationType::DuplexMaxima => Err(export_error(
+        "duplex-maxima" => Err(export_error(
             "Cannot convert \"duplex-maxima\" duration to MusicXML (too long).",
         )),
-        DurationType::Zero => Err(export_error(
+        "inexpressible" => Err(export_error(
+            "Cannot convert inexpressible durations to MusicXML.",
+        )),
+        "complex" => Err(export_error(
+            "Cannot convert complex durations to MusicXML. Try exporting with \
+             makeNotation=True or manually running splitAtDurations()",
+        )),
+        "zero" => Err(export_error(
             "Cannot convert durations without types to MusicXML.",
         )),
-        other => Ok(other.music21_name()),
+        other => Ok(other),
     }
 }
 
@@ -3512,13 +3613,8 @@ fn written_type(duration: &Duration) -> Result<(&'static str, u32)> {
     match components.as_slice() {
         [(duration_type, dots)] => Ok((musicxml_type(*duration_type)?, *dots)),
         [] if duration.quarter_length() == 0.0 => musicxml_type(DurationType::Zero).map(|t| (t, 0)),
-        [] => Err(export_error(
-            "Cannot convert inexpressible durations to MusicXML.",
-        )),
-        _ => Err(export_error(
-            "Cannot convert complex durations to MusicXML. Try exporting with \
-             makeNotation=True or manually running splitAtDurations()",
-        )),
+        [] => type_to_musicxml("inexpressible").map(|t| (t, 0)),
+        _ => type_to_musicxml("complex").map(|t| (t, 0)),
     }
 }
 
@@ -4018,8 +4114,9 @@ fn transpose_element(interval: &Interval) -> Element {
     element
 }
 
-/// music21's `xmlObjects.DYNAMIC_MARKS`.
-const DYNAMIC_MARKS: [&str; 27] = [
+/// music21's `xmlObjects.DYNAMIC_MARKS`: the marks MusicXML writes as a
+/// `<dynamics>` element of their own name.
+pub const DYNAMIC_MARKS: [&str; 27] = [
     "p",
     "pp",
     "ppp",
@@ -4068,7 +4165,19 @@ fn is_fraction_offset(offset: FloatType) -> bool {
 
 /// music21's `normalizeColor`: a hex colour upper-cased, and a CSS colour
 /// name written as its hex value.
-fn normalize_color(color: &str) -> Result<String> {
+///
+/// ```
+/// use music21::musicxml::normalize_color;
+///
+/// assert_eq!(normalize_color("red")?, "#FF0000");
+/// assert_eq!(normalize_color("#00ff00")?, "#00FF00");
+/// # Ok::<(), music21::Error>(())
+/// ```
+///
+/// # Errors
+///
+/// A name that is not a CSS colour's.
+pub fn normalize_color(color: &str) -> Result<String> {
     if color.is_empty() {
         return Ok(String::new());
     }

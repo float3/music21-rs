@@ -67,7 +67,15 @@ pub(super) fn join(parts: &mut [Element], multi_key: bool, multi_meter: bool) ->
 
 /// music21's `measureNumberComesBefore`: whether one measure number comes
 /// strictly before another, suffixes and all.
-fn measure_number_comes_before(first: &str, second: &str) -> bool {
+///
+/// ```
+/// use music21::musicxml::measure_number_comes_before;
+///
+/// assert!(measure_number_comes_before("23", "23a"));
+/// assert!(measure_number_comes_before("23b", "24a"));
+/// assert!(!measure_number_comes_before("23b", "23a"));
+/// ```
+pub fn measure_number_comes_before(first: &str, second: &str) -> bool {
     if first == second {
         return false;
     }
