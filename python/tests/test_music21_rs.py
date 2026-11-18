@@ -11379,3 +11379,20 @@ def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
     assert done.returncode == 0, done.stderr
     assert done.stdout.split()[0] == "4.0"
     assert done.stdout.split()[-1] == "True"
+
+
+def test_an_installed_network_hands_out_music21_s_terminus():
+    """Installed, the wheel's network names its termini with music21's own
+    `Terminus`, so they equal what music21's code imported."""
+    pytest.importorskip("music21.stream")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import scale\n"
+        "from music21.scale.intervalNetwork import Direction, Terminus\n"
+        "net = scale.CyclicalScale('c4', ['M9']).abstract._net\n"
+        "print(net.getNeighborNodeIds('c4', Terminus.LOW, 'b3') == (Terminus.LOW, Terminus.LOW))\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["True"]

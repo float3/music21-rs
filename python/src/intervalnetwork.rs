@@ -96,7 +96,18 @@ fn member<'py>(
             "music21.scale.intervalNetwork is not registered",
         ));
     };
-    class.bind(py).getattr(name)
+    let class = class.bind(py);
+
+    // Installed, music21's code compares against its own enum, which never
+    // equals the package's: hand out music21's member where it has one.
+    if crate::music21_installed(py)
+        && let Ok(real) = crate::real_music21(py, MODULE)
+        && let Ok(theirs) = real.getattr(class.getattr("__name__")?.extract::<String>()?)
+        && !theirs.is(class)
+    {
+        return theirs.getattr(name);
+    }
+    class.getattr(name)
 }
 
 /// The value an enum member carries, which music21's own members share.

@@ -496,6 +496,14 @@ pub(crate) fn installed_class<'py>(
     found
 }
 
+/// Whether `install_into_music21` has run: music21's own classes have
+/// been replaced, so music21's code is what reads the package's answers.
+pub(crate) fn music21_installed(py: Python<'_>) -> bool {
+    built_helper(py)
+        .and_then(|helper| helper.getattr("installed").ok())
+        .is_some_and(|installed| installed.len().is_ok_and(|count| count > 0))
+}
+
 /// What [`installed_class`] has found, by module and name, absent ones
 /// included.
 ///
