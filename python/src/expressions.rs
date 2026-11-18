@@ -1589,18 +1589,17 @@ impl Fermata {
         })
     }
 
-    /// Which way up it is drawn: `'upright'` or `'inverted'`.
+    /// Which way up it is drawn: `'upright'`, `'inverted'` or any other
+    /// text a caller gave, as music21 keeps it.
     #[getter]
-    fn get_type(&self) -> &'static str {
+    fn get_type(&self) -> &str {
         self.inner.fermata_type().as_str()
     }
 
     #[setter]
-    fn set_type(&mut self, value: &str) -> PyResult<()> {
-        let parsed = music21::expressions::FermataType::from_name(value)
-            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        self.inner.set_fermata_type(parsed);
-        Ok(())
+    fn set_type(&mut self, value: &str) {
+        self.inner
+            .set_fermata_type(music21::expressions::FermataType::from_name(value));
     }
 
     /// Its shape: `'normal'`, `'angled'` or `'square'`.

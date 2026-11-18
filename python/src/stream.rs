@@ -8064,13 +8064,12 @@ fn expressions_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<music21::expression
             out.push(Expression::Ornament(Box::new(read)));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "Fermata"))? {
             let mut fermata = Fermata::new();
-            fermata.set_fermata_type(
-                if text_attribute(&expression, "type").as_deref() == Some("upright") {
-                    FermataType::Upright
-                } else {
-                    FermataType::Inverted
-                },
-            );
+            // music21's default where none is said.
+            let named = text_attribute(&expression, "type");
+            fermata.set_fermata_type(match named.as_deref() {
+                Some(name) => FermataType::from_name(name),
+                None => FermataType::Inverted,
+            });
             fermata.set_shape(text_attribute(&expression, "shape"));
             out.push(Expression::Fermata(fermata));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "ArpeggioMark"))? {

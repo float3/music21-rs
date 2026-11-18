@@ -1360,42 +1360,47 @@ pub(crate) fn python_float(value: FloatType) -> String {
     }
 }
 
-/// Which way up a fermata is drawn: music21's `Fermata.type`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// Which way up a fermata is drawn: music21's `Fermata.type`, which
+/// MusicXML says is `upright` or `inverted` and music21 lets be any text.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FermataType {
     /// The arc opening downward, above the staff: MusicXML's `upright`.
     Upright,
     /// The arc opening upward: MusicXML's `inverted`, and music21's default.
     #[default]
     Inverted,
+    /// Any other type a caller gave, kept as given.
+    Other(String),
 }
 
 impl FermataType {
     /// The name music21 and MusicXML give it.
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Upright => "upright",
             Self::Inverted => "inverted",
+            Self::Other(name) => name,
         }
     }
 
-    /// Reads the name music21 and MusicXML give it.
+    /// Reads the name music21 gives it; one MusicXML does not have is kept
+    /// as given.
     ///
     /// ```
     /// use music21::expressions::FermataType;
     ///
-    /// assert_eq!(FermataType::from_name("upright")?, FermataType::Upright);
-    /// assert!(FermataType::from_name("sideways").is_err());
-    /// # Ok::<(), music21::Error>(())
+    /// assert_eq!(FermataType::from_name("upright"), FermataType::Upright);
+    /// let other = FermataType::from_name("sideways");
+    /// assert_eq!(other, FermataType::Other("sideways".to_string()));
+    /// assert_eq!(other.as_str(), "sideways");
     /// ```
-    pub fn from_name(name: &str) -> Result<Self> {
+    pub fn from_name(name: &str) -> Self {
         match name {
-            "upright" => Ok(Self::Upright),
-            "inverted" => Ok(Self::Inverted),
-            other => Err(Error::Value(format!(
-                "a fermata is drawn \"upright\" or \"inverted\", not '{other}'"
-            ))),
+            "upright" => Self::Upright,
+            "inverted" => Self::Inverted,
+            other => Self::Other(other.to_string()),
         }
     }
 }
@@ -1416,8 +1421,8 @@ impl Fermata {
     }
 
     /// Which way up it is drawn.
-    pub fn fermata_type(&self) -> FermataType {
-        self.fermata_type
+    pub fn fermata_type(&self) -> &FermataType {
+        &self.fermata_type
     }
 
     /// Says which way up it is drawn.
