@@ -11953,3 +11953,27 @@ def test_metadata_is_shown_as_music21_shows_it():
 
     for made in (m.Metadata(), m.Metadata(title="Jingle Bells")):
         assert re.fullmatch(r"<music21\.metadata\.Metadata object at 0x[0-9a-f]+>", repr(made))
+
+
+def test_a_rehearsal_mark_counts_on_as_music21s_does():
+    """`expressions.RehearsalMark` keeps its content as given and counts on
+    in the numbering it reads in; a score read keeps its marks."""
+    assert repr(m.RehearsalMark("B")) == "<music21.expressions.RehearsalMark 'B'>"
+    assert m.RehearsalMark("Z").nextContent() == "AA"
+    assert m.RehearsalMark("IV").nextContent() == "V"
+    assert m.RehearsalMark(7).nextContent() == 8
+    assert m.RehearsalMark("I", numbering="alphabetical").nextContent() == "J"
+    assert m.RehearsalMark("IV", numbering="roman").nextMark().numbering == "roman"
+    assert m.RehearsalMark._getNumberingFromContent("CI") == "roman"
+    with pytest.raises(m.ExpressionException):
+        m.RehearsalMark("A", numbering="greek")
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes><direction><direction-type><rehearsal>A</rehearsal>"
+        "</direction-type></direction><note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    marks = m.from_musicxml(document).recurse().getElementsByClass(m.RehearsalMark)
+    assert [mark.content for mark in marks] == ["A"]

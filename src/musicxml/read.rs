@@ -3291,40 +3291,13 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// music21's `xmlBarline`.
     fn barline(&mut self, element: &'x Xml) -> Result<()> {
-        let style = element.child_text("bar-style");
         let right = matches!(element.get("location"), Some("right") | None);
-        let barline = match element.find("repeat") {
-            Some(repeat) => {
-                let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
-                    Some("forward") => RepeatDirection::Start,
-                    Some("backward") => RepeatDirection::End,
-                    Some(other) => {
-                        return Err(import_error(format!(
-                            "cannot handle mx direction format: {other}"
-                        )));
-                    }
-                    None => return Err(import_error("Repeat sign direction is required")),
-                };
-                // A repeat closing a measure ends the passage, whatever the
-                // file says; only an end says how many times.
-                let direction = if right { RepeatDirection::End } else { written };
-                let times = repeat
-                    .get("times")
-                    .and_then(parse_int)
-                    .map(|times| times.max(0) as u32)
-                    .filter(|_| written == RepeatDirection::End);
-                // The sign is drawn as its direction draws it, not as the
-                // file's bar style says.
-                Barline::repeat(direction, times)
-            }
-            None => {
-                let mut barline = Barline::default();
-                if !style.is_empty() {
-                    barline.set_bar_type(BarlineType::from_name(style)?);
-                }
-                barline
-            }
-        };
+        let mut barline = barline_of(element)?;
+        // A repeat closing a measure ends the passage, whatever the file
+        // says.
+        if right && barline.repeat_direction() == Some(RepeatDirection::Start) {
+            barline = Barline::repeat(RepeatDirection::End, None);
+        }
 
         if let Some(ending) = element.find("ending") {
             let index = self.part.measures.len();
@@ -3395,6 +3368,43 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         }
         Ok(())
     }
+}
+
+/// music21's `xmlToRepeat` and `xmlToBarline`: what a `<barline>` draws,
+/// a repeat in the direction it is written.
+pub(super) fn barline_of(element: &Xml) -> Result<Barline> {
+    let style = element.child_text("bar-style");
+    let barline = match element.find("repeat") {
+        Some(repeat) => {
+            let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
+                Some("forward") => RepeatDirection::Start,
+                Some("backward") => RepeatDirection::End,
+                Some(other) => {
+                    return Err(import_error(format!(
+                        "cannot handle mx direction format: {other}"
+                    )));
+                }
+                None => return Err(import_error("Repeat sign direction is required")),
+            };
+            // Only an end says how many times.
+            let times = repeat
+                .get("times")
+                .and_then(parse_int)
+                .map(|times| times.max(0) as u32)
+                .filter(|_| written == RepeatDirection::End);
+            // The sign is drawn as its direction draws it, not as the
+            // file's bar style says.
+            Barline::repeat(written, times)
+        }
+        None => {
+            let mut barline = Barline::default();
+            if !style.is_empty() {
+                barline.set_bar_type(BarlineType::from_name(style)?);
+            }
+            barline
+        }
+    };
+    Ok(barline)
 }
 
 /// General MIDI's drum for a key as the instrument music21 has for it:
@@ -3839,83 +3849,89 @@ pub(super) fn tie_of(note: &Xml) -> Option<Tie> {
     Some(tie)
 }
 
-/// music21's `updateLyricsFromList` and `xmlToLyric`.
+/// music21's `updateLyricsFromList`: each `<lyric>` read, one numbered
+/// nought taking its place among them.
 pub(super) fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
     let mut out = Vec::new();
-    let mut current = 1;
-    for lyric in written {
-        let texts: Vec<&Xml> = lyric.find_all("text").collect();
-        let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
-        let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
-        let mut read = Lyric::unsung();
-        if texts.is_empty() {
-            // A lyric that only extends one: music21 hands back a bare one.
-            out.push(read);
-            current += 1;
-            continue;
-        }
-        if texts.len() == 1 {
-            if let Some(text) = texts[0].text() {
-                read.set_text(text.trim());
-            }
-            if let Some(syllabic) = syllabics.first()
-                && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
-            {
-                read.set_syllabic(syllabic);
-            }
-        } else if texts.len() > 1 {
-            let mut components = Vec::new();
-            for (index, text) in texts.iter().enumerate() {
-                let mut component = Lyric::unsung();
-                if let Some(text) = text.text() {
-                    component.set_text(text.trim());
-                }
-                if let Some(syllabic) = syllabics.get(index) {
-                    if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
-                        component.set_syllabic(syllabic);
-                    }
-                    if index >= 1
-                        && let Some(elision) = elisions.get(index - 1)
-                    {
-                        component.set_elision_before(elision.text().unwrap_or(""));
-                    }
-                }
-                components.push(component);
-            }
-            read.set_components(components);
-        }
-        match lyric.get("number") {
-            Some(number) => match number.trim().parse::<IntegerType>() {
-                Ok(number) => read.set_number(number),
-                Err(_) => {
-                    read.set_number(0);
-                    read.set_identifier(Some(number.to_string()));
-                }
-            },
-            None => read.set_number(0),
-        }
-        if let Some(name) = lyric.get("name") {
-            read.set_identifier(Some(name.to_string()));
-        }
-        if let Some(justify) = lyric.get("justify") {
-            read.set_justify(Some(Justification::from_name(justify)?));
-        }
-        if let Some(placement) = lyric.get("placement") {
-            read.set_placement(Placement::from_name(placement).ok());
-        }
-        if lyric.get("print-object") == Some("no") {
-            read.set_hidden(true);
-        }
-        if let Some(color) = lyric.get("color") {
-            read.set_color(Some(color.to_string()));
-        }
-        if read.number() == 0 {
-            read.set_number(current);
+    for (place, lyric) in written.enumerate() {
+        let mut read = lyric_of(lyric)?;
+        // A bare lyric, which only extends one, keeps its number.
+        let sung = lyric.find("text").is_some();
+        if sung && read.number() == 0 {
+            read.set_number(IntegerType::try_from(place + 1).unwrap_or(IntegerType::MAX));
         }
         out.push(read);
-        current += 1;
     }
     Ok(out)
+}
+
+/// music21's `xmlToLyric`: one `<lyric>`, numbered nought where it says
+/// no number.
+pub(super) fn lyric_of(lyric: &Xml) -> Result<Lyric> {
+    let texts: Vec<&Xml> = lyric.find_all("text").collect();
+    let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
+    let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
+    let mut read = Lyric::unsung();
+    if texts.is_empty() {
+        // A lyric that only extends one: music21 hands back a bare one.
+        return Ok(read);
+    }
+    if texts.len() == 1 {
+        if let Some(text) = texts[0].text() {
+            read.set_text(text.trim());
+        }
+        if let Some(syllabic) = syllabics.first()
+            && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
+        {
+            read.set_syllabic(syllabic);
+        }
+    } else if texts.len() > 1 {
+        let mut components = Vec::new();
+        for (index, text) in texts.iter().enumerate() {
+            let mut component = Lyric::unsung();
+            if let Some(text) = text.text() {
+                component.set_text(text.trim());
+            }
+            if let Some(syllabic) = syllabics.get(index) {
+                if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
+                    component.set_syllabic(syllabic);
+                }
+                if index >= 1
+                    && let Some(elision) = elisions.get(index - 1)
+                {
+                    component.set_elision_before(elision.text().unwrap_or(""));
+                }
+            }
+            components.push(component);
+        }
+        read.set_components(components);
+    }
+    match lyric.get("number") {
+        Some(number) => match number.trim().parse::<IntegerType>() {
+            Ok(number) => read.set_number(number),
+            Err(_) => {
+                read.set_number(0);
+                read.set_identifier(Some(number.to_string()));
+            }
+        },
+        None => read.set_number(0),
+    }
+    if let Some(name) = lyric.get("name") {
+        read.set_identifier(Some(name.to_string()));
+    }
+    if let Some(justify) = lyric.get("justify") {
+        read.set_justify(Some(Justification::from_name(justify)?));
+    }
+    if let Some(placement) = lyric.get("placement") {
+        read.set_placement(Placement::from_name(placement).ok());
+    }
+    if lyric.get("print-object") == Some("no") {
+        read.set_hidden(true);
+    }
+    if let Some(color) = lyric.get("color") {
+        read.set_color(Some(color.to_string()));
+    }
+    Ok(read)
 }
 
 /// music21's `xmlToArticulation`.

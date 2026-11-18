@@ -25,6 +25,7 @@
 use super::read;
 pub use super::read::{ActiveTuplets, Encoding, FitAsked, MeasureFit, measure_fit};
 use crate::articulations::Articulation;
+use crate::bar::Barline;
 use crate::clef::Clef;
 use crate::defaults::IntegerType;
 use crate::error::{Error, Result};
@@ -106,9 +107,18 @@ pub fn read_beams(texts: &[&str]) -> Result<Beams> {
 }
 
 /// music21's `xmlToLyric`: a `<lyric>`.
-pub fn read_lyric(text: &str) -> Result<Option<Lyric>> {
-    let read = element(text, "lyric")?;
-    Ok(read::lyrics_from(std::iter::once(&read))?.pop())
+pub fn read_lyric(text: &str) -> Result<Lyric> {
+    read::lyric_of(&element(text, "lyric")?)
+}
+
+/// music21's `updateLyricsFromList`: `<lyric>`s of one note, one numbered
+/// nought taking its place among them.
+pub fn read_lyrics(texts: &[&str]) -> Result<Vec<Lyric>> {
+    let read: Vec<Xml> = texts
+        .iter()
+        .map(|text| element(text, "lyric"))
+        .collect::<Result<_>>()?;
+    read::lyrics_from(read.iter())
 }
 
 /// music21's `xmlToArticulation`: one mark of `<articulations>`, `None`
@@ -121,6 +131,12 @@ pub fn read_articulation(text: &str) -> Result<Option<Articulation>> {
 /// `None` for one music21 does not know.
 pub fn read_technical(text: &str) -> Result<Option<Articulation>> {
     Ok(read::technical_of(&Xml::parse(text)?))
+}
+
+/// music21's `xmlToBarline` and `xmlToRepeat`: what a `<barline>` draws,
+/// a repeat in the direction written.
+pub fn read_barline(text: &str) -> Result<Barline> {
+    read::barline_of(&element(text, "barline")?)
 }
 
 /// music21's `getStaffNumber`: the staff an element is written on, nought

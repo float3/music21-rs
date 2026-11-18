@@ -742,6 +742,22 @@ pub fn is_standard_name(name: &str) -> bool {
         .any(|(unique, named, _)| *unique == name || *named == name)
 }
 
+/// Whether a name is one of the work ids music21 wrote before v8, such
+/// as `date`: music21's `ALL_MUSIC21_WORK_IDS`.
+///
+/// ```
+/// use music21::metadata::is_music21_work_id;
+///
+/// assert!(is_music21_work_id("date"));
+/// assert!(!is_music21_work_id("dateDestroyed"));
+/// ```
+#[must_use]
+pub fn is_music21_work_id(name: &str) -> bool {
+    OLD_MUSIC21_NAMES
+        .iter()
+        .any(|(_, _, work_id)| *work_id == Some(name))
+}
+
 /// The unique name a plural attribute of music21's answers for,
 /// `composer` for `composers`: music21's
 /// `ALL_PLURAL_ATTRIBUTE_NAMES`, each of which answers every value under
