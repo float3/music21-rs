@@ -124,6 +124,7 @@ pub mod meter;
 mod metertools;
 pub mod midibase;
 pub mod midipercussion;
+pub mod miditranslate;
 pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
@@ -2317,7 +2318,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 21] = [
+const BUILT_MODULES: [&str; 22] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2331,6 +2332,7 @@ const BUILT_MODULES: [&str; 21] = [
     "music21.stream.filters",
     "music21.converter.subConverters",
     "music21.midi.base",
+    "music21.midi.translate",
     "music21.test.commonTest",
     "music21.romanText.rtObjects",
     "music21.stream.enums",
@@ -2360,6 +2362,7 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.stream.filters" => filters::module(py),
         "music21.converter.subConverters" => subconverters::module(py),
         "music21.midi.base" => midibase::module(py),
+        "music21.midi.translate" => miditranslate::module(py),
         "music21.test.commonTest" => commontest::module(py),
         "music21.romanText.rtObjects" => rtobjects::module(py),
         "music21.stream.enums" => streamenums::module(py),

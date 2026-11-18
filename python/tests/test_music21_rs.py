@@ -10673,6 +10673,43 @@ print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
     ]
 
 
+def test_provided_midi_translate_round_trips_a_part(tmp_path):
+    """Provided, `midi.translate` lays a note out as music21's events,
+    reads a time signature event back, writes a stream as a `MidiFile`
+    and reads that file back as a score."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import midi, note, stream
+n = note.Note('C#4')
+events = midi.translate.noteToMidiEvents(n, includeDeltaTime=False, channel=3)
+print(events, events[0].correspondingEvent is events[1])
+me = midi.MidiEvent(type=midi.MetaEvents.TIME_SIGNATURE)
+me.data = midi.putNumbersAsList([3, 4])
+print(midi.translate.midiEventsToTimeSignature(me))
+p = stream.Part()
+p.repeatAppend(note.Note('G4', quarterLength=2), 2)
+mf = midi.translate.streamToMidiFile(p)
+print(mf, mf.ticksPerQuarterNote)
+s = midi.translate.midiFileToStream(mf)
+print(len(s.flatten().notes), s.flatten().notes[0].nameWithOctave)
+try:
+    midi.translate.midiFileToStream(mf, quantizePost=False)
+except NotImplementedError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.midi.MidiEvent NOTE_ON, track=None, channel=3, pitch=61, velocity=90>, "
+        "<music21.midi.MidiEvent NOTE_OFF, track=None, channel=3, pitch=61, velocity=0>] True",
+        "<music21.meter.TimeSignature 3/16>",
+        "<music21.midi.MidiFile 2 tracks> 10080",
+        "2 G4",
+        "quantizePost=False is not ported to music21-rs",
+    ]
+
+
 def test_provided_rtobjects_tokenize_a_roman_text(tmp_path):
     """Provided, `romanText.rtObjects` reads a RomanText into music21's
     tokens: tagged lines, measures with their numbers and atoms, beats

@@ -19,6 +19,8 @@ use music21::midi::base::{
     METAEVENT_MARKER, MidiDataError, Param, ReadEvent, SYSEX_EVENTS,
 };
 
+use music21::midi::translate::Laid;
+
 use crate::plumbing::built::new_class;
 use crate::prebase::ProtoM21Object;
 
@@ -74,7 +76,7 @@ fn member<'py>(py: Python<'py>, kind: EventType) -> PyResult<Bound<'py, PyAny>> 
 
 /// The crate's event type for a member of one of the enums; nothing for
 /// any other type, such as `'DeltaTime'`.
-fn event_type(value: &Bound<'_, PyAny>) -> PyResult<Option<EventType>> {
+pub(crate) fn event_type(value: &Bound<'_, PyAny>) -> PyResult<Option<EventType>> {
     let py = value.py();
     let makers: [fn(u8) -> EventType; 4] = [
         EventType::ChannelVoice,
@@ -1038,6 +1040,60 @@ impl MidiFile {
         .map_err(|e| raised(py, e))?;
         Ok(py_bytes(py, &written))
     }
+}
+
+/// The delta times and events a translated list stands for, each on
+/// `track`: what music21's translating functions hand back.
+pub(crate) fn laid_objects<'py>(
+    py: Python<'py>,
+    track: &Bound<'py, PyAny>,
+    laid: &[Laid],
+) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    let owner = (!track.is_none()).then(|| track.clone().unbind());
+    let mut out = Vec::with_capacity(laid.len());
+    for entry in laid {
+        let made = match entry {
+            Laid::Delta { ticks, channel } => {
+                let time = Some(ticks.into_pyobject(py)?.into_any().unbind());
+                let channel = match channel {
+                    Some(channel) => Some(channel.into_pyobject(py)?.into_any().unbind()),
+                    None => None,
+                };
+                Bound::new(
+                    py,
+                    DeltaTime::new(
+                        py,
+                        owner.as_ref().map(|held| held.clone_ref(py)),
+                        time,
+                        channel,
+                    ),
+                )?
+                .into_any()
+            }
+            Laid::Event { event, cent_shift } => {
+                let made = Bound::new(
+                    py,
+                    MidiEvent::new(
+                        py,
+                        owner.as_ref().map(|held| held.clone_ref(py)),
+                        None,
+                        None,
+                        None,
+                    )?,
+                )?;
+                {
+                    let mut held = made.borrow_mut();
+                    held.apply(py, event)?;
+                    if let Some(cents) = cent_shift {
+                        held.centShift = cents.into_pyobject(py)?.into_any().unbind();
+                    }
+                }
+                made.into_any()
+            }
+        };
+        out.push(made);
+    }
+    Ok(out)
 }
 
 /// The module's `environLocal`.
