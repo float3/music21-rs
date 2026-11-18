@@ -121,6 +121,7 @@ pub mod layout;
 mod m21toxml;
 pub mod makenotation;
 pub mod metadata;
+mod metadataproperties;
 pub mod meter;
 mod metertools;
 pub mod midibase;
@@ -2331,7 +2332,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 28] = [
+const BUILT_MODULES: [&str; 29] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2360,6 +2361,7 @@ const BUILT_MODULES: [&str; 28] = [
     "music21.musicxml.partStaffExporter",
     "music21.musicxml.m21ToXml",
     "music21.musicxml.xmlSoundParser",
+    "music21.metadata.properties",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2396,6 +2398,7 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.partStaffExporter" => musicxml::part_staff_module(py),
         "music21.musicxml.m21ToXml" => m21toxml::module(py),
         "music21.musicxml.xmlSoundParser" => xmlsoundparser::module(py),
+        "music21.metadata.properties" => metadataproperties::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

@@ -765,6 +765,63 @@ pub fn unique_name_of_plural(plural: &str) -> Option<&'static str> {
     }
 }
 
+/// One property of the vocabulary as music21's `PropertyDescription`
+/// says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PropertyDescription {
+    /// The name music21 knows it by, unique in the vocabulary.
+    pub unique_name: &'static str,
+    /// Its name in its namespace, the tail of `dcterms:alternative`.
+    pub name: &'static str,
+    /// The namespace: `dcterms`, `marcrel`, `humdrum`, `m21FileInfo` or
+    /// `music21`.
+    pub namespace: &'static str,
+    /// The Humdrum abbreviation music21 took it by before v8.
+    pub old_abbreviation: Option<&'static str>,
+    /// The work id music21 took it by before v8.
+    pub old_work_id: Option<&'static str>,
+    /// What kind of value it takes.
+    pub value_kind: ValueKind,
+    /// Whether its value is a title whose closing article reads in front.
+    pub needs_article_normalization: bool,
+    /// Whether it names somebody who had a hand in the work.
+    pub is_contributor: bool,
+}
+
+/// music21's `STANDARD_PROPERTY_DESCRIPTIONS`, in its order.
+///
+/// ```
+/// use music21::metadata::property_descriptions;
+///
+/// let alternative = property_descriptions()
+///     .find(|property| property.unique_name == "alternativeTitle")
+///     .unwrap();
+/// assert_eq!((alternative.namespace, alternative.name), ("dcterms", "alternative"));
+/// assert_eq!(alternative.old_abbreviation, Some("ota"));
+/// assert!(alternative.needs_article_normalization);
+/// ```
+pub fn property_descriptions() -> impl Iterator<Item = PropertyDescription> {
+    STANDARD_PROPERTIES
+        .iter()
+        .map(|(unique_name, namespaced, is_contributor)| {
+            let (namespace, name) = namespaced.split_once(':').unwrap_or(("", namespaced));
+            let old = OLD_MUSIC21_NAMES
+                .iter()
+                .find(|(old_name, _, _)| old_name == unique_name);
+            PropertyDescription {
+                unique_name,
+                name,
+                namespace,
+                old_abbreviation: old.and_then(|(_, abbreviation, _)| *abbreviation),
+                old_work_id: old.and_then(|(_, _, work_id)| *work_id),
+                value_kind: value_kind_of(unique_name).unwrap_or(ValueKind::Text),
+                needs_article_normalization: ARTICLED_TITLES.contains(unique_name),
+                is_contributor: *is_contributor,
+            }
+        })
+}
+
 /// music21's `STANDARD_PROPERTY_DESCRIPTIONS`: each property's unique name,
 /// its namespaced name, and whether it names a contributor.
 pub const STANDARD_PROPERTIES: [(&str, &str, bool); 131] = [
