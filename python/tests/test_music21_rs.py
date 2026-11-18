@@ -11526,3 +11526,25 @@ def test_repeat_bracket_numbers_as_music21_does():
     assert m.RepeatBracket().number == ""
     with pytest.raises(m.SpannerException):
         bracket.number = "x"
+
+
+def test_a_chord_symbol_read_keeps_inversion_placement_and_steps():
+    """A `<harmony>` read keeps where it is drawn, its added steps and
+    its inversion, as music21's reader does."""
+    harmony = (
+        '<harmony placement="below"><root><root-step>C</root-step></root>'
+        "<kind>major</kind><inversion>1</inversion>"
+        "<degree><degree-value>9</degree-value><degree-alter>0</degree-alter>"
+        "<degree-type>add</degree-type></degree></harmony>"
+    )
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes>" + harmony + "<note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    symbol = m.from_musicxml(document).recurse().getElementsByClass(m.ChordSymbol).first()
+    assert symbol.placement == "below"
+    assert symbol.inversion() == 1
+    assert [step.degree for step in symbol.getChordStepModifications()] == [9]

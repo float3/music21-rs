@@ -6520,6 +6520,7 @@ fn element_object_as<'py>(
                 }
                 let made =
                     class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?;
+                crate::harmony::finish_read(&made, symbol)?;
                 // What a transposition left it sounding, which music21
                 // moves pitch by pitch.
                 if let Some(moved) = symbol.transposed_pitches() {

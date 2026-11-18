@@ -3150,6 +3150,18 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 symbol.add_chord_step_modification(modification);
             }
         }
+        // An inversion with no bass written puts that chord note in the
+        // bass, as music21's `ChordSymbol(inversion=...)` does.
+        let inversion = parse_int(harmony.child_text("inversion")).unwrap_or(0);
+        if inversion > 0 && symbol.bass().is_none() && !symbol.is_no_chord() {
+            let pitches = symbol.pitches()?;
+            if let Some(bass) = usize::try_from(inversion)
+                .ok()
+                .and_then(|at| pitches.get(at))
+            {
+                symbol.set_bass(Some(bass.clone()));
+            }
+        }
         symbol.set_placement(placement_of(harmony));
         let offset = self.offset + self.offset_of(harmony);
         self.insert(offset, staff_number(harmony), symbol);
@@ -4670,6 +4682,25 @@ mod tests {
             .expect("the measure holds a rest");
         assert_eq!(rest.color(), Some("#FF0000"));
         assert!(written_back(&read).contains("<note color=\"#FF0000\">"));
+    }
+
+    #[test]
+    fn a_chord_symbols_inversion_puts_that_note_in_the_bass() {
+        let read = from_musicxml(&score(&format!(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>\
+             <harmony><root><root-step>C</root-step></root><kind>major</kind>\
+             <inversion>1</inversion></harmony>{NOTE}</measure>"
+        )))
+        .unwrap();
+        let leaves = read.leaves();
+        let symbol = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::ChordSymbol(symbol) => Some(symbol),
+                _ => None,
+            })
+            .expect("the measure holds a chord symbol");
+        assert_eq!(symbol.bass().map(Pitch::name), Some("E".to_string()));
     }
 
     #[test]
