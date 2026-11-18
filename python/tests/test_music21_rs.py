@@ -11379,3 +11379,53 @@ def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
     assert done.returncode == 0, done.stderr
     assert done.stdout.split()[0] == "4.0"
     assert done.stdout.split()[-1] == "True"
+
+
+def test_provided_musicxml_exports_as_music21_does(tmp_path):
+    """Provided, `musicxml.m21ToXml` writes a pitch as a whole document,
+    a note alone as the `<note>` its measure writes (appending it, as
+    music21's exporter does), and an empty score as music21's blank
+    page; `xmlObjects` and `helpers` carry music21's names."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import musicxml, note, pitch
+from music21.musicxml import helpers, m21ToXml, xmlObjects
+print({'helpers', 'm21ToXml', 'partStaffExporter', 'xmlObjects'} <= set(musicxml.__all__))
+out = m21ToXml.GeneralObjectExporter(pitch.Pitch('D#4')).parse().decode('utf-8')
+print('<alter>1</alter>' in out, out.count('<measure '))
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.noteToXml(note.Note('E-5', quarterLength=0.5)))
+print(len(MEX.xmlRoot))
+SX = m21ToXml.ScoreExporter()
+print(SX.parse().find('work/work-title').text)
+error = xmlObjects.MusicXMLExportException('too short')
+error.partName = 'Trumpet'
+error.measureNumber = '1'
+print(error, issubclass(m21ToXml.MusicXMLExportException, music21_rs._provide.Music21Exception))
+print(xmlObjects.booleanToYesNo(5), xmlObjects.isValidXSDID('4sad'))
+print(helpers.measureNumberComesBefore('23', '23a'), m21ToXml.typeToMusicXMLType('longa'))
+print([cls.__name__ for cls in m21ToXml.ScoreExporter.__mro__])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "True 1",
+        "<note>",
+        "  <pitch>",
+        "    <step>E</step>",
+        "    <alter>-1</alter>",
+        "    <octave>5</octave>",
+        "  </pitch>",
+        "  <duration>5040</duration>",
+        "  <type>eighth</type>",
+        "  <accidental>flat</accidental>",
+        "</note>",
+        "1",
+        "This Page Intentionally Left Blank",
+        "In part (Trumpet), measure (1): too short True",
+        "yes False",
+        "True long",
+        "['ScoreExporter', 'XMLExporterBase', 'PartStaffExporterMixin', 'object']",
+    ]

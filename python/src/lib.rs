@@ -118,6 +118,7 @@ pub mod interval;
 pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
+mod m21toxml;
 pub mod makenotation;
 pub mod metadata;
 pub mod meter;
@@ -125,6 +126,7 @@ mod metertools;
 pub mod midibase;
 pub mod midipercussion;
 pub mod miditranslate;
+mod musicxml;
 pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
@@ -2328,7 +2330,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 22] = [
+const BUILT_MODULES: [&str; 27] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2351,6 +2353,11 @@ const BUILT_MODULES: [&str; 22] = [
     "music21.chord.tools",
     "music21.meter.tools",
     "music21.figuredBass.checker",
+    "music21.musicxml",
+    "music21.musicxml.xmlObjects",
+    "music21.musicxml.helpers",
+    "music21.musicxml.partStaffExporter",
+    "music21.musicxml.m21ToXml",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2381,6 +2388,11 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.chord.tools" => chordtools::module(py),
         "music21.meter.tools" => metertools::module(py),
         "music21.figuredBass.checker" => fbchecker::module(py),
+        "music21.musicxml" => musicxml::package(py),
+        "music21.musicxml.xmlObjects" => musicxml::objects_module(py),
+        "music21.musicxml.helpers" => musicxml::helpers_module(py),
+        "music21.musicxml.partStaffExporter" => musicxml::part_staff_module(py),
+        "music21.musicxml.m21ToXml" => m21toxml::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
