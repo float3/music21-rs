@@ -79,12 +79,14 @@ impl Music21Object {
             made.bind(py).setattr("quarterLength", length)?;
             duration = Some(made);
         }
-        Ok(PyClassInitializer::from(ProtoM21Object).add_subclass(Self {
-            groups,
-            derivation: None,
-            style: None,
-            duration,
-        }))
+        Ok(
+            PyClassInitializer::from(ProtoM21Object::default()).add_subclass(Self {
+                groups,
+                derivation: None,
+                style: None,
+                duration,
+            }),
+        )
     }
 
     /// music21's `groups`: the names of the groups this belongs to, as a
@@ -605,7 +607,7 @@ impl Footing for PyAny {
 
 impl Footing for ProtoM21Object {
     fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
-        PyClassInitializer::from(ProtoM21Object).add_subclass(value)
+        PyClassInitializer::from(ProtoM21Object::default()).add_subclass(value)
     }
 }
 
@@ -647,6 +649,7 @@ const MULTIPLE_BASES: &[(&str, &[&str])] = &[
     ("FrettedPluck", &["FretIndication", "Fingering"]),
     ("RepeatExpression", &["RepeatMark", "Expression"]),
     ("Repeat", &["RepeatMark", "Barline"]),
+    ("ChordWithFretBoard", &["ChordSymbol", "FretBoard"]),
 ];
 
 /// Gives the classes music21 builds on more than one base the rest of
