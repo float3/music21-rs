@@ -223,9 +223,18 @@ pub fn read_measure(text: &str, context: &mut MeasureContext) -> Result<Stream> 
     measure.ok_or_else(|| Error::music_xml("a measure read to nothing"))
 }
 
-/// music21's `PartParser.parse`: a `<part>` with its `<score-part>`, as
-/// the part, or a part for each staff where it is written on several.
-pub fn read_part(part: &str, score_part: Option<&str>) -> Result<Vec<Stream>> {
+/// A part read, and what music21 warns of as it reads it.
+#[derive(Clone, Debug)]
+pub struct PartRead {
+    /// The part, or a part for each staff where it is written on several.
+    pub parts: Vec<Stream>,
+    /// What music21 warns of, in order: a percussion key outside the
+    /// General MIDI map, which is read as a bare unpitched instrument.
+    pub warnings: Vec<Error>,
+}
+
+/// music21's `PartParser.parse`: a `<part>` with its `<score-part>`.
+pub fn read_part(part: &str, score_part: Option<&str>) -> Result<PartRead> {
     let part = element(part, "part")?;
     let id = part.get("id").unwrap_or("P1").to_string();
     // The score part is the part's, whatever id it was written with.
@@ -239,8 +248,11 @@ pub fn read_part(part: &str, score_part: Option<&str>) -> Result<Vec<Stream>> {
     ))?;
     root.children[0].children.push(score_part);
     root.children[1] = part;
-    let score = read::score_of(&root)?;
-    Ok(score.parts().into_iter().cloned().collect())
+    let (score, warnings) = read::score_warned(&root)?;
+    Ok(PartRead {
+        parts: score.parts().into_iter().cloned().collect(),
+        warnings,
+    })
 }
 
 #[cfg(test)]
@@ -283,7 +295,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(parts.len(), 2);
+        assert_eq!(parts.parts.len(), 2);
     }
 
     #[test]
@@ -344,6 +356,19 @@ mod tests {
         assert_eq!(
             tuplet_type(&stopped),
             Some(crate::duration::TupletType::Stop)
+        );
+    }
+
+    #[test]
+    fn a_percussion_key_outside_the_map_is_warned_of() {
+        let score_part = "<score-part><midi-instrument id=\"I1\"><midi-unpitched>23</midi-unpitched>\
+                          </midi-instrument></score-part>";
+        let read = read_part("<part><measure/></part>", Some(score_part)).unwrap();
+        assert_eq!(read.warnings.len(), 1);
+        assert!(
+            read.warnings[0]
+                .to_string()
+                .contains("22 does not map to a valid instrument!")
         );
     }
 

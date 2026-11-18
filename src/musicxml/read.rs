@@ -115,6 +115,14 @@ pub(super) fn score_of(root: &Xml) -> Result<Stream> {
     Importer::default().score(root)
 }
 
+/// A `<score-partwise>` read as a score, with what music21 warns of as
+/// it reads it.
+pub(super) fn score_warned(root: &Xml) -> Result<(Stream, Vec<Error>)> {
+    let mut importer = Importer::default();
+    let read = importer.score(root)?;
+    Ok((read, importer.warnings))
+}
+
 /// The same, its first part starting inside `tuplets`, which are left as
 /// the last part ends.
 pub(super) fn score_within(root: &Xml, tuplets: &mut ActiveTuplets) -> Result<Stream> {
@@ -576,6 +584,8 @@ struct Importer {
     tuplets_before: Option<ActiveTuplets>,
     /// The tuplets the last part read was left inside.
     tuplets_after: ActiveTuplets,
+    /// What music21 warns of as it reads, in order.
+    warnings: Vec<Error>,
 }
 
 /// The tuplets a part is inside, by number: music21's `activeTuplets`,
@@ -1189,6 +1199,10 @@ impl<'a, 'x> PartParser<'a, 'x> {
             if !unpitched_text.is_empty() {
                 unpitched = true;
                 let pitch = adjusted(unpitched_text).unwrap_or(0);
+                // music21 warns of a key outside the General MIDI map.
+                if let Err(error) = crate::instrument::for_percussion_key(pitch) {
+                    self.importer.warnings.push(error);
+                }
                 instrument = Some(percussion_instrument(pitch));
             } else if !program_text.is_empty() {
                 let mut read = adjusted(program_text)

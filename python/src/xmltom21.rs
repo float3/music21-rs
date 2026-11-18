@@ -577,6 +577,17 @@ const SYSTEM_LAYOUT: &[&str] = &[
 ];
 const STAFF_LAYOUT: &[&str] = &["distance", "staffNumber"];
 
+/// What the reader warns of, each as a `MusicXMLWarning`, as music21
+/// warns.
+fn warn_all(py: Python<'_>, warnings: &[music21::Error]) -> PyResult<()> {
+    let warn = py.import("warnings")?.getattr("warn")?;
+    let category = py.get_type::<crate::musicxml::MusicXMLWarning>();
+    for warning in warnings {
+        warn.call1((crate::pitch::message(warning), &category, 2))?;
+    }
+    Ok(())
+}
+
 /// Each of `members` copied from one object to another where the first
 /// has it set.
 fn copy_members(from: &Bound<'_, PyAny>, to: &Bound<'_, PyAny>, members: &[&str]) -> PyResult<()> {
@@ -904,8 +915,9 @@ impl PartParser {
         };
         let read = step::read_part(&written(&part)?, score_part.as_deref())
             .map_err(|error| Self::placed(slf, &error).unwrap_or_else(|failed| failed))?;
+        warn_all(py, &read.warnings)?;
         let mut made = Vec::new();
-        for staff in &read {
+        for staff in &read.parts {
             made.push(crate::stream::from_crate(py, staff)?);
         }
         let Some(first) = made.first() else {
@@ -1042,7 +1054,8 @@ impl PartParser {
         )?;
         let read =
             step::read_part(&written(&part)?, score_part.as_deref()).map_err(import_error)?;
-        for part in &read {
+        warn_all(py, &read.warnings)?;
+        for part in &read.parts {
             let made = crate::stream::from_crate(py, part)?;
             let found = first_of(&made, "Instrument")?;
             if !found.is_none() {

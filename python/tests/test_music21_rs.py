@@ -11977,3 +11977,30 @@ def test_a_rehearsal_mark_counts_on_as_music21s_does():
     )
     marks = m.from_musicxml(document).recurse().getElementsByClass(m.RehearsalMark)
     assert [mark.content for mark in marks] == ["A"]
+
+
+def test_provided_xmltom21_warns_of_a_key_outside_the_percussion_map(tmp_path):
+    """A `<midi-unpitched>` key outside General MIDI's map is read as a bare
+    unpitched instrument with a `MusicXMLWarning`, as music21 warns."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21.musicxml.xmlToM21 import PartParser, MusicXMLWarning
+scorePart = EL('<score-part id="P4"><part-name>Hi-Hat Rim</part-name>'
+               '<score-instrument id="P4-I23"><instrument-name>Hi-Hat Rim</instrument-name>'
+               '</score-instrument><midi-instrument id="P4-I23"><midi-channel>10</midi-channel>'
+               '<midi-unpitched>23</midi-unpitched></midi-instrument></score-part>')
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    unp = PartParser().getDefaultInstrument(scorePart)
+print([(w.category is MusicXMLWarning, str(w.message)) for w in caught])
+print(type(unp).__name__, unp.percMapPitch)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(True, '22 does not map to a valid instrument!')]",
+        "UnpitchedPercussion 22",
+    ]
