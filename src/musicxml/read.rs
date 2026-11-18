@@ -107,7 +107,12 @@ pub fn from_musicxml(document: &str) -> Result<Stream> {
         ))
         .of_kind(FormatErrorKind::Unsupported));
     }
-    Importer::default().score(&root)
+    score_of(&root)
+}
+
+/// A `<score-partwise>` already read as XML, read as a score.
+pub(super) fn score_of(root: &Xml) -> Result<Stream> {
+    Importer::default().score(root)
 }
 
 // ------------------------------------------------------------------ numbers
@@ -3550,7 +3555,7 @@ fn score_layout(defaults: &Xml) -> ScoreLayout {
 }
 
 /// music21's `getStaffNumber`.
-fn staff_number(element: &Xml) -> i32 {
+pub(super) fn staff_number(element: &Xml) -> i32 {
     match element.tag.as_str() {
         "harmony" | "forward" | "note" | "direction" => {
             parse_int(element.child_text("staff")).unwrap_or(NO_STAFF)
@@ -3567,7 +3572,7 @@ fn staff_number(element: &Xml) -> i32 {
 }
 
 /// music21's `xmlToPitch`.
-fn pitch_of(note: &Xml) -> Result<Pitch> {
+pub(super) fn pitch_of(note: &Xml) -> Result<Pitch> {
     let Some(written) = note.find("pitch") else {
         return Pitch::from_name("C4");
     };
@@ -3603,7 +3608,7 @@ fn pitch_of(note: &Xml) -> Result<Pitch> {
 }
 
 /// music21's `xmlToAccidental`.
-fn accidental_of(written: &Xml) -> Result<Accidental> {
+pub(super) fn accidental_of(written: &Xml) -> Result<Accidental> {
     let name = written.stripped().to_lowercase();
     let name = match name.as_str() {
         "quarter-sharp" => "half-sharp",
@@ -3629,7 +3634,7 @@ fn accidental_of(written: &Xml) -> Result<Accidental> {
 }
 
 /// music21's `xmlToBeams`.
-fn beams_of(written: &[&Xml]) -> Result<Beams> {
+pub(super) fn beams_of(written: &[&Xml]) -> Result<Beams> {
     let mut beams = Beams::new();
     for (index, beam) in written.iter().enumerate() {
         let text = beam.text().map_or("begin", str::trim);
@@ -3653,7 +3658,7 @@ fn beams_of(written: &[&Xml]) -> Result<Beams> {
 }
 
 /// music21's `xmlToTie`.
-fn tie_of(note: &Xml) -> Option<Tie> {
+pub(super) fn tie_of(note: &Xml) -> Option<Tie> {
     let types: Vec<&str> = note
         .find_all("tie")
         .filter_map(|tie| tie.get("type"))
@@ -3688,7 +3693,7 @@ fn tie_of(note: &Xml) -> Option<Tie> {
 }
 
 /// music21's `updateLyricsFromList` and `xmlToLyric`.
-fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
+pub(super) fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
     let mut out = Vec::new();
     let mut current = 1;
     for lyric in written {
@@ -3767,7 +3772,7 @@ fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>>
 }
 
 /// music21's `xmlToArticulation`.
-fn articulation_of(mark: &Xml) -> Option<Articulation> {
+pub(super) fn articulation_of(mark: &Xml) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "accent" => "Accent",
         "strong-accent" => "StrongAccent",
@@ -3808,7 +3813,7 @@ fn articulation_of(mark: &Xml) -> Option<Articulation> {
 }
 
 /// music21's `xmlTechnicalToArticulation`.
-fn technical_of(mark: &Xml) -> Option<Articulation> {
+pub(super) fn technical_of(mark: &Xml) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "up-bow" => "UpBow",
         "down-bow" => "DownBow",
@@ -3875,7 +3880,7 @@ fn technical_of(mark: &Xml) -> Option<Articulation> {
 /// music21's `xmlToTempoIndication`, for a mark with one note value.
 /// music21's `xmlToTempoIndication`: a `<metronome>` is a tempo mark, or
 /// with two note values a metric modulation, placed as its direction says.
-fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
+pub(super) fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
     let mut referents: Vec<Duration> = Vec::new();
     let mut numbers: Vec<FloatType> = Vec::new();
     for child in &written.children {
@@ -3931,7 +3936,7 @@ fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElemen
 }
 
 /// music21's `xmlToTimeSignature`.
-fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
+pub(super) fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
     if written.find("senza-misura").is_some() {
         return Err(import_error(
             "reading a senza misura time signature is not supported yet",
@@ -3970,7 +3975,7 @@ fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
 }
 
 /// music21's `xmlToClef`.
-fn clef_of(written: &Xml) -> Result<Clef> {
+pub(super) fn clef_of(written: &Xml) -> Result<Clef> {
     let sign = written.child_text("sign");
     let mut clef = if matches!(
         sign.to_lowercase().as_str(),
@@ -3994,7 +3999,7 @@ fn clef_of(written: &Xml) -> Result<Clef> {
 
 /// music21's `xmlToKeySignature`: a key where the mode is said and is one
 /// music21 knows, a signature otherwise.
-fn key_signature(written: &Xml) -> Result<StreamElement> {
+pub(super) fn key_signature(written: &Xml) -> Result<StreamElement> {
     let color = written.get("color").map(str::to_string);
     if written.find("fifths").is_none() {
         let mut steps = Vec::new();
@@ -4039,7 +4044,7 @@ fn key_signature(written: &Xml) -> Result<StreamElement> {
 }
 
 /// music21's `xmlTransposeToInterval`.
-fn transpose_interval(written: &Xml) -> Result<Interval> {
+pub(super) fn transpose_interval(written: &Xml) -> Result<Interval> {
     let mut diatonic = written
         .find("diatonic")
         .and_then(|d| parse_int(d.stripped()));

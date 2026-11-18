@@ -11379,3 +11379,47 @@ def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
     assert done.returncode == 0, done.stderr
     assert done.stdout.split()[0] == "4.0"
     assert done.stdout.split()[-1] == "True"
+
+
+def test_provided_xmltom21_reads_one_element_at_a_time(tmp_path):
+    """music21's `MeasureParser` steps read an ElementTree element each, a
+    measure whole, and a part with its name in what it refuses."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import clef
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, PartParser, MusicXMLImportException,
+)
+mp = MeasureParser()
+c = mp.xmlToClef(EL('<clef><sign>G</sign><line>2</line>'
+                    '<clef-octave-change>-1</clef-octave-change></clef>'))
+print(isinstance(c, clef.Treble8vbClef))
+print(mp.xmlToPitch(EL('<note><pitch><step>E</step><alter>-1</alter>'
+                       '<octave>4</octave></pitch></note>')))
+mp = MeasureParser(EL('<measure number="12b"><note><rest/><duration>40320</duration></note></measure>'))
+mp.parse()
+print(mp.restAndNoteCount['rest'], mp.fullMeasureRest, mp.measureNumber, mp.numberSuffix)
+mp = MeasureParser()
+mp.lastClefs[1] = clef.Treble8vbClef()
+r = mp.xmlToRest(EL('<note><rest><display-step>B</display-step>'
+                    '<display-octave>3</display-octave></rest>'
+                    '<duration>5</duration><type>eighth</type></note>'))
+print(r.stepShift)
+pp = PartParser(mxPart=EL('<part><measure><note><type>thirty-tooth</type></note></measure></part>'),
+                mxScorePart=EL('<score-part><part-name>Elec.</part-name></score-part>'))
+try:
+    pp.parse()
+except MusicXMLImportException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "E-4",
+        "1 True 12 b",
+        "0",
+        "In part (Elec.), measure (0): found unknown MusicXML type: thirty-tooth",
+    ]

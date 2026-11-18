@@ -17,6 +17,7 @@
 mod notate;
 mod partstaff;
 mod read;
+pub mod step;
 mod tree;
 
 pub use read::from_musicxml;
