@@ -11512,6 +11512,17 @@ print(type(s).__name__, [n.nameWithOctave for n in s.recurse().notes])
 nwcc = binaryTranslate.NWCConverter()
 nwcc.fileContents = b'\\x02\\x01\\xff\\x00ab\\x00'
 print(nwcc.readLEShort(), nwcc.byteToSignedInt(), nwcc.readToNUL(), nwcc.readToNUL(False), nwcc.parsePosition)
+nwt = translate.NoteworthyTranslator()
+nwt.currentMeasure = stream.Measure()
+nwt.createClef({'Type': 'Bass', 'OctaveShift': 'Octave Down'})
+nwt.translateNote({'Dur': 'Half', 'Pos': '#-3^'})
+print(nwt.currentClef, list(nwt.currentMeasure), nwt.currentPosition(), nwt.tiedSteps)
+nwcc = binaryTranslate.NWCConverter()
+nwcc.version = 201
+nwcc.fileContents = b'\\x00\\x00\\x00\\x03\\x00\\x00\\x00'
+clef = binaryTranslate.NWCObject(parserParent=nwcc)
+clef.parse()
+print(clef.type, clef.dumpMethod(clef), nwcc.parsePosition)
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
@@ -11520,4 +11531,7 @@ print(nwcc.readLEShort(), nwcc.byteToSignedInt(), nwcc.readToNUL(), nwcc.readToN
         "('G', 3) [<music21.pitch.Pitch E3>, <music21.pitch.Pitch G-3>, <music21.pitch.Pitch B3>]",
         "Score ['B4']",
         "258 -1 b'' b'ab' 4",
+        "BASS8dw [<music21.clef.Bass8vbClef>, <music21.note.Note A#>] 2.0 "
+        "{('A', 1): (<music21.stream.Measure 0 offset=0.0>, 2.0)}",
+        "Clef |Clef|Type:Tenor| 7",
     ]

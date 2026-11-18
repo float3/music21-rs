@@ -132,6 +132,8 @@ pub mod neoriemannian;
 pub mod notation;
 pub mod note;
 mod noteworthy;
+mod nwcbinary;
+mod nwctranslate;
 pub mod omrcorrectors;
 pub mod ornamentrecognizer;
 pub mod percussion;

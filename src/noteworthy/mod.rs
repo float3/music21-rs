@@ -9,8 +9,9 @@
 mod binary;
 
 pub use binary::{
-    ALTERATION_TEXTS, BAR_STYLES, CLEF_NAMES, DURATION_VALUES, FLAT_MASK, MIDI_INSTRUMENTS,
-    OCTAVE_SHIFT_NAMES, SHARP_MASK, from_nwc, nwc_lines,
+    ALTERATION_TEXTS, BAR_STYLES, CLEF_NAMES, DURATION_VALUES, FLAT_MASK, MIDI_INSTRUMENTS, Member,
+    NwcFont, NwcHeader, NwcObject, NwcReader, NwcStaff, OCTAVE_SHIFT_NAMES, Object, SHARP_MASK,
+    dump_lines, from_nwc, nwc_lines,
 };
 
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
@@ -187,6 +188,21 @@ impl ClefState {
             "ALTO" => Self::Alto,
             "TENOR" => Self::Tenor,
             _ => Self::Treble,
+        }
+    }
+
+    /// The name music21's reader keeps for this clef as `currentClef`.
+    fn music21_name(self) -> &'static str {
+        match self {
+            Self::Treble => "TREBLE",
+            Self::TrebleDown => "TREBLE8dw",
+            Self::TrebleUp => "TREBLE8up",
+            Self::Bass => "BASS",
+            Self::BassDown => "BASS8dw",
+            Self::BassUp => "BASS8up",
+            Self::Alto => "ALTO",
+            Self::Tenor => "TENOR",
+            Self::Percussion => "PERCUSSION",
         }
     }
 
@@ -601,11 +617,7 @@ impl Reader {
                 self.at_position(StreamElement::TextExpression(words));
             }
             "TimeSig" => {
-                let signature = match attributes.required("Signature")? {
-                    "AllaBreve" => "2/2",
-                    "Common" => "4/4",
-                    other => other,
-                };
+                let signature = meter_ratio(attributes.required("Signature")?);
                 let meter = crate::meter::TimeSignature::from_ratio_string(signature)?;
                 self.at_position(StreamElement::TimeSignature(meter));
             }
@@ -718,24 +730,19 @@ impl Reader {
             let spanned = std::mem::take(&mut self.repeated);
             self.endings.push((spanned, self.ending));
         }
-        match style {
-            "MasterRepeatOpen" | "LocalRepeatOpen" => {
+        match bar_style(style)? {
+            BarStyle::RepeatOpen => {
                 self.close_measure(0)?;
                 self.measure.left = Some(Barline::repeat(RepeatDirection::Start, None));
             }
-            "MasterRepeatClose" | "LocalRepeatClose" => {
+            BarStyle::RepeatClose => {
                 self.measure.right = Some(Barline::repeat(RepeatDirection::End, None));
                 self.close_measure(0)?;
             }
-            "Double" | "SectionOpen" | "SectionClose" => {
-                self.measure.right = Some(Barline::new(match style {
-                    "Double" => BarlineType::Double,
-                    "SectionOpen" => BarlineType::HeavyLight,
-                    _ => BarlineType::Final,
-                }));
+            BarStyle::Closing(kind) => {
+                self.measure.right = Some(Barline::new(kind));
                 self.close_measure(0)?;
             }
-            other => return Err(error(format!("cannot find a style {other} in our list"))),
         }
         self.measure.number = self.measure_number;
         self.measure_number += 1;
@@ -754,65 +761,20 @@ impl Reader {
     }
 
     fn flow(&mut self, attributes: &Attributes) -> Result<()> {
-        let kind = match attributes.required("Style")? {
-            "DCalFine" => RepeatExpressionKind::DaCapoAlFine,
-            "Coda" | "ToCoda" => RepeatExpressionKind::Coda,
-            "Segno" => RepeatExpressionKind::Segno,
-            "DSalCoda" => RepeatExpressionKind::DalSegnoAlCoda,
-            "Fine" => RepeatExpressionKind::Fine,
-            _ => return Err(error("Cannot get style from a flow mark")),
-        };
+        let kind = flow_kind(attributes.required("Style")?)?;
         self.at_position(StreamElement::RepeatExpression(RepeatExpression::new(kind)));
         Ok(())
     }
 
     fn clef(&mut self, attributes: &Attributes) -> Result<()> {
-        let shift = match attributes.get("OctaveShift") {
-            None => 0,
-            Some("Octave Down") => -1,
-            Some("Octave Up") => 1,
-            Some(other) => {
-                return Err(error(format!(
-                    "Did not get a proper octave shift from {other}"
-                )));
-            }
-        };
-        let kind = attributes.required("Type")?;
-        let (clef, state) = match (kind, shift) {
-            ("Treble", 0) => (ClefKind::TrebleClef, ClefState::Treble),
-            ("Treble", -1) => (ClefKind::Treble8vbClef, ClefState::TrebleDown),
-            ("Treble", _) => (ClefKind::Treble8vaClef, ClefState::TrebleUp),
-            ("Bass", 0) => (ClefKind::BassClef, ClefState::Bass),
-            ("Bass", -1) => (ClefKind::Bass8vbClef, ClefState::BassDown),
-            ("Bass", _) => (ClefKind::Bass8vaClef, ClefState::BassUp),
-            ("Alto", 0) => (ClefKind::AltoClef, ClefState::Alto),
-            ("Alto", _) => return Err(error("cannot shift octaves on an alto clef")),
-            ("Tenor", 0) => (ClefKind::TenorClef, ClefState::Tenor),
-            ("Tenor", _) => return Err(error("cannot shift octaves on a tenor clef")),
-            ("Percussion", _) => (ClefKind::PercussionClef, ClefState::Percussion),
-            (other, _) => {
-                return Err(error(format!(
-                    "Did not find a proper clef in type, {other}"
-                )));
-            }
-        };
-        let mut clef = Clef::of_kind(clef);
-        if state == ClefState::Percussion {
-            clef.set_line(Some(2));
-        }
+        let (clef, state) = clef_of(attributes.required("Type")?, attributes.get("OctaveShift"))?;
         self.at_position(StreamElement::Clef(clef));
         self.clef = state;
         Ok(())
     }
 
     fn key(&mut self, attributes: &Attributes) -> Result<()> {
-        let signature = attributes.required("Signature")?;
-        let sharps = signature.chars().fold(0, |sharps, mark| match mark {
-            '#' => sharps + 1,
-            'b' => sharps - 1,
-            _ => sharps,
-        });
-        self.key = KeySignature::new(sharps);
+        self.key = KeySignature::new(key_sharps(attributes.required("Signature")?));
         self.at_position(StreamElement::KeySignature(self.key.clone()));
         Ok(())
     }
@@ -1129,6 +1091,118 @@ fn with_dots(duration: &Duration, dots: u32) -> Duration {
     dotted
 }
 
+/// music21's `createClef`: the clef a `Type` and `OctaveShift` name, and
+/// the name music21's reader keeps for it as `currentClef`.
+///
+/// # Errors
+///
+/// An octave shift or clef music21 does not know, or a shifted alto or
+/// tenor clef.
+pub fn clef_named(kind: &str, shift: Option<&str>) -> Result<(Clef, &'static str)> {
+    let (clef, state) = clef_of(kind, shift)?;
+    Ok((clef, state.music21_name()))
+}
+
+fn clef_of(kind: &str, shift: Option<&str>) -> Result<(Clef, ClefState)> {
+    let shift = match shift {
+        None => 0,
+        Some("Octave Down") => -1,
+        Some("Octave Up") => 1,
+        Some(other) => {
+            return Err(error(format!(
+                "Did not get a proper octave shift from {other}"
+            )));
+        }
+    };
+    let (clef, state) = match (kind, shift) {
+        ("Treble", 0) => (ClefKind::TrebleClef, ClefState::Treble),
+        ("Treble", -1) => (ClefKind::Treble8vbClef, ClefState::TrebleDown),
+        ("Treble", _) => (ClefKind::Treble8vaClef, ClefState::TrebleUp),
+        ("Bass", 0) => (ClefKind::BassClef, ClefState::Bass),
+        ("Bass", -1) => (ClefKind::Bass8vbClef, ClefState::BassDown),
+        ("Bass", _) => (ClefKind::Bass8vaClef, ClefState::BassUp),
+        ("Alto", 0) => (ClefKind::AltoClef, ClefState::Alto),
+        ("Alto", _) => return Err(error("cannot shift octaves on an alto clef")),
+        ("Tenor", 0) => (ClefKind::TenorClef, ClefState::Tenor),
+        ("Tenor", _) => return Err(error("cannot shift octaves on a tenor clef")),
+        ("Percussion", _) => (ClefKind::PercussionClef, ClefState::Percussion),
+        (other, _) => {
+            return Err(error(format!(
+                "Did not find a proper clef in type, {other}"
+            )));
+        }
+    };
+    let mut clef = Clef::of_kind(clef);
+    if state == ClefState::Percussion {
+        clef.set_line(Some(2));
+    }
+    Ok((clef, state))
+}
+
+/// music21's `createKey`: sharps less flats in a `Signature` value.
+#[must_use]
+pub fn key_sharps(signature: &str) -> IntegerType {
+    signature.chars().fold(0, |sharps, mark| match mark {
+        '#' => sharps + 1,
+        'b' => sharps - 1,
+        _ => sharps,
+    })
+}
+
+/// music21's `createTimeSignature`: a `Signature` value as a ratio.
+#[must_use]
+pub fn meter_ratio(signature: &str) -> &str {
+    match signature {
+        "AllaBreve" => "2/2",
+        "Common" => "4/4",
+        other => other,
+    }
+}
+
+/// music21's `createOtherRepetitions`: the mark a flow `Style` names.
+///
+/// # Errors
+///
+/// A style music21 does not know.
+pub fn flow_kind(style: &str) -> Result<RepeatExpressionKind> {
+    match style {
+        "DCalFine" => Ok(RepeatExpressionKind::DaCapoAlFine),
+        "Coda" | "ToCoda" => Ok(RepeatExpressionKind::Coda),
+        "Segno" => Ok(RepeatExpressionKind::Segno),
+        "DSalCoda" => Ok(RepeatExpressionKind::DalSegnoAlCoda),
+        "Fine" => Ok(RepeatExpressionKind::Fine),
+        _ => Err(error(format!("Cannot get style from {style}"))),
+    }
+}
+
+/// What a barline `Style` does to the measure: music21's
+/// `createBarlines`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BarStyle {
+    /// The next measure opens with a start repeat.
+    RepeatOpen,
+    /// The measure closes with an end repeat.
+    RepeatClose,
+    /// The measure closes with a barline of this kind.
+    Closing(BarlineType),
+}
+
+/// The barline a `Style` names.
+///
+/// # Errors
+///
+/// A style music21 does not know.
+pub fn bar_style(style: &str) -> Result<BarStyle> {
+    match style {
+        "MasterRepeatOpen" | "LocalRepeatOpen" => Ok(BarStyle::RepeatOpen),
+        "MasterRepeatClose" | "LocalRepeatClose" => Ok(BarStyle::RepeatClose),
+        "Double" => Ok(BarStyle::Closing(BarlineType::Double)),
+        "SectionOpen" => Ok(BarStyle::Closing(BarlineType::HeavyLight)),
+        "SectionClose" => Ok(BarStyle::Closing(BarlineType::Final)),
+        other => Err(error(format!("cannot find a style {other} in our list"))),
+    }
+}
+
 /// A slur begun at a note and not yet joined: the note's number, the
 /// measure it is in, where it ends and its place in its group.
 #[derive(Clone, Copy)]
@@ -1141,7 +1215,11 @@ struct OpenSlur {
 
 /// music21's `setDurationForObject`: the length a `Dur` value gives, with
 /// its dots, grace and triplet.
-fn duration_of(written: &str) -> Result<Duration> {
+///
+/// # Errors
+///
+/// A length music21 does not know.
+pub fn duration_of(written: &str) -> Result<Duration> {
     let mut parts = written.split(',');
     let length = match parts.next().unwrap_or("") {
         "Whole" => 4.0,
@@ -1178,7 +1256,8 @@ fn slurred(written: &str) -> bool {
 
 /// The staff position in a `Pos` value: its first whole number, as
 /// music21 finds it with `-?\d+`.
-fn first_number(position: &str) -> Option<IntegerType> {
+#[must_use]
+pub fn first_number(position: &str) -> Option<IntegerType> {
     let start = position.find(|c: char| c.is_ascii_digit())?;
     let negative = position[..start].ends_with('-');
     let digits: String = position[start..]
@@ -1198,7 +1277,8 @@ fn number<T: std::str::FromStr>(text: &str) -> Result<T> {
 
 /// music21's `createLyrics`: a verse split into the syllables sung to each
 /// note, a syllable after a hyphen written with one before it.
-fn lyrics(text: &str) -> Vec<String> {
+#[must_use]
+pub fn lyrics(text: &str) -> Vec<String> {
     let text = text
         .trim_matches('"')
         .replace("\r\n", " ")
