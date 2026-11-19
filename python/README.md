@@ -429,6 +429,9 @@ beside it:
 ```bash
 # music21's own test suite, on music21, on the crate and on the wheel
 cargo run --release -p xtask --features python -- music21-suite
+# where the wheel's functions and constants live in music21, worked out
+# from music21 into python/src/homes.rs (`--check` compares)
+cargo run --release -p xtask --features python -- homes
 # harte-library's test suite, on music21 and on the wheel
 cargo run --release -p xtask -- downstream
 ```

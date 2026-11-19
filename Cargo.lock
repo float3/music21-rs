@@ -2889,6 +2889,7 @@ dependencies = [
  "proc-macro2",
  "pyo3",
  "quote",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

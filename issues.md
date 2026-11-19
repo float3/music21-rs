@@ -278,7 +278,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
     `lily`, `graph` and `tree.core` (see DECISIONS). Partial, in
     music21's public names: `converter` 7 of 20, `corpus` 5 of 16,
     `stream` 17 of 21, `note` 11 of 18, `metadata` 12 of 20, `layout` 7
-    of 22 (`generate_homes.py --coverage`, 1,502 of 2,245 in all). A
+    of 22 (`xtask homes --coverage`, 1,502 of 2,245 in all). A
     provided corpus is read from `MUSIC21_RS_CORPUS`, and
     `getSourceFilePath` is that directory's parent. Five names are
     placed where music21 lacks them: `metadata.MetadataException`,

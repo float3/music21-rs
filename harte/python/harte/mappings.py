@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 
-from music21_rs.music21_rs import _HarteLabel
+from music21_rs import _HarteLabel
 
 # Each shorthand and the degrees it stands for, the root included.
 SHORTHAND_DEGREES = {

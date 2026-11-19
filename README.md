@@ -306,6 +306,8 @@ cargo test --manifest-path python-parity/Cargo.toml --test parity doctest_key::
 
 # music21's own test suite, on music21 and on the crate
 cargo run --release -p xtask --features python -- music21-suite
+# the wheel's table of where music21 keeps each name (`homes` rewrites it)
+cargo run --release -p xtask --features python -- homes --check
 
 # CI's site job; `report` fails when the feature map is stale
 cargo doc --workspace --no-deps

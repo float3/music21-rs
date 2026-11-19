@@ -9983,6 +9983,23 @@ print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
     ]
 
 
+def test_a_provided_module_names_a_missing_attribute_as_python_does(tmp_path):
+    """The message quotes the module and the name as Python's own does,
+    which is what music21's suite reads a blocker out of."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar
+try:
+    bar.noSuchName
+except AttributeError as error:
+    print(str(error).split(':')[0])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "module 'music21.bar' has no attribute 'noSuchName'"
+
+
 def test_provided_music21_parses_with_the_packages_converter(tmp_path):
     corpus = pathlib.Path(__file__).resolve().parents[2] / "music21" / "music21" / "corpus"
     if not corpus.is_dir():
@@ -10073,31 +10090,19 @@ print(stream.StreamException is music21_rs.StreamException)
 def test_every_exported_name_has_a_music21_home_or_none(tmp_path):
     """A name the package exports is placed in a module of music21's, or
     listed as one music21 has nowhere: a new function with neither means
-    `tests/generate_homes.py` has to be run again."""
+    `cargo run -p xtask --features python -- homes` has to be run again."""
     code = """
 import music21_rs
 music21_rs.provide_music21()
 from music21_rs import _homes, _provide
-from music21_rs import music21_rs as extension
 placed = {name for names in _provide._contents().values() for name in names}
-exported = {*extension.__all__, *extension.__exception_names__}
+exported = {*_provide._EXPORTED, *music21_rs.__exception_names__}
 print(sorted(exported - placed - set(_homes.NO_HOME)))
 print(sorted(placed & set(_homes.NO_HOME)))
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == ["[]", "[]"]
-
-
-def test_music21_homes_are_where_music21_keeps_them():
-    """`_homes.py` is what `generate_homes.py` works out from music21 now:
-    every home is a module of music21's that defines the name."""
-    pytest.importorskip("music21.stream")
-    script = pathlib.Path(__file__).with_name("generate_homes.py")
-    done = subprocess.run(
-        [sys.executable, str(script), "--check"], capture_output=True, text=True
-    )
-    assert done.returncode == 0, done.stderr
 
 
 def test_pth_file_provides_music21_without_importing_the_package(tmp_path):

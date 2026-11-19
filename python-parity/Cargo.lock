@@ -802,6 +802,7 @@ dependencies = [
  "pyo3",
  "regex",
  "serde",
+ "serde_json",
  "toml",
  "utils",
 ]
