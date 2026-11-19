@@ -12,6 +12,8 @@ mod harness;
 mod homes;
 #[cfg(feature = "python")]
 mod music21_suite;
+#[cfg(feature = "python")]
+mod provided_suite;
 mod report;
 mod report_script;
 mod scala_archive;
