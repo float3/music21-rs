@@ -212,9 +212,17 @@ impl ClefState {
     /// The step and octave of a staff position under this clef.
     fn step_and_octave(self, position: IntegerType) -> (char, IntegerType) {
         let (octave, lowest, steps) = self.table();
-        let from_lowest = position - lowest;
+        // Wider than the position, so one as far off the staff as an
+        // integer goes neither overflows nor panics.
+        let from_lowest = i64::from(position) - i64::from(lowest);
         let step = steps[usize::try_from(from_lowest.rem_euclid(7)).unwrap_or(0)];
-        (step, octave + from_lowest.div_euclid(7))
+        let octave = i64::from(octave) + from_lowest.div_euclid(7);
+        let octave = IntegerType::try_from(octave).unwrap_or(if octave < 0 {
+            IntegerType::MIN
+        } else {
+            IntegerType::MAX
+        });
+        (step, octave)
     }
 
     /// music21's `getStepAndOctaveFromPosition` tables: the octave of the
@@ -1355,6 +1363,16 @@ fn assemble(part: PartBuilt, index: usize, endings: &[(Vec<Place>, u32)]) -> Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A position as far from the staff as an integer goes gives some
+    /// step and octave rather than overflowing: the fuzzer found one.
+    #[test]
+    fn an_extreme_position_does_not_overflow() {
+        for clef in ["TREBLE", "BASS", "TREBLE8dw", "ALTO"] {
+            let _ = step_and_octave(clef, IntegerType::MIN);
+            let _ = step_and_octave(clef, IntegerType::MAX);
+        }
+    }
 
     #[test]
     fn a_position_is_a_step_and_octave_under_its_clef() {
