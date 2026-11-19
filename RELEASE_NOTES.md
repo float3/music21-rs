@@ -19,7 +19,8 @@
   streams answers a tree of trees; `TimespanTree` can be edited;
   `iterateVerticalities` walks lazily.
 - Scores read from MusicXML now also hold their staff groups, layouts,
-  repeat brackets, rehearsal marks, pedal objects and score style, so code
+  repeat brackets, rehearsal marks, pedal objects, fermatas, metric
+  modulations, percussion chords and score style, so code
   counting their elements sees more.
 
 ## added
@@ -66,7 +67,8 @@
   `spanner.RepeatBracket`, `stream['#id']`, `Stream.isSorted`/`autoSort`,
   `coreInsert`, `makeBeams(inPlace=True)`, `Verticality.beatStrength`,
   `StreamStyle` written into `<defaults>`, frames and fret boards written
-  as `<frame>`, roman numerals as `<harmony>`.
+  as `<frame>`, roman numerals as `<harmony>`, `editorial.Comment`,
+  `meter.SenzaMisuraTimeSignature`; every element answers music21's `id`.
 
 ## fixed
 
@@ -74,6 +76,7 @@
   with its offset there, not 0.
 - `show('text')` lists a measure's barlines where music21 does.
 - Installed, the interval network hands out music21's own `Terminus`.
+- The provided `metadata.properties` builds on Python 3.9 to 3.11.
 - A pickle names `_thawed` and the new `_groups` by the package, so a
   score cached by the wheel thaws where the crate is linked in, and a
   standalone wheel stream pickles at all.
@@ -90,7 +93,7 @@
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
-Gate (`xtask music21-suite`, provided side): 2596 of music21's 5276
+Gate (`xtask music21-suite`, provided side): 2621 of music21's 5276
 passing tests pass, up from 1298; 191 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
