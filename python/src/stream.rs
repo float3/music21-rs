@@ -383,6 +383,23 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
+/// Whether a key indexing a stream is a class, or a list or tuple of
+/// classes, as music21's `Stream.__getitem__` searches for.
+fn is_class_query(key: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if key.is_instance_of::<pyo3::types::PyType>() {
+        return Ok(true);
+    }
+    if !key.is_instance_of::<PyList>() && !key.is_instance_of::<PyTuple>() {
+        return Ok(false);
+    }
+    for each in key.try_iter()? {
+        if !each?.is_instance_of::<pyo3::types::PyType>() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
 /// [`sort_order`], for the context search.
 pub(crate) fn sort_order_of(object: &Bound<'_, PyAny>) -> i64 {
     sort_order(object)
@@ -4601,9 +4618,22 @@ impl Stream {
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
-        let index: isize = key
-            .extract()
-            .map_err(|_| PyTypeError::new_err("a stream is indexed by a number or a slice"))?;
+
+        // A class, or a list of classes, is looked for anywhere inside.
+        if is_class_query(key)? {
+            drop(me);
+            return slf
+                .call_method0("recurse")?
+                .call_method1("getElementsByClass", (key,));
+        }
+        let index: isize = key.extract().map_err(|_| {
+            let given = key.get_type().repr().map(|shown| shown.to_string());
+            PyTypeError::new_err(format!(
+                "Streams can get items by int, slice, class, class iterable, or string query; \
+                 got {}",
+                given.unwrap_or_default()
+            ))
+        })?;
         let length = elements.len() as isize;
         let at = if index < 0 { index + length } else { index };
         if at < 0 || at >= length {

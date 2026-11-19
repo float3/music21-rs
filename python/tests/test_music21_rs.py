@@ -3211,6 +3211,16 @@ def _flat_notes(stream):
     ]
 
 
+def test_a_stream_indexed_by_a_class_finds_it_anywhere_inside():
+    # music21's `Stream.__getitem__`: a class, or classes, search recursively.
+    part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 r4 e1")
+    assert [n.nameWithOctave for n in part[m.Note]] == ["C4", "D4", "E4"]
+    assert len(part[[m.Note, m.Rest]]) == 4
+    assert len(part[m.TimeSignature]) == 1
+    with pytest.raises(TypeError):
+        part[0.5]
+
+
 def test_streams_are_sliced_scaled_and_inverted_as_music21_does():
     # Each answer read off music21 11.0.0b12.
     part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4 f1")
