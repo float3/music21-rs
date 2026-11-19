@@ -225,13 +225,15 @@ fn deprecation_warning(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 /// Answer `import music21` from this package, music21 not being installed.
 ///
 /// Code written for music21 then runs on these classes unchanged, as far as
-/// the names it imports are ones this package has::
+/// the names it imports are ones this package has:
 ///
-///     import music21_rs
-///     music21_rs.provide_music21()
+/// ```python
+/// import music21_rs
+/// music21_rs.provide_music21()
 ///
-///     from music21 import chord
-///     chord.Chord('C4 E4 G4').commonName   # 'major triad'
+/// from music21 import chord
+/// chord.Chord('C4 E4 G4').commonName   # 'major triad'
+/// ```
 ///
 /// It refuses, with `ImportError`, where music21 itself can be imported:
 /// `install_into_music21()` is the way to run music21 on these classes
