@@ -12,9 +12,51 @@
 //! partitioning by a count takes the first of those with that many parts.
 //! That is why `5/8` in two is `{2/8+3/8}` and not `{2.5/8+2.5/8}`.
 
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+
 use crate::defaults::{FloatType, UnsignedIntegerType};
 use crate::error::{Error, Result};
 use crate::meter::tools;
+
+/// The partition options of each ratio asked for so far, as music21 keeps
+/// its `getPartitionOptions` in an `lru_cache`: every time signature
+/// divides its spans several levels deep, and building the options as text
+/// each time was most of what making one cost.
+type Options = Arc<[Vec<String>]>;
+static OPTIONS: LazyLock<Mutex<HashMap<(UnsignedIntegerType, UnsignedIntegerType), Options>>> =
+    LazyLock::new(Mutex::default);
+
+/// The ways a ratio divides: [`MeterTerminal::partition_options`], kept.
+fn options_of(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Options {
+    let key = (numerator, denominator);
+    let mut kept = OPTIONS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(found) = kept.get(&key) {
+        return Arc::clone(found);
+    }
+    let made: Options = built_options(numerator, denominator).into();
+    kept.insert(key, Arc::clone(&made));
+    made
+}
+
+/// The options built afresh: the algorithmic ones, then the presets, each
+/// once and none empty.
+fn built_options(
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+) -> Vec<Vec<String>> {
+    let mut options = tools::division_options_algo(numerator, denominator);
+    options.extend(tools::division_options_preset(numerator, denominator));
+    let mut seen = Vec::new();
+    options.retain(|option| {
+        if option.is_empty() || seen.contains(option) {
+            return false;
+        }
+        seen.push(option.clone());
+        true
+    });
+    options
+}
 
 /// How close two quarter lengths must be to count as the same boundary.
 const OFFSET_TOLERANCE: FloatType = 1e-9;
@@ -370,10 +412,10 @@ impl MeterTerminal {
     /// count nothing divides into leaves the first option standing, which is
     /// music21's `loadDefault`.
     pub fn partitioned_by_count(&self, count: usize, load_default: bool) -> Result<Self> {
-        let options = self.partition_options();
+        let options = options_of(self.numerator, self.denominator);
         let chosen = options.iter().find(|option| option.len() == count);
         let chosen = match chosen {
-            Some(option) => option.clone(),
+            Some(option) => option,
             None => {
                 if !load_default || options.is_empty() {
                     return Err(Error::Meter(format!(
@@ -381,7 +423,7 @@ impl MeterTerminal {
                         self.numerator, self.denominator
                     )));
                 }
-                options[0].clone()
+                &options[0]
             }
         };
         let borrowed: Vec<&str> = chosen.iter().map(String::as_str).collect();
@@ -419,7 +461,8 @@ impl MeterTerminal {
             return self.partitioned_by_parts(&borrowed);
         }
         let asked: Vec<UnsignedIntegerType> = numerators.to_vec();
-        let matching = self.partition_options().into_iter().find(|option| {
+        let options = options_of(self.numerator, self.denominator);
+        let matching = options.iter().find(|option| {
             option
                 .iter()
                 .map(|part| {
@@ -624,20 +667,7 @@ impl MeterTerminal {
     /// prefers them: music21's `getPartitionOptions`.
     #[must_use]
     pub fn partition_options(&self) -> Vec<Vec<String>> {
-        let mut options = tools::division_options_algo(self.numerator, self.denominator);
-        options.extend(tools::division_options_preset(
-            self.numerator,
-            self.denominator,
-        ));
-        let mut seen = Vec::new();
-        options.retain(|option| {
-            if option.is_empty() || seen.contains(option) {
-                return false;
-            }
-            seen.push(option.clone());
-            true
-        });
-        options
+        options_of(self.numerator, self.denominator).to_vec()
     }
 
     /// The terminals at one level of this sequence: music21's `getLevelList`.
@@ -981,8 +1011,24 @@ fn split_ratio(ratio: &str) -> Result<(UnsignedIntegerType, UnsignedIntegerType)
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::MeterTerminal;
     use super::OffsetAlign;
+    use super::options_of;
+
+    /// The options of a ratio are built once and kept, as music21 keeps
+    /// them in an `lru_cache`: building them as text for every span every
+    /// time signature divides was most of what making one cost.
+    #[test]
+    fn partition_options_are_kept() {
+        let first = options_of(4, 4);
+        assert!(Arc::ptr_eq(&first, &options_of(4, 4)));
+        assert_eq!(
+            MeterTerminal::new(4, 4).unwrap().partition_options(),
+            first.to_vec()
+        );
+    }
 
     /// music21's own `divisionOptionsAlgo(4, 4)`, in its order.
     ///

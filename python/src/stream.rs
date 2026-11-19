@@ -46,7 +46,7 @@ use pyo3::prelude::*;
 
 use crate::Walkable;
 use crate::sites::{Here, SortKey};
-use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
+use pyo3::types::{PyDict, PyList, PySlice, PyString, PyTuple};
 
 use music21::braille::SegmentDivision;
 use music21::voiceleading::QuartetOptions;
@@ -557,16 +557,21 @@ fn already_held(object: &Bound<'_, PyAny>, stream: Option<&str>) -> PyResult<PyE
 /// Whether an object is of a class, named or given: a name matches any
 /// class in the object's lineage, or any name in music21's `classes`.
 fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if let Ok(name) = class.extract::<String>() {
-        let lineage = object.get_type().getattr("__mro__")?;
-        for each in lineage.walk()? {
-            if each?.getattr("__name__")?.extract::<String>()? == name {
-                return Ok(true);
-            }
+    let Ok(name) = class.cast::<PyString>() else {
+        return object.is_instance(class);
+    };
+
+    // Compared in place: the writer asks this of every element several
+    // times, and copying each name out was most of what it cost.
+    let name = name.to_str()?;
+    let py = object.py();
+    for each in object.get_type().mro().iter() {
+        let each = each.getattr(pyo3::intern!(py, "__name__"))?;
+        if each.cast::<PyString>()?.to_str()? == name {
+            return Ok(true);
         }
-        return Ok(false);
     }
-    object.is_instance(class)
+    Ok(false)
 }
 
 /// What music21 says an object *is*: its own class and every class it is a
@@ -1553,8 +1558,15 @@ impl Stream {
                 .iter()
                 .map(|held| (held.offset, held.object.clone_ref(py), Placing::Held)),
         );
+
+        // The end is worked out only when something stands there: it asks
+        // every element for its length.
+        let last = self.end_elements(py);
+        if last.is_empty() {
+            return Ok(out);
+        }
         let end = self.end(py)?;
-        for last in self.end_elements(py) {
+        for last in last {
             out.push((end, last, Placing::Last));
         }
         Ok(out)
@@ -1775,6 +1787,33 @@ impl Stream {
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
     }
+}
+
+/// Which elements `notes` and `notesAndRests` keep.
+#[derive(Clone, Copy)]
+enum Sounding {
+    Notes,
+    NotesAndRests,
+}
+
+/// Whether an element is a note or chord, or a rest where those are kept,
+/// by music21's `isNote`, `isChord` and `isRest` flags. A stream of this
+/// package's is none of them; it is skipped without asking, since a flag a
+/// stream lacks costs a failed lookup.
+fn is_sounding(object: &Bound<'_, PyAny>, kept: Sounding) -> bool {
+    if object.is_instance_of::<Stream>() {
+        return false;
+    }
+    let flags: &[&str] = match kept {
+        Sounding::Notes => &["isNote", "isChord"],
+        Sounding::NotesAndRests => &["isNote", "isChord", "isRest"],
+    };
+    flags.iter().any(|flag| {
+        object
+            .getattr(*flag)
+            .and_then(|flag| flag.is_truthy())
+            .unwrap_or(false)
+    })
 }
 
 /// Whether an element's `id` is the one asked for, as music21's
@@ -4552,8 +4591,10 @@ impl Stream {
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        if let Ok(query) = key.extract::<String>() {
-            return Self::queried(slf, &query);
+        // A cast, not an extraction: a failed extraction builds an error,
+        // and most keys are numbers.
+        if let Ok(query) = key.cast::<PyString>() {
+            return Self::queried(slf, query.to_str()?);
         }
         let me = slf.borrow();
         let elements = me.elements(py)?;
@@ -4641,12 +4682,7 @@ impl Stream {
     #[getter]
     fn notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Walked>> {
         Self::filtered(slf, "notes", |object| {
-            Ok(["isNote", "isChord"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+            Ok(is_sounding(object, Sounding::Notes))
         })
     }
 
@@ -4655,16 +4691,7 @@ impl Stream {
     #[getter]
     fn notesAndRests<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Walked>> {
         Self::filtered(slf, "notesAndRests", |object| {
-            for flag in ["isNote", "isChord", "isRest"] {
-                if object
-                    .getattr(flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-                {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
+            Ok(is_sounding(object, Sounding::NotesAndRests))
         })
     }
 
@@ -9109,19 +9136,22 @@ fn barline_value(barline: &Bound<'_, PyAny>) -> PyResult<music21::Barline> {
 /// they stand among the score's parts.
 fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()> {
     let py = object.py();
-    let Ok(bundle) = object.getattr("spannerBundle") else {
-        return Ok(());
-    };
+
+    // The parts first: only a stream holding parts can name them, and
+    // `spannerBundle` walks everything held, so a measure or a part must
+    // not ask for it. `isStream` before `kind_of`, which is the dearer.
     let mut parts: Vec<Bound<'_, PyAny>> = Vec::new();
     for element in object.getattr("elements")?.walk()? {
         let element = element?;
-        if matches!(
-            kind_of(&element),
-            Ok(StreamKind::Part | StreamKind::PartStaff)
-        ) && element
+        let stream = element
             .getattr("isStream")
             .and_then(|flag| flag.is_truthy())
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if stream
+            && matches!(
+                kind_of(&element),
+                Ok(StreamKind::Part | StreamKind::PartStaff)
+            )
         {
             parts.push(element);
         }
@@ -9129,6 +9159,9 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
     if parts.is_empty() {
         return Ok(());
     }
+    let Ok(bundle) = object.getattr("spannerBundle") else {
+        return Ok(());
+    };
     for group in bundle.call_method1("getByClass", ("StaffGroup",))?.walk()? {
         stream.add_staff_group(staff_group_value(&group?, &parts)?);
     }
@@ -10192,9 +10225,10 @@ impl Walked {
     /// list for a slice, and its own code asks for one
     /// (`thisStreamIter[3:5]`).
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
-        if let Ok(query) = index.extract::<String>() {
+        if let Ok(query) = index.cast::<PyString>() {
+            let query = query.to_str()?;
             let found = self.found.iter().map(|(_, object)| object.bind(py).clone());
-            return first_with_id(found, &query)
+            return first_with_id(found, query)
                 .map(Bound::unbind)
                 .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
         }
@@ -10243,12 +10277,7 @@ impl Walked {
     #[getter]
     fn notes(&self, py: Python<'_>) -> PyResult<Self> {
         self.picked(py, "getElementsByClass", |object| {
-            Ok(["isNote", "isChord"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+            Ok(is_sounding(object, Sounding::Notes))
         })
     }
 
@@ -10256,12 +10285,7 @@ impl Walked {
     #[getter]
     fn notesAndRests(&self, py: Python<'_>) -> PyResult<Self> {
         self.picked(py, "getElementsByClass", |object| {
-            Ok(["isNote", "isChord", "isRest"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+            Ok(is_sounding(object, Sounding::NotesAndRests))
         })
     }
 

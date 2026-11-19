@@ -1175,14 +1175,15 @@ fn contextSites<'py>(
 }
 
 /// music21's `SortTuple`: an installed music21's, or music21's own where
-/// it imports, and the package's otherwise.
+/// it is loaded, and the package's otherwise. Never imported to ask: that
+/// loads all of music21, and searches for it on every call where it is
+/// absent.
 fn sort_tuple_class(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     if let Some(installed) = crate::installed_class(py, "music21.sorting", "SortTuple") {
         return Ok(installed);
     }
-    if let Ok(found) = py
-        .import("music21.sorting")
-        .and_then(|module| module.getattr("SortTuple"))
+    if let Some(found) = crate::loaded_music21(py, "music21.sorting")
+        .and_then(|module| module.getattr("SortTuple").ok())
     {
         return Ok(found);
     }
@@ -1217,8 +1218,9 @@ fn sortTuple<'py>(
     };
     // An installed element is one of music21's own objects, and music21's
     // streams record where it stands only in music21's sites: music21
-    // knows where.
-    if let Ok(base) = crate::real_music21(py, "music21.base")
+    // knows where. Only a loaded music21 can have made one, so it is not
+    // imported to ask.
+    if let Some(base) = crate::loaded_music21(py, "music21.base")
         && element.is_instance(&base.getattr("Music21Object")?)?
     {
         let asked = given.map_or_else(

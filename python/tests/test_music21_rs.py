@@ -2309,6 +2309,37 @@ def test_importing_the_package_imports_no_music21():
     )
 
 
+def test_sort_tuple_looks_for_no_music21(tmp_path):
+    """`sortTuple` asked music21 whether the element was one of its own by
+    importing `music21.base` and `music21.sorting`: standing alone, with
+    music21 absent, every call searched the path for it again, about 90
+    microseconds a call. Counts the searches after a first call."""
+    code = """
+import sys
+import music21_rs as m
+
+class Counting:
+    asked = []
+    def find_spec(self, name, path=None, target=None):
+        if name.split('.')[0] == 'music21':
+            self.asked.append(name)
+        return None
+
+s = m.Stream()
+n = m.Note('C4')
+s.append(n)
+n.sortTuple()
+counting = Counting()
+sys.meta_path.insert(0, counting)
+for i in range(3):
+    n.sortTuple()
+print(counting.asked)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "[]"
+
+
 def test_an_exception_is_the_class_music21_keeps_under_that_name():
     # The module string is what `install_into_music21` leaves music21 holding,
     # and what a traceback prints.
