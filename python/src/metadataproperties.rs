@@ -72,11 +72,14 @@ fn description_class(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
         })
         .collect::<PyResult<Vec<_>>>()?,
     )?;
-    let keywords = PyDict::new(py);
-    keywords.set_item("module", MODULE)?;
-    py.import("dataclasses")?
+    // Its module set after: `make_dataclass` takes `module` only from
+    // Python 3.12.
+    let made = py
+        .import("dataclasses")?
         .getattr("make_dataclass")?
-        .call(("PropertyDescription", fields), Some(&keywords))
+        .call1(("PropertyDescription", fields))?;
+    made.setattr("__module__", MODULE)?;
+    Ok(made)
 }
 
 /// One description as music21's: the unique name set only where it is
