@@ -23,6 +23,14 @@
   modulations, percussion chords and score style, so code
   counting their elements sees more.
 
+- **The wheel's Python is Rust now.** `provide_music21`, its import hook,
+  `converter` and `corpus` are pyo3 code; the package's `__init__.py` is
+  one line. `music21_rs.music21_rs` is the package itself; the private
+  `__music21_modules__` and `__music21_built_modules__` are gone.
+  `xtask homes [--check]` replaces `generate_homes.py`, the provided
+  gate's harness is in xtask, and parity's shards are dealt by
+  `cargo run --manifest-path python-parity/Cargo.toml --bin shards`.
+
 ## added
 
 - **Crate:** public `midi::base` (MIDI events, tracks and headers as
