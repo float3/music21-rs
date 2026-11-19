@@ -291,9 +291,11 @@ enum Outcome {
 }
 
 /// Takes out how the export is laid out: MuseScore writes the pages and
-/// systems it engraved, and its title frames as credits, none of which the
-/// crate's reader of its own file reads.
+/// systems it engraved, its title frames as credits and its engraving
+/// style as `<defaults>`, none of which the crate's reader of its own file
+/// reads.
 fn strip_layouts(stream: &mut Stream) {
+    stream.set_stream_style(None);
     stream.retain_leaves(&mut |_, element| {
         !matches!(
             element,
