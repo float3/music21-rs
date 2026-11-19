@@ -1,7 +1,8 @@
-# How long each parity test takes on CI, in seconds, as `shards.py`
-# deals the tests out to the shards by. A test missing here goes to a
-# shard by a hash of its name. Remake it from the logs of a CI run's
-# parity shards: `python3 shards.py times shard*.log > test-times.toml`.
+# How long each parity test takes on CI, in seconds, as the `shards`
+# binary deals the tests out to the shards by. A test missing here goes
+# to a shard by a hash of its name. Remake it from the logs of a CI run's
+# parity shards: `cargo run --manifest-path python-parity/Cargo.toml
+# --bin shards -- times shard*.log > python-parity/test-times.toml`.
 
 [seconds]
 "abc_read_parity::the_crate_reads_abc_as_music21_does" = 4.1

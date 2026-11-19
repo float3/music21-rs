@@ -570,10 +570,11 @@ that are at parity. the pause is recorded against the test it landed on and
 taken off before the sides are compared; the clock time stays in the JSON.
 
 **parity tests are dealt to shards by measured time.**
-`python-parity/shards.py` deals the tests, slowest first, by the times in
-`test-times.toml`, and nextest's priorities start the slow ones first.
-refresh with `python3 python-parity/shards.py times shard*.log >
-python-parity/test-times.toml`. *costs:* the times go stale as tests
+the parity crate's `shards` binary deals the tests, slowest first, by the
+times in `test-times.toml`, and nextest's priorities start the slow ones
+first. the build job deals all five shards and hands each its filter.
+refresh with `cargo run --manifest-path python-parity/Cargo.toml --bin
+shards -- times shard*.log > python-parity/test-times.toml`. *costs:* the times go stale as tests
 change, and a test missing from the file is dealt as if quick.
 
 **the crate's events carry music21's priority.** `StreamEvent::priority`

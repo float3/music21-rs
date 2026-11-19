@@ -214,10 +214,6 @@ jobs:
         with:
           tool: cargo-nextest
 
-      # The script that deals the tests out to the shards below.
-      - name: Test the shard dealing
-        run: python -m unittest discover -s python-parity -p test_shards.py
-
       - name: Build and archive the parity tests
         shell: bash
         run: |
@@ -228,12 +224,33 @@ jobs:
           cargo nextest archive --manifest-path python-parity/Cargo.toml \
             --archive-file python-parity.tar.zst
 
+      # Each shard's filter and priorities, from the archive's tests and the
+      # times CI measured, so a shard has nothing to build. The `shards`
+      # binary's own tests are in the archive, and run on the shards.
+      - name: Deal the tests out to the shards
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo nextest list --archive-file python-parity.tar.zst \
+            --workspace-remap python-parity \
+            --message-format json > "$RUNNER_TEMP/parity-tests.json"
+          mkdir -p parity-shards
+          for shard in 1 2 3 4 5; do
+            cargo run --manifest-path python-parity/Cargo.toml --bin shards -- \
+              run "$shard" 5 --list "$RUNNER_TEMP/parity-tests.json" \
+              --config "parity-shards/$shard.toml" > "parity-shards/$shard.filter"
+          done
+
       # Already compressed, and read once by each shard and then by nobody.
       - name: Upload the archive
         uses: actions/upload-artifact@v7
         with:
           name: python-parity-archive
-          path: python-parity.tar.zst
+          path: |
+            python-parity.tar.zst
+            parity-shards/
           compression-level: 0
           retention-days: 1
 
@@ -319,16 +336,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          cargo nextest list --archive-file python-parity.tar.zst \
-            --workspace-remap python-parity \
-            --message-format json > "$RUNNER_TEMP/parity-tests.json"
-          filter="$(python python-parity/shards.py run ${{ matrix.shard }} 5 \
-            --list "$RUNNER_TEMP/parity-tests.json" \
-            --config "$RUNNER_TEMP/parity-shard.toml")"
           cargo nextest run --archive-file python-parity.tar.zst \
             --workspace-remap python-parity \
-            --config-file "$RUNNER_TEMP/parity-shard.toml" \
-            --no-fail-fast --no-tests=pass -E "$filter"
+            --config-file "parity-shards/${{ matrix.shard }}.toml" \
+            --no-fail-fast --no-tests=pass \
+            -E "$(cat "parity-shards/${{ matrix.shard }}.filter")"
 
   # The wheel is built and tested on Linux here, and on Windows and macOS
   # in `wheel-platforms`. Linux's is a job of its own because
