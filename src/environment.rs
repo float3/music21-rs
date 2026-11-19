@@ -687,6 +687,7 @@ pub fn default_root_temp_dir(
 
 /// Makes a directory only its owner can open, as `mkdir(mode=0o700)` does.
 fn private_directory(path: &Path) -> std::io::Result<()> {
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
