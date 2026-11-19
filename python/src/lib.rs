@@ -87,7 +87,9 @@ pub mod clef;
 pub mod clercqtemperley;
 mod common;
 pub mod commontest;
+mod converter;
 pub mod converters;
+mod corpus;
 pub mod correlate;
 pub mod defaults;
 pub mod derivation;
@@ -113,6 +115,7 @@ pub mod harmony;
 pub mod harmparser;
 pub mod hartelabel;
 pub mod hasher;
+mod homes;
 pub mod humdruminstruments;
 pub mod instrument;
 mod instrument_kinds;
@@ -146,6 +149,7 @@ mod plumbing;
 pub mod possibility;
 pub mod prebase;
 pub mod primitives;
+mod provide;
 pub mod realizer;
 pub mod realizerscale;
 pub mod reducechords;
@@ -616,9 +620,8 @@ pub(crate) fn loaded_music21<'py>(py: Python<'py>, name: &str) -> Option<Bound<'
 }
 
 /// The package pickles reach this one's helpers through, set as the
-/// module registers: `music21_rs` for the wheel's `music21_rs.music21_rs`
-/// and for the crate linked in as `music21_rs`, the facade's own name under
-/// `python-parity`.
+/// module registers: `music21_rs` for the wheel and for the crate linked
+/// in as `music21_rs`, the facade's own name under `python-parity`.
 static PACKAGE_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// The name [`PACKAGE_NAME`] holds, `music21_rs` before registration.
@@ -2403,15 +2406,27 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     thaw.setattr("__module__", package_name(m.py()))?;
     m.add_function(thaw)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
-    // `common` first: where two of these have a name, `provide_music21`
-    // places `common`'s wherever music21 imports it.
-    let built: Vec<String> = common::names()
-        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
-        .collect();
-    m.add("__music21_built_modules__", built)?;
     m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
+}
+
+/// What the extension takes over from the package that imports it.
+const PACKAGE_IDENTITY: [&str; 5] = [
+    "__spec__",
+    "__file__",
+    "__path__",
+    "__package__",
+    "__loader__",
+];
+
+/// Every module of music21's built here whole: `common` first, since where
+/// two of these have a name, `provide_music21` places `common`'s wherever
+/// music21 imports it.
+fn built_modules() -> Vec<String> {
+    common::names()
+        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
+        .collect()
 }
 
 /// music21's modules that are built here whole, as modules, rather than
@@ -2543,26 +2558,57 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Not music21's: what the harte-rs package builds its `Harte` on.
     hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
-    // What `provide_music21` builds music21's modules from: the names each
-    // module of music21's is installed under, and the package's version.
-    m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    // maturin's generated package does `from .music21_rs import *`, which
-    // without this would pull the extension module in under its own name.
-    let mut names: Vec<String> = m
+
+    // Every name registered but the dunders, private ones included: what
+    // `provide_music21` places and the table of homes is worked out for.
+    let mut exported: Vec<String> = m
         .dict()
         .keys()
         .iter()
         .filter_map(|key| key.extract::<String>().ok())
-        // Everything but the dunders, since the package the wheel installs
-        // takes its contents from this list: a pickle written by one of
-        // these classes names `_thawed`, and music21's own `key` doctest
-        // reads `_sharpsToPitchCache` back.
         .filter(|name| !name.starts_with("__"))
         .collect();
-    names.sort();
-    m.add("__all__", names)?;
-    Ok(())
+    exported.sort();
+
+    // The public names: the exceptions are among them, though each is
+    // built on first asking (see [`module_getattr`]).
+    let mut public: Vec<String> = exported
+        .iter()
+        .map(String::as_str)
+        .chain(EXCEPTION_NAMES.iter().copied())
+        .chain(["provide_music21"])
+        .filter(|name| !name.starts_with('_'))
+        .map(str::to_owned)
+        .collect();
+    public.sort();
+
+    // The package's one line imports this module, which stands in for the
+    // package from here on: `import music21_rs` answers with it, under the
+    // package's name, spec and file.
+    let modules = m.py().import("sys")?.getattr("modules")?;
+    let package = package_name(m.py());
+    if let Some(imported) = modules.get_item(package).ok().filter(|found| !found.is(m)) {
+        for name in PACKAGE_IDENTITY {
+            if let Ok(value) = imported.getattr(name) {
+                m.setattr(name, value)?;
+            }
+        }
+    }
+    modules.set_item(package, m)?;
+    m.setattr("__name__", package)?;
+
+    // music21's `converter` and `corpus`, importable by their dotted names.
+    for (name, module) in [
+        ("converter", converter::module(m.py())?),
+        ("corpus", corpus::module(m.py())?),
+    ] {
+        modules.set_item(module.name()?, &module)?;
+        m.add(name, module)?;
+    }
+    provide::register(m, exported)?;
+    m.add("__all__", public)?;
+    provide::provide_if_asked(m)
 }
 
 #[cfg(test)]

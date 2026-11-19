@@ -231,12 +231,13 @@ where it would sit best in a package of its own.
 **without music21 installed, the switch is `provide_music21()`.** an
 import hook answers `music21` and each module of music21's the package
 has classes for, with the package's classes, functions and constants
-under music21's names (`_homes.py`, generated from music21's own
-modules, says where each lives), and refuses any other module by name
-rather than faking it. `MUSIC21_RS_PROVIDE_MUSIC21=1` turns it on for
-code that never imports `music21_rs`. every lookup of music21's own
-state goes through `real_music21()`, which passes a provided module
-over, so the package then does what it does with no music21 at all.
+under music21's names (`python/src/homes.rs`, generated from music21's
+own modules by `xtask homes`, says where each lives), and refuses any
+other module by name rather than faking it.
+`MUSIC21_RS_PROVIDE_MUSIC21=1` turns it on for code that never imports
+`music21_rs`. every lookup of music21's own state goes through
+`real_music21()`, which passes a provided module over, so the package
+then does what it does with no music21 at all.
 *costs:* a provided module lacks whatever the package does not port,
 and says so only when the name is asked for.
 
@@ -252,8 +253,8 @@ subclass `list`; `Direction` and `Terminus` by the enum functional API;
 temporary files by Python's `tempfile`; Python ints cross as `BigInt`.
 
 **modules built whole are listed and built on first asking.** the
-extension names in `__music21_built_modules__` every module of music21's
-it builds whole -- `common` and its thirteen modules, `environment`,
+extension lists in `BUILT_MODULES` every module of music21's it builds
+whole -- `common` and its thirteen modules, `environment`,
 `style`, `stream.filters` and others -- and `_music21_module(name)`
 builds one, once, when `provide_music21()` first asks. a module whose
 names would shadow Python's own (`set`, `get`) cannot be names on the
@@ -597,10 +598,15 @@ more test names, and a score's place in the deal is a list kept by hand.
 
 ## packaging and tooling
 
-**the wheel is a mixed layout.** a checked-in `python/pysrc/music21_rs/__init__.py`
-beside the extension, rather than the one maturin writes, because the
-generated package imports every name — which would build all 27 exceptions
-and import music21 at import time.
+**the package is the extension.** maturin writes a package around a
+pure-Rust extension whose `__init__` star-imports every name, which would
+build all 27 exceptions and import music21 at import time. so
+`python/pysrc/music21_rs/__init__.py` is one line importing the extension,
+and the extension puts itself in `sys.modules` under the package's name as
+it loads: `import music21_rs` answers with the extension. its `converter`,
+`corpus` and the `provide_music21` import hook are built in Rust and
+registered in `sys.modules` as it loads; the exceptions are built on first
+asking by the module's own `__getattr__`.
 
 **the dependency is taken under another name.** this crate's library and the
 crate it wraps are both `music21_rs`, and rustdoc refuses to build a doctest

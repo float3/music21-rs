@@ -9,6 +9,8 @@ mod facade;
 mod fixtures;
 mod harness;
 #[cfg(feature = "python")]
+mod homes;
+#[cfg(feature = "python")]
 mod music21_suite;
 mod report;
 mod report_script;
@@ -158,6 +160,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         #[cfg(not(feature = "python"))]
         Some("music21-suite") => Err(PYTHON_FEATURE.into()),
+        #[cfg(feature = "python")]
+        Some("homes") => {
+            let code = homes::run(&workspace_root, homes::Mode::parse(&args[2..]))?;
+            std::process::exit(code);
+        }
+        #[cfg(not(feature = "python"))]
+        Some("homes") => Err(PYTHON_FEATURE.into()),
         Some("contributed-back") => {
             let check = args[2..].iter().any(|arg| arg == "--check");
             let code = contributed_back::run(&workspace_root, check)?;
@@ -215,6 +224,7 @@ fn print_help() {
     eprintln!(
         "  cargo run --release -p xtask --features python -- music21-suite [--parallel] [--only a,b] [--sides music21_rs_wheel,music21_rs_provided] [--profile] [--route-converters musicxml,midi]"
     );
+    eprintln!("  cargo run --release -p xtask --features python -- homes [--check|--coverage]");
     eprintln!(
         "  cargo run --release -p xtask -- pr-numbers --head report.json [--base report.json] --out comment.md"
     );

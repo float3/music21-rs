@@ -383,6 +383,10 @@ reason = "its unpitched notes"
 kind = "facade-only"
 reason = "an answer about where an element stands; its beat duration is a computed answer"
 
+[Provider]
+kind = "facade-only"
+reason = "the import hook's table of music21's modules, which no crate value reads"
+
 [RTAtom]
 kind = "facade-only"
 reason = "music21's source and measure; the crate sorts the source into an atom's kind"

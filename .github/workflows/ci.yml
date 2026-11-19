@@ -601,6 +601,14 @@ jobs:
           export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
           cargo run --release -p xtask --features python -- music21-suite --parallel
 
+      # `python/src/homes.rs`, where the provider places each function and
+      # constant, is what music21 says now; it needs the wheel installed and
+      # music21 importable, as the suite does.
+      - name: Check the table of homes
+        run: |
+          export PYO3_PYTHON="$(python -c 'import sys; print(sys.executable)')"
+          cargo run --release -p xtask --features python -- homes --check
+
   lint:
     name: Lint (fmt + clippy + check)
     runs-on: ubuntu-latest
