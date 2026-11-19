@@ -15,8 +15,8 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
+use super::BenchCase;
 use super::html::share;
-use super::suites::median_speedup;
 use super::{Report, SuiteStatus};
 
 /// The first line of the comment, which finds it again to edit in place.
@@ -135,11 +135,25 @@ fn metrics(report: &Report) -> Vec<Metric> {
         && !benchmarks.cases.is_empty()
     {
         found.push(Metric {
-            name: "Median speedup over music21".to_string(),
-            value: Value::Factor(median_speedup(&benchmarks.cases)),
+            name: "Geometric mean speedup over music21".to_string(),
+            value: Value::Factor(geometric_mean(&benchmarks.cases)),
         });
     }
     found
+}
+
+/// The geometric mean of the cases' speedups: a median lands on whichever
+/// case sits in the middle, and jumps when one case crosses it.
+fn geometric_mean(cases: &[BenchCase]) -> f64 {
+    let logs: Vec<f64> = cases
+        .iter()
+        .filter(|case| case.speedup > 0.0)
+        .map(|case| case.speedup.ln())
+        .collect();
+    if logs.is_empty() {
+        return 0.0;
+    }
+    (logs.iter().sum::<f64>() / logs.len() as f64).exp()
 }
 
 /// A percentage of a share, nought for an empty whole.
@@ -315,6 +329,28 @@ mod tests {
         head.suites[0].failed = 0;
         let text = comment(&head, None);
         assert!(!text.contains("Suite: parity"), "{text}");
+    }
+
+    /// The speed headline is the geometric mean of the cases, which one
+    /// case crossing the middle does not move as it moves a median.
+    #[test]
+    fn speed_is_the_geometric_mean_of_the_cases() {
+        let mut head = report("head", 100, 9);
+        head.benchmarks = Some(
+            serde_json::from_value(serde_json::json!({
+                "status": "passed", "command": "",
+                "cases": [
+                    {"case": "a", "group": "g", "music21_ns": 4.0, "music21_rs_ns": 1.0, "speedup": 4.0},
+                    {"case": "b", "group": "g", "music21_ns": 16.0, "music21_rs_ns": 1.0, "speedup": 16.0},
+                ],
+            }))
+            .unwrap(),
+        );
+        let text = comment(&head, None);
+        assert!(
+            text.contains("| Geometric mean speedup over music21 | 8.00× |"),
+            "{text}"
+        );
     }
 
     #[test]

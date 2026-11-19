@@ -77,6 +77,13 @@
 - `show('text')` lists a measure's barlines where music21 does.
 - Installed, the interval network hands out music21's own `Terminus`.
 - The provided `metadata.properties` builds on Python 3.9 to 3.11.
+- Speed: a meter's partition options are built once per ratio;
+  `sortTuple` no longer searches for music21 on each call; stream reads
+  and writes stop repeating spanner and class lookups. Reading bwv69.6
+  went from 7.1x to 9.2x music21's speed, writing it from 4.8x to 8.5x,
+  `recurse().notes` from 4.2x to 16x, `makeMeasures` from 5.4x to 10.7x.
+- An extreme NoteWorthy staff position no longer overflows (found by the
+  fuzzer).
 - A pickle names `_thawed` and the new `_groups` by the package, so a
   score cached by the wheel thaws where the crate is linked in, and a
   standalone wheel stream pickles at all.
