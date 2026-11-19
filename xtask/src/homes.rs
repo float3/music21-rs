@@ -109,12 +109,30 @@ fn music21_modules(py: Python<'_>) -> PyResult<Vec<(String, Bound<'_, PyModule>)
         if last.starts_with("test") {
             continue;
         }
-        let module = importlib
-            .call_method1("import_module", (&name,))?
-            .cast_into::<PyModule>()?;
+        // A module that needs a package music21 does not (its pytest
+        // plugin needs pytest) defines nothing the table places.
+        let module = match importlib.call_method1("import_module", (&name,)) {
+            Ok(module) => module.cast_into::<PyModule>()?,
+            Err(error) if missing_outside_music21(py, &error) => continue,
+            Err(error) => return Err(error),
+        };
         modules.push((name, module));
     }
     Ok(modules)
+}
+
+/// Whether `error` is a `ModuleNotFoundError` for a package other than
+/// music21's own.
+fn missing_outside_music21(py: Python<'_>, error: &PyErr) -> bool {
+    if !error.is_instance_of::<pyo3::exceptions::PyModuleNotFoundError>(py) {
+        return false;
+    }
+    let missing: Option<String> = error
+        .value(py)
+        .getattr("name")
+        .ok()
+        .and_then(|name| name.extract().ok());
+    missing.is_some_and(|name| name != "music21" && !name.starts_with("music21."))
 }
 
 /// Whether `module` is where music21 defines `name`, not imports it.
