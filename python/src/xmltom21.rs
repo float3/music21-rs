@@ -650,6 +650,21 @@ fn warn_all(py: Python<'_>, warnings: &[music21::Error]) -> PyResult<()> {
     Ok(())
 }
 
+/// What `added` holds put after what the note's list `member` holds, and
+/// the list set again: a note may hand back a copy of its list.
+fn append_to(note: &Bound<'_, PyAny>, member: &str, added: &Bound<'_, PyAny>) -> PyResult<()> {
+    let held = PyList::new(
+        note.py(),
+        note.getattr(member)?
+            .try_iter()?
+            .collect::<PyResult<Vec<_>>>()?,
+    )?;
+    for item in added.try_iter()? {
+        held.append(item?)?;
+    }
+    note.setattr(member, held)
+}
+
 /// Each of `members` copied from one object to another where the first
 /// has it set.
 fn copy_members(from: &Bound<'_, PyAny>, to: &Bound<'_, PyAny>, members: &[&str]) -> PyResult<()> {
@@ -1149,6 +1164,41 @@ impl PartParser {
         Ok(())
     }
 
+    /// music21's `applyMultiMeasureRest`: a rest joined to the rest of
+    /// several measures being read, which goes into the part once it has
+    /// all the rests it counts.
+    fn applyMultiMeasureRest(slf: &Bound<'_, Self>, r: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let active = slf.getattr("activeMultiMeasureRestSpanner")?;
+        if active.is_none() {
+            return Ok(());
+        }
+        active.call_method1("addSpannedElements", (r,))?;
+        let left: i64 = slf.getattr("multiMeasureRestsToCapture")?.extract()?;
+        slf.setattr("multiMeasureRestsToCapture", left - 1)?;
+        if left - 1 != 0 {
+            return Ok(());
+        }
+        slf.getattr("stream")?
+            .call_method1("insert", (0, &active))?;
+        slf.setattr("activeMultiMeasureRestSpanner", py.None())
+    }
+
+    /// music21's `insertActiveMultiMeasureRest`: the rest of several
+    /// measures being read put into the part, where it holds any rests,
+    /// as the part ends or another begins.
+    fn insertActiveMultiMeasureRest(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let py = slf.py();
+        let active = slf.getattr("activeMultiMeasureRestSpanner")?;
+        slf.setattr("activeMultiMeasureRestSpanner", py.None())?;
+        slf.setattr("multiMeasureRestsToCapture", 0)?;
+        if active.is_none() || active.call_method0("getSpannedElements")?.len()? == 0 {
+            return Ok(());
+        }
+        slf.getattr("stream")?.call_method1("insert", (0, active))?;
+        Ok(())
+    }
+
     /// music21's `setLastMeasureInfo`: the measure's number, suffix and
     /// meter kept for the next; a 4/4 where no meter has been met.
     fn setLastMeasureInfo(slf: &Bound<'_, Self>, m: &Bound<'_, PyAny>) -> PyResult<()> {
@@ -1241,7 +1291,7 @@ impl PartParser {
     }
 
     /// music21's `getDefaultInstrument`: the instrument a `<score-part>`
-    /// names, read as the reader reads it for a part.
+    /// names, before the part's own names are put on it.
     #[pyo3(signature = (mxScorePart = None))]
     fn getDefaultInstrument<'py>(
         slf: &Bound<'py, Self>,
@@ -1252,33 +1302,17 @@ impl PartParser {
             Some(given) => given.clone(),
             None => slf.getattr("mxScorePart")?,
         };
-        let score_part = match score_part.is_none() {
-            true => None,
-            false => Some(written(&score_part)?),
-        };
-        // Under the part's id, which names the instrument read.
-        let id: String = slf.getattr("partId")?.str()?.extract()?;
-        let part = crate::musicxml::element_tree(py)?
-            .getattr("Element")?
-            .call1(("part",))?;
-        part.call_method1("set", ("id", id))?;
-        part.call_method1(
-            "append",
-            (crate::musicxml::element_tree(py)?
-                .getattr("Element")?
-                .call1(("measure",))?,),
-        )?;
-        let read =
-            step::read_part(&written(&part)?, score_part.as_deref()).map_err(import_error)?;
-        warn_all(py, &read.warnings)?;
-        for part in &read.parts {
-            let made = crate::stream::from_crate(py, part)?;
-            let found = first_of(&made, "Instrument")?;
-            if !found.is_none() {
-                return Ok(found);
-            }
+        if score_part.is_none() {
+            return Err(MusicXMLImportException::new_err(
+                "score-part must be defined before calling this.",
+            ));
         }
-        music21_name(py, "music21.instrument", "Instrument")?.call0()
+        let (read, warnings) =
+            step::read_default_instrument(&written(&score_part)?).map_err(import_error)?;
+        warn_all(py, &warnings)?;
+        let made = object_of(py, &music21::StreamElement::Instrument(Box::new(read)))?;
+        made.setattr("partId", slf.getattr("partId")?)?;
+        Ok(made)
     }
 
     /// music21's `xmlMeasureToMeasure`: one `<measure>` read and appended
@@ -1667,8 +1701,41 @@ impl MeasureParser {
         let Some(given) = inputM21.filter(|given| !given.is_none()) else {
             return Ok(duration);
         };
-        given.setattr("quarterLength", duration.getattr("quarterLength")?)?;
-        Ok(given.clone())
+
+        // Written into the duration given, which music21 hands nothing back
+        // for; one of music21's own takes the length alone.
+        let py = slf.py();
+        match given.cast::<crate::duration::Duration>() {
+            Ok(target) => {
+                let read = duration.cast::<crate::duration::Duration>()?.borrow();
+                target.borrow_mut().take_from(py, &read);
+            }
+            Err(_) => given.setattr("quarterLength", duration.getattr("quarterLength")?)?,
+        }
+        Ok(py.None().into_bound(py))
+    }
+
+    /// music21's `xmlGraceToGrace`: the grace note of `noteOrChord`, with
+    /// whether it is slashed and the time it steals as the `<grace>` says.
+    #[staticmethod]
+    fn xmlGraceToGrace<'py>(
+        mxGrace: &Bound<'py, PyAny>,
+        noteOrChord: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let grace = noteOrChord.call_method0("getGrace")?;
+        let duration = grace.getattr("duration")?;
+        let slash: Option<String> = mxGrace.call_method1("get", ("slash",))?.extract()?;
+        duration.setattr("slash", matches!(slash.as_deref(), Some("yes") | None))?;
+        for (attribute, member) in [
+            ("steal-time-previous", "stealTimePrevious"),
+            ("steal-time-following", "stealTimeFollowing"),
+        ] {
+            let said: Option<String> = mxGrace.call_method1("get", (attribute,))?.extract()?;
+            if let Some(percent) = said.and_then(|said| said.trim().parse::<i64>().ok()) {
+                duration.setattr(member, percent as f64 / 100.0)?;
+            }
+        }
+        Ok(grace)
     }
 
     /// music21's `xmlToTuplets`: the tuplets a `<note>`'s duration is in.
@@ -1867,14 +1934,20 @@ impl MeasureParser {
 
     /// music21's `xmlOrnamentToExpression`: one mark of `<ornaments>`, as
     /// read on a note of its own; `None` for one music21 does not know.
-    #[pyo3(signature = (mxObj, *, taggedNote = None))]
+    #[pyo3(signature = (mxObj, *, mostRecentOrnament = None))]
     fn xmlOrnamentToExpression<'py>(
         slf: &Bound<'py, Self>,
         mxObj: &Bound<'py, PyAny>,
-        taggedNote: Option<&Bound<'py, PyAny>>,
+        mostRecentOrnament: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        let _ = taggedNote;
+        let tag: String = mxObj.getattr("tag")?.extract()?;
+        if tag == "accidental-mark" {
+            if let Some(ornament) = mostRecentOrnament.filter(|given| !given.is_none()) {
+                Self::mark_accidental(slf, mxObj, ornament)?;
+            }
+            return Ok(py.None().into_bound(py));
+        }
         let notations = format!(
             "<notations><ornaments>{}</ornaments></notations>",
             written(mxObj)?
@@ -1884,7 +1957,10 @@ impl MeasureParser {
         if expressions.len()? == 0 {
             return Ok(py.None().into_bound(py));
         }
-        expressions.get_item(0)
+        let ornament = expressions.get_item(0)?;
+        XMLParserBase::setPrintStyle(mxObj, &ornament)?;
+        XMLParserBase::setPlacement(mxObj, &ornament)?;
+        Ok(ornament)
     }
 
     /// music21's `xmlNotations`: what a `<notations>` marks -- the
@@ -1901,10 +1977,7 @@ impl MeasureParser {
             if read.len()? == 0 {
                 continue;
             }
-            let held = n.getattr(member)?;
-            for mark in read.try_iter()? {
-                held.call_method1("append", (mark?,))?;
-            }
+            append_to(n, member, &read)?;
         }
         Ok(())
     }
@@ -1986,8 +2059,11 @@ impl MeasureParser {
         }
         let tremolo = Self::xmlOrnamentToExpression(slf, mxTremolo, None)?;
         if !tremolo.is_none() {
-            n.getattr("expressions")?
-                .call_method1("append", (&tremolo,))?;
+            append_to(
+                n,
+                "expressions",
+                PyList::new(slf.py(), [&tremolo])?.as_any(),
+            )?;
         }
         Ok(tremolo)
     }
@@ -2067,7 +2143,13 @@ impl MeasureParser {
         mxTime: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
-        match step::read_time(&written(mxTime)?).map_err(import_error)? {
+        let text = written(mxTime)?;
+        if let Some(said) = step::read_senza_misura(&text).map_err(import_error)? {
+            return Ok(
+                crate::meter::SenzaMisuraTimeSignature::object(py, Some(said))?.into_bound(py),
+            );
+        }
+        match step::read_time(&text).map_err(import_error)? {
             Some(read) => object_of(py, &music21::StreamElement::TimeSignature(read)),
             None => Ok(py.None().into_bound(py)),
         }
@@ -2084,13 +2166,39 @@ impl MeasureParser {
         slf.getattr("parent")?.setattr("lastTimeSignature", meter)
     }
 
+    /// music21's `xmlStaffLayoutFromStaffDetails`: a `<staff-details>` as a
+    /// staff layout, or written into the one given.
+    #[pyo3(signature = (mxDetails, m21staffLayout = None))]
+    fn xmlStaffLayoutFromStaffDetails<'py>(
+        slf: &Bound<'py, Self>,
+        mxDetails: &Bound<'py, PyAny>,
+        m21staffLayout: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let text = written(mxDetails)?;
+        if let Some(given) = m21staffLayout.filter(|given| !given.is_none()) {
+            let held = given.cast::<crate::layout::StaffLayout>()?;
+            let mut layout = held.borrow().inner.clone();
+            step::read_staff_details(&text, &mut layout).map_err(import_error)?;
+            held.borrow_mut().inner = layout;
+            return Ok(py.None().into_bound(py));
+        }
+        let mut layout = music21::layout::StaffLayout::default();
+        step::read_staff_details(&text, &mut layout).map_err(import_error)?;
+        let classes = crate::layout::classes_from(py, false)?;
+        crate::layout::layout_object(&classes, &music21::layout::Layout::Staff(layout))
+    }
+
     /// music21's `xmlTransposeToInterval`: a `<transpose>`.
     fn xmlTransposeToInterval(
         slf: &Bound<'_, Self>,
         mxTranspose: &Bound<'_, PyAny>,
     ) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
         let read = step::read_transpose(&written(mxTranspose)?).map_err(import_error)?;
-        crate::interval::interval_object(slf.py(), read)
+        let made = crate::interval::interval_object(py, read)?;
+        crate::musicxml::synchronizeIdsToM21(mxTranspose, made.bind(py))?;
+        Ok(made)
     }
 
     /// music21's `xmlToTempoIndication`: a `<metronome>`.
@@ -2249,6 +2357,31 @@ impl PartParser {
 }
 
 impl MeasureParser {
+    /// An `<accidental-mark>` put on the ornament before it: a turn's upper
+    /// or lower accidental, by where it is placed, or a mordent's or
+    /// trill's own.
+    fn mark_accidental(
+        slf: &Bound<'_, Self>,
+        mark: &Bound<'_, PyAny>,
+        ornament: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let accidental = Self::xmlToAccidental(slf, mark, None)?.into_bound(slf.py());
+        accidental.setattr("displayStatus", true)?;
+        let classes = ornament.getattr("classes")?;
+        if classes.contains("Turn")? {
+            let placement: Option<String> = mark.call_method1("get", ("placement",))?.extract()?;
+            let side = match placement.as_deref() {
+                Some("below") => "lowerAccidental",
+                _ => "upperAccidental",
+            };
+            return ornament.setattr(side, accidental);
+        }
+        if classes.contains("GeneralMordent")? || classes.contains("Trill")? {
+            ornament.setattr("accidental", accidental)?;
+        }
+        Ok(())
+    }
+
     /// One spanner-reading step within the part's state, `target` the note
     /// it joins or ends a spanner with: the spanners it begins go into the
     /// part's bundle, the pedal's marks into the measure on `staff`, and

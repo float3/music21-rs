@@ -9,10 +9,11 @@
 //! divided by assigning it a new sequence, `ts.beatSequence =
 //! ts.beatSequence.partitioned(2)`.
 //!
-//! `SenzaMisuraTimeSignature` and `bestTimeSignature` stay music21's. The
-//! first is a meter with no numbers in it at all, which this crate cannot
-//! express; the second builds a `TimeSignature` out of a stream, and leaving
-//! it alone means music21's own function is run over *our* meters.
+//! `SenzaMisuraTimeSignature` is a meter with no numbers in it at all,
+//! which the crate does not model: this package's keeps its text alone and
+//! is not installed over music21's. `bestTimeSignature` stays music21's: it
+//! builds a `TimeSignature` out of a stream, and leaving it alone means
+//! music21's own function is run over *our* meters.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
@@ -140,6 +141,47 @@ middle_class!(
     "music21.meter.base",
     crate::base::Music21Object
 );
+
+/// music21's `meter.SenzaMisuraTimeSignature`: the absence of a meter,
+/// with the text written in its place, `0` or nothing.
+#[pyclass(
+    name = "SenzaMisuraTimeSignature",
+    module = "music21.meter",
+    extends = TimeSignatureBase,
+    subclass
+)]
+pub struct SenzaMisuraTimeSignature {
+    /// What is written instead of a meter: music21's `text`.
+    #[pyo3(get, set)]
+    text: Option<String>,
+}
+
+impl SenzaMisuraTimeSignature {
+    /// One saying `text`.
+    pub(crate) fn object(py: Python<'_>, text: Option<String>) -> PyResult<Py<PyAny>> {
+        let made = Bound::new(
+            py,
+            crate::base::built(TimeSignatureBase).add_subclass(Self { text }),
+        )?;
+        Ok(made.into_any().unbind())
+    }
+}
+
+#[pymethods]
+impl SenzaMisuraTimeSignature {
+    #[new]
+    #[pyo3(signature = (text = None))]
+    fn new(text: Option<String>) -> PyClassInitializer<Self> {
+        crate::base::built(TimeSignatureBase).add_subclass(Self { text })
+    }
+
+    fn __repr__(&self) -> String {
+        match &self.text {
+            Some(text) => format!("<music21.meter.SenzaMisuraTimeSignature {text}>"),
+            None => "<music21.meter.SenzaMisuraTimeSignature>".to_string(),
+        }
+    }
+}
 
 /// music21's `TimeSignature`: a numerator over a denominator, and everything
 /// that follows from the pair.
@@ -2679,6 +2721,7 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(getMeterTerminal, m)?)?;
     m.add_function(wrap_pyfunction!(getMeterSequence, m)?)?;
     m.add_class::<TimeSignatureBase>()?;
+    m.add_class::<SenzaMisuraTimeSignature>()?;
     m.add_class::<TimeSignature>()?;
     m.add_class::<MeterTerminal>()?;
     m.add_class::<MeterSequence>()?;

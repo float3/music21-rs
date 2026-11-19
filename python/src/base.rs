@@ -49,6 +49,8 @@ pub struct Music21Object {
     /// own: a `Duration` of nothing, made on first asking, until one is
     /// set.
     duration: Option<Py<PyAny>>,
+    /// music21's `id`, where one has been given.
+    id: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -85,6 +87,7 @@ impl Music21Object {
                 derivation: None,
                 style: None,
                 duration,
+                id: given("id")?.filter(|id| !id.is_none()).map(Bound::unbind),
             }),
         )
     }
@@ -104,6 +107,25 @@ impl Music21Object {
     #[setter]
     fn set_groups(&mut self, value: Py<PyAny>) {
         self.groups = Some(value);
+    }
+
+    /// music21's `id`: the one given, or else Python's `id()` of the
+    /// object, a number of its own.
+    #[getter]
+    fn get_id(slf: &Bound<'_, Self>) -> Py<PyAny> {
+        let py = slf.py();
+        match &slf.borrow().id {
+            Some(given) => given.clone_ref(py),
+            None => (slf.as_ptr() as usize)
+                .into_pyobject(py)
+                .map(|id| id.into_any().unbind())
+                .unwrap_or_else(|_| py.None()),
+        }
+    }
+
+    #[setter]
+    fn set_id(&mut self, value: Option<Py<PyAny>>) {
+        self.id = value;
     }
 
     /// Where among things at one offset this class sorts: music21's
@@ -166,12 +188,14 @@ impl Music21Object {
         visit.call(&self.groups)?;
         visit.call(&self.derivation)?;
         visit.call(&self.style)?;
-        visit.call(&self.duration)
+        visit.call(&self.duration)?;
+        visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
         self.groups = None;
         self.derivation = None;
+        self.id = None;
         self.style = None;
         self.duration = None;
     }

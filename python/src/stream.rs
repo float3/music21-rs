@@ -6858,6 +6858,35 @@ fn element_object_as<'py>(
         )?
         .into_bound(py)
         .into_any(),
+        StreamElement::PercussionChord(chord) if whose == Whose::Wheel => {
+            // Its strokes and notes, each an object of its own.
+            let members = PyList::empty(py);
+            for member in chord.members() {
+                let element = match member {
+                    music21::percussion::PercussionNote::Unpitched(stroke) => {
+                        StreamElement::Unpitched(stroke)
+                    }
+                    music21::percussion::PercussionNote::Note(note) => StreamElement::Note(note),
+                };
+                if let Some(made) = element_object_as(py, &element, whose)? {
+                    members.append(made)?;
+                }
+            }
+            let made = py
+                .get_type::<crate::percussion::PercussionChord>()
+                .call1((members,))?;
+            if let Some(duration) = chord.duration() {
+                let duration = crate::duration::Duration::wrap(duration.clone());
+                made.setattr(
+                    "duration",
+                    crate::installed_new(py, "music21.duration", "Duration", duration)?,
+                )?;
+            }
+            made
+        }
+        StreamElement::MetricModulation(modulation) if whose == Whose::Wheel => {
+            crate::tempo::MetricModulation::object(py, modulation)?.into_bound(py)
+        }
         StreamElement::PedalObject(mark) if whose == Whose::Wheel => {
             crate::pedals::PedalObject::object(py, mark)?.into_bound(py)
         }
@@ -6976,18 +7005,23 @@ fn carry_notation(
         made.setattr("expressions", held)?;
         return Ok(());
     }
-    let ornaments: Vec<_> = expressions
-        .iter()
-        .filter_map(|expression| match expression {
-            music21::expressions::Expression::Ornament(ornament) => Some((**ornament).clone()),
-            _ => None,
-        })
-        .collect();
-    if !ornaments.is_empty() {
-        let held = PyList::empty(py);
-        for ornament in ornaments {
-            held.append(crate::expressions::Ornament::object(py, ornament)?)?;
+    // The package's own: its ornaments and fermatas, in order.
+    let held = PyList::empty(py);
+    for expression in expressions {
+        match expression {
+            music21::expressions::Expression::Ornament(ornament) => {
+                held.append(crate::expressions::Ornament::object(
+                    py,
+                    (**ornament).clone(),
+                )?)?;
+            }
+            music21::expressions::Expression::Fermata(fermata) => {
+                held.append(crate::expressions::Fermata::object(py, fermata.clone())?)?;
+            }
+            _ => {}
         }
+    }
+    if !held.is_empty() {
         made.setattr("expressions", held)?;
     }
     Ok(())

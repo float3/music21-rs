@@ -190,7 +190,87 @@ impl Editorial {
 }
 
 /// Adds the editorial class to a module.
+/// The longest a comment's text is shown in its repr before it is cut.
+const SHOWN_TEXT: usize = 20;
+
+/// music21's `editorial.Comment`: a comment or footnote on a note, with
+/// how sure it is and where it comes from. Its members are plain
+/// attributes, as music21's are.
+#[pyclass(
+    name = "Comment",
+    module = "music21.editorial",
+    extends = crate::prebase::ProtoM21Object,
+    subclass,
+    dict
+)]
+pub struct Comment;
+
+#[pymethods]
+impl Comment {
+    #[new]
+    #[pyo3(signature = (*_arguments, **_keywords))]
+    fn new(
+        _arguments: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        crate::base::built(Comment)
+    }
+
+    /// music21's `Comment(text=None)`.
+    #[pyo3(signature = (text = None))]
+    fn __init__(slf: &Bound<'_, Self>, text: Option<Py<PyAny>>) -> PyResult<()> {
+        let py = slf.py();
+        slf.setattr("text", text.unwrap_or_else(|| py.None()))?;
+        slf.setattr("isFootnote", false)?;
+        slf.setattr("isReference", false)?;
+        slf.setattr("levelInformation", py.None())
+    }
+
+    /// The text, cut short past twenty characters.
+    fn _reprInternal(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let text = slf.getattr("text")?;
+        if text.is_none() {
+            return Ok(String::new());
+        }
+        let text: String = text.str()?.extract()?;
+        let shown = match text.chars().count() < SHOWN_TEXT {
+            true => text,
+            false => format!(
+                "{}...",
+                text.chars().take(SHOWN_TEXT - 3).collect::<String>()
+            ),
+        };
+        Ok(pyo3::types::PyString::new(slf.py(), &shown)
+            .repr()?
+            .to_string())
+    }
+
+    /// How it is drawn, made the first time it is asked for.
+    #[getter]
+    fn style<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let held = slf.getattr("__dict__")?;
+        if let Some(style) = held
+            .get_item("_style")
+            .ok()
+            .filter(|style| !style.is_none())
+        {
+            return Ok(style);
+        }
+        let style = crate::subconverters::music21_name(py, "music21.style", "Style")?.call0()?;
+        held.set_item("_style", &style)?;
+        Ok(style)
+    }
+
+    /// Whether a style has been made for it.
+    #[getter]
+    fn hasStyleInformation(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        Ok(slf.getattr("__dict__")?.get_item("_style").is_ok())
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Editorial>()?;
+    m.add_class::<Comment>()?;
     Ok(())
 }

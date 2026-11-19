@@ -1762,6 +1762,23 @@ pub struct Fermata {
     tieAttach: String,
 }
 
+impl Fermata {
+    /// The object for one of the crate's fermatas.
+    pub(crate) fn object(
+        py: Python<'_>,
+        inner: music21::expressions::Fermata,
+    ) -> PyResult<Py<PyAny>> {
+        let made = Bound::new(
+            py,
+            crate::base::built(Expression).add_subclass(Self {
+                inner,
+                tieAttach: "last".to_owned(),
+            }),
+        )?;
+        Ok(made.into_any().unbind())
+    }
+}
+
 #[pymethods]
 impl Fermata {
     #[new]

@@ -1032,6 +1032,29 @@ pub struct MetricModulation {
 }
 
 impl MetricModulation {
+    /// The object for one of the crate's modulations, its two marks
+    /// objects of their own.
+    pub(crate) fn object(py: Python<'_>, inner: &RsMetricModulation) -> PyResult<Py<PyAny>> {
+        let mark = |side: Option<&RsMetronomeMark>| -> PyResult<Option<Py<PyAny>>> {
+            side.map(|mark| {
+                crate::installed_new(
+                    py,
+                    "music21.tempo",
+                    "MetronomeMark",
+                    MetronomeMark::wrap(mark.clone()),
+                )
+                .map(Py::into_any)
+            })
+            .transpose()
+        };
+        let mut held = Self::blank();
+        held.old = mark(inner.old_metronome())?;
+        held.new = mark(inner.new_metronome())?;
+        held.parentheses = inner.parentheses();
+        let made = Bound::new(py, crate::base::built(TempoIndication).add_subclass(held))?;
+        Ok(made.into_any().unbind())
+    }
+
     fn blank() -> Self {
         Self {
             old: None,

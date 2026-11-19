@@ -1316,14 +1316,13 @@ impl<'a, 'x> PartParser<'a, 'x> {
 
     /// music21's `parseXmlScorePart` and `getDefaultInstrument`.
     fn score_part_info(&mut self) -> Result<()> {
-        let clean = |text: &str| text.trim().replace('\n', " ");
         let score_part = self.score_part;
         let named = |tag: &str| {
             score_part
                 .find(tag)
                 .and_then(Xml::text)
                 .filter(|text| !text.is_empty())
-                .map(clean)
+                .map(cleaned)
         };
         let part_name = named("part-name");
         let part_abbreviation = named("part-abbreviation");
@@ -1334,72 +1333,10 @@ impl<'a, 'x> PartParser<'a, 'x> {
             .find("part-abbreviation")
             .is_some_and(|name| name.get("print-object") == Some("no"));
 
-        let adjusted = |text: &str| -> Option<u8> {
-            parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
-        };
-        let mut instrument: Option<Instrument> = None;
-        let mut unpitched = false;
-        if let Some(midi) = score_part.find("midi-instrument") {
-            let unpitched_text = midi.child_text("midi-unpitched");
-            let program_text = midi.child_text("midi-program");
-            if !unpitched_text.is_empty() {
-                unpitched = true;
-                let pitch = adjusted(unpitched_text).unwrap_or(0);
-                // music21 warns of a key outside the General MIDI map.
-                if let Err(error) = crate::instrument::for_percussion_key(pitch) {
-                    self.importer.warnings.push(error);
-                }
-                instrument = Some(percussion_instrument(pitch));
-            } else if !program_text.is_empty() {
-                let mut read = adjusted(program_text)
-                    .and_then(|program| Instrument::from_midi_program(program).ok())
-                    .unwrap_or_default();
-                if let Some(channel) = midi
-                    .find("midi-channel")
-                    .and_then(Xml::text)
-                    .and_then(adjusted)
-                {
-                    read.set_midi_channel(Some(channel));
-                }
-                instrument = Some(read);
-            }
-        }
-        let mut instrument = instrument.unwrap_or_default();
-        let score_instrument = score_part.find("score-instrument");
-        if let Some(score_instrument) = score_instrument
-            && !unpitched
-        {
-            let name = score_instrument.child_text("instrument-name");
-            if !name.is_empty() {
-                let mut from_name =
-                    Instrument::from_name(name, SearchLanguage::All).unwrap_or_default();
-                from_name.set_midi_channel(instrument.midi_channel());
-                if from_name.midi_program() == instrument.midi_program() || instrument.is_a("Piano")
-                {
-                    instrument = from_name;
-                }
-            }
-        }
+        let mut instrument = default_instrument(score_part, &mut self.importer.warnings);
         instrument.set_part_id(Some(self.id.clone()));
         instrument.set_part_name(part_name.clone());
         instrument.set_part_abbreviation(part_abbreviation.clone());
-        if let Some(score_instrument) = score_instrument {
-            let named = |tag: &str| {
-                score_instrument
-                    .find(tag)
-                    .and_then(Xml::text)
-                    .filter(|text| !text.is_empty())
-            };
-            if let Some(name) = named("instrument-name") {
-                instrument.set_name(Some(clean(name)));
-            }
-            if let Some(abbreviation) = named("instrument-abbreviation") {
-                instrument.set_abbreviation(Some(clean(abbreviation)));
-            }
-            if let Some(sound) = named("instrument-sound") {
-                instrument.set_sound(Some(sound.to_string()));
-            }
-        }
         self.name = part_name;
         self.abbreviation = part_abbreviation;
         self.name_hidden = name_hidden;
@@ -3558,6 +3495,81 @@ pub(super) fn barline_of(element: &Xml) -> Result<Barline> {
     Ok(barline)
 }
 
+/// A name as written, its ends trimmed and its line breaks spaces:
+/// music21's `_clean`.
+fn cleaned(text: &str) -> String {
+    text.trim().replace('\n', " ")
+}
+
+/// music21's `getDefaultInstrument`: the instrument a `<score-part>`'s
+/// MIDI instrument and score instrument name, before the part's own names
+/// are put on it; what music21 warns of goes into `warnings`.
+pub(super) fn default_instrument(score_part: &Xml, warnings: &mut Vec<Error>) -> Instrument {
+    let adjusted = |text: &str| -> Option<u8> {
+        parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
+    };
+    let mut instrument: Option<Instrument> = None;
+    let mut unpitched = false;
+    if let Some(midi) = score_part.find("midi-instrument") {
+        let unpitched_text = midi.child_text("midi-unpitched");
+        let program_text = midi.child_text("midi-program");
+        if !unpitched_text.is_empty() {
+            unpitched = true;
+            let pitch = adjusted(unpitched_text).unwrap_or(0);
+            // music21 warns of a key outside the General MIDI map.
+            if let Err(error) = crate::instrument::for_percussion_key(pitch) {
+                warnings.push(error);
+            }
+            instrument = Some(percussion_instrument(pitch));
+        } else if !program_text.is_empty() {
+            let mut read = adjusted(program_text)
+                .and_then(|program| Instrument::from_midi_program(program).ok())
+                .unwrap_or_default();
+            if let Some(channel) = midi
+                .find("midi-channel")
+                .and_then(Xml::text)
+                .and_then(adjusted)
+            {
+                read.set_midi_channel(Some(channel));
+            }
+            instrument = Some(read);
+        }
+    }
+    let mut instrument = instrument.unwrap_or_default();
+    let score_instrument = score_part.find("score-instrument");
+    if let Some(score_instrument) = score_instrument
+        && !unpitched
+    {
+        let name = score_instrument.child_text("instrument-name");
+        if !name.is_empty() {
+            let mut from_name =
+                Instrument::from_name(name, SearchLanguage::All).unwrap_or_default();
+            from_name.set_midi_channel(instrument.midi_channel());
+            if from_name.midi_program() == instrument.midi_program() || instrument.is_a("Piano") {
+                instrument = from_name;
+            }
+        }
+    }
+    if let Some(score_instrument) = score_instrument {
+        let named = |tag: &str| {
+            score_instrument
+                .find(tag)
+                .and_then(Xml::text)
+                .filter(|text| !text.is_empty())
+        };
+        if let Some(name) = named("instrument-name") {
+            instrument.set_name(Some(cleaned(name)));
+        }
+        if let Some(abbreviation) = named("instrument-abbreviation") {
+            instrument.set_abbreviation(Some(cleaned(abbreviation)));
+        }
+        if let Some(sound) = named("instrument-sound") {
+            instrument.set_sound(Some(sound.to_string()));
+        }
+    }
+    instrument
+}
+
 /// General MIDI's drum for a key as the instrument music21 has for it:
 /// its `PercussionMapper.midiPitchToInstrument`, and a bare unpitched
 /// instrument carrying the key where the map names nothing -- which is
@@ -3708,7 +3720,7 @@ pub(super) fn staff_layout(written: &Xml) -> StaffLayout {
 }
 
 /// music21's `xmlStaffLayoutFromStaffDetails`.
-fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
+pub(super) fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
     if let Some(number) = details
         .get("number")
         .and_then(|value| value.trim().parse().ok())
@@ -4564,6 +4576,14 @@ pub(super) fn key_octaves(written: &Xml, signature: &mut KeySignature) -> Result
     }
     signature.set_altered_pitches(altered);
     Ok(())
+}
+
+/// What a `<time>` of no meter says, `0` or nothing, where it is one:
+/// music21's `SenzaMisuraTimeSignature`'s text.
+pub(super) fn senza_misura(written: &Xml) -> Option<String> {
+    written
+        .find("senza-misura")
+        .map(|senza| senza.stripped().to_string())
 }
 
 /// music21's `xmlTransposeToInterval`.

@@ -468,6 +468,7 @@ ALSO = {
     'music21.meter.base': (
         'MeterDivision',
         'MeterSequence',
+        'SenzaMisuraTimeSignature',
         'getMeterSequence',
         'getMeterTerminal',
         'opFrac',
@@ -729,6 +730,7 @@ ALSO = {
 NO_HOME = (
     'Placed',
     '_HarteLabel',
+    '_groups',
     '_music21_module',
     '_thawed',
     'from_abc',

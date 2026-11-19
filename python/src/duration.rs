@@ -1016,6 +1016,22 @@ impl Duration {
         grace_object(py, base, said, kind)
     }
 
+    /// Everything `other` says of a length written into this one, which
+    /// keeps the note it belongs to: music21's readers fill a duration
+    /// handed to them so.
+    pub(crate) fn take_from(&mut self, py: Python<'_>, other: &Self) {
+        self.inner = other.inner.clone();
+        self.components = other.components.clone();
+        self.tuplets = other
+            .tuplets
+            .as_ref()
+            .map(|held| held.iter().map(|tuplet| tuplet.clone_ref(py)).collect());
+        self.dot_groups = other.dot_groups.clone();
+        self.linked = other.linked;
+        self.unlinked_type = other.unlinked_type.clone();
+        self.expression_is_inferred = other.expression_is_inferred;
+    }
+
     pub(crate) fn wrap(inner: RsDuration) -> Self {
         let unlinked = !inner.linked();
         let mut made = Self {
