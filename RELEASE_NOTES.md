@@ -12,6 +12,15 @@
 - `scale::Simplification` gains `SimplifyEnharmonic` and
   `scale::DegreeComparison` gains `Ps` and `NameWithOctave`; both are now
   `#[non_exhaustive]`, so a `match` on them needs a wildcard arm.
+- `expressions::FermataType` gains `Other(String)`, is `#[non_exhaustive]`
+  and no longer `Copy`; `fermata_type()` returns `&FermataType`.
+- The wheel's `flatten()` hands back the same stream until a stream
+  changes, as music21's does; `Stream.asTimespans(flatten=False)` on nested
+  streams answers a tree of trees; `TimespanTree` can be edited;
+  `iterateVerticalities` walks lazily.
+- Scores read from MusicXML now also hold their staff groups, layouts,
+  repeat brackets, rehearsal marks, pedal objects and score style, so code
+  counting their elements sees more.
 
 ## added
 
@@ -39,18 +48,50 @@
   `storeAtEnd` keeps any number of zero-length objects and sets each one's
   `activeSite`.
 
+- **music21's `musicxml` is provided in full** over the crate's reader and
+  writer: `m21ToXml` (exporters and their steps, part-staff joining over
+  any XML tree), `xmlToM21` (importer and parsers, element by element
+  through the crate's new `musicxml::step`, with spanner and tuplet state
+  kept between calls), `xmlSoundParser`, `xmlObjects`, `helpers`,
+  `partStaffExporter`; also `metadata.properties`.
+- **music21's `tree` package is ported** to Rust (`music21::tree::core`):
+  AVL trees, ElementTree, OffsetTree, TimespanTree, verticalities holding
+  their own timespans, `tree.fromStream`, `tree.toStream`.
+- **`freezeThaw`** over stream pickling; music21's abstract scale classes
+  and `WeightedHexatonicBlues`; **`noteworthy` in full** (translator,
+  `NWCConverter`, `NWCStaff`, `NWCObject`), its placing one implementation
+  in the crate (`noteworthy::placement`).
+- Provided as well: `expressions.Fermata`, `RehearsalMark`, the pedal
+  objects, `tablature.ChordWithFretBoard` (a `FretBoard` too),
+  `spanner.RepeatBracket`, `stream['#id']`, `Stream.isSorted`/`autoSort`,
+  `coreInsert`, `makeBeams(inPlace=True)`, `Verticality.beatStrength`,
+  `StreamStyle` written into `<defaults>`, frames and fret boards written
+  as `<frame>`, roman numerals as `<harmony>`.
+
 ## fixed
 
 - Installed, an element in one of music21's streams answers `sortTuple`
   with its offset there, not 0.
-- `show('text')` lists a measure's right barline last, as music21 does.
+- `show('text')` lists a measure's barlines where music21 does.
+- Installed, the interval network hands out music21's own `Terminus`.
+- A pickle names `_thawed` and the new `_groups` by the package, so a
+  score cached by the wheel thaws where the crate is linked in, and a
+  standalone wheel stream pickles at all.
+- Reading a score without music21 no longer imports music21 (a spanner
+  asked music21 for its storage); `loaded_music21` asks only what is
+  loaded.
+- A measure's barlines sort by insert index; a copied pitch keeps its
+  groups; a deep-copied measure keeps its number; the NoteWorthy reader
+  places notes, slurs and ties as music21 does; whole decimal style values
+  are written as `5.0`; `Metadata` and `ChordSymbol` subclasses repr as
+  music21's.
 - The wheel's Rag Marwa network gave degree 6 where music21 gives 5 and 7.
 - `xtask contributed-back` drops pull requests closed without merging.
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
-Gate (`xtask music21-suite`, provided side): 1916 of music21's 5276
-passing tests pass, up from 1298; 167 of 217 modules import, up from 151.
+Gate (`xtask music21-suite`, provided side): 2596 of music21's 5276
+passing tests pass, up from 1298; 191 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
 

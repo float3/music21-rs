@@ -320,18 +320,14 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side at 0.21.0: 1916 of 5276 passing tests,
-    167 of 217 modules importing. Next blockers: `musicxml` (803 tests,
-    15 modules; 7 of them need only `m21ToXml.GeneralObjectExporter`,
-    which `stream/tests.py`'s 286 tests import), `mei` (233),
-    `metadata.bundles` (102, corpus cache), `lily` (77), `abcFormat`
-    (128), `noteworthy` (47), `tree.core` (39), `freezeThaw` (17; streams
-    pickle now, so a Rust StreamFreezer/StreamThawer is next), the
-    abstract scale classes and `WeightedHexatonicBlues` (about 19), and
-    `Sites.add` (13). Not ported: `midi.translate`'s
-    `assignPacketsToChannels`, `quantizePost=False` and other quantize
-    divisors; `Variant.replacedElements`. An interval network's `nodes`
-    and `edges` are rebuilt on each read, so editing one changes nothing.
+    music21-suite`'s provided side at 0.21.0: 2596 of 5276 passing tests,
+    191 of 217 modules importing. Left: `mei` (233), `metadata.bundles`
+    (102, corpus cache), `lily` (77), `abcFormat` (128), `graph` (86),
+    `musedata.translate` (46), `humdrum.testFiles` (41), `Sites.add`
+    (13); xmlToM21's last docstrings (multi-measure rests, metric
+    modulation, senza misura, unpitched chords); freezeThaw's
+    `recursiveClearSites`. The median benchmark speedup fell from 18.8x to
+    about 15.5x during 0.21.0 and wants profiling.
 
 21. **the crate's ports that are copies.** the wheel's `makeNotation`
     `op_frac` and `nearest_multiple` are approximate copies of the
