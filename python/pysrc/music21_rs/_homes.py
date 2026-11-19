@@ -468,6 +468,7 @@ ALSO = {
     'music21.meter.base': (
         'MeterDivision',
         'MeterSequence',
+        'SenzaMisuraTimeSignature',
         'getMeterSequence',
         'getMeterTerminal',
         'opFrac',

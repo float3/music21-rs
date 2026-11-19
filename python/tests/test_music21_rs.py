@@ -12442,3 +12442,81 @@ def test_a_pickle_names_the_thawing_function_by_the_package():
     data = pickle.dumps(s)
     assert b"music21_rs.music21_rs" not in data
     assert pickle.loads(data)[0].nameWithOctave == "C4"
+
+
+def test_a_note_read_keeps_its_fermata():
+    """A `<fermata>` read stays on the package's note as a `Fermata` with
+    its type and shape, beside the note's ornaments."""
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure><attributes><divisions>1</divisions></attributes>'
+        "<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>"
+        '<type>quarter</type><notations><fermata type="upright">angled</fermata>'
+        "<ornaments><turn/></ornaments></notations></note></measure></part></score-partwise>"
+    )
+    held = m.from_musicxml(document).recurse().notes.first().expressions
+    assert [type(e).__name__ for e in held] == ["Fermata", "Turn"]
+    assert (held[0].type, held[0].shape) == ("upright", "angled")
+
+
+def test_an_element_answers_its_id_as_music21s_does():
+    """Every element has music21's `id`: the one given, or else a number
+    of its own."""
+    interval = m.Interval("M2")
+    assert isinstance(interval.id, int)
+    interval.id = "x"
+    assert interval.id == "x"
+    note = m.Note("C4")
+    note.id = "n2"
+    assert note.id == "n2"
+
+
+def test_provided_xmltom21_reads_meters_modulations_details_and_graces(tmp_path):
+    """The last of music21's per-element docstrings: a meter of no
+    numbers, a metric modulation, staff details, a transposition's id,
+    a grace, a level-only comment, unpitched notes in one chord, and a
+    rest of several measures filled one rest at a time."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import duration, note, spanner
+from music21.musicxml.xmlToM21 import MeasureParser, PartParser, XMLParserBase
+MP = MeasureParser()
+print(MP.xmlToTimeSignature(EL('<time><senza-misura>0</senza-misura></time>')))
+print(MP.xmlToTempoIndication(EL('<metronome><beat-unit>half</beat-unit><beat-unit>quarter</beat-unit></metronome>')))
+stl = MP.xmlStaffLayoutFromStaffDetails(EL('<details number="2" print-object="no"><staff-lines>4</staff-lines></details>'))
+print(stl.staffLines, stl.staffNumber, stl.hidden)
+print(MP.xmlTransposeToInterval(EL('<transpose id="x"><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose>')).id)
+c = duration.Duration()
+MP.divisions = 10080
+print(MP.xmlToDuration(EL('<note><duration>7560</duration><type>eighth</type><dot/></note>'), c), c)
+grace = MP.xmlGraceToGrace(EL('<grace slash="no"/>'), note.Note('C4'))
+print(grace.duration.slash)
+n = note.Note('C#4')
+XMLParserBase().setEditorial(EL('<note><level reference="no">ed</level></note>'), n)
+print(n.hasEditorialInformation, len(n.editorial.comments), n.editorial.comments[0].levelInformation)
+a = EL('<note><unpitched><display-step>A</display-step><display-octave>3</display-octave></unpitched><duration>1</duration><type>quarter</type></note>')
+b = EL('<note><chord/><unpitched><display-step>B</display-step><display-octave>3</display-octave></unpitched><duration>1</duration><type>quarter</type></note>')
+print(MP.xmlToChord([a, b]))
+pp = PartParser()
+pp.activeMultiMeasureRestSpanner = spanner.MultiMeasureRest()
+pp.multiMeasureRestsToCapture = 2
+pp.applyMultiMeasureRest(note.Rest(type='whole'))
+pp.applyMultiMeasureRest(note.Rest(type='whole'))
+print(pp.activeMultiMeasureRestSpanner, list(pp.stream))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.meter.SenzaMisuraTimeSignature 0>",
+        "<music21.tempo.MetricModulation <music21.tempo.MetronomeMark Half=None>"
+        "=<music21.tempo.MetronomeMark Quarter=None>>",
+        "4 2 True",
+        "x",
+        "None <music21.duration.Duration 0.75>",
+        "False",
+        "True 1 ed",
+        "<music21.percussion.PercussionChord [unpitched[A3] unpitched[B3]]>",
+        "None [<music21.spanner.MultiMeasureRest 2 measures>]",
+    ]

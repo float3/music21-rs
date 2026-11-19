@@ -369,7 +369,7 @@ reason = "music21's index, events and data; the crate reads the data into events
 
 [Music21Object]
 kind = "facade-only"
-reason = "music21's groups and derivation, which no crate value carries"
+reason = "music21's groups, derivation and id, which no crate value carries"
 
 [OffsetFilter]
 kind = "facade-only"

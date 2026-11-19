@@ -32,6 +32,7 @@ use crate::bar::Barline;
 use crate::clef::Clef;
 use crate::defaults::IntegerType;
 use crate::error::{Error, Result};
+use crate::instrument::Instrument;
 use crate::interval::Interval;
 use crate::key::KeySignature;
 use crate::layout::{PageLayout, StaffLayout, SystemLayout};
@@ -96,6 +97,19 @@ pub fn read_key_octaves(text: &str, signature: &mut KeySignature) -> Result<()> 
 /// hides the meter.
 pub fn read_time(text: &str) -> Result<Option<TimeSignature>> {
     read::time_signature(&element(text, "time")?)
+}
+
+/// The text of a `<time>` of no meter, where it is one: what music21
+/// reads as a `SenzaMisuraTimeSignature`.
+pub fn read_senza_misura(text: &str) -> Result<Option<String>> {
+    Ok(read::senza_misura(&element(text, "time")?))
+}
+
+/// music21's `xmlStaffLayoutFromStaffDetails`: a `<staff-details>`
+/// written into `layout`.
+pub fn read_staff_details(text: &str, layout: &mut StaffLayout) -> Result<()> {
+    read::read_staff_details(&Xml::parse(text)?, layout);
+    Ok(())
 }
 
 /// music21's `xmlTransposeToInterval`: a `<transpose>`.
@@ -210,6 +224,15 @@ pub fn read_appearance(text: &str) -> Result<StreamStyle> {
     let mut style = StreamStyle::default();
     read::read_appearance(&element(text, "appearance")?, &mut style);
     Ok(style)
+}
+
+/// music21's `getDefaultInstrument`: the instrument a `<score-part>`
+/// names, before the part's own names are put on it, and what music21
+/// warns of as it reads it.
+pub fn read_default_instrument(text: &str) -> Result<(Instrument, Vec<Error>)> {
+    let mut warnings = Vec::new();
+    let read = read::default_instrument(&element(text, "score-part")?, &mut warnings);
+    Ok((read, warnings))
 }
 
 /// music21's `getStaffNumber`: the staff an element is written on, nought

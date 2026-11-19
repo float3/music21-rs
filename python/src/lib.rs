@@ -668,6 +668,24 @@ pub(crate) fn music21_editorial<'py>(
     ))
 }
 
+/// Whether an object has editorial information as music21's own
+/// `hasEditorialInformation` answers, where the object is one of music21's
+/// elements: `None` where it is this package's own, which answers itself.
+pub(crate) fn music21_has_editorial(object: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    let py = object.py();
+    let Ok(base) = crate::real_music21(py, "music21.base") else {
+        return Ok(None);
+    };
+    let class = base.getattr("Music21Object")?;
+    if !object.is_instance(&class)? {
+        return Ok(None);
+    }
+    let answer = class
+        .getattr("hasEditorialInformation")?
+        .call_method1("__get__", (object,))?;
+    Ok(Some(answer.is_truthy()?))
+}
+
 /// The class a module of music21's names: the installed one where this
 /// package stands in for music21's, and the package's own otherwise.
 ///
