@@ -405,7 +405,10 @@ last. *debated 2026-10-30.* holding them would shift the places spanners name
 their notes by, silently, across forty sites that touch what a stream holds,
 for a pattern music21's own code barely uses; listing them closes what callers
 see. *costs:* `len(measure)`, indexing and plain iteration leave them out
-where music21's count them.
+where music21's count them. *reversed 2026-11-20 by the maintainer, for
+0.22.0:* a measure holds its barlines as music21's does, so `len`, indexing
+and iteration count them; code written for music21 indexing a measure sees
+the same positions.
 
 *debated 2026-10-31.* `storeAtEnd` keeps one barline, as the stream's right
 barline, and `isAtEnd` asks whether something is that barline. every
