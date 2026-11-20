@@ -66,6 +66,11 @@
 - **music21's `tree` package is ported** to Rust (`music21::tree::core`):
   AVL trees, ElementTree, OffsetTree, TimespanTree, verticalities holding
   their own timespans, `tree.fromStream`, `tree.toStream`.
+- **music21's `mei` is provided:** `MeiToM21Converter` and every
+  per-element step of `mei.base` under music21's names, over the crate's
+  new `mei::step`; steps call each other through the module, so replacing
+  one there takes effect. Notes, rests and chords take attributes of a
+  caller's own; streams have `coreAppend`.
 - **`freezeThaw`** over stream pickling; music21's abstract scale classes
   and `WeightedHexatonicBlues`; **`noteworthy` in full** (translator,
   `NWCConverter`, `NWCStaff`, `NWCObject`), its placing one implementation
@@ -108,8 +113,8 @@
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
-Gate (`xtask music21-suite`, provided side): 2621 of music21's 5276
-passing tests pass, up from 1298; 191 of 217 modules import, up from 151.
+Gate (`xtask music21-suite`, provided side): 2852 of music21's 5276
+passing tests pass, up from 1298; 192 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
 
