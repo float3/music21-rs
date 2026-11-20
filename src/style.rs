@@ -53,6 +53,10 @@ impl std::fmt::Display for StyleValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Whole(whole) => write!(f, "{whole}"),
+            // Python writes a whole float with its point.
+            Self::Decimal(value) if value.is_finite() && value.fract() == 0.0 => {
+                write!(f, "{value:.1}")
+            }
             Self::Decimal(value) => write!(f, "{value}"),
             Self::Text(text) => f.write_str(text),
         }
@@ -209,6 +213,209 @@ fn checked(
     }
 }
 
+/// How a whole score is drawn, past what its layouts say: music21's
+/// `StreamStyle`, the part MusicXML's `<defaults>` writes.
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StreamStyle {
+    /// Line widths by what they draw, in tenths: `lineWidths`.
+    pub line_widths: Vec<(String, StyleValue)>,
+    /// Note sizes by kind, as percentages: `noteSizes`.
+    pub note_sizes: Vec<(String, StyleValue)>,
+    /// Distances by what they separate, in tenths: `distances`.
+    pub distances: Vec<(String, StyleValue)>,
+    /// Any other appearance by its type: `otherAppearances`.
+    pub other_appearances: Vec<(String, StyleValue)>,
+    /// The font music is set in: `musicFont`.
+    pub music_font: Option<TextStyle>,
+    /// The font words are set in: `wordFont`.
+    pub word_font: Option<TextStyle>,
+    /// A font for the lyrics of each name: `lyricFonts`.
+    pub lyric_fonts: Vec<(Option<String>, Option<TextStyle>)>,
+    /// A language for the lyrics of each name: `lyricLanguages`.
+    pub lyric_languages: Vec<(Option<String>, Option<String>)>,
+}
+
+impl StreamStyle {
+    /// Whether it says anything MusicXML's `<appearance>` writes.
+    pub fn has_appearance(&self) -> bool {
+        !(self.line_widths.is_empty()
+            && self.note_sizes.is_empty()
+            && self.distances.is_empty()
+            && self.other_appearances.is_empty())
+    }
+}
+
+/// The hex value of a CSS3 colour name, as `#FF0000` for `red`, whatever
+/// case the name is written in; `None` for a name CSS does not have.
+///
+/// ```
+/// use music21::style::css_color_hex;
+///
+/// assert_eq!(css_color_hex("Red"), Some("#FF0000"));
+/// assert_eq!(css_color_hex("grey"), css_color_hex("gray"));
+/// assert_eq!(css_color_hex("reddish"), None);
+/// ```
+pub fn css_color_hex(name: &str) -> Option<&'static str> {
+    let name = name.to_ascii_lowercase();
+    CSS_COLORS
+        .binary_search_by(|(known, _)| known.cmp(&name.as_str()))
+        .ok()
+        .map(|index| CSS_COLORS[index].1)
+}
+
+/// The CSS3 colour names and their hex values, sorted by name: the table
+/// music21 reads a colour name out of, through `webcolors`.
+pub const CSS_COLORS: [(&str, &str); 147] = [
+    ("aliceblue", "#F0F8FF"),
+    ("antiquewhite", "#FAEBD7"),
+    ("aqua", "#00FFFF"),
+    ("aquamarine", "#7FFFD4"),
+    ("azure", "#F0FFFF"),
+    ("beige", "#F5F5DC"),
+    ("bisque", "#FFE4C4"),
+    ("black", "#000000"),
+    ("blanchedalmond", "#FFEBCD"),
+    ("blue", "#0000FF"),
+    ("blueviolet", "#8A2BE2"),
+    ("brown", "#A52A2A"),
+    ("burlywood", "#DEB887"),
+    ("cadetblue", "#5F9EA0"),
+    ("chartreuse", "#7FFF00"),
+    ("chocolate", "#D2691E"),
+    ("coral", "#FF7F50"),
+    ("cornflowerblue", "#6495ED"),
+    ("cornsilk", "#FFF8DC"),
+    ("crimson", "#DC143C"),
+    ("cyan", "#00FFFF"),
+    ("darkblue", "#00008B"),
+    ("darkcyan", "#008B8B"),
+    ("darkgoldenrod", "#B8860B"),
+    ("darkgray", "#A9A9A9"),
+    ("darkgreen", "#006400"),
+    ("darkgrey", "#A9A9A9"),
+    ("darkkhaki", "#BDB76B"),
+    ("darkmagenta", "#8B008B"),
+    ("darkolivegreen", "#556B2F"),
+    ("darkorange", "#FF8C00"),
+    ("darkorchid", "#9932CC"),
+    ("darkred", "#8B0000"),
+    ("darksalmon", "#E9967A"),
+    ("darkseagreen", "#8FBC8F"),
+    ("darkslateblue", "#483D8B"),
+    ("darkslategray", "#2F4F4F"),
+    ("darkslategrey", "#2F4F4F"),
+    ("darkturquoise", "#00CED1"),
+    ("darkviolet", "#9400D3"),
+    ("deeppink", "#FF1493"),
+    ("deepskyblue", "#00BFFF"),
+    ("dimgray", "#696969"),
+    ("dimgrey", "#696969"),
+    ("dodgerblue", "#1E90FF"),
+    ("firebrick", "#B22222"),
+    ("floralwhite", "#FFFAF0"),
+    ("forestgreen", "#228B22"),
+    ("fuchsia", "#FF00FF"),
+    ("gainsboro", "#DCDCDC"),
+    ("ghostwhite", "#F8F8FF"),
+    ("gold", "#FFD700"),
+    ("goldenrod", "#DAA520"),
+    ("gray", "#808080"),
+    ("green", "#008000"),
+    ("greenyellow", "#ADFF2F"),
+    ("grey", "#808080"),
+    ("honeydew", "#F0FFF0"),
+    ("hotpink", "#FF69B4"),
+    ("indianred", "#CD5C5C"),
+    ("indigo", "#4B0082"),
+    ("ivory", "#FFFFF0"),
+    ("khaki", "#F0E68C"),
+    ("lavender", "#E6E6FA"),
+    ("lavenderblush", "#FFF0F5"),
+    ("lawngreen", "#7CFC00"),
+    ("lemonchiffon", "#FFFACD"),
+    ("lightblue", "#ADD8E6"),
+    ("lightcoral", "#F08080"),
+    ("lightcyan", "#E0FFFF"),
+    ("lightgoldenrodyellow", "#FAFAD2"),
+    ("lightgray", "#D3D3D3"),
+    ("lightgreen", "#90EE90"),
+    ("lightgrey", "#D3D3D3"),
+    ("lightpink", "#FFB6C1"),
+    ("lightsalmon", "#FFA07A"),
+    ("lightseagreen", "#20B2AA"),
+    ("lightskyblue", "#87CEFA"),
+    ("lightslategray", "#778899"),
+    ("lightslategrey", "#778899"),
+    ("lightsteelblue", "#B0C4DE"),
+    ("lightyellow", "#FFFFE0"),
+    ("lime", "#00FF00"),
+    ("limegreen", "#32CD32"),
+    ("linen", "#FAF0E6"),
+    ("magenta", "#FF00FF"),
+    ("maroon", "#800000"),
+    ("mediumaquamarine", "#66CDAA"),
+    ("mediumblue", "#0000CD"),
+    ("mediumorchid", "#BA55D3"),
+    ("mediumpurple", "#9370DB"),
+    ("mediumseagreen", "#3CB371"),
+    ("mediumslateblue", "#7B68EE"),
+    ("mediumspringgreen", "#00FA9A"),
+    ("mediumturquoise", "#48D1CC"),
+    ("mediumvioletred", "#C71585"),
+    ("midnightblue", "#191970"),
+    ("mintcream", "#F5FFFA"),
+    ("mistyrose", "#FFE4E1"),
+    ("moccasin", "#FFE4B5"),
+    ("navajowhite", "#FFDEAD"),
+    ("navy", "#000080"),
+    ("oldlace", "#FDF5E6"),
+    ("olive", "#808000"),
+    ("olivedrab", "#6B8E23"),
+    ("orange", "#FFA500"),
+    ("orangered", "#FF4500"),
+    ("orchid", "#DA70D6"),
+    ("palegoldenrod", "#EEE8AA"),
+    ("palegreen", "#98FB98"),
+    ("paleturquoise", "#AFEEEE"),
+    ("palevioletred", "#DB7093"),
+    ("papayawhip", "#FFEFD5"),
+    ("peachpuff", "#FFDAB9"),
+    ("peru", "#CD853F"),
+    ("pink", "#FFC0CB"),
+    ("plum", "#DDA0DD"),
+    ("powderblue", "#B0E0E6"),
+    ("purple", "#800080"),
+    ("red", "#FF0000"),
+    ("rosybrown", "#BC8F8F"),
+    ("royalblue", "#4169E1"),
+    ("saddlebrown", "#8B4513"),
+    ("salmon", "#FA8072"),
+    ("sandybrown", "#F4A460"),
+    ("seagreen", "#2E8B57"),
+    ("seashell", "#FFF5EE"),
+    ("sienna", "#A0522D"),
+    ("silver", "#C0C0C0"),
+    ("skyblue", "#87CEEB"),
+    ("slateblue", "#6A5ACD"),
+    ("slategray", "#708090"),
+    ("slategrey", "#708090"),
+    ("snow", "#FFFAFA"),
+    ("springgreen", "#00FF7F"),
+    ("steelblue", "#4682B4"),
+    ("tan", "#D2B48C"),
+    ("teal", "#008080"),
+    ("thistle", "#D8BFD8"),
+    ("tomato", "#FF6347"),
+    ("turquoise", "#40E0D0"),
+    ("violet", "#EE82EE"),
+    ("wheat", "#F5DEB3"),
+    ("white", "#FFFFFF"),
+    ("whitesmoke", "#F5F5F5"),
+    ("yellow", "#FFFF00"),
+    ("yellowgreen", "#9ACD32"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +443,14 @@ mod tests {
         assert!(style.set_font_style(Some("oblique")).is_err());
         style.set_font_weight(Some("BOLD")).unwrap();
         assert_eq!(style.font_weight(), Some("bold"));
+    }
+
+    /// Python writes a whole `float` with its point: music21's
+    /// `<line-width type="beam">5.0</line-width>`.
+    #[test]
+    fn a_whole_decimal_is_written_with_its_point() {
+        assert_eq!(StyleValue::Decimal(5.0).to_string(), "5.0");
+        assert_eq!(StyleValue::Decimal(0.1).to_string(), "0.1");
+        assert_eq!(StyleValue::Whole(75).to_string(), "75");
     }
 }

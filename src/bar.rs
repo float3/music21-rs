@@ -201,6 +201,21 @@ pub struct Ending {
     numbers: Vec<u32>,
     starts: bool,
     stops: bool,
+    #[cfg_attr(feature = "serde", serde(default))]
+    place: BracketPlace,
+}
+
+/// Where in its part music21 puts the `RepeatBracket` over an ending,
+/// which differs by the reader that made it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BracketPlace {
+    /// At the part's start, as its MusicXML reader puts it.
+    #[default]
+    PartStart,
+    /// Where the ending's last measure starts, as its NoteWorthy reader
+    /// appends it before that measure.
+    LastMeasure,
 }
 
 impl Ending {
@@ -212,7 +227,19 @@ impl Ending {
             numbers,
             starts,
             stops,
+            place: BracketPlace::default(),
         }
+    }
+
+    /// The same ending, its bracket put at `place` in the part.
+    pub fn placed(mut self, place: BracketPlace) -> Self {
+        self.place = place;
+        self
+    }
+
+    /// Where music21 puts the bracket over this ending in its part.
+    pub fn place(&self) -> BracketPlace {
+        self.place
     }
 
     /// The times through the ending is played: music21's `numberRange`.
@@ -228,6 +255,73 @@ impl Ending {
     /// Whether the bracket closes on this measure.
     pub fn stops(&self) -> bool {
         self.stops
+    }
+
+    /// The times an ending is numbered for, read from text as music21's
+    /// `RepeatBracket.number` reads it: `1-3` a range, `1, 3` a list,
+    /// empty the ending that gives none (`[0]`).
+    ///
+    /// ```
+    /// use music21::bar::Ending;
+    ///
+    /// assert_eq!(Ending::numbers_from_text("1-3")?, vec![1, 2, 3]);
+    /// assert_eq!(Ending::numbers_from_text("2, 7")?, vec![2, 7]);
+    /// assert_eq!(Ending::numbers_from_text("")?, vec![0]);
+    /// assert!(Ending::numbers_from_text("x").is_err());
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn numbers_from_text(text: &str) -> Result<Vec<u32>> {
+        let refused = || {
+            Error::Value(format!(
+                "number for RepeatBracket must be a number, not {text:?}"
+            ))
+        };
+        let number = |piece: &str| piece.trim().parse::<u32>().map_err(|_| refused());
+        if text.is_empty() {
+            return Ok(vec![0]);
+        }
+        if let Some((low, high)) = text.split_once('-') {
+            return Ok((number(low)?..=number(high)?).collect());
+        }
+        if text.contains(',') {
+            return text.split(',').map(number).collect();
+        }
+        if !text.chars().all(|c| c.is_ascii_digit()) {
+            return Err(refused());
+        }
+        Ok(vec![number(text)?])
+    }
+
+    /// The times an ending is numbered for, written as music21's
+    /// `RepeatBracket.number` writes them: `1-3` for a run of three or
+    /// more, `2, 3` for two in a row or numbers with gaps, empty for none.
+    ///
+    /// ```
+    /// use music21::bar::Ending;
+    ///
+    /// assert_eq!(Ending::numbers_label(&[1, 2, 3]), "1-3");
+    /// assert_eq!(Ending::numbers_label(&[2, 3]), "2, 3");
+    /// assert_eq!(Ending::numbers_label(&[1, 2, 3, 7]), "1, 2, 3, 7");
+    /// assert_eq!(Ending::numbers_label(&[0]), "");
+    /// ```
+    pub fn numbers_label(numbers: &[u32]) -> String {
+        if let [only] = numbers {
+            return match only {
+                0 => String::new(),
+                number => number.to_string(),
+            };
+        }
+        let contiguous = numbers.windows(2).all(|pair| pair[1] == pair[0] + 1);
+        match (numbers.first(), numbers.last()) {
+            (Some(first), Some(last)) if contiguous && numbers.len() > 2 => {
+                format!("{first}-{last}")
+            }
+            _ => numbers
+                .iter()
+                .map(u32::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+        }
     }
 
     /// The numbers as MusicXML writes them, `1,2`; an ending numbered

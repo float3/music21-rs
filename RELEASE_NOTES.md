@@ -1,3 +1,129 @@
+# music21-rs 0.21.0
+
+`harte` 0.14.0 depends on this release.
+
+## breaking changes
+
+- **The wheel's stream filters answer a `StreamIterator`,** as music21's
+  do: `getElementsByClass`, `getElementsNotOfClass`, `getElementsByOffset`,
+  `notes` and `notesAndRests`. Call `.stream()` where a `Stream` is needed;
+  a member only streams have still answers, with music21's
+  `StreamIteratorInefficientWarning`.
+- `scale::Simplification` gains `SimplifyEnharmonic` and
+  `scale::DegreeComparison` gains `Ps` and `NameWithOctave`; both are now
+  `#[non_exhaustive]`, so a `match` on them needs a wildcard arm.
+- `expressions::FermataType` gains `Other(String)`, is `#[non_exhaustive]`
+  and no longer `Copy`; `fermata_type()` returns `&FermataType`.
+- The wheel's `flatten()` hands back the same stream until a stream
+  changes, as music21's does; `Stream.asTimespans(flatten=False)` on nested
+  streams answers a tree of trees; `TimespanTree` can be edited;
+  `iterateVerticalities` walks lazily.
+- Scores read from MusicXML now also hold their staff groups, layouts,
+  repeat brackets, rehearsal marks, pedal objects, fermatas, metric
+  modulations, percussion chords and score style, so code
+  counting their elements sees more.
+
+- **The wheel's Python is Rust now.** `provide_music21`, its import hook,
+  `converter` and `corpus` are pyo3 code; the package's `__init__.py` is
+  one line. `music21_rs.music21_rs` is the package itself; the private
+  `__music21_modules__` and `__music21_built_modules__` are gone.
+  `xtask homes [--check]` replaces `generate_homes.py`, the provided
+  gate's harness is in xtask, and parity's shards are dealt by
+  `cargo run --manifest-path python-parity/Cargo.toml --bin shards`.
+
+## added
+
+- **Crate:** public `midi::base` (MIDI events, tracks and headers as
+  bytes), `midi::translate` (ticks, meter, key and tempo bytes, note and
+  chord events, channel plans; shared by the MIDI reader and writer, whose
+  `from_tracks` and `part_from_track` are new), `romantext::tokens`
+  (RomanText's tokenizing steps), `scale::intervalnetwork` (music21's
+  `IntervalNetwork`) and `ScaleType::network()`, `meter::tools`,
+  `figuredbass::checker`, `sorting` (how a SortTuple compares and
+  combines), `stream::enums`, `stream::iterator` and `stream::status`;
+  `Chord::all_chord_steps` and `BarTogether::from_word`.
+- **`provide_music21()` answers more of music21:** `midi.base`,
+  `midi.translate`, `romanText.rtObjects`, `scale.intervalNetwork`,
+  `test.commonTest.testCopyAll`, `stream.enums`, `stream.streamStatus`,
+  `sorting`, `stream.iterator.OffsetIterator`, `base._SplitTuple`,
+  `chord.tools`, `meter.tools`, meter.core's `getMeterTerminal` and
+  `getMeterSequence`, `duration.FrozenDuration` and `typeFromNumDict` with
+  its sibling tables, `layout.StaffGroup`, `figuredBass.checker`,
+  `sites.WEAKREF_ACTIVE` and a bare `Sites()`, `variant.Variant` and
+  `stream.VariantStorage`. `AbstractScale._net` is the wheel's network.
+- Every wheel `Music21Object` answers `classSortOrder`, `sortTuple()`,
+  `style` and `duration`; `StaffLayout` has `staffType`.
+- Wheel streams pickle and become the site of what they hold again;
+  `storeAtEnd` keeps any number of zero-length objects and sets each one's
+  `activeSite`.
+
+- **music21's `musicxml` is provided in full** over the crate's reader and
+  writer: `m21ToXml` (exporters and their steps, part-staff joining over
+  any XML tree), `xmlToM21` (importer and parsers, element by element
+  through the crate's new `musicxml::step`, with spanner and tuplet state
+  kept between calls), `xmlSoundParser`, `xmlObjects`, `helpers`,
+  `partStaffExporter`; also `metadata.properties`.
+- **music21's `tree` package is ported** to Rust (`music21::tree::core`):
+  AVL trees, ElementTree, OffsetTree, TimespanTree, verticalities holding
+  their own timespans, `tree.fromStream`, `tree.toStream`.
+- **music21's `mei` is provided:** `MeiToM21Converter` and every
+  per-element step of `mei.base` under music21's names, over the crate's
+  new `mei::step`; steps call each other through the module, so replacing
+  one there takes effect. Notes, rests and chords take attributes of a
+  caller's own; streams have `coreAppend`.
+- **music21's `graph` is provided:** axes, plot data and `findPlot` in
+  Rust, drawn through matplotlib where it is installed, as music21 draws;
+  `base._missingImport`, `measureOffsetMap` as an `OrderedDict`, a stream
+  indexed by a class.
+- **`freezeThaw`** over stream pickling; music21's abstract scale classes
+  and `WeightedHexatonicBlues`; **`noteworthy` in full** (translator,
+  `NWCConverter`, `NWCStaff`, `NWCObject`), its placing one implementation
+  in the crate (`noteworthy::placement`).
+- Provided as well: `expressions.Fermata`, `RehearsalMark`, the pedal
+  objects, `tablature.ChordWithFretBoard` (a `FretBoard` too),
+  `spanner.RepeatBracket`, `stream['#id']`, `Stream.isSorted`/`autoSort`,
+  `coreInsert`, `makeBeams(inPlace=True)`, `Verticality.beatStrength`,
+  `StreamStyle` written into `<defaults>`, frames and fret boards written
+  as `<frame>`, roman numerals as `<harmony>`, `editorial.Comment`,
+  `meter.SenzaMisuraTimeSignature`; every element answers music21's `id`.
+
+## fixed
+
+- Installed, an element in one of music21's streams answers `sortTuple`
+  with its offset there, not 0.
+- `show('text')` lists a measure's barlines where music21 does.
+- Installed, the interval network hands out music21's own `Terminus`.
+- The provided `metadata.properties` builds on Python 3.9 to 3.11.
+- Speed: a meter's partition options are built once per ratio;
+  `sortTuple` no longer searches for music21 on each call; stream reads
+  and writes stop repeating spanner and class lookups. Reading bwv69.6
+  went from 7.1x to 9.2x music21's speed, writing it from 4.8x to 8.5x,
+  `recurse().notes` from 4.2x to 16x, `makeMeasures` from 5.4x to 10.7x.
+- An extreme NoteWorthy staff position no longer overflows (found by the
+  fuzzer).
+- Installed, a score music21 itself had cached reads back with its lyrics
+  and pitches: music21's pickled state goes through the installed classes'
+  properties. Provided, temporary files go under `music21-rs` in music21's
+  temporary directory, so music21 never reads the package's pickles.
+- A pickle names `_thawed` and the new `_groups` by the package, so a
+  score cached by the wheel thaws where the crate is linked in, and a
+  standalone wheel stream pickles at all.
+- Reading a score without music21 no longer imports music21 (a spanner
+  asked music21 for its storage); `loaded_music21` asks only what is
+  loaded.
+- A measure's barlines sort by insert index; a copied pitch keeps its
+  groups; a deep-copied measure keeps its number; the NoteWorthy reader
+  places notes, slurs and ties as music21 does; whole decimal style values
+  are written as `5.0`; `Metadata` and `ChordSymbol` subclasses repr as
+  music21's.
+- The wheel's Rag Marwa network gave degree 6 where music21 gives 5 and 7.
+- `xtask contributed-back` drops pull requests closed without merging.
+- The provided gate rewrites `0x` addresses in expected doctest output, as
+  music21's runner does.
+
+Gate (`xtask music21-suite`, provided side): 2931 of music21's 5276
+passing tests pass, up from 1298; 198 of 217 modules import, up from 151.
+
 # music21-rs 0.20.1
 
 `harte` 0.13.1 depends on this release.

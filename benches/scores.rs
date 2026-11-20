@@ -1,5 +1,6 @@
 //! Times whole-score work: reading MusicXML and MEI, and `chordify`,
-//! `make_notation` and `flatten` on a score read from MusicXML.
+//! `make_notation` and `flatten` on a score read from MusicXML; and making
+//! a time signature, which every measure read with a meter does.
 //!
 //! `cargo bench --features musicxml --bench scores`. The scores are read
 //! from disk when the bench starts: music21's corpus when the submodule is
@@ -12,6 +13,7 @@ use std::path::{Path, PathBuf};
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use music21::makenotation::make_notation;
 use music21::mei::from_mei;
+use music21::meter::TimeSignature;
 use music21::musicxml::from_musicxml;
 use music21::{Stream, StreamKind};
 
@@ -99,5 +101,16 @@ fn streams(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, parsing, streams);
+/// A time signature divides its bar several levels deep for its beams,
+/// beats and accents; asking for the ways a ratio divides each time made
+/// one cost 200 microseconds.
+fn meters(c: &mut Criterion) {
+    for ratio in ["4/4", "6/8"] {
+        c.bench_function(&format!("TimeSignature {ratio}"), |b| {
+            b.iter(|| TimeSignature::from_ratio_string(black_box(ratio)).unwrap())
+        });
+    }
+}
+
+criterion_group!(benches, parsing, streams, meters);
 criterion_main!(benches);

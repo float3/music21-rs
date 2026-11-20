@@ -226,6 +226,11 @@ impl Tuplet {
         }
     }
 
+    /// The crate's tuplet this one is.
+    pub(crate) fn value(&self) -> RsTuplet {
+        self.inner
+    }
+
     /// A written value as music21's tuplet setters take one: `None`, a
     /// `DurationTuple`, a `Duration`, a type name, or a `(type, dots)` pair.
     fn written_value(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<(RsDurationType, u32)>> {
@@ -887,13 +892,13 @@ pub(crate) fn adopt_duration(
     holder: &Bound<'_, PyAny>,
 ) -> PyResult<()> {
     let duration = duration.bind(py);
-    if let Ok(mut ours) = duration.extract::<PyRefMut<'_, Duration>>() {
-        ours.client = Some(holder.clone().unbind());
-        return Ok(());
-    }
     // A `FrozenDuration` never changes, so it has nothing to tell a client
     // and keeps none: music21's `duration` setter leaves it alone.
     if is_frozen(duration) {
+        return Ok(());
+    }
+    if let Ok(mut ours) = duration.extract::<PyRefMut<'_, Duration>>() {
+        ours.client = Some(holder.clone().unbind());
         return Ok(());
     }
     // One of music21's own durations keeps the same slot, and writing it is
@@ -1009,6 +1014,22 @@ impl Duration {
             make_time: marks.make_time(),
         };
         grace_object(py, base, said, kind)
+    }
+
+    /// Everything `other` says of a length written into this one, which
+    /// keeps the note it belongs to: music21's readers fill a duration
+    /// handed to them so.
+    pub(crate) fn take_from(&mut self, py: Python<'_>, other: &Self) {
+        self.inner = other.inner.clone();
+        self.components = other.components.clone();
+        self.tuplets = other
+            .tuplets
+            .as_ref()
+            .map(|held| held.iter().map(|tuplet| tuplet.clone_ref(py)).collect());
+        self.dot_groups = other.dot_groups.clone();
+        self.linked = other.linked;
+        self.unlinked_type = other.unlinked_type.clone();
+        self.expression_is_inferred = other.expression_is_inferred;
     }
 
     pub(crate) fn wrap(inner: RsDuration) -> Self {
@@ -2350,6 +2371,159 @@ impl Duration {
     }
 }
 
+/// music21's `FrozenDuration`: a duration that cannot change once made, so
+/// that one object can be shared, as a meter shares its bar's length, and
+/// can be a set member or a dictionary key by its value.
+///
+/// Writing any attribute raises music21's `TypeError`, and so do the
+/// changes music21 refuses by name; a copy is the duration itself, and
+/// `unfreeze` hands out a `Duration` that can change.
+#[pyclass(
+    name = "FrozenDuration",
+    module = "music21.duration",
+    extends = Duration,
+    subclass,
+    skip_from_py_object
+)]
+pub struct FrozenDuration {
+    /// The hash, worked out on first asking: music21's `_frozenHash`.
+    hash: Option<isize>,
+}
+
+/// What music21 raises at a change to a frozen object.
+fn immutable(slf: &Bound<'_, PyAny>) -> PyErr {
+    let name = slf
+        .get_type()
+        .name()
+        .map_or_else(|_| "FrozenDuration".to_string(), |name| name.to_string());
+    PyTypeError::new_err(format!("This {name} instance is immutable."))
+}
+
+#[pymethods]
+impl FrozenDuration {
+    /// Takes what `Duration` takes, and works out its written values at
+    /// once, since they cannot be worked out later.
+    #[new]
+    #[pyo3(signature = (*arguments, **keywords))]
+    fn new(
+        py: Python<'_>,
+        arguments: &Bound<'_, PyTuple>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let mut base = match arguments.len() {
+            0 => Duration::new(None, keywords)?,
+            1 => Duration::new(Some(&arguments.get_item(0)?), keywords)?,
+            given => {
+                return Err(PyTypeError::new_err(format!(
+                    "Duration takes at most one positional argument ({given} given)"
+                )));
+            }
+        };
+        base.materialize(py)?;
+        Ok(crate::base::built(base).add_subclass(Self { hash: None }))
+    }
+
+    fn __setattr__(slf: &Bound<'_, Self>, _name: &str, _value: &Bound<'_, PyAny>) -> PyResult<()> {
+        Err(immutable(slf.as_any()))
+    }
+
+    fn __delattr__(slf: &Bound<'_, Self>, _name: &str) -> PyResult<()> {
+        Err(immutable(slf.as_any()))
+    }
+
+    /// Equal as any duration is, by value.
+    fn __eq__(slf: &Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Duration::__eq__(slf.as_super(), other)
+    }
+
+    /// By value, which cannot change, and worked out once.
+    fn __hash__(slf: &Bound<'_, Self>) -> PyResult<isize> {
+        if let Some(hash) = slf.borrow().hash {
+            return Ok(hash);
+        }
+        let me = slf.as_any();
+        let mut values = Vec::new();
+        for name in [
+            "quarterLength",
+            "type",
+            "dots",
+            "linked",
+            "expressionIsInferred",
+            "dotGroups",
+        ] {
+            values.push(me.getattr(name)?);
+        }
+        let tuplets = me.getattr("tuplets")?;
+        // A tuplet that cannot be hashed counts by how many there are.
+        let tuplets = match tuplets.hash() {
+            Ok(_) => tuplets,
+            Err(_) => tuplets.len()?.into_pyobject(slf.py())?.into_any(),
+        };
+        values.push(tuplets);
+        let hash = PyTuple::new(slf.py(), values)?.hash()?;
+        slf.borrow_mut().hash = Some(hash);
+        Ok(hash)
+    }
+
+    /// The duration itself, which no copy could differ from.
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: Option<&Bound<'py, PyAny>>,
+    ) -> Bound<'py, Self> {
+        slf.clone()
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> Bound<'py, Self> {
+        slf.clone()
+    }
+
+    /// The same value as a `Duration`, which can change, its tuplets copied
+    /// and belonging to nobody.
+    fn unfreeze(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let mut thawed = slf.as_super().borrow().clone();
+        let memo = PyDict::new(py);
+        thawed.tuplets = deep_copied_objects(py, memo.as_any(), thawed.tuplets)?;
+        Ok(crate::installed_new(py, "music21.duration", "Duration", thawed)?.into_any())
+    }
+
+    /// Scaled, as a `Duration`, since this one cannot be.
+    #[pyo3(signature = (amountToScale, retainComponents = None))]
+    fn augmentOrDiminish<'py>(
+        slf: &Bound<'py, Self>,
+        amountToScale: &Bound<'py, PyAny>,
+        retainComponents: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let keywords = PyDict::new(slf.py());
+        if let Some(retain) = retainComponents {
+            keywords.set_item("retainComponents", retain)?;
+        }
+        Self::unfreeze(slf)?.bind(slf.py()).call_method(
+            "augmentOrDiminish",
+            (amountToScale,),
+            Some(&keywords),
+        )
+    }
+
+    /// Split, as a `Duration`; split in place is refused.
+    #[pyo3(signature = (*, inPlace = false))]
+    fn splitDotGroups<'py>(
+        slf: &Bound<'py, Self>,
+        #[pyo3(from_py_with = crate::truthy)] inPlace: bool,
+    ) -> PyResult<Py<PyAny>> {
+        if inPlace {
+            return Err(immutable(slf.as_any()));
+        }
+        let thawed = Self::unfreeze(slf)?;
+        let keywords = PyDict::new(slf.py());
+        keywords.set_item("inPlace", true)?;
+        thawed
+            .bind(slf.py())
+            .call_method("splitDotGroups", (), Some(&keywords))?;
+        Ok(thawed)
+    }
+}
+
 /// Whether `object` is one of music21's own durations: an instance of a
 /// class named `Duration` in `music21.duration`, which its `FrozenDuration`
 /// is built on.
@@ -2950,9 +3124,53 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Duration>()?;
     m.add_class::<GraceDuration>()?;
     m.add_class::<AppoggiaturaDuration>()?;
+    m.add_class::<FrozenDuration>()?;
     m.add_class::<DurationTuple>()?;
     m.add_class::<Tuplet>()?;
     m.add_function(wrap_pyfunction!(durationTupleFromQuarterLength, m)?)?;
     m.add_function(wrap_pyfunction!(durationTupleFromTypeDots, m)?)?;
+    add_tables(m)?;
+    Ok(())
+}
+
+/// music21's module-level tables of note values, which its `beam`,
+/// `meter` and `tinyNotation` read: `typeToDuration`, `typeFromNumDict`
+/// (in music21's order, whole to 2048th, then zero, then breve and
+/// longer), its sorted keys, `ordinalTypeFromNum` and the tuplet tables.
+fn add_tables(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+
+    // Every type by its length in quarters, longest first.
+    let to_duration = PyDict::new(py);
+    for kind in RsDurationType::ALL {
+        to_duration.set_item(kind.music21_name(), kind.quarter_length())?;
+    }
+    m.add("typeToDuration", to_duration)?;
+
+    // By type number: whole and shorter, zero, then longer than whole.
+    let (longer, rest) = RsDurationType::ALL.split_at(RsDurationType::Whole.ordinal().unwrap_or(4));
+    let from_number = PyDict::new(py);
+    for kind in rest.iter().chain(longer.iter().rev()) {
+        from_number.set_item(kind.type_number().unwrap_or(0.0), kind.music21_name())?;
+    }
+    let mut keys: Vec<f64> = from_number.keys().extract()?;
+    keys.sort_by(f64::total_cmp);
+    m.add("typeFromNumDict", from_number)?;
+    m.add("typeFromNumDictKeys", keys)?;
+
+    let ordinal: Vec<&str> = RsDurationType::ALL
+        .iter()
+        .filter(|kind| kind.ordinal().is_some())
+        .map(|kind| kind.music21_name())
+        .collect();
+    m.add("ordinalTypeFromNum", ordinal)?;
+    m.add(
+        "defaultTupletNumerators",
+        PyTuple::new(py, music21::duration::TUPLET_NUMERATORS)?,
+    )?;
+    m.add(
+        "POSSIBLE_DOTS_IN_TUPLETS",
+        PyTuple::new(py, music21::duration::TUPLET_DOTS)?,
+    )?;
     Ok(())
 }

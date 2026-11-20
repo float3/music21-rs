@@ -9,11 +9,7 @@ use crate::note::Note;
 use crate::stream::{Stream, StreamElement, StreamEvent};
 use crate::volume::Volume;
 
-/// music21's `defaults.ticksPerQuarter`, its MusicXML divisions.
-const TICKS_PER_QUARTER: i64 = 10080;
-/// music21's `defaults.ticksAtStart`: the delay before the first note and
-/// after the last, a quarter.
-const TICKS_AT_START: i64 = TICKS_PER_QUARTER;
+use super::translate::{self, Mode, Played, TICKS_AT_START, TICKS_PER_QUARTER};
 
 const NOTE_OFF: u8 = 0x80;
 const NOTE_ON: u8 = 0x90;
@@ -223,7 +219,7 @@ fn put_variable_length(out: &mut Vec<u8>, mut number: i64) {
 /// music21's `offsetToMidiTicks` and `durationToMidiTicks`, rounding as
 /// Python rounds.
 fn ticks(quarter_length: FloatType) -> i64 {
-    (quarter_length * TICKS_PER_QUARTER as FloatType).round_ties_even() as i64
+    translate::duration_ticks(quarter_length)
 }
 
 // ------------------------------------------------------------------ prepare
@@ -524,78 +520,36 @@ fn percussion() -> Instrument {
     Instrument::of_kind("UnpitchedPercussion").unwrap_or_default()
 }
 
-/// music21's `channelInstrumentData`: a channel for each program the parts
-/// play, an instrument's own channel where it names one, and the channels
-/// left over to bend microtones on.
+/// music21's `channelInstrumentData` over the tracks, through
+/// [`translate::plan_channels`].
 fn channel_instrument_data(
     tracks: &[Track],
     options: &ExportOptions,
 ) -> (Vec<(Option<u8>, u8)>, Vec<u8>) {
-    let mut acceptable: Vec<u8> = options
-        .acceptable_channels
-        .clone()
-        .unwrap_or_else(|| (1..=9).chain(11..=16).collect());
-    let mut programs: Vec<Option<u8>> = Vec::new();
-    let mut by_program: Vec<(Option<u8>, u8)> = Vec::new();
-    let mut assigned: Vec<u8> = Vec::new();
-    for track in tracks.iter().filter(|track| !track.conductor) {
-        let mut any = false;
-        for (_, element) in &track.elements {
-            let StreamElement::Instrument(instrument) = element else {
-                continue;
-            };
-            let program = instrument.midi_program();
-            if let Some(channel) = instrument.midi_channel()
-                && !by_program.has(&program)
-            {
-                let mut channel = channel + 1;
-                if let Some(index) = acceptable.iter().position(|ok| *ok == channel) {
-                    acceptable.remove(index);
-                } else if channel != 10 {
-                    channel = 1;
-                }
-                if !assigned.contains(&channel) {
-                    assigned.push(channel);
-                }
-                by_program.push((program, channel));
-            }
-            if !programs.contains(&program) {
-                programs.push(program);
-            }
-            any = true;
-        }
-        if !any && !programs.contains(&None) {
-            programs.push(None);
-        }
-    }
-    let needed: Vec<Option<u8>> = programs
-        .into_iter()
-        .filter(|program| !by_program.has(program))
+    let parts: Vec<Vec<Played>> = tracks
+        .iter()
+        .filter(|track| !track.conductor)
+        .map(|track| {
+            track
+                .elements
+                .iter()
+                .filter_map(|(_, element)| match element {
+                    StreamElement::Instrument(instrument) => Some(Played {
+                        program: instrument.midi_program(),
+                        channel: instrument.midi_channel(),
+                    }),
+                    _ => None,
+                })
+                .collect()
+        })
         .collect();
-    for (index, program) in needed.into_iter().enumerate() {
-        let channel = if index + 1 < acceptable.len() {
-            acceptable[index]
-        } else {
-            acceptable.first().copied().unwrap_or(1)
-        };
-        if !assigned.contains(&channel) {
-            assigned.push(channel);
-        }
-        by_program.push((program, channel));
-    }
-    let dynamic = acceptable
-        .into_iter()
-        .filter(|channel| !assigned.contains(channel))
-        .collect();
-    (by_program, dynamic)
+    let plan = translate::plan_channels(&parts, options.acceptable_channels.as_deref());
+    (plan.by_program, plan.dynamic)
 }
 
 /// A list of pairs read as a map, in the order its keys were added.
 trait Keyed<K, V> {
     fn get(&self, key: &K) -> Option<&V>;
-    fn has(&self, key: &K) -> bool {
-        self.get(key).is_some()
-    }
 }
 
 impl<K: PartialEq, V> Keyed<K, V> for Vec<(K, V)> {
@@ -830,18 +784,20 @@ fn element_events(
             together(&lyric_text(written.lyrics()), &members, 10)
         }
         StreamElement::TimeSignature(meter) => {
-            let numerator = meter.numerator();
-            if numerator > 255 {
+            let Some(data) = translate::meter_data(meter.numerator(), meter.denominator()) else {
                 return Ok(Some(Vec::new()));
-            }
-            let denominator = FloatType::from(meter.denominator()).log2() as u8;
-            vec![Event::meta(
-                TIME_SIGNATURE,
-                vec![numerator as u8, denominator, 24, 8],
-            )]
+            };
+            vec![Event::meta(TIME_SIGNATURE, data.to_vec())]
         }
-        StreamElement::KeySignature(signature) => key_events(signature.sharps(), false),
-        StreamElement::Key(key) => key_events(key.key_signature().sharps(), key.mode() == "minor"),
+        StreamElement::KeySignature(signature) => key_events(signature.sharps(), Mode::Major),
+        StreamElement::Key(key) => {
+            let mode = if key.mode() == "minor" {
+                Mode::Minor
+            } else {
+                Mode::Major
+            };
+            key_events(key.key_signature().sharps(), mode)
+        }
         StreamElement::MetronomeMark(mark) => {
             if mark.number().is_none() && mark.number_sounding().is_none() {
                 return Ok(None);
@@ -849,9 +805,7 @@ fn element_events(
             let Some(bpm) = mark.sounding_quarter_bpm() else {
                 return Ok(None);
             };
-            let mut data = Vec::new();
-            put_number(&mut data, (60_000_000.0 / bpm).round_ties_even() as i64, 3);
-            vec![Event::meta(SET_TEMPO, data)]
+            vec![Event::meta(SET_TEMPO, translate::tempo_data(bpm).to_vec())]
         }
         StreamElement::Instrument(instrument) => vec![Event {
             first: instrument.midi_program().unwrap_or(0),
@@ -861,10 +815,10 @@ fn element_events(
     }))
 }
 
-fn key_events(sharps: IntegerType, minor: bool) -> Vec<Event> {
+fn key_events(sharps: IntegerType, mode: Mode) -> Vec<Event> {
     vec![Event::meta(
         KEY_SIGNATURE,
-        vec![sharps.rem_euclid(256) as u8, u8::from(minor)],
+        translate::key_data(sharps, mode).to_vec(),
     )]
 }
 

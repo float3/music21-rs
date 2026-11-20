@@ -27,8 +27,9 @@ dev = ["pytest>=8"]
 # interpreter `python-parity` uses and wrong for a wheel.
 features = ["extension-module"]
 # A package of its own beside the extension, rather than the one maturin
-# writes: what it writes imports every name the extension has, and the
-# exceptions are the names this package hands out lazily instead.
+# writes: what it writes star-imports every name, which builds every
+# exception and imports music21. Its one line imports the extension, which
+# puts itself in `sys.modules` under the package's name as it loads.
 module-name = "music21_rs.music21_rs"
 python-source = "pysrc"
 # Lands in site-packages, where Python reads it at start-up: with

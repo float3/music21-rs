@@ -26,6 +26,7 @@ pub use super::realized::Scale;
 /// common spelling of each note.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Simplification {
     /// Spell literally, however many accidentals that takes.
     Exact,
@@ -33,6 +34,9 @@ pub enum Simplification {
     MaxAccidental,
     /// Respell to the most common spelling of the pitch class.
     MostCommon,
+    /// Respell any double accidental, and `E#`, `B#`, `C-` and `F-`, to a
+    /// simpler name for the same note.
+    SimplifyEnharmonic,
 }
 
 impl Simplification {
@@ -44,6 +48,19 @@ impl Simplification {
             Self::Exact => None,
             Self::MaxAccidental => Some("maxAccidental"),
             Self::MostCommon => Some("mostCommon"),
+            Self::SimplifyEnharmonic => Some("simplifyEnharmonic"),
+        }
+    }
+
+    /// The rule music21 names, `None` and `"none"` being [`Self::Exact`].
+    #[must_use]
+    pub fn from_music21_name(name: Option<&str>) -> Option<Self> {
+        match name {
+            None | Some("none") => Some(Self::Exact),
+            Some("maxAccidental") => Some(Self::MaxAccidental),
+            Some("mostCommon") => Some(Self::MostCommon),
+            Some("simplifyEnharmonic") => Some(Self::SimplifyEnharmonic),
+            Some(_) => None,
         }
     }
 }
@@ -585,6 +602,7 @@ pub(super) const MAX_RANGE_OCTAVES: usize = 12;
 /// `comparisonAttribute`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum DegreeComparison {
     /// By sounding note, so `E#` matches the `F` of C major.
     PitchClass,
@@ -592,15 +610,35 @@ pub enum DegreeComparison {
     Name,
     /// By letter alone, so an `E-` matches the `E` of C major.
     Step,
+    /// By sounding pitch, octave included: music21's `ps`.
+    Ps,
+    /// By written note and octave.
+    NameWithOctave,
 }
 
 impl DegreeComparison {
     /// What two pitches have to share to count as the same degree.
-    pub(super) fn key(self, pitch: &Pitch) -> String {
+    #[must_use]
+    pub fn key(self, pitch: &Pitch) -> String {
         match self {
             Self::PitchClass => pitch.pitch_class().number().to_string(),
             Self::Name => pitch.name(),
             Self::Step => pitch.name().chars().take(1).collect(),
+            Self::Ps => pitch.ps().to_string(),
+            Self::NameWithOctave => pitch.name_with_octave(),
+        }
+    }
+
+    /// The comparison music21 names by attribute, such as `"pitchClass"`.
+    #[must_use]
+    pub fn from_music21_name(name: &str) -> Option<Self> {
+        match name {
+            "pitchClass" => Some(Self::PitchClass),
+            "name" => Some(Self::Name),
+            "step" => Some(Self::Step),
+            "ps" => Some(Self::Ps),
+            "nameWithOctave" => Some(Self::NameWithOctave),
+            _ => None,
         }
     }
 }
@@ -618,10 +656,11 @@ pub(super) fn advance(
         // music21 transposes with its default cap of four accidentals when it
         // is not told to spell with one, and respells past that.
         Simplification::Exact => interval.transpose_pitch_with_options(pitch, false, Some(4)),
-        Simplification::MostCommon => {
+        Simplification::MostCommon | Simplification::SimplifyEnharmonic => {
             let mut transposed = interval.transpose_pitch_with_options(pitch, false, Some(4))?;
             if transposed.accidental().alter() != 0.0 {
-                transposed.simplify_enharmonic_in_place(true)?;
+                let most_common = simplification == Simplification::MostCommon;
+                transposed.simplify_enharmonic_in_place(most_common)?;
             }
             Ok(transposed)
         }

@@ -278,7 +278,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
     `lily`, `graph` and `tree.core` (see DECISIONS). Partial, in
     music21's public names: `converter` 7 of 20, `corpus` 5 of 16,
     `stream` 17 of 21, `note` 11 of 18, `metadata` 12 of 20, `layout` 7
-    of 22 (`generate_homes.py --coverage`, 1,502 of 2,245 in all). A
+    of 22 (`xtask homes --coverage`, 1,502 of 2,245 in all). A
     provided corpus is read from `MUSIC21_RS_CORPUS`, and
     `getSourceFilePath` is that directory's parent. Five names are
     placed where music21 lacks them: `metadata.MetadataException`,
@@ -320,13 +320,16 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side: 316
-    passes on w20/mods' head (+44 in music21's own code), 74 of 217
-    modules importing, up from 100 and 41 at 0.19.0; not remeasured
-    after the merge. Next blockers: `converter.museScore` (47), then
-    `mei`, `braille.objects`, `musicxml`, `abcFormat` and
-    `musedata.base12_26`. Under the provided harness, doctests showing
-    `0x` addresses fail.
+    music21-suite`'s provided side at 0.21.0: 2931 of 5276 passing tests,
+    198 of 217 modules importing. A measure's `len()` and indexing leave
+    out its barlines, which music21 counts (4 `mei.test_base` tests).
+    Left: `metadata.bundles`
+    (102, corpus cache), `lily` (77), `abcFormat` (128), `graph` (86),
+    `musedata.translate` (46), `humdrum.testFiles` (41), `Sites.add`
+    (13); xmlToM21's last docstrings (multi-measure rests, metric
+    modulation, senza misura, unpitched chords); freezeThaw's
+    `recursiveClearSites`. The median benchmark speedup fell from 18.8x to
+    about 15.5x during 0.21.0 and wants profiling.
 
 21. **the crate's ports that are copies.** the wheel's `makeNotation`
     `op_frac` and `nearest_multiple` are approximate copies of the

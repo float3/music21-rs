@@ -2,7 +2,7 @@
 
 from typing import List
 
-from music21_rs.music21_rs import _HarteLabel
+from music21_rs import _HarteLabel
 
 from harte.mappings import SHORTHAND_DEGREES
 

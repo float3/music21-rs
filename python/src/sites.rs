@@ -275,6 +275,16 @@ pub(crate) fn entered(element: &Bound<'_, PyAny>, here: &Here, index: u64, offse
     });
 }
 
+/// The index an element was given when it was put into a stream, if it
+/// stands there.
+pub(crate) fn index_in(element: &Bound<'_, PyAny>, here: &Here) -> Option<u64> {
+    read(element)
+        .entries
+        .into_iter()
+        .find(|(entry, _)| entry.key == here.key)
+        .map(|(_, index)| index)
+}
+
 /// Makes a stream the `activeSite` of an element reached through it.
 pub(crate) fn reached(element: &Bound<'_, PyAny>, here: &Here, offset: f64) {
     let py = element.py();
@@ -1121,7 +1131,6 @@ fn getOffsetInHierarchy<'py>(
 }
 
 static CONTEXT_TUPLE: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
-static SORT_TUPLE: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
 
 /// music21's `contextSites`, as a list of its `ContextTuple`s -- or with
 /// `returnSortTuples`, of `ContextSortTuple`s carrying a `SortTuple`.
@@ -1165,15 +1174,112 @@ fn contextSites<'py>(
     Ok(out)
 }
 
+/// music21's `SortTuple`: an installed music21's, or music21's own where
+/// it is loaded, and the package's otherwise. Never imported to ask: that
+/// loads all of music21, and searches for it on every call where it is
+/// absent.
+fn sort_tuple_class(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    if let Some(installed) = crate::installed_class(py, "music21.sorting", "SortTuple") {
+        return Ok(installed);
+    }
+    if let Some(found) = crate::loaded_music21(py, "music21.sorting")
+        .and_then(|module| module.getattr("SortTuple").ok())
+    {
+        return Ok(found);
+    }
+    crate::sorting::sort_tuple(py)
+}
+
+/// music21's `sortTuple`: where an element stands among the others in a
+/// stream, as a `SortTuple`: in `useSite`, or its `activeSite` where none
+/// is given. Standing in neither, it stands alone at its own offset, or
+/// with `raiseExceptionOnMiss` a stream given that does not hold it is a
+/// `SitesException`.
+#[pyfunction]
+#[pyo3(signature = (element, useSite = None, raiseExceptionOnMiss = false))]
+fn sortTuple<'py>(
+    element: &Bound<'py, PyAny>,
+    useSite: Option<&Bound<'py, PyAny>>,
+    #[pyo3(from_py_with = crate::truthy)] raiseExceptionOnMiss: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = element.py();
+    let given =
+        useSite.filter(|site| !site.is_none() && !site.is(pyo3::types::PyBool::new(py, false)));
+    let is_stream = element.cast::<Stream>().is_ok();
+    // A barline of the package's keeps no duration, and is no grace note.
+    let grace = !is_stream
+        && element
+            .getattr("duration")
+            .and_then(|duration| duration.getattr("isGrace"))
+            .is_ok_and(|grace| grace.is_truthy().unwrap_or(false));
+    let site = match given {
+        Some(site) => Some(site.clone()),
+        None => active_site(element),
+    };
+    // An installed element is one of music21's own objects, and music21's
+    // streams record where it stands only in music21's sites: music21
+    // knows where. Only a loaded music21 can have made one, so it is not
+    // imported to ask.
+    if let Some(base) = crate::loaded_music21(py, "music21.base")
+        && element.is_instance(&base.getattr("Music21Object")?)?
+    {
+        let asked = given.map_or_else(
+            || pyo3::types::PyBool::new(py, false).to_owned().into_any(),
+            Clone::clone,
+        );
+        return base.getattr("Music21Object")?.getattr("sortTuple")?.call1((
+            element,
+            asked,
+            raiseExceptionOnMiss,
+        ));
+    }
+    if let Some(site) = &site
+        && let Some(mut key) = sort_key_in(element, site)
+    {
+        // Stored at the end, it stands at no offset of its own.
+        if site
+            .call_method1("isAtEnd", (element,))
+            .is_ok_and(|at_end| at_end.is_truthy().unwrap_or(false))
+        {
+            key.at_end = 1.0;
+            key.offset = 0.0;
+        }
+        if grace {
+            key.not_grace = 0.0;
+        }
+        return sort_tuple(py, &key);
+    }
+    if let Some(site) = given
+        && raiseExceptionOnMiss
+    {
+        return Err(SitesException::new_err(format!(
+            "an entry for this object {:#x} is not stored in stream {}",
+            element.as_ptr() as usize,
+            site.repr()?
+        )));
+    }
+    let offset = if given.is_some() {
+        read(element).naive
+    } else {
+        offset_of(element)
+    };
+    let priority = match element.getattr("priority") {
+        Ok(priority) => priority,
+        Err(_) => 0_i64.into_pyobject(py)?.into_any(),
+    };
+    sort_tuple_class(py)?.call1((
+        0,
+        crate::duration::op_frac(py, offset)?,
+        priority,
+        element.getattr("classSortOrder")?,
+        if grace { 0 } else { 1 },
+        0,
+    ))
+}
+
 /// A `SortKey` as music21's `SortTuple`.
 fn sort_tuple<'py>(py: Python<'py>, key: &SortKey) -> PyResult<Bound<'py, PyAny>> {
-    let class = crate::music21_or_namedtuple(
-        py,
-        "music21.sorting",
-        "SortTuple",
-        "atEnd offset priority classSortOrder isNotGrace insertIndex",
-        &SORT_TUPLE,
-    )?;
+    let class = sort_tuple_class(py)?;
     let whole = |value: f64| -> PyResult<Bound<'py, PyAny>> {
         if value.is_finite() {
             Ok((value as i64).into_pyobject(py)?.into_any())
@@ -1435,6 +1541,16 @@ impl Sites {
 
 #[pymethods]
 impl Sites {
+    /// music21's `Sites(containedById=False)`, standing for no element:
+    /// it holds no site, there being no element for a stream to hold.
+    /// music21's own `Music21Object.__init__` builds one so.
+    #[new]
+    #[pyo3(signature = (containedById = false))]
+    fn new(py: Python<'_>, containedById: bool) -> Self {
+        let _ = containedById;
+        Self { element: py.None() }
+    }
+
     /// The streams, oldest first, `None` among them unless `excludeNone`:
     /// music21's `get`.
     #[pyo3(signature = (*, sortByCreationTime = false, priorityTarget = None, excludeNone = false))]
@@ -1586,6 +1702,9 @@ pub(crate) const MEMBERS: [&str; 19] = [
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     m.add_class::<Sites>()?;
+    // music21's switch for holding sites weakly, which `base` imports. The
+    // sites here are always weak.
+    m.add("WEAKREF_ACTIVE", true)?;
     let methods: Vec<(&'static str, Py<PyAny>)> = vec![
         (
             "getOffsetBySite",
@@ -1627,6 +1746,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         (
             "getSpannerSites",
             wrap_pyfunction!(getSpannerSites, m)?.into_any().unbind(),
+        ),
+        (
+            "sortTuple",
+            wrap_pyfunction!(sortTuple, m)?.into_any().unbind(),
         ),
     ];
     for class in element_classes(py) {

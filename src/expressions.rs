@@ -1360,23 +1360,47 @@ pub(crate) fn python_float(value: FloatType) -> String {
     }
 }
 
-/// Which way up a fermata is drawn: music21's `Fermata.type`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// Which way up a fermata is drawn: music21's `Fermata.type`, which
+/// MusicXML says is `upright` or `inverted` and music21 lets be any text.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FermataType {
     /// The arc opening downward, above the staff: MusicXML's `upright`.
     Upright,
     /// The arc opening upward: MusicXML's `inverted`, and music21's default.
     #[default]
     Inverted,
+    /// Any other type a caller gave, kept as given.
+    Other(String),
 }
 
 impl FermataType {
     /// The name music21 and MusicXML give it.
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Upright => "upright",
             Self::Inverted => "inverted",
+            Self::Other(name) => name,
+        }
+    }
+
+    /// Reads the name music21 gives it; one MusicXML does not have is kept
+    /// as given.
+    ///
+    /// ```
+    /// use music21::expressions::FermataType;
+    ///
+    /// assert_eq!(FermataType::from_name("upright"), FermataType::Upright);
+    /// let other = FermataType::from_name("sideways");
+    /// assert_eq!(other, FermataType::Other("sideways".to_string()));
+    /// assert_eq!(other.as_str(), "sideways");
+    /// ```
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "upright" => Self::Upright,
+            "inverted" => Self::Inverted,
+            other => Self::Other(other.to_string()),
         }
     }
 }
@@ -1397,8 +1421,8 @@ impl Fermata {
     }
 
     /// Which way up it is drawn.
-    pub fn fermata_type(&self) -> FermataType {
-        self.fermata_type
+    pub fn fermata_type(&self) -> &FermataType {
+        &self.fermata_type
     }
 
     /// Says which way up it is drawn.
@@ -1554,6 +1578,119 @@ impl RehearsalMark {
     /// Says what is drawn round the mark.
     pub fn set_enclosure(&mut self, enclosure: Option<String>) {
         self.enclosure.0 = enclosure;
+    }
+
+    /// What the next mark reads, counted in `numbering` or, where none is
+    /// given, in the one the content reads as: music21's `nextContent`.
+    /// A content of no numbering is doubled.
+    ///
+    /// ```
+    /// use music21::expressions::{RehearsalMark, RehearsalNumbering};
+    ///
+    /// assert_eq!(RehearsalMark::new("A").next_content(None)?, "B");
+    /// assert_eq!(RehearsalMark::new("Z").next_content(None)?, "AA");
+    /// assert_eq!(RehearsalMark::new("IV").next_content(None)?, "V");
+    /// assert_eq!(RehearsalMark::new("7").next_content(None)?, "8");
+    /// let alphabetical = Some(RehearsalNumbering::Alphabetical);
+    /// assert_eq!(RehearsalMark::new("I").next_content(alphabetical)?, "J");
+    /// # Ok::<(), music21::Error>(())
+    /// ```
+    pub fn next_content(&self, numbering: Option<RehearsalNumbering>) -> crate::Result<String> {
+        let content = self.content.as_str();
+        let Some(numbering) = numbering.or_else(|| RehearsalNumbering::of_content(content)) else {
+            return Ok(content.repeat(2));
+        };
+        match numbering {
+            RehearsalNumbering::Alphabetical => {
+                let next = content
+                    .chars()
+                    .last()
+                    .and_then(|last| char::from_u32(u32::from(last) + 1))
+                    .filter(char::is_ascii_alphabetic);
+                Ok(match next {
+                    Some(next) => next.to_string(),
+                    None => "A".repeat(content.chars().count() + 1),
+                })
+            }
+            RehearsalNumbering::Number => {
+                let number: i64 = content
+                    .trim()
+                    .parse()
+                    .map_err(|_| crate::Error::Value(format!("{content:?} is not a number")))?;
+                Ok((number + 1).to_string())
+            }
+            RehearsalNumbering::Roman => {
+                let number = crate::common::numbertools::from_roman(content, false)?;
+                crate::common::numbertools::to_roman(number + 1)
+            }
+        }
+    }
+}
+
+/// Python's `string.ascii_letters`.
+const LETTERS: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// How a run of rehearsal marks counts: music21's `numbering`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RehearsalNumbering {
+    /// `A`, `B`, `C`.
+    Alphabetical,
+    /// `I`, `II`, `III`.
+    Roman,
+    /// `1`, `2`, `3`.
+    Number,
+}
+
+impl RehearsalNumbering {
+    /// music21's name for the numbering.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Alphabetical => "alphabetical",
+            Self::Roman => "roman",
+            Self::Number => "number",
+        }
+    }
+
+    /// Reads music21's name for a numbering.
+    pub fn from_name(name: &str) -> crate::Result<Self> {
+        match name {
+            "alphabetical" => Ok(Self::Alphabetical),
+            "roman" => Ok(Self::Roman),
+            "number" => Ok(Self::Number),
+            _ => Err(crate::Error::Value(
+                "Numbering must be \"alphabetical\", \"roman\", \"number\", or None".to_string(),
+            )),
+        }
+    }
+
+    /// The numbering a mark's content reads in, where any: music21's
+    /// `_getNumberingFromContent`. A roman numeral of one letter is a
+    /// letter where it is 50 or more (`L`, `C`, `D`, `M`).
+    ///
+    /// ```
+    /// use music21::expressions::RehearsalNumbering;
+    ///
+    /// assert_eq!(RehearsalNumbering::of_content("C"), Some(RehearsalNumbering::Alphabetical));
+    /// assert_eq!(RehearsalNumbering::of_content("X"), Some(RehearsalNumbering::Roman));
+    /// assert_eq!(RehearsalNumbering::of_content("CI"), Some(RehearsalNumbering::Roman));
+    /// assert_eq!(RehearsalNumbering::of_content("5"), Some(RehearsalNumbering::Number));
+    /// assert_eq!(RehearsalNumbering::of_content("*"), None);
+    /// ```
+    pub fn of_content(content: &str) -> Option<Self> {
+        if content.trim().parse::<i64>().is_ok() {
+            return Some(Self::Number);
+        }
+        if let Ok(value) = crate::common::numbertools::from_roman(content, false) {
+            let roman = content.chars().count() >= 2 || value < 50;
+            return Some(if roman {
+                Self::Roman
+            } else {
+                Self::Alphabetical
+            });
+        }
+        // music21 asks whether the content is found in `ascii_letters`, so
+        // a run of letters in order counts too.
+        LETTERS.contains(content).then_some(Self::Alphabetical)
     }
 }
 

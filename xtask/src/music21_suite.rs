@@ -206,10 +206,8 @@ def crate_types():
     """The names cProfile gives the classes the extension defines, as in
     `<method 'add' of 'music21.chord.Chord' objects>`."""
     names = set()
-    for module_name in ('music21_rs.music21_rs', 'music21_rs'):
-        module = sys.modules.get(module_name)
-        if module is None:
-            continue
+    module = sys.modules.get('music21_rs')
+    if module is not None:
         for value in vars(module).values():
             if isinstance(value, type):
                 names.add(f'{value.__module__}.{value.__name__}')
@@ -879,10 +877,6 @@ fn run_one(
     })
 }
 
-/// The Python that runs music21's modules from their source on the provided
-/// side.
-const PROVIDED_SUITE: &str = include_str!("provided_suite.py");
-
 /// The provided side: every module of music21's with a test in it, run
 /// from its source with `import music21` answered by `provide_music21()`
 /// and music21 itself nowhere on the path.
@@ -914,43 +908,24 @@ fn run_provided(
                 .to_string(),
         )?;
     }
-    let runner = PyModule::from_code(
-        py,
-        &std::ffi::CString::new(PROVIDED_SUITE)?,
-        c"music21_rs_provided_suite.py",
-        c"music21_rs_provided_suite",
-    )?;
-    let records = runner.call_method1(
-        "run",
-        (submodule.to_string_lossy().to_string(), only.unwrap_or("")),
-    )?;
+    let records = crate::provided_suite::run(py, &submodule, only.unwrap_or(""))?;
 
     let mut report = Report::default();
-    for record in records.try_iter()? {
-        let record = record?;
-        let module = ProvidedModule {
-            module: record.get_item("module")?.extract()?,
-            imported: record.get_item("imported")?.extract()?,
-            provided: record.get_item("provided")?.extract()?,
-            blocker: record.get_item("blocker")?.extract()?,
-            error: record.get_item("error")?.extract()?,
-            run: record.get_item("run")?.extract()?,
-            passed: record.get_item("passed")?.extract()?,
-            blockers: record.get_item("blockers")?.extract()?,
-        };
-        report.run += module.run;
-        report
-            .failures
-            .extend(record.get_item("failures")?.extract::<Vec<String>>()?);
-        report
-            .errors
-            .extend(record.get_item("errors")?.extract::<Vec<String>>()?);
-        report.detail.extend(
-            record
-                .get_item("detail")?
-                .extract::<BTreeMap<String, String>>()?,
-        );
-        report.provided.push(module);
+    for record in records {
+        report.run += record.run;
+        report.failures.extend(record.failures);
+        report.errors.extend(record.errors);
+        report.detail.extend(record.detail);
+        report.provided.push(ProvidedModule {
+            module: record.module,
+            imported: record.imported,
+            provided: record.provided,
+            blocker: record.blocker,
+            error: record.error,
+            run: record.run,
+            passed: record.passed,
+            blockers: record.blockers,
+        });
     }
     report.failures.sort();
     report.errors.sort();

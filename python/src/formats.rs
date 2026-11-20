@@ -17,7 +17,7 @@ use music21::stream::Stream as RsStream;
 
 use crate::stream::StreamException;
 
-fn format_error(error: music21::Error) -> PyErr {
+pub(crate) fn format_error(error: music21::Error) -> PyErr {
     StreamException::new_err(crate::pitch::message(&error))
 }
 
@@ -25,7 +25,7 @@ fn format_error(error: music21::Error) -> PyErr {
 /// streams once the wheel is installed into music21, so a note answers its
 /// offset and the score nests and writes as music21's; the wheel's own
 /// streams otherwise, whether or not music21 happens to be importable.
-fn handed_back<'py>(
+pub(crate) fn handed_back<'py>(
     py: Python<'py>,
     read: music21::Result<RsStream>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -344,7 +344,7 @@ fn to_lilypond(score: &Bound<'_, PyAny>, version: (u32, u32)) -> PyResult<String
 /// `from_noteworthy` reads them. A compressed file is inflated first, as
 /// music21 inflates one.
 #[pyfunction]
-fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
+pub(crate) fn from_nwc<'py>(py: Python<'py>, data: &[u8]) -> PyResult<Bound<'py, PyAny>> {
     let inflated: Vec<u8>;
     let data = if data.starts_with(b"[NWZ]\x00") {
         inflated = py

@@ -12,14 +12,54 @@
 //! partitioning by a count takes the first of those with that many parts.
 //! That is why `5/8` in two is `{2/8+3/8}` and not `{2.5/8+2.5/8}`.
 
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+
 use crate::defaults::{FloatType, UnsignedIntegerType};
 use crate::error::{Error, Result};
+use crate::meter::tools;
+
+/// The partition options of each ratio asked for so far, as music21 keeps
+/// its `getPartitionOptions` in an `lru_cache`: every time signature
+/// divides its spans several levels deep, and building the options as text
+/// each time was most of what making one cost.
+type Options = Arc<[Vec<String>]>;
+static OPTIONS: LazyLock<Mutex<HashMap<(UnsignedIntegerType, UnsignedIntegerType), Options>>> =
+    LazyLock::new(Mutex::default);
+
+/// The ways a ratio divides: [`MeterTerminal::partition_options`], kept.
+fn options_of(numerator: UnsignedIntegerType, denominator: UnsignedIntegerType) -> Options {
+    let key = (numerator, denominator);
+    let mut kept = OPTIONS.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(found) = kept.get(&key) {
+        return Arc::clone(found);
+    }
+    let made: Options = built_options(numerator, denominator).into();
+    kept.insert(key, Arc::clone(&made));
+    made
+}
+
+/// The options built afresh: the algorithmic ones, then the presets, each
+/// once and none empty.
+fn built_options(
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+) -> Vec<Vec<String>> {
+    let mut options = tools::division_options_algo(numerator, denominator);
+    options.extend(tools::division_options_preset(numerator, denominator));
+    let mut seen = Vec::new();
+    options.retain(|option| {
+        if option.is_empty() || seen.contains(option) {
+            return false;
+        }
+        seen.push(option.clone());
+        true
+    });
+    options
+}
 
 /// How close two quarter lengths must be to count as the same boundary.
 const OFFSET_TOLERANCE: FloatType = 1e-9;
-
-/// The denominators music21 will write a meter in.
-const VALID_DENOMINATORS: [UnsignedIntegerType; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
 
 /// How an offset is matched against the boundaries of a level: music21's
 /// `align` argument to `offsetToDepth`.
@@ -372,10 +412,10 @@ impl MeterTerminal {
     /// count nothing divides into leaves the first option standing, which is
     /// music21's `loadDefault`.
     pub fn partitioned_by_count(&self, count: usize, load_default: bool) -> Result<Self> {
-        let options = self.partition_options();
+        let options = options_of(self.numerator, self.denominator);
         let chosen = options.iter().find(|option| option.len() == count);
         let chosen = match chosen {
-            Some(option) => option.clone(),
+            Some(option) => option,
             None => {
                 if !load_default || options.is_empty() {
                     return Err(Error::Meter(format!(
@@ -383,7 +423,7 @@ impl MeterTerminal {
                         self.numerator, self.denominator
                     )));
                 }
-                options[0].clone()
+                &options[0]
             }
         };
         let borrowed: Vec<&str> = chosen.iter().map(String::as_str).collect();
@@ -421,7 +461,8 @@ impl MeterTerminal {
             return self.partitioned_by_parts(&borrowed);
         }
         let asked: Vec<UnsignedIntegerType> = numerators.to_vec();
-        let matching = self.partition_options().into_iter().find(|option| {
+        let options = options_of(self.numerator, self.denominator);
+        let matching = options.iter().find(|option| {
             option
                 .iter()
                 .map(|part| {
@@ -626,17 +667,7 @@ impl MeterTerminal {
     /// prefers them: music21's `getPartitionOptions`.
     #[must_use]
     pub fn partition_options(&self) -> Vec<Vec<String>> {
-        let mut options = division_options_algorithmic(self.numerator, self.denominator);
-        options.extend(division_options_preset(self.numerator, self.denominator));
-        let mut seen = Vec::new();
-        options.retain(|option| {
-            if option.is_empty() || seen.contains(option) {
-                return false;
-            }
-            seen.push(option.clone());
-            true
-        });
-        options
+        options_of(self.numerator, self.denominator).to_vec()
     }
 
     /// The terminals at one level of this sequence: music21's `getLevelList`.
@@ -978,210 +1009,26 @@ fn split_ratio(ratio: &str) -> Result<(UnsignedIntegerType, UnsignedIntegerType)
     ))
 }
 
-/// The same ratio in shorter notes, while the denominator allows: music21's
-/// `divisionOptionsFractionsUpward`.
-fn fractions_upward(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<String> {
-    let largest = VALID_DENOMINATORS[VALID_DENOMINATORS.len() - 1];
-    let mut out = Vec::new();
-    if denominator >= largest {
-        return out;
-    }
-    let (mut numerator, mut denominator) = (numerator * 2, denominator * 2);
-    while denominator <= largest {
-        out.push(format!("{numerator}/{denominator}"));
-        numerator *= 2;
-        denominator *= 2;
-    }
-    out
-}
-
-/// The same ratio in longer notes, while it stays whole: music21's
-/// `divisionOptionsFractionsDownward`.
-fn fractions_downward(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<String> {
-    let smallest = VALID_DENOMINATORS[0];
-    let mut out = Vec::new();
-    if denominator <= smallest || !numerator.is_multiple_of(2) {
-        return out;
-    }
-    let (mut numerator, mut denominator) = (numerator / 2, denominator / 2);
-    loop {
-        out.push(format!("{numerator}/{denominator}"));
-        if !numerator.is_multiple_of(2) || denominator <= smallest {
-            break;
-        }
-        numerator /= 2;
-        denominator /= 2;
-    }
-    out
-}
-
-/// One unit at a time, then twice as many half as long: music21's
-/// `divisionOptionsAdditiveMultiplesUpward`, which stops at sixteen parts or
-/// at the numerator where that is larger.
-fn additive_multiples_upward(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    let mut out = Vec::new();
-    if numerator <= 1 {
-        return out;
-    }
-    let largest = VALID_DENOMINATORS[VALID_DENOMINATORS.len() - 1];
-    let limit = if numerator > 16 { numerator } else { 16 };
-    let (mut denominator, mut count) = (denominator, numerator);
-    while denominator <= largest && count <= limit {
-        out.push(vec![format!("1/{denominator}"); count as usize]);
-        denominator *= 2;
-        count *= 2;
-    }
-    out
-}
-
-/// The bar halved, and halved again while it stays even: music21's
-/// `divisionOptionsAdditiveMultiplesEvenDivision`. A `4/4` bar reads
-/// `1/2+1/2`, written in the note value a half of it actually is.
-fn additive_multiples_even_division(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    let mut out = Vec::new();
-    if !numerator.is_multiple_of(2) || denominator < 2 {
-        return out;
-    }
-    let (mut count, mut denominator) = (numerator / 2, denominator / 2);
-    while denominator >= 1 && count > 1 {
-        out.push(vec![format!("1/{denominator}"); count as usize]);
-        if !count.is_multiple_of(2) || denominator == 1 {
-            break;
-        }
-        denominator /= 2;
-        count /= 2;
-    }
-    out
-}
-
-/// Even groupings in the bar's own note value: music21's
-/// `divisionOptionsAdditiveMultiples`, which reads `6/4` as `3/4+3/4`.
-fn additive_multiples(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    let mut out = Vec::new();
-    if numerator <= 3 || !numerator.is_multiple_of(2) {
-        return out;
-    }
-    let mut divisor = 2;
-    while numerator.is_multiple_of(divisor) {
-        let count = numerator / divisor;
-        if count <= 1 {
-            break;
-        }
-        out.push(vec![format!("{count}/{denominator}"); divisor as usize]);
-        divisor *= 2;
-    }
-    out
-}
-
-/// A single unit split into smaller ones: music21's
-/// `divisionOptionsAdditiveMultiplesDownward`, which only ever applies where
-/// the numerator is one.
-fn additive_multiples_downward(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    let largest = VALID_DENOMINATORS[VALID_DENOMINATORS.len() - 1];
-    let mut out = Vec::new();
-    if denominator >= largest || numerator != 1 {
-        return out;
-    }
-    let (mut count, mut denominator) = (2usize, denominator * 2);
-    while denominator <= largest {
-        out.push(vec![format!("{numerator}/{denominator}"); count]);
-        denominator *= 2;
-        count *= 2;
-    }
-    out
-}
-
-/// The ways music21 divides a meter, in the order it prefers them:
-/// music21's `divisionOptionsAlgo`.
-///
-/// The order is the behaviour, not decoration:
-/// [`MeterTerminal::partition_by_count`] takes the first option of the right
-/// length, so these pieces are composed in the same sequence music21
-/// composes them in.
-fn division_options_algorithmic(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    let mut options: Vec<Vec<String>> = Vec::new();
-
-    // Compound meters divide into threes first: 6/8 is two dotted beats.
-    if numerator > 3 && numerator.is_multiple_of(3) {
-        options.push(vec![format!("3/{denominator}"); (numerator / 3) as usize]);
-    }
-    // The odd meters music21 keeps a grouping for.
-    let groupings: &[&[UnsignedIntegerType]] = match numerator {
-        5 => &[&[2, 3], &[3, 2]],
-        7 => &[&[2, 2, 3], &[3, 2, 2], &[2, 3, 2]],
-        10 => &[&[2, 2, 3, 3]],
-        _ => &[],
-    };
-    for grouping in groupings {
-        options.push(
-            grouping
-                .iter()
-                .map(|count| format!("{count}/{denominator}"))
-                .collect(),
-        );
-    }
-    options.extend(additive_multiples_upward(numerator, denominator));
-    options.extend(additive_multiples_even_division(numerator, denominator));
-    options.push(vec![format!("{numerator}/{denominator}")]);
-    options.extend(additive_multiples(numerator, denominator));
-    options.extend(additive_multiples_downward(numerator, denominator));
-    for written in fractions_downward(numerator, denominator) {
-        options.push(vec![written]);
-    }
-    for written in fractions_upward(numerator, denominator) {
-        options.push(vec![written]);
-    }
-    options
-}
-
-/// The divisions music21 keeps by hand because no rule produces them: only
-/// the two extra readings of a five.
-fn division_options_preset(
-    numerator: UnsignedIntegerType,
-    denominator: UnsignedIntegerType,
-) -> Vec<Vec<String>> {
-    if numerator != 5 {
-        return Vec::new();
-    }
-    vec![
-        vec![
-            format!("2/{denominator}"),
-            format!("2/{denominator}"),
-            format!("1/{denominator}"),
-        ],
-        vec![
-            format!("2/{denominator}"),
-            format!("1/{denominator}"),
-            format!("2/{denominator}"),
-        ],
-    ]
-}
-
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::MeterTerminal;
     use super::OffsetAlign;
+    use super::options_of;
+
+    /// The options of a ratio are built once and kept, as music21 keeps
+    /// them in an `lru_cache`: building them as text for every span every
+    /// time signature divides was most of what making one cost.
+    #[test]
+    fn partition_options_are_kept() {
+        let first = options_of(4, 4);
+        assert!(Arc::ptr_eq(&first, &options_of(4, 4)));
+        assert_eq!(
+            MeterTerminal::new(4, 4).unwrap().partition_options(),
+            first.to_vec()
+        );
+    }
 
     /// music21's own `divisionOptionsAlgo(4, 4)`, in its order.
     ///
@@ -1259,7 +1106,7 @@ mod tests {
 
     #[test]
     fn the_options_come_in_the_order_music21_offers_them() {
-        use super::division_options_algorithmic;
+        use crate::meter::tools::division_options_algo as division_options_algorithmic;
 
         let offered: Vec<Vec<String>> = division_options_algorithmic(4, 4)
             .into_iter()

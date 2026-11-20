@@ -64,6 +64,7 @@ macro_rules! middle_class {
     };
 }
 
+pub mod abstractscale;
 pub mod aligner;
 pub mod alphasearch;
 pub mod analysis;
@@ -81,10 +82,14 @@ pub mod brailletext;
 pub mod brailletranslate;
 pub mod chord;
 pub mod chordtables;
+mod chordtools;
 pub mod clef;
 pub mod clercqtemperley;
 mod common;
+pub mod commontest;
+mod converter;
 pub mod converters;
+mod corpus;
 pub mod correlate;
 pub mod defaults;
 pub mod derivation;
@@ -97,17 +102,21 @@ pub mod environment;
 pub mod exceptions21;
 pub mod expressions;
 pub mod extractors;
+mod fbchecker;
 pub mod fbrules;
 pub mod features;
 pub mod figuredbass;
 pub mod filters;
 pub mod fixer;
 pub mod formats;
+mod freezethaw;
+pub(crate) mod graph;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
 pub mod hartelabel;
 pub mod hasher;
+mod homes;
 pub mod humdruminstruments;
 pub mod instrument;
 mod instrument_kinds;
@@ -115,22 +124,34 @@ pub mod interval;
 pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
+mod m21toxml;
 pub mod makenotation;
+mod meibase;
 pub mod metadata;
+mod metadataproperties;
 pub mod meter;
+mod metertools;
+pub mod midibase;
 pub mod midipercussion;
+pub mod miditranslate;
+mod musicxml;
 pub mod naturallanguage;
 pub mod neoriemannian;
 pub mod notation;
 pub mod note;
+mod noteworthy;
+mod nwcbinary;
+mod nwctranslate;
 pub mod omrcorrectors;
 pub mod ornamentrecognizer;
+mod pedals;
 pub mod percussion;
 pub mod pitch;
 mod plumbing;
 pub mod possibility;
 pub mod prebase;
 pub mod primitives;
+mod provide;
 pub mod realizer;
 pub mod realizerscale;
 pub mod reducechords;
@@ -139,6 +160,7 @@ pub mod repeat;
 pub mod resolution;
 pub mod rest;
 pub mod roman;
+pub mod rtobjects;
 pub mod scala;
 pub mod scale;
 mod scalewrite;
@@ -150,10 +172,13 @@ pub mod segment;
 pub mod serial;
 pub mod sieve;
 pub mod sites;
+pub mod sorting;
 pub mod spanner;
 mod spelling;
 pub mod spineparser;
 pub mod stream;
+pub mod streamenums;
+pub mod streamstatus;
 pub mod style;
 pub mod subconverters;
 pub mod tablature;
@@ -166,6 +191,8 @@ pub mod unpitched;
 pub mod variant;
 pub mod voiceleading;
 pub mod windowed;
+mod xmlsoundparser;
+mod xmltom21;
 
 pub use pitch::{Accidental, Microtone, Pitch};
 
@@ -486,6 +513,14 @@ pub(crate) fn installed_class<'py>(
     found
 }
 
+/// Whether `install_into_music21` has run: music21's own classes have
+/// been replaced, so music21's code is what reads the package's answers.
+pub(crate) fn music21_installed(py: Python<'_>) -> bool {
+    built_helper(py)
+        .and_then(|helper| helper.getattr("installed").ok())
+        .is_some_and(|installed| installed.len().is_ok_and(|count| count > 0))
+}
+
 /// What [`installed_class`] has found, by module and name, absent ones
 /// included.
 ///
@@ -569,6 +604,33 @@ pub(crate) fn real_music21<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'
     Ok(module)
 }
 
+/// music21's own module of this name where music21 is already loaded,
+/// and not one `provide_music21` built. Asking costs no import: a wheel
+/// standing alone must not load music21 just to see whether it could.
+pub(crate) fn loaded_music21<'py>(py: Python<'py>, name: &str) -> Option<Bound<'py, PyModule>> {
+    let module = py
+        .import("sys")
+        .ok()?
+        .getattr("modules")
+        .ok()?
+        .get_item(name)
+        .ok()?;
+    if is_provided(&module) {
+        return None;
+    }
+    module.cast_into::<PyModule>().ok()
+}
+
+/// The package pickles reach this one's helpers through, set as the
+/// module registers: `music21_rs` for the wheel and for the crate linked
+/// in as `music21_rs`, the facade's own name under `python-parity`.
+static PACKAGE_NAME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// The name [`PACKAGE_NAME`] holds, `music21_rs` before registration.
+pub(crate) fn package_name(_py: Python<'_>) -> &'static str {
+    PACKAGE_NAME.get().map_or("music21_rs", String::as_str)
+}
+
 /// Whether a module is one `provide_music21` built rather than music21's.
 fn is_provided(module: &Bound<'_, PyAny>) -> bool {
     module
@@ -609,6 +671,24 @@ pub(crate) fn music21_editorial<'py>(
             .getattr("editorial")?
             .call_method1("__get__", (object,))?,
     ))
+}
+
+/// Whether an object has editorial information as music21's own
+/// `hasEditorialInformation` answers, where the object is one of music21's
+/// elements: `None` where it is this package's own, which answers itself.
+pub(crate) fn music21_has_editorial(object: &Bound<'_, PyAny>) -> PyResult<Option<bool>> {
+    let py = object.py();
+    let Ok(base) = crate::real_music21(py, "music21.base") else {
+        return Ok(None);
+    };
+    let class = base.getattr("Music21Object")?;
+    if !object.is_instance(&class)? {
+        return Ok(None);
+    }
+    let answer = class
+        .getattr("hasEditorialInformation")?
+        .call_method1("__get__", (object,))?;
+    Ok(Some(answer.is_truthy()?))
 }
 
 /// The class a module of music21's names: the installed one where this
@@ -894,11 +974,9 @@ where
                 .map(|(written, carried)| (written, carried, py.None()))
         });
     let Ok((written, carried, extra)) = read else {
-        // Not one of ours. music21 freezes its own half as a plain dictionary
-        // of attributes and hands it straight back, so that is what this is.
-        if let Ok(own) = slf.as_any().getattr("__dict__") {
-            own.call_method1("update", (state,))?;
-        }
+        // Not one of ours: music21 freezes its own state as a plain
+        // dictionary of attributes, which is what this is.
+        music21_state(slf.as_any(), state)?;
         return Ok((None, None));
     };
     if !carried.is_none(py)
@@ -908,6 +986,47 @@ where
     }
     let extra = (!extra.is_none(py)).then_some(extra);
     read_state(&written).map(|value| (Some(value), extra))
+}
+
+/// music21's own pickled state put on an installed object: each attribute
+/// the class keeps behind a property of its name, or of its name without
+/// music21's leading underscore (`_duration` for `duration`), goes through
+/// that property, so the value reaches the Rust side; the rest goes in
+/// `__dict__`, as music21 keeps it.
+fn music21_state(object: &Bound<'_, PyAny>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+    let Ok(state) = state.cast::<pyo3::types::PyDict>() else {
+        return Ok(());
+    };
+    let own = object.getattr("__dict__").ok();
+    let class = object.get_type();
+    for (key, value) in state.iter() {
+        let name: String = key.extract()?;
+        let through = [name.as_str(), name.trim_start_matches('_')]
+            .into_iter()
+            .find(|candidate| is_data_property(&class, candidate));
+        if let Some(through) = through
+            && object.setattr(through, &value).is_ok()
+        {
+            continue;
+        }
+        if let Some(own) = &own {
+            own.set_item(&key, &value)?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether `class` has a property of this name that can be set: a data
+/// descriptor, such as a pyo3 getter and setter or a Python `property`.
+fn is_data_property(class: &Bound<'_, pyo3::types::PyType>, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let Ok(found) = class.getattr(name) else {
+        return false;
+    };
+    let kind = found.get_type();
+    kind.hasattr("__set__").unwrap_or(false) && !found.is_callable()
 }
 
 /// A new facade object, as the class music21 now has under that name.
@@ -1424,6 +1543,17 @@ def make_class(facade, original):
                 if ancestor.__module__ == 'music21.prebase' and ancestor in _facades:
                     namespace.setdefault(name, getattr(original, name))
                 break
+    # Likewise the wheel's `Music21Object`, which keeps a style and a
+    # duration for a class with none of its own: installed, music21's class
+    # keeps them, in the `_style` and `_duration` its own code writes.
+    for name in ('duration', 'style', 'hasStyleInformation'):
+        for ancestor in facade.__mro__:
+            if name in vars(ancestor):
+                if (ancestor.__name__ == 'Music21Object'
+                        and ancestor in _facades
+                        and hasattr(original, name)):
+                    namespace.setdefault(name, getattr(original, name))
+                break
     if issubclass(original, _base.Music21Object):
         # music21 tells an element's sites of a new priority or length
         # through `informSites`, which reaches music21's streams alone. The
@@ -1749,6 +1879,11 @@ exceptions![
         layout::LayoutException,
         Some("music21.layout")
     ),
+    (
+        "StaffGroupException",
+        layout::StaffGroupException,
+        Some("music21.layout")
+    ),
     ("TextException", text::TextException, Some("music21.text")),
     (
         "SearchModuleException",
@@ -1946,6 +2081,11 @@ exceptions![
         scale::IntervalNetworkException,
         Some("music21.scale.intervalNetwork")
     ),
+    (
+        "EdgeException",
+        intervalnetwork::EdgeException,
+        Some("music21.scale.intervalNetwork")
+    ),
     ("KeyException", key::KeyException, Some("music21.key")),
     (
         "KeySignatureException",
@@ -2087,6 +2227,11 @@ exceptions![
         Some("music21.exceptions21")
     ),
     (
+        "StreamIteratorInefficientWarning",
+        stream::StreamIteratorInefficientWarning,
+        Some("music21.stream.iterator")
+    ),
+    (
         "ImmutableStreamException",
         exceptions21::ImmutableStreamException,
         Some("music21.exceptions21")
@@ -2100,6 +2245,21 @@ exceptions![
         "TreeException",
         exceptions21::TreeException,
         Some("music21.exceptions21")
+    ),
+    (
+        "TimespanException",
+        tree::TimespanException,
+        Some("music21.tree.spans")
+    ),
+    (
+        "VerticalityException",
+        tree::verticality::VerticalityException,
+        Some("music21.tree.verticality")
+    ),
+    (
+        "HorizontalityException",
+        tree::analysis::HorizontalityException,
+        Some("music21.tree.analysis")
     ),
     (
         "SubConverterException",
@@ -2176,6 +2336,11 @@ fn module_getattr<'py>(module: &Bound<'py, PyModule>, name: &str) -> PyResult<Bo
 /// module around this one, so the registration is separate from the
 /// `#[pymodule]` below.
 pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // First, so every helper registered below is named by it.
+    let module_name = m.name()?.to_string();
+    let top = module_name.split('.').next().unwrap_or("music21_rs");
+    let _ = PACKAGE_NAME.set(top.to_owned());
+
     prebase::register(m)?;
     base::register(m)?;
     pitch::register(m)?;
@@ -2242,6 +2407,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     interval::register(m)?;
     harmony::register(m)?;
     scale::register(m)?;
+    abstractscale::register(m)?;
     sieve::register(m)?;
     roman::register(m)?;
     notation::register(m)?;
@@ -2259,6 +2425,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     clef::register(m)?;
     articulations::register(m)?;
     expressions::register(m)?;
+    pedals::register(m)?;
     stream::register(m)?;
     tree::register(m)?;
     formats::register(m)?;
@@ -2266,6 +2433,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     derivation::register(m)?;
     // Once every class is made: it gives some a second base.
     base::add_bases(m)?;
+    base::add_late_members(m)?;
     // Last: it puts its members on classes the others registered.
     sites::register(m)?;
     // The other end of every pickle these classes write. It belongs here
@@ -2273,17 +2441,33 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // own module out of this one, and a score frozen under that harness --
     // which is what `corpus.parse` does on the way back out -- names
     // `_thawed` on whichever of the two modules is present.
-    m.add_function(wrap_pyfunction!(thawed, m)?)?;
+    // Named by the package, not by the extension inside the wheel, so a
+    // pickle the wheel writes reads back where the crate is linked in.
+    let thaw = wrap_pyfunction!(thawed, m)?;
+    thaw.setattr("__module__", package_name(m.py()))?;
+    m.add_function(thaw)?;
     m.add("__exception_names__", EXCEPTION_NAMES)?;
-    // `common` first: where two of these have a name, `provide_music21`
-    // places `common`'s wherever music21 imports it.
-    let built: Vec<String> = common::names()
-        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
-        .collect();
-    m.add("__music21_built_modules__", built)?;
     m.add_function(wrap_pyfunction!(music21_module, m)?)?;
     m.add_function(wrap_pyfunction!(module_getattr, m)?)?;
     Ok(())
+}
+
+/// What the extension takes over from the package that imports it.
+const PACKAGE_IDENTITY: [&str; 5] = [
+    "__spec__",
+    "__file__",
+    "__path__",
+    "__package__",
+    "__loader__",
+];
+
+/// Every module of music21's built here whole: `common` first, since where
+/// two of these have a name, `provide_music21` places `common`'s wherever
+/// music21 imports it.
+fn built_modules() -> Vec<String> {
+    common::names()
+        .chain(BUILT_MODULES.iter().map(|name| (*name).to_owned()))
+        .collect()
 }
 
 /// music21's modules that are built here whole, as modules, rather than
@@ -2291,7 +2475,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 12] = [
+const BUILT_MODULES: [&str; 47] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2304,6 +2488,41 @@ const BUILT_MODULES: [&str; 12] = [
     "music21.style",
     "music21.stream.filters",
     "music21.converter.subConverters",
+    "music21.midi.base",
+    "music21.midi.translate",
+    "music21.test.commonTest",
+    "music21.romanText.rtObjects",
+    "music21.stream.enums",
+    "music21.stream.streamStatus",
+    "music21.sorting",
+    "music21.chord.tools",
+    "music21.meter.tools",
+    "music21.figuredBass.checker",
+    "music21.freezeThaw",
+    "music21.noteworthy",
+    "music21.noteworthy.binaryTranslate",
+    "music21.noteworthy.constants",
+    "music21.noteworthy.dictionaries",
+    "music21.noteworthy.translate",
+    "music21.tree.fromStream",
+    "music21.tree.examples",
+    "music21.tree.toStream",
+    "music21.musicxml",
+    "music21.musicxml.xmlObjects",
+    "music21.musicxml.helpers",
+    "music21.musicxml.partStaffExporter",
+    "music21.musicxml.m21ToXml",
+    "music21.musicxml.xmlSoundParser",
+    "music21.metadata.properties",
+    "music21.musicxml.xmlToM21",
+    "music21.mei",
+    "music21.mei.base",
+    "music21.graph",
+    "music21.graph.utilities",
+    "music21.graph.primitives",
+    "music21.graph.axis",
+    "music21.graph.plot",
+    "music21.graph.findPlot",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2324,7 +2543,33 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.style" => style::module(py),
         "music21.stream.filters" => filters::module(py),
         "music21.converter.subConverters" => subconverters::module(py),
+        "music21.midi.base" => midibase::module(py),
+        "music21.midi.translate" => miditranslate::module(py),
+        "music21.test.commonTest" => commontest::module(py),
+        "music21.romanText.rtObjects" => rtobjects::module(py),
+        "music21.stream.enums" => streamenums::module(py),
+        "music21.stream.streamStatus" => streamstatus::module(py),
+        "music21.sorting" => sorting::module(py),
+        "music21.chord.tools" => chordtools::module(py),
+        "music21.meter.tools" => metertools::module(py),
+        "music21.figuredBass.checker" => fbchecker::module(py),
+        "music21.freezeThaw" => freezethaw::module(py),
+        _ if name.starts_with("music21.noteworthy") => noteworthy::module(py, name),
+        "music21.tree.fromStream" => tree::fromstream::module(py),
+        "music21.tree.examples" => tree::examples::module(py),
+        "music21.tree.toStream" => tree::tostream::module(py),
+        "music21.musicxml" => musicxml::package(py),
+        "music21.musicxml.xmlObjects" => musicxml::objects_module(py),
+        "music21.musicxml.helpers" => musicxml::helpers_module(py),
+        "music21.musicxml.partStaffExporter" => musicxml::part_staff_module(py),
+        "music21.musicxml.m21ToXml" => m21toxml::module(py),
+        "music21.musicxml.xmlSoundParser" => xmlsoundparser::module(py),
+        "music21.metadata.properties" => metadataproperties::module(py),
+        "music21.musicxml.xmlToM21" => xmltom21::module(py),
+        "music21.mei" => meibase::package(py),
+        "music21.mei.base" => meibase::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
+        _ if name.starts_with("music21.graph") => graph::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
 }
@@ -2365,26 +2610,57 @@ pub fn music21_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Not music21's: what the harte-rs package builds its `Harte` on.
     hartelabel::register(m)?;
     m.add_function(wrap_pyfunction!(install_into_music21, m)?)?;
-    // What `provide_music21` builds music21's modules from: the names each
-    // module of music21's is installed under, and the package's version.
-    m.add("__music21_modules__", MUSIC21_MODULES.to_vec())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
-    // maturin's generated package does `from .music21_rs import *`, which
-    // without this would pull the extension module in under its own name.
-    let mut names: Vec<String> = m
+
+    // Every name registered but the dunders, private ones included: what
+    // `provide_music21` places and the table of homes is worked out for.
+    let mut exported: Vec<String> = m
         .dict()
         .keys()
         .iter()
         .filter_map(|key| key.extract::<String>().ok())
-        // Everything but the dunders, since the package the wheel installs
-        // takes its contents from this list: a pickle written by one of
-        // these classes names `_thawed`, and music21's own `key` doctest
-        // reads `_sharpsToPitchCache` back.
         .filter(|name| !name.starts_with("__"))
         .collect();
-    names.sort();
-    m.add("__all__", names)?;
-    Ok(())
+    exported.sort();
+
+    // The public names: the exceptions are among them, though each is
+    // built on first asking (see [`module_getattr`]).
+    let mut public: Vec<String> = exported
+        .iter()
+        .map(String::as_str)
+        .chain(EXCEPTION_NAMES.iter().copied())
+        .chain(["provide_music21"])
+        .filter(|name| !name.starts_with('_'))
+        .map(str::to_owned)
+        .collect();
+    public.sort();
+
+    // The package's one line imports this module, which stands in for the
+    // package from here on: `import music21_rs` answers with it, under the
+    // package's name, spec and file.
+    let modules = m.py().import("sys")?.getattr("modules")?;
+    let package = package_name(m.py());
+    if let Some(imported) = modules.get_item(package).ok().filter(|found| !found.is(m)) {
+        for name in PACKAGE_IDENTITY {
+            if let Ok(value) = imported.getattr(name) {
+                m.setattr(name, value)?;
+            }
+        }
+    }
+    modules.set_item(package, m)?;
+    m.setattr("__name__", package)?;
+
+    // music21's `converter` and `corpus`, importable by their dotted names.
+    for (name, module) in [
+        ("converter", converter::module(m.py())?),
+        ("corpus", corpus::module(m.py())?),
+    ] {
+        modules.set_item(module.name()?, &module)?;
+        m.add(name, module)?;
+    }
+    provide::register(m, exported)?;
+    m.add("__all__", public)?;
+    provide::provide_if_asked(m)
 }
 
 #[cfg(test)]

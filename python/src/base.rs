@@ -42,6 +42,15 @@ pub struct Music21Object {
     /// music21's `derivation`: what this was made from, made on first
     /// asking or by what made it.
     derivation: Option<Py<PyAny>>,
+    /// music21's `_style`: made of the class's `_styleClass` on first
+    /// asking, where the class keeps no style of its own.
+    style: Option<Py<PyAny>>,
+    /// music21's `_duration`, where the class keeps no duration of its
+    /// own: a `Duration` of nothing, made on first asking, until one is
+    /// set.
+    duration: Option<Py<PyAny>>,
+    /// music21's `id`, where one has been given.
+    id: Option<Py<PyAny>>,
 }
 
 #[pymethods]
@@ -50,21 +59,37 @@ impl Music21Object {
     /// `groups` keyword. Whatever else is given is for a subclass.
     #[new]
     #[pyo3(signature = (*_arguments, **keywords))]
-    fn new(
+    pub(crate) fn new(
         _arguments: &Bound<'_, PyTuple>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
-        let groups = match keywords {
-            Some(keywords) => keywords
-                .get_item("groups")?
-                .filter(|given| !given.is_none())
-                .map(Bound::unbind),
-            None => None,
+        let given = |name: &str| -> PyResult<Option<Bound<'_, PyAny>>> {
+            Ok(match keywords {
+                Some(keywords) => keywords.get_item(name)?.filter(|value| !value.is_none()),
+                None => None,
+            })
         };
-        Ok(PyClassInitializer::from(ProtoM21Object).add_subclass(Self {
-            groups,
-            derivation: None,
-        }))
+        let groups = given("groups")?.map(Bound::unbind);
+        let mut duration = given("duration")?.map(Bound::unbind);
+        if let Some(length) = given("quarterLength")? {
+            let py = length.py();
+            let made = crate::duration::Duration::object(
+                py,
+                music21::Duration::new(0.0)
+                    .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?,
+            )?;
+            made.bind(py).setattr("quarterLength", length)?;
+            duration = Some(made);
+        }
+        Ok(
+            PyClassInitializer::from(ProtoM21Object::default()).add_subclass(Self {
+                groups,
+                derivation: None,
+                style: None,
+                duration,
+                id: given("id")?.filter(|id| !id.is_none()).map(Bound::unbind),
+            }),
+        )
     }
 
     /// music21's `groups`: the names of the groups this belongs to, as a
@@ -82,6 +107,32 @@ impl Music21Object {
     #[setter]
     fn set_groups(&mut self, value: Py<PyAny>) {
         self.groups = Some(value);
+    }
+
+    /// music21's `id`: the one given, or else Python's `id()` of the
+    /// object, a number of its own.
+    #[getter]
+    fn get_id(slf: &Bound<'_, Self>) -> Py<PyAny> {
+        let py = slf.py();
+        match &slf.borrow().id {
+            Some(given) => given.clone_ref(py),
+            None => (slf.as_ptr() as usize)
+                .into_pyobject(py)
+                .map(|id| id.into_any().unbind())
+                .unwrap_or_else(|_| py.None()),
+        }
+    }
+
+    #[setter]
+    fn set_id(&mut self, value: Option<Py<PyAny>>) {
+        self.id = value;
+    }
+
+    /// Where among things at one offset this class sorts: music21's
+    /// `classSortOrder`, 20 for a class that says nothing, as a note does.
+    #[classattr]
+    fn classSortOrder() -> i64 {
+        20
     }
 
     /// music21's `derivation`: what this was made from and how, a
@@ -105,22 +156,55 @@ impl Music21Object {
         self.derivation = value;
     }
 
+    /// music21's `style`: how this is drawn, an object of the class's
+    /// `_styleClass` made the first time it is asked for, and the same
+    /// object after that.
+    #[getter]
+    fn get_style(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(style) = &slf.borrow().style {
+            return Ok(style.clone_ref(py));
+        }
+        let made = style_class(slf.as_any())?.call0()?.unbind();
+        slf.borrow_mut().style = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_style(&mut self, value: Py<PyAny>) {
+        self.style = Some(value);
+    }
+
+    /// Whether a `style` has been made yet.
+    #[getter]
+    fn hasStyleInformation(&self) -> bool {
+        self.style.is_some()
+    }
+
     fn __traverse__(
         &self,
         visit: pyo3::pyclass::PyVisit<'_>,
     ) -> Result<(), pyo3::pyclass::PyTraverseError> {
         visit.call(&self.groups)?;
-        visit.call(&self.derivation)
+        visit.call(&self.derivation)?;
+        visit.call(&self.style)?;
+        visit.call(&self.duration)?;
+        visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
         self.groups = None;
         self.derivation = None;
+        self.id = None;
+        self.style = None;
+        self.duration = None;
     }
 }
 
-/// music21's `GeneralNote`: a note, a rest or a chord.
-#[pyclass(name = "GeneralNote", module = "music21.note", extends = Music21Object, subclass)]
+/// music21's `GeneralNote`: a note, a rest or a chord. It takes
+/// attributes of a caller's own, as music21's does: its MEI reader marks
+/// notes with them while it reads.
+#[pyclass(name = "GeneralNote", module = "music21.note", extends = Music21Object, subclass, dict)]
 #[derive(Default)]
 pub struct GeneralNote;
 
@@ -391,6 +475,118 @@ pub(crate) fn carry_groups(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -
     Ok(())
 }
 
+/// A copy's own copies of the style and the duration kept here, as
+/// music21's deep copy makes them; a class keeping either elsewhere
+/// copies it itself.
+fn carry_style(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
+    let (Ok(source), Ok(copy)) = (source.cast::<Music21Object>(), copy.cast::<Music21Object>())
+    else {
+        return Ok(());
+    };
+    let py = source.py();
+    let deep = |held: &Option<Py<PyAny>>| -> PyResult<Option<Py<PyAny>>> {
+        match held {
+            Some(held) => Ok(Some(
+                py.import("copy")?
+                    .call_method1("deepcopy", (held.bind(py),))?
+                    .unbind(),
+            )),
+            None => Ok(None),
+        }
+    };
+    let (style, duration) = {
+        let source = source.borrow();
+        (deep(&source.style)?, deep(&source.duration)?)
+    };
+    if let Some(style) = style {
+        copy.borrow_mut().style = Some(style);
+    }
+    if let Some(duration) = duration {
+        crate::duration::adopt_duration(py, &duration, copy.as_any())?;
+        copy.borrow_mut().duration = Some(duration);
+    }
+    Ok(())
+}
+
+/// music21's `Music21Object.duration`, read: the duration set, or a
+/// `Duration` of nothing made the first time it is asked for.
+#[pyfunction]
+fn duration_of(slf: &Bound<'_, Music21Object>) -> PyResult<Py<PyAny>> {
+    let py = slf.py();
+    if let Some(duration) = &slf.borrow().duration {
+        return Ok(duration.clone_ref(py));
+    }
+    let empty = music21::Duration::new(0.0)
+        .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
+    let made = crate::duration::Duration::object(py, empty)?;
+    slf.borrow_mut().duration = Some(made.clone_ref(py));
+    Ok(made)
+}
+
+/// music21's `Music21Object.duration`, written: the old duration let go,
+/// the new one told what holds it, and the sites told of the change where
+/// there was a duration before. Anything with no `quarterLength` is no
+/// duration.
+#[pyfunction]
+fn set_duration_of(slf: &Bound<'_, Music21Object>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let py = slf.py();
+    let old = slf.borrow().duration.as_ref().map(|old| old.clone_ref(py));
+    if let Some(old) = &old {
+        let old = old.bind(py);
+        if !crate::duration::is_frozen(old) {
+            old.setattr("client", py.None())?;
+        }
+    }
+    let Ok(length) = value.getattr("quarterLength") else {
+        return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+            "this must be a Duration object, not {}",
+            value.str()?
+        )));
+    };
+    let value = value.clone().unbind();
+    slf.borrow_mut().duration = Some(value.clone_ref(py));
+    crate::duration::adopt_duration(py, &value, slf.as_any())?;
+    if old.is_some() {
+        crate::duration::told_sites(slf.as_any(), &length)?;
+    }
+    Ok(())
+}
+
+/// The class an object's `style` is made of: the `_styleClass` its class
+/// names, as a Python subclass of music21's names it, or else the one
+/// music21 gives the wheel's class -- a `TextStyle` for an expression, a
+/// plain `Style` for anything else.
+///
+/// Not a class attribute here, since the wheel reads one as a class's own
+/// choice: a note with none of its own is drawn with a note's style.
+fn style_class<'py>(object: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let py = object.py();
+    if let Ok(named) = object.get_type().getattr("_styleClass") {
+        return Ok(named);
+    }
+    if object.is_instance_of::<crate::expressions::Expression>() {
+        return Ok(py.get_type::<crate::style::TextStyle>().into_any());
+    }
+    Ok(py.get_type::<crate::notation::Style>().into_any())
+}
+
+/// Gives `Music21Object` its `duration`, once the module is made.
+///
+/// The `duration` is a Python `property`, as music21's is, rather than an
+/// attribute of the class's own: music21's `Chord` takes the getter of the
+/// one it inherits and puts its own beside the setter.
+pub(crate) fn add_late_members(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let duration = py.import("builtins")?.getattr("property")?.call1((
+        wrap_pyfunction!(duration_of, m)?,
+        wrap_pyfunction!(set_duration_of, m)?,
+        py.None(),
+        "Get and set the duration of this object as a Duration object.",
+    ))?;
+    m.getattr("Music21Object")?.setattr("duration", duration)?;
+    Ok(())
+}
+
 /// The derivation an object has, without making one for an object that has
 /// none: the package's own, or music21's `_derivation`.
 pub(crate) fn derivation_held<'py>(object: &Bound<'py, PyAny>) -> Option<Bound<'py, PyAny>> {
@@ -410,6 +606,7 @@ pub(crate) fn derivation_held<'py>(object: &Bound<'py, PyAny>) -> Option<Bound<'
 /// `deepcopy` does: a derivation via `'__deepcopy__'`, and the groups.
 pub(crate) fn copied_from(source: &Bound<'_, PyAny>, copy: &Bound<'_, PyAny>) -> PyResult<()> {
     carry_groups(source, copy)?;
+    carry_style(source, copy)?;
     crate::derived_from(copy, source, "__deepcopy__")
 }
 
@@ -436,7 +633,7 @@ impl Footing for PyAny {
 
 impl Footing for ProtoM21Object {
     fn under<T: PyClass<BaseType = Self>>(value: T) -> PyClassInitializer<T> {
-        PyClassInitializer::from(ProtoM21Object).add_subclass(value)
+        PyClassInitializer::from(ProtoM21Object::default()).add_subclass(value)
     }
 }
 
@@ -478,6 +675,7 @@ const MULTIPLE_BASES: &[(&str, &[&str])] = &[
     ("FrettedPluck", &["FretIndication", "Fingering"]),
     ("RepeatExpression", &["RepeatMark", "Expression"]),
     ("Repeat", &["RepeatMark", "Barline"]),
+    ("ChordWithFretBoard", &["ChordSymbol", "FretBoard"]),
 ];
 
 /// Gives the classes music21 builds on more than one base the rest of
@@ -536,9 +734,118 @@ class Groups(list):
                 return False
         return True
 
+    def __reduce__(self):
+        # Rebuilt from its names by the package's `_groups`, which every
+        # build can import; the class's own name is music21's.
+        return (_groups, (list(self),))
+
 
 Groups.__module__ = 'music21.base'
 "#;
+
+/// A new `_SplitTuple` of what is given, as a tuple.
+#[pyfunction]
+fn split_tuple_new<'py>(
+    cls: &Bound<'py, PyAny>,
+    tupEls: &Bound<'py, PyAny>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = cls.py();
+    let items = PyTuple::new(py, tupEls.try_iter()?.collect::<PyResult<Vec<_>>>()?)?;
+    py.get_type::<PyTuple>()
+        .call_method1("__new__", (cls, items))
+}
+
+/// Gives a new `_SplitTuple` its own empty `spannerList`.
+#[pyfunction]
+fn split_tuple_init(slf: &Bound<'_, PyAny>, tupEls: &Bound<'_, PyAny>) -> PyResult<()> {
+    let _ = tupEls;
+    slf.setattr("spannerList", pyo3::types::PyList::empty(slf.py()))
+}
+
+/// Two are equal where both are `_SplitTuple`s holding equal spanners and
+/// equal items.
+#[pyfunction]
+fn split_tuple_eq(slf: &Bound<'_, PyAny>, other: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if !other.is_instance(&slf.get_type())? {
+        return Ok(false);
+    }
+    if !slf
+        .getattr("spannerList")?
+        .eq(other.getattr("spannerList")?)?
+    {
+        return Ok(false);
+    }
+    let tuple = slf.py().get_type::<PyTuple>();
+    tuple.getattr("__eq__")?.call1((slf, other))?.is_truthy()
+}
+
+/// The hash of the items and of which spanner list it holds, so that two
+/// holding equal items and different lists hash apart.
+#[pyfunction]
+fn split_tuple_hash(slf: &Bound<'_, PyAny>) -> PyResult<isize> {
+    let py = slf.py();
+    let items = py
+        .get_type::<PyTuple>()
+        .getattr("__hash__")?
+        .call1((slf,))?;
+    let list = slf.getattr("spannerList")?.as_ptr() as usize;
+    PyTuple::new(py, [items, list.into_pyobject(py)?.into_any()])?.hash()
+}
+
+static SPLIT_TUPLE: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// music21's `_SplitTuple`: the tuple of pieces `splitAtQuarterLength`
+/// hands back, a tuple with a `spannerList` of the spanners the split made.
+pub(crate) fn split_tuple<'py>(m: &Bound<'py, PyModule>) -> PyResult<Bound<'py, PyAny>> {
+    use crate::plumbing::built::{method, new_class, static_method};
+
+    let py = m.py();
+    let class = SPLIT_TUPLE.get_or_try_init(py, || {
+        let as_method = |function: Bound<'py, PyAny>, name: &str| {
+            method(function, "music21.base", "_SplitTuple", name)
+        };
+        let members = vec![
+            (
+                "__new__",
+                static_method(
+                    wrap_pyfunction!(split_tuple_new, m)?.into_any(),
+                    "music21.base",
+                    "_SplitTuple",
+                    "__new__",
+                )?,
+            ),
+            (
+                "__init__",
+                as_method(
+                    wrap_pyfunction!(split_tuple_init, m)?.into_any(),
+                    "__init__",
+                )?,
+            ),
+            (
+                "__eq__",
+                as_method(wrap_pyfunction!(split_tuple_eq, m)?.into_any(), "__eq__")?,
+            ),
+            (
+                "__hash__",
+                as_method(
+                    wrap_pyfunction!(split_tuple_hash, m)?.into_any(),
+                    "__hash__",
+                )?,
+            ),
+        ];
+        let made = new_class(
+            py,
+            "music21.base",
+            "_SplitTuple",
+            "The pieces a split hands back, as a tuple, with the spanners the split \
+             made in its `spannerList`.",
+            vec![py.get_type::<PyTuple>().into_any()],
+            members,
+        )?;
+        Ok::<_, PyErr>(made.unbind())
+    })?;
+    Ok(class.bind(py).clone())
+}
 
 /// The `GroupException` music21 raises for a name that is not a string.
 #[pyfunction]
@@ -561,9 +868,34 @@ pub(crate) fn own_groups(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
                 c"music21_rs_groups",
             )?;
             module.add_function(wrap_pyfunction!(group_exception, &module)?)?;
+            module.add("_groups", groups_rebuilder(py)?)?;
             Ok::<_, PyErr>(module.getattr("Groups")?.unbind())
         })
         .map(|class| class.bind(py).clone())
+}
+
+/// A `Groups` holding these names: what a pickled one is read back with.
+#[pyfunction]
+#[pyo3(name = "_groups")]
+fn rebuilt_groups<'py>(py: Python<'py>, names: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
+    let made = own_groups(py)?.call0()?;
+    for name in names {
+        made.call_method1("append", (name,))?;
+    }
+    Ok(made)
+}
+
+static GROUPS_REBUILDER: pyo3::sync::PyOnceLock<Py<PyAny>> = pyo3::sync::PyOnceLock::new();
+
+/// `_groups`, made once, and named by the package it is reached from.
+pub(crate) fn groups_rebuilder(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+    GROUPS_REBUILDER
+        .get_or_try_init(py, || {
+            let made = wrap_pyfunction!(rebuilt_groups, py)?.into_any();
+            made.setattr("__module__", crate::package_name(py))?;
+            Ok::<_, PyErr>(made.unbind())
+        })
+        .map(|made| made.bind(py).clone())
 }
 
 /// The `Groups` a new element is given: music21's own where music21 has
@@ -589,7 +921,26 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<NotRest>()?;
     m.add_class::<ElementWrapper>()?;
     m.add("Groups", own_groups(m.py())?)?;
+    m.add("_groups", groups_rebuilder(m.py())?)?;
+    m.add("_SplitTuple", split_tuple(m)?)?;
+    m.add("_missingImport", missing_imports(m.py())?)?;
     Ok(())
+}
+
+/// The optional packages music21 asks after, whose absence some of its
+/// modules check before using them.
+const OPTIONAL_IMPORTS: [&str; 2] = ["matplotlib", "numpy"];
+
+/// music21's `_missingImport`: those of [`OPTIONAL_IMPORTS`] not installed.
+fn missing_imports(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyList>> {
+    let find_spec = py.import("importlib.util")?.getattr("find_spec")?;
+    let missing = pyo3::types::PyList::empty(py);
+    for name in OPTIONAL_IMPORTS {
+        if find_spec.call1((name,))?.is_none() {
+            missing.append(name)?;
+        }
+    }
+    Ok(missing)
 }
 
 /// Hands a class built on one of these to Python by value, as pyo3 does

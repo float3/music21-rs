@@ -742,6 +742,22 @@ pub fn is_standard_name(name: &str) -> bool {
         .any(|(unique, named, _)| *unique == name || *named == name)
 }
 
+/// Whether a name is one of the work ids music21 wrote before v8, such
+/// as `date`: music21's `ALL_MUSIC21_WORK_IDS`.
+///
+/// ```
+/// use music21::metadata::is_music21_work_id;
+///
+/// assert!(is_music21_work_id("date"));
+/// assert!(!is_music21_work_id("dateDestroyed"));
+/// ```
+#[must_use]
+pub fn is_music21_work_id(name: &str) -> bool {
+    OLD_MUSIC21_NAMES
+        .iter()
+        .any(|(_, _, work_id)| *work_id == Some(name))
+}
+
 /// The unique name a plural attribute of music21's answers for,
 /// `composer` for `composers`: music21's
 /// `ALL_PLURAL_ATTRIBUTE_NAMES`, each of which answers every value under
@@ -763,6 +779,63 @@ pub fn unique_name_of_plural(plural: &str) -> Option<&'static str> {
         "software" => Some("software"),
         _ => None,
     }
+}
+
+/// One property of the vocabulary as music21's `PropertyDescription`
+/// says it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PropertyDescription {
+    /// The name music21 knows it by, unique in the vocabulary.
+    pub unique_name: &'static str,
+    /// Its name in its namespace, the tail of `dcterms:alternative`.
+    pub name: &'static str,
+    /// The namespace: `dcterms`, `marcrel`, `humdrum`, `m21FileInfo` or
+    /// `music21`.
+    pub namespace: &'static str,
+    /// The Humdrum abbreviation music21 took it by before v8.
+    pub old_abbreviation: Option<&'static str>,
+    /// The work id music21 took it by before v8.
+    pub old_work_id: Option<&'static str>,
+    /// What kind of value it takes.
+    pub value_kind: ValueKind,
+    /// Whether its value is a title whose closing article reads in front.
+    pub needs_article_normalization: bool,
+    /// Whether it names somebody who had a hand in the work.
+    pub is_contributor: bool,
+}
+
+/// music21's `STANDARD_PROPERTY_DESCRIPTIONS`, in its order.
+///
+/// ```
+/// use music21::metadata::property_descriptions;
+///
+/// let alternative = property_descriptions()
+///     .find(|property| property.unique_name == "alternativeTitle")
+///     .unwrap();
+/// assert_eq!((alternative.namespace, alternative.name), ("dcterms", "alternative"));
+/// assert_eq!(alternative.old_abbreviation, Some("ota"));
+/// assert!(alternative.needs_article_normalization);
+/// ```
+pub fn property_descriptions() -> impl Iterator<Item = PropertyDescription> {
+    STANDARD_PROPERTIES
+        .iter()
+        .map(|(unique_name, namespaced, is_contributor)| {
+            let (namespace, name) = namespaced.split_once(':').unwrap_or(("", namespaced));
+            let old = OLD_MUSIC21_NAMES
+                .iter()
+                .find(|(old_name, _, _)| old_name == unique_name);
+            PropertyDescription {
+                unique_name,
+                name,
+                namespace,
+                old_abbreviation: old.and_then(|(_, abbreviation, _)| *abbreviation),
+                old_work_id: old.and_then(|(_, _, work_id)| *work_id),
+                value_kind: value_kind_of(unique_name).unwrap_or(ValueKind::Text),
+                needs_article_normalization: ARTICLED_TITLES.contains(unique_name),
+                is_contributor: *is_contributor,
+            }
+        })
 }
 
 /// music21's `STANDARD_PROPERTY_DESCRIPTIONS`: each property's unique name,

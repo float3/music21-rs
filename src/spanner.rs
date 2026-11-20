@@ -46,6 +46,10 @@ pub enum SpannerKind {
     /// Rests of several measures drawn as one: music21's
     /// `MultiMeasureRest`.
     MultiMeasureRest,
+    /// The measures of an alternative ending, a first or second time bar:
+    /// music21's `RepeatBracket`. A measure read or written keeps its
+    /// ending as a `bar::Ending`; this is the bracket built by hand.
+    RepeatBracket,
 }
 
 impl SpannerKind {
@@ -64,7 +68,30 @@ impl SpannerKind {
             Self::TremoloSpanner => "TremoloSpanner",
             Self::Neume => "Neume",
             Self::MultiMeasureRest => "MultiMeasureRest",
+            Self::RepeatBracket => "RepeatBracket",
         }
+    }
+
+    /// Every kind, in the order music21 lists their classes.
+    pub const ALL: [Self; 13] = [
+        Self::Slur,
+        Self::Crescendo,
+        Self::Diminuendo,
+        Self::Ottava,
+        Self::Line,
+        Self::PedalMark,
+        Self::TrillExtension,
+        Self::ArpeggioMark,
+        Self::Glissando,
+        Self::TremoloSpanner,
+        Self::Neume,
+        Self::MultiMeasureRest,
+        Self::RepeatBracket,
+    ];
+
+    /// The kind music21's class of this name is, where it is one.
+    pub fn from_class_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.class_name() == name)
     }
 
     /// The class spanners of this kind are counted with where music21 numbers

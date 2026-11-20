@@ -41,12 +41,12 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use pyo3::exceptions::{PyAttributeError, PyIndexError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyIndexError, PyKeyError, PyTypeError};
 use pyo3::prelude::*;
 
 use crate::Walkable;
 use crate::sites::{Here, SortKey};
-use pyo3::types::{PyDict, PyList, PySlice, PyTuple};
+use pyo3::types::{PyDict, PyList, PySlice, PyString, PyTuple};
 
 use music21::braille::SegmentDivision;
 use music21::voiceleading::QuartetOptions;
@@ -62,6 +62,11 @@ use crate::rest::Rest;
 use crate::tempo::{MetronomeMark, TempoException};
 
 pyo3::create_exception!(music21_rs_facade, StreamException, crate::Music21Exception);
+pyo3::create_exception!(
+    music21_rs_facade,
+    StreamIteratorInefficientWarning,
+    pyo3::exceptions::PyUserWarning
+);
 
 /// How many times something a stream may hold has changed how long it
 /// lasts, and how many times one has changed its `priority`. These stand
@@ -71,6 +76,43 @@ pyo3::create_exception!(music21_rs_facade, StreamException, crate::Music21Except
 /// checking a version on every element would read every element again.
 static LENGTHS: AtomicU64 = AtomicU64::new(0);
 static PRIORITIES: AtomicU64 = AtomicU64::new(0);
+
+/// How many times any stream has changed what it holds -- its elements,
+/// their offsets, its barlines or what stands at its end. A stream's kept
+/// `flatten()` stands only while this and the two counts above stand:
+/// music21 tells a stream's sites when it changes, and one count for
+/// every stream says the same of any stream a stream holds.
+static EDITS: AtomicU64 = AtomicU64::new(0);
+
+/// Tells every stream that some stream has changed what it holds.
+fn stream_edited() {
+    EDITS.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The three counts a kept flattening was made at.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Counts {
+    edits: u64,
+    lengths: u64,
+    priorities: u64,
+}
+
+impl Counts {
+    fn now() -> Self {
+        Self {
+            edits: EDITS.load(Ordering::Relaxed),
+            lengths: LENGTHS.load(Ordering::Relaxed),
+            priorities: PRIORITIES.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// A stream's `flatten()`, kept as music21 keeps it in `_cache`, with the
+/// counts it was made at.
+struct KeptFlat {
+    counts: Counts,
+    stream: Py<Stream>,
+}
 
 /// Tells every stream that something it may hold has changed its length.
 pub(crate) fn length_changed() {
@@ -307,6 +349,12 @@ pub struct Stream {
     /// the ones it is given.
     left_barline: Option<Py<PyAny>>,
     right_barline: Option<Py<PyAny>>,
+    /// The rest of music21's `_endElements`: what `storeAtEnd` was given
+    /// after the right barline, things of no length standing at the end,
+    /// in the order given.
+    at_end: Vec<Py<PyAny>>,
+    /// The last `flatten()`, while nothing has changed since.
+    flat: Option<KeptFlat>,
     /// What a measure is called and how much of its bar is missing:
     /// music21's `number`, `numberSuffix`, `paddingLeft` and
     /// `paddingRight`, which its `Measure.__init__` gives every measure.
@@ -322,6 +370,8 @@ pub struct Stream {
     /// music21's `_unlinkedDuration`: a duration set apart from what the
     /// stream holds, which `duration` and `quarterLength` then answer.
     unlinked_duration: Option<Py<PyAny>>,
+    /// music21's `streamStatus`, made on first asking.
+    status: Option<Py<PyAny>>,
 }
 
 /// music21's `classSortOrder` for an object, which decides what comes first
@@ -507,16 +557,21 @@ fn already_held(object: &Bound<'_, PyAny>, stream: Option<&str>) -> PyResult<PyE
 /// Whether an object is of a class, named or given: a name matches any
 /// class in the object's lineage, or any name in music21's `classes`.
 fn is_of_class(object: &Bound<'_, PyAny>, class: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if let Ok(name) = class.extract::<String>() {
-        let lineage = object.get_type().getattr("__mro__")?;
-        for each in lineage.walk()? {
-            if each?.getattr("__name__")?.extract::<String>()? == name {
-                return Ok(true);
-            }
+    let Ok(name) = class.cast::<PyString>() else {
+        return object.is_instance(class);
+    };
+
+    // Compared in place: the writer asks this of every element several
+    // times, and copying each name out was most of what it cost.
+    let name = name.to_str()?;
+    let py = object.py();
+    for each in object.get_type().mro().iter() {
+        let each = each.getattr(pyo3::intern!(py, "__name__"))?;
+        if each.cast::<PyString>()?.to_str()? == name {
+            return Ok(true);
         }
-        return Ok(false);
     }
-    object.is_instance(class)
+    Ok(false)
 }
 
 /// What music21 says an object *is*: its own class and every class it is a
@@ -706,6 +761,8 @@ impl Stream {
             sounding: None,
             left_barline: None,
             right_barline: None,
+            at_end: Vec::new(),
+            flat: None,
             number: 0,
             number_suffix: None,
             padding_left: 0.0,
@@ -713,6 +770,7 @@ impl Stream {
             part_name: None,
             part_abbreviation: None,
             unlinked_duration: None,
+            status: None,
         }
     }
 
@@ -872,6 +930,7 @@ impl Stream {
 
     /// Lets go of what was worked out from what is held.
     fn let_go(&mut self) {
+        stream_edited();
         let priorities = PRIORITIES.load(Ordering::Relaxed);
         *locked(&self.derived) = Arc::new(Derived::at(priorities));
     }
@@ -912,9 +971,14 @@ impl Stream {
         me.site = Some(here.clone_ref(py));
         me.enter_barline(true);
         me.enter_barline(false);
+        let end = me.end(py)?;
+        let at_end: Vec<Py<PyAny>> = me.at_end.iter().map(|last| last.clone_ref(py)).collect();
         drop(me);
         for (object, index, offset) in held {
             crate::sites::entered(object.bind(py), &here, index, offset);
+        }
+        for last in at_end {
+            crate::sites::entered(last.bind(py), &here, crate::sites::next_index(), end);
         }
         Ok(())
     }
@@ -994,7 +1058,7 @@ impl Stream {
         let is = |bar: &Option<Py<PyAny>>| bar.as_ref().is_some_and(|bar| bar.bind(py).is(object));
         let at_end = if is(&self.left_barline) {
             0.0
-        } else if is(&self.right_barline) {
+        } else if is(&self.right_barline) || self.stored_at_end(object) {
             1.0
         } else {
             return None;
@@ -1005,7 +1069,11 @@ impl Stream {
             priority: priority_of(object) as f64,
             order: sort_order(object) as f64,
             not_grace: 1.0,
-            index: 0.0,
+            index: self
+                .site
+                .as_ref()
+                .and_then(|here| crate::sites::index_in(object, here))
+                .unwrap_or(0) as f64,
         })
     }
 
@@ -1181,6 +1249,7 @@ impl Stream {
             .right_barline
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(element))
+            || self.stored_at_end(element)
         {
             return self.end(py);
         }
@@ -1438,6 +1507,31 @@ impl Stream {
         Self::viewed(slf, out)
     }
 
+    /// What is picked, as music21's iterator over this stream filtered
+    /// once, the filtering called `method`.
+    fn filtered<'py>(
+        slf: &Bound<'py, Self>,
+        method: &str,
+        mut keep: impl FnMut(&Bound<'py, PyAny>) -> PyResult<bool>,
+    ) -> PyResult<Bound<'py, Walked>> {
+        let py = slf.py();
+        let mut found = Vec::new();
+        for (offset, object, _) in slf.borrow().listed(py)? {
+            if keep(object.bind(py))? {
+                found.push((offset, object));
+            }
+        }
+        let holders = found
+            .iter()
+            .map(|_| slf.clone().into_any().unbind())
+            .collect();
+        let walked = Walked::of(found, slf.borrow().kind)
+            .held_by(holders)
+            .walking(slf.as_any())
+            .named(method);
+        Bound::new(py, walked)
+    }
+
     /// [`Stream::listed`] as offsets and objects, for the lookups that
     /// must find what the listings show.
     fn placed_listed(&self, py: Python<'_>) -> PyResult<Vec<(f64, Py<PyAny>)>> {
@@ -1464,8 +1558,16 @@ impl Stream {
                 .iter()
                 .map(|held| (held.offset, held.object.clone_ref(py), Placing::Held)),
         );
-        if let Some(right) = &self.right_barline {
-            out.push((self.end(py)?, right.clone_ref(py), Placing::Last));
+
+        // The end is worked out only when something stands there: it asks
+        // every element for its length.
+        let last = self.end_elements(py);
+        if last.is_empty() {
+            return Ok(out);
+        }
+        let end = self.end(py)?;
+        for last in last {
+            out.push((end, last, Placing::Last));
         }
         Ok(out)
     }
@@ -1508,6 +1610,113 @@ impl Stream {
         Ok(())
     }
 
+    /// What a pickle carries of a stream: what it holds with each offset
+    /// and priority, what stands at its ends, what it says of itself, and
+    /// the Python half music21 keeps on the object.
+    fn frozen<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        let py = slf.py();
+        let state = PyDict::new(py);
+        let me = slf.borrow();
+        let held = PyList::empty(py);
+        for one in me.held() {
+            let priority = one.priority.load(Ordering::Relaxed);
+            held.append((one.offset, priority, one.object.bind(py)))?;
+        }
+        state.set_item("held", held)?;
+        state.set_item("leftBarline", me.left_barline.as_ref())?;
+        state.set_item("rightBarline", me.right_barline.as_ref())?;
+        state.set_item("atEnd", PyList::new(py, me.at_end.iter())?)?;
+        state.set_item("id", me.id.as_ref())?;
+        state.set_item("atSoundingPitch", me.sounding)?;
+        state.set_item("number", me.number)?;
+        state.set_item("numberSuffix", me.number_suffix.as_deref())?;
+        state.set_item("paddingLeft", me.padding_left)?;
+        state.set_item("paddingRight", me.padding_right)?;
+        state.set_item("partName", me.part_name.as_deref())?;
+        state.set_item("partAbbreviation", me.part_abbreviation.as_deref())?;
+        state.set_item("unlinkedDuration", me.unlinked_duration.as_ref())?;
+        state.set_item("streamStatus", me.status.as_ref())?;
+        drop(me);
+
+        // What `Music21Object` keeps: the groups, and the style where one
+        // was made.
+        let any = slf.as_any();
+        state.set_item("groups", any.getattr("groups")?)?;
+        if any.getattr("hasStyleInformation")?.is_truthy()? {
+            state.set_item("style", any.getattr("style")?)?;
+        }
+        // The Python half, with the two fields music21 never freezes
+        // emptied, as `Music21Object` freezes it.
+        if let Ok(own) = any.getattr("__dict__") {
+            let own = own.call_method0("copy")?;
+            for never in ["_derivation", "_activeSite"] {
+                if own.contains(never)? {
+                    own.set_item(never, py.None())?;
+                }
+            }
+            state.set_item("__dict__", own)?;
+        }
+        Ok(state)
+    }
+
+    /// A blank stream given back what [`Stream::frozen`] wrote, then made
+    /// the site of what it holds.
+    fn thaw(slf: &Bound<'_, Self>, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        let get = |name: &str| -> PyResult<Option<Bound<'_, PyAny>>> {
+            Ok(state.get_item(name)?.filter(|value| !value.is_none()))
+        };
+        let unbound = |value: Option<Bound<'_, PyAny>>| value.map(Bound::unbind);
+        {
+            let mut me = slf.borrow_mut();
+            if let Some(held) = get("held")? {
+                for one in held.try_iter()? {
+                    let (offset, priority, object): (f64, i64, Bound<'_, PyAny>) =
+                        one?.extract()?;
+                    me.put_with_priority(offset, &object, priority);
+                }
+            }
+            me.left_barline = unbound(get("leftBarline")?);
+            me.right_barline = unbound(get("rightBarline")?);
+            if let Some(at_end) = get("atEnd")? {
+                me.at_end = at_end.extract()?;
+            }
+            me.id = unbound(get("id")?);
+            me.sounding = get("atSoundingPitch")?
+                .map(|value| value.extract())
+                .transpose()?;
+            if let Some(number) = get("number")? {
+                me.number = number.extract()?;
+            }
+            me.number_suffix = get("numberSuffix")?
+                .map(|value| value.extract())
+                .transpose()?;
+            if let Some(padding) = get("paddingLeft")? {
+                me.padding_left = padding.extract()?;
+            }
+            if let Some(padding) = get("paddingRight")? {
+                me.padding_right = padding.extract()?;
+            }
+            me.part_name = get("partName")?.map(|value| value.extract()).transpose()?;
+            me.part_abbreviation = get("partAbbreviation")?
+                .map(|value| value.extract())
+                .transpose()?;
+            me.unlinked_duration = unbound(get("unlinkedDuration")?);
+            me.status = unbound(get("streamStatus")?);
+        }
+
+        let any = slf.as_any();
+        if let Some(groups) = get("groups")? {
+            any.setattr("groups", groups)?;
+        }
+        if let Some(style) = get("style")? {
+            any.setattr("style", style)?;
+        }
+        if let (Some(carried), Ok(own)) = (get("__dict__")?, any.getattr("__dict__")) {
+            own.call_method1("update", (carried,))?;
+        }
+        Self::birth(slf)
+    }
+
     /// [`Stream::storeAtEnd`] of one object, or of each in a list.
     fn store_at_end(slf: &Bound<'_, Self>, item: &Bound<'_, PyAny>) -> PyResult<()> {
         if item.is_instance_of::<PyList>() {
@@ -1523,20 +1732,136 @@ impl Stream {
                  elements list",
             ));
         }
+        Self::refuse_held(slf, item)?;
+        let py = slf.py();
         let mut me = slf.borrow_mut();
-        if !is_barline(item)? || me.right_barline.is_some() {
-            return Err(StreamException::new_err(format!(
-                "storeAtEnd of {}: the package keeps one barline at the end, as the \
-                 stream's rightBarline, and nothing else; not ported to music21-rs",
-                item.repr()?
-            )));
+        if me
+            .end_elements(py)
+            .iter()
+            .any(|last| last.bind(py).is(item))
+        {
+            let shown = format!("{}, id()={}", slf.repr()?, slf.as_ptr() as usize);
+            return Err(already_held(item, Some(&shown))?);
         }
-        me.right_barline = Some(item.clone().unbind());
+
+        // music21's `rightBarline` is the first barline at the end.
+        if me.right_barline.is_none() && is_barline(item)? {
+            stream_edited();
+            me.right_barline = Some(item.clone().unbind());
+            me.enter_barline(false);
+            return Ok(());
+        }
+        stream_edited();
+        me.at_end.push(item.clone().unbind());
+        if let Some(site) = &me.site {
+            let end = me.end(py)?;
+            crate::sites::entered(item, site, crate::sites::next_index(), end);
+        }
         Ok(())
+    }
+
+    /// Whether this object is one `storeAtEnd` keeps beside the right
+    /// barline.
+    fn stored_at_end(&self, object: &Bound<'_, PyAny>) -> bool {
+        self.at_end
+            .iter()
+            .any(|last| last.bind(object.py()).is(object))
+    }
+
+    /// Everything kept at the end, the right barline first, then the rest
+    /// by music21's `priority` and `classSortOrder`, as music21 sorts its
+    /// `_endElements`.
+    fn end_elements(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
+        let mut rest: Vec<&Py<PyAny>> = self.at_end.iter().collect();
+        rest.sort_by_key(|last| {
+            let last = last.bind(py);
+            (priority_of(last), sort_order(last))
+        });
+        self.right_barline
+            .iter()
+            .chain(rest)
+            .map(|last| last.clone_ref(py))
+            .collect()
     }
 
     fn class_name(slf: &Bound<'_, Self>) -> PyResult<String> {
         slf.get_type().name()?.extract()
+    }
+}
+
+/// Which elements `notes` and `notesAndRests` keep.
+#[derive(Clone, Copy)]
+enum Sounding {
+    Notes,
+    NotesAndRests,
+}
+
+/// Whether an element is a note or chord, or a rest where those are kept,
+/// by music21's `isNote`, `isChord` and `isRest` flags. A stream of this
+/// package's is none of them; it is skipped without asking, since a flag a
+/// stream lacks costs a failed lookup.
+fn is_sounding(object: &Bound<'_, PyAny>, kept: Sounding) -> bool {
+    if object.is_instance_of::<Stream>() {
+        return false;
+    }
+    let flags: &[&str] = match kept {
+        Sounding::Notes => &["isNote", "isChord"],
+        Sounding::NotesAndRests => &["isNote", "isChord", "isRest"],
+    };
+    flags.iter().any(|flag| {
+        object
+            .getattr(*flag)
+            .and_then(|flag| flag.is_truthy())
+            .unwrap_or(false)
+    })
+}
+
+/// Whether an element's `id` is the one asked for, as music21's
+/// `IdFilter` asks: equal, or equal once both are lower case.
+fn id_matches(object: &Bound<'_, PyAny>, wanted: &str) -> bool {
+    let Ok(id) = object.getattr("id") else {
+        return false;
+    };
+    let wanted = wanted.to_lowercase();
+    id.extract::<String>()
+        .is_ok_and(|id| id == wanted || id.to_lowercase() == wanted)
+}
+
+/// The first of some elements whose `id` is the one a `'#id'` key asks
+/// for.
+fn first_with_id<'py>(
+    elements: impl IntoIterator<Item = Bound<'py, PyAny>>,
+    key: &str,
+) -> Option<Bound<'py, PyAny>> {
+    let wanted = key.strip_prefix('#').unwrap_or(key);
+    elements
+        .into_iter()
+        .find(|element| id_matches(element, wanted))
+}
+
+impl Stream {
+    /// music21's `stream[query]` for a string: `'#id'` the first element
+    /// with that id at any depth, or `None`; `'.group'` or a class name
+    /// those that answer to it at any depth. A stream standing in for an
+    /// iterator answers as music21's iterator does: the one of its own
+    /// with that id, or a `KeyError`.
+    fn queried<'py>(slf: &Bound<'py, Self>, query: &str) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        if slf.borrow().view_of.is_some() {
+            let elements = slf.borrow().elements(py)?;
+            return first_with_id(elements.iter(), query)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
+        let walked = Self::recurse(slf)?;
+        if let Some((_, id)) = query.rsplit_once('#') {
+            let found: Vec<Bound<'py, PyAny>> = walked.try_iter()?.collect::<PyResult<_>>()?;
+            let found = first_with_id(found, id);
+            return Ok(found.unwrap_or_else(|| py.None().into_bound(py)));
+        }
+        if let Some(group) = query.strip_prefix('.') {
+            return walked.call_method1("getElementsByGroup", (group,));
+        }
+        walked.call_method1("getElementsByClass", (query,))
     }
 }
 
@@ -1593,12 +1918,22 @@ impl Stream {
         if let Some(source) = &self.view_of {
             source.visit(&visit)?;
         }
+        for last in &self.at_end {
+            visit.call(last)?;
+        }
+        if let Some(kept) = &self.flat {
+            visit.call(&kept.stream)?;
+        }
+        visit.call(&self.status)?;
         visit.call(&self.id)
     }
 
     fn __clear__(&mut self) {
+        self.flat = None;
         self.held_mut().clear();
+        self.at_end.clear();
         self.id = None;
+        self.status = None;
         self.site = None;
         self.view_of = None;
     }
@@ -1722,6 +2057,7 @@ impl Stream {
     /// music21 reads one, so `'final'` is a final barline.
     #[setter]
     fn set_leftBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.left_barline = barline_given(value)?;
         self.enter_barline(true);
         Ok(())
@@ -1737,6 +2073,7 @@ impl Stream {
     /// Writes the barline closing this measure.
     #[setter]
     fn set_rightBarline(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        stream_edited();
         self.right_barline = barline_given(value)?;
         self.enter_barline(false);
         Ok(())
@@ -1862,6 +2199,7 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.left_barline = None;
             return Ok(());
         }
@@ -1870,7 +2208,13 @@ impl Stream {
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(target))
         {
+            stream_edited();
             self.right_barline = None;
+            return Ok(());
+        }
+        if let Some(at) = self.at_end.iter().position(|last| last.bind(py).is(target)) {
+            stream_edited();
+            self.at_end.remove(at);
             return Ok(());
         }
 
@@ -1899,8 +2243,12 @@ impl Stream {
         if let Some(at) = self.sorted_position(el) {
             return Ok(left + at);
         }
-        if is(&self.right_barline) {
-            return Ok(left + self.held().len());
+        if let Some(at) = self
+            .end_elements(py)
+            .iter()
+            .position(|last| last.bind(py).is(el))
+        {
+            return Ok(left + self.held().len() + at);
         }
 
         let shown = el.str().map(|text| text.to_string()).unwrap_or_default();
@@ -2057,12 +2405,29 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] useMixedNumerals: bool,
     ) -> PyResult<String> {
         let py = slf.py();
-        let held: Vec<(f64, Py<PyAny>)> = slf
+        let mut held: Vec<(f64, Py<PyAny>)> = slf
             .borrow()
             .sorted()
             .iter()
             .map(|held| (held.offset, held.object.clone_ref(py)))
             .collect();
+
+        // A measure's left barline, which it lists rather than holds, at
+        // nought among what stands there, as music21 holds it.
+        if let Some(left) = slf
+            .borrow()
+            .left_barline
+            .as_ref()
+            .map(|bar| bar.clone_ref(py))
+        {
+            let key = |object: &Bound<'_, PyAny>| (priority_of(object), sort_order(object));
+            let own = key(left.bind(py));
+            let at = held
+                .iter()
+                .position(|(offset, object)| *offset > 0.0 || key(object.bind(py)) > own)
+                .unwrap_or(held.len());
+            held.insert(at, (0.0, left));
+        }
         let written = |value: f64| -> PyResult<String> {
             match useMixedNumerals {
                 true => crate::duration::mixed_numeral(value),
@@ -2095,6 +2460,22 @@ impl Stream {
                 lines.push(inner.extract()?);
             }
         }
+
+        // A measure's right barline, which it lists rather than holds,
+        // last and at its end, where music21 holds it.
+        let right = slf
+            .as_any()
+            .getattr("rightBarline")
+            .unwrap_or_else(|_| py.None().into_bound(py));
+        if !right.is_none() {
+            let end: f64 = slf.as_any().getattr("highestTime")?.extract()?;
+            let mut place = written(end)?;
+            if addEndTimes {
+                place = format!("{place} - {place}");
+            }
+            lines.push(format!("{indent}{{{place}}} {}", right.repr()?));
+        }
+
         let joint = match addBreaks {
             true => "\n",
             false => " / ",
@@ -2176,6 +2557,7 @@ impl Stream {
         self.held_mut().clear();
         self.left_barline = None;
         self.right_barline = None;
+        self.at_end.clear();
     }
 
     /// The element of this stream sounding where another element starts:
@@ -2733,10 +3115,10 @@ impl Stream {
         Ok(())
     }
 
-    /// The measures this stream holds, gathered by the offset each stands
-    /// at: music21's `measureOffsetMap`, whose answer a score builds out of
-    /// its parts, so measures standing together in different parts are
-    /// listed together.
+    /// The measures this stream holds, in an `OrderedDict` by the offset
+    /// each stands at: music21's `measureOffsetMap`, whose answer a score
+    /// builds out of its parts, so measures standing together in different
+    /// parts are listed together.
     ///
     /// Only `Measure` is taken as a class to gather by: music21's other
     /// classes are found by asking an element which measure holds it,
@@ -2745,7 +3127,7 @@ impl Stream {
     fn measureOffsetMap<'py>(
         slf: &Bound<'py, Self>,
         classFilterList: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if let Some(asked) = classFilterList.filter(|list| !list.is_none()) {
             let names = class_names(asked)?;
@@ -2772,8 +3154,8 @@ impl Stream {
             if is_of_class(object, &part)? {
                 parts = true;
                 let inner = Self::measureOffsetMap(object.cast::<Stream>()?, None)?;
-                for (offset, measures) in inner.iter() {
-                    let offset: f64 = offset.extract()?;
+                for item in inner.call_method0("items")?.try_iter()? {
+                    let (offset, measures): (f64, Bound<'py, PyAny>) = item?.extract()?;
                     for held in measures.try_iter()? {
                         gathered.push((offset, held?));
                     }
@@ -2795,7 +3177,7 @@ impl Stream {
             }
         }
         offsets.sort_by(f64::total_cmp);
-        let out = PyDict::new(py);
+        let out = py.import("collections")?.getattr("OrderedDict")?.call0()?;
         for offset in offsets {
             let standing: Vec<&Bound<'py, PyAny>> = gathered
                 .iter()
@@ -3060,10 +3442,12 @@ impl Stream {
         let made = barline_given(Some(value))?;
         match Self::last_measure(slf)? {
             Some(measure) => {
+                stream_edited();
                 measure.cast::<Stream>()?.borrow_mut().right_barline = made;
             }
             None => slf.borrow_mut().right_barline = made,
         }
+        stream_edited();
         let _ = py;
         Ok(())
     }
@@ -3495,9 +3879,9 @@ impl Stream {
     /// Keeps something at the end, after whatever is appended later:
     /// music21's `storeAtEnd`, which takes one object or a list of them.
     ///
-    /// music21 keeps any number of things of no length there; the package
-    /// keeps one, a barline, as the stream's `rightBarline`, and refuses
-    /// the rest. `ignoreSort` is taken and, as in music21, changes nothing.
+    /// Any number of things of no length are kept there; the first
+    /// barline is the stream's `rightBarline`. `ignoreSort` is taken and,
+    /// as in music21, changes nothing.
     #[pyo3(signature = (itemOrList, ignoreSort = false))]
     fn storeAtEnd(
         slf: &Bound<'_, Self>,
@@ -3516,11 +3900,32 @@ impl Stream {
             .right_barline
             .as_ref()
             .is_some_and(|bar| bar.bind(py).is(element))
+            || self.stored_at_end(element)
         {
             return Ok(true);
         }
         self.offset_of(element)?;
         Ok(false)
+    }
+
+    /// music21's `_elements`: what stands at an offset, in order, a
+    /// measure's left barline first. A new list, so writing to it changes
+    /// nothing.
+    #[getter]
+    fn _elements(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
+        let left = self.left_barline.iter().map(|bar| bar.clone_ref(py));
+        let held = self
+            .sorted()
+            .into_iter()
+            .map(|one| one.object.clone_ref(py));
+        left.chain(held).collect()
+    }
+
+    /// music21's `_endElements`: what is kept at the end, the right
+    /// barline first. A new list, as `_elements` is.
+    #[getter]
+    fn _endElements(&self, py: Python<'_>) -> Vec<Py<PyAny>> {
+        self.end_elements(py)
     }
 
     /// Every element, those of the streams held too, with where it stands
@@ -4099,6 +4504,71 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `isSorted`. A stream here answers in order whenever it
+    /// is read, so it is always sorted.
+    #[getter]
+    fn isSorted(&self) -> bool {
+        true
+    }
+
+    /// music21's callers mark a stream unsorted to have it sorted on the
+    /// next read, which here happens anyway: what is given is accepted
+    /// and changes nothing.
+    #[setter]
+    fn set_isSorted(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
+    /// music21's `autoSort`: whether a stream sorts itself when read,
+    /// which a stream here always does.
+    #[getter]
+    fn autoSort(&self) -> bool {
+        true
+    }
+
+    /// Accepted and changes nothing: music21's spanners and freezer turn
+    /// it off on streams they keep, which here are read in order anyway.
+    #[setter]
+    fn set_autoSort(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        crate::truthy(value).map(|_| ())
+    }
+
+    /// music21's `coreInsert`: `insert`, which here keeps the stream in
+    /// order as it goes, so nothing waits for `coreElementsChanged`.
+    #[pyo3(signature = (offset, element, *, ignoreSort = false, setActiveSite = true))]
+    fn coreInsert(
+        slf: &Bound<'_, Self>,
+        offset: &Bound<'_, PyAny>,
+        element: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] ignoreSort: bool,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
+    ) -> PyResult<()> {
+        let _ = (ignoreSort, setActiveSite);
+        slf.call_method1("insert", (offset, element))?;
+        Ok(())
+    }
+
+    /// music21's `coreAppend`: `append`, which here keeps the stream in
+    /// order as it goes, so nothing waits for `coreElementsChanged`.
+    #[pyo3(signature = (element, *, setActiveSite = true))]
+    fn coreAppend(
+        slf: &Bound<'_, Self>,
+        element: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
+    ) -> PyResult<()> {
+        let _ = setActiveSite;
+        slf.call_method1("append", (element,))?;
+        Ok(())
+    }
+
+    /// music21's `coreElementsChanged`. A stream here is up to date after
+    /// every change, so there is nothing to do; music21's keywords are
+    /// accepted for that.
+    #[pyo3(signature = (**keywords))]
+    fn coreElementsChanged(&self, keywords: Option<&Bound<'_, PyDict>>) {
+        let _ = keywords;
+    }
+
     /// music21's `sort`. A stream here answers in order whenever it is
     /// read, so there is nothing to do; `force` is accepted for that.
     #[pyo3(signature = (force = false))]
@@ -4125,15 +4595,29 @@ impl Stream {
         let is = |bar: &Option<Py<PyAny>>| bar.as_ref().is_some_and(|bar| bar.bind(py).is(element));
         Ok(is(&self.left_barline)
             || is(&self.right_barline)
+            || self.stored_at_end(element)
             || self.held_position(element).is_some())
     }
 
     fn __getitem__<'py>(
-        &self,
-        py: Python<'py>,
+        slf: &Bound<'py, Self>,
         key: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let elements = self.elements(py)?;
+        let py = slf.py();
+        // A cast, not an extraction: a failed extraction builds an error,
+        // and most keys are numbers.
+        if let Ok(query) = key.cast::<PyString>() {
+            return Self::queried(slf, query.to_str()?);
+        }
+
+        // A class, or several, is looked for all through the stream.
+        if is_class_key(key)? {
+            return slf
+                .call_method0("recurse")?
+                .call_method1("getElementsByClass", (key,));
+        }
+        let me = slf.borrow();
+        let elements = me.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
@@ -4148,7 +4632,7 @@ impl Stream {
             )));
         }
         let found = elements.get_item(at as usize)?;
-        self.reach(&found);
+        me.reach(&found);
         Ok(found)
     }
 
@@ -4156,19 +4640,33 @@ impl Stream {
     /// their offsets from this stream's start.
     fn flatten<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
         let py = slf.py();
+
+        // Kept, as music21 keeps it, while no stream has changed since.
+        if let Some(kept) = &slf.borrow().flat
+            && kept.counts == Counts::now()
+        {
+            return Ok(kept.stream.bind(py).clone());
+        }
+        let made = Self::flattened(slf)?;
+        slf.borrow_mut().flat = Some(KeptFlat {
+            counts: Counts::now(),
+            stream: made.clone().unbind(),
+        });
+        Ok(made)
+    }
+
+    /// One timeline with the nesting dissolved, made afresh.
+    fn flattened<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
+        let py = slf.py();
         let mut leaves = Vec::new();
         Self::flatten_into(slf, 0.0, &mut leaves)?;
-        let own_right = slf
-            .borrow()
-            .right_barline
-            .as_ref()
-            .map(|right| right.clone_ref(py));
+        let own_end = slf.borrow().end_elements(py);
         let mut out = Self::empty(slf.borrow().kind);
         for (offset, object) in leaves {
             // A nested measure's right barline is an element like any other
             // once flattened; this stream's own stays last, as music21
             // keeps it at the end.
-            let own = own_right.as_ref().is_some_and(|right| right.is(&object));
+            let own = own_end.iter().any(|last| last.is(&object));
             match own {
                 true => out.put_with_priority(offset, object.bind(py), i64::MAX),
                 false => out.put(offset, object.bind(py)),
@@ -4199,43 +4697,31 @@ impl Stream {
         Bound::new(py, walked)
     }
 
-    /// The notes and chords this stream holds directly.
+    /// The notes and chords this stream holds directly, as music21's
+    /// iterator.
     #[getter]
-    fn notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
-        Self::picked(slf, Some(StreamKind::Stream), |object| {
-            Ok(["isNote", "isChord"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+    fn notes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Walked>> {
+        Self::filtered(slf, "notes", |object| {
+            Ok(is_sounding(object, Sounding::Notes))
         })
     }
 
-    /// The notes, chords and rests this stream holds directly.
+    /// The notes, chords and rests this stream holds directly, as
+    /// music21's iterator.
     #[getter]
-    fn notesAndRests<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Stream>> {
-        Self::picked(slf, Some(StreamKind::Stream), |object| {
-            for flag in ["isNote", "isChord", "isRest"] {
-                if object
-                    .getattr(flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-                {
-                    return Ok(true);
-                }
-            }
-            Ok(false)
+    fn notesAndRests<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, Walked>> {
+        Self::filtered(slf, "notesAndRests", |object| {
+            Ok(is_sounding(object, Sounding::NotesAndRests))
         })
     }
 
     /// What this stream holds directly of the classes given, by class or by
-    /// name.
+    /// name, as music21's iterator.
     fn getElementsByClass<'py>(
         slf: &Bound<'py, Self>,
         classFilterList: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, Stream>> {
-        Self::picked(slf, Some(StreamKind::Stream), |object| {
+    ) -> PyResult<Bound<'py, Walked>> {
+        Self::filtered(slf, "getElementsByClass", |object| {
             is_of_any(object, classFilterList)
         })
     }
@@ -4246,8 +4732,8 @@ impl Stream {
     fn getElementsNotOfClass<'py>(
         slf: &Bound<'py, Self>,
         classFilterList: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, Stream>> {
-        Self::picked(slf, Some(StreamKind::Stream), |object| {
+    ) -> PyResult<Bound<'py, Walked>> {
+        Self::filtered(slf, "getElementsNotOfClass", |object| {
             is_of_any(object, classFilterList).map(|found| !found)
         })
     }
@@ -4310,7 +4796,7 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] mustBeginInSpan: bool,
         #[pyo3(from_py_with = crate::truthy)] includeElementsThatEndAtStart: bool,
         classList: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, Stream>> {
+    ) -> PyResult<Bound<'py, Walked>> {
         let span = music21::stream::OffsetSpan {
             start: offsetStart,
             end: offsetEnd,
@@ -4321,25 +4807,20 @@ impl Stream {
         };
         // The offsets live beside the objects, so the span is asked of
         // each rather than read into the crate.
-        let placed = slf.borrow().placed_listed(slf.py())?;
-        let py = slf.py();
-        let mut out = Self::empty(slf.borrow().kind);
-        for (offset, object) in placed {
-            let object = object.into_bound(py);
-            if let Some(classList) = classList.filter(|list| !list.is_none())
-                && !is_of_any(&object, classList)?
+        let classList = classList.filter(|list| !list.is_none());
+        Self::filtered(slf, "getElementsByOffset", |object| {
+            if let Some(classList) = classList
+                && !is_of_any(object, classList)?
             {
-                continue;
+                return Ok(false);
             }
+            let offset = slf.borrow().offset_of(object)?;
             let length: f64 = object
                 .getattr("quarterLength")
                 .and_then(|value| value.extract())
                 .unwrap_or(0.0);
-            if span.takes_at(offset, length) {
-                out.put(offset, &object);
-            }
-        }
-        Self::viewed(slf, out)
+            Ok(span.takes_at(offset, length))
+        })
     }
 
     /// Whether every pitch sounding is one of the twelve of equal
@@ -4684,6 +5165,14 @@ impl Stream {
         Ok(())
     }
 
+    /// Moves the stream's own offset onto what it holds, leaving it at
+    /// nought: music21's `transferOffsetToElements`.
+    fn transferOffsetToElements(slf: &Bound<'_, Self>) -> PyResult<()> {
+        let offset: f64 = slf.getattr("offset")?.extract()?;
+        Self::shiftElements(slf, offset, None, None, None)?;
+        slf.setattr("offset", 0.0)
+    }
+
     /// A copy with a measure's one voice dissolved into the measure
     /// itself: music21's `flattenUnnecessaryVoices`, which `force` applies
     /// to every voice however many there are.
@@ -4885,13 +5374,39 @@ impl Stream {
         #[pyo3(from_py_with = crate::truthy)] setStemDirections: bool,
         #[pyo3(from_py_with = crate::truthy)] failOnNoTimeSignature: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
-        refuse_unported(false, false, inPlace)?;
         if !setStemDirections || failOnNoTimeSignature {
             return Err(StreamException::new_err(
                 "setStemDirections=False and failOnNoTimeSignature=True are not supported here: beaming always points a group's stems, and a stream with no meter is left unbeamed",
             ));
         }
-        remade(slf, Some("makeBeams"), music21::makenotation::make_beams)
+        let made = remade(slf, Some("makeBeams"), music21::makenotation::make_beams)?;
+        if !inPlace {
+            return Ok(made);
+        }
+
+        // In place: the beamed copy's beams and stems put on the stream's
+        // own notes, which it holds in the same order.
+        let py = slf.py();
+        let held: Vec<_> = slf
+            .call_method0("recurse")?
+            .getattr("notes")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        let beamed: Vec<_> = made
+            .call_method0("recurse")?
+            .getattr("notes")?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        if held.len() != beamed.len() {
+            return Err(StreamException::new_err(
+                "makeBeams changed what the stream holds",
+            ));
+        }
+        for (own, copy) in held.iter().zip(&beamed) {
+            own.setattr("beams", copy.getattr("beams")?)?;
+            own.setattr("stemDirection", copy.getattr("stemDirection")?)?;
+        }
+        Ok(py.None().into_bound(py))
     }
 
     /// A copy with each accidental's showing decided: music21's
@@ -5023,6 +5538,27 @@ impl Stream {
         })
     }
 
+    /// What this stream knows of its own notation: music21's
+    /// `streamStatus`, made on first asking with this stream its client.
+    #[getter]
+    fn get_streamStatus(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        if let Some(status) = &slf.borrow().status {
+            return Ok(status.clone_ref(py));
+        }
+        let made = crate::streamstatus::module(py)?
+            .getattr("StreamStatus")?
+            .call1((slf,))?
+            .unbind();
+        slf.borrow_mut().status = Some(made.clone_ref(py));
+        Ok(made)
+    }
+
+    #[setter]
+    fn set_streamStatus(&mut self, value: Option<Py<PyAny>>) {
+        self.status = value;
+    }
+
     #[pyo3(signature = (memo = None))]
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
@@ -5030,27 +5566,79 @@ impl Stream {
     ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let deepcopy = py.import("copy")?.getattr("deepcopy")?;
-        let copied = slf.get_type().call0()?;
-        let held: Vec<(f64, Py<PyAny>)> = slf
-            .borrow()
-            .sorted()
-            .iter()
-            .map(|held| (held.offset, held.object.clone_ref(py)))
-            .collect();
-        {
-            let stream = copied.cast::<Stream>()?;
-            let mut stream = stream.borrow_mut();
-            stream.id = slf.borrow().id.as_ref().map(|id| id.clone_ref(py));
-            if let Some(set) = &slf.borrow().unlinked_duration {
-                stream.unlinked_duration = Some(deepcopy.call1((set, memo))?.unbind());
+        // One memo for everything copied below, so a spanner can be told
+        // the copies of the notes it joins.
+        let made_memo;
+        let memo = match memo.filter(|memo| !memo.is_none()) {
+            Some(memo) => memo,
+            None => {
+                made_memo = PyDict::new(py).into_any();
+                &made_memo
             }
-            for (offset, object) in held {
-                let object = deepcopy.call1((object, memo))?;
-                stream.put(offset, &object);
+        };
+        // What a pickle carries, copied: everything held, the ends, the
+        // stream's own fields and its Python half. The copy is in the memo
+        // first, so what points back at the stream points at the copy.
+        let copied = slf.get_type().call0()?;
+        memo.set_item(slf.as_ptr() as usize, &copied)?;
+        let state = deepcopy.call1((Self::frozen(slf)?, memo))?;
+        Self::thaw(copied.cast::<Stream>()?, state.cast::<PyDict>()?)?;
+        let status = copied
+            .cast::<Stream>()?
+            .borrow()
+            .status
+            .as_ref()
+            .map(|held| held.clone_ref(py));
+        if let Some(status) = status {
+            status.bind(py).setattr("client", &copied)?;
+        }
+
+        // A spanner copied before the notes it joins still joins the
+        // originals; each joins the copies once all are made.
+        let mut found = Vec::new();
+        let mut holders = Vec::new();
+        Self::recurse_into(copied.cast::<Stream>()?, 0.0, &mut found, &mut holders)?;
+        for (_, object) in found {
+            if let Ok(spanner) = object.bind(py).cast::<crate::spanner::Spanner>() {
+                crate::spanner::Spanner::join_copies(spanner, memo)?;
             }
         }
         crate::base::copied_from(slf.as_any(), &copied)?;
         Ok(copied)
+    }
+
+    /// How a stream is pickled: rebuilt blank as its own class, then given
+    /// what it held, where, and what it says of itself. music21 freezes a
+    /// score by pickling it; the elements pickle themselves, and the thawed
+    /// stream is made their site again as it takes them back.
+    fn __reduce__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let py = slf.py();
+        let class = slf.get_type();
+        let thaw = py
+            .import("music21_rs")
+            .or_else(|_| py.import("music21_rs_facade"))?
+            .getattr("_thawed")?;
+        let named = (class.getattr("__module__")?, class.getattr("__qualname__")?);
+        PyTuple::new(
+            py,
+            [
+                thaw,
+                named.into_pyobject(py)?.into_any(),
+                Self::frozen(slf)?.into_any(),
+            ],
+        )
+    }
+
+    /// The state [`Stream::__reduce__`] carries, for jsonpickle: having
+    /// `append` and `__getitem__`, a stream is a list to it, and a list
+    /// is not reduced but read for its state.
+    fn __getstate__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyDict>> {
+        Self::frozen(slf)
+    }
+
+    /// The other end of [`Stream::__reduce__`].
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyDict>) -> PyResult<()> {
+        Self::thaw(slf, state)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -5071,17 +5659,44 @@ impl Stream {
 
     /// music21's `asTimespans`: every element as a timespan in a
     /// `TimespanTree`, those of the streams held too; `flatten='semiFlat'`
-    /// keeps the streams as timespans of their own, and `classList` keeps
-    /// only elements of those classes.
+    /// keeps the streams as timespans of their own, `flatten=False` makes a
+    /// tree of the trees of the streams held, and `classList` keeps only
+    /// elements of those classes.
     ///
     /// music21 caches the tree on the stream; this reads it afresh.
     #[pyo3(signature = (*, flatten = None, classList = None))]
-    fn asTimespans(
-        slf: &Bound<'_, Self>,
-        flatten: Option<&Bound<'_, PyAny>>,
-        classList: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<crate::tree::TimespanTree> {
-        crate::tree::as_timespans(slf.as_any(), flatten, classList)
+    fn asTimespans<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let flatten = match flatten {
+            Some(flatten) => flatten.clone(),
+            None => pyo3::types::PyBool::new(py, true).to_owned().into_any(),
+        };
+        crate::tree::fromstream::as_timespans_of(slf.as_any(), Some(&flatten), classList)
+    }
+
+    /// music21's `asTree`: the elements in an `ElementTree` by their
+    /// `SortTuple`s, with `groupOffsets` an `OffsetTree` by offset, with
+    /// `useTimespans` a `TimespanTree`; `flatten` reads the streams held
+    /// through. Read afresh each time, as `asTimespans` is.
+    #[pyo3(signature = (*, flatten = None, classList = None, useTimespans = None, groupOffsets = None))]
+    fn asTree<'py>(
+        slf: &Bound<'py, Self>,
+        flatten: Option<&Bound<'py, PyAny>>,
+        classList: Option<&Bound<'py, PyAny>>,
+        useTimespans: Option<&Bound<'py, PyAny>>,
+        groupOffsets: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::tree::fromstream::as_tree(
+            slf.as_any(),
+            flatten,
+            classList,
+            useTimespans,
+            groupOffsets,
+        )
     }
 
     fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
@@ -5281,6 +5896,23 @@ fn meters_of(stream: &Bound<'_, PyAny>) -> PyResult<Vec<(f64, music21::meter::Ti
 pub(crate) fn read_with_leaves(stream: &Bound<'_, PyAny>) -> PyResult<(RsStream, Vec<Py<PyAny>>)> {
     let read = read_values(stream)?;
     Ok((read.stream, read.leaves))
+}
+
+/// Whether a stream's key is a class, or a tuple or list of classes:
+/// music21 looks those up all through the stream.
+fn is_class_key(key: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if key.is_instance_of::<pyo3::types::PyType>() {
+        return Ok(true);
+    }
+    if !key.is_instance_of::<PyTuple>() && !key.is_instance_of::<PyList>() {
+        return Ok(false);
+    }
+    for item in key.try_iter()? {
+        if !item?.is_instance_of::<pyo3::types::PyType>() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// One element -- music21's own object or this package's -- read as the
@@ -5579,13 +6211,13 @@ struct Built<'py> {
     leaves: Vec<Option<Py<PyAny>>>,
     /// The repeat brackets of its parts, each with its part, which go in
     /// after the spanners the score puts in its parts.
-    brackets: Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>,
+    brackets: Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>, f64)>,
 }
 
 /// Puts each repeat bracket in its part, at nought.
-fn insert_brackets(brackets: &[(Bound<'_, PyAny>, Bound<'_, PyAny>)]) -> PyResult<()> {
-    for (part, bracket) in brackets {
-        part.call_method1("insert", (0.0, bracket))?;
+fn insert_brackets(brackets: &[(Bound<'_, PyAny>, Bound<'_, PyAny>, f64)]) -> PyResult<()> {
+    for (part, bracket, offset) in brackets {
+        part.call_method1("insert", (*offset, bracket))?;
     }
     Ok(())
 }
@@ -5637,7 +6269,7 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
                 let built = build_as(py, inner, whose)?;
                 brackets.extend(built.brackets);
                 if let Some(ending) = inner.ending() {
-                    endings.push((ending, built.made.clone()));
+                    endings.push((ending, built.made.clone(), event.offset()));
                 }
                 let first = leaves.len();
                 leaves.extend(built.leaves);
@@ -5737,24 +6369,23 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
             }
         }
     }
-    if whose == Whose::Music21 {
-        for bracket in music21_repeat_brackets(py, &endings)? {
-            brackets.push((made.clone(), bracket));
-        }
+    for (bracket, offset) in repeat_brackets(py, &endings, whose)? {
+        brackets.push((made.clone(), bracket, offset));
     }
     // A score's parts take their brackets once its spanners are in.
     if stream.kind() == StreamKind::Score {
         insert_brackets(&std::mem::take(&mut brackets))?;
     }
-    // music21's own staff groups, which its reader puts in the score.
-    if whose == Whose::Music21 {
+    // The staff groups, which music21's reader puts in the score.
+    if !stream.staff_groups().is_empty() {
+        let classes = crate::layout::classes_from(py, whose == Whose::Music21)?;
         for group in stream.staff_groups() {
             let grouped = group
                 .parts()
                 .iter()
                 .filter_map(|place| parts.get(*place).map(|(part, _)| part.clone()))
                 .collect();
-            let made_group = crate::layout::music21_staff_group(py, group, grouped)?;
+            let made_group = crate::layout::staff_group_object(&classes, group, grouped)?;
             made.call_method1("insert", (0.0, made_group))?;
         }
     }
@@ -5775,6 +6406,10 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     }
     if let Some(at) = stream.at_sounding_pitch() {
         made.setattr("atSoundingPitch", at)?;
+    }
+    // What a score's defaults say of how it is drawn.
+    if let Some(style) = stream.stream_style() {
+        crate::text::stream_style_into(&made.getattr("style")?, style)?;
     }
     match stream.kind() {
         StreamKind::Measure => {
@@ -5807,21 +6442,27 @@ fn build_as<'py>(py: Python<'py>, stream: &RsStream, whose: Whose) -> PyResult<B
     })
 }
 
-/// music21's own `RepeatBracket` over each alternative ending among a
-/// part's measures, from the measure it opens on to the one it closes on,
-/// each complete, in the order they close: what its readers put in the
-/// part at nought once the part is read.
-fn music21_repeat_brackets<'py>(
+/// A `RepeatBracket` over each alternative ending among a part's measures,
+/// from the measure it opens on to the one it closes on, each complete, in
+/// the order they close, each with where it goes in the part: at nought,
+/// or where the ending's last measure starts, as the reader that made it
+/// puts it. music21's own class for its streams, this package's for its
+/// own.
+fn repeat_brackets<'py>(
     py: Python<'py>,
-    endings: &[(&music21::Ending, Bound<'py, PyAny>)],
-) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    endings: &[(&music21::Ending, Bound<'py, PyAny>, f64)],
+    whose: Whose,
+) -> PyResult<Vec<(Bound<'py, PyAny>, f64)>> {
     let mut made = Vec::new();
     if endings.is_empty() {
         return Ok(made);
     }
-    let class = crate::real_music21(py, "music21.spanner")?.getattr("RepeatBracket")?;
+    let class = match whose {
+        Whose::Music21 => crate::real_music21(py, "music21.spanner")?.getattr("RepeatBracket")?,
+        Whose::Wheel => py.get_type::<crate::spanner::RepeatBracket>().into_any(),
+    };
     let mut open: Option<Bound<'py, PyAny>> = None;
-    for (ending, measure) in endings {
+    for (ending, measure, offset) in endings {
         let bracket = match open.take() {
             Some(bracket) if !ending.starts() => bracket,
             _ => {
@@ -5837,7 +6478,11 @@ fn music21_repeat_brackets<'py>(
         bracket.call_method1("addSpannedElements", (measure,))?;
         if ending.stops() {
             bracket.setattr("completeStatus", true)?;
-            made.push(bracket);
+            let at = match ending.place() {
+                music21::BracketPlace::PartStart => 0.0,
+                music21::BracketPlace::LastMeasure => *offset,
+            };
+            made.push((bracket, at));
         } else {
             open = Some(bracket);
         }
@@ -6180,6 +6825,7 @@ fn element_object_as<'py>(
                 }
                 let made =
                     class_named("music21.harmony", "ChordSymbol")?.call((), Some(&keywords))?;
+                crate::harmony::finish_read(&made, symbol)?;
                 // What a transposition left it sounding, which music21
                 // moves pitch by pitch.
                 if let Some(moved) = symbol.transposed_pitches() {
@@ -6214,10 +6860,7 @@ fn element_object_as<'py>(
         )?
         .into_bound(py)
         .into_any(),
-        StreamElement::Variant(variant) => match variant_object(py, variant, whose)? {
-            Some(made) => made,
-            None => return Ok(None),
-        },
+        StreamElement::Variant(variant) => variant_object(py, variant, whose)?,
         // music21's own on music21's streams, which install nothing over
         // it; the package's own on the package's.
         StreamElement::GlobalComment(said) if whose == Whose::Music21 => {
@@ -6263,8 +6906,9 @@ fn element_object_as<'py>(
         .into_any(),
         // music21's own, which its reader makes and nothing installed
         // stands in for.
-        StreamElement::Layout(layout) if whose == Whose::Music21 => {
-            crate::layout::music21_object(py, layout)?
+        StreamElement::Layout(layout) => {
+            let classes = crate::layout::classes_from(py, whose == Whose::Music21)?;
+            crate::layout::layout_object(&classes, layout)?
         }
         StreamElement::TextBox(text_box) if whose == Whose::Music21 => {
             crate::text::music21_object(py, text_box)?
@@ -6278,6 +6922,41 @@ fn element_object_as<'py>(
         )?
         .into_bound(py)
         .into_any(),
+        StreamElement::PercussionChord(chord) if whose == Whose::Wheel => {
+            // Its strokes and notes, each an object of its own.
+            let members = PyList::empty(py);
+            for member in chord.members() {
+                let element = match member {
+                    music21::percussion::PercussionNote::Unpitched(stroke) => {
+                        StreamElement::Unpitched(stroke)
+                    }
+                    music21::percussion::PercussionNote::Note(note) => StreamElement::Note(note),
+                };
+                if let Some(made) = element_object_as(py, &element, whose)? {
+                    members.append(made)?;
+                }
+            }
+            let made = py
+                .get_type::<crate::percussion::PercussionChord>()
+                .call1((members,))?;
+            if let Some(duration) = chord.duration() {
+                let duration = crate::duration::Duration::wrap(duration.clone());
+                made.setattr(
+                    "duration",
+                    crate::installed_new(py, "music21.duration", "Duration", duration)?,
+                )?;
+            }
+            made
+        }
+        StreamElement::MetricModulation(modulation) if whose == Whose::Wheel => {
+            crate::tempo::MetricModulation::object(py, modulation)?.into_bound(py)
+        }
+        StreamElement::PedalObject(mark) if whose == Whose::Wheel => {
+            crate::pedals::PedalObject::object(py, mark)?.into_bound(py)
+        }
+        StreamElement::RehearsalMark(mark) if whose == Whose::Wheel => {
+            crate::expressions::RehearsalMark::object(py, mark.clone())?.into_bound(py)
+        }
         StreamElement::TempoText(_)
         | StreamElement::RepeatExpression(_)
         | StreamElement::Unpitched(_)
@@ -6286,7 +6965,6 @@ fn element_object_as<'py>(
         | StreamElement::RehearsalMark(_)
         | StreamElement::MetricModulation(_)
         | StreamElement::Break(_)
-        | StreamElement::Layout(_)
         | StreamElement::TextBox(_)
         | StreamElement::BrailleSegmentDivision(_) => return Ok(None),
         // A kind added to the crate since has no class here yet either.
@@ -6391,18 +7069,23 @@ fn carry_notation(
         made.setattr("expressions", held)?;
         return Ok(());
     }
-    let ornaments: Vec<_> = expressions
-        .iter()
-        .filter_map(|expression| match expression {
-            music21::expressions::Expression::Ornament(ornament) => Some((**ornament).clone()),
-            _ => None,
-        })
-        .collect();
-    if !ornaments.is_empty() {
-        let held = PyList::empty(py);
-        for ornament in ornaments {
-            held.append(crate::expressions::Ornament::object(py, ornament)?)?;
+    // The package's own: its ornaments and fermatas, in order.
+    let held = PyList::empty(py);
+    for expression in expressions {
+        match expression {
+            music21::expressions::Expression::Ornament(ornament) => {
+                held.append(crate::expressions::Ornament::object(
+                    py,
+                    (**ornament).clone(),
+                )?)?;
+            }
+            music21::expressions::Expression::Fermata(fermata) => {
+                held.append(crate::expressions::Fermata::object(py, fermata.clone())?)?;
+            }
+            _ => {}
         }
+    }
+    if !held.is_empty() {
         made.setattr("expressions", held)?;
     }
     Ok(())
@@ -6545,6 +7228,15 @@ stream_kinds!(
         StreamKind::Opus,
         -20,
         "music21's `Opus`: a collection of scores."
+    ),
+    (
+        VariantStorage,
+        "VariantStorage",
+        Stream,
+        [],
+        StreamKind::Stream,
+        -20,
+        "music21's `VariantStorage`: the stream a `Variant` keeps its reading in."
     ),
 );
 
@@ -6734,18 +7426,16 @@ pub(crate) fn variant_value(object: &Bound<'_, PyAny>) -> PyResult<music21::vari
     Ok(value)
 }
 
-/// A variant as music21 holds one, where music21 can be asked for its
-/// class; the package has none of its own.
+/// A variant as music21 holds one: music21's own class where music21 can
+/// be asked for it, the package's otherwise.
 pub(crate) fn variant_object<'py>(
     py: Python<'py>,
     variant: &music21::variant::Variant,
     whose: Whose,
-) -> PyResult<Option<Bound<'py, PyAny>>> {
-    let Ok(class) =
-        crate::real_music21(py, "music21.variant").and_then(|module| module.getattr("Variant"))
-    else {
-        return Ok(None);
-    };
+) -> PyResult<Bound<'py, PyAny>> {
+    let class = crate::real_music21(py, "music21.variant")
+        .and_then(|module| module.getattr("Variant"))
+        .unwrap_or_else(|_| py.get_type::<crate::variant::Variant>().into_any());
     let made = class.call0()?;
     for event in variant.contents().events() {
         if let Some(object) = element_object_as(py, event.element(), whose)? {
@@ -6762,16 +7452,15 @@ pub(crate) fn variant_object<'py>(
         "replacementQuarterLength",
         variant.replacement_quarter_length(),
     )?;
-    Ok(Some(made))
+    Ok(made)
 }
 
 /// The crate's value of one element, or `None` for one it has no value for.
 fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<StreamElement>> {
     let py = object.py();
-    // music21's own `variant.Variant`, which holds a stream of the
-    // reading it stands in for. The package has no class for one, so a
-    // variant is always music21's; what is read of it is its contents,
-    // its groups and how much of the stream it replaces.
+    // A `variant.Variant`, music21's or the package's, which holds a
+    // stream of the reading it stands in for: what is read of it is its
+    // contents, its groups and how much of the stream it replaces.
     if is_of_class(object, &pyo3::types::PyString::new(py, "Variant"))? {
         return Ok(Some(variant_value(object)?.into()));
     }
@@ -6818,6 +7507,9 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         }
         if !stand_ins && let Some(duration) = inferred_duration(object, value.duration()) {
             value = value.with_duration(duration);
+        }
+        if !stand_ins && let Some(symbol) = numeral_symbol(object, &value)? {
+            return Ok(Some(StreamElement::ChordSymbol(symbol)));
         }
         return Ok(Some(StreamElement::Chord(value)));
     }
@@ -6882,6 +7574,11 @@ fn element_value(object: &Bound<'_, PyAny>, stand_ins: bool) -> PyResult<Option<
         let mut value = dynamic.inner.clone();
         drop(dynamic);
         value.set_placement(placement_of(object));
+        // Where its style moves it, where it carries one: a dynamic of
+        // the wheel's own has none, and the crate's starting place stands.
+        if let Ok(style) = object.getattr("style") {
+            value.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(value)));
     }
     if let Ok(key) = object.cast::<crate::key::Key>() {
@@ -7597,13 +8294,12 @@ fn expressions_of(object: &Bound<'_, PyAny>) -> PyResult<Vec<music21::expression
             out.push(Expression::Ornament(Box::new(read)));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "Fermata"))? {
             let mut fermata = Fermata::new();
-            fermata.set_fermata_type(
-                if text_attribute(&expression, "type").as_deref() == Some("upright") {
-                    FermataType::Upright
-                } else {
-                    FermataType::Inverted
-                },
-            );
+            // music21's default where none is said.
+            let named = text_attribute(&expression, "type");
+            fermata.set_fermata_type(match named.as_deref() {
+                Some(name) => FermataType::from_name(name),
+                None => FermataType::Inverted,
+            });
             fermata.set_shape(text_attribute(&expression, "shape"));
             out.push(Expression::Fermata(fermata));
         } else if is_of_class(&expression, &pyo3::types::PyString::new(py, "ArpeggioMark"))? {
@@ -7860,6 +8556,9 @@ fn music21_value(object: &Bound<'_, PyAny>) -> PyResult<Option<StreamElement>> {
         let mut dynamic =
             music21::dynamics::Dynamic::new(object.getattr("value")?.extract::<String>()?);
         dynamic.set_placement(placement_of(object));
+        if let Ok(style) = object.getattr("style") {
+            dynamic.set_style(text_style_of(&style)?);
+        }
         return Ok(Some(StreamElement::Dynamic(dynamic)));
     }
     // A metric modulation is two marks, and is asked for before a mark.
@@ -8175,14 +8874,114 @@ fn text_box_value(object: &Bound<'_, PyAny>) -> PyResult<music21::text::TextBox>
     let content = text_attribute(object, "content").unwrap_or_default();
     let mut read = music21::text::TextBox::new(content);
     read.page = whole_of(object, "page").unwrap_or(1);
-    let style = object.getattr("style")?;
-    let words = |name: &str| text_attribute(&style, name);
-    let text = &mut read.style;
-    text.absolute_x = style_value_of(&style, "absoluteX");
-    text.absolute_y = style_value_of(&style, "absoluteY");
-    text.relative_x = style_value_of(&style, "relativeX");
-    text.relative_y = style_value_of(&style, "relativeY");
-    text.font_size = style_value_of(&style, "fontSize");
+    read.style = text_style_of(&object.getattr("style")?)?;
+    Ok(read)
+}
+
+/// A Roman numeral not written as its chord, as the harmony music21's
+/// `romanNumeralToXml` writes for it: `writeAsChord` false, its key shown
+/// where it `followsKeyChange`.
+fn numeral_symbol(
+    object: &Bound<'_, PyAny>,
+    chord: &music21::Chord,
+) -> PyResult<Option<music21::chordsymbol::ChordSymbol>> {
+    use music21::chordsymbol::{ChordSymbol, KeyDisplay};
+    let Some(numeral) = chord.numeral() else {
+        return Ok(None);
+    };
+    let as_chord = object
+        .getattr("writeAsChord")
+        .and_then(|flag| flag.is_truthy())
+        .unwrap_or(true);
+    if as_chord {
+        return Ok(None);
+    }
+    let display = match object
+        .getattr("followsKeyChange")
+        .and_then(|flag| flag.is_truthy())
+    {
+        Ok(true) => KeyDisplay::Shown,
+        _ => KeyDisplay::Hidden,
+    };
+    ChordSymbol::from_numeral(chord, numeral, display)
+        .map_err(|error| StreamException::new_err(error.to_string()))
+}
+
+/// A stream's `StreamStyle`, as the crate keeps it, where it says what a
+/// score's `<defaults>` writes; `None` for a plain `Style`.
+fn stream_style_of(style: &Bound<'_, PyAny>) -> PyResult<Option<music21::style::StreamStyle>> {
+    use music21::style::{StreamStyle, StyleValue};
+    let Ok(line_widths) = style.getattr("lineWidths") else {
+        return Ok(None);
+    };
+    let pairs = |listed: Bound<'_, PyAny>| -> PyResult<Vec<(String, StyleValue)>> {
+        let mut read = Vec::new();
+        for pair in listed.try_iter()? {
+            let (kind, value): (String, Bound<'_, PyAny>) = pair?.extract()?;
+            let value = if value.is_instance_of::<pyo3::types::PyInt>() {
+                StyleValue::Whole(value.extract()?)
+            } else if let Ok(number) = value.extract::<f64>() {
+                StyleValue::Decimal(number)
+            } else {
+                StyleValue::Text(value.str()?.to_string())
+            };
+            read.push((kind, value));
+        }
+        Ok(read)
+    };
+    let font = |name: &str| -> PyResult<Option<music21::style::TextStyle>> {
+        match style.getattr(name) {
+            Ok(font) if !font.is_none() => text_style_of(&font).map(Some),
+            _ => Ok(None),
+        }
+    };
+    let optional = |value: Bound<'_, PyAny>| -> PyResult<Option<String>> {
+        if value.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(value.str()?.to_string()))
+    };
+    let mut lyric_fonts = Vec::new();
+    for pair in style.getattr("lyricFonts")?.try_iter()? {
+        let (name, font): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        let font = if font.is_none() {
+            None
+        } else {
+            Some(text_style_of(&font)?)
+        };
+        lyric_fonts.push((optional(name)?, font));
+    }
+    let mut lyric_languages = Vec::new();
+    for pair in style.getattr("lyricLanguages")?.try_iter()? {
+        let (name, language): (Bound<'_, PyAny>, Bound<'_, PyAny>) = pair?.extract()?;
+        lyric_languages.push((optional(name)?, optional(language)?));
+    }
+    let read = StreamStyle {
+        line_widths: pairs(line_widths)?,
+        note_sizes: pairs(style.getattr("noteSizes")?)?,
+        distances: pairs(style.getattr("distances")?)?,
+        other_appearances: pairs(style.getattr("otherAppearances")?)?,
+        music_font: font("musicFont")?,
+        word_font: font("wordFont")?,
+        lyric_fonts,
+        lyric_languages,
+    };
+    if read == StreamStyle::default() {
+        return Ok(None);
+    }
+    Ok(Some(read))
+}
+
+/// music21's style of something drawn with text, as the crate keeps it.
+fn text_style_of(style: &Bound<'_, PyAny>) -> PyResult<music21::style::TextStyle> {
+    let words = |name: &str| text_attribute(style, name);
+    let mut read = music21::style::TextStyle::default();
+    let text = &mut read;
+    text.absolute_x = style_value_of(style, "absoluteX");
+    text.absolute_y = style_value_of(style, "absoluteY");
+    text.relative_x = style_value_of(style, "relativeX");
+    text.relative_y = style_value_of(style, "relativeY");
+    text.font_size = style_value_of(style, "fontSize");
     text.color = words("color");
     text.font_family = style
         .getattr("fontFamily")
@@ -8294,6 +9093,7 @@ fn read_labels(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()>
         };
         stream.set_name_hidden(hidden("printPartName"));
         stream.set_abbreviation_hidden(hidden("printPartAbbreviation"));
+        stream.set_stream_style(stream_style_of(&style)?);
     }
     if let Ok(metadata) = object.getattr("metadata")
         && !metadata.is_none()
@@ -8372,21 +9172,23 @@ fn barline_value(barline: &Bound<'_, PyAny>) -> PyResult<music21::Barline> {
 /// A score's `StaffGroup` spanners, each naming the parts it spans by where
 /// they stand among the score's parts.
 fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResult<()> {
-    use music21::{BarTogether, StaffGroup};
     let py = object.py();
-    let Ok(bundle) = object.getattr("spannerBundle") else {
-        return Ok(());
-    };
+
+    // The parts first: only a stream holding parts can name them, and
+    // `spannerBundle` walks everything held, so a measure or a part must
+    // not ask for it. `isStream` before `kind_of`, which is the dearer.
     let mut parts: Vec<Bound<'_, PyAny>> = Vec::new();
     for element in object.getattr("elements")?.walk()? {
         let element = element?;
-        if matches!(
-            kind_of(&element),
-            Ok(StreamKind::Part | StreamKind::PartStaff)
-        ) && element
+        let stream = element
             .getattr("isStream")
             .and_then(|flag| flag.is_truthy())
-            .unwrap_or(false)
+            .unwrap_or(false);
+        if stream
+            && matches!(
+                kind_of(&element),
+                Ok(StreamKind::Part | StreamKind::PartStaff)
+            )
         {
             parts.push(element);
         }
@@ -8394,42 +9196,54 @@ fn read_staff_groups(object: &Bound<'_, PyAny>, stream: &mut RsStream) -> PyResu
     if parts.is_empty() {
         return Ok(());
     }
+    let Ok(bundle) = object.getattr("spannerBundle") else {
+        return Ok(());
+    };
     for group in bundle.call_method1("getByClass", ("StaffGroup",))?.walk()? {
-        let group = group?;
-        let mut positions = Vec::new();
-        for spanned in group.call_method0("getSpannedElements")?.walk()? {
-            let spanned = spanned?;
-            if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
-                positions.push(position);
-            }
-        }
-        let mut read = StaffGroup::new(positions);
-        read.set_name(text_attribute(&group, "name"));
-        read.set_abbreviation(text_attribute(&group, "abbreviation"));
-        read.set_symbol(text_attribute(&group, "symbol").as_deref())
-            .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
-        let bar_together = group.getattr("barTogether")?;
-        read.set_bar_together(if bar_together.is_none() {
-            None
-        } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
-            Some(if flag.is_true() {
-                BarTogether::Yes
-            } else {
-                BarTogether::No
-            })
-        } else {
-            Some(BarTogether::Mensurstrich)
-        });
-        let hidden = group
-            .getattr("style")
-            .and_then(|style| style.getattr("hideObjectOnPrint"))
-            .map(|hidden| hidden.is_truthy().unwrap_or(false))
-            .unwrap_or(false);
-        read.set_name_hidden(hidden);
-        stream.add_staff_group(read);
+        stream.add_staff_group(staff_group_value(&group?, &parts)?);
     }
     let _ = py;
     Ok(())
+}
+
+/// A music21 `StaffGroup`, naming the parts it spans by where they stand
+/// among `parts`.
+pub(crate) fn staff_group_value(
+    group: &Bound<'_, PyAny>,
+    parts: &[Bound<'_, PyAny>],
+) -> PyResult<music21::StaffGroup> {
+    use music21::{BarTogether, StaffGroup};
+    let mut positions = Vec::new();
+    for spanned in group.call_method0("getSpannedElements")?.walk()? {
+        let spanned = spanned?;
+        if let Some(position) = parts.iter().position(|part| part.is(&spanned)) {
+            positions.push(position);
+        }
+    }
+    let mut read = StaffGroup::new(positions);
+    read.set_name(text_attribute(group, "name"));
+    read.set_abbreviation(text_attribute(group, "abbreviation"));
+    read.set_symbol(text_attribute(group, "symbol").as_deref())
+        .map_err(|error| StreamException::new_err(crate::pitch::message(&error)))?;
+    let bar_together = group.getattr("barTogether")?;
+    read.set_bar_together(if bar_together.is_none() {
+        None
+    } else if let Ok(flag) = bar_together.cast::<pyo3::types::PyBool>() {
+        Some(if flag.is_true() {
+            BarTogether::Yes
+        } else {
+            BarTogether::No
+        })
+    } else {
+        Some(BarTogether::Mensurstrich)
+    });
+    let hidden = group
+        .getattr("style")
+        .and_then(|style| style.getattr("hideObjectOnPrint"))
+        .map(|hidden| hidden.is_truthy().unwrap_or(false))
+        .unwrap_or(false);
+    read.set_name_hidden(hidden);
+    Ok(read)
 }
 
 /// A music21 `Metadata`, name by name in the order music21 keeps them.
@@ -8649,7 +9463,7 @@ fn is_inner_barline(stream: &Bound<'_, PyAny>, element: &Bound<'_, PyAny>) -> Py
 /// A music21 spanner of a kind the crate carries, naming what it joins by
 /// position among `leaves`. One joining anything outside them -- a slur
 /// from one part into another -- is left out.
-fn spanner_value(
+pub(crate) fn spanner_value(
     spanner: &Bound<'_, PyAny>,
     leaves: &[Py<PyAny>],
 ) -> PyResult<Option<music21::Spanner>> {
@@ -9166,6 +9980,20 @@ fn iterateAllVoiceLeadingQuartets<'py>(
 /// in for it, because a stream sorts what it holds and a walk's order is
 /// not a sort -- `recurse` meets one part's notes before the next part's,
 /// where a stream would put every offset nought together.
+/// What music21's `StreamIterator` is built on besides its own classes,
+/// as its `classes` lists them.
+const ITERATOR_BASES: [&str; 9] = [
+    "ProtoM21Object",
+    "Sequence",
+    "Reversible",
+    "Collection",
+    "Sized",
+    "Iterable",
+    "Container",
+    "Generic",
+    "object",
+];
+
 #[pyclass(name = "StreamIterator", module = "music21.stream.iterator", subclass)]
 pub struct Walked {
     /// What was found, each with its offset from the start of the stream
@@ -9181,6 +10009,9 @@ pub struct Walked {
     source: Option<Py<PyAny>>,
     /// The filters put on with `addFilter`, each already applied.
     filters: Vec<Py<PyAny>>,
+    /// What each filtering is called, in order, which `stream()` gives
+    /// as its derivation's `method`: music21's filters' `derivationStr`.
+    methods: Vec<String>,
 }
 
 impl Walked {
@@ -9192,7 +10023,15 @@ impl Walked {
             kind,
             source: None,
             filters: Vec::new(),
+            methods: Vec::new(),
         }
+    }
+
+    /// The same, its filtering called `method`.
+    fn named(self, method: &str) -> Self {
+        let mut methods = self.methods;
+        methods.push(method.to_owned());
+        Self { methods, ..self }
     }
 
     /// The same, knowing the stream holding each.
@@ -9219,6 +10058,13 @@ impl Walked {
         let me = slf.borrow();
         let mut kept = Self::of(Vec::new(), me.kind);
         kept.source = me.source.as_ref().map(|source| source.clone_ref(py));
+        kept.methods = me.methods.clone();
+        let method = filter
+            .getattr("derivationStr")
+            .or_else(|_| filter.getattr("__name__"))
+            .and_then(|name| name.extract::<String>())
+            .unwrap_or_default();
+        kept.methods.push(method);
         for (at, (offset, object)) in me.found.iter().enumerate() {
             let element = object.bind(py);
             match filter.call1((element, slf)) {
@@ -9256,6 +10102,7 @@ impl Walked {
     fn picked(
         &self,
         py: Python<'_>,
+        method: &str,
         wanted: impl Fn(&Bound<'_, PyAny>) -> PyResult<bool>,
     ) -> PyResult<Self> {
         let mut found = Vec::new();
@@ -9270,12 +10117,60 @@ impl Walked {
         }
         let mut picked = Self::of(found, self.kind).held_by(holders);
         picked.source = self.source.as_ref().map(|source| source.clone_ref(py));
-        Ok(picked)
+        picked.methods = self.methods.clone();
+        Ok(picked.named(method))
     }
 }
 
 #[pymethods]
 impl Walked {
+    /// A member the walked stream has and an iterator has not, read off
+    /// the stream `stream()` gathers, with a warning that this makes a
+    /// stream each time: music21's deprecated fallback.
+    fn __getattr__(slf: &Bound<'_, Self>, attr: &str) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        // Python's own protocol names (`__deepcopy__`, `__getstate__`)
+        // are never the stream's: copying an iterator must not copy a
+        // stream instead.
+        let owned = !attr.starts_with("__")
+            && slf
+                .borrow()
+                .source
+                .as_ref()
+                .is_some_and(|source| source.bind(py).hasattr(attr).unwrap_or(false));
+        if !owned {
+            return Err(PyAttributeError::new_err(format!(
+                "'StreamIterator' object has no attribute '{attr}'"
+            )));
+        }
+        let message = format!(
+            "{attr} is not defined on StreamIterators. Call .stream() first for efficiency"
+        );
+        PyErr::warn(
+            py,
+            &py.get_type::<StreamIteratorInefficientWarning>(),
+            &std::ffi::CString::new(message)?,
+            2,
+        )?;
+        let gathered = slf.borrow().stream(py)?;
+        Ok(gathered.getattr(attr)?.unbind())
+    }
+
+    /// What music21 says an iterator is: its class and those it is built
+    /// on, `ProtoM21Object` and the sequence protocols among them.
+    #[getter]
+    fn classes<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        let mut names = Vec::new();
+        for class in slf.get_type().mro().iter() {
+            let name: String = class.getattr("__name__")?.extract()?;
+            if name != "object" {
+                names.push(name);
+            }
+        }
+        names.extend(ITERATOR_BASES.iter().map(|name| (*name).to_owned()));
+        PyTuple::new(slf.py(), names)
+    }
+
     /// The stream walked: music21's `srcStream`.
     #[getter]
     fn srcStream(&self, py: Python<'_>) -> Option<Py<PyAny>> {
@@ -9367,6 +10262,13 @@ impl Walked {
     /// list for a slice, and its own code asks for one
     /// (`thisStreamIter[3:5]`).
     fn __getitem__(&self, py: Python<'_>, index: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        if let Ok(query) = index.cast::<PyString>() {
+            let query = query.to_str()?;
+            let found = self.found.iter().map(|(_, object)| object.bind(py).clone());
+            return first_with_id(found, query)
+                .map(Bound::unbind)
+                .ok_or_else(|| PyKeyError::new_err(query.trim_start_matches('#').to_owned()));
+        }
         let count = self.found.len();
         if let Ok(slice) = index.cast::<pyo3::types::PySlice>() {
             let read = slice.indices(count as isize)?;
@@ -9411,26 +10313,16 @@ impl Walked {
     /// The notes and chords among them: music21's `notes`.
     #[getter]
     fn notes(&self, py: Python<'_>) -> PyResult<Self> {
-        self.picked(py, |object| {
-            Ok(["isNote", "isChord"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+        self.picked(py, "getElementsByClass", |object| {
+            Ok(is_sounding(object, Sounding::Notes))
         })
     }
 
     /// The notes, chords and rests among them: music21's `notesAndRests`.
     #[getter]
     fn notesAndRests(&self, py: Python<'_>) -> PyResult<Self> {
-        self.picked(py, |object| {
-            Ok(["isNote", "isChord", "isRest"].iter().any(|flag| {
-                object
-                    .getattr(*flag)
-                    .and_then(|flag| flag.is_truthy())
-                    .unwrap_or(false)
-            }))
+        self.picked(py, "getElementsByClass", |object| {
+            Ok(is_sounding(object, Sounding::NotesAndRests))
         })
     }
 
@@ -9442,7 +10334,9 @@ impl Walked {
         py: Python<'_>,
         classFilterList: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
-        self.picked(py, |object| is_of_any(object, classFilterList))
+        self.picked(py, "getElementsByClass", |object| {
+            is_of_any(object, classFilterList)
+        })
     }
 
     /// Those answering to none of them: music21's
@@ -9453,19 +10347,53 @@ impl Walked {
         py: Python<'_>,
         classFilterList: &Bound<'_, PyAny>,
     ) -> PyResult<Self> {
-        self.picked(py, |object| {
+        self.picked(py, "getElementsNotOfClass", |object| {
             is_of_any(object, classFilterList).map(|found| !found)
         })
     }
 
-    /// Them gathered into a stream, each where it stood: music21's
+    /// Them gathered into a stream of the walked one's class, each where
+    /// it stood and what the walked one keeps at its end kept at the end,
+    /// derived from the walked one by the filters' names: music21's
     /// `stream`.
     fn stream<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, Stream>> {
-        let mut out = Stream::empty(self.kind);
+        let source = self.source.as_ref().map(|source| source.bind(py));
+        let at_end = |object: &Bound<'py, PyAny>| -> bool {
+            source
+                .and_then(|source| source.cast::<Stream>().ok())
+                .is_some_and(|source| {
+                    let source = source.borrow();
+                    source.stored_at_end(object)
+                        || source
+                            .right_barline
+                            .as_ref()
+                            .is_some_and(|bar| bar.bind(py).is(object))
+                })
+        };
+        // Of the walked stream's own class, as music21 makes it, or a
+        // plain one of its kind where that class cannot be made bare.
+        let own = source
+            .and_then(|source| source.get_type().call0().ok())
+            .and_then(|made| made.cast_into::<Stream>().ok());
+        let made = match own {
+            Some(made) => made,
+            None => Stream::born(py, Stream::empty(self.kind))?,
+        };
+        let mut last = Vec::new();
         for (offset, object) in &self.found {
-            out.put(*offset, object.bind(py));
+            let object = object.bind(py);
+            match at_end(object) {
+                true => last.push(object.clone()),
+                false => made.borrow_mut().put(*offset, object),
+            }
         }
-        Stream::born(py, out)
+        for object in last {
+            Stream::store_at_end(&made, &object)?;
+        }
+        if let Some(source) = source {
+            crate::derived_from(made.as_any(), source, &self.methods.join("."))?;
+        }
+        Ok(made)
     }
 
     fn __repr__(&self) -> String {
@@ -9473,9 +10401,135 @@ impl Walked {
     }
 }
 
+impl Walked {
+    /// Another holding the same, filtered the same.
+    fn duplicate(&self, py: Python<'_>) -> Self {
+        let copy = |all: &[Py<PyAny>]| all.iter().map(|one| one.clone_ref(py)).collect();
+        Self {
+            found: self
+                .found
+                .iter()
+                .map(|(offset, object)| (*offset, object.clone_ref(py)))
+                .collect(),
+            holders: copy(&self.holders),
+            kind: self.kind,
+            source: self.source.as_ref().map(|source| source.clone_ref(py)),
+            filters: copy(&self.filters),
+            methods: self.methods.clone(),
+        }
+    }
+}
+
+/// music21's `OffsetIterator`: a stream's elements walked as `iter` walks
+/// them, each step the list of those standing together at one offset.
+#[pyclass(name = "OffsetIterator", module = "music21.stream.iterator", extends = Walked, subclass)]
+pub struct OffsetWalked;
+
+impl OffsetWalked {
+    /// What a walk found, as one of these.
+    fn grouping(py: Python<'_>, walked: Walked) -> PyResult<Bound<'_, Self>> {
+        Bound::new(py, PyClassInitializer::from(walked).add_subclass(Self))
+    }
+}
+
+#[pymethods]
+impl OffsetWalked {
+    /// The elements of `srcStream`, filtered by each of `filterList` in
+    /// turn. The other keywords are music21's, and change nothing here.
+    #[new]
+    #[pyo3(signature = (srcStream, *, filterList = None, restoreActiveSites = true, activeInformation = None, ignoreSorting = false))]
+    fn new(
+        srcStream: &Bound<'_, PyAny>,
+        filterList: Option<&Bound<'_, PyAny>>,
+        restoreActiveSites: bool,
+        activeInformation: Option<&Bound<'_, PyAny>>,
+        ignoreSorting: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let _ = (restoreActiveSites, activeInformation, ignoreSorting);
+        let py = srcStream.py();
+        let walked = srcStream.call_method0("iter")?;
+        let mut walked = walked.cast::<Walked>()?.clone();
+        if let Some(filters) = filterList.filter(|filters| !filters.is_none()) {
+            for filter in filters.try_iter()? {
+                walked = Walked::addFilter(&walked, &filter?, true)?;
+            }
+        }
+        let own = walked.borrow().duplicate(py);
+        Ok(PyClassInitializer::from(own).add_subclass(Self))
+    }
+
+    /// Each run of elements standing at one offset, as a list, in order.
+    fn __iter__<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        let walked = slf.as_super();
+        let offsets: Vec<f64> = walked.found.iter().map(|(offset, _)| *offset).collect();
+        let groups = PyList::empty(py);
+        for run in music21::stream::iterator::offset_runs(&offsets) {
+            let group = PyList::empty(py);
+            for at in run {
+                if let Some(element) = walked.hand_out(py, at) {
+                    group.append(element)?;
+                }
+            }
+            groups.append(group)?;
+        }
+        groups.as_any().try_iter().map(Bound::into_any)
+    }
+
+    /// The notes and chords among them, grouped the same way.
+    #[getter]
+    fn notes<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().notes(py)?)
+    }
+
+    /// The notes, chords and rests among them, grouped the same way.
+    #[getter]
+    fn notesAndRests<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().notesAndRests(py)?)
+    }
+
+    /// Those answering to one of these classes, grouped the same way.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsByClass<'py>(
+        slf: PyRef<'py, Self>,
+        classFilterList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(py, slf.as_super().getElementsByClass(py, classFilterList)?)
+    }
+
+    /// Those answering to none of these classes, grouped the same way.
+    #[pyo3(signature = (classFilterList))]
+    fn getElementsNotOfClass<'py>(
+        slf: PyRef<'py, Self>,
+        classFilterList: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, Self>> {
+        let py = slf.py();
+        Self::grouping(
+            py,
+            slf.as_super().getElementsNotOfClass(py, classFilterList)?,
+        )
+    }
+
+    fn __repr__(slf: PyRef<'_, Self>) -> String {
+        format!(
+            "<music21.stream.iterator.OffsetIterator for {}>",
+            slf.as_super().kind
+        )
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StreamCore>()?;
+    m.add_class::<OffsetWalked>()?;
     m.add_class::<Stream>()?;
+    // A stream is drawn with music21's `StreamStyle`.
+    m.getattr("Stream")?.setattr(
+        "_styleClass",
+        m.py().get_type::<crate::style::StreamStyle>(),
+    )?;
     m.add_class::<Walked>()?;
     register_kinds(m)?;
     // What music21's `System` says of itself, which nothing here reads.

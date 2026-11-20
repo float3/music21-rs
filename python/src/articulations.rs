@@ -45,7 +45,21 @@ impl Articulation {
                 .getattr(name)?,
         };
         let made = class.call0()?;
-        made.extract::<PyRefMut<'_, Self>>()?.inner = inner;
+        // A bend's interval is held as the object music21 hands back.
+        let bend = match inner.bend_alter() {
+            Some(alter) => Some(
+                py.import("music21_rs")
+                    .or_else(|_| py.import("music21_rs_facade"))?
+                    .getattr("Interval")?
+                    .call1((alter.semitones(),))?
+                    .unbind(),
+            ),
+            None => None,
+        };
+        let mut held = made.extract::<PyRefMut<'_, Self>>()?;
+        held.inner = inner;
+        held.bend_alter = bend;
+        drop(held);
         Ok(made.unbind())
     }
 
@@ -764,5 +778,12 @@ articulation_kinds!(
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Articulation>()?;
-    register_kinds(m)
+    register_kinds(m)?;
+    // Drawn as music21 draws them: with text, and a slide as a line.
+    let py = m.py();
+    py.get_type::<Articulation>()
+        .setattr("_styleClass", py.get_type::<crate::style::TextStyle>())?;
+    py.get_type::<IndeterminateSlide>()
+        .setattr("_styleClass", py.get_type::<crate::style::LineStyle>())?;
+    Ok(())
 }

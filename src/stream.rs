@@ -28,8 +28,10 @@ mod classes;
 mod consecutive;
 mod editing;
 mod ends;
+pub mod enums;
 pub(crate) mod exact;
 mod filling;
+pub mod iterator;
 mod lookups;
 mod lyrics;
 mod opus;
@@ -42,6 +44,7 @@ mod slicing;
 mod sounding;
 mod span;
 mod splitting;
+pub mod status;
 mod template;
 mod ties;
 mod voices;
@@ -651,6 +654,25 @@ pub enum BarTogether {
 }
 
 impl BarTogether {
+    /// The setting a word names, as music21's `barTogether` setter reads
+    /// it: `yes`, `no`, or `Mensurstrich` in any case.
+    ///
+    /// ```
+    /// use music21::stream::BarTogether;
+    ///
+    /// assert_eq!(BarTogether::from_word("mensurstrich"), Some(BarTogether::Mensurstrich));
+    /// assert_eq!(BarTogether::from_word("Yes"), None);
+    /// ```
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Self> {
+        match word {
+            "yes" => Some(Self::Yes),
+            "no" => Some(Self::No),
+            _ if word.to_lowercase() == "mensurstrich" => Some(Self::Mensurstrich),
+            _ => None,
+        }
+    }
+
     /// The group barline MusicXML writes for it.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -799,6 +821,9 @@ struct Labels {
     at_sounding_pitch: Option<bool>,
     #[cfg_attr(feature = "serde", serde(default))]
     measure_numbering: Option<String>,
+    /// How the stream is drawn as a whole. Boxed: most streams carry none.
+    #[cfg_attr(feature = "serde", serde(default))]
+    style: Option<Box<crate::style::StreamStyle>>,
 }
 
 impl Stream {
@@ -965,6 +990,17 @@ impl Stream {
     /// Sets the metadata, or clears it.
     pub fn set_metadata(&mut self, metadata: Option<Metadata>) {
         self.labels.metadata = metadata.map(Box::new);
+    }
+
+    /// How the stream is drawn as a whole: music21's `StreamStyle`, where
+    /// it says anything.
+    pub fn stream_style(&self) -> Option<&crate::style::StreamStyle> {
+        self.labels.style.as_deref()
+    }
+
+    /// Sets how the stream is drawn as a whole, or clears it.
+    pub fn set_stream_style(&mut self, style: Option<crate::style::StreamStyle>) {
+        self.labels.style = style.map(Box::new);
     }
 
     /// The groups a score brackets its parts in, in the order they were

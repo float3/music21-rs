@@ -94,6 +94,8 @@ pub mod features;
 pub mod figuredbass;
 #[doc = include_str!("guide.md")]
 pub mod guide {}
+/// Graphs of a score's data: what music21's `graph` plots.
+pub mod graph;
 /// Humdrum `**kern` scores.
 pub mod humdrum;
 /// Instruments: music21's `instrument` module.
@@ -152,6 +154,9 @@ pub mod search;
 /// Tone rows, twelve-tone matrices and serial transformations.
 pub mod serial;
 pub mod sieve;
+/// What decides which of two things comes first in a stream: music21's
+/// `sorting`.
+pub mod sorting;
 /// Marks joining several notes: slurs.
 pub mod spanner;
 pub(crate) mod statistics;
@@ -193,7 +198,7 @@ pub use analysis::{
 };
 pub use analysis::{tonal_certainty, tonal_certainty_from_scores};
 pub use articulations::{Articulation, ArticulationKind};
-pub use bar::{Barline, BarlineType, Ending, RepeatDirection};
+pub use bar::{Barline, BarlineType, BracketPlace, Ending, RepeatDirection};
 pub use chord::{
     Chord, ChordResolutionSuggestion, ChordTableAddress, GuitarFingering, GuitarStringFingering,
     GuitarTuning, GuitarTuningString, IntoNotes, KnownChordType, TriadQuality,

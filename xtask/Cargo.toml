@@ -10,7 +10,7 @@ version = "0.1.0"
 
 [features]
 default = []
-python = ["dep:pyo3", "dep:reqwest", "dep:music21_rs_python"]
+python = ["dep:pyo3", "dep:regex", "dep:reqwest", "dep:music21_rs_python"]
 
 [dependencies]
 # The Harte crate, whose fixture the fixture generator sorts as the crate does.
@@ -26,6 +26,9 @@ music21_rs_python = { package = "music21-rs-python", path = "../python", optiona
 proc-macro2 = "1.0.106"
 pyo3 = { version = "0.29.0", features = ["auto-initialize"], optional = true }
 quote = "1.0.45"
+# The provided side of `music21-suite` reads what blocked a test out of its
+# traceback.
+regex = { version = "1.12", optional = true }
 reqwest = { version = "0.13.3", features = ["blocking"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0"

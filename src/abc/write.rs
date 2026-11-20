@@ -868,6 +868,8 @@ fn expression_text(expression: &Expression) -> Result<&'static str> {
         Expression::Fermata(fermata) => match fermata.fermata_type() {
             FermataType::Inverted => "!fermata!",
             FermataType::Upright => "!invertedfermata!",
+            // ABC draws only these two; any other is written as the usual one.
+            _ => "!fermata!",
         },
         Expression::Arpeggio(ArpeggioType::Normal) => "!arpeggio!",
         Expression::Arpeggio(_) => {

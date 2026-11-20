@@ -4,7 +4,7 @@ import sys
 from typing import List, Optional
 
 import music21_rs
-from music21_rs.music21_rs import _HarteLabel
+from music21_rs import _HarteLabel
 
 
 def _chord_class():

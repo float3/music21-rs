@@ -94,6 +94,10 @@ classes = { kind = "identity", sync = "read live", why = "extractor classes hand
 tuplets = { kind = "identity", sync = "written_value" }
 client = { kind = "identity", sync = "read live", why = "the note or chord it belongs to; not part of the value" }
 
+[Edge]
+interval = { kind = "identity", sync = "read live", why = "the interval given, handed back as itself; the crate edge keeps its name" }
+id = { kind = "identity", sync = "read live", why = "the id given, handed back as itself; the crate edge keeps it as a number" }
+
 [FiguredBassLine]
 key = { kind = "identity", sync = "FiguredBassLine::current", why = "its sharps are written; the figures stay counted in the scale the line was made with, as music21's do" }
 time = { kind = "identity", sync = "FiguredBassLine::current" }
@@ -117,6 +121,9 @@ tonic_object = { kind = "identity", sync = "current" }
 [Lyric]
 components = { kind = "identity", sync = "synced" }
 style = { kind = "identity", sync = "synced" }
+
+[RehearsalMark]
+content = { kind = "identity", sync = "set_content", why = "the content as given, a number or text; the setter writes its text into the value" }
 
 [MeterSequence]
 parts = { kind = "identity", sync = "read live", why = "a sequence cannot change, so its parts are the objects it was made of, standing for the spans it holds" }
@@ -200,10 +207,6 @@ identifier = { kind = "identity", sync = "read live", why = "music21's id; the c
 [TimeSignature]
 sequences = { kind = "identity", sync = "read live", why = "a sequence cannot change; each is handed back only while it still equals the one the meter carries, and assigning one writes its value into the meter" }
 bar_duration = { kind = "identity", sync = "read live", why = "handed back as given only while the meter still carries the length written with it" }
-
-[TimespanTree]
-source = { kind = "identity", sync = "read live", why = "the stream read, handed back and asked for its parts" }
-spans = { kind = "cache", note = "the timespans, in the crate tree's order" }
 
 [TwelveToneMatrix]
 source = { kind = "identity", sync = "read live", why = "the row the matrix was made from, which only its repr reads" }
@@ -348,13 +351,29 @@ reason = "a corrector's slice of a score"
 kind = "facade-only"
 reason = "an analysis over a stream"
 
+[MeiToM21Converter]
+kind = "facade-only"
+reason = "music21's document root, attributes to add and slur bundle; the steps read and write them as music21's do, with no crate value behind them"
+
 [MetricModulation]
 kind = "facade-only"
 reason = "two marks and how the change is drawn"
 
+[MidiEvent]
+kind = "facade-only"
+reason = "music21's attributes, any Python object each; the crate reads the type, channel and parameters each time it writes the event's bytes"
+
+[MidiFile]
+kind = "facade-only"
+reason = "music21's open file, format, tracks and ticks; the crate reads them each time it writes the header"
+
+[MidiTrack]
+kind = "facade-only"
+reason = "music21's index, events and data; the crate reads the data into events and writes each event's bytes"
+
 [Music21Object]
 kind = "facade-only"
-reason = "music21's groups and derivation, which no crate value carries"
+reason = "music21's groups, derivation and id, which no crate value carries"
 
 [OffsetFilter]
 kind = "facade-only"
@@ -367,6 +386,42 @@ reason = "its unpitched notes"
 [Placed]
 kind = "facade-only"
 reason = "an answer about where an element stands; its beat duration is a computed answer"
+
+[Provider]
+kind = "facade-only"
+reason = "the import hook's table of music21's modules, which no crate value reads"
+
+[RTAtom]
+kind = "facade-only"
+reason = "music21's source and measure; the crate sorts the source into an atom's kind"
+
+[RTChord]
+kind = "facade-only"
+reason = "music21's offset and length, which a translator sets; the crate keeps nothing of them"
+
+[RTFile]
+kind = "facade-only"
+reason = "music21's open file and its name, read into a handler"
+
+[RTHandler]
+kind = "facade-only"
+reason = "music21's list of tokens and line count; the crate reads each line's text as it is tokenized"
+
+[RTMeasure]
+kind = "facade-only"
+reason = "music21's measure attributes, read once from the line by the crate"
+
+[RTNoChord]
+kind = "facade-only"
+reason = "music21's offset and length, which a translator sets; the crate keeps nothing of them"
+
+[RTTagged]
+kind = "facade-only"
+reason = "music21's tag and data, split once from the line by the crate"
+
+[RTToken]
+kind = "facade-only"
+reason = "music21's source text and line number; the crate reads the source each time it is asked"
 
 [ScalaData]
 kind = "facade-only"
@@ -396,6 +451,10 @@ reason = "the element whose sites it reads, kept in the sites table"
 kind = "facade-only"
 reason = "the spanner it is the storage of"
 
+[Variant]
+kind = "facade-only"
+reason = "the VariantStorage holding its reading, and the length it replaces"
+
 [SpannerBundle]
 kind = "facade-only"
 reason = "spanners"
@@ -412,6 +471,10 @@ reason = "an alignment over two streams"
 kind = "facade-only"
 reason = "a search over a stream"
 
+[StreamStatus]
+kind = "facade-only"
+reason = "its stream and music21's unread flags; the crate works the known flags out from the stream"
+
 [SubConverter]
 kind = "facade-only"
 reason = "the stream read and the keywords given; the wheel's converter does the reading"
@@ -424,6 +487,10 @@ reason = "the text and numbers of a TSV row"
 kind = "facade-only"
 reason = "the text and numbers of a TSV row"
 
+[SpannerHolder]
+kind = "facade-only"
+reason = "the objects made for what a crate spanner state builds, by the uids it knows them by"
+
 [TextBox]
 kind = "facade-only"
 reason = "a style and a place"
@@ -434,7 +501,7 @@ reason = "pitches and the chords made of them"
 
 [TreeVerticality]
 kind = "facade-only"
-reason = "a tree and the offset asked about"
+reason = "a tree, the offset asked about and the timespans starting, sounding across and stopping there"
 
 [TurnRecognizer]
 kind = "facade-only"
@@ -459,3 +526,82 @@ reason = "verticalities"
 [Walked]
 kind = "facade-only"
 reason = "elements and their offsets, the stream walked and the filters applied; its kind is a tag"
+
+[AbstractDiatonicScale]
+kind = "facade-only"
+reason = "the mode name it was given"
+
+[AbstractOctatonicScale]
+kind = "facade-only"
+reason = "the mode it was given"
+
+[AbstractScale]
+kind = "facade-only"
+reason = "the interval network a subclass built, handed out as _net and walked through it"
+
+[StreamFreezeThawBase]
+kind = "facade-only"
+reason = "the stream frozen or thawed"
+
+[StreamFreezer]
+kind = "facade-only"
+reason = "the ids of the streams found and music21's empty dictionary of sub-freezers"
+
+[NoteworthyTranslator]
+kind = "facade-only"
+reason = "the measures and notes its placing state remembers, by identity"
+
+[AvlNode]
+kind = "facade-only"
+reason = "a position, a payload and the child nodes, all music21's code reaches into"
+
+[AvlTree]
+kind = "facade-only"
+reason = "its root node"
+
+[ElementNode]
+kind = "facade-only"
+reason = "the earliest and latest end under the node, as Python numbers"
+
+[ElementTree]
+kind = "facade-only"
+reason = "the stream it is of, kept weakly, and the trees holding it"
+
+[VerticalityWalk]
+kind = "facade-only"
+reason = "the tree walked and the verticality last handed out"
+
+[VerticalityRuns]
+kind = "facade-only"
+reason = "the walk read, the padding verticality and the run so far"
+
+[CacheMethod]
+kind = "facade-only"
+reason = "the method cached and its cache key"
+
+[Deprecated]
+kind = "facade-only"
+reason = "the method that warns"
+
+[Method]
+kind = "facade-only"
+reason = "the function bound"
+
+[OptionalArgDecorator]
+kind = "facade-only"
+reason = "the decorator wrapped"
+
+[ParenthesesMatch]
+kind = "facade-only"
+reason = "the text matched and where, as music21's dataclass holds them"
+
+[TempAttribute]
+obj = { kind = "identity", sync = "read live", why = "the object the attribute is set on" }
+attribute = { kind = "identity", sync = "read live", why = "the name set" }
+new_val = { kind = "identity", sync = "read live", why = "the value set on entering" }
+stored = { kind = "identity", sync = "read live", why = "the value it had, put back on leaving" }
+
+[SaveAttributes]
+obj = { kind = "identity", sync = "read live", why = "the object whose attributes are put back on leaving" }
+attributes = { kind = "identity", sync = "read live", why = "the names saved" }
+stored = { kind = "identity", sync = "read live", why = "each name and the value it had on entering" }

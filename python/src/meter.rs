@@ -9,10 +9,11 @@
 //! divided by assigning it a new sequence, `ts.beatSequence =
 //! ts.beatSequence.partitioned(2)`.
 //!
-//! `SenzaMisuraTimeSignature` and `bestTimeSignature` stay music21's. The
-//! first is a meter with no numbers in it at all, which this crate cannot
-//! express; the second builds a `TimeSignature` out of a stream, and leaving
-//! it alone means music21's own function is run over *our* meters.
+//! `SenzaMisuraTimeSignature` is a meter with no numbers in it at all,
+//! which the crate does not model: this package's keeps its text alone and
+//! is not installed over music21's. `bestTimeSignature` stays music21's: it
+//! builds a `TimeSignature` out of a stream, and leaving it alone means
+//! music21's own function is run over *our* meters.
 
 // music21's own names, kept as music21 spells them.
 #![allow(non_snake_case)]
@@ -140,6 +141,47 @@ middle_class!(
     "music21.meter.base",
     crate::base::Music21Object
 );
+
+/// music21's `meter.SenzaMisuraTimeSignature`: the absence of a meter,
+/// with the text written in its place, `0` or nothing.
+#[pyclass(
+    name = "SenzaMisuraTimeSignature",
+    module = "music21.meter",
+    extends = TimeSignatureBase,
+    subclass
+)]
+pub struct SenzaMisuraTimeSignature {
+    /// What is written instead of a meter: music21's `text`.
+    #[pyo3(get, set)]
+    text: Option<String>,
+}
+
+impl SenzaMisuraTimeSignature {
+    /// One saying `text`.
+    pub(crate) fn object(py: Python<'_>, text: Option<String>) -> PyResult<Py<PyAny>> {
+        let made = Bound::new(
+            py,
+            crate::base::built(TimeSignatureBase).add_subclass(Self { text }),
+        )?;
+        Ok(made.into_any().unbind())
+    }
+}
+
+#[pymethods]
+impl SenzaMisuraTimeSignature {
+    #[new]
+    #[pyo3(signature = (text = None))]
+    fn new(text: Option<String>) -> PyClassInitializer<Self> {
+        crate::base::built(TimeSignatureBase).add_subclass(Self { text })
+    }
+
+    fn __repr__(&self) -> String {
+        match &self.text {
+            Some(text) => format!("<music21.meter.SenzaMisuraTimeSignature {text}>"),
+            None => "<music21.meter.SenzaMisuraTimeSignature>".to_string(),
+        }
+    }
+}
 
 /// music21's `TimeSignature`: a numerator over a denominator, and everything
 /// that follows from the pair.
@@ -2629,9 +2671,57 @@ fn bestTimeSignature(meas: &Bound<'_, PyAny>) -> PyResult<Py<TimeSignature>> {
     )
 }
 
+/// music21's `getMeterTerminal`: the one terminal of this ratio and
+/// weight, the same object each time it is asked for.
+#[pyfunction]
+#[pyo3(name = "getMeterTerminal", signature = (numerator, denominator, weight = 1.0))]
+fn getMeterTerminal(
+    py: Python<'_>,
+    numerator: UnsignedIntegerType,
+    denominator: UnsignedIntegerType,
+    weight: FloatType,
+) -> PyResult<Py<PyAny>> {
+    let span = RsMeterTerminal::new(numerator, denominator).map_err(meter_error)?;
+    terminal_object(py, span.with_weight(weight))
+}
+
+/// The sequences handed out by `getMeterSequence` so far, each its own
+/// key, so an equal one asked for again is the one handed out before.
+static SEQUENCES: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+
+/// How many sequences are kept, as music21 keeps its 4096 most recent.
+const SEQUENCES_KEPT: usize = 4096;
+
+/// music21's `getMeterSequence`: a sequence made as `MeterSequence(value,
+/// partitionRequest)` makes one, the same object for the same sequence.
+#[pyfunction]
+#[pyo3(name = "getMeterSequence", signature = (value = None, partitionRequest = None))]
+fn getMeterSequence<'py>(
+    py: Python<'py>,
+    value: Option<&Bound<'py, PyAny>>,
+    partitionRequest: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let class = crate::installed_class(py, "music21.meter.core", "MeterSequence")
+        .unwrap_or_else(|| py.get_type::<MeterSequence>().into_any());
+    let built = class.call1((value, partitionRequest))?;
+    let cache = SEQUENCES.get_or_init(py, || PyDict::new(py).unbind());
+    let cache = cache.bind(py);
+    if let Some(found) = cache.get_item(&built)? {
+        return Ok(found);
+    }
+    if cache.len() >= SEQUENCES_KEPT {
+        cache.clear();
+    }
+    cache.set_item(&built, &built)?;
+    Ok(built)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bestTimeSignature, m)?)?;
+    m.add_function(wrap_pyfunction!(getMeterTerminal, m)?)?;
+    m.add_function(wrap_pyfunction!(getMeterSequence, m)?)?;
     m.add_class::<TimeSignatureBase>()?;
+    m.add_class::<SenzaMisuraTimeSignature>()?;
     m.add_class::<TimeSignature>()?;
     m.add_class::<MeterTerminal>()?;
     m.add_class::<MeterSequence>()?;

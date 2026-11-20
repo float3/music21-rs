@@ -107,7 +107,32 @@ pub fn from_musicxml(document: &str) -> Result<Stream> {
         ))
         .of_kind(FormatErrorKind::Unsupported));
     }
-    Importer::default().score(&root)
+    score_of(&root)
+}
+
+/// A `<score-partwise>` already read as XML, read as a score.
+pub(super) fn score_of(root: &Xml) -> Result<Stream> {
+    Importer::default().score(root)
+}
+
+/// A `<score-partwise>` read as a score, with what music21 warns of as
+/// it reads it.
+pub(super) fn score_warned(root: &Xml) -> Result<(Stream, Vec<Error>)> {
+    let mut importer = Importer::default();
+    let read = importer.score(root)?;
+    Ok((read, importer.warnings))
+}
+
+/// The same, its first part starting inside `tuplets`, which are left as
+/// the last part ends.
+pub(super) fn score_within(root: &Xml, tuplets: &mut ActiveTuplets) -> Result<Stream> {
+    let mut importer = Importer {
+        tuplets_before: Some(*tuplets),
+        ..Importer::default()
+    };
+    let read = importer.score(root);
+    *tuplets = importer.tuplets_after;
+    read
 }
 
 // ------------------------------------------------------------------ numbers
@@ -148,6 +173,20 @@ fn op_frac(value: FloatType) -> FloatType {
     }
     let snapped = best_p as FloatType / best_q as FloatType;
     if negative { -snapped } else { snapped }
+}
+
+/// music21's `setSoundTempo`: the quarters a minute a `<sound>`'s `tempo`
+/// attribute plays at, or `None` for one that is nought or no number,
+/// which sets no tempo.
+///
+/// ```
+/// use music21::musicxml::sound_tempo;
+///
+/// assert_eq!(sound_tempo("128"), Some(128.0));
+/// assert_eq!(sound_tempo("0"), None);
+/// ```
+pub fn sound_tempo(tempo: &str) -> Option<FloatType> {
+    parse_float(tempo).filter(|qpm| *qpm != 0.0)
 }
 
 fn parse_float(text: &str) -> Option<FloatType> {
@@ -428,27 +467,111 @@ struct Bracket {
 /// music21's `RepeatBracket.number` setter: nothing at all is nought,
 /// which is written as no number; otherwise `1`, `1, 2` or `1-3`.
 fn bracket_numbers(text: &str) -> Vec<u32> {
-    if text.is_empty() {
-        return vec![0];
-    }
-    let number = |piece: &str| piece.trim().parse::<u32>().ok();
-    let read = if let Some((low, high)) = text.split_once('-') {
-        number(low)
-            .zip(number(high))
-            .map(|(low, high)| (low..=high).collect())
-    } else if text.contains(',') {
-        text.split(',').map(number).collect::<Option<Vec<u32>>>()
-    } else {
-        number(text).map(|number| vec![number])
-    };
     // music21 falls back to a first ending where it cannot read one.
-    read.unwrap_or_else(|| vec![1])
+    Ending::numbers_from_text(text).unwrap_or_else(|_| vec![1])
+}
+
+// ------------------------------------------------------------- measure fit
+
+/// What is known of a measure as it goes into its part.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FitAsked {
+    /// Where its contents end, in quarters: music21's `highestTime`.
+    pub highest: FloatType,
+    /// How long a bar of its meter is.
+    pub bar_length: FloatType,
+    /// Whether it holds a note or a rest.
+    pub has_notes: bool,
+    /// Whether it opens the part: nothing before it took any time.
+    pub at_start: bool,
+    /// Whether the measure before it was cut short.
+    pub last_was_short: bool,
+}
+
+/// How a measure sits in its part: music21's
+/// `adjustTimeAttributesFromMeasure`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MeasureFit {
+    /// How far the next measure starts after this one.
+    pub shift: FloatType,
+    /// The padding of a pickup, where it is one.
+    pub padding_left: Option<FloatType>,
+    /// What a measure cut short lacks at its end.
+    pub padding_right: Option<FloatType>,
+    /// Whether an empty measure is filled with a bar's rest.
+    pub fill_with_rest: bool,
+    /// Whether it is overfull by an amount music21 takes for a mistake,
+    /// and so takes the bar's length instead; music21 warns then.
+    pub overfull_ignored: bool,
+    /// Whether the next measure follows one cut short.
+    pub last_was_short: bool,
+}
+
+/// Decides how a measure sits in its part, as music21's
+/// `adjustTimeAttributesFromMeasure` does.
+pub fn measure_fit(asked: &FitAsked) -> MeasureFit {
+    let FitAsked {
+        highest,
+        bar_length,
+        has_notes,
+        at_start,
+        last_was_short,
+    } = *asked;
+    let mut fit = MeasureFit {
+        shift: highest,
+        last_was_short,
+        ..MeasureFit::default()
+    };
+
+    // Full, or overfull by a round amount or by a lot, keeps its length.
+    if highest == bar_length {
+        return fit;
+    }
+    if highest > bar_length {
+        let difference = highest - bar_length;
+        let near = |unit: FloatType| {
+            let multiple = (difference / unit).round() * unit;
+            (difference - multiple).abs() < 1e-6
+        };
+        if !(difference > 0.5 || near(0.0625) || near(1.0 / 12.0)) {
+            fit.shift = bar_length;
+            fit.overfull_ignored = true;
+        }
+        return fit;
+    }
+
+    // An empty measure some writers leave the rest out of.
+    if highest == 0.0 && !has_notes {
+        fit.shift = bar_length;
+        fit.fill_with_rest = true;
+        fit.last_was_short = false;
+        return fit;
+    }
+
+    // A short measure is a pickup where it opens the part or follows
+    // another short one, and is cut short at its end otherwise. music21
+    // pads a pickup as `padAsAnacrusis` does, by the share of the bar it
+    // lacks, and a short measure by what it lacks, unsnapped.
+    let anacrusis = op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
+    if at_start {
+        fit.padding_left = Some(anacrusis);
+    } else if last_was_short {
+        fit.padding_left = Some(anacrusis);
+        fit.last_was_short = false;
+    } else {
+        fit.padding_right = Some(bar_length - op_frac(highest));
+        fit.last_was_short = true;
+    }
+    fit
 }
 
 // ----------------------------------------------------------------- importer
 
-#[derive(Default)]
-struct Importer {
+/// The spanners a reading is building, which outlive one element: the
+/// state music21 keeps in its `spannerBundle`. A reading of one element
+/// at a time keeps it between elements, as music21's parsers do.
+#[derive(Clone, Debug, Default)]
+pub struct SpannerState {
     spanners: Vec<Building>,
     /// The spanners waiting for the next note, chord or rest, which becomes
     /// the first thing the one at the front joins.
@@ -457,9 +580,171 @@ struct Importer {
     /// where each stands in `spanners`: one finished in a part may still be
     /// handed the first note of the next by the queue.
     finished: Vec<usize>,
+    /// The last uid given to anything read.
     next_uid: usize,
-    finale: bool,
+    /// Where each pedal mark began, for a `resume` at that very place:
+    /// music21's `pedalToStartOffset`.
+    pedal_starts: Vec<(usize, FloatType)>,
 }
+
+/// A spanner a [`SpannerState`] is building, by where it stands there.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SpannerId(usize);
+
+impl SpannerState {
+    /// A new uid, for something read outside this state -- a note -- that
+    /// a spanner may then join.
+    pub fn new_uid(&mut self) -> usize {
+        self.next_uid += 1;
+        self.next_uid
+    }
+
+    /// The spanner as built so far, standing in no stream: what it says of
+    /// itself, and whether its end has been read.
+    pub fn spanner(&self, id: SpannerId) -> Option<Spanner> {
+        let building = self.spanners.get(id.0)?;
+        let mut spanner = building.finish(&|_| None);
+        spanner.set_complete(building.complete);
+        Some(spanner)
+    }
+
+    /// The uids of what the spanner joins, in order.
+    pub fn joined(&self, id: SpannerId) -> &[usize] {
+        self.spanners
+            .get(id.0)
+            .map_or(&[], |building| building.uids.as_slice())
+    }
+
+    /// Every spanner the state holds, in the order they were begun.
+    pub fn ids(&self) -> impl Iterator<Item = SpannerId> {
+        (0..self.spanners.len()).map(SpannerId)
+    }
+}
+
+/// What one step of spanner reading did: the spanners it handed back
+/// and the ones it began, and the pedal's bounces and gaps it put in the
+/// measure, each with its uid and offset.
+#[derive(Clone, Debug, Default)]
+pub struct SpannersRead {
+    /// What the step hands back, as music21's does: the spanners a
+    /// direction begins, or the one `xmlOneSpanner` found or made.
+    pub returned: Vec<SpannerId>,
+    /// Every spanner begun, in order.
+    pub started: Vec<SpannerId>,
+    /// Each pedal bounce or gap put in, with its uid and offset.
+    pub marks: Vec<(usize, FloatType, PedalObject)>,
+}
+
+/// Which of music21's spanner-reading steps to take.
+#[derive(Clone, Copy, Debug)]
+pub enum SpannerStep {
+    /// `xmlDirectionTypeToSpanners`: a wedge, bracket, dashes, octave
+    /// shift or pedal, its marks on `staff` at `offset`.
+    DirectionType {
+        /// The staff a pedal's marks go on.
+        staff: i32,
+        /// Where in the measure a pedal's marks stand.
+        offset: FloatType,
+    },
+    /// `xmlNotationsToSpanners`: the slurs, wavy lines, tremolos,
+    /// glissandos and arpeggios a `<notations>` joins its note to.
+    Notations,
+    /// `xmlOneSpanner`: the open spanner of a kind and number, or a new
+    /// one where there is none or duplicates are wanted.
+    One {
+        /// The kind of spanner.
+        kind: SpannerKind,
+        /// Whether an open one of the same number is joined or another
+        /// begun.
+        duplicates: DuplicateIds,
+    },
+}
+
+/// Whether a spanner of a number already open is joined or another begun:
+/// music21's `allowDuplicateIds`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DuplicateIds {
+    /// Join the open one.
+    Join,
+    /// Begin another.
+    Allow,
+}
+
+/// One of music21's spanner-reading steps on `element`, within `state`:
+/// `target`, a uid of the state's, is what ends or joins a spanner.
+pub(super) fn spanners_within(
+    element: &Xml,
+    target: Option<usize>,
+    step: SpannerStep,
+    state: &mut SpannerState,
+) -> Result<SpannersRead> {
+    let before = state.spanners.len();
+    let mut importer = Importer {
+        state: std::mem::take(state),
+        ..Importer::default()
+    };
+    let part = Xml::parse("<part id=\"P1\"/>")?;
+    let score_part = Xml::parse("<score-part id=\"P1\"/>")?;
+    let measure = Xml::parse("<measure/>")?;
+    let read = {
+        let mut part_parser = PartParser::new(&mut importer, &part, &score_part, "P1");
+        let mut parser = MeasureParser::new(&mut part_parser, &measure);
+        parser.last_note = target;
+        parser.pedal_starts = std::mem::take(&mut parser.part.importer.state.pedal_starts);
+        let returned = match step {
+            SpannerStep::DirectionType { staff, offset } => {
+                parser.direction_spanners(element, staff, offset)
+            }
+            SpannerStep::Notations => match target {
+                Some(uid) => parser.notation_spanners(element, uid).map(|()| Vec::new()),
+                None => Ok(Vec::new()),
+            },
+            SpannerStep::One { kind, duplicates } => Ok(vec![parser.one_spanner(
+                element,
+                target,
+                kind,
+                duplicates == DuplicateIds::Allow,
+            )]),
+        };
+        parser.part.importer.state.pedal_starts = std::mem::take(&mut parser.pedal_starts);
+        let marks = parser
+            .measure
+            .items
+            .iter()
+            .filter_map(|item| match (&item.element, item.uid) {
+                (StreamElement::PedalObject(mark), Some(uid)) => {
+                    Some((uid, item.offset, mark.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        let after = parser.part.importer.state.spanners.len();
+        returned.map(|returned| SpannersRead {
+            returned: returned.into_iter().map(SpannerId).collect(),
+            started: (before..after).map(SpannerId).collect(),
+            marks,
+        })
+    };
+    *state = importer.state;
+    read
+}
+
+#[derive(Default)]
+struct Importer {
+    state: SpannerState,
+    finale: bool,
+    /// The tuplets the first part starts inside, for a measure read on its
+    /// own after others: music21's `PartParser.activeTuplets`.
+    tuplets_before: Option<ActiveTuplets>,
+    /// The tuplets the last part read was left inside.
+    tuplets_after: ActiveTuplets,
+    /// What music21 warns of as it reads, in order.
+    warnings: Vec<Error>,
+}
+
+/// The tuplets a part is inside, by number: music21's `activeTuplets`,
+/// nought being the one a note's `<time-modification>` alone implies.
+pub type ActiveTuplets = [Option<Tuplet>; 7];
 
 struct PartGroup<'a> {
     element: &'a Xml,
@@ -479,12 +764,11 @@ struct BuiltPart {
 
 impl Importer {
     fn uid(&mut self) -> usize {
-        self.next_uid += 1;
-        self.next_uid
+        self.state.new_uid()
     }
 
     /// music21's `xmlRootToScore`.
-    fn score(mut self, root: &Xml) -> Result<Stream> {
+    fn score(&mut self, root: &Xml) -> Result<Stream> {
         let metadata = self.metadata(root);
         let defaults = root.find("defaults").map(score_layout);
         let credits = root
@@ -507,7 +791,7 @@ impl Importer {
                 continue;
             };
             let first = built.len();
-            let staves = PartParser::new(&mut self, part, score_part, &id).parse()?;
+            let staves = PartParser::new(self, part, score_part, &id).parse()?;
             let name = staves
                 .first()
                 .and_then(|staff| staff.stream.name().map(str::to_string));
@@ -581,15 +865,17 @@ impl Importer {
 
         // Whatever was completed and never put into a part goes into the
         // score, an arpeggio across parts among them.
-        for building in &mut self.spanners {
+        for building in &mut self.state.spanners {
             if building.kind == SpannerKind::ArpeggioMark {
                 building.complete = true;
             }
         }
-        let late: Vec<usize> = (0..self.spanners.len())
-            .filter(|index| self.spanners[*index].complete && !self.spanners[*index].placed)
+        let late: Vec<usize> = (0..self.state.spanners.len())
+            .filter(|index| {
+                self.state.spanners[*index].complete && !self.state.spanners[*index].placed
+            })
             .collect();
-        self.finished.extend(late);
+        self.state.finished.extend(late);
 
         // The credits sort before the parts, as music21 sorts its text boxes,
         // and stand before the parts' leaves where spanners count them.
@@ -612,12 +898,18 @@ impl Importer {
         let mut assembled = Stream::from_events(events);
         assembled.set_kind(StreamKind::Score);
         assembled.set_metadata(Some(metadata));
+        if let Some(defaults) = root.find("defaults") {
+            let style = stream_style(defaults)?;
+            if style != crate::style::StreamStyle::default() {
+                assembled.set_stream_style(Some(style));
+            }
+        }
         for group in staff_groups {
             assembled.add_staff_group(group);
         }
         let position_of = |uid: usize| uids.iter().position(|held| *held == Some(uid));
-        for index in &self.finished {
-            assembled.add_spanner(self.spanners[*index].finish(&position_of));
+        for index in &self.state.finished {
+            assembled.add_spanner(self.state.spanners[*index].finish(&position_of));
         }
         Ok(assembled)
     }
@@ -656,43 +948,21 @@ impl Importer {
             return metadata;
         };
         for creator in identification.find_all("creator") {
-            let name = creator.stripped();
-            match creator.get("type") {
-                Some(role) if crate::metadata::is_contributor_unique_name(role) => {
-                    metadata.add(role, MetadataValue::with_role(name, role));
-                }
-                Some(role) => {
-                    metadata.add("otherContributor", MetadataValue::with_role(name, role));
-                }
-                None => metadata.add("otherContributor", MetadataValue::new(name)),
-            }
+            // A role music21 has a name for is kept under it.
+            let name = match creator.get("type") {
+                Some(role) if crate::metadata::is_contributor_unique_name(role) => role,
+                _ => "otherContributor",
+            };
+            metadata.add(name, creator_value(creator));
         }
         if let Some(rights) = identification.find("rights") {
-            // music21 writes a copyright that says nothing as `None`.
-            let text = match rights.text() {
-                Some(text) => text.trim(),
-                None => "None",
-            };
-            metadata.add(
-                "copyright",
-                match rights.get("type") {
-                    Some(role) => MetadataValue::with_role(text, role),
-                    None => MetadataValue::new(text),
-                },
-            );
+            metadata.add("copyright", rights_value(rights));
         }
         if let Some(encoding) = identification.find("encoding") {
-            let mut found = false;
-            for software in encoding.find_all("software") {
-                let text = software.stripped();
-                if text.is_empty() {
-                    continue;
-                }
-                if !found && text.contains("Finale") {
-                    self.finale = true;
-                }
-                found = true;
-                metadata.add_text("software", text);
+            let read = encoding_of(encoding);
+            self.finale = read.finale;
+            for software in &read.software {
+                metadata.add_text("software", software);
             }
         }
         if let Some(miscellaneous) = identification.find("miscellaneous") {
@@ -711,6 +981,46 @@ impl Importer {
         }
         metadata
     }
+}
+
+/// What an `<encoding>` says of the program that wrote the document.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Encoding {
+    /// Each `<software>` named, in order.
+    pub software: Vec<String>,
+    /// Whether the first program named is Finale, whose mistakes music21
+    /// works around: its `applyFinaleWorkarounds`.
+    pub finale: bool,
+    /// Whether the document says where every system starts: music21's
+    /// `definesExplicitSystemBreaks`.
+    pub system_breaks: bool,
+    /// Whether it says where every page starts: music21's
+    /// `definesExplicitPageBreaks`.
+    pub page_breaks: bool,
+}
+
+/// music21's `processEncoding`.
+pub(super) fn encoding_of(encoding: &Xml) -> Encoding {
+    let mut read = Encoding::default();
+    for software in encoding.find_all("software") {
+        let text = software.stripped();
+        if text.is_empty() {
+            continue;
+        }
+        if read.software.is_empty() && text.contains("Finale") {
+            read.finale = true;
+        }
+        read.software.push(text.to_string());
+    }
+    for supports in encoding.find_all("supports") {
+        let value = supports.get("value").or_else(|| supports.get("type"));
+        match (supports.get("attribute"), value) {
+            (Some("new-system"), Some("yes")) => read.system_breaks = true,
+            (Some("new-page"), Some("yes")) => read.page_breaks = true,
+            _ => {}
+        }
+    }
+    read
 }
 
 /// music21's `parsePartList`: each `<score-part>` by id, and the groups.
@@ -776,7 +1086,7 @@ struct PartParser<'a, 'x> {
     last_measure_number: IntegerType,
     last_number_suffix: Option<String>,
     last_clefs: Vec<(i32, Clef)>,
-    active_tuplets: [Option<Tuplet>; 7],
+    active_tuplets: ActiveTuplets,
     first_measure_parsed: bool,
     /// music21's `PartParser.atSoundingPitch`: a part is at sounding pitch
     /// until a `<transpose>` says otherwise.
@@ -803,6 +1113,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                     .any(|staves| parse_int(staves.stripped()).is_some_and(|count| count > 1))
             })
         });
+        let active_tuplets = importer.tuplets_before.take().unwrap_or_default();
         Self {
             importer,
             part,
@@ -824,7 +1135,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
             last_measure_number: 0,
             last_number_suffix: None,
             last_clefs: Vec::new(),
-            active_tuplets: Default::default(),
+            active_tuplets,
             first_measure_parsed: false,
             at_sounding_pitch: true,
             arpeggios: Vec::new(),
@@ -841,7 +1152,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest else {
             return;
         };
-        self.importer.spanners[index].add(uid);
+        self.importer.state.spanners[index].add(uid);
         self.multi_rests_left -= 1;
         if self.multi_rests_left == 0 {
             self.end_multi_rest();
@@ -858,7 +1169,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let Some(index) = self.multi_rest.take() else {
             return;
         };
-        let building = &mut self.importer.spanners[index];
+        let building = &mut self.importer.state.spanners[index];
         if building.uids.is_empty() {
             return;
         }
@@ -884,6 +1195,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         }
         self.remove_finale_ending_rest(last_forward);
         self.end_multi_rest();
+        self.importer.tuplets_after = self.active_tuplets;
 
         // Endings, from the brackets over the measures.
         for bracket in &self.brackets {
@@ -904,7 +1216,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
         // those in as it was completed.
         let mut ours: Vec<usize> = std::mem::take(&mut self.multi_rests);
         for pass in [false, true] {
-            for (index, building) in self.importer.spanners.iter_mut().enumerate() {
+            for (index, building) in self.importer.state.spanners.iter_mut().enumerate() {
                 let ottava = building.kind == SpannerKind::Ottava;
                 if building.complete && !building.placed && ottava == pass {
                     building.placed = true;
@@ -912,7 +1224,7 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 }
             }
         }
-        self.importer.finished.extend(ours);
+        self.importer.state.finished.extend(ours);
 
         if self.max_staves > 1 {
             self.separate_staves()
@@ -1004,14 +1316,13 @@ impl<'a, 'x> PartParser<'a, 'x> {
 
     /// music21's `parseXmlScorePart` and `getDefaultInstrument`.
     fn score_part_info(&mut self) -> Result<()> {
-        let clean = |text: &str| text.trim().replace('\n', " ");
         let score_part = self.score_part;
         let named = |tag: &str| {
             score_part
                 .find(tag)
                 .and_then(Xml::text)
                 .filter(|text| !text.is_empty())
-                .map(clean)
+                .map(cleaned)
         };
         let part_name = named("part-name");
         let part_abbreviation = named("part-abbreviation");
@@ -1022,68 +1333,10 @@ impl<'a, 'x> PartParser<'a, 'x> {
             .find("part-abbreviation")
             .is_some_and(|name| name.get("print-object") == Some("no"));
 
-        let adjusted = |text: &str| -> Option<u8> {
-            parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
-        };
-        let mut instrument: Option<Instrument> = None;
-        let mut unpitched = false;
-        if let Some(midi) = score_part.find("midi-instrument") {
-            let unpitched_text = midi.child_text("midi-unpitched");
-            let program_text = midi.child_text("midi-program");
-            if !unpitched_text.is_empty() {
-                unpitched = true;
-                let pitch = adjusted(unpitched_text).unwrap_or(0);
-                instrument = Some(percussion_instrument(pitch));
-            } else if !program_text.is_empty() {
-                let mut read = adjusted(program_text)
-                    .and_then(|program| Instrument::from_midi_program(program).ok())
-                    .unwrap_or_default();
-                if let Some(channel) = midi
-                    .find("midi-channel")
-                    .and_then(Xml::text)
-                    .and_then(adjusted)
-                {
-                    read.set_midi_channel(Some(channel));
-                }
-                instrument = Some(read);
-            }
-        }
-        let mut instrument = instrument.unwrap_or_default();
-        let score_instrument = score_part.find("score-instrument");
-        if let Some(score_instrument) = score_instrument
-            && !unpitched
-        {
-            let name = score_instrument.child_text("instrument-name");
-            if !name.is_empty() {
-                let mut from_name =
-                    Instrument::from_name(name, SearchLanguage::All).unwrap_or_default();
-                from_name.set_midi_channel(instrument.midi_channel());
-                if from_name.midi_program() == instrument.midi_program() || instrument.is_a("Piano")
-                {
-                    instrument = from_name;
-                }
-            }
-        }
+        let mut instrument = default_instrument(score_part, &mut self.importer.warnings);
         instrument.set_part_id(Some(self.id.clone()));
         instrument.set_part_name(part_name.clone());
         instrument.set_part_abbreviation(part_abbreviation.clone());
-        if let Some(score_instrument) = score_instrument {
-            let named = |tag: &str| {
-                score_instrument
-                    .find(tag)
-                    .and_then(Xml::text)
-                    .filter(|text| !text.is_empty())
-            };
-            if let Some(name) = named("instrument-name") {
-                instrument.set_name(Some(clean(name)));
-            }
-            if let Some(abbreviation) = named("instrument-abbreviation") {
-                instrument.set_abbreviation(Some(clean(abbreviation)));
-            }
-            if let Some(sound) = named("instrument-sound") {
-                instrument.set_sound(Some(sound.to_string()));
-            }
-        }
         self.name = part_name;
         self.abbreviation = part_abbreviation;
         self.name_hidden = name_hidden;
@@ -1192,26 +1445,19 @@ impl<'a, 'x> PartParser<'a, 'x> {
         let index = self.measures.len();
 
         // music21's `adjustTimeAttributesFromMeasure`.
-        let highest = measure.highest_time();
         let has_notes = measure
             .items
             .iter()
             .chain(measure.voices.iter().flat_map(|voice| &voice.items))
             .any(Item::is_note_or_rest);
-        let shift = if highest == bar_length {
-            highest
-        } else if highest > bar_length {
-            let difference = highest - bar_length;
-            let near = |unit: FloatType| {
-                let multiple = (difference / unit).round() * unit;
-                (difference - multiple).abs() < 1e-6
-            };
-            if difference > 0.5 || near(0.0625) || near(1.0 / 12.0) {
-                highest
-            } else {
-                bar_length
-            }
-        } else if highest == 0.0 && !has_notes {
+        let fit = measure_fit(&FitAsked {
+            highest: measure.highest_time(),
+            bar_length,
+            has_notes,
+            at_start: self.last_measure_offset == 0.0,
+            last_was_short: self.last_measure_was_short,
+        });
+        if fit.fill_with_rest {
             // Some writers leave the rest out of an empty measure.
             let uid = self.importer.uid();
             measure.items.push(Item {
@@ -1221,32 +1467,15 @@ impl<'a, 'x> PartParser<'a, 'x> {
                 uid: Some(uid),
                 element: Rest::new(Duration::new(bar_length)?).into(),
             });
-            self.last_measure_was_short = false;
-            bar_length
-        } else {
-            // A short measure is a pickup where it opens the part or follows
-            // another short one, and is cut short at its end otherwise.
-            // music21 pads a pickup as `padAsAnacrusis` does, by the share
-            // of the bar it lacks, and a short measure by what it lacks,
-            // unsnapped.
-            let anacrusis = || op_frac(bar_length * (1.0 - op_frac(highest / bar_length)));
-            if self.last_measure_offset == 0.0 {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                }
-            } else if self.last_measure_was_short {
-                if highest < bar_length {
-                    measure.padding_left = anacrusis();
-                    self.last_measure_was_short = false;
-                }
-            } else {
-                if highest < bar_length {
-                    measure.padding_right = bar_length - op_frac(highest);
-                }
-                self.last_measure_was_short = highest < bar_length;
-            }
-            highest
-        };
+        }
+        if let Some(padding) = fit.padding_left {
+            measure.padding_left = padding;
+        }
+        if let Some(padding) = fit.padding_right {
+            measure.padding_right = padding;
+        }
+        self.last_measure_was_short = fit.last_was_short;
+        let shift = fit.shift;
         self.last_measure_offset += shift;
         self.measures.push(measure);
         Ok(finale_forward.map(|_| (index, !use_voices)))
@@ -1638,17 +1867,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `updateVoiceInformation`: a measure naming more than one
     /// voice holds a voice for each.
     fn voice_information(&mut self) {
-        let mut ids: Vec<String> = Vec::new();
-        for tag in ["note", "forward"] {
-            for element in self.element.find_all(tag) {
-                let voice = element.child_text("voice");
-                if !voice.is_empty() && !ids.iter().any(|held| held == voice) {
-                    ids.push(voice.to_string());
-                }
-            }
-        }
+        let ids = voice_ids(self.element);
         if ids.len() > 1 {
-            ids.sort();
             self.measure.voices = ids
                 .into_iter()
                 .map(|id| VoiceIr {
@@ -1737,8 +1957,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         self.part.end_multi_rest();
         let mut building = Building::new(SpannerKind::MultiMeasureRest, None);
         building.use_symbols = multiple.get("use-symbols") == Some("yes");
-        self.part.importer.spanners.push(building);
-        self.part.multi_rest = Some(self.part.importer.spanners.len() - 1);
+        self.part.importer.state.spanners.push(building);
+        self.part.multi_rest = Some(self.part.importer.state.spanners.len() - 1);
         self.part.multi_rests_left = i64::from(count);
         Ok(())
     }
@@ -1754,26 +1974,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
             || print.find("page-layout").is_some();
         let system = says("new-system") || print.find("system-layout").is_some();
         if page {
-            let mut read = PageLayout {
-                is_new: print.get("new-page").map(|value| value == "yes"),
-                page_number: print
-                    .get("page-number")
-                    .and_then(|value| value.trim().parse().ok()),
-                ..PageLayout::default()
-            };
-            if let Some(written) = print.find("page-layout") {
-                read_page_layout(written, &mut read);
-            }
+            let read = print_page_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::Page(read)));
         }
         if system || !page {
-            let mut read = SystemLayout {
-                is_new: print.get("new-system").map(|value| value == "yes"),
-                ..SystemLayout::default()
-            };
-            if let Some(written) = print.find("system-layout") {
-                read_system_layout(written, &mut read);
-            }
+            let read = print_system_layout(print);
             self.insert(0.0, NO_STAFF, StreamElement::Layout(Layout::System(read)));
         }
         for written in print.find_all("staff-layout") {
@@ -1927,7 +2132,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// Spanners that knew an element by one number know it by another.
     fn rename(&mut self, from: usize, to: usize) {
-        for building in &mut self.part.importer.spanners {
+        for building in &mut self.part.importer.state.spanners {
             let mut renamed: Vec<usize> = Vec::new();
             for uid in &building.uids {
                 let uid = if *uid == from { to } else { *uid };
@@ -1942,8 +2147,8 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `freePendingSpannedElementAssignment`.
     fn free_pending(&mut self, uid: usize) {
         let importer = &mut *self.part.importer;
-        if let Some(index) = importer.pending.pop_front() {
-            importer.spanners[index].add_first(uid);
+        if let Some(index) = importer.state.pending.pop_front() {
+            importer.state.spanners[index].add_first(uid);
         }
     }
 
@@ -2485,7 +2690,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     fn notations(&mut self, notations: &'x Xml, general: &mut General) -> Result<()> {
         for technical in notations.find_all("technical") {
             for mark in &technical.children {
-                if let Some(read) = technical_of(mark) {
+                if let Some(read) = technical_of(mark, self.divisions) {
                     general.articulations.push(read);
                 }
             }
@@ -2615,7 +2820,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     .iter()
                     .find(|(held, _)| *held == key)
                     .map(|(_, index)| *index);
-                let spanners = &mut self.part.importer.spanners;
+                let spanners = &mut self.part.importer.state.spanners;
                 let index = found.unwrap_or_else(|| {
                     let mut building = Building::new(SpannerKind::ArpeggioMark, Some(number));
                     building.arpeggio = kind;
@@ -2625,7 +2830,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 if found.is_none() {
                     self.part.arpeggios.push((key, index));
                 }
-                self.part.importer.spanners[index].add(uid);
+                self.part.importer.state.spanners[index].add(uid);
             }
         }
         for ornaments in notations.find_all("ornaments") {
@@ -2639,7 +2844,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     "tremolo" if matches!(mark.get("type"), Some("start" | "stop")) => {
                         let index =
                             self.one_spanner(mark, Some(uid), SpannerKind::TremoloSpanner, false);
-                        self.part.importer.spanners[index].marks = tremolo_marks(mark)?;
+                        self.part.importer.state.spanners[index].marks = tremolo_marks(mark)?;
                     }
                     _ => {}
                 }
@@ -2647,7 +2852,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         }
         for slur in notations.find_all("slur") {
             let index = self.one_spanner(slur, Some(uid), SpannerKind::Slur, false);
-            let building = &mut self.part.importer.spanners[index];
+            let building = &mut self.part.importer.state.spanners[index];
             if let Some(line_type) = slur.get("line-type") {
                 building.line_type = Some(line_type.to_string());
             }
@@ -2658,7 +2863,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         for tag in ["glissando", "slide"] {
             for written in notations.find_all(tag) {
                 let index = self.one_spanner(written, Some(uid), SpannerKind::Glissando, false);
-                let building = &mut self.part.importer.spanners[index];
+                let building = &mut self.part.importer.state.spanners[index];
                 if tag == "slide" {
                     building.slide = SlideType::Continuous;
                 }
@@ -2688,7 +2893,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
         allow_duplicates: bool,
     ) -> usize {
         let id = element.get("number");
-        let spanners = &mut self.part.importer.spanners;
+        let spanners = &mut self.part.importer.state.spanners;
         let found = spanners
             .iter()
             .position(|held| held.kind == kind && !held.complete && held.id_local.as_deref() == id);
@@ -2740,11 +2945,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// music21's `setSoundTempo`: how fast the music is played, where no
     /// mark says.
     fn sound_tempo(&mut self, sound: &Xml, direction: Option<&Xml>, staff: i32, total: FloatType) {
-        let Some(tempo) = sound
-            .get("tempo")
-            .and_then(parse_float)
-            .filter(|qpm| *qpm != 0.0)
-        else {
+        let Some(tempo) = sound.get("tempo").and_then(sound_tempo) else {
             return;
         };
         let mut mark = MetronomeMark::default().with_number_sounding(tempo);
@@ -2778,7 +2979,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 // music21 warns and carries on when one cannot be read.
                 if let Ok(made) = self.direction_spanners(specific, staff, total) {
                     for index in made {
-                        let building = &mut self.part.importer.spanners[index];
+                        let building = &mut self.part.importer.state.spanners[index];
                         if let Some(placement) = placement_of(specific) {
                             building.placement = Some(placement);
                         }
@@ -2878,11 +3079,11 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 match kind {
                     Some(kind) => {
                         let index = self.one_spanner(element, None, kind, true);
-                        self.part.importer.pending.push_back(index);
+                        self.part.importer.state.pending.push_back(index);
                         made.push(index);
                     }
                     None => {
-                        let spanners = &mut self.part.importer.spanners;
+                        let spanners = &mut self.part.importer.state.spanners;
                         let index = open(spanners, &SpannerKind::is_wedge)
                             .ok_or_else(|| import_error("Error in getting DynamicWedges"))?;
                         spanners[index].complete = true;
@@ -2901,9 +3102,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                     }
                 };
                 let height = element.get("end-length").and_then(parse_float);
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some("start") => {
                         let mut building = Building::new(SpannerKind::Line, id);
@@ -2951,9 +3152,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "octave-shift" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(direction @ ("up" | "down")) => {
                         let size = element.get("size").and_then(parse_int).unwrap_or(8);
@@ -2998,9 +3199,9 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 }
             }
             "pedal" => {
-                let Importer {
+                let SpannerState {
                     spanners, pending, ..
-                } = &mut *self.part.importer;
+                } = &mut self.part.importer.state;
                 match element.get("type") {
                     Some(kind @ ("start" | "sostenuto")) => {
                         let mut building = Building::new(SpannerKind::PedalMark, id);
@@ -3073,7 +3274,7 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     /// joined by the pedal mark it belongs to.
     fn pedal_object(&mut self, kind: PedalObjectKind, pedal: usize, staff: i32, total: FloatType) {
         let uid = self.insert(total, staff, PedalObject::new(kind));
-        self.part.importer.spanners[pedal].add(uid);
+        self.part.importer.state.spanners[pedal].add(uid);
     }
 
     /// music21's `xmlHarmony` and `xmlToChordSymbol`.
@@ -3158,6 +3359,18 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
                 symbol.add_chord_step_modification(modification);
             }
         }
+        // An inversion with no bass written puts that chord note in the
+        // bass, as music21's `ChordSymbol(inversion=...)` does.
+        let inversion = parse_int(harmony.child_text("inversion")).unwrap_or(0);
+        if inversion > 0 && symbol.bass().is_none() && !symbol.is_no_chord() {
+            let pitches = symbol.pitches()?;
+            if let Some(bass) = usize::try_from(inversion)
+                .ok()
+                .and_then(|at| pitches.get(at))
+            {
+                symbol.set_bass(Some(bass.clone()));
+            }
+        }
         symbol.set_placement(placement_of(harmony));
         let offset = self.offset + self.offset_of(harmony);
         self.insert(offset, staff_number(harmony), symbol);
@@ -3166,40 +3379,13 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
 
     /// music21's `xmlBarline`.
     fn barline(&mut self, element: &'x Xml) -> Result<()> {
-        let style = element.child_text("bar-style");
         let right = matches!(element.get("location"), Some("right") | None);
-        let barline = match element.find("repeat") {
-            Some(repeat) => {
-                let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
-                    Some("forward") => RepeatDirection::Start,
-                    Some("backward") => RepeatDirection::End,
-                    Some(other) => {
-                        return Err(import_error(format!(
-                            "cannot handle mx direction format: {other}"
-                        )));
-                    }
-                    None => return Err(import_error("Repeat sign direction is required")),
-                };
-                // A repeat closing a measure ends the passage, whatever the
-                // file says; only an end says how many times.
-                let direction = if right { RepeatDirection::End } else { written };
-                let times = repeat
-                    .get("times")
-                    .and_then(parse_int)
-                    .map(|times| times.max(0) as u32)
-                    .filter(|_| written == RepeatDirection::End);
-                // The sign is drawn as its direction draws it, not as the
-                // file's bar style says.
-                Barline::repeat(direction, times)
-            }
-            None => {
-                let mut barline = Barline::default();
-                if !style.is_empty() {
-                    barline.set_bar_type(BarlineType::from_name(style)?);
-                }
-                barline
-            }
-        };
+        let mut barline = barline_of(element)?;
+        // A repeat closing a measure ends the passage, whatever the file
+        // says.
+        if right && barline.repeat_direction() == Some(RepeatDirection::Start) {
+            barline = Barline::repeat(RepeatDirection::End, None);
+        }
 
         if let Some(ending) = element.find("ending") {
             let index = self.part.measures.len();
@@ -3272,6 +3458,118 @@ impl<'p, 'a, 'x> MeasureParser<'p, 'a, 'x> {
     }
 }
 
+/// music21's `xmlToRepeat` and `xmlToBarline`: what a `<barline>` draws,
+/// a repeat in the direction it is written.
+pub(super) fn barline_of(element: &Xml) -> Result<Barline> {
+    let style = element.child_text("bar-style");
+    let barline = match element.find("repeat") {
+        Some(repeat) => {
+            let written = match repeat.get("direction").map(str::to_lowercase).as_deref() {
+                Some("forward") => RepeatDirection::Start,
+                Some("backward") => RepeatDirection::End,
+                Some(other) => {
+                    return Err(import_error(format!(
+                        "cannot handle mx direction format: {other}"
+                    )));
+                }
+                None => return Err(import_error("Repeat sign direction is required")),
+            };
+            // Only an end says how many times.
+            let times = repeat
+                .get("times")
+                .and_then(parse_int)
+                .map(|times| times.max(0) as u32)
+                .filter(|_| written == RepeatDirection::End);
+            // The sign is drawn as its direction draws it, not as the
+            // file's bar style says.
+            Barline::repeat(written, times)
+        }
+        None => {
+            let mut barline = Barline::default();
+            if !style.is_empty() {
+                barline.set_bar_type(BarlineType::from_name(style)?);
+            }
+            barline
+        }
+    };
+    Ok(barline)
+}
+
+/// A name as written, its ends trimmed and its line breaks spaces:
+/// music21's `_clean`.
+fn cleaned(text: &str) -> String {
+    text.trim().replace('\n', " ")
+}
+
+/// music21's `getDefaultInstrument`: the instrument a `<score-part>`'s
+/// MIDI instrument and score instrument name, before the part's own names
+/// are put on it; what music21 warns of goes into `warnings`.
+pub(super) fn default_instrument(score_part: &Xml, warnings: &mut Vec<Error>) -> Instrument {
+    let adjusted = |text: &str| -> Option<u8> {
+        parse_int(text).map(|value| value.saturating_sub(1).max(0) as u8)
+    };
+    let mut instrument: Option<Instrument> = None;
+    let mut unpitched = false;
+    if let Some(midi) = score_part.find("midi-instrument") {
+        let unpitched_text = midi.child_text("midi-unpitched");
+        let program_text = midi.child_text("midi-program");
+        if !unpitched_text.is_empty() {
+            unpitched = true;
+            let pitch = adjusted(unpitched_text).unwrap_or(0);
+            // music21 warns of a key outside the General MIDI map.
+            if let Err(error) = crate::instrument::for_percussion_key(pitch) {
+                warnings.push(error);
+            }
+            instrument = Some(percussion_instrument(pitch));
+        } else if !program_text.is_empty() {
+            let mut read = adjusted(program_text)
+                .and_then(|program| Instrument::from_midi_program(program).ok())
+                .unwrap_or_default();
+            if let Some(channel) = midi
+                .find("midi-channel")
+                .and_then(Xml::text)
+                .and_then(adjusted)
+            {
+                read.set_midi_channel(Some(channel));
+            }
+            instrument = Some(read);
+        }
+    }
+    let mut instrument = instrument.unwrap_or_default();
+    let score_instrument = score_part.find("score-instrument");
+    if let Some(score_instrument) = score_instrument
+        && !unpitched
+    {
+        let name = score_instrument.child_text("instrument-name");
+        if !name.is_empty() {
+            let mut from_name =
+                Instrument::from_name(name, SearchLanguage::All).unwrap_or_default();
+            from_name.set_midi_channel(instrument.midi_channel());
+            if from_name.midi_program() == instrument.midi_program() || instrument.is_a("Piano") {
+                instrument = from_name;
+            }
+        }
+    }
+    if let Some(score_instrument) = score_instrument {
+        let named = |tag: &str| {
+            score_instrument
+                .find(tag)
+                .and_then(Xml::text)
+                .filter(|text| !text.is_empty())
+        };
+        if let Some(name) = named("instrument-name") {
+            instrument.set_name(Some(cleaned(name)));
+        }
+        if let Some(abbreviation) = named("instrument-abbreviation") {
+            instrument.set_abbreviation(Some(cleaned(abbreviation)));
+        }
+        if let Some(sound) = named("instrument-sound") {
+            instrument.set_sound(Some(sound.to_string()));
+        }
+    }
+    instrument
+}
+
 /// General MIDI's drum for a key as the instrument music21 has for it:
 /// its `PercussionMapper.midiPitchToInstrument`, and a bare unpitched
 /// instrument carrying the key where the map names nothing -- which is
@@ -3340,7 +3638,7 @@ fn tenths(element: &Xml, tag: &str) -> Option<Tenths> {
 }
 
 /// music21's `xmlPageLayoutToPageLayout`.
-fn read_page_layout(written: &Xml, read: &mut PageLayout) {
+pub(super) fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     if let Some(height) = tenths(written, "page-height") {
         read.page_height = Some(height);
     }
@@ -3361,8 +3659,35 @@ fn read_page_layout(written: &Xml, read: &mut PageLayout) {
     }
 }
 
+/// music21's `xmlPrintToPageLayout`: the page a `<print>` starts.
+pub(super) fn print_page_layout(print: &Xml) -> PageLayout {
+    let mut read = PageLayout {
+        is_new: print.get("new-page").map(|value| value == "yes"),
+        page_number: print
+            .get("page-number")
+            .and_then(|value| value.trim().parse().ok()),
+        ..PageLayout::default()
+    };
+    if let Some(written) = print.find("page-layout") {
+        read_page_layout(written, &mut read);
+    }
+    read
+}
+
+/// music21's `xmlPrintToSystemLayout`: the system a `<print>` starts.
+pub(super) fn print_system_layout(print: &Xml) -> SystemLayout {
+    let mut read = SystemLayout {
+        is_new: print.get("new-system").map(|value| value == "yes"),
+        ..SystemLayout::default()
+    };
+    if let Some(written) = print.find("system-layout") {
+        read_system_layout(written, &mut read);
+    }
+    read
+}
+
 /// music21's `xmlSystemLayoutToSystemLayout`.
-fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
+pub(super) fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
     if let Some(margins) = written.find("system-margins") {
         for (tag, place) in [
             ("top-margin", &mut read.top_margin),
@@ -3384,7 +3709,7 @@ fn read_system_layout(written: &Xml, read: &mut SystemLayout) {
 }
 
 /// music21's `xmlStaffLayoutToStaffLayout`.
-fn staff_layout(written: &Xml) -> StaffLayout {
+pub(super) fn staff_layout(written: &Xml) -> StaffLayout {
     StaffLayout {
         distance: tenths(written, "staff-distance"),
         staff_number: written
@@ -3395,7 +3720,7 @@ fn staff_layout(written: &Xml) -> StaffLayout {
 }
 
 /// music21's `xmlStaffLayoutFromStaffDetails`.
-fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
+pub(super) fn read_staff_details(details: &Xml, read: &mut StaffLayout) {
     if let Some(number) = details
         .get("number")
         .and_then(|value| value.trim().parse().ok())
@@ -3463,23 +3788,7 @@ pub(crate) fn read_print_style_align(written: &Xml, style: &mut TextStyle) -> Re
     if let Some(read) = value("relative-y") {
         style.relative_y = Some(read);
     }
-    if let Some(family) = written.get("font-family") {
-        style.font_family = Some(
-            family
-                .split(',')
-                .map(|name| name.trim().to_string())
-                .collect(),
-        );
-    }
-    if let Some(font_style) = written.get("font-style") {
-        style.set_font_style(Some(font_style))?;
-    }
-    if let Some(size) = value("font-size") {
-        style.font_size = Some(size);
-    }
-    if let Some(weight) = written.get("font-weight") {
-        style.set_font_weight(Some(weight))?;
-    }
+    read_font(written, style)?;
     if let Some(color) = written.get("color") {
         style.color = Some(color.to_string());
     }
@@ -3492,11 +3801,119 @@ pub(crate) fn read_print_style_align(written: &Xml, style: &mut TextStyle) -> Re
     Ok(())
 }
 
+/// music21's `creatorToContributor`: a `<creator>`, its type its role.
+pub(super) fn creator_value(creator: &Xml) -> MetadataValue {
+    let name = creator.stripped();
+    match creator.get("type") {
+        Some(role) => MetadataValue::with_role(name, role),
+        None => MetadataValue::new(name),
+    }
+}
+
+/// music21's `rightsToCopyright`: a `<rights>`, its type its role. One
+/// saying nothing is music21's copyright of `None`, which writes `None`.
+pub(super) fn rights_value(rights: &Xml) -> MetadataValue {
+    let text = match rights.text() {
+        Some(text) => text.trim(),
+        None => "None",
+    };
+    match rights.get("type") {
+        Some(role) => MetadataValue::with_role(text, role),
+        None => MetadataValue::new(text),
+    }
+}
+
+/// music21's `setFont`: the family, style, size and weight written.
+pub(super) fn read_font(written: &Xml, style: &mut TextStyle) -> Result<()> {
+    if let Some(family) = written.get("font-family") {
+        style.font_family = Some(
+            family
+                .split(',')
+                .map(|name| name.trim().to_string())
+                .collect(),
+        );
+    }
+    if let Some(font_style) = written.get("font-style") {
+        style.set_font_style(Some(font_style))?;
+    }
+    if let Some(size) = written.get("font-size") {
+        style.font_size = Some(StyleValue::read(size));
+    }
+    if let Some(weight) = written.get("font-weight") {
+        style.set_font_weight(Some(weight))?;
+    }
+    Ok(())
+}
+
+/// music21's `styleFromXmlDefaults`: the appearance and fonts a score's
+/// `<defaults>` give, and its lyrics' languages, English where unsaid.
+pub(super) fn stream_style(defaults: &Xml) -> Result<crate::style::StreamStyle> {
+    let mut style = crate::style::StreamStyle::default();
+    if let Some(appearance) = defaults.find("appearance") {
+        read_appearance(appearance, &mut style);
+    }
+    let font = |written: &Xml| -> Result<TextStyle> {
+        let mut read = TextStyle::default();
+        read_font(written, &mut read)?;
+        Ok(read)
+    };
+    if let Some(written) = defaults.find("music-font") {
+        style.music_font = Some(font(written)?);
+    }
+    if let Some(written) = defaults.find("word-font") {
+        style.word_font = Some(font(written)?);
+    }
+    for written in defaults.find_all("lyric-font") {
+        style.lyric_fonts.push((
+            written.get("name").map(str::to_string),
+            Some(font(written)?),
+        ));
+    }
+    for written in defaults.find_all("lyric-language") {
+        let language = written.get("xml:lang").unwrap_or(DEFAULT_LYRIC_LANGUAGE);
+        style.lyric_languages.push((
+            written.get("name").map(str::to_string),
+            Some(language.to_string()),
+        ));
+    }
+    Ok(style)
+}
+
+/// The language music21 takes a lyric to be in where nothing says.
+const DEFAULT_LYRIC_LANGUAGE: &str = "en";
+
+/// music21's `xmlAppearanceToStyle`: line widths, note sizes, distances
+/// and other appearances, each by its type.
+pub(super) fn read_appearance(appearance: &Xml, style: &mut crate::style::StreamStyle) {
+    let pairs = |tag: &str, read: fn(&str) -> StyleValue| -> Vec<(String, StyleValue)> {
+        appearance
+            .find_all(tag)
+            .map(|written| {
+                let kind = written.get("type").unwrap_or("").to_string();
+                (kind, read(written.stripped()))
+            })
+            .collect()
+    };
+    // Each a number but the other appearances, which may be anything.
+    style
+        .line_widths
+        .extend(pairs("line-width", StyleValue::read));
+    style
+        .note_sizes
+        .extend(pairs("note-size", StyleValue::read));
+    style.distances.extend(pairs("distance", StyleValue::read));
+    style
+        .other_appearances
+        .extend(pairs("other-appearance", |text| {
+            StyleValue::Text(text.to_string())
+        }));
+}
+
 /// music21's `xmlCreditToTextBox`: a text box of the credit's words, one
 /// line each, drawn as its first words say, on the page it names or the
 /// first. A fresh text box's place, 500 tenths each way, stands where the
 /// words say none.
-fn text_box(credit: &Xml) -> Result<TextBox> {
+pub(super) fn text_box(credit: &Xml) -> Result<TextBox> {
     let mut read = TextBox::new("");
     read.style.set_align_horizontal(None)?;
     read.style.set_align_vertical(None)?;
@@ -3550,7 +3967,7 @@ fn score_layout(defaults: &Xml) -> ScoreLayout {
 }
 
 /// music21's `getStaffNumber`.
-fn staff_number(element: &Xml) -> i32 {
+pub(super) fn staff_number(element: &Xml) -> i32 {
     match element.tag.as_str() {
         "harmony" | "forward" | "note" | "direction" => {
             parse_int(element.child_text("staff")).unwrap_or(NO_STAFF)
@@ -3567,7 +3984,7 @@ fn staff_number(element: &Xml) -> i32 {
 }
 
 /// music21's `xmlToPitch`.
-fn pitch_of(note: &Xml) -> Result<Pitch> {
+pub(super) fn pitch_of(note: &Xml) -> Result<Pitch> {
     let Some(written) = note.find("pitch") else {
         return Pitch::from_name("C4");
     };
@@ -3603,19 +4020,10 @@ fn pitch_of(note: &Xml) -> Result<Pitch> {
 }
 
 /// music21's `xmlToAccidental`.
-fn accidental_of(written: &Xml) -> Result<Accidental> {
+pub(super) fn accidental_of(written: &Xml) -> Result<Accidental> {
     let name = written.stripped().to_lowercase();
-    let name = match name.as_str() {
-        "quarter-sharp" => "half-sharp",
-        "three-quarters-sharp" => "one-and-a-half-sharp",
-        "quarter-flat" => "half-flat",
-        "three-quarters-flat" => "one-and-a-half-flat",
-        "flat-flat" => "double-flat",
-        "sharp-sharp" => "double-sharp",
-        other => other,
-    };
     let mut accidental = Accidental::natural();
-    accidental.set_allowing_non_standard_value(name)?;
+    accidental.set_allowing_non_standard_value(accidental_name(&name))?;
     if let Some(color) = written.get("color") {
         accidental.set_color(Some(color.to_string()));
     }
@@ -3628,8 +4036,22 @@ fn accidental_of(written: &Xml) -> Result<Accidental> {
     Ok(accidental)
 }
 
+/// An accidental's MusicXML name as music21 names it: its
+/// `mxAccidentalNameToM21`.
+fn accidental_name(name: &str) -> &str {
+    match name {
+        "quarter-sharp" => "half-sharp",
+        "three-quarters-sharp" => "one-and-a-half-sharp",
+        "quarter-flat" => "half-flat",
+        "three-quarters-flat" => "one-and-a-half-flat",
+        "flat-flat" => "double-flat",
+        "sharp-sharp" => "double-sharp",
+        other => other,
+    }
+}
+
 /// music21's `xmlToBeams`.
-fn beams_of(written: &[&Xml]) -> Result<Beams> {
+pub(super) fn beams_of(written: &[&Xml]) -> Result<Beams> {
     let mut beams = Beams::new();
     for (index, beam) in written.iter().enumerate() {
         let text = beam.text().map_or("begin", str::trim);
@@ -3653,7 +4075,7 @@ fn beams_of(written: &[&Xml]) -> Result<Beams> {
 }
 
 /// music21's `xmlToTie`.
-fn tie_of(note: &Xml) -> Option<Tie> {
+pub(super) fn tie_of(note: &Xml) -> Option<Tie> {
     let types: Vec<&str> = note
         .find_all("tie")
         .filter_map(|tie| tie.get("type"))
@@ -3687,87 +4109,93 @@ fn tie_of(note: &Xml) -> Option<Tie> {
     Some(tie)
 }
 
-/// music21's `updateLyricsFromList` and `xmlToLyric`.
-fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
+/// music21's `updateLyricsFromList`: each `<lyric>` read, one numbered
+/// nought taking its place among them.
+pub(super) fn lyrics_from<'x>(written: impl Iterator<Item = &'x Xml>) -> Result<Vec<Lyric>> {
     let mut out = Vec::new();
-    let mut current = 1;
-    for lyric in written {
-        let texts: Vec<&Xml> = lyric.find_all("text").collect();
-        let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
-        let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
-        let mut read = Lyric::unsung();
-        if texts.is_empty() {
-            // A lyric that only extends one: music21 hands back a bare one.
-            out.push(read);
-            current += 1;
-            continue;
-        }
-        if texts.len() == 1 {
-            if let Some(text) = texts[0].text() {
-                read.set_text(text.trim());
-            }
-            if let Some(syllabic) = syllabics.first()
-                && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
-            {
-                read.set_syllabic(syllabic);
-            }
-        } else if texts.len() > 1 {
-            let mut components = Vec::new();
-            for (index, text) in texts.iter().enumerate() {
-                let mut component = Lyric::unsung();
-                if let Some(text) = text.text() {
-                    component.set_text(text.trim());
-                }
-                if let Some(syllabic) = syllabics.get(index) {
-                    if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
-                        component.set_syllabic(syllabic);
-                    }
-                    if index >= 1
-                        && let Some(elision) = elisions.get(index - 1)
-                    {
-                        component.set_elision_before(elision.text().unwrap_or(""));
-                    }
-                }
-                components.push(component);
-            }
-            read.set_components(components);
-        }
-        match lyric.get("number") {
-            Some(number) => match number.trim().parse::<IntegerType>() {
-                Ok(number) => read.set_number(number),
-                Err(_) => {
-                    read.set_number(0);
-                    read.set_identifier(Some(number.to_string()));
-                }
-            },
-            None => read.set_number(0),
-        }
-        if let Some(name) = lyric.get("name") {
-            read.set_identifier(Some(name.to_string()));
-        }
-        if let Some(justify) = lyric.get("justify") {
-            read.set_justify(Some(Justification::from_name(justify)?));
-        }
-        if let Some(placement) = lyric.get("placement") {
-            read.set_placement(Placement::from_name(placement).ok());
-        }
-        if lyric.get("print-object") == Some("no") {
-            read.set_hidden(true);
-        }
-        if let Some(color) = lyric.get("color") {
-            read.set_color(Some(color.to_string()));
-        }
-        if read.number() == 0 {
-            read.set_number(current);
+    for (place, lyric) in written.enumerate() {
+        let mut read = lyric_of(lyric)?;
+        // A bare lyric, which only extends one, keeps its number.
+        let sung = lyric.find("text").is_some();
+        if sung && read.number() == 0 {
+            read.set_number(IntegerType::try_from(place + 1).unwrap_or(IntegerType::MAX));
         }
         out.push(read);
-        current += 1;
     }
     Ok(out)
 }
 
+/// music21's `xmlToLyric`: one `<lyric>`, numbered nought where it says
+/// no number.
+pub(super) fn lyric_of(lyric: &Xml) -> Result<Lyric> {
+    let texts: Vec<&Xml> = lyric.find_all("text").collect();
+    let syllabics: Vec<&Xml> = lyric.find_all("syllabic").collect();
+    let elisions: Vec<&Xml> = lyric.find_all("elision").collect();
+    let mut read = Lyric::unsung();
+    if texts.is_empty() {
+        // A lyric that only extends one: music21 hands back a bare one.
+        return Ok(read);
+    }
+    if texts.len() == 1 {
+        if let Some(text) = texts[0].text() {
+            read.set_text(text.trim());
+        }
+        if let Some(syllabic) = syllabics.first()
+            && let Ok(syllabic) = Syllabic::from_name(syllabic.stripped())
+        {
+            read.set_syllabic(syllabic);
+        }
+    } else if texts.len() > 1 {
+        let mut components = Vec::new();
+        for (index, text) in texts.iter().enumerate() {
+            let mut component = Lyric::unsung();
+            if let Some(text) = text.text() {
+                component.set_text(text.trim());
+            }
+            if let Some(syllabic) = syllabics.get(index) {
+                if let Ok(syllabic) = Syllabic::from_name(syllabic.stripped()) {
+                    component.set_syllabic(syllabic);
+                }
+                if index >= 1
+                    && let Some(elision) = elisions.get(index - 1)
+                {
+                    component.set_elision_before(elision.text().unwrap_or(""));
+                }
+            }
+            components.push(component);
+        }
+        read.set_components(components);
+    }
+    match lyric.get("number") {
+        Some(number) => match number.trim().parse::<IntegerType>() {
+            Ok(number) => read.set_number(number),
+            Err(_) => {
+                read.set_number(0);
+                read.set_identifier(Some(number.to_string()));
+            }
+        },
+        None => read.set_number(0),
+    }
+    if let Some(name) = lyric.get("name") {
+        read.set_identifier(Some(name.to_string()));
+    }
+    if let Some(justify) = lyric.get("justify") {
+        read.set_justify(Some(Justification::from_name(justify)?));
+    }
+    if let Some(placement) = lyric.get("placement") {
+        read.set_placement(Placement::from_name(placement).ok());
+    }
+    if lyric.get("print-object") == Some("no") {
+        read.set_hidden(true);
+    }
+    if let Some(color) = lyric.get("color") {
+        read.set_color(Some(color.to_string()));
+    }
+    Ok(read)
+}
+
 /// music21's `xmlToArticulation`.
-fn articulation_of(mark: &Xml) -> Option<Articulation> {
+pub(super) fn articulation_of(mark: &Xml) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "accent" => "Accent",
         "strong-accent" => "StrongAccent",
@@ -3808,7 +4236,8 @@ fn articulation_of(mark: &Xml) -> Option<Articulation> {
 }
 
 /// music21's `xmlTechnicalToArticulation`.
-fn technical_of(mark: &Xml) -> Option<Articulation> {
+/// A bend's release is read in `divisions` to the quarter.
+pub(super) fn technical_of(mark: &Xml, divisions: FloatType) -> Option<Articulation> {
     let class = match mark.tag.as_str() {
         "up-bow" => "UpBow",
         "down-bow" => "DownBow",
@@ -3858,7 +4287,19 @@ fn technical_of(mark: &Xml) -> Option<Articulation> {
             } else if mark.find("natural").is_some() {
                 technical.set_harmonic_type(Some("natural".to_string()));
             }
+            // music21's `setHarmonic`: which pitch the note is written at.
+            let pitch_type = [
+                ("base-pitch", "base"),
+                ("sounding-pitch", "sounding"),
+                ("touching-pitch", "touching"),
+            ]
+            .into_iter()
+            .find(|(tag, _)| mark.find(tag).is_some());
+            if let Some((_, said)) = pitch_type {
+                technical.set_pitch_type(Some(said.to_string()));
+            }
         }
+        "bend" => read_bend(mark, &mut technical, divisions),
         "heel" | "toe" => {
             if let Some(substitution) = mark.get("substitution") {
                 technical.set_substitution(substitution == "yes");
@@ -3872,10 +4313,35 @@ fn technical_of(mark: &Xml) -> Option<Articulation> {
     Some(technical)
 }
 
+/// music21's `setBend`: how far a bend goes, whether it is bent before
+/// it sounds, the bar it is drawn with and when it is let go, in quarters.
+fn read_bend(mark: &Xml, bend: &mut Articulation, divisions: FloatType) {
+    if let Some(alter) = mark
+        .find("bend-alter")
+        .and_then(|alter| parse_float(alter.stripped()))
+    {
+        bend.set_bend_alter(crate::interval::ChromaticInterval::new(alter).ok());
+    }
+    if mark.find("pre-bend").is_some() {
+        bend.set_pre_bend(true);
+    }
+    if let Some(bar) = mark.find("with-bar") {
+        bend.set_with_bar(bar.text().map(str::to_string));
+    }
+    if let Some(release) = mark.find("release") {
+        // A release that says no offset is let go at once.
+        let at = release
+            .get("offset")
+            .and_then(parse_float)
+            .map_or(0.0, |offset| op_frac(offset / divisions));
+        bend.set_release(Some(at));
+    }
+}
+
 /// music21's `xmlToTempoIndication`, for a mark with one note value.
 /// music21's `xmlToTempoIndication`: a `<metronome>` is a tempo mark, or
 /// with two note values a metric modulation, placed as its direction says.
-fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
+pub(super) fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElement> {
     let mut referents: Vec<Duration> = Vec::new();
     let mut numbers: Vec<FloatType> = Vec::new();
     for child in &written.children {
@@ -3931,7 +4397,7 @@ fn metronome(written: &Xml, placement: Option<Placement>) -> Result<StreamElemen
 }
 
 /// music21's `xmlToTimeSignature`.
-fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
+pub(super) fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
     if written.find("senza-misura").is_some() {
         return Err(import_error(
             "reading a senza misura time signature is not supported yet",
@@ -3970,7 +4436,7 @@ fn time_signature(written: &Xml) -> Result<Option<TimeSignature>> {
 }
 
 /// music21's `xmlToClef`.
-fn clef_of(written: &Xml) -> Result<Clef> {
+pub(super) fn clef_of(written: &Xml) -> Result<Clef> {
     let sign = written.child_text("sign");
     let mut clef = if matches!(
         sign.to_lowercase().as_str(),
@@ -3994,34 +4460,11 @@ fn clef_of(written: &Xml) -> Result<Clef> {
 
 /// music21's `xmlToKeySignature`: a key where the mode is said and is one
 /// music21 knows, a signature otherwise.
-fn key_signature(written: &Xml) -> Result<StreamElement> {
+pub(super) fn key_signature(written: &Xml) -> Result<StreamElement> {
     let color = written.get("color").map(str::to_string);
     if written.find("fifths").is_none() {
-        let mut steps = Vec::new();
-        let mut alters = Vec::new();
-        for child in &written.children {
-            match child.tag.as_str() {
-                "key-step" if !child.stripped().is_empty() => steps.push(child.stripped()),
-                "key-alter" => {
-                    if let Some(alter) = parse_float(child.stripped()) {
-                        alters.push(alter);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if steps.len() != alters.len() {
-            return Err(import_error(
-                "For non traditional signatures each step must have an alter",
-            ));
-        }
-        let mut pitches = Vec::new();
-        for (step, alter) in steps.into_iter().zip(alters) {
-            let mut pitch = Pitch::from_name(step)?;
-            pitch.set_written_accidental(Some(Accidental::new(alter)?));
-            pitches.push(pitch);
-        }
-        let mut signature = KeySignature::from_altered_pitches(pitches);
+        let mut signature = non_traditional_key(written)?;
+        key_octaves(written, &mut signature)?;
         signature.set_color(color);
         return Ok(signature.into());
     }
@@ -4034,12 +4477,117 @@ fn key_signature(written: &Xml) -> Result<StreamElement> {
         key.set_color(color);
         return Ok(key.into());
     }
+    key_octaves(written, &mut signature)?;
     signature.set_color(color);
     Ok(signature.into())
 }
 
+/// The voices a measure's notes and forwards are written in, sorted:
+/// music21's `voiceIndices`.
+pub(super) fn voice_ids(measure: &Xml) -> Vec<String> {
+    let mut ids: Vec<String> = Vec::new();
+    for tag in ["note", "forward"] {
+        for element in measure.find_all(tag) {
+            let voice = element.child_text("voice");
+            if !voice.is_empty() && !ids.iter().any(|held| held == voice) {
+                ids.push(voice.to_string());
+            }
+        }
+    }
+    ids.sort();
+    ids
+}
+
+/// music21's `nonTraditionalKeySignature`: a `<key>` of steps, each with
+/// its alteration and perhaps the accidental it is written with.
+pub(super) fn non_traditional_key(written: &Xml) -> Result<KeySignature> {
+    let mut steps = Vec::new();
+    let mut alters = Vec::new();
+    let mut accidentals: Vec<Option<&str>> = Vec::new();
+    let mut last_tag = "";
+    for child in &written.children {
+        let tag = child.tag.as_str();
+        // A step after an alteration that said no accidental has none.
+        if last_tag == "key-alter" && tag == "key-step" {
+            accidentals.push(None);
+        }
+        match tag {
+            "key-step" if !child.stripped().is_empty() => steps.push(child.stripped()),
+            "key-alter" => {
+                if let Some(alter) = parse_float(child.stripped()) {
+                    alters.push(alter);
+                }
+            }
+            "key-accidental" => accidentals.push(child.text()),
+            _ => {}
+        }
+        last_tag = tag;
+    }
+    if accidentals.len() < alters.len() {
+        accidentals.push(None);
+    }
+    if steps.len() != alters.len() {
+        return Err(import_error(
+            "For non traditional signatures each step must have an alter",
+        ));
+    }
+    let mut pitches = Vec::new();
+    for (index, (step, alter)) in steps.into_iter().zip(alters).enumerate() {
+        let mut pitch = Pitch::from_name(step)?;
+        let accidental = match accidentals.get(index).copied().flatten() {
+            Some(written) => {
+                let mut accidental = Accidental::natural();
+                accidental
+                    .set_allowing_non_standard_value(accidental_name(&written.to_lowercase()))?;
+                accidental.set_alter(alter)?;
+                accidental
+            }
+            None => Accidental::new(alter)?,
+        };
+        pitch.set_written_accidental(Some(accidental));
+        pitches.push(pitch);
+    }
+    Ok(KeySignature::from_altered_pitches(pitches))
+}
+
+/// music21's `mxKeyOctaves`: the octave a `<key-octave>` puts each altered
+/// pitch of the signature in, by its place among them.
+pub(super) fn key_octaves(written: &Xml, signature: &mut KeySignature) -> Result<()> {
+    let octaves: Vec<&Xml> = written.find_all("key-octave").collect();
+    if octaves.is_empty() {
+        return Ok(());
+    }
+    let mut altered = signature.altered_pitches()?;
+    for octave in octaves {
+        // A cancelled signature's octaves are not read yet, as music21's.
+        if octave.get("cancel") == Some("yes") {
+            continue;
+        }
+        let place = octave
+            .get("number")
+            .and_then(parse_int)
+            .and_then(|number| usize::try_from(number - 1).ok());
+        let Some(pitch) = place.and_then(|place| altered.get_mut(place)) else {
+            continue;
+        };
+        if let Some(number) = parse_int(octave.stripped()) {
+            pitch.set_octave(Some(number));
+        }
+    }
+    signature.set_altered_pitches(altered);
+    Ok(())
+}
+
+/// What a `<time>` of no meter says, `0` or nothing, where it is one:
+/// music21's `SenzaMisuraTimeSignature`'s text.
+pub(super) fn senza_misura(written: &Xml) -> Option<String> {
+    written
+        .find("senza-misura")
+        .map(|senza| senza.stripped().to_string())
+}
+
 /// music21's `xmlTransposeToInterval`.
-fn transpose_interval(written: &Xml) -> Result<Interval> {
+pub(super) fn transpose_interval(written: &Xml) -> Result<Interval> {
     let mut diatonic = written
         .find("diatonic")
         .and_then(|d| parse_int(d.stripped()));
@@ -4678,6 +5226,25 @@ mod tests {
             .expect("the measure holds a rest");
         assert_eq!(rest.color(), Some("#FF0000"));
         assert!(written_back(&read).contains("<note color=\"#FF0000\">"));
+    }
+
+    #[test]
+    fn a_chord_symbols_inversion_puts_that_note_in_the_bass() {
+        let read = from_musicxml(&score(&format!(
+            "<measure number=\"1\"><attributes><divisions>1</divisions></attributes>\
+             <harmony><root><root-step>C</root-step></root><kind>major</kind>\
+             <inversion>1</inversion></harmony>{NOTE}</measure>"
+        )))
+        .unwrap();
+        let leaves = read.leaves();
+        let symbol = leaves
+            .iter()
+            .find_map(|(_, element)| match element {
+                StreamElement::ChordSymbol(symbol) => Some(symbol),
+                _ => None,
+            })
+            .expect("the measure holds a chord symbol");
+        assert_eq!(symbol.bass().map(Pitch::name), Some("E".to_string()));
     }
 
     #[test]

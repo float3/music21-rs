@@ -1548,6 +1548,16 @@ impl Note {
         Ok(())
     }
 
+    /// Whether an editorial has been made for it yet: music21's
+    /// `hasEditorialInformation`, which asks without making one.
+    #[getter]
+    fn hasEditorialInformation(slf: &Bound<'_, Self>) -> PyResult<bool> {
+        if let Some(answer) = crate::music21_has_editorial(slf.as_any())? {
+            return Ok(answer);
+        }
+        Ok(slf.borrow().editorial.is_some())
+    }
+
     /// The text of every verse, one per line, or `None` when there is none.
     /// Assigning a string sets one verse per line, a `Lyric` sets the one
     /// verse, and `None` clears them.

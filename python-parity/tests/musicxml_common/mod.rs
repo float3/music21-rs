@@ -696,8 +696,11 @@ def strip_layout(score, keep_layouts=False):
             element.activeSite.remove(element)
     score.definesExplicitSystemBreaks = False
     score.definesExplicitPageBreaks = False
-    # How the page is drawn as a whole: line widths, note sizes, fonts.
-    score.style = score._styleClass()
+    # How the page is drawn as a whole: line widths, note sizes, fonts. The
+    # crate's MusicXML reader keeps it, as music21's does, so a score read
+    # from MusicXML keeps it here too; other formats' readers have none.
+    if not keep_layouts:
+        score.style = score._styleClass()
     for spanner in score.spannerBundle:
         reset_placing(spanner)
     for element in score.recurse(includeSelf=True):

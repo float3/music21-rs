@@ -19,7 +19,7 @@ use pyo3::types::{PyDict, PyList, PyString, PyTuple};
 
 use music21::expressions::{
     Ornament as RsOrnament, OrnamentDelay, OrnamentKind, Realization,
-    TextExpression as RsTextExpression,
+    RehearsalMark as RsRehearsalMark, RehearsalNumbering, TextExpression as RsTextExpression,
 };
 use music21::{
     Duration as RsDuration, Interval as RsInterval, IntervalDirection,
@@ -1492,6 +1492,190 @@ impl TextExpression {
     fn __eq__(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
+
+    /// music21 freezes a score by pickling it, and copies one through the
+    /// same reduction; the words live in Rust where neither can see them.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        crate::pickled(slf, &slf.borrow().inner)
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Some(inner) = crate::unpickled::<_, RsTextExpression>(slf, state)? {
+            slf.borrow_mut().inner = inner;
+        }
+        Ok(())
+    }
+}
+
+/// music21's `expressions.RehearsalMark`: a mark for rehearsal, `A` or
+/// `12`, counting on in the numbering it reads in.
+///
+/// The content is kept as given, a number or text, as music21 keeps it;
+/// the crate's mark holds it as text.
+#[pyclass(
+    name = "RehearsalMark",
+    module = "music21.expressions",
+    extends = Expression,
+    subclass,
+    skip_from_py_object,
+    weakref
+)]
+pub struct RehearsalMark {
+    inner: RsRehearsalMark,
+    /// What it reads, as given: music21's `content`.
+    content: Option<Py<PyAny>>,
+    /// How marks count on from it, where said: music21's `numbering`.
+    numbering: Option<RehearsalNumbering>,
+}
+
+impl RehearsalMark {
+    /// The object for one of the crate's marks.
+    pub(crate) fn object(py: Python<'_>, inner: RsRehearsalMark) -> PyResult<Py<PyAny>> {
+        let content = PyString::new(py, inner.content()).into_any().unbind();
+        let made = Bound::new(
+            py,
+            crate::base::built(Self {
+                inner,
+                content: Some(content),
+                numbering: None,
+            }),
+        )?;
+        Ok(made.into_any().unbind())
+    }
+
+    /// A numbering's name read, refused as music21 refuses one.
+    fn numbering_of(value: Option<&str>) -> PyResult<Option<RehearsalNumbering>> {
+        value
+            .map(|name| {
+                RehearsalNumbering::from_name(name)
+                    .map_err(|error| ExpressionException::new_err(crate::pitch::message(&error)))
+            })
+            .transpose()
+    }
+}
+
+#[pymethods]
+impl RehearsalMark {
+    /// music21's `RehearsalMark(content=None, *, numbering=None)`.
+    #[new]
+    #[pyo3(signature = (content = None, *, numbering = None, **_keywords))]
+    fn new(
+        content: Option<Py<PyAny>>,
+        numbering: Option<&str>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let numbering = Self::numbering_of(numbering)?;
+        let text = match &content {
+            Some(given) => Python::attach(|py| given.bind(py).str().map(|text| text.to_string()))?,
+            None => String::new(),
+        };
+        Ok(crate::base::built(Self {
+            inner: RsRehearsalMark::new(text),
+            content,
+            numbering,
+        }))
+    }
+
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        if let Some(content) = &self.content {
+            visit.call(content)?;
+        }
+        Ok(())
+    }
+
+    fn __clear__(&mut self) {
+        self.content = None;
+    }
+
+    /// music21's sort order: with words, before everything else.
+    #[classattr]
+    fn classSortOrder() -> i32 {
+        -30
+    }
+
+    /// What the mark reads, as given.
+    #[getter]
+    fn get_content(&self, py: Python<'_>) -> Py<PyAny> {
+        self.content
+            .as_ref()
+            .map_or_else(|| py.None(), |held| held.clone_ref(py))
+    }
+
+    #[setter]
+    fn set_content(&mut self, value: Option<Py<PyAny>>) -> PyResult<()> {
+        let text = match &value {
+            Some(given) => Python::attach(|py| given.bind(py).str().map(|text| text.to_string()))?,
+            None => String::new(),
+        };
+        self.inner.set_content(text);
+        self.content = value;
+        Ok(())
+    }
+
+    /// How marks count on from this one: `'alphabetical'`, `'roman'`,
+    /// `'number'` or `None`.
+    #[getter]
+    fn get_numbering(&self) -> Option<&'static str> {
+        self.numbering.map(RehearsalNumbering::as_str)
+    }
+
+    #[setter]
+    fn set_numbering(&mut self, value: Option<&str>) -> PyResult<()> {
+        self.numbering = Self::numbering_of(value)?;
+        Ok(())
+    }
+
+    /// music21's `_getNumberingFromContent`: the numbering a content
+    /// reads in, a number always counting as one.
+    #[staticmethod]
+    fn _getNumberingFromContent(c: Option<&Bound<'_, PyAny>>) -> PyResult<Option<&'static str>> {
+        let Some(given) = c.filter(|given| !given.is_none()) else {
+            return Ok(None);
+        };
+        if given.extract::<i64>().is_ok() && !given.is_instance_of::<PyString>() {
+            return Ok(Some(RehearsalNumbering::Number.as_str()));
+        }
+        let Ok(text) = given.extract::<String>() else {
+            return Ok(None);
+        };
+        Ok(RehearsalNumbering::of_content(&text).map(RehearsalNumbering::as_str))
+    }
+
+    /// music21's `nextContent`: what the next mark reads. A number counts
+    /// on as a number.
+    fn nextContent(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let Some(content) = &self.content else {
+            return Ok(py.None());
+        };
+        let content = content.bind(py);
+        if !content.is_instance_of::<PyString>()
+            && let Ok(number) = content.extract::<i64>()
+        {
+            return Ok((number + 1).into_pyobject(py)?.into_any().unbind());
+        }
+        let next = self
+            .inner
+            .next_content(self.numbering)
+            .map_err(expression_error)?;
+        Ok(PyString::new(py, &next).into_any().unbind())
+    }
+
+    /// music21's `nextMark`: the next mark, counting the same way.
+    fn nextMark(slf: &Bound<'_, Self>) -> PyResult<Py<PyAny>> {
+        let py = slf.py();
+        let next = slf.borrow().nextContent(py)?;
+        let keywords = PyDict::new(py);
+        keywords.set_item("numbering", slf.borrow().get_numbering())?;
+        Ok(slf.get_type().call((next,), Some(&keywords))?.unbind())
+    }
+
+    fn __repr__(&self, py: Python<'_>) -> PyResult<String> {
+        let shown = self.get_content(py).bind(py).repr()?.to_string();
+        Ok(format!("<music21.expressions.RehearsalMark {shown}>"))
+    }
 }
 
 /// How many ornaments `realizeOrnaments` plays out before it stops, as
@@ -1558,11 +1742,101 @@ fn realizeOrnaments<'py>(
     Ok(before)
 }
 
+/// A pause of unmeasured length over a note: music21's
+/// `expressions.Fermata`, drawn upright or inverted.
+///
+/// Not installed over music21's own, which its MusicXML reader and
+/// writer make and read; this is the one a caller with no music21 has.
+#[pyclass(
+    name = "Fermata",
+    module = "music21.expressions",
+    extends = Expression,
+    subclass,
+    skip_from_py_object
+)]
+#[derive(Clone)]
+pub struct Fermata {
+    inner: music21::expressions::Fermata,
+    /// Which note of a tie it goes on: music21's `tieAttach`.
+    #[pyo3(get, set)]
+    tieAttach: String,
+}
+
+impl Fermata {
+    /// The object for one of the crate's fermatas.
+    pub(crate) fn object(
+        py: Python<'_>,
+        inner: music21::expressions::Fermata,
+    ) -> PyResult<Py<PyAny>> {
+        let made = Bound::new(
+            py,
+            crate::base::built(Expression).add_subclass(Self {
+                inner,
+                tieAttach: "last".to_owned(),
+            }),
+        )?;
+        Ok(made.into_any().unbind())
+    }
+}
+
+#[pymethods]
+impl Fermata {
+    #[new]
+    #[pyo3(signature = (**_keywords))]
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Expression).add_subclass(Self {
+            inner: music21::expressions::Fermata::new(),
+            tieAttach: "last".to_owned(),
+        })
+    }
+
+    /// Which way up it is drawn: `'upright'`, `'inverted'` or any other
+    /// text a caller gave, as music21 keeps it.
+    #[getter]
+    fn get_type(&self) -> &str {
+        self.inner.fermata_type().as_str()
+    }
+
+    #[setter]
+    fn set_type(&mut self, value: &str) {
+        self.inner
+            .set_fermata_type(music21::expressions::FermataType::from_name(value));
+    }
+
+    /// Its shape: `'normal'`, `'angled'` or `'square'`.
+    #[getter]
+    fn shape(&self) -> &str {
+        self.inner.shape().unwrap_or("normal")
+    }
+
+    #[setter]
+    fn set_shape(&mut self, value: String) {
+        self.inner.set_shape(Some(value));
+    }
+
+    fn __repr__(&self) -> &'static str {
+        "<music21.expressions.Fermata>"
+    }
+
+    fn __deepcopy__<'py>(
+        slf: &Bound<'py, Self>,
+        _memo: &Bound<'py, PyAny>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone())
+    }
+
+    fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        crate::copy_as_same_type(slf, slf.borrow().clone()).map(crate::base::shallow)
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(realizeOrnaments, m)?)?;
     m.add_class::<Expression>()?;
     m.add_class::<Ornament>()?;
     m.add_class::<TextExpression>()?;
+    m.add_class::<Fermata>()?;
+    m.add_class::<RehearsalMark>()?;
     m.add_class::<Trill>()?;
     register_kinds(m)
 }

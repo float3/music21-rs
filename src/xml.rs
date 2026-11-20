@@ -31,6 +31,13 @@ impl Xml {
             .map(|(_, value)| value.as_str())
     }
 
+    /// An attribute set to `value`, replacing any it had.
+    #[cfg(feature = "musicxml")]
+    pub(crate) fn set(&mut self, name: &str, value: &str) {
+        self.attributes.retain(|(key, _)| key != name);
+        self.attributes.push((name.to_string(), value.to_string()));
+    }
+
     /// The text before the first child, as written.
     pub(crate) fn text(&self) -> Option<&str> {
         self.text.as_deref()

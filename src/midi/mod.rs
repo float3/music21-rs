@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 
+pub mod base;
 mod score;
+pub mod translate;
 mod write;
 
-pub use score::from_midi;
+pub use score::{from_midi, from_tracks, part_from_track};
 pub use write::{ExportOptions, to_midi};
 
 use crate::{

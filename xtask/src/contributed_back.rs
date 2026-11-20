@@ -2,9 +2,10 @@
 //!
 //! Every entry that links a GitHub pull request or issue says "(open)" while
 //! it is open and stops saying it once it is merged or closed. A pull request
-//! the contributor has opened on music21 that the list does not have yet is
-//! added, with its title as its description, among the other music21 pull
-//! requests in number order. Issues are never added: an issue can be a
+//! closed without merging contributed nothing and leaves the list. A
+//! pull request the contributor has opened on music21 that the list does
+//! not have yet is added, with its title as its description, among the
+//! other music21 pull requests in number order. Issues are never added: an issue can be a
 //! question rather than a contribution, so which ones belong is left to
 //! whoever edits the list.
 //!
@@ -74,19 +75,14 @@ pub fn run(root: &Path, check: bool) -> Result<i32, Box<dyn Error>> {
         .collect();
     let mut missing = Vec::new();
     for pr in contributor_prs()? {
-        let known = listed.contains(&pr.number);
-        match (known, pr.state.as_str()) {
-            (true, "CLOSED") => println!(
-                "{MUSIC21}#{} was closed without merging; it is still listed",
-                pr.number
-            ),
-            (false, "OPEN" | "MERGED") => missing.push(Missing {
-                number: pr.number,
-                title: pr.title,
-                open: pr.state == "OPEN",
-            }),
-            _ => {}
+        if listed.contains(&pr.number) || pr.state == "CLOSED" {
+            continue;
         }
+        missing.push(Missing {
+            number: pr.number,
+            title: pr.title,
+            open: pr.state == "OPEN",
+        });
     }
     missing.sort_by_key(|pr| pr.number);
 
@@ -264,6 +260,16 @@ fn update(
                 .get(&link)
                 .copied()
                 .ok_or_else(|| format!("no state for {}#{}", link.repo, link.number))?;
+
+            // Closed unmerged: nothing went upstream, so the entry goes.
+            if !link.issue && state == State::Closed {
+                changes.push(format!(
+                    "{}#{} closed unmerged, removed",
+                    link.repo, link.number
+                ));
+                continue;
+            }
+
             let text = body
                 .iter()
                 .map(|line| line.trim())
@@ -388,6 +394,25 @@ after
         assert!(text.contains("  a first fix.\n"));
         assert!(text.contains("  a third fix (open).\n"));
         assert!(text.contains("  a reported bug.\n"));
+    }
+
+    /// A pull request closed without merging contributed nothing; a closed
+    /// issue stays, as a report that was dealt with.
+    #[test]
+    fn a_closed_pull_request_leaves_the_list() {
+        let lines: Vec<&str> = README.lines().collect();
+        let (out, changes) = update(
+            &lines,
+            &states(State::Closed, State::Merged, State::Closed),
+            &[],
+        )
+        .unwrap();
+        let text = out.join("\n");
+        assert!(!text.contains("music21#10"), "{text}");
+        assert!(!text.contains("a first fix"), "{text}");
+        assert!(text.contains("music21#30"));
+        assert!(text.contains("  a reported bug.\n"));
+        assert_eq!(changes.len(), 2, "{changes:?}");
     }
 
     #[test]

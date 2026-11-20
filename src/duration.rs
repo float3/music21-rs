@@ -434,11 +434,11 @@ impl DurationTuple {
 /// The numerators music21 searches when reading a length as a tuplet: its
 /// `defaultTupletNumerators`. Four in the time of three is deliberately
 /// absent, since that length is a dotted note.
-const TUPLET_NUMERATORS: [u32; 5] = [3, 5, 7, 11, 13];
+pub const TUPLET_NUMERATORS: [u32; 5] = [3, 5, 7, 11, 13];
 
 /// The dot counts music21 allows inside a tuplet: its
 /// `POSSIBLE_DOTS_IN_TUPLETS`.
-const TUPLET_DOTS: [u32; 2] = [0, 1];
+pub const TUPLET_DOTS: [u32; 2] = [0, 1];
 
 /// How many written values music21 will tie together before it gives up, its
 /// `range(8)`.

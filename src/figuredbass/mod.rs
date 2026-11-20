@@ -11,6 +11,7 @@
 
 use std::fmt;
 
+pub mod checker;
 pub mod possibility;
 pub mod realizer;
 pub mod resolution;

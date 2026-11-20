@@ -7,6 +7,7 @@ that the classes carry music21's reprs and module strings, and that the
 handful of behaviours a caller reaches for first are right.
 """
 
+import collections
 import gc
 import os
 import pickle
@@ -1014,6 +1015,133 @@ def test_a_flattened_parts_barlines_stand_nowhere_again():
     assert m.objectToBraille(flat) == "⠀⠀⠀⠼⠙⠲⠀⠀⠀\n⠼⠁⠀⠐⠽⠀⠵⠣⠅"
 
 
+def test_a_measures_barlines_sort_by_when_they_were_put_in():
+    """Two measures' final barlines sort by the index each was given when
+    it was put in, as music21's do, not both at index nought."""
+    first, second = m.Measure(), m.Measure()
+    first.rightBarline = m.Barline("final")
+    second.rightBarline = m.Barline("final")
+    early = first.rightBarline.sortTuple(first)
+    late = second.rightBarline.sortTuple(second)
+
+    assert early.atEnd == 1
+    assert early.insertIndex != 0
+    assert early < late
+
+
+def test_a_copied_pitch_keeps_its_groups():
+    """A deep copy of a pitch, or of the note holding it, keeps the
+    groups put on it, as music21's copies do; the copy's list is its
+    own."""
+    import copy
+
+    pitch = m.Pitch("C4")
+    pitch.groups.append("upper")
+    copied = copy.deepcopy(pitch)
+    assert list(copied.groups) == ["upper"]
+    copied.groups.append("lower")
+    assert list(pitch.groups) == ["upper"]
+    note = m.Note("E4")
+    note.pitch.groups.append("alto")
+    assert list(copy.deepcopy(note).pitch.groups) == ["alto"]
+
+
+
+def test_a_stream_is_indexed_by_an_id_as_music21s_is():
+    """`'#id'` finds an element by its id: anywhere below a stream, its
+    first or `None`; among an iterator's own, case aside, or a
+    `KeyError`."""
+    score = m.Score()
+    for name in ("Soprano", "Alto"):
+        part = m.Part()
+        part.id = name
+        score.insert(0, part)
+    deep = m.Measure()
+    deep.id = "deep"
+    score.parts[1].append(deep)
+
+    assert score["#Alto"].id == "Alto"
+    assert score["#deep"] is deep
+    assert score["#missing"] is None
+    assert score.parts["#alto"].id == "Alto"
+    assert score.iter()["#Soprano"].id == "Soprano"
+    with pytest.raises(KeyError):
+        score.iter()["#deep"]
+
+
+def test_a_streams_flattening_is_kept_until_it_changes():
+    """`flatten()` hands back the same stream until the stream, or one it
+    holds, changes, as music21 caches it; so an element reached through
+    it keeps it as its `activeSite`, and sorts after everything at its
+    offset in a tree built before."""
+    score = m.Score()
+    for name in ("upper", "lower"):
+        part = m.Part()
+        part.id = name
+        part.append([m.Note("C4"), m.Note("D4")])
+        score.insert(0, part)
+    tree = score.asTree(flatten=True)
+    first = score.flatten().notes[0]
+    after = tree.getNodeAfter(first.sortTuple())
+    assert after.position.offset == 1.0
+
+    flat = score.flatten()
+    assert score.flatten() is flat
+    score.parts[0].append(m.Note("E4"))
+    refreshed = score.flatten()
+    assert refreshed is not flat
+    assert len(refreshed.notes) == 5
+
+    bar = m.Measure()
+    bar.append(m.Note("F4"))
+    held = m.Part([bar])
+    before = held.flatten()
+    bar.rightBarline = m.Barline("final")
+    assert held.flatten() is not before
+    assert type(held.flatten()[-1]).__name__ == "Barline"
+
+
+def test_a_fermata_is_music21s():
+    """music21's `Fermata`: a normal arc drawn inverted, attached to the
+    last note of a tie, its shape and type set as music21 sets them, any
+    text as a type."""
+    fermata = m.Fermata()
+    assert (fermata.shape, fermata.type, fermata.tieAttach) == ("normal", "inverted", "last")
+    fermata.type = "upright"
+    fermata.shape = "square"
+    assert (fermata.type, fermata.shape) == ("upright", "square")
+    assert "Expression" in fermata.classes
+    assert repr(fermata) == "<music21.expressions.Fermata>"
+    fermata.type = "sideways"
+    assert fermata.type == "sideways"
+
+
+def test_a_fermata_is_copied():
+    """A note carrying a fermata is copied with it, as `makeElement`
+    copies the notes it gathers."""
+    import copy
+
+    fermata = m.Fermata()
+    fermata.type = "upright"
+    copied = copy.deepcopy(fermata)
+    assert copied is not fermata
+    assert (type(copied).__name__, copied.type) == ("Fermata", "upright")
+    assert copy.copy(fermata).type == "upright"
+
+
+def test_a_stream_is_always_sorted_and_sorts_itself():
+    """music21's `isSorted` and `autoSort`: a stream here answers in
+    order whenever it is read, so it says it is sorted, and marking it
+    unsorted, as music21's callers do to force a sort, changes nothing."""
+    stream = m.Stream()
+    stream.insert(2.0, m.Note("D4"))
+    stream.insert(0.0, m.Note("C4"))
+    assert stream.isSorted and stream.autoSort
+    stream.isSorted = False
+    assert stream.isSorted
+    assert [n.name for n in stream] == ["C", "D"]
+
+
 def test_a_measures_barlines_are_found_where_they_are_listed():
     """What the listings show, the lookups find: music21's answers for a
     measure's own barlines, the left at nought, the right at its end."""
@@ -1332,17 +1460,18 @@ def test_store_at_end_keeps_a_barline_as_the_right_one():
     assert repeat.direction == "start"
 
 
-def test_store_at_end_refuses_what_it_cannot_keep():
-    """A length music21 refuses too; a second barline, or anything that is
-    not one, music21 keeps and the package does not."""
+def test_store_at_end_keeps_what_has_no_length():
+    """A length is refused, as music21 refuses it; a second barline and a
+    clef are kept, the first barline being the `rightBarline`."""
     line = m.Stream()
     with pytest.raises(m.StreamException, match="non-zero Duration"):
         line.storeAtEnd(m.Note("C"))
-    line.storeAtEnd(m.Barline())
+    first = m.Barline()
+    line.storeAtEnd(first)
     for other in (m.Barline("double"), m.TrebleClef()):
-        with pytest.raises(m.StreamException, match="not ported to music21-rs$"):
-            line.storeAtEnd(other)
-    assert len(line.getElementsByClass("Barline")) == 1
+        line.storeAtEnd(other)
+    assert len(line.getElementsByClass("Barline")) == 2
+    assert line.rightBarline is first
 
 
 def test_placed_answers_where_each_element_stands():
@@ -1777,6 +1906,15 @@ def _untraversed(src: pathlib.Path):
 # why no cycle runs through it: Python's collector frees a cycle only where
 # each object in it shows what it holds.
 _UNTRAVERSED = {
+    # RomanText tokens: numbers, text and an open file, none of which
+    # holds the token.
+    "RTChord": "an offset and a length",
+    # An interval network's edge: the interval and id it was given, which
+    # hold nothing of the edge.
+    "Edge": "an interval and an id",
+    "RTFile": "an open file and its name",
+    "RTNoChord": "an offset and a length",
+    "RTTagged": "a tag and its text",
     # Tools built over a stream or a score they analyse, search or correct,
     # holding it and their own results; nothing they hold is given a way
     # back to the tool.
@@ -1853,7 +1991,7 @@ def _struct_fields(src: pathlib.Path):
     """Each #[pyclass] struct's fields, name to type, comments and
     attributes left out, keyed by class name."""
     found = {}
-    for path in sorted(src.glob("*.rs")):
+    for path in sorted(src.rglob("*.rs")):
         text = path.read_text()
         for match in re.finditer(
             r"#\[pyclass[^\]]*\]\s*(?:#\[[^\]]*\]\s*)*pub(?:\(crate\))?\s+struct\s+(\w+)\s*\{(.*?)\n\}",
@@ -2172,6 +2310,37 @@ def test_importing_the_package_imports_no_music21():
     )
 
 
+def test_sort_tuple_looks_for_no_music21(tmp_path):
+    """`sortTuple` asked music21 whether the element was one of its own by
+    importing `music21.base` and `music21.sorting`: standing alone, with
+    music21 absent, every call searched the path for it again, about 90
+    microseconds a call. Counts the searches after a first call."""
+    code = """
+import sys
+import music21_rs as m
+
+class Counting:
+    asked = []
+    def find_spec(self, name, path=None, target=None):
+        if name.split('.')[0] == 'music21':
+            self.asked.append(name)
+        return None
+
+s = m.Stream()
+n = m.Note('C4')
+s.append(n)
+n.sortTuple()
+counting = Counting()
+sys.meta_path.insert(0, counting)
+for i in range(3):
+    n.sortTuple()
+print(counting.asked)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "[]"
+
+
 def test_an_exception_is_the_class_music21_keeps_under_that_name():
     # The module string is what `install_into_music21` leaves music21 holding,
     # and what a traceback prints.
@@ -2181,6 +2350,51 @@ def test_an_exception_is_the_class_music21_keeps_under_that_name():
     assert m.PitchException is m.PitchException
     with pytest.raises(AttributeError):
         m.NoSuchException
+
+
+def test_an_interval_network_realizes_a_scale_on_any_degree():
+    net = m.IntervalNetwork(["M2", "M2", "m2", "M2", "M2", "M2", "m2"])
+    assert [str(p) for p in net.realizePitch("c#", 7)] == [
+        "D3", "E3", "F#3", "G3", "A3", "B3", "C#4", "D4",
+    ]
+    pitches, nodes = net.realize("c4", 1)
+    assert [str(n) for n in nodes] == [
+        "Terminus.LOW", "0", "1", "2", "3", "4", "5", "Terminus.HIGH",
+    ]
+    assert net.getRelativeNodeDegree("e-2", 1, "d3") == 7
+    assert str(net.find(["g", "a", "b", "d", "f#"])[0][1]) == "G"
+    assert repr(net.nodes[m.Terminus.LOW]) == (
+        "<music21.scale.intervalNetwork.Node id=Terminus.LOW>"
+    )
+    assert repr(net.edges[0]) == (
+        "<music21.scale.intervalNetwork.Edge Direction.BI M2 "
+        "[(Terminus.LOW, 0), (0, Terminus.LOW)]>"
+    )
+
+
+def test_a_melodic_minor_network_comes_down_another_way():
+    net = m.IntervalNetwork()
+    net.fillMelodicMinor()
+    assert str(net.getPitchFromNodeDegree("c4", 1, 6, m.Direction.DESCENDING)) == "A-4"
+    assert str(net.nextPitch("c4", 1, "c5", direction=m.Direction.DESCENDING)) == "B-4"
+    assert net.getNeighborNodeIds("c4", 1, "c#") == (m.Terminus.HIGH, 0)
+
+
+def test_a_weighted_network_draws_from_the_generator_given():
+    n1 = m.Node(id=1, degree=1, weight=1000000)
+    n2 = m.Node(id=2, degree=1, weight=1)
+    e1 = m.Edge("m3", id=1)
+    e2 = m.Edge("m3", id=2)
+    net = m.IntervalNetwork()
+    _, node = net.weightedSelection([e1, e2], [n1, n2], randomGenerator=lambda: 0.9999999)
+    assert node.id == 2
+
+
+def test_an_abstract_scale_hands_out_the_wheels_own_network():
+    net = m.MajorScale("g").abstract._net
+    assert isinstance(net, m.IntervalNetwork)
+    assert sorted(net.edges.keys()) == [0, 1, 2, 3, 4, 5, 6]
+    assert [str(p) for p in net.realizePitch("D5")][:3] == ["D5", "E5", "F#5"]
 
 
 def test_a_note_is_drawn_with_a_style_of_the_wheels_own():
@@ -3248,7 +3462,7 @@ def test_elements_are_found_by_offset_as_music21_finds_them():
     flat = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4").flatten()
 
     def offsets(found):
-        return [round(flat.elementOffset(e), 4) for e in found.elements]
+        return [round(flat.elementOffset(e), 4) for e in found]
 
     # Under music21's defaults an element is found only where it begins,
     # so the half note at nought is not found at 1.
@@ -3275,8 +3489,8 @@ def test_a_stream_is_asked_what_classes_it_holds():
     assert flat.hasElementOfClass("Clef")
     assert not flat.hasElementOfClass("Dynamic")
     # The clef, the meter and the measure's final barline, as music21.
-    assert len(flat.getElementsNotOfClass("Note").elements) == 3
-    assert len(flat.getElementsByClass("Note").elements) == 3
+    assert len(flat.getElementsNotOfClass("Note")) == 3
+    assert len(flat.getElementsByClass("Note")) == 3
 
 
 def test_a_stream_answers_for_its_pitches_and_its_staff():
@@ -4200,6 +4414,8 @@ def test_the_measures_of_a_score_are_gathered_by_offset():
     # in the two parts are listed together.
     assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
     assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # An OrderedDict, as music21's, which its repr shows.
+    assert type(whole.measureOffsetMap()) is collections.OrderedDict
     # The measures are the parts' own objects.
     assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
     # Gathering by another class is refused rather than answered without
@@ -4489,7 +4705,7 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
         line.insert(float(at), element)
 
     def count(name):
-        return len(line.getElementsByClass(name).elements)
+        return len(line.getElementsByClass(name))
 
     # The leaves of music21's hierarchy, which the class names alone answer.
     assert (count("Note"), count("Rest"), count("Dynamic")) == (1, 1, 1)
@@ -4504,7 +4720,7 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
     assert count("TimeSignatureBase") == 1
     assert count("Music21Object") == 9
     # A list of classes takes anything answering to one of them.
-    assert len(line.getElementsByClass(["Clef", "NotRest"]).elements) == 4
+    assert len(line.getElementsByClass(["Clef", "NotRest"])) == 4
     assert sorted(
         type(e).__name__ for e in line.getElementsNotOfClass("GeneralNote")
     ) == ["Dynamic", "KeySignature", "MetronomeMark", "TimeSignature", "TrebleClef"]
@@ -4515,10 +4731,10 @@ def test_a_class_filter_reads_what_music21_says_a_thing_is():
     # else the stream holds.
     holder = m.Part()
     holder.insert(0.0, m.Measure())
-    assert len(holder.getElementsByClass("Music21Object").elements) == 1
-    assert len(holder.getElementsByClass("Stream").elements) == 1
-    assert len(holder.getElementsByClass("Measure").elements) == 1
-    assert len(holder.getElementsByClass("Voice").elements) == 0
+    assert len(holder.getElementsByClass("Music21Object")) == 1
+    assert len(holder.getElementsByClass("Stream")) == 1
+    assert len(holder.getElementsByClass("Measure")) == 1
+    assert len(holder.getElementsByClass("Voice")) == 0
 
 
 def test_a_thing_says_what_it_is_as_music21_says_it():
@@ -4575,7 +4791,7 @@ def test_a_thing_says_what_it_is_as_music21_says_it():
     # And what a thing says it is, a filter finds it by.
     line = m.Stream()
     line.insert(0.0, m.Key("G"))
-    assert len(line.getElementsByClass("Scale").elements) == 1
+    assert len(line.getElementsByClass("Scale")) == 1
 
 
 def test_the_overlaps_in_a_stream_are_gathered_by_offset():
@@ -5441,7 +5657,7 @@ def test_words_are_read_off_a_score_and_stood_on_its_page():
     # A text box stands where it is told and keeps the style it is drawn
     # with, so writing into that style is writing into the box's.
     box = m.TextBox("Hello there, this is long", 250, 1000)
-    assert repr(box) == '<music21.text.TextBox "Hello ther...">'
+    assert repr(box) == "<music21.text.TextBox 'Hello ther...'>"
     assert (box.page, box.style.absoluteX, box.style.absoluteY) == (1, 250, 1000)
     assert (box.style.alignVertical, box.style.alignHorizontal) == ("top", "center")
     box.style.fontSize = 40
@@ -7306,23 +7522,16 @@ def test_two_readings_of_a_stream_are_merged_as_variants():
     """Where two readings of one stream differ, what differs is kept as a
     variant, as music21's `variant` module keeps it.
 
-    A variant is music21's own `variant.Variant`, which this package has
-    no class for, so each of these says outright that it needs music21
-    beside it rather than answering a stream with no variants in it."""
+    Without music21 the variants are the package's own `Variant`."""
     one = m.from_tiny_notation("4/4 a4 b c d  e2 f2")
     two = m.from_tiny_notation("4/4 a4 b c e  e2 f2")
     try:
         from music21 import variant as m21variant
     except ImportError:
-        for call in (
-            lambda: m.mergeVariants(one, two, variantName="london"),
-            lambda: m.mergeVariantMeasureStreams(one, two, variantName="london"),
-            lambda: m.mergeVariantsEqualDuration([one, two], ["london"]),
-            lambda: m.addVariant(one, 0.0, two, variantName="london"),
-            lambda: m.makeAllVariantsReplacements(one),
-        ):
-            with pytest.raises(Exception, match="no class for"):
-                call()
+        merged = m.mergeVariants(one, two, variantName="london")
+        found = merged.recurse().getElementsByClass("Variant")
+        assert [type(v) for v in found] == [m.Variant]
+        assert list(found[0].groups) == ["london"]
         return
 
     from music21 import converter
@@ -8896,14 +9105,44 @@ def test_timespans_hold_floats_and_a_measures_barline():
     assert triplet.nextStartOffset == 1.3333333333333333
 
 
-def test_what_as_timespans_leaves_unported_says_so():
+def test_as_timespans_unflattened_is_a_tree_of_trees():
+    """music21's `asTimespans(flatten=False)` of a score: a tree holding
+    a tree for each part, each of the part."""
     score, _, _ = _two_part_score()
-    with pytest.raises(NotImplementedError):
-        score.asTimespans(flatten=False)
+    parts = list(score.asTimespans(flatten=False))
+    assert [type(each).__name__ for each in parts] == ["TimespanTree"] * 2
+    assert [each.source for each in parts] == list(score.parts)
+
+
+def test_what_as_timespans_leaves_unported_says_so():
     loose = m.Stream([m.Note("C4"), m.Note("D4")])
     assert len(loose.asTimespans(flatten=False)) == 2
+    score, _, _ = _two_part_score()
+    edited = score.asTimespans()
+    edited.removeTimespan(edited[0])
     with pytest.raises(NotImplementedError):
-        score.asTimespans().getVerticalityAt(0.0).makeElement(addPartIdAsGroup=True)
+        edited.getVerticalityAt(0.0).getPairedMotion()
+
+
+def test_make_element_takes_music21s_keywords():
+    """`copyPitches=False` keeps the score's own pitches, and
+    `addPartIdAsGroup` groups each pitch by the id of its part."""
+    score, _, _ = _two_part_score()
+    verticality = score.asTimespans().getVerticalityAt(0.0)
+    sounding = [span.element.pitch for span in verticality.startTimespans
+                if hasattr(span.element, "pitch")]
+    kept = verticality.makeElement(1.0, copyPitches=False)
+    assert all(any(p is own for own in sounding) for p in kept.pitches)
+    grouped = verticality.makeElement(1.0, addPartIdAsGroup=True)
+    assert sorted(g for n in grouped.notes for g in n.groups) == ["lower", "upper"]
+
+
+def test_a_verticality_names_its_class_as_music21_does():
+    """Asking a verticality for what it lacks names `Verticality`, as
+    music21's AttributeError does."""
+    score, _, _ = _two_part_score()
+    with pytest.raises(AttributeError, match="^'Verticality' object has no attribute 'endTime'$"):
+        score.asTimespans().getVerticalityAt(0.0).endTime
 
 
 def test_a_humdrum_comment_read_standalone_stays_in_the_score():
@@ -9731,20 +9970,37 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.mei', 'from music21 import musicxml'):
+for statement in ('import music21.ipython21', 'from music21 import lily'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.mei",
-        "music21-rs does not provide music21.musicxml",
+        "music21-rs does not provide music21.ipython21",
+        "music21-rs does not provide music21.lily",
         "False True",
     ]
+
+
+def test_a_provided_module_names_a_missing_attribute_as_python_does(tmp_path):
+    """The message quotes the module and the name as Python's own does,
+    which is what music21's suite reads a blocker out of."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar
+try:
+    bar.noSuchName
+except AttributeError as error:
+    print(str(error).split(':')[0])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "module 'music21.bar' has no attribute 'noSuchName'"
 
 
 def test_provided_music21_parses_with_the_packages_converter(tmp_path):
@@ -9837,31 +10093,19 @@ print(stream.StreamException is music21_rs.StreamException)
 def test_every_exported_name_has_a_music21_home_or_none(tmp_path):
     """A name the package exports is placed in a module of music21's, or
     listed as one music21 has nowhere: a new function with neither means
-    `tests/generate_homes.py` has to be run again."""
+    `cargo run -p xtask --features python -- homes` has to be run again."""
     code = """
 import music21_rs
 music21_rs.provide_music21()
 from music21_rs import _homes, _provide
-from music21_rs import music21_rs as extension
 placed = {name for names in _provide._contents().values() for name in names}
-exported = {*extension.__all__, *extension.__exception_names__}
+exported = {*_provide._EXPORTED, *music21_rs.__exception_names__}
 print(sorted(exported - placed - set(_homes.NO_HOME)))
 print(sorted(placed & set(_homes.NO_HOME)))
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == ["[]", "[]"]
-
-
-def test_music21_homes_are_where_music21_keeps_them():
-    """`_homes.py` is what `generate_homes.py` works out from music21 now:
-    every home is a module of music21's that defines the name."""
-    pytest.importorskip("music21.stream")
-    script = pathlib.Path(__file__).with_name("generate_homes.py")
-    done = subprocess.run(
-        [sys.executable, str(script), "--check"], capture_output=True, text=True
-    )
-    assert done.returncode == 0, done.stderr
 
 
 def test_pth_file_provides_music21_without_importing_the_package(tmp_path):
@@ -10621,3 +10865,1864 @@ print(type(data).__name__)
         "registered for it",
         "str",
     ]
+
+
+def test_provided_midi_base_reads_and_writes_a_track(tmp_path):
+    """Provided, `midi.base` reads a track's chunk into delta times and
+    events, writes them back to the same bytes, and reads a file's header
+    and tracks, as music21's does."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import midi
+chunk = (b'MTrk\\x00\\x00\\x00\\x16\\x00\\xff\\x03\\x00\\x00'
+         + b'\\xe0\\x00@\\x00\\x90CZ\\x88\\x00\\x80C\\x00\\x88\\x00\\xff/\\x00')
+mt = midi.MidiTrack(3)
+print(mt.read(chunk), len(mt), mt)
+print(mt.events[3], mt.events[6])
+print(mt.getBytes() == chunk)
+mf = midi.MidiFile()
+mf.tracks = [mt]
+mf.ticksPerQuarterNote = 1024
+read = midi.MidiFile()
+read.readstr(mf.writestr())
+print(read, read.ticksPerQuarterNote, read.tracks[0].events[-1])
+pc = midi.MidiEvent(mt, type=midi.ChannelVoiceMessages.PROGRAM_CHANGE, channel=16)
+print(pc.parseChannelVoiceMessage(bytes([0xCF, 71, 5])), pc, pc.getBytes())
+try:
+    midi.putVariableLengthNumber(-1)
+except midi.MidiException as error:
+    print(type(error).__module__, error)
+print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "b'' 22 <music21.midi.MidiTrack 3 -- 10 events>",
+        "<music21.midi.MidiEvent PITCH_BEND, track=3, channel=1, parameter1=0, parameter2=64> "
+        "<music21.midi.DeltaTime t=1024, track=3>",
+        "True",
+        "<music21.midi.MidiFile 1 track> 1024 "
+        "<music21.midi.MidiEvent END_OF_TRACK, track=0, data=b''>",
+        "b'\\x05' <music21.midi.MidiEvent PROGRAM_CHANGE, track=3, channel=16, data=71> "
+        "b'\\xcfG'",
+        "music21.midi.base cannot putVariableLengthNumber() when number is negative: -1",
+        "True",
+    ]
+
+
+def test_provided_mei_reads_a_score_through_its_steps(tmp_path):
+    """Provided, `mei.MeiToM21Converter` reads a score, and each step
+    calls the others through the module, so a step replaced on it is the
+    one called, as music21's tests replace them."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from unittest import mock
+from xml.etree import ElementTree as ET
+from music21 import mei
+from music21.mei import base
+document = ('<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>'
+            '<scoreDef meter.count="2" meter.unit="4"><staffGrp>'
+            '<staffDef n="1" clef.shape="G" clef.line="2"/></staffGrp></scoreDef>'
+            '<section><measure n="1"><staff n="1"><layer n="1">'
+            '<note pname="c" oct="4" dur="4" xml:id="a"/>'
+            '<note pname="e" oct="4" dur="4" xml:id="b"/>'
+            '</layer></staff><slur startid="#a" endid="#b"/></measure></section>'
+            '</score></music></mei>')
+score = mei.MeiToM21Converter(document).run()
+print([n.nameWithOctave for n in score.recurse().notes])
+print(len(score.spanners))
+print(base.instrument.__name__, base._accidentalFromAttr('s'))
+chord = ET.fromstring('<chord xmlns="http://www.music-encoding.org/ns/mei" dur="4">'
+                      '<note pname="c" oct="4"/></chord>')
+with mock.patch('music21.mei.base.noteFromElement') as replaced:
+    replaced.return_value = 'a note'
+    with mock.patch('music21.chord.Chord') as made:
+        base.chordFromElement(chord)
+        print(made.call_args)
+try:
+    base._attrTranslator('9', 'dur', base._DUR_ATTR_DICT)
+except base.MeiValueError as error:
+    print(type(error).__module__, error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['C4', 'E4']",
+        "1",
+        "music21.instrument #",
+        "call(notes=['a note'])",
+        'music21.mei.base Unexpected value for "dur" attribute: 9',
+    ]
+
+
+def test_provided_midi_translate_round_trips_a_part(tmp_path):
+    """Provided, `midi.translate` lays a note out as music21's events,
+    reads a time signature event back, writes a stream as a `MidiFile`
+    and reads that file back as a score."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import midi, note, stream
+n = note.Note('C#4')
+events = midi.translate.noteToMidiEvents(n, includeDeltaTime=False, channel=3)
+print(events, events[0].correspondingEvent is events[1])
+me = midi.MidiEvent(type=midi.MetaEvents.TIME_SIGNATURE)
+me.data = midi.putNumbersAsList([3, 4])
+print(midi.translate.midiEventsToTimeSignature(me))
+p = stream.Part()
+p.repeatAppend(note.Note('G4', quarterLength=2), 2)
+mf = midi.translate.streamToMidiFile(p)
+print(mf, mf.ticksPerQuarterNote)
+s = midi.translate.midiFileToStream(mf)
+print(len(s.flatten().notes), s.flatten().notes[0].nameWithOctave)
+try:
+    midi.translate.midiFileToStream(mf, quantizePost=False)
+except NotImplementedError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.midi.MidiEvent NOTE_ON, track=None, channel=3, pitch=61, velocity=90>, "
+        "<music21.midi.MidiEvent NOTE_OFF, track=None, channel=3, pitch=61, velocity=0>] True",
+        "<music21.meter.TimeSignature 3/16>",
+        "<music21.midi.MidiFile 2 tracks> 10080",
+        "2 G4",
+        "quantizePost=False is not ported to music21-rs",
+    ]
+
+
+def test_provided_rtobjects_tokenize_a_roman_text(tmp_path):
+    """Provided, `romanText.rtObjects` reads a RomanText into music21's
+    tokens: tagged lines, measures with their numbers and atoms, beats
+    as floats or fractions, and keys as the wheel's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import meter
+from music21.romanText import rtObjects
+rth = rtObjects.RTHandler()
+rth.process('Title: Test \\n Movement: 1 \\n m1 g;: i b2.66 V/v \\n Movement: 2 \\n m1-2 = m3')
+print(rth.tokens)
+measure = rth.tokens[2]
+print(measure.number, measure.atoms, measure.atoms[0].container is measure)
+print(measure.atoms[0].getKey(), measure.atoms[2].getBeatFloatOrFrac(),
+      measure.atoms[2].getOffset(meter.TimeSignature('6/8')))
+print([len(h) for h in rth.splitByMovement()], rth.definesMovements())
+print(rtObjects.RTMeasure('m17varC vi').variantLetter,
+      rtObjects.RTMeasure('m35-36 = m29-30').getCopyTarget())
+print(rtObjects.reMeasureTag.match('m3-4=m1-2').group(0))
+try:
+    rtObjects.RTHandler().splitAtHeader(['Title: x'])
+except rtObjects.RomanTextException as error:
+    print(type(error).__module__, error.args[0][:21])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.romanText.rtObjects.RTTagged 'Title: Test'>, "
+        "<music21.romanText.rtObjects.RTTagged 'Movement: 1'>, "
+        "<music21.romanText.rtObjects.RTMeasure 1>, "
+        "<music21.romanText.rtObjects.RTTagged 'Movement: 2'>, "
+        "<music21.romanText.rtObjects.RTMeasure 1-2>]",
+        "[1] [<music21.romanText.rtObjects.RTKey 'g;:'>, "
+        "<music21.romanText.rtObjects.RTChord 'i'>, "
+        "<music21.romanText.rtObjects.RTBeat 'b2.66'>, "
+        "<music21.romanText.rtObjects.RTChord 'V/v'>] True",
+        "g minor 8/3 2.5",
+        "[3, 3] True",
+        "C ([29, 30], ['', ''])",
+        "m3-4",
+        "music21.romanText.rtObjects Cannot find the first",
+    ]
+
+
+def test_provided_test_copy_all_copies_each_class_a_module_defines(tmp_path):
+    """Provided, `test.commonTest.testCopyAll` makes each class of the
+    test's module that takes no arguments and copies it, failing the test
+    where a copy fails."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import copy, unittest
+from music21.test.commonTest import testCopyAll
+class Copies:
+    pass
+class Refuses:
+    def __deepcopy__(self, memo):
+        raise ValueError('no')
+class Needs:
+    def __init__(self, x):
+        pass
+class Test(unittest.TestCase):
+    def runTest(self):
+        pass
+case = Test()
+testCopyAll(case, {'Copies': Copies, 'Needs': Needs, '_Refuses': Refuses})
+print('passed')
+try:
+    testCopyAll(case, {'Refuses': Refuses})
+except AssertionError as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["passed", "Could not deepcopy obj Refuses: no"]
+
+def test_provided_stream_enums_are_music21s(tmp_path):
+    """Provided, `stream.enums` has music21's four enums, and a staff
+    layout's `staffType` is one of `StaffType`'s members."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import layout
+from music21.common.enums import StrEnum
+from music21.stream import enums
+print(repr(enums.StaffType('cue')), enums.StaffType.OSSIA.value)
+print(repr(enums.GivenElementsBehavior.APPEND), isinstance(enums.ShowNumber.NEVER, StrEnum))
+print([member.value for member in enums.RecursionType], enums.ShowNumber.NEVER == 'never')
+try:
+    enums.StaffType('tiny')
+except ValueError as error:
+    print(error)
+staff = layout.StaffLayout()
+print(repr(staff.staffType))
+staff.staffType = enums.StaffType.OSSIA
+print(staff.staffType is enums.StaffType.OSSIA)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<StaffType.CUE: 'cue'> ossia",
+        "<GivenElementsBehavior.APPEND> True",
+        "['elementsFirst', 'flatten', 'elementsOnly'] True",
+        "'tiny' is not a valid StaffType",
+        "<StaffType.REGULAR: 'regular'>",
+        "True",
+    ]
+
+
+def test_provided_sort_tuples_compare_as_music21s(tmp_path):
+    """Provided, `sorting.SortTuple` compares against bare offsets, one
+    stored at the end coming after all but infinity, and every element's
+    `sortTuple` is one."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, note, sites, sorting, stream
+st = sorting.SortTuple(0, 1.0, 0, 20, 1, 323)
+print(st.shortRepr(), st < 5.0, 5.0 > st, st == 1.0, st <= 1.0, st != 1.0)
+print(st.modify(atEnd=1, isNotGrace=0).shortRepr(), st.modify(offset=2.0).offset)
+print(sorting.ZeroSortTupleLow)
+print(st.add(st).shortRepr(), st.sub(st).shortRepr())
+try:
+    st.add((0, 1.0, 0, 20, 1, 323))
+except sorting.SortingException as error:
+    print(error)
+s = stream.Stream()
+n = note.Note()
+s.insert(4, n)
+print(type(n.sortTuple()) is sorting.SortTuple, n.sortTuple().offset)
+barline = bar.Barline('double')
+s.storeAtEnd(barline)
+at_end = barline.sortTuple(s)
+print(at_end.atEnd, at_end.classSortOrder, at_end > 999999, at_end == float('inf'))
+print(n.sortTuple() < at_end, s.sortTuple().classSortOrder)
+alone = note.Note()
+alone.offset = 30
+elsewhere = stream.Stream()
+print(alone.sortTuple(elsewhere).shortRepr())
+try:
+    alone.sortTuple(elsewhere, raiseExceptionOnMiss=True)
+except sites.SitesException:
+    print('not stored')
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "1.0 <0.20.323> True True True True False",
+        "End <0.20.[Grace].323> 2.0",
+        "SortTuple(atEnd=0, offset=0.0, priority=-inf, classSortOrder=0, "
+        "isNotGrace=1, insertIndex=0)",
+        "2.0 <0.40.646> 0.0 <0.0.0>",
+        "Cannot add attributes from a different class",
+        "True 4.0",
+        "1 -5 True True",
+        "True -20",
+        "30.0 <0.20.0>",
+        "not stored",
+    ]
+
+
+def test_provided_stream_status_reports_on_its_stream(tmp_path):
+    """Provided, a stream's `streamStatus` serves it, works out what it
+    is not told, and is copied with what it knows to serve the copy."""
+    code = """
+import copy
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream
+from music21.stream import streamStatus
+s = stream.Stream()
+print(type(s.streamStatus) is streamStatus.StreamStatus, s.streamStatus.client is s)
+print(s.streamStatus.haveTupletBracketsBeenMade(), s.streamStatus.tuplets)
+s.append(note.Note(quarterLength=1/3))
+print(s.streamStatus.haveTupletBracketsBeenMade())
+s.notes[0].duration.tuplets[0].type = 'start'
+print(s.streamStatus.haveTupletBracketsBeenMade(), s.streamStatus.haveAccidentalsBeenMade())
+print(copy.deepcopy(s.streamStatus).client)
+m = stream.Measure()
+first = note.Note('D4', type='eighth')
+second = note.Note('D4', type='eighth')
+m.append([first, second])
+print(m.streamStatus.haveBeamsBeenMade())
+first.beams.append('start')
+second.beams.append('stop')
+print(m.streamStatus.haveBeamsBeenMade())
+m.streamStatus.beams = False
+copied = copy.deepcopy(m)
+print(copied.streamStatus.client is copied, copied.streamStatus.beams)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True",
+        "None True",
+        "False",
+        "True False",
+        "None",
+        "False",
+        "True",
+        "True False",
+    ]
+
+
+def test_provided_base_has_split_tuple_and_class_sort_order(tmp_path):
+    """Provided, `base._SplitTuple` is a tuple whose equality and hash
+    take its spanners in, and `Music21Object.classSortOrder` is 20."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import base
+from music21.base import _SplitTuple
+first = _SplitTuple([1, 2])
+second = _SplitTuple([1, 2])
+print(first, first.spannerList, first == second, first == (1, 2))
+print(hash(first) == hash(second), second < _SplitTuple([1, 3]))
+first.spannerList.append('a spanner')
+print(first == second, first.__class__)
+print(base.Music21Object.classSortOrder)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "(1, 2) [] True False",
+        "False True",
+        "False <class 'music21.base._SplitTuple'>",
+        "20",
+    ]
+
+
+def test_provided_offset_iterator_groups_by_offset(tmp_path):
+    """Provided, `stream.iterator.OffsetIterator` hands out the elements
+    standing together at each offset, filtered ones too."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import clef, note, stream
+from music21.stream.iterator import OffsetIterator
+s = stream.Stream()
+for offset, name in ((0, 'C'), (0, 'D'), (1, 'E'), (2, 'F')):
+    s.insert(offset, note.Note(name))
+s.insert(2, clef.BassClef())
+grouped = OffsetIterator(s)
+print(list(grouped))
+print(list(grouped.notes))
+print(list(grouped.getElementsByClass(clef.Clef)), type(grouped.notes).__name__)
+print(grouped, isinstance(grouped, stream.iterator.StreamIterator))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[[<music21.note.Note C>, <music21.note.Note D>], [<music21.note.Note E>], "
+        "[<music21.clef.BassClef>, <music21.note.Note F>]]",
+        "[[<music21.note.Note C>, <music21.note.Note D>], [<music21.note.Note E>], "
+        "[<music21.note.Note F>]]",
+        "[[<music21.clef.BassClef>]] OffsetIterator",
+        "<music21.stream.iterator.OffsetIterator for Stream> True",
+    ]
+
+
+def test_provided_chord_tools_names_every_chord_step(tmp_path):
+    """Provided, `chord.tools.allChordSteps` keys each step to the first of
+    the chord's own pitches on it, in their order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import chord
+ch = chord.Chord('C4 E4 G4 B4 C5 D5')
+steps = chord.tools.allChordSteps(ch)
+print(steps)
+print(steps[1] is ch.pitches[0], steps[2] is ch.pitches[5])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{1: <music21.pitch.Pitch C4>, 3: <music21.pitch.Pitch E4>, "
+        "5: <music21.pitch.Pitch G4>, 7: <music21.pitch.Pitch B4>, "
+        "2: <music21.pitch.Pitch D5>}",
+        "True True",
+    ]
+
+
+def test_provided_meter_tools_read_meters_as_music21_does(tmp_path):
+    """Provided, `meter.tools` reads meters written as text, refusing what
+    music21 refuses with its exceptions, and divides them in its order."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import exceptions21
+from music21.meter import tools
+print(tools.slashToTuple('slow 6/8'))
+print(tools.slashCompoundToFraction('5/8+2/4+x'))
+print(tools.slashMixedToFraction('3+2+5/8+3/4'))
+for bad in ('3+2+5/8+3/4+2+1+4', '3.0/4.0'):
+    try:
+        tools.slashMixedToFraction(bad)
+    except exceptions21.Music21Exception as error:
+        print(type(error).__name__, error)
+print(tools.fractionToSlashMixed(((3, 8), (2, 8), (3, 4))))
+print(tools.fractionSum(((1, 13), (2, 17))), tools.fractionSum(()))
+print(tools.proportionToFraction(0.83333))
+print(tools.divisionOptionsAlgo(3, 128), tools.divisionOptionsPreset(5, 8))
+print(tools.divisionOptionsFractionsDownward(12, 16), tools.validDenominators[-1])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "MeterTerminalTuple(numerator=6, denominator=8, division=<MeterDivision.SLOW>)",
+        "((5, 8), (2, 4))",
+        "(((3, 8), (2, 8), (5, 8), (3, 4)), True)",
+        "MeterException cannot match denominator to numerator in: 3+2+5/8+3/4+2+1+4",
+        'TimeSignatureException Cannot create time signature from "3.0/4.0"',
+        "(('3+2', 8), ('3', 4))",
+        "(43, 221) (0, 1)",
+        "(5, 6)",
+        "(('1/128', '1/128', '1/128'), ('3/128',)) "
+        "(('2/8', '2/8', '1/8'), ('2/8', '1/8', '2/8'))",
+        "('6/8', '3/4') 128",
+    ]
+
+
+def test_a_frozen_duration_cannot_change():
+    """A `FrozenDuration` refuses every write, hashes by its value, is its
+    own copy, and thaws into a `Duration` that can change."""
+    import copy
+
+    fd = m.FrozenDuration(type="half", dots=2)
+    assert fd.quarterLength == 3.5
+    assert repr(fd) == "<music21.duration.FrozenDuration 3.5>"
+    with pytest.raises(TypeError, match="This FrozenDuration instance is immutable."):
+        fd.dots = 1
+    with pytest.raises(TypeError, match="immutable"):
+        fd.splitDotGroups(inPlace=True)
+    assert fd.dots == 2
+    assert copy.deepcopy(fd) is fd
+    assert copy.copy(fd) is fd
+    assert hash(fd) == hash(m.FrozenDuration(type="half", dots=2))
+    assert len({fd, m.FrozenDuration(type="half", dots=2)}) == 1
+    assert fd == m.Duration(3.5)
+
+    thawed = fd.unfreeze()
+    assert type(thawed) is m.Duration
+    thawed.dots = 0
+    assert (thawed.quarterLength, fd.quarterLength) == (2.0, 3.5)
+    halved = m.FrozenDuration(quarterLength=1.0).augmentOrDiminish(0.5)
+    assert type(halved) is m.Duration and halved.quarterLength == 0.5
+
+
+def test_provided_meter_core_shares_its_terminals_and_sequences(tmp_path):
+    """Provided, `meter.core` hands out one terminal per ratio and weight
+    and one sequence per sequence."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import meter
+quarter = meter.core.getMeterTerminal(1, 4)
+print(repr(quarter), meter.core.getMeterTerminal(1, 4) is quarter,
+      meter.core.getMeterTerminal(1, 4, weight=0.5) is quarter)
+four = meter.core.getMeterSequence('4/4', 4)
+print(repr(four), meter.core.getMeterSequence('4/4', 4) is four)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.meter.core.MeterTerminal 1/4> True False",
+        "<music21.meter.core.MeterSequence {1/4+1/4+1/4+1/4}> True",
+    ]
+
+
+def test_a_staff_group_reads_its_symbol_and_barring():
+    """A `StaffGroup` spans the parts given, takes its abbreviation as its
+    name where it has none, and reads its symbol and barring as music21
+    does, refusing what music21 refuses."""
+    p1, p2 = m.Part(), m.Part()
+    group = m.StaffGroup([p1, p2], abbreviation="Mba.", symbol="Brace")
+    assert group.name == "Mba." and group.abbreviation == "Mba."
+    assert group.symbol == "brace" and group.barTogether is True
+    assert len(group.getSpannedElements()) == 2
+    group.barTogether = "no"
+    assert group.barTogether is False
+    group.barTogether = "mensurstrich"
+    assert group.barTogether == "Mensurstrich"
+    group.barTogether = None
+    assert group.barTogether == "Mensurstrich"
+    group.symbol = "none"
+    assert group.symbol is None
+    with pytest.raises(m.StaffGroupException, match="the symbol value Wavy is not acceptable"):
+        group.symbol = "Wavy"
+    with pytest.raises(m.StaffGroupException, match="the bar together value maybe"):
+        group.barTogether = "maybe"
+    assert issubclass(m.StaffGroupException, m.SpannerException)
+
+
+def test_a_staff_group_keeps_the_barring_it_was_built_with():
+    """music21's constructor keeps `barTogether` unread, `None` and all."""
+    assert m.StaffGroup(barTogether="yes").barTogether == "yes"
+    assert m.StaffGroup(barTogether=None).barTogether is None
+
+
+def test_every_music21_object_has_a_style_and_a_duration():
+    """A `Music21Object` with no style or duration of its own makes music21's
+    on first asking: a style of its `_styleClass`, a duration of nothing."""
+    plain = m.Music21Object()
+    assert not plain.hasStyleInformation
+    assert type(plain.style) is m.Style and plain.hasStyleInformation
+    assert plain.duration.quarterLength == 0.0
+    assert plain.duration is plain.duration
+    assert type(m.TextExpression("x").style).__name__ == "TextStyle"
+
+    held = m.Duration(2.0)
+    plain.duration = held
+    assert plain.duration is held and held.client is plain
+    with pytest.raises(TypeError, match="this must be a Duration object, not 3"):
+        plain.duration = 3
+    assert m.Music21Object(quarterLength=1.5).duration.quarterLength == 1.5
+    # music21's `Chord` puts its own getter beside the setter it inherits.
+    assert isinstance(m.ChordBase.duration, property)
+
+
+def test_provided_checker_names_the_parts_breaking_a_rule(tmp_path):
+    """Provided, `figuredBass.checker` names the parts breaking each rule,
+    passing over resting parts, and keeps what it decides in the tables it
+    shares with `figuredBass.possibility`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from fractions import Fraction
+from music21 import note, pitch, stream
+from music21.figuredBass import checker, possibility
+P = pitch.Pitch
+print(checker.voiceCrossing((P('C5'), P('G5'), P('E4'))))
+print(checker.parallelOctaves((P('C4'), P('G3'), P('C3')), (P('D4'), P('A3'), P('D3'))))
+print(checker.hiddenFifths((P('E5'), P('C3')), (P('A5'), P('D3'))))
+possibility.parallelFifthsTable.clear()
+a, b = (P('B4'), P('G3'), P('C3')), (P('A4'), P('A3'), P('D3'))
+print(checker.parallelFifths(a, b), list(possibility.parallelFifthsTable.values()))
+rest = checker.generalNoteToPitch(note.Rest())
+print(checker._isRest(rest), checker.voiceCrossing((P('C4'), rest, P('G4'))))
+part = stream.Part()
+for unused in range(3):
+    part.append(note.Note('C3', quarterLength=Fraction(1, 3)))
+part.append(note.Note('F3'))
+print(sorted(checker.createOffsetMapping(part)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(1, 2)]",
+        "[(1, 3)]",
+        "[(1, 2)]",
+        "[(2, 3)] [True]",
+        "True [(1, 3)]",
+        "[(0.0, Fraction(1, 3)), (Fraction(1, 3), Fraction(2, 3)), "
+        "(Fraction(2, 3), 1.0), (1.0, 2.0)]",
+    ]
+
+
+def test_provided_sites_and_duration_have_music21s_constants(tmp_path):
+    """Provided, `sites.WEAKREF_ACTIVE`, a bare `Sites` and `duration`'s
+    tables are there, as `music21.base` and `music21.beam` use them."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21.sites import WEAKREF_ACTIVE, Sites
+from music21 import duration
+print(WEAKREF_ACTIVE, len(Sites()), Sites().getSiteCount(), Sites().get())
+print(duration.typeFromNumDict[8], duration.typeFromNumDict[0.5], list(duration.typeFromNumDict)[-5:])
+print(duration.typeToDuration['16th'], duration.typeToDuration['zero'], duration.typeFromNumDictKeys[:3])
+print(duration.ordinalTypeFromNum[3], len(duration.ordinalTypeFromNum), duration.defaultTupletNumerators)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True 1 0 [None]",
+        "eighth breve [0.0, 0.5, 0.25, 0.125, 0.0625]",
+        "0.25 0.0 [0.0, 0.0625, 0.125]",
+        "breve 16 (3, 5, 7, 11, 13)",
+    ]
+
+
+def test_provided_store_at_end_keeps_any_number_and_sets_the_site(tmp_path):
+    """Provided, `storeAtEnd` keeps a barline and a clef at the end, each
+    with the stream as its `activeSite`, as music21's `_endElements` do."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, clef, note, stream
+s = stream.Stream()
+s.insert(0, note.Note('C'))
+s.insert(2, note.Note('F'))
+r, c = bar.Repeat('end'), clef.TrebleClef()
+s.storeAtEnd(r)
+s.storeAtEnd(c)
+print(r.activeSite is s, c.activeSite is s, s.isAtEnd(c), c in s, s.elementOffset(c))
+for group in stream.iterator.OffsetIterator(s):
+    print(group)
+print(list(stream.iterator.OffsetIterator(s).getElementsByClass(clef.Clef)))
+s.remove(c)
+print(c in s, s.isAtEnd(r))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True True True 3.0",
+        "[<music21.note.Note C>]",
+        "[<music21.note.Note F>]",
+        "[<music21.bar.Repeat direction=end>, <music21.clef.TrebleClef>]",
+        "[[<music21.clef.TrebleClef>]]",
+        "False True",
+    ]
+
+
+def test_provided_stream_filters_answer_iterators(tmp_path):
+    """Provided, a stream's `getElementsByClass`, `notes` and their kin
+    answer music21's `StreamIterator`, whose `stream()` gathers them back
+    with the derivation music21 gives, the end kept at the end."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import bar, note, stream
+s = stream.Part()
+s.insert(0, note.Note('C'))
+s.append(note.Rest())
+s.append(note.Note('D'))
+b = bar.Barline()
+s.storeAtEnd(b)
+f = s.getElementsByClass(note.Note)
+print(type(f).__name__, len(f), f[1].activeSite is s)
+s2 = f.stream()
+print(type(s2).__name__, s2.derivation.method, s2.derivation.origin is s, [e.offset for e in s2])
+print(s.notesAndRests.stream().derivation.method, len(s.notes), s.getElementsNotOfClass(note.Rest).stream().derivation.method)
+s4 = s.iter().getElementsByClass(bar.Barline).stream()
+print(s4.isAtEnd(b))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "StreamIterator 2 True",
+        "Part getElementsByClass True [0.0, 2.0]",
+        "notesAndRests 2 getElementsNotOfClass",
+        "True",
+    ]
+
+
+def test_provided_streams_pickle_with_what_they_hold(tmp_path):
+    """Provided, a score pickles and reads back with its parts, measures,
+    notes, barlines and what is kept at the end, each where it stood, as
+    music21's freezing needs."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import pickle
+from music21 import bar, clef, meter, note, stream
+s = stream.Score(id='sc')
+p = stream.Part()
+m = stream.Measure(number=3)
+m.append(meter.TimeSignature('3/4'))
+m.append(note.Note('C', quarterLength=3))
+m.rightBarline = bar.Barline('final')
+m.storeAtEnd(clef.BassClef())
+p.append(m)
+s.insert(0, p)
+s2 = pickle.loads(pickle.dumps(s))
+m2 = s2.parts[0].getElementsByClass('Measure')[0]
+n = m2.notes[0]
+print(type(s2).__name__, s2.id, m2.number, n, n.getOffsetBySite(m2), n.measureNumber)
+print(m2.rightBarline, list(m2.iter()), m2.isAtEnd(m2.iter()[-1]))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Score sc 3 <music21.note.Note C> 0.0 3",
+        "<music21.bar.Barline type=final> [<music21.meter.TimeSignature 3/4>, "
+        "<music21.note.Note C>, <music21.bar.Barline type=final>, <music21.clef.BassClef>] True",
+    ]
+
+
+def test_provided_variant_is_music21s(tmp_path):
+    """Provided, `variant.Variant` holds its reading in a
+    `VariantStorage`, takes no time in the stream holding it, and is what
+    `addVariant` builds."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream, variant
+v = variant.Variant(name='paris')
+v.repeatAppend(note.Note(), 8)
+print(len(v.notes), v.highestTime, v.containedHighestTime, v.duration, v.isStream, v.groups)
+s = stream.Stream()
+s.append(v)
+s.append(note.Note())
+print(s.highestTime, list(s.iter()), v.activeSite is s)
+v.replacementQuarterLength = 4.0
+print(v.lengthType, type(v.containedSite).__name__, v.classSortOrder)
+s2 = stream.Stream([note.Note('C'), note.Note('D')])
+variant.addVariant(s2, 1.0, stream.Stream([note.Note('E')]), variantName='alt')
+found = s2.getElementsByClass(variant.Variant).first()
+print(found, found.groups, found.getOffsetBySite(s2))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "8 0.0 8.0 <music21.duration.Duration 0.0> False ['paris']",
+        "1.0 [<music21.variant.Variant object of length 8.0>, <music21.note.Note C>] True",
+        "elongation VariantStorage -22",
+        "<music21.variant.Variant object of length 2.0> ['alt'] 1.0",
+    ]
+
+
+def test_an_installed_note_s_sort_tuple_counts_music21_s_offset():
+    """Installed, a note music21's own stream holds answers `sortTuple`
+    with the offset it stands at there, as music21's does."""
+    pytest.importorskip("music21.stream")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import note, stream\n"
+        "s = stream.Stream()\n"
+        "n = note.Note()\n"
+        "s.insert(4, n)\n"
+        "print(n.sortTuple().shortRepr(), n.sortTuple() > 3.0)\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split()[0] == "4.0"
+    assert done.stdout.split()[-1] == "True"
+
+
+def test_an_installed_network_hands_out_music21_s_terminus():
+    """Installed, the wheel's network names its termini with music21's own
+    `Terminus`, so they equal what music21's code imported."""
+    pytest.importorskip("music21.stream")
+    # In a process of its own, as installing cannot be undone.
+    code = (
+        "import music21_rs; music21_rs.install_into_music21()\n"
+        "from music21 import scale\n"
+        "from music21.scale.intervalNetwork import Direction, Terminus\n"
+        "net = scale.CyclicalScale('c4', ['M9']).abstract._net\n"
+        "print(net.getNeighborNodeIds('c4', Terminus.LOW, 'b3') == (Terminus.LOW, Terminus.LOW))\n"
+    )
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["True"]
+
+
+def test_provided_spanners_words_and_variants_pickle(tmp_path):
+    """Provided, a stream holding a slur, a text expression and a variant
+    pickles, and the thawed slur joins the thawed stream's own note, as
+    music21's freezing needs."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+import copy, pickle
+from music21 import expressions, note, spanner, stream, variant
+s = stream.Stream()
+n = note.Note('D')
+s.insert(0, spanner.Slur([n]))
+s.insert(2, n)
+s.insert(0, expressions.TextExpression('dolce'))
+s.insert(0, variant.Variant([note.Note('E')], name='alt'))
+for thawed in (pickle.loads(pickle.dumps(s)), copy.deepcopy(s)):
+    print(thawed.spanners[0].getFirst() is thawed.notes[0], thawed.notes[0].offset)
+    words = thawed.getElementsByClass(expressions.TextExpression).first()
+    v = thawed.getElementsByClass(variant.Variant).first()
+    print(words.content, v.groups, list(v.notes))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True 2.0",
+        "dolce ['alt'] [<music21.note.Note E>]",
+    ] * 2
+
+
+def test_provided_streams_jsonpickle_with_what_they_hold(tmp_path):
+    """Provided, jsonpickle carries what a stream holds: it takes a stream
+    for a list, having `append` and `__getitem__`, and reads its state
+    rather than its reduction."""
+    jsonpickle = pytest.importorskip("jsonpickle")
+    # The interpreter below has no site-packages; jsonpickle's own
+    # directory is put on its path, and nothing else of it.
+    where = pathlib.Path(jsonpickle.__file__).resolve().parents[1]
+    code = f"""
+import sys
+sys.path.append({str(where)!r})
+import music21_rs
+music21_rs.provide_music21()
+import jsonpickle
+from music21 import note, stream
+s = stream.Stream()
+s.insert(1, note.Note('E'))
+thawed = jsonpickle.decode(jsonpickle.encode(s, keys=True), keys=True)
+print(type(thawed).__name__, list(thawed), thawed[0].offset)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["Stream [<music21.note.Note E>] 1.0"]
+
+
+def test_a_copied_measure_keeps_what_it_says_of_itself():
+    """A deep copy of a measure keeps its number, suffix, padding and
+    barlines, as a pickle of it does; music21's freezing copies the score
+    it freezes."""
+    import copy
+
+    measure = m.Measure(number=7)
+    measure.numberSuffix = "a"
+    measure.paddingLeft = 1.0
+    measure.leftBarline = m.Barline("heavy")
+    measure.append(m.Note("C"))
+    copied = copy.deepcopy(measure)
+    assert (copied.number, copied.numberSuffix, copied.paddingLeft) == (7, "a", 1.0)
+    assert copied.leftBarline.type == "heavy"
+    assert copied.leftBarline is not measure.leftBarline
+    assert [n.name for n in copied.notes] == ["C"]
+
+
+def test_provided_add_variant_takes_measures(tmp_path):
+    """Provided, `addVariant` builds a variant of measures: the package's
+    own streams, music21's not being there to build."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream, variant
+s = stream.Part([stream.Measure([note.Note('C', type='whole')])])
+reading = stream.Stream([stream.Measure([note.Note('D', type='whole')])])
+variant.addVariant(s, 0.0, reading, variantName='alt')
+v = s.getElementsByClass(variant.Variant).first()
+print(v.groups, type(v._stream[0]).__name__, v._stream[0].notes[0].name)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["['alt'] Measure D"]
+
+
+def test_music21s_abstract_scales_build_their_networks():
+    """The subclasses of `AbstractScale` build music21's networks: the
+    diatonic modes compare by network, the cyclical and octave-repeating
+    ones keep their steps, and a concrete scale stands on any of them."""
+    major, ionian = m.AbstractDiatonicScale("major"), m.AbstractDiatonicScale("Ionian")
+    assert major == ionian and major != m.AbstractDiatonicScale("lydian")
+    assert (major.type, ionian.mode, major.octaveDuplicating) == ("Abstract diatonic", "ionian", True)
+    assert m.AbstractOctatonicScale() == m.AbstractOctatonicScale()
+    assert [i.name for i in m.AbstractOctaveRepeatingScale(["M3"]).intervalList] == ["M3", "m6"]
+    assert m.AbstractCyclicalScale(["M3"]).getDegreeMaxUnique() == 3
+    assert not m.AbstractCyclicalScale(["P5"]).octaveDuplicating
+
+    octatonic = m.OctatonicScale("C", mode=2)
+    octatonic.abstract = m.AbstractOctatonicScale(mode=1)
+    assert str(octatonic.pitchFromDegree(2)) == "D-4"
+
+    blues = m.WeightedHexatonicBlues("c4")
+    assert blues.type == "Weighted Hexatonic Blues"
+    assert str(blues.pitchFromDegree(4)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.75)) == "F#4"
+    assert str(blues.nextPitch("f4", randomGenerator=lambda: 0.25)) == "G4"
+
+
+def test_provided_noteworthy_reads_through_the_crate(tmp_path):
+    """Provided, `music21.noteworthy` has music21's tables, a translator
+    that reads `.nwctxt` lines through the crate and spells staff
+    positions, and a converter with music21's byte readers."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import noteworthy, stream
+from music21.noteworthy import binaryTranslate, constants, dictionaries, translate
+print(constants.ClefNames[1], dictionaries.dictionaryBass[3], noteworthy.translate is not None)
+nwt = translate.NoteworthyTranslator()
+nwt.currentClef = 'BASS'
+print(nwt.getStepAndOctaveFromPosition(3), nwt.getMultiplePitchesFromPositionInfo('1,b3,5^'))
+s = nwt.parseList(['|AddStaff|', '|Clef|Type:Treble', '|Note|Dur:4th|Pos:0'])
+print(type(s).__name__, [n.nameWithOctave for n in s.recurse().notes])
+nwcc = binaryTranslate.NWCConverter()
+nwcc.fileContents = b'\\x02\\x01\\xff\\x00ab\\x00'
+print(nwcc.readLEShort(), nwcc.byteToSignedInt(), nwcc.readToNUL(), nwcc.readToNUL(False), nwcc.parsePosition)
+nwt = translate.NoteworthyTranslator()
+nwt.currentMeasure = stream.Measure()
+nwt.createClef({'Type': 'Bass', 'OctaveShift': 'Octave Down'})
+nwt.translateNote({'Dur': 'Half', 'Pos': '#-3^'})
+print(nwt.currentClef, list(nwt.currentMeasure), nwt.currentPosition(), nwt.tiedSteps)
+nwcc = binaryTranslate.NWCConverter()
+nwcc.version = 201
+nwcc.fileContents = b'\\x00\\x00\\x00\\x03\\x00\\x00\\x00'
+clef = binaryTranslate.NWCObject(parserParent=nwcc)
+clef.parse()
+print(clef.type, clef.dumpMethod(clef), nwcc.parsePosition)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "Bass G True",
+        "('G', 3) [<music21.pitch.Pitch E3>, <music21.pitch.Pitch G-3>, <music21.pitch.Pitch B3>]",
+        "Score ['B4']",
+        "258 -1 b'' b'ab' 4",
+        "BASS8dw [<music21.clef.Bass8vbClef>, <music21.note.Note A#>] 2.0 "
+        "{('A', 1): (<music21.stream.Measure 0 offset=0.0>, 2.0)}",
+        "Clef |Clef|Type:Tenor| 7",
+    ]
+
+
+def test_metadata_is_shown_as_music21_shows_it():
+    """music21 gives `Metadata` no repr of its own: it is shown by its
+    address, whatever its title, and a score's `show('text')` lists it
+    so."""
+    import re
+
+    for made in (m.Metadata(), m.Metadata(title="Jingle Bells")):
+        assert re.fullmatch(r"<music21\.metadata\.Metadata object at 0x[0-9a-f]+>", repr(made))
+
+
+def test_provided_noteworthy_translator_state_is_settable(tmp_path):
+    """Provided, code written for music21 sets the translator's placing
+    state directly, as music21's own `createStaff` does, and the
+    translator goes on from what it was set to."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import note, stream
+from music21.noteworthy import translate
+nwt = translate.NoteworthyTranslator()
+m = stream.Measure()
+nwt.currentMeasure = m
+nwt.translateNote({'Dur': '4th', 'Pos': '1^'})
+nwt.tiedSteps = {}
+nwt.openSlurs = []
+nwt.translateNote({'Dur': '4th', 'Pos': '1'})
+print(nwt.tiedSteps, nwt.openSlurs, [n.tie for n in m.notes])
+nwt.positionMeasure = m
+nwt.measurePosition = 3.0
+nwt.translateRest({'Dur': '4th'})
+print(nwt.positionMeasure is m, nwt.measurePosition, m.notesAndRests.last().offset)
+nwt.positionMeasure = None
+print(nwt.positionMeasure, nwt.currentPosition())
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{} [] [<music21.tie.Tie start>, None]",
+        "True 4.0 3.0",
+        "None 4.0",
+    ]
+
+
+def test_provided_musicxml_exports_as_music21_does(tmp_path):
+    """Provided, `musicxml.m21ToXml` writes a pitch as a whole document,
+    a note alone as the `<note>` its measure writes (appending it, as
+    music21's exporter does), and an empty score as music21's blank
+    page; `xmlObjects` and `helpers` carry music21's names."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import musicxml, note, pitch
+from music21.musicxml import helpers, m21ToXml, xmlObjects
+print({'helpers', 'm21ToXml', 'partStaffExporter', 'xmlObjects'} <= set(musicxml.__all__))
+out = m21ToXml.GeneralObjectExporter(pitch.Pitch('D#4')).parse().decode('utf-8')
+print('<alter>1</alter>' in out, out.count('<measure '))
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.noteToXml(note.Note('E-5', quarterLength=0.5)))
+print(len(MEX.xmlRoot))
+SX = m21ToXml.ScoreExporter()
+print(SX.parse().find('work/work-title').text)
+error = xmlObjects.MusicXMLExportException('too short')
+error.partName = 'Trumpet'
+error.measureNumber = '1'
+print(error, issubclass(m21ToXml.MusicXMLExportException, music21_rs._provide.Music21Exception))
+print(xmlObjects.booleanToYesNo(5), xmlObjects.isValidXSDID('4sad'))
+print(helpers.measureNumberComesBefore('23', '23a'), m21ToXml.typeToMusicXMLType('longa'))
+print([cls.__name__ for cls in m21ToXml.ScoreExporter.__mro__])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "True 1",
+        "<note>",
+        "  <pitch>",
+        "    <step>E</step>",
+        "    <alter>-1</alter>",
+        "    <octave>5</octave>",
+        "  </pitch>",
+        "  <duration>5040</duration>",
+        "  <type>eighth</type>",
+        "  <accidental>flat</accidental>",
+        "</note>",
+        "1",
+        "This Page Intentionally Left Blank",
+        "In part (Trumpet), measure (1): too short True",
+        "yes False",
+        "True long",
+        "['ScoreExporter', 'XMLExporterBase', 'PartStaffExporterMixin', 'object']",
+    ]
+
+
+def test_provided_musicxml_writes_a_dynamics_style_and_a_signatures_mode(tmp_path):
+    """Provided, a dynamic's style moves it as music21 writes it
+    (`relative-y` beside the default place), and a key signature given a
+    mode writes it, as music21's `dynamicToXml` and `keySignatureToXml`
+    docstrings show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, key
+from music21.musicxml import m21ToXml
+ppp = dynamics.Dynamic('ppp')
+ppp.style.relativeY = -10
+MEX = m21ToXml.MeasureExporter()
+print(MEX.dynamicToXml(ppp).find('direction-type/dynamics').attrib)
+ks = key.KeySignature(-3)
+print(getattr(ks, 'mode', None))
+ks.mode = 'major'
+print(MEX.keySignatureToXml(ks).find('mode').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{'default-x': '-36', 'default-y': '-80', 'relative-y': '-10'}",
+        "None",
+        "major",
+    ]
+
+
+def test_provided_musicxml_writes_a_numeral_as_a_harmony(tmp_path):
+    """Provided, a Roman numeral not written as its chord is a MusicXML 4
+    `<harmony>` holding a `<numeral>`, which takes no time: the next one
+    is moved to with a `<forward>`, as music21's
+    `test_roman_musicxml_two_kinds` and `romanNumeralToXml` show."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import roman, stream
+from music21.musicxml import m21ToXml
+rn1 = roman.RomanNumeral('I', 'C')
+rn1.duration.type = 'half'
+rn2 = roman.RomanNumeral('V', 'C')
+rn2.duration.type = 'half'
+m = stream.Measure()
+m.insert(0.0, rn1)
+m.insert(2.0, rn2)
+rn1.writeAsChord = False
+rn2.writeAsChord = False
+out = m21ToXml.GeneralObjectExporter().parse(m).decode('utf-8')
+print('<numeral' in out, '<forward>' in out, '<chord' in out, '<rest' in out)
+complexRn = roman.RomanNumeral('#iio65', 'e-')
+complexRn.followsKeyChange = True
+complexRn.writeAsChord = False
+MEX = m21ToXml.MeasureExporter()
+MEX.dump(MEX.romanNumeralToXml(complexRn))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True True False False",
+        "<harmony>",
+        "  <numeral>",
+        '    <numeral-root text="#iio65">2</numeral-root>',
+        '    <numeral-alter location="left">1.0</numeral-alter>',
+        "    <numeral-key>",
+        "      <numeral-fifths>-6</numeral-fifths>",
+        "      <numeral-mode>minor</numeral-mode>",
+        "    </numeral-key>",
+        "  </numeral>",
+        "  <kind>diminished-seventh</kind>",
+        "  <inversion>1</inversion>",
+        "</harmony>",
+    ]
+
+
+def test_provided_metadata_properties_and_exporter_steps(tmp_path):
+    """Provided, `metadata.properties` holds music21's vocabulary as
+    `PropertyDescription` dataclasses and its lookup tables, and the
+    exporter's style, spanner and staff-group steps answer as music21's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import dynamics, expressions, layout, spanner, stream
+from music21.metadata import properties
+from music21.musicxml import m21ToXml
+from xml.etree.ElementTree import fromstring as EL
+print(len(properties.STANDARD_PROPERTY_DESCRIPTIONS), properties.UNIQUE_NAME_TO_NAMESPACE_NAME['title'])
+print(properties.MUSIC21_WORK_ID_TO_UNIQUE_NAME['date'], properties.UNIQUE_NAME_TO_VALUE_TYPE['composer'].__name__)
+XB = m21ToXml.XMLExporterBase()
+mx = EL('<text>hi</text>')
+te = expressions.TextExpression('hi!')
+te.style.fontStyle = 'bolditalic'
+XB.setFont(mx, te)
+XB.dump(mx)
+ssp = m21ToXml.MeasureExporter._spannerStartParameters
+print(ssp('Ottava', spanner.Ottava(type='8va')), ssp('DynamicWedge', dynamics.Crescendo()))
+s = stream.Score()
+staves = []
+for name in ('a', 'b'):
+    staff = stream.PartStaff(id=name)
+    staff.insert(0, stream.Measure())
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+print(len(SX.joinableGroups()))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "131 dcterms:title",
+        "dateCreated Contributor",
+        '<text font-style="italic" font-weight="bold">hi</text>',
+        "{'type': 'down', 'size': 8} {'type': 'crescendo', 'spread': 0}",
+        "1",
+    ]
+
+
+def test_provided_musicxml_joins_staves_in_steps_and_writes_frames(tmp_path):
+    """Provided, the part-staff mixin's steps join a piano's staves over
+    ElementTree as the writer joins them, a fret board is a `<frame>`, and
+    a score's `StreamStyle` is written into its `<defaults>`."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import clef, layout, meter, note, stream, tablature
+from music21.musicxml import m21ToXml, partStaffExporter
+from xml.etree.ElementTree import fromstring as EL
+s = stream.Score()
+staves = []
+for c in (clef.TrebleClef(), clef.BassClef()):
+    staff = stream.PartStaff()
+    m = stream.Measure(number=1)
+    m.append([c, meter.TimeSignature('4/4'), note.Note(type='whole')])
+    staff.append(m)
+    staves.append(staff)
+    s.insert(0, staff)
+s.insert(0, layout.StaffGroup(staves))
+SX = m21ToXml.ScoreExporter(s)
+SX.scorePreliminaries()
+SX.parsePartlikeScore()
+SX.postPartProcess()
+root = SX.xmlRoot
+print(len(SX.partExporterList), len(root.findall('part')), len(root.findall('part/measure/note/staff')))
+print(root.find('part/measure/attributes/staves').text)
+measure = EL('<measure number="3"><note><staff>1</staff></note></measure>')
+try:
+    partStaffExporter.addStaffTags(measure, 2, tagList=['note'])
+except m21ToXml.MusicXMLExportException as error:
+    print(error)
+MEX = m21ToXml.MeasureExporter()
+board = tablature.GuitarFretBoard(fretNotes=[tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)])
+frame = MEX.fretBoardToXml(board)
+print(frame.find('frame-strings').text, [n.find('string').text for n in frame.findall('frame-note')])
+s.style.lineWidths.append(('beam', 5.0))
+print(m21ToXml.ScoreExporter(s).styleToXmlAppearance().find('line-width').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "1 1 2",
+        "2",
+        "In part (), measure (3): Attempted to create a second <staff> tag",
+        "6 ['3', '1']",
+        "5.0",
+    ]
+
+
+def test_provided_pedal_objects_and_chord_with_fret_board(tmp_path):
+    """Provided, music21's pedal objects and `ChordWithFretBoard` exist, and
+    the exporter writes them as music21's `pedalObjectToXml` and
+    `chordWithFretBoardToXml` do."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import expressions, tablature
+from music21.musicxml import m21ToXml
+pm = expressions.PedalMark()
+po = expressions.PedalBounce()
+pm.addSpannedElements(po)
+pm.pedalForm = expressions.PedalForm.Line
+pm.pedalType = expressions.PedalType.Sustain
+print(po, pm.pedalForm.value)
+MEX = m21ToXml.MeasureExporter()
+print(MEX.pedalObjectToXml(po).find('direction-type/pedal').attrib)
+notes = [tablature.FretNote(1, 2, 2), tablature.FretNote(3, 2, 1)]
+chord = tablature.ChordWithFretBoard('DM', numStrings=6, fretNotes=notes)
+chord.tuning = tablature.GuitarFretBoard().tuning
+print(chord, chord.getPitches()[-1])
+harmony = MEX.chordWithFretBoardToXml(chord)
+print(harmony.find('kind').text, harmony.find('frame/frame-strings').text)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.expressions.PedalBounce uninserted> line",
+        "{'line': 'yes', 'type': 'change'}",
+        "<music21.tablature.ChordWithFretBoard DM> F#4",
+        "major 6",
+    ]
+
+
+def test_a_chord_symbol_subclass_names_its_own_module():
+    """A subclass of `ChordSymbol` shows the module it lives in, as music21's
+    repr does, rather than `music21.harmony`."""
+
+    class Labelled(m.ChordSymbol):
+        pass
+
+    # music21's repr names the class by its qualified name.
+    Labelled.__module__ = "music21.tablature"
+    Labelled.__qualname__ = "Labelled"
+    assert repr(Labelled("D")).startswith("<music21.tablature.Labelled D")
+
+
+def test_provided_xmltom21_reads_one_element_at_a_time(tmp_path):
+    """music21's `MeasureParser` steps read an ElementTree element each, a
+    measure whole, and a part with its name in what it refuses."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import clef
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, PartParser, MusicXMLImportException,
+)
+mp = MeasureParser()
+c = mp.xmlToClef(EL('<clef><sign>G</sign><line>2</line>'
+                    '<clef-octave-change>-1</clef-octave-change></clef>'))
+print(isinstance(c, clef.Treble8vbClef))
+print(mp.xmlToPitch(EL('<note><pitch><step>E</step><alter>-1</alter>'
+                       '<octave>4</octave></pitch></note>')))
+mp = MeasureParser(EL('<measure number="12b"><note><rest/><duration>40320</duration></note></measure>'))
+mp.parse()
+print(mp.restAndNoteCount['rest'], mp.fullMeasureRest, mp.measureNumber, mp.numberSuffix)
+mp = MeasureParser()
+mp.lastClefs[1] = clef.Treble8vbClef()
+r = mp.xmlToRest(EL('<note><rest><display-step>B</display-step>'
+                    '<display-octave>3</display-octave></rest>'
+                    '<duration>5</duration><type>eighth</type></note>'))
+print(r.stepShift)
+pp = PartParser(mxPart=EL('<part><measure><note><type>thirty-tooth</type></note></measure></part>'),
+                mxScorePart=EL('<score-part><part-name>Elec.</part-name></score-part>'))
+try:
+    pp.parse()
+except MusicXMLImportException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "True",
+        "E-4",
+        "1 True 12 b",
+        "0",
+        "In part (Elec.), measure (0): found unknown MusicXML type: thirty-tooth",
+    ]
+
+
+def test_make_beams_in_place_beams_the_notes_held():
+    """`makeBeams(inPlace=True)` beams the stream's own notes and hands
+    back nothing, as music21's does."""
+    measure = m.Measure()
+    first = m.Note(64, quarterLength=0.25)
+    second = m.Note(67, quarterLength=0.25)
+    measure.append(m.TabClef())
+    measure.append(m.TimeSignature("4/4"))
+    measure.append(first)
+    measure.append(second)
+    assert measure.makeBeams(inPlace=True) is None
+    assert first.stemDirection == "down"
+    assert [beam.type for beam in first.beams] == ["start", "start"]
+    assert [beam.type for beam in second.beams] == ["stop", "stop"]
+
+
+def test_repeat_bracket_numbers_as_music21_does():
+    """`spanner.RepeatBracket` keeps the endings it marks in `numberRange`
+    and writes them back as music21 does."""
+    measure = m.Measure()
+    bracket = m.RepeatBracket(measure, number=1)
+    assert bracket.number == "1"
+    assert bracket.getSpannedElements() == [measure]
+    bracket.number = "1-3"
+    assert bracket.numberRange == [1, 2, 3]
+    bracket.number = [2, 3]
+    assert bracket.number == "2, 3"
+    bracket.number = "1, 2, 3"
+    assert bracket.number == "1-3"
+    bracket.number = "1, 2, 3, 7"
+    assert bracket.number == "1, 2, 3, 7"
+    assert m.RepeatBracket().numberRange == [0]
+    assert m.RepeatBracket().number == ""
+    with pytest.raises(m.SpannerException):
+        bracket.number = "x"
+
+
+def test_a_chord_symbol_read_keeps_inversion_placement_and_steps():
+    """A `<harmony>` read keeps where it is drawn, its added steps and
+    its inversion, as music21's reader does."""
+    harmony = (
+        '<harmony placement="below"><root><root-step>C</root-step></root>'
+        "<kind>major</kind><inversion>1</inversion>"
+        "<degree><degree-value>9</degree-value><degree-alter>0</degree-alter>"
+        "<degree-type>add</degree-type></degree></harmony>"
+    )
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes>" + harmony + "<note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    symbol = m.from_musicxml(document).recurse().getElementsByClass(m.ChordSymbol).first()
+    assert symbol.placement == "below"
+    assert symbol.inversion() == 1
+    assert [step.degree for step in symbol.getChordStepModifications()] == [9]
+
+
+def test_a_score_read_keeps_its_staff_groups_and_system_breaks():
+    """A score read keeps its `<part-group>` as a `StaffGroup` among its
+    elements and each `<print new-system>` as a `SystemLayout` in its
+    measure, as music21's reader does: bwv66.6 has one and eight."""
+    corpus = pathlib.Path(__file__).resolve().parents[2] / "music21" / "music21" / "corpus"
+    path = corpus / "bach" / "bwv66.6.mxl"
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    import zipfile
+
+    with zipfile.ZipFile(path) as archive:
+        name = next(n for n in archive.namelist() if not n.startswith("META"))
+        score = m.from_musicxml(archive.read(name).decode("utf-8"))
+    groups = [e for e in score.elements if type(e).__name__ == "StaffGroup"]
+    assert len(groups) == 1
+    assert len(groups[0].getSpannedElements()) == 4
+    layouts = [e for e in score.recurse() if type(e).__name__ == "SystemLayout"]
+    assert len(layouts) == 8
+    assert all(layout.isNew for layout in layouts)
+
+
+def test_provided_xmltom21_keeps_state_and_style_between_steps(tmp_path):
+    """music21's parsers carry tuplets from one note to the next, read an
+    encoding, layouts and the style attributes of any element, and keep
+    a part's last measure, as music21's docstrings show."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import base, duration, expressions, metadata, meter, note, stream
+from music21.musicxml.xmlToM21 import (
+    MeasureParser, MusicXMLImporter, PartParser, MusicXMLWarning, XMLParserBase,
+)
+def tupletNote(kind):
+    return EL('<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>'
+              '<type>eighth</type><time-modification><actual-notes>3</actual-notes>'
+              '<normal-notes>2</normal-notes></time-modification>'
+              f'<notations><tuplet type="{kind}"/></notations></note>')
+MP = MeasureParser()
+print([MP.xmlToTuplets(tupletNote(kind))[0].type for kind in ('start', 'stop')])
+XP = XMLParserBase()
+m21Obj = base.Music21Object()
+XP.setStyleAttributes(EL('<a x="20.1" y="10.0" z="yes" />'), m21Obj, ('w', 'x', 'y', 'z'),
+                      ('justify', 'absoluteX', 'absoluteY', 'hideObjectOnPrint'))
+print(m21Obj.style.absoluteX, m21Obj.style.absoluteY, m21Obj.style.hideObjectOnPrint)
+te = expressions.TextExpression('hi!')
+XP.setFont(EL('<text font-family="Courier,monospaced" font-size="24" font-weight="bold" />'), te)
+print(te.style.fontFamily, te.style.fontSize, te.style.fontWeight)
+n = note.Note('C#4')
+XP.setPrintObject(EL('<note print-object="no"/>'), n)
+print(n.style.hideObjectOnPrint)
+pl = MP.xmlPrintToPageLayout(EL('<print new-page="yes" page-number="5"><page-layout>'
+                                '<page-height>4000</page-height></page-layout></print>'))
+print(pl.isNew, pl.pageNumber, pl.pageHeight)
+sl = MP.xmlPrintToSystemLayout(EL('<print new-system="yes"><system-layout>'
+                                  '<system-distance>55</system-distance></system-layout></print>'))
+print(sl.isNew, sl.distance)
+MI = MusicXMLImporter()
+md = metadata.Metadata()
+MI.processEncoding(EL('<encoding><software>Finale v26.3 for Mac</software>'
+                      '<supports attribute="new-page" element="print" type="yes" value="yes"/>'
+                      '</encoding>'), md)
+print(MI.applyFinaleWorkarounds, MI.definesExplicitSystemBreaks, MI.definesExplicitPageBreaks,
+      'Finale v26.3 for Mac' in md.software)
+pp = PartParser()
+m = stream.Measure(number=4)
+m.numberSuffix = 'b'
+pp.setLastMeasureInfo(m)
+print(pp.lastMeasureNumber, pp.lastNumberSuffix, pp.lastTimeSignature)
+m = stream.Measure([meter.TimeSignature('6/8'), note.Note(duration=duration.Duration(3 + 3 / 480))])
+pp = PartParser()
+pp.lastMeasureOffset = 21.0
+pp.setLastMeasureInfo(m)
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    pp.adjustTimeAttributesFromMeasure(m)
+print(pp.lastMeasureOffset, [w.category is MusicXMLWarning for w in caught])
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['start', 'stop']",
+        "20.1 10 True",
+        "['Courier', 'monospaced'] 24 bold",
+        "True",
+        "True 5 4000",
+        "True 55",
+        "True False True True",
+        "4 b <music21.meter.TimeSignature 4/4>",
+        "24.0 [True]",
+    ]
+
+
+def test_core_insert_and_elements_changed_are_music21s():
+    """music21's readers put elements in with `coreInsert` and then call
+    `coreElementsChanged`; a stream here takes both."""
+    measure = m.Measure()
+    note = m.Note("D4")
+    measure.coreInsert(1.0, note)
+    measure.coreElementsChanged()
+    assert measure.elementOffset(note) == 1.0
+    assert list(measure.notes) == [note]
+
+
+def test_a_measures_left_barline_is_listed_where_music21_lists_it():
+    """`show('text')` lists a measure's left barline at nought among what
+    stands there, by its sort order, as music21 holds it."""
+    measure = m.Measure()
+    measure.insert(0.0, m.TextExpression("G"))
+    measure.append(m.Note("A4"))
+    measure.leftBarline = m.Barline("regular")
+    lines = measure.recurseRepr().splitlines()
+    assert lines == [
+        "{0.0} <music21.expressions.TextExpression 'G'>",
+        "{0.0} <music21.bar.Barline type=regular>",
+        "{0.0} <music21.note.Note A>",
+    ]
+
+
+def test_a_noteworthy_endings_bracket_stands_where_music21_appends_it():
+    """music21's NoteWorthy reader appends a `RepeatBracket` to the part
+    as the ending's last measure starts; its MusicXML reader puts one at
+    nought."""
+    path = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "music21" / "music21" / "noteworthy" / "jingle_v175.nwc"
+    )
+    if not path.is_file():
+        pytest.skip("music21's submodule is not checked out")
+    from music21_rs import converter
+
+    part = converter.parse(str(path)).parts[0]
+    brackets = [e for e in part.elements if type(e).__name__ == "RepeatBracket"]
+    assert [part.elementOffset(bracket) for bracket in brackets] == [28.0]
+    assert [measure.number for measure in brackets[0].getSpannedElements()] == [5, 6]
+
+
+def test_a_rehearsal_mark_counts_on_as_music21s_does():
+    """`expressions.RehearsalMark` keeps its content as given and counts on
+    in the numbering it reads in; a score read keeps its marks."""
+    assert repr(m.RehearsalMark("B")) == "<music21.expressions.RehearsalMark 'B'>"
+    assert m.RehearsalMark("Z").nextContent() == "AA"
+    assert m.RehearsalMark("IV").nextContent() == "V"
+    assert m.RehearsalMark(7).nextContent() == 8
+    assert m.RehearsalMark("I", numbering="alphabetical").nextContent() == "J"
+    assert m.RehearsalMark("IV", numbering="roman").nextMark().numbering == "roman"
+    assert m.RehearsalMark._getNumberingFromContent("CI") == "roman"
+    with pytest.raises(m.ExpressionException):
+        m.RehearsalMark("A", numbering="greek")
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>'
+        "</attributes><direction><direction-type><rehearsal>A</rehearsal>"
+        "</direction-type></direction><note><pitch><step>C</step><octave>4</octave>"
+        "</pitch><duration>4</duration><type>whole</type></note></measure></part>"
+        "</score-partwise>"
+    )
+    marks = m.from_musicxml(document).recurse().getElementsByClass(m.RehearsalMark)
+    assert [mark.content for mark in marks] == ["A"]
+
+
+def test_provided_xmltom21_warns_of_a_key_outside_the_percussion_map(tmp_path):
+    """A `<midi-unpitched>` key outside General MIDI's map is read as a bare
+    unpitched instrument with a `MusicXMLWarning`, as music21 warns."""
+    code = """
+import warnings
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21.musicxml.xmlToM21 import PartParser, MusicXMLWarning
+scorePart = EL('<score-part id="P4"><part-name>Hi-Hat Rim</part-name>'
+               '<score-instrument id="P4-I23"><instrument-name>Hi-Hat Rim</instrument-name>'
+               '</score-instrument><midi-instrument id="P4-I23"><midi-channel>10</midi-channel>'
+               '<midi-unpitched>23</midi-unpitched></midi-instrument></score-part>')
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter('always')
+    unp = PartParser().getDefaultInstrument(scorePart)
+print([(w.category is MusicXMLWarning, str(w.message)) for w in caught])
+print(type(unp).__name__, unp.percMapPitch)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[(True, '22 does not map to a valid instrument!')]",
+        "UnpitchedPercussion 22",
+    ]
+
+
+def test_provided_direction_types_build_spanners_between_calls(tmp_path):
+    """`xmlDirectionTypeToSpanners` keeps a part's spanners from one call to
+    the next, as music21's spanner bundle does: a wedge begun, then ended
+    on the last note; a bracket's heights; a pedal's bounce and gaps."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import note
+from music21.musicxml.xmlToM21 import MeasureParser
+MP = MeasureParser()
+n1 = note.Note('D4')
+MP.nLast = n1
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="crescendo" number="2"/>')))
+print(MP.xmlDirectionTypeToSpanners(EL('<wedge type="stop" number="2"/>')), list(MP.spannerBundle))
+mp = MeasureParser()
+line = mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="start" line-end="down" end-length="12.5" number="1"></bracket>'))[0]
+mp.xmlDirectionTypeToSpanners(
+    EL('<bracket type="stop" line-end="down" end-length="12.5" number="1"></bracket>'))
+print(line.startHeight, line.endHeight)
+MP = MeasureParser()
+MP.nLast = n1
+pedal = MP.xmlDirectionTypeToSpanners(EL('<pedal type="sostenuto" sign="yes" number="2"/>'), 1, 0.5)[0]
+for kind, at in (('resume', 0.5), ('change', 1.0), ('discontinue', 2.0), ('resume', 3.5), ('stop', 4.0)):
+    MP.xmlDirectionTypeToSpanners(EL(f'<pedal type="{kind}" line="yes" number="2"/>'), 1, at)
+print(pedal.pedalForm, pedal.getFirst(), pedal.getLast() is n1)
+print(MP.stream.elements)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "[<music21.dynamics.Crescendo>]",
+        "[] [<music21.dynamics.Crescendo <music21.note.Note D>>]",
+        "12.5 12.5",
+        "symbolline <music21.expressions.PedalBounce at 1.0> True",
+        "(<music21.expressions.PedalBounce at 1.0>, <music21.expressions.PedalGapStart at 2.0>,"
+        " <music21.expressions.PedalGapEnd at 3.5>)",
+    ]
+
+
+def test_provided_xmltom21_reads_notation_spanners_keys_voices_and_credits(tmp_path):
+    """The rest of music21's per-element steps: slurs and tremolos kept
+    between notes, a key's octaves and steps, a measure's voices, credits
+    and rights, bends and harmonics, and styles drawn as music21's."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import base, expressions, key, note, spanner
+from music21.musicxml.xmlToM21 import MeasureParser, MusicXMLImporter, XMLParserBase
+MP = MeasureParser()
+n1, n2 = note.Note('C4'), note.Note('D4')
+MP.xmlNotationsToSpanners(EL('<notations><slur type="start" number="1"/></notations>'), n1)
+slur = MP.xmlOneSpanner(EL('<slur type="stop" number="1"/>'), n2, spanner.Slur)
+print(slur, slur.completeStatus, len(MP.spannerBundle))
+print(MP.xmlToTremolo(EL('<tremolo type="start">2</tremolo>'), n1))
+ks = key.KeySignature(-4)
+MP.mxKeyOctaves(EL('<key><fifths>-4</fifths><key-octave number="1">3</key-octave></key>'), ks)
+print(ks.alteredPitches[0])
+print(MP.nonTraditionalKeySignature(EL('<key><key-step>G</key-step><key-alter>1</key-alter>'
+                                       '<key-accidental>sharp</key-accidental></key>')))
+MP = MeasureParser()
+MP.mxMeasure = EL('<measure><note><voice>1</voice></note><forward><voice>2</voice></forward></measure>')
+MP.updateVoiceInformation()
+print(sorted(MP.voiceIndices), MP.useVoices, len(MP.stream))
+MI = MusicXMLImporter()
+print(repr(MI.creatorToContributor(EL('<creator type="composer">Beethoven, Ludwig van</creator>'))))
+print(repr(MI.rightsToCopyright(EL('<rights type="owner">CC-SA-BY</rights>'))))
+print(repr(MI.xmlCreditToTextBox(EL('<credit><credit-words/></credit>'))))
+a = MP.xmlTechnicalToArticulation(EL('<bend><bend-alter>-1</bend-alter><with-bar>dip</with-bar></bend>'))
+print(a.withBar, MP.xmlTechnicalToArticulation(EL('<harmonic><sounding-pitch/></harmonic>')).pitchType)
+a = MP.xmlToArticulation(EL('<doit dash-length="2" line-shape="curved"/>'))
+print(a.style.dashLength, a.style.lineShape)
+try:
+    base.Music21Object().style.justify
+except AttributeError as error:
+    print(error)
+lyric = note.Lyric()
+MP.xmlToLyric(EL('<lyric color="red"><text>word</text></lyric>'), lyric)
+print(lyric.style.color)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.spanner.Slur <music21.note.Note C><music21.note.Note D>> True 1",
+        "<music21.expressions.TremoloSpanner <music21.note.Note C>>",
+        "B-3",
+        "<music21.key.KeySignature of pitches: [G#]>",
+        "['1', '2'] True 2",
+        "<music21.metadata.primitives.Contributor composer:Beethoven, Ludwig van>",
+        "<music21.metadata.primitives.Copyright CC-SA-BY>",
+        "<music21.text.TextBox ''>",
+        "dip sounding",
+        "2 curved",
+        "'Style' object has no attribute 'justify'",
+        "red",
+    ]
+
+
+def test_provided_style_attributes_take_their_names_in_camel_case(tmp_path):
+    """Given no music21 names, `setStyleAttributes` and
+    `_setAttributeFromTagText` write each MusicXML name in camel case."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import expressions, pitch
+from music21.musicxml import xmlToM21
+te = expressions.TextExpression('hi')
+xmlToM21.XMLParserBase().setStyleAttributes(EL('<words font-size="9"/>'), te, ('font-size',))
+acc = pitch.Accidental()
+xmlToM21._setAttributeFromTagText(acc, EL('<accidental><alter>-2</alter></accidental>'), 'alter',
+                                  transform=float)
+print(te.style.fontSize, acc.alter)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["9 -2.0"]
+
+
+def test_a_pickle_names_the_thawing_function_by_the_package():
+    """A pickle names `_thawed` by the package, `music21_rs`, which every
+    build has, not by the extension module inside the wheel: one written by
+    the wheel is read back where the crate is linked in under that name."""
+    import pickle
+
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    data = pickle.dumps(s)
+    assert b"music21_rs.music21_rs" not in data
+    assert pickle.loads(data)[0].nameWithOctave == "C4"
+
+
+def test_a_note_read_keeps_its_fermata():
+    """A `<fermata>` read stays on the package's note as a `Fermata` with
+    its type and shape, beside the note's ornaments."""
+    document = (
+        '<score-partwise><part-list><score-part id="P1"/></part-list>'
+        '<part id="P1"><measure><attributes><divisions>1</divisions></attributes>'
+        "<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration>"
+        '<type>quarter</type><notations><fermata type="upright">angled</fermata>'
+        "<ornaments><turn/></ornaments></notations></note></measure></part></score-partwise>"
+    )
+    held = m.from_musicxml(document).recurse().notes.first().expressions
+    assert [type(e).__name__ for e in held] == ["Fermata", "Turn"]
+    assert (held[0].type, held[0].shape) == ("upright", "angled")
+
+
+def test_an_element_answers_its_id_as_music21s_does():
+    """Every element has music21's `id`: the one given, or else a number
+    of its own."""
+    interval = m.Interval("M2")
+    assert isinstance(interval.id, int)
+    interval.id = "x"
+    assert interval.id == "x"
+    note = m.Note("C4")
+    note.id = "n2"
+    assert note.id == "n2"
+
+
+def test_provided_xmltom21_reads_meters_modulations_details_and_graces(tmp_path):
+    """The last of music21's per-element docstrings: a meter of no
+    numbers, a metric modulation, staff details, a transposition's id,
+    a grace, a level-only comment, unpitched notes in one chord, and a
+    rest of several measures filled one rest at a time."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from xml.etree.ElementTree import fromstring as EL
+from music21 import duration, note, spanner
+from music21.musicxml.xmlToM21 import MeasureParser, PartParser, XMLParserBase
+MP = MeasureParser()
+print(MP.xmlToTimeSignature(EL('<time><senza-misura>0</senza-misura></time>')))
+print(MP.xmlToTempoIndication(EL('<metronome><beat-unit>half</beat-unit><beat-unit>quarter</beat-unit></metronome>')))
+stl = MP.xmlStaffLayoutFromStaffDetails(EL('<details number="2" print-object="no"><staff-lines>4</staff-lines></details>'))
+print(stl.staffLines, stl.staffNumber, stl.hidden)
+print(MP.xmlTransposeToInterval(EL('<transpose id="x"><diatonic>-1</diatonic><chromatic>-2</chromatic></transpose>')).id)
+c = duration.Duration()
+MP.divisions = 10080
+print(MP.xmlToDuration(EL('<note><duration>7560</duration><type>eighth</type><dot/></note>'), c), c)
+grace = MP.xmlGraceToGrace(EL('<grace slash="no"/>'), note.Note('C4'))
+print(grace.duration.slash)
+n = note.Note('C#4')
+XMLParserBase().setEditorial(EL('<note><level reference="no">ed</level></note>'), n)
+print(n.hasEditorialInformation, len(n.editorial.comments), n.editorial.comments[0].levelInformation)
+a = EL('<note><unpitched><display-step>A</display-step><display-octave>3</display-octave></unpitched><duration>1</duration><type>quarter</type></note>')
+b = EL('<note><chord/><unpitched><display-step>B</display-step><display-octave>3</display-octave></unpitched><duration>1</duration><type>quarter</type></note>')
+print(MP.xmlToChord([a, b]))
+pp = PartParser()
+pp.activeMultiMeasureRestSpanner = spanner.MultiMeasureRest()
+pp.multiMeasureRestsToCapture = 2
+pp.applyMultiMeasureRest(note.Rest(type='whole'))
+pp.applyMultiMeasureRest(note.Rest(type='whole'))
+print(pp.activeMultiMeasureRestSpanner, list(pp.stream))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "<music21.meter.SenzaMisuraTimeSignature 0>",
+        "<music21.tempo.MetricModulation <music21.tempo.MetronomeMark Half=None>"
+        "=<music21.tempo.MetronomeMark Quarter=None>>",
+        "4 2 True",
+        "x",
+        "None <music21.duration.Duration 0.75>",
+        "False",
+        "True 1 ed",
+        "<music21.percussion.PercussionChord [unpitched[A3] unpitched[B3]]>",
+        "None [<music21.spanner.MultiMeasureRest 2 measures>]",
+    ]
+
+
+def test_a_stream_is_indexed_by_a_class():
+    """A class, or several, finds those elements all through the stream, as
+    music21's `s[note.Note]` does."""
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    s.append(m.Rest())
+    voice = m.Voice()
+    voice.insert(0.0, m.Note("D4"))
+    s.insert(2.0, voice)
+    assert [n.name for n in s[m.Note]] == ["C", "D"]
+    assert len(s[m.Note, m.Rest]) == 3
+
+
+def test_provided_graph_works_out_its_data_without_matplotlib(tmp_path):
+    """Colours, ticks and the choice of plot are the crate's; a graph that
+    would draw refuses, as music21's does, without matplotlib."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import graph
+print(graph.utilities.getColor('Steel Blue'), graph.utilities.getColor([0.5, 0.5, 0.5]))
+print(graph.findPlot.getPlotsToMake('scatter', 'pc', 'offset'))
+ax = graph.axis.DynamicsAxis()
+ax.minValue, ax.maxValue = 3, 4
+print(ax.ticks())
+try:
+    graph.primitives.Graph()
+except graph.utilities.GraphException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "#4682b4 #808080",
+        "[<class 'music21.graph.plot.ScatterPitchClassOffset'>]",
+        "[(3, '$ppp$'), (4, '$pp$')]",
+        "could not find matplotlib, graphing is not allowed",
+    ]
+
+
+def test_provided_graph_plots_a_stream_with_matplotlib(tmp_path):
+    """A histogram's data, read off a stream, and its figure drawn."""
+    pytest.importorskip("matplotlib")
+    code = """
+import importlib.util
+if importlib.util.find_spec('music21') is not None:
+    print('skip')
+    raise SystemExit
+import music21_rs
+music21_rs.provide_music21()
+import matplotlib
+matplotlib.use('Agg')
+from music21 import graph, note, stream
+s = stream.Stream([note.Note('C4'), note.Note('E4'), note.Note('C4')])
+plot = graph.plot.HistogramPitchSpace(s, doneAction=None)
+plot.run()
+print(plot.data)
+print(plot.axis['x']['ticks'])
+print(type(plot.figure).__name__)
+"""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=tmp_path,
+        env=env,
+    )
+    assert done.returncode == 0, done.stderr
+    if done.stdout.strip() == "skip":
+        pytest.skip("music21 is installed beside this package")
+    assert done.stdout.splitlines() == [
+        "[(1, 2, {}), (2, 1, {})]",
+        "([1, 2], ['C4', 'E'])",
+        "Figure",
+    ]
+
+
+def test_provided_music21_keeps_its_cache_apart(tmp_path):
+    """Provided, music21's temporary files, its parsed-score pickles among
+    them, go in a directory of the package's own, so music21 itself never
+    reads a pickle the package wrote under the same name."""
+    code = """
+import tempfile, pathlib
+import music21_rs
+music21_rs.provide_music21()
+from music21 import environment
+root = pathlib.Path(environment.Environment().getRootTempDir())
+print(root.name, root.parent == pathlib.Path(tempfile.gettempdir()) / 'music21')
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["music21-rs", "True"]
+
+
+def test_an_installed_wheel_reads_music21s_own_cached_scores(tmp_path):
+    """A score music21 itself parsed and cached reads back whole once the
+    wheel is installed: its notes keep their lyrics and pitches. music21
+    pickles its own state as a plain dictionary, which has to reach the
+    installed classes' properties."""
+    pytest.importorskip("music21.stream")
+    count = (
+        "import tempfile, sys\n"
+        f"tempfile.tempdir = {str(tmp_path)!r}\n"
+        "import music21_rs\n"
+        "if sys.argv[1] == 'install':\n"
+        "    music21_rs.install_into_music21()\n"
+        "from music21 import corpus\n"
+        "s = corpus.parse('handel/rinaldo/lascia_chio_pianga')\n"
+        "notes = list(s.recurse().notes)\n"
+        "print(len([n for n in notes if n.lyrics]), notes[0].pitches[0].nameWithOctave)\n"
+    )
+    plain = subprocess.run([sys.executable, "-c", count, "plain"], capture_output=True, text=True)
+    assert plain.returncode == 0, plain.stderr
+    installed = subprocess.run([sys.executable, "-c", count, "install"], capture_output=True, text=True)
+    assert installed.returncode == 0, installed.stderr
+    assert installed.stdout.split() == plain.stdout.split()

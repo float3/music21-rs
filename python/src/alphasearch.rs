@@ -13,7 +13,7 @@
 #![allow(non_snake_case)]
 
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString};
+use pyo3::types::{PyDict, PyList};
 
 use music21::alpha::analysis::search::{
     PitchAttribute, RunDirection, ScaleRunOptions, find_consecutive_scale,
@@ -64,14 +64,14 @@ fn direction_object<'py>(
     py: Python<'py>,
     direction: Option<RunDirection>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (member, text) = match direction {
+    let member = match direction {
         None => return Ok(py.None().into_bound(py)),
-        Some(RunDirection::Ascending) => ("ASCENDING", "ascending"),
-        Some(RunDirection::Descending) => ("DESCENDING", "descending"),
+        Some(RunDirection::Ascending) => "ASCENDING",
+        Some(RunDirection::Descending) => "DESCENDING",
     };
     match crate::real_music21(py, "music21.scale.intervalNetwork") {
         Ok(network) => network.getattr("Direction")?.getattr(member),
-        Err(_) => Ok(PyString::new(py, text).into_any()),
+        Err(_) => crate::intervalnetwork::direction_member(py, member),
     }
 }
 

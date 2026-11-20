@@ -157,6 +157,20 @@ impl ScoreLayout {
                         made.inner.scaling_millimeters = read_tenths(Some(&value))?;
                     }
                     "scalingTenths" => made.inner.scaling_tenths = read_tenths(Some(&value))?,
+                    // The layouts it starts with, as music21's constructor
+                    // takes them.
+                    "pageLayout" if !value.is_none() => made.pageLayout = Some(value.extract()?),
+                    "systemLayout" if !value.is_none() => {
+                        made.systemLayout = Some(value.extract()?);
+                    }
+                    "staffLayoutList" if !value.is_none() => {
+                        made.staffLayoutList = pyo3::types::PyList::new(
+                            py,
+                            value.try_iter()?.collect::<PyResult<Vec<_>>>()?,
+                        )?
+                        .unbind();
+                    }
+                    "pageLayout" | "systemLayout" | "staffLayoutList" => {}
                     other => {
                         return Err(LayoutException::new_err(format!(
                             "a score layout here says nothing of {other}"
@@ -772,6 +786,19 @@ impl StaffLayout {
         self.inner.staff_lines = value;
     }
 
+    /// What the staff is for: music21's `staffType`, a member of
+    /// `stream.enums.StaffType`.
+    #[getter]
+    fn staffType<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        crate::streamenums::staff_type(py, self.inner.staff_type.as_str())
+    }
+
+    #[setter]
+    fn set_staffType(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.staff_type = read_staff_type(value)?;
+        Ok(())
+    }
+
     /// Whether it is hidden, or nothing to inherit whatever the part says.
     #[getter]
     fn hidden(&self) -> Option<bool> {
@@ -870,16 +897,26 @@ fn read_staff_type(value: &Bound<'_, PyAny>) -> PyResult<StaffType> {
         .ok_or_else(|| LayoutException::new_err(format!("no staff is of the type {said}")))
 }
 
-/// A crate layout as music21's own object, for a score built into
-/// music21's streams: music21's reader makes its own, which nothing
-/// installed stands in for. A measurement nobody gave stays `None`.
-pub(crate) fn music21_object<'py>(
-    py: Python<'py>,
+/// Where the layout classes are found: music21's own `layout` for a score
+/// built into music21's streams, which its reader makes and nothing
+/// installed stands in for, and this package for its own.
+pub(crate) fn classes_from(py: Python<'_>, music21: bool) -> PyResult<Bound<'_, PyModule>> {
+    match music21 {
+        true => py.import("music21.layout"),
+        false => py.import("music21_rs"),
+    }
+}
+
+/// A crate layout as an object of the classes `module` holds. A
+/// measurement nobody gave stays `None`.
+pub(crate) fn layout_object<'py>(
+    module: &Bound<'py, PyModule>,
     layout: &music21::layout::Layout,
 ) -> PyResult<Bound<'py, PyAny>> {
     use music21::layout::Layout;
 
-    let module = py.import("music21.layout")?;
+    let py = module.py();
+    let module = module.clone();
     let keywords = PyDict::new(py);
     let made = match layout {
         Layout::Score(score) => {
@@ -955,9 +992,12 @@ fn staff_object<'py>(
     keywords.set_item("staffNumber", staff.staff_number)?;
     keywords.set_item("staffLines", staff.staff_lines)?;
     keywords.set_item("hidden", staff.hidden)?;
-    let kind = module
-        .getattr("StaffType")?
-        .call1((staff.staff_type.as_str(),))?;
+    // music21's `layout` carries its `StaffType`; this package's is the
+    // one `stream.enums` holds.
+    let kind = match module.getattr("StaffType") {
+        Ok(class) => class.call1((staff.staff_type.as_str(),))?,
+        Err(_) => crate::streamenums::staff_type(py, staff.staff_type.as_str())?,
+    };
     keywords.set_item("staffType", kind)?;
     let made = module.getattr("StaffLayout")?.call((), Some(&keywords))?;
     // As music21's reader sets it, past the constructor's `float`: a
@@ -972,19 +1012,19 @@ fn staff_object<'py>(
     Ok(made)
 }
 
-/// A crate staff group as music21's own `StaffGroup` over `parts`, the
-/// parts it groups as already built.
-pub(crate) fn music21_staff_group<'py>(
-    py: Python<'py>,
+/// A crate staff group as a `StaffGroup` of the classes `module` holds,
+/// over `parts`, the parts it groups as already built.
+pub(crate) fn staff_group_object<'py>(
+    module: &Bound<'py, PyModule>,
     group: &music21::stream::StaffGroup,
     parts: Vec<Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    let py = module.py();
     let keywords = PyDict::new(py);
     keywords.set_item("name", group.name())?;
     keywords.set_item("abbreviation", group.abbreviation())?;
     keywords.set_item("symbol", group.symbol())?;
-    let made = py
-        .import("music21.layout")?
+    let made = module
         .getattr("StaffGroup")?
         .call((pyo3::types::PyTuple::new(py, parts)?,), Some(&keywords))?;
     // Not through the constructor, which keeps what it is given as given.
@@ -1003,8 +1043,185 @@ pub(crate) fn music21_staff_group<'py>(
     Ok(made)
 }
 
+pyo3::create_exception!(
+    music21_rs_facade,
+    StaffGroupException,
+    crate::spanner::SpannerException
+);
+
+/// music21's `layout.StaffGroup`: parts shown together under a bracket, a
+/// brace or another symbol, and perhaps one name. It is a `Spanner` over
+/// the parts.
+///
+/// `name` and `abbreviation` are plain attributes, as music21's are; the
+/// symbol and the barring are checked as they are written.
+#[pyclass(
+    name = "StaffGroup",
+    module = "music21.layout",
+    extends = crate::spanner::Spanner,
+    subclass
+)]
+pub struct StaffGroup {
+    /// The symbol, checked by the crate's group.
+    group: music21::StaffGroup,
+    /// music21's `_barTogether`: as the constructor was given it, or as
+    /// the setter read it.
+    bar_together: Barring,
+}
+
+/// What music21 keeps as `_barTogether`: the setter's `True`, `False` or
+/// `'Mensurstrich'`, or whatever word or nothing the constructor was given,
+/// which it keeps unread.
+enum Barring {
+    Flag(bool),
+    Word(String),
+    Unset,
+}
+
+impl Barring {
+    /// What the constructor was given, kept as given.
+    fn given(value: &Bound<'_, PyAny>) -> PyResult<Self> {
+        if value.is_none() {
+            return Ok(Self::Unset);
+        }
+        if let Ok(word) = value.extract::<String>() {
+            return Ok(Self::Word(word));
+        }
+        Ok(Self::Flag(value.is_truthy()?))
+    }
+
+    fn object(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(match self {
+            Self::Flag(flag) => flag.into_pyobject(py)?.to_owned().into_any().unbind(),
+            Self::Word(word) => word.into_pyobject(py)?.into_any().unbind(),
+            Self::Unset => py.None(),
+        })
+    }
+}
+
+#[pymethods]
+impl StaffGroup {
+    /// A group of nothing yet; `__init__` takes the parts.
+    #[new]
+    #[pyo3(signature = (*_spannedElements, **_keywords))]
+    fn new(
+        _spannedElements: &Bound<'_, pyo3::types::PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
+        let plain = crate::spanner::Spanner::of_kind(music21::spanner::SpannerKind::Slur);
+        crate::base::built(plain).add_subclass(Self {
+            group: music21::StaffGroup::new(Vec::new()),
+            bar_together: Barring::Flag(true),
+        })
+    }
+
+    /// The parts are joined by `Spanner.__init__`; the name is the
+    /// abbreviation where there is no name. `barTogether` is read from the
+    /// keywords, since one given as `None` is kept as `None`.
+    #[pyo3(signature = (
+        *spannedElements,
+        name = None,
+        abbreviation = None,
+        symbol = None,
+        **keywords
+    ))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        spannedElements: &Bound<'_, pyo3::types::PyTuple>,
+        name: Option<&Bound<'_, PyAny>>,
+        abbreviation: Option<&Bound<'_, PyAny>>,
+        symbol: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        let keywords = match keywords {
+            Some(keywords) => keywords.copy()?,
+            None => PyDict::new(py),
+        };
+        let barTogether = keywords.get_item("barTogether")?;
+        if barTogether.is_some() {
+            keywords.del_item("barTogether")?;
+        }
+        let mut arguments = vec![slf.clone().into_any()];
+        arguments.extend(spannedElements.iter());
+        py.get_type::<crate::spanner::Spanner>()
+            .getattr("__init__")?
+            .call(pyo3::types::PyTuple::new(py, arguments)?, Some(&keywords))?;
+        let abbreviation = abbreviation
+            .cloned()
+            .unwrap_or_else(|| py.None().into_bound(py));
+        let name = match name.filter(|name| name.is_truthy().unwrap_or(false)) {
+            Some(name) => name.clone(),
+            None => abbreviation.clone(),
+        };
+        slf.setattr("name", name)?;
+        slf.setattr("abbreviation", abbreviation)?;
+        Self::set_symbol(&mut slf.borrow_mut(), symbol)?;
+        if let Some(given) = barTogether {
+            slf.borrow_mut().bar_together = Barring::given(&given)?;
+        }
+        Ok(())
+    }
+
+    /// Whether the barlines run through the group: `True`, `False`, or
+    /// `'Mensurstrich'`, between the staves only. `'yes'` and `'no'` are
+    /// read as `True` and `False`, and `None` changes nothing.
+    #[getter]
+    fn get_barTogether(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.bar_together.object(py)
+    }
+
+    #[setter]
+    fn set_barTogether(&mut self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        if value.is_none() {
+            return Ok(());
+        }
+        let read = match value.extract::<String>() {
+            Ok(word) => music21::BarTogether::from_word(&word),
+            // `True` and `False`, and the numbers equal to them.
+            Err(_) if value.eq(true)? => Some(music21::BarTogether::Yes),
+            Err(_) if value.eq(false)? => Some(music21::BarTogether::No),
+            Err(_) => None,
+        };
+        self.bar_together = match read {
+            Some(music21::BarTogether::Yes) => Barring::Flag(true),
+            Some(music21::BarTogether::No) => Barring::Flag(false),
+            Some(music21::BarTogether::Mensurstrich) => Barring::Word("Mensurstrich".to_string()),
+            None => {
+                return Err(StaffGroupException::new_err(format!(
+                    "the bar together value {} is not acceptable",
+                    value.str()?
+                )));
+            }
+        };
+        Ok(())
+    }
+
+    /// What the group is drawn with: `'bracket'`, `'line'`, `'brace'` or
+    /// `'square'`, in any case, or `None`.
+    #[getter]
+    fn get_symbol(&self) -> Option<&str> {
+        self.group.symbol()
+    }
+
+    #[setter]
+    fn set_symbol(&mut self, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let written = match value.filter(|value| !value.is_none()) {
+            Some(value) => Some(value.str()?.to_string()),
+            None => None,
+        };
+        self.group.set_symbol(written.as_deref()).map_err(|_| {
+            StaffGroupException::new_err(format!(
+                "the symbol value {} is not acceptable",
+                written.as_deref().unwrap_or("None")
+            ))
+        })
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LayoutBase>()?;
+    m.add_class::<StaffGroup>()?;
     m.add_class::<ScoreLayout>()?;
     m.add_class::<PageLayout>()?;
     m.add_class::<SystemLayout>()?;

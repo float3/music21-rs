@@ -231,12 +231,13 @@ where it would sit best in a package of its own.
 **without music21 installed, the switch is `provide_music21()`.** an
 import hook answers `music21` and each module of music21's the package
 has classes for, with the package's classes, functions and constants
-under music21's names (`_homes.py`, generated from music21's own
-modules, says where each lives), and refuses any other module by name
-rather than faking it. `MUSIC21_RS_PROVIDE_MUSIC21=1` turns it on for
-code that never imports `music21_rs`. every lookup of music21's own
-state goes through `real_music21()`, which passes a provided module
-over, so the package then does what it does with no music21 at all.
+under music21's names (`python/src/homes.rs`, generated from music21's
+own modules by `xtask homes`, says where each lives), and refuses any
+other module by name rather than faking it.
+`MUSIC21_RS_PROVIDE_MUSIC21=1` turns it on for code that never imports
+`music21_rs`. every lookup of music21's own state goes through
+`real_music21()`, which passes a provided module over, so the package
+then does what it does with no music21 at all.
 *costs:* a provided module lacks whatever the package does not port,
 and says so only when the name is asked for.
 
@@ -252,8 +253,8 @@ subclass `list`; `Direction` and `Terminus` by the enum functional API;
 temporary files by Python's `tempfile`; Python ints cross as `BigInt`.
 
 **modules built whole are listed and built on first asking.** the
-extension names in `__music21_built_modules__` every module of music21's
-it builds whole -- `common` and its thirteen modules, `environment`,
+extension lists in `BUILT_MODULES` every module of music21's it builds
+whole -- `common` and its thirteen modules, `environment`,
 `style`, `stream.filters` and others -- and `_music21_module(name)`
 builds one, once, when `provide_music21()` first asks. a module whose
 names would shadow Python's own (`set`, `get`) cannot be names on the
@@ -264,11 +265,27 @@ provided module takes every name, private ones too, and its `__all__`;
 module built this way is not on `music21_rs` itself, only provided.
 
 **a provided module is music21's public surface, not its parser's
-insides.** music21's tests reach into `mei`, `musicxml`, `abcFormat`,
-`lily` and `musedata.translate` internals; those are not provided, nor
-`graph` (matplotlib's layer) or `tree.core` (another design). a stream
-iterator's filters apply when `addFilter` is called, not lazily.
-*costs:* music21's tests of those modules fail on the provided side.
+insides.** music21's tests reach into `mei`, `abcFormat`, `lily` and
+`musedata.translate` internals; those are not provided, nor `graph`
+(matplotlib's layer). a stream iterator's filters apply when `addFilter`
+is called, not lazily. *costs:* music21's tests of those modules fail on
+the provided side. *reversed in full 2026-11-19 by the maintainer:*
+`mei`, `abcFormat`, `musedata.translate`, `lily`, `graph` and
+`metadata.bundles` are ported and provided too, over the crate's readers
+and writers (a LilyPond writer, a corpus metadata cache, and matplotlib
+driven from Rust for `graph`). *reversed in part 2026-11-18 by the
+maintainer:*
+`musicxml` is provided in full (`m21ToXml`, `xmlToM21`, its helpers),
+over the crate's MusicXML reader and writer, as it blocks 803 of the
+gate's tests; `tree.core` and `tree.trees` are ported too.
+
+**a stream's filters answer a `StreamIterator`, as music21's do.**
+`getElementsByClass`, `getElementsNotOfClass`, `getElementsByOffset`,
+`notes` and `notesAndRests` hand back an iterator whose `stream()` builds
+the source's class; a member only streams have still answers, with
+music21's `StreamIteratorInefficientWarning`. *decided 2026-11-18,* for
+0.21.0: music21's tests call `.stream()` on what the filters return.
+*costs:* code that took the result for a `Stream` calls `.stream()`.
 
 **a pyo3 class takes a second base only where it adds no layout.**
 music21's middle classes (`ChordBase`, `StreamCore`) and articulations'
@@ -302,10 +319,7 @@ a rewrite every such caller would have to make. *costs:* a weak reference
 and a table row for every element ever put in a stream, and a lookup in
 that table on every put and every element handed out; every element class
 carries `weakref`; a stream built in Rust is a site only once it is a
-Python object, so each place that builds one has to make it one; the
-streams standing in for music21's iterators (`notes`,
-`getElementsByClass`, `getElementsByOffset`) are no sites of what they
-hold and hand it out as the stream they were picked from's; there are
+Python object, so each place that builds one has to make it one; there are
 references back to what holds an element, though weak ones, and one
 object can stand in two streams at two offsets. derivations are still not
 kept, so a search does not follow one, a spanner is no site of what it
@@ -322,6 +336,10 @@ each of its sites. held notes and durations are marked
 edit to any held element anywhere makes every stream read its lengths
 again once; music21's own uninstalled objects and Python-written classes
 tell only music21's sites, so they are read afresh each time.
+*added 2026-11-18:* a third count, of edits to any stream's contents,
+barlines and end elements, keys the `flatten()` a stream keeps, as
+music21 keeps it in `_cache`. *costs:* an edit to any stream anywhere
+lets every kept flattening go.
 
 **elements stand on real base classes.** `base.Music21Object`,
 `note.GeneralNote` and `note.NotRest` are pyo3 classes (`base.rs`) that
@@ -557,10 +575,11 @@ that are at parity. the pause is recorded against the test it landed on and
 taken off before the sides are compared; the clock time stays in the JSON.
 
 **parity tests are dealt to shards by measured time.**
-`python-parity/shards.py` deals the tests, slowest first, by the times in
-`test-times.toml`, and nextest's priorities start the slow ones first.
-refresh with `python3 python-parity/shards.py times shard*.log >
-python-parity/test-times.toml`. *costs:* the times go stale as tests
+the parity crate's `shards` binary deals the tests, slowest first, by the
+times in `test-times.toml`, and nextest's priorities start the slow ones
+first. the build job deals all five shards and hands each its filter.
+refresh with `cargo run --manifest-path python-parity/Cargo.toml --bin
+shards -- times shard*.log > python-parity/test-times.toml`. *costs:* the times go stale as tests
 change, and a test missing from the file is dealt as if quick.
 
 **the crate's events carry music21's priority.** `StreamEvent::priority`
@@ -585,10 +604,15 @@ more test names, and a score's place in the deal is a list kept by hand.
 
 ## packaging and tooling
 
-**the wheel is a mixed layout.** a checked-in `python/pysrc/music21_rs/__init__.py`
-beside the extension, rather than the one maturin writes, because the
-generated package imports every name — which would build all 27 exceptions
-and import music21 at import time.
+**the package is the extension.** maturin writes a package around a
+pure-Rust extension whose `__init__` star-imports every name, which would
+build all 27 exceptions and import music21 at import time. so
+`python/pysrc/music21_rs/__init__.py` is one line importing the extension,
+and the extension puts itself in `sys.modules` under the package's name as
+it loads: `import music21_rs` answers with the extension. its `converter`,
+`corpus` and the `provide_music21` import hook are built in Rust and
+registered in `sys.modules` as it loads; the exceptions are built on first
+asking by the module's own `__getattr__`.
 
 **the dependency is taken under another name.** this crate's library and the
 crate it wraps are both `music21_rs`, and rustdoc refuses to build a doctest
@@ -654,7 +678,8 @@ and each runner's job takes as long as all its versions do.
 
 **growing enums and every options struct are `#[non_exhaustive]`.**
 `StreamElement`, `StreamKind`, `SpannerKind`, `expressions::Expression`,
-`TuningSystem`, `ScaleType`, `stream::Analysis` and every `*Options`
+`TuningSystem`, `ScaleType`, `Simplification`, `DegreeComparison`,
+`stream::Analysis` and every `*Options`
 struct. A new variant or field then stops being a breaking change.
 *debated 2026-11-01:* thirteen breaking-change sections in five weeks were
 mostly variants and fields added. *costs:* a caller's `match` needs a

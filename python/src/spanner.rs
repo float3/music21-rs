@@ -112,8 +112,8 @@ impl Spanner {
             .iter()
             .map(|object| object.clone_ref(py))
             .collect();
-        let Ok(class) = crate::real_music21(py, "music21.stream")
-            .and_then(|module| module.getattr("SpannerStorage"))
+        let Some(Ok(class)) = crate::loaded_music21(py, "music21.stream")
+            .map(|module| module.getattr("SpannerStorage"))
         else {
             return Self::own_storage(slf, &held);
         };
@@ -138,6 +138,31 @@ impl Spanner {
         match class.call((elements,), Some(&keywords)) {
             Ok(made) => slf.borrow_mut().storage = Some(made.unbind()),
             Err(_) => return Self::own_storage(slf, &held),
+        }
+        Ok(())
+    }
+
+    /// Joins, in place of each object it joins, that object's copy in a
+    /// `deepcopy` memo, where there is one.
+    pub(crate) fn join_copies(slf: &Bound<'_, Self>, memo: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let mut changed = false;
+        {
+            let mut me = slf.borrow_mut();
+            for spanned in &mut me.spanned {
+                let key = spanned.bind(py).as_ptr() as usize;
+                if let Some(copy) = memo
+                    .call_method1("get", (key,))?
+                    .into_any()
+                    .extract::<Option<Py<PyAny>>>()?
+                {
+                    *spanned = copy;
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            Self::refresh_storage(slf)?;
         }
         Ok(())
     }
@@ -470,6 +495,42 @@ impl Spanner {
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         Self::__deepcopy__(slf, None).map(crate::base::shallow)
+    }
+
+    /// music21 freezes a score by pickling it. The kind lives in Rust and
+    /// the joined objects in a list the pickle carries, so a thawed slur
+    /// joins the thawed stream's own notes; the storage is rebuilt.
+    fn __reduce__(slf: &Bound<'_, Self>) -> PyResult<crate::Pickled> {
+        let py = slf.py();
+        let extra = PyDict::new(py);
+        {
+            let me = slf.borrow();
+            let spanned = me.spanned.iter().map(|one| one.clone_ref(py));
+            extra.set_item("spanned", PyList::new(py, spanned)?)?;
+            extra.set_item("idLocal", me.idLocal.as_ref())?;
+        }
+        crate::pickled_extra(slf, &slf.borrow().inner, Some(&extra))
+    }
+
+    fn __setstate__(slf: &Bound<'_, Self>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+        let py = slf.py();
+        let (inner, extra) = crate::unpickled_extra::<_, RsSpanner>(slf, state)?;
+        {
+            let mut me = slf.borrow_mut();
+            if let Some(inner) = inner {
+                me.inner = inner;
+            }
+            if let Some(extra) = extra {
+                let extra = extra.bind(py);
+                if let Ok(spanned) = extra.get_item("spanned") {
+                    me.spanned = spanned.extract()?;
+                }
+                if let Ok(id) = extra.get_item("idLocal") {
+                    me.idLocal = (!id.is_none()).then(|| id.unbind());
+                }
+            }
+        }
+        Self::refresh_storage(slf)
     }
 
     /// What music21 compares two spanners by: its own
@@ -1024,6 +1085,60 @@ impl Spanner {
         Ok(me.inner.shift().is_some_and(|shift| shift.transposing()))
     }
 
+    /// Which pedal a pedal mark holds: music21's `pedalType`, a member of
+    /// `PedalType`, or `None` where nothing says.
+    #[getter]
+    fn pedalType<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        only(slf, SpannerKind::PedalMark, "pedalType")?;
+        let named = slf
+            .borrow()
+            .inner
+            .pedal()
+            .and_then(|pedal| pedal.pedal_type);
+        match named {
+            Some(kind) => crate::pedals::pedal_enum(py, crate::pedals::PedalEnum::Type)?
+                .call1((kind.as_str(),)),
+            None => Ok(py.None().into_bound(py)),
+        }
+    }
+
+    #[setter]
+    fn set_pedalType(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        only(slf, SpannerKind::PedalMark, "pedalType")?;
+        let named = pedal_name(value)?;
+        let mut me = slf.borrow_mut();
+        let mut pedal = me.inner.pedal().unwrap_or_default();
+        pedal.pedal_type = named.as_deref().and_then(music21::PedalType::from_name);
+        me.inner.set_pedal(Some(pedal));
+        Ok(())
+    }
+
+    /// How a pedal mark is drawn: music21's `pedalForm`, a member of
+    /// `PedalForm`, or `None` where nothing says.
+    #[getter]
+    fn pedalForm<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
+        only(slf, SpannerKind::PedalMark, "pedalForm")?;
+        let form = slf.borrow().inner.pedal().and_then(|pedal| pedal.form);
+        match form {
+            Some(form) => crate::pedals::pedal_enum(py, crate::pedals::PedalEnum::Form)?
+                .call1((form.as_str(),)),
+            None => Ok(py.None().into_bound(py)),
+        }
+    }
+
+    #[setter]
+    fn set_pedalForm(slf: &Bound<'_, Self>, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        only(slf, SpannerKind::PedalMark, "pedalForm")?;
+        let named = pedal_name(value)?;
+        let mut me = slf.borrow_mut();
+        let mut pedal = me.inner.pedal().unwrap_or_default();
+        pedal.form = named.as_deref().and_then(music21::PedalForm::from_name);
+        me.inner.set_pedal(Some(pedal));
+        Ok(())
+    }
+
     /// How many measures a rest of several lasts: music21's `numRests`,
     /// the number it was given or else how many rests it joins.
     #[getter]
@@ -1165,7 +1280,16 @@ impl Spanner {
         }
         // music21's `Ottava._reprInternal` says the shift and whether the
         // notes under it are written where they sound.
-        let said = if kind == SpannerKind::Ottava {
+        let said = if kind == SpannerKind::RepeatBracket {
+            // music21's `RepeatBracket._reprInternal`: what is shown, or
+            // the numbers.
+            let shown = slf.getattr("overrideDisplay")?;
+            let shown: String = match shown.is_none() {
+                true => slf.getattr("number")?.extract()?,
+                false => shown.str()?.to_string(),
+            };
+            format!("{shown} ")
+        } else if kind == SpannerKind::Ottava {
             let shift = slf.borrow().inner.shift();
             let transposing = if shift.is_some_and(|shift| shift.transposing()) {
                 "transposing"
@@ -1805,6 +1929,19 @@ fn module_of(kind: SpannerKind) -> &'static str {
     }
 }
 
+/// The value of a pedal enum's member, or of its name given as text.
+fn pedal_name(value: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> {
+    let Some(given) = value.filter(|given| !given.is_none()) else {
+        return Ok(None);
+    };
+    match given.getattr("value") {
+        Ok(member) if !given.is_instance_of::<pyo3::types::PyString>() => {
+            member.extract().map(Some)
+        }
+        _ => given.extract().map(Some),
+    }
+}
+
 /// Refuses a member music21 keeps on one kind of spanner alone, naming the
 /// class as music21's error names it.
 fn only(slf: &Bound<'_, Spanner>, kind: SpannerKind, member: &str) -> PyResult<()> {
@@ -1828,6 +1965,78 @@ fn drawn_with_a_line(slf: &Bound<'_, Spanner>, member: &str) -> PyResult<()> {
         return Ok(());
     }
     only(slf, SpannerKind::Line, member)
+}
+
+/// music21's `spanner.RepeatBracket`: the measures of an alternative
+/// ending, numbered for the times through it is played.
+#[pyclass(name = "RepeatBracket", module = "music21.spanner", extends = Spanner, subclass)]
+pub struct RepeatBracket;
+
+#[pymethods]
+impl RepeatBracket {
+    #[new]
+    #[pyo3(signature = (*_spannedElements, **_keywords))]
+    fn new(
+        _spannedElements: &Bound<'_, PyTuple>,
+        _keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        Ok(crate::base::built(Spanner::of_kind(SpannerKind::RepeatBracket)).add_subclass(Self))
+    }
+
+    /// The measures joined, then `number` and `overrideDisplay` kept as
+    /// music21 keeps them.
+    #[pyo3(signature = (*spannedElements, number = None, overrideDisplay = None, **keywords))]
+    fn __init__(
+        slf: &Bound<'_, Self>,
+        spannedElements: &Bound<'_, PyTuple>,
+        number: Option<&Bound<'_, PyAny>>,
+        overrideDisplay: Option<&Bound<'_, PyAny>>,
+        keywords: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        let py = slf.py();
+        Spanner::__init__(slf.as_super(), spannedElements, keywords)?;
+        slf.setattr("numberRange", PyList::empty(py))?;
+        slf.setattr(
+            "overrideDisplay",
+            overrideDisplay.map_or_else(|| py.None(), |given| given.clone().unbind()),
+        )?;
+        match number {
+            Some(given) => Self::set_number(slf, given),
+            None => Self::set_number(slf, &0_i32.into_pyobject(py)?.into_any()),
+        }
+    }
+
+    /// The numbers as text: `1-3` for a run, `2, 3` or `1, 2, 7` else,
+    /// empty for none.
+    #[getter]
+    fn number(slf: &Bound<'_, Self>) -> PyResult<String> {
+        let numbers: Vec<u32> = slf.getattr("numberRange")?.extract()?;
+        Ok(music21::bar::Ending::numbers_label(&numbers))
+    }
+
+    /// A number, numbers, or text naming them, `'1-3'` or `'1, 2'`.
+    #[setter(number)]
+    fn set_number(slf: &Bound<'_, Self>, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        let refused = || {
+            SpannerException::new_err(format!(
+                "number for RepeatBracket must be a number, not {}",
+                value
+                    .repr()
+                    .map(|shown| shown.to_string())
+                    .unwrap_or_default()
+            ))
+        };
+        let numbers: Vec<u32> = if let Ok(text) = value.extract::<String>() {
+            music21::bar::Ending::numbers_from_text(&text).map_err(|_| refused())?
+        } else if let Ok(number) = value.extract::<u32>() {
+            vec![number]
+        } else if let Ok(numbers) = value.extract::<Vec<u32>>() {
+            numbers
+        } else {
+            return Err(refused());
+        };
+        slf.setattr("numberRange", numbers)
+    }
 }
 
 /// music21's `dynamics.DynamicWedge`: what a crescendo and a diminuendo
@@ -1880,12 +2089,13 @@ macro_rules! spanner_kinds {
             m.add_class::<Spanner>()?;
             m.add_class::<SpannerBundle>()?;
             m.add_class::<DynamicWedge>()?;
+            m.add_class::<RepeatBracket>()?;
             $(m.add_class::<$class>()?;)*
             Ok(())
         }
 
         /// The names this module hands out beside the exception.
-        pub const CLASS_NAMES: &[&str] = &["Spanner", "SpannerBundle", $($name),*];
+        pub const CLASS_NAMES: &[&str] = &["Spanner", "SpannerBundle", "RepeatBracket", $($name),*];
     };
 }
 
