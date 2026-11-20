@@ -12559,3 +12559,17 @@ print(pp.activeMultiMeasureRestSpanner, list(pp.stream))
         "<music21.percussion.PercussionChord [unpitched[A3] unpitched[B3]]>",
         "None [<music21.spanner.MultiMeasureRest 2 measures>]",
     ]
+
+
+def test_a_stream_is_indexed_by_a_class():
+    """A class, or several, finds those elements all through the stream, as
+    music21's `s[note.Note]` does."""
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    s.append(m.Rest())
+    voice = m.Voice()
+    voice.insert(0.0, m.Note("D4"))
+    s.insert(2.0, voice)
+    assert [n.name for n in s[m.Note]] == ["C", "D"]
+    assert len(s[m.Note, m.Rest]) == 3
+
