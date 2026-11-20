@@ -101,6 +101,10 @@
   `recurse().notes` from 4.2x to 16x, `makeMeasures` from 5.4x to 10.7x.
 - An extreme NoteWorthy staff position no longer overflows (found by the
   fuzzer).
+- Installed, a score music21 itself had cached reads back with its lyrics
+  and pitches: music21's pickled state goes through the installed classes'
+  properties. Provided, temporary files go under `music21-rs` in music21's
+  temporary directory, so music21 never reads the package's pickles.
 - A pickle names `_thawed` and the new `_groups` by the package, so a
   score cached by the wheel thaws where the crate is linked in, and a
   standalone wheel stream pickles at all.
