@@ -150,6 +150,20 @@ impl SlurCollector {
         }
     }
 
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        for held in &self.elements {
+            visit.call(held)?;
+        }
+        visit.call(&self.slurs)
+    }
+
+    fn __clear__(&mut self) {
+        self.elements.clear();
+    }
+
     /// The slurs made so far.
     #[getter]
     fn slurs(&self, py: Python<'_>) -> Py<PyList> {
