@@ -574,9 +574,10 @@ impl EnvironmentCore {
             .import("tempfile")?
             .call_method0("gettempdir")?
             .extract()?;
-        let mut found = settings::default_root_temp_dir(Path::new(&system), user_id(py)?, |path| {
-            accessible_path(py, path)
-        })?;
+        let mut found =
+            settings::default_root_temp_dir(Path::new(&system), user_id(py)?, |path| {
+                accessible_path(py, path)
+            })?;
 
         // Standing in for music21, the package keeps its temporary files,
         // parsed-score pickles among them, apart: music21 names its pickles
