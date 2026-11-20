@@ -12685,3 +12685,44 @@ print(type(plot.figure).__name__)
         "([1, 2], ['C4', 'E'])",
         "Figure",
     ]
+
+
+def test_provided_music21_keeps_its_cache_apart(tmp_path):
+    """Provided, music21's temporary files, its parsed-score pickles among
+    them, go in a directory of the package's own, so music21 itself never
+    reads a pickle the package wrote under the same name."""
+    code = """
+import tempfile, pathlib
+import music21_rs
+music21_rs.provide_music21()
+from music21 import environment
+root = pathlib.Path(environment.Environment().getRootTempDir())
+print(root.name, root.parent == pathlib.Path(tempfile.gettempdir()) / 'music21')
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["music21-rs", "True"]
+
+
+def test_an_installed_wheel_reads_music21s_own_cached_scores(tmp_path):
+    """A score music21 itself parsed and cached reads back whole once the
+    wheel is installed: its notes keep their lyrics and pitches. music21
+    pickles its own state as a plain dictionary, which has to reach the
+    installed classes' properties."""
+    pytest.importorskip("music21.stream")
+    count = (
+        "import tempfile, sys\n"
+        f"tempfile.tempdir = {str(tmp_path)!r}\n"
+        "import music21_rs\n"
+        "if sys.argv[1] == 'install':\n"
+        "    music21_rs.install_into_music21()\n"
+        "from music21 import corpus\n"
+        "s = corpus.parse('handel/rinaldo/lascia_chio_pianga')\n"
+        "notes = list(s.recurse().notes)\n"
+        "print(len([n for n in notes if n.lyrics]), notes[0].pitches[0].nameWithOctave)\n"
+    )
+    plain = subprocess.run([sys.executable, "-c", count, "plain"], capture_output=True, text=True)
+    assert plain.returncode == 0, plain.stderr
+    installed = subprocess.run([sys.executable, "-c", count, "install"], capture_output=True, text=True)
+    assert installed.returncode == 0, installed.stderr
+    assert installed.stdout.split() == plain.stdout.split()

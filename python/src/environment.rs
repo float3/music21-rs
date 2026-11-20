@@ -13,6 +13,10 @@
 
 use std::path::{Path, PathBuf};
 
+/// The directory under music21's temporary one that `provide_music21`
+/// keeps its own temporary files in.
+const PROVIDED_TEMP_DIR: &str = "music21-rs";
+
 use music21::environment::{self as settings, LocalCorpus, Platform, Value};
 use pyo3::prelude::*;
 use pyo3::types::{IntoPyDict, PyDict, PyList, PyModule, PyString, PyTuple};
@@ -557,16 +561,31 @@ impl EnvironmentCore {
     fn getDefaultRootTempDir<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let held = slf.borrow().defaultRootTempDir.clone_ref(py).into_bound(py);
-        if accessible(py, &held)? {
+        let providing = crate::provide::providing(py)?;
+        // One found before `provide_music21` ran is music21's own.
+        let held_kind = held
+            .getattr("name")
+            .and_then(|name| name.extract::<String>())
+            .is_ok_and(|name| name == PROVIDED_TEMP_DIR);
+        if accessible(py, &held)? && held_kind == providing {
             return Ok(held);
         }
         let system: String = py
             .import("tempfile")?
             .call_method0("gettempdir")?
             .extract()?;
-        let found = settings::default_root_temp_dir(Path::new(&system), user_id(py)?, |path| {
+        let mut found = settings::default_root_temp_dir(Path::new(&system), user_id(py)?, |path| {
             accessible_path(py, path)
         })?;
+
+        // Standing in for music21, the package keeps its temporary files,
+        // parsed-score pickles among them, apart: music21 names its pickles
+        // by its version alone and would read the package's as its own.
+        if providing {
+            found.push(PROVIDED_TEMP_DIR);
+            std::fs::create_dir_all(&found)
+                .map_err(|error| environment_error(error.to_string()))?;
+        }
         let found = pathlib_path(py, &found)?;
         slf.borrow_mut().defaultRootTempDir = found.clone().unbind();
         Ok(found)
