@@ -923,7 +923,24 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("Groups", own_groups(m.py())?)?;
     m.add("_groups", groups_rebuilder(m.py())?)?;
     m.add("_SplitTuple", split_tuple(m)?)?;
+    m.add("_missingImport", missing_imports(m.py())?)?;
     Ok(())
+}
+
+/// The optional packages music21 asks after, whose absence some of its
+/// modules check before using them.
+const OPTIONAL_IMPORTS: [&str; 2] = ["matplotlib", "numpy"];
+
+/// music21's `_missingImport`: those of [`OPTIONAL_IMPORTS`] not installed.
+fn missing_imports(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyList>> {
+    let find_spec = py.import("importlib.util")?.getattr("find_spec")?;
+    let missing = pyo3::types::PyList::empty(py);
+    for name in OPTIONAL_IMPORTS {
+        if find_spec.call1((name,))?.is_none() {
+            missing.append(name)?;
+        }
+    }
+    Ok(missing)
 }
 
 /// Hands a class built on one of these to Python by value, as pyo3 does

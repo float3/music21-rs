@@ -7,6 +7,7 @@ that the classes carry music21's reprs and module strings, and that the
 handful of behaviours a caller reaches for first are right.
 """
 
+import collections
 import gc
 import os
 import pickle
@@ -4413,6 +4414,8 @@ def test_the_measures_of_a_score_are_gathered_by_offset():
     # in the two parts are listed together.
     assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
     assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # An OrderedDict, as music21's, which its repr shows.
+    assert type(whole.measureOffsetMap()) is collections.OrderedDict
     # The measures are the parts' own objects.
     assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
     # Gathering by another class is refused rather than answered without
@@ -12601,4 +12604,84 @@ print(pp.activeMultiMeasureRestSpanner, list(pp.stream))
         "True 1 ed",
         "<music21.percussion.PercussionChord [unpitched[A3] unpitched[B3]]>",
         "None [<music21.spanner.MultiMeasureRest 2 measures>]",
+    ]
+
+
+def test_a_stream_is_indexed_by_a_class():
+    """A class, or several, finds those elements all through the stream, as
+    music21's `s[note.Note]` does."""
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    s.append(m.Rest())
+    voice = m.Voice()
+    voice.insert(0.0, m.Note("D4"))
+    s.insert(2.0, voice)
+    assert [n.name for n in s[m.Note]] == ["C", "D"]
+    assert len(s[m.Note, m.Rest]) == 3
+
+
+def test_provided_graph_works_out_its_data_without_matplotlib(tmp_path):
+    """Colours, ticks and the choice of plot are the crate's; a graph that
+    would draw refuses, as music21's does, without matplotlib."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import graph
+print(graph.utilities.getColor('Steel Blue'), graph.utilities.getColor([0.5, 0.5, 0.5]))
+print(graph.findPlot.getPlotsToMake('scatter', 'pc', 'offset'))
+ax = graph.axis.DynamicsAxis()
+ax.minValue, ax.maxValue = 3, 4
+print(ax.ticks())
+try:
+    graph.primitives.Graph()
+except graph.utilities.GraphException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "#4682b4 #808080",
+        "[<class 'music21.graph.plot.ScatterPitchClassOffset'>]",
+        "[(3, '$ppp$'), (4, '$pp$')]",
+        "could not find matplotlib, graphing is not allowed",
+    ]
+
+
+def test_provided_graph_plots_a_stream_with_matplotlib(tmp_path):
+    """A histogram's data, read off a stream, and its figure drawn."""
+    pytest.importorskip("matplotlib")
+    code = """
+import importlib.util
+if importlib.util.find_spec('music21') is not None:
+    print('skip')
+    raise SystemExit
+import music21_rs
+music21_rs.provide_music21()
+import matplotlib
+matplotlib.use('Agg')
+from music21 import graph, note, stream
+s = stream.Stream([note.Note('C4'), note.Note('E4'), note.Note('C4')])
+plot = graph.plot.HistogramPitchSpace(s, doneAction=None)
+plot.run()
+print(plot.data)
+print(plot.axis['x']['ticks'])
+print(type(plot.figure).__name__)
+"""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=tmp_path,
+        env=env,
+    )
+    assert done.returncode == 0, done.stderr
+    if done.stdout.strip() == "skip":
+        pytest.skip("music21 is installed beside this package")
+    assert done.stdout.splitlines() == [
+        "[(1, 2, {}), (2, 1, {})]",
+        "([1, 2], ['C4', 'E'])",
+        "Figure",
     ]

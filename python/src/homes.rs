@@ -51,6 +51,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
     ]),
     ("music21.base", &[
         "_SplitTuple",
+        "_missingImport",
     ]),
     ("music21.braille.basic", &[
         "barlineToBraille",
