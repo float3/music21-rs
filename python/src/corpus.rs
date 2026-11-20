@@ -65,7 +65,7 @@ const EXTENSIONS: [&str; 17] = [
     ".nwc",
 ];
 
-static CORPUS_EXCEPTION: LazyException =
+pub(crate) static CORPUS_EXCEPTION: LazyException =
     LazyException::new("CorpusException", "music21.exceptions21");
 static CORPUS_EXCEPTIONS: [&LazyException; 1] = [&CORPUS_EXCEPTION];
 
@@ -116,7 +116,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
 /// where there is neither.
 #[pyfunction]
 #[pyo3(name = "getCorpusFilePath")]
-fn corpus_file_path(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+pub(crate) fn corpus_file_path(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     let named = py
         .import("os")?
         .getattr("environ")?
@@ -145,6 +145,12 @@ fn corpus_file_path(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
             ),
         )),
     }
+}
+
+/// The corpus directory as a path, or nothing where there is none.
+pub(crate) fn corpus_directory(py: Python<'_>) -> Option<PathBuf> {
+    let found = corpus_file_path(py).ok()?;
+    Some(PathBuf::from(found.str().ok()?.to_string()))
 }
 
 /// music21's `corpus` directory, found by where the package is rather than
@@ -182,7 +188,7 @@ fn music21_corpus(py: Python<'_>) -> PyResult<Option<Bound<'_, PyAny>>> {
 
 /// Every extension of the formats `fileExtensions` names, as music21's
 /// `Corpus.translateExtensions` widens them; all of them for none.
-fn extensions(file_extensions: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<String>> {
+pub(crate) fn extensions(file_extensions: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<String>> {
     let Some(given) = file_extensions.filter(|given| given.is_truthy().unwrap_or(true)) else {
         return Ok(EXTENSIONS.iter().map(|each| (*each).to_owned()).collect());
     };
@@ -215,7 +221,7 @@ fn get_paths<'py>(
 
 /// The corpus's files in the formats asked for, listed once for each
 /// directory and set of extensions.
-fn listing<'py>(
+pub(crate) fn listing<'py>(
     py: Python<'py>,
     file_extensions: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<(Vec<PathBuf>, Bound<'py, PyList>)> {
@@ -254,7 +260,7 @@ fn listing<'py>(
 /// Everything under `directory`, as `Path.rglob("*")` finds it: a link to a
 /// directory is listed and not followed, and what cannot be read is passed
 /// over.
-fn walk(directory: &Path, into: &mut Vec<PathBuf>) {
+pub(crate) fn walk(directory: &Path, into: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(directory) else {
         return;
     };
@@ -270,7 +276,7 @@ fn walk(directory: &Path, into: &mut Vec<PathBuf>) {
 
 /// Whether a path is a work's: not hidden, not private, and in one of the
 /// formats asked for.
-fn is_work(path: &Path, extensions: &[String]) -> bool {
+pub(crate) fn is_work(path: &Path, extensions: &[String]) -> bool {
     let name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -310,10 +316,20 @@ fn posix(path: &Path) -> String {
 /// The paths matching `workName`, as music21's `Corpus.getWorkList` matches
 /// them: a path holding the name, those with a `/` before it where there
 /// are any, then those of the movement asked for.
-fn work_list(
+pub(crate) fn work_list(
     work_name: &Bound<'_, PyAny>,
     movement: Option<&Bound<'_, PyAny>>,
     file_extensions: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Vec<PathBuf>> {
+    let (paths, _) = listing(work_name.py(), file_extensions)?;
+    work_list_in(paths, work_name, movement)
+}
+
+/// [`work_list`] among `paths`, which a local corpus lists for itself.
+pub(crate) fn work_list_in(
+    paths: Vec<PathBuf>,
+    work_name: &Bound<'_, PyAny>,
+    movement: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Vec<PathBuf>> {
     let py = work_name.py();
     let named = work_name.str()?.to_string();
@@ -331,7 +347,6 @@ fn work_list(
         .extract()?;
 
     // Every path holding the name, then only those with a `/` before it.
-    let (paths, _) = listing(py, file_extensions)?;
     let lowered = |path: &PathBuf| posix(path).to_lowercase();
     let mut results: Vec<PathBuf> = paths
         .into_iter()
@@ -501,7 +516,7 @@ fn given_extensions<'py>(py: Python<'py>, given: Option<&Bound<'py, PyAny>>) -> 
     format=None
 ))]
 #[allow(non_snake_case)]
-fn parse<'py>(
+pub(crate) fn parse<'py>(
     py: Python<'py>,
     workName: &Bound<'py, PyAny>,
     movementNumber: Option<&Bound<'py, PyAny>>,

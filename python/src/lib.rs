@@ -80,6 +80,8 @@ pub mod brailleobjects;
 pub mod braillesegment;
 pub mod brailletext;
 pub mod brailletranslate;
+mod bundles;
+mod caching;
 pub mod chord;
 pub mod chordtables;
 mod chordtools;
@@ -89,6 +91,7 @@ mod common;
 pub mod commontest;
 mod converter;
 pub mod converters;
+mod corpora;
 mod corpus;
 pub mod correlate;
 pub mod defaults;
@@ -123,6 +126,8 @@ pub mod interval;
 pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
+mod lilyobjects;
+mod lilytranslate;
 mod m21toxml;
 pub mod makenotation;
 pub mod metadata;
@@ -157,6 +162,7 @@ pub mod reduction;
 pub mod repeat;
 pub mod resolution;
 pub mod rest;
+mod richmetadata;
 pub mod roman;
 pub mod rtobjects;
 pub mod scala;
@@ -2137,7 +2143,7 @@ exceptions![
     (
         "MetadataException",
         metadata::MetadataException,
-        Some("music21.metadata")
+        Some("music21.exceptions21")
     ),
     (
         "DiscreteAnalysisException",
@@ -2358,6 +2364,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     editorial::register(m)?;
     spanner::register(m)?;
     metadata::register(m)?;
+    richmetadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
     serial::register(m)?;
@@ -2434,7 +2441,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 39] = [
+const BUILT_MODULES: [&str; 46] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2474,6 +2481,13 @@ const BUILT_MODULES: [&str; 39] = [
     "music21.musicxml.xmlSoundParser",
     "music21.metadata.properties",
     "music21.musicxml.xmlToM21",
+    "music21.metadata.bundles",
+    "music21.metadata.caching",
+    "music21.corpus.corpora",
+    "music21.corpus.manager",
+    "music21.lily",
+    "music21.lily.lilyObjects",
+    "music21.lily.translate",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2517,6 +2531,13 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.xmlSoundParser" => xmlsoundparser::module(py),
         "music21.metadata.properties" => metadataproperties::module(py),
         "music21.musicxml.xmlToM21" => xmltom21::module(py),
+        "music21.metadata.bundles" => bundles::module(py),
+        "music21.metadata.caching" => caching::module(py),
+        "music21.corpus.corpora" => corpora::corpora_module(py),
+        "music21.corpus.manager" => corpora::manager_module(py),
+        "music21.lily" => lilytranslate::package(py),
+        "music21.lily.lilyObjects" => lilyobjects::module(py),
+        "music21.lily.translate" => lilytranslate::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }

@@ -92,6 +92,10 @@ impl Xml {
 
     /// Reads a document and hands back its root element.
     pub(crate) fn parse(document: &str) -> Result<Xml> {
+        // A byte order mark says how the text was encoded, and is not part
+        // of the document.
+        let document = document.strip_prefix(BYTE_ORDER_MARK).unwrap_or(document);
+
         // A line ends in a line feed whatever the file wrote, as the XML
         // standard has a reader take it.
         let normalized;
@@ -110,6 +114,9 @@ impl Xml {
         Ok(root)
     }
 }
+
+/// U+FEFF at the start of a decoded document: its byte order mark.
+const BYTE_ORDER_MARK: char = '\u{feff}';
 
 /// How deeply elements may nest, the root counted as one: libxml2's
 /// default limit. MusicXML and MEI nest a dozen deep; a document nested
@@ -363,6 +370,12 @@ mod tests {
         assert!(root.find("c").unwrap().text().is_none());
         assert_eq!(root.find_all("b").nth(1).unwrap().stripped(), "2");
         assert_eq!(root.child_text("missing"), "");
+    }
+
+    #[test]
+    fn a_byte_order_mark_before_the_document_is_passed_over() {
+        let root = Xml::parse("\u{feff}<?xml version='1.0' encoding='UTF-16'?>\n<a/>").unwrap();
+        assert_eq!(root.tag, "a");
     }
 
     #[test]

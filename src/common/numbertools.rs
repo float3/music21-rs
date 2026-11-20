@@ -185,6 +185,7 @@ pub const MUSIC_ORDINAL_NAMES: [&str; 23] = [
 /// A quarter length or an offset as music21 keeps one: a float where a
 /// float says it exactly, a fraction where none does.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum OffsetQL {
     /// A value a float holds exactly.
     Float(FloatType),

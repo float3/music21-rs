@@ -493,6 +493,36 @@ pub fn format_str<S: AsRef<str>>(parts: &[S]) -> String {
     format!("{}\n", joined.join(" "))
 }
 
+/// A text as Python's `repr` writes it, in single quotes unless it holds
+/// one.
+pub(crate) fn python_str_repr(text: &str) -> String {
+    let quote = if text.contains('\'') && !text.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::new();
+    out.push(quote);
+    for character in text.chars() {
+        match character {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
+                out.push_str(&format!("\\x{:02x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

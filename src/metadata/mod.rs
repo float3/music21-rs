@@ -10,7 +10,9 @@
 //! lyricist. Its unique name is its role where the role is in the
 //! vocabulary, and `otherContributor` where it is not.
 
+pub mod bundles;
 pub mod primitives;
+pub mod rich;
 
 use std::borrow::Cow;
 
@@ -404,7 +406,7 @@ impl Metadata {
     /// `_getStringValuesByNamespaceName` does and the rest of a search
     /// does not, so that a title stored as `Grassy Turf, The` is searched
     /// as `The Grassy Turf` under `title` and as itself under every field.
-    fn field_texts(&self, unique_name: &str) -> Vec<Cow<'_, str>> {
+    pub(crate) fn field_texts(&self, unique_name: &str) -> Vec<Cow<'_, str>> {
         self.get(unique_name)
             .iter()
             .map(|value| {
@@ -449,7 +451,7 @@ impl Metadata {
 /// Whether a contributor answers to a search field: every contributor where
 /// none was asked for, one whose role holds the field, and a contributor
 /// with no role only under `contributor` itself.
-fn contributor_answers_to(role: Option<&str>, field: Option<&str>) -> bool {
+pub(crate) fn contributor_answers_to(role: Option<&str>, field: Option<&str>) -> bool {
     let Some(field) = field else {
         return true;
     };
@@ -493,7 +495,7 @@ pub fn unique_name_of(name: &str) -> Option<&'static str> {
 /// grandfathered work ids, or one of its Humdrum abbreviations. The field
 /// reaching here is already lowercase, so a name written with a capital in
 /// it is only found by [`Metadata::partial_field_match`], as in music21.
-fn unique_name_of_field(field: &str) -> Option<(&'static str, &'static str)> {
+pub(crate) fn unique_name_of_field(field: &str) -> Option<(&'static str, &'static str)> {
     if let Some((name, _, _)) = STANDARD_PROPERTIES
         .iter()
         .find(|(name, _, _)| *name == field)
@@ -513,7 +515,7 @@ fn unique_name_of_field(field: &str) -> Option<(&'static str, &'static str)> {
 
 /// The work id a unique name was written as before music21 v8, where it had
 /// one: music21's `UNIQUE_NAME_TO_MUSIC21_WORK_ID`.
-fn old_work_id(unique_name: &str) -> Option<&'static str> {
+pub(crate) fn old_work_id(unique_name: &str) -> Option<&'static str> {
     OLD_MUSIC21_NAMES
         .iter()
         .find(|(name, _, _)| *name == unique_name)

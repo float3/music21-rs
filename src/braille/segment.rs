@@ -203,15 +203,10 @@ pub(crate) fn element_repr(element: &StreamElement) -> String {
             };
             format!(
                 "<music21.expressions.TextExpression {}>",
-                python_str_repr(&shown)
+                crate::common::stringtools::python_str_repr(&shown)
             )
         }
-        StreamElement::TempoText(tempo) => {
-            format!(
-                "<music21.tempo.TempoText {}>",
-                python_str_repr(tempo.text())
-            )
-        }
+        StreamElement::TempoText(tempo) => tempo.music21_repr(),
         StreamElement::KeySignature(signature) if signature.is_non_traditional() => {
             "<music21.key.KeySignature of pitches: []>".to_string()
         }
@@ -229,27 +224,15 @@ pub(crate) fn element_repr(element: &StreamElement) -> String {
             };
             format!("{tonic} {}", key.mode())
         }
-        StreamElement::MetronomeMark(mark) => {
-            let mut sounding = "";
-            let mut number = mark.number();
-            if number.is_none() && mark.number_sounding().is_some() {
-                sounding = " (playback only)";
-                number = mark.number_sounding();
-            }
-            let number = number.map_or_else(|| "None".to_string(), python_number);
-            let referent = mark.referent().full_name();
-            match mark.text() {
-                Some(text) => {
-                    format!("<music21.tempo.MetronomeMark {text} {referent}={number}{sounding}>")
-                }
-                None => format!("<music21.tempo.MetronomeMark {referent}={number}{sounding}>"),
-            }
-        }
+        StreamElement::MetronomeMark(mark) => mark.music21_repr(),
         StreamElement::Unpitched(unpitched) => match unpitched
             .stored_instrument()
             .and_then(|instrument| instrument.name())
         {
-            Some(name) => format!("<music21.note.Unpitched {}>", python_str_repr(name)),
+            Some(name) => format!(
+                "<music21.note.Unpitched {}>",
+                crate::common::stringtools::python_str_repr(name)
+            ),
             None => "<music21.note.Unpitched>".to_string(),
         },
         StreamElement::PercussionChord(chord) => {
@@ -311,45 +294,6 @@ fn sharps_description(sharps: IntegerType) -> String {
         sharps if sharps > 0 => format!("{sharps} sharps"),
         sharps => format!("{} flats", -sharps),
     }
-}
-
-/// A number as music21 keeps it, a whole one as an integer.
-fn python_number(number: FloatType) -> String {
-    if number.fract() == 0.0 {
-        format!("{}", number as i64)
-    } else {
-        crate::statistics::python_repr(number)
-    }
-}
-
-/// A text as Python's `repr` writes it, in single quotes unless it holds
-/// one.
-fn python_str_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::new();
-    out.push(quote);
-    for character in text.chars() {
-        match character {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
 }
 
 /// The affinity and sort order braille gives an element, or nothing for one
