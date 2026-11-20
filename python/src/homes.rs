@@ -425,6 +425,24 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "Possibility",
     ]),
+    ("music21.graph.axis", &[
+        "GraphException",
+        "accidentalLabelToUnicode",
+    ]),
+    ("music21.graph.plot", &[
+        "GraphException",
+        "PlotStreamException",
+    ]),
+    ("music21.graph.primitives", &[
+        "GraphException",
+        "SubConverter",
+        "accidentalLabelToUnicode",
+        "getColor",
+        "getExtendedModules",
+    ]),
+    ("music21.graph.utilities", &[
+        "_missingImport",
+    ]),
     ("music21.humdrum.spineParser", &[
         "GraceDuration",
         "OffsetQL",

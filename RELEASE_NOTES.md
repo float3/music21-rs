@@ -71,6 +71,10 @@
   new `mei::step`; steps call each other through the module, so replacing
   one there takes effect. Notes, rests and chords take attributes of a
   caller's own; streams have `coreAppend`.
+- **music21's `graph` is provided:** axes, plot data and `findPlot` in
+  Rust, drawn through matplotlib where it is installed, as music21 draws;
+  `base._missingImport`, `measureOffsetMap` as an `OrderedDict`, a stream
+  indexed by a class.
 - **`freezeThaw`** over stream pickling; music21's abstract scale classes
   and `WeightedHexatonicBlues`; **`noteworthy` in full** (translator,
   `NWCConverter`, `NWCStaff`, `NWCObject`), its placing one implementation
@@ -113,8 +117,8 @@
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
-Gate (`xtask music21-suite`, provided side): 2852 of music21's 5276
-passing tests pass, up from 1298; 192 of 217 modules import, up from 151.
+Gate (`xtask music21-suite`, provided side): 2931 of music21's 5276
+passing tests pass, up from 1298; 198 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
 
