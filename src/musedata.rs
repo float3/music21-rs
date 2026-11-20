@@ -83,9 +83,70 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
     for text in files {
         parts.extend(split_parts(text)?);
     }
+    score_of(&parts, Header::Read)
+}
+
+/// Whether [`from_musedata_parts`] reads the work's title, number and
+/// movement into the score's metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Header {
+    /// Read, as music21's `museDataWorkToStreamScore` reads it.
+    Read,
+    /// Left out, as music21's `musedataPartToStreamPart` leaves it.
+    Skipped,
+}
+
+/// Reads parts already split from their files, each the lines of one part
+/// as music21's `MuseDataPart.src` holds them, into a score: music21's
+/// `museDataWorkToStreamScore`, or with [`Header::Skipped`] its
+/// `musedataPartToStreamPart` for each.
+///
+/// # Errors
+///
+/// As [`from_musedata`], and a part of one line or none.
+pub fn from_musedata_parts(parts: &[Vec<String>], header: Header) -> Result<Stream> {
+    let mut read = Vec::new();
+    for lines in parts {
+        let numbers = (1..=lines.len()).collect();
+        read.push(Part::new(lines.clone(), numbers)?);
+    }
+    score_of(&read, header)
+}
+
+/// The score of a work's parts, each holding its slurs.
+fn score_of(parts: &[Part], header: Header) -> Result<Stream> {
     let first = parts
         .first()
         .ok_or_else(|| error("a MuseData work with no parts"))?;
+    let mut score = Stream::with_kind(StreamKind::Score);
+    if header == Header::Read {
+        score.set_metadata(Some(work_metadata(first)));
+    }
+    for part in parts {
+        let (mut made, joined) = part.to_part()?;
+        // Each slur goes in its part, naming its notes by their places
+        // among the part's notes and chords in the order they were read.
+        let read: Vec<usize> = made
+            .leaves()
+            .into_iter()
+            .enumerate()
+            .filter(|(_, (_, element))| {
+                matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
+            })
+            .map(|(position, _)| position)
+            .collect();
+        for (start, stop) in joined {
+            if let (Some(first), Some(last)) = (read.get(start), read.get(stop)) {
+                made.add_spanner(Spanner::slur(vec![*first, *last]));
+            }
+        }
+        score.insert(0.0, made);
+    }
+    Ok(score)
+}
+
+/// The work's title, number and movement, as the first part names them.
+fn work_metadata(first: &Part) -> Metadata {
     let mut metadata = Metadata::new();
     if let Some(title) = first.work_title() {
         metadata.add_text("title", title);
@@ -99,40 +160,15 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
     if let Some(number) = first.work_number() {
         metadata.add_text("number", number);
     }
-    let mut score = Stream::with_kind(StreamKind::Score);
-    score.set_metadata(Some(metadata));
-    let mut slurs = Vec::new();
-    for part in &parts {
-        let (made, joined) = part.to_part()?;
-        score.insert(0.0, made);
-        slurs.push(joined);
-    }
-    // Each part's notes and chords in the order they were read, as places
-    // among the score's leaves.
-    let mut places: Vec<Vec<usize>> = vec![Vec::new(); slurs.len()];
-    for (position, (top, _, element)) in score.leaves_under_top().into_iter().enumerate() {
-        if matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
-            && let Some(read) = places.get_mut(top)
-        {
-            read.push(position);
-        }
-    }
-    for (joined, read) in slurs.iter().zip(&places) {
-        for (start, stop) in joined {
-            if let (Some(first), Some(last)) = (read.get(*start), read.get(*stop)) {
-                score.add_spanner(Spanner::slur(vec![*first, *last]));
-            }
-        }
-    }
-    Ok(score)
+    metadata
 }
 
 /// The slurs of one part, as music21's `_SlurCollector` builds them: the
 /// marks ( ) [ ] { } and z x start and stop slurs 1 to 4, a stop closing the
 /// open slur of its number. Notes and chords are counted in the order they
 /// are read.
-#[derive(Default)]
-struct Slurs {
+#[derive(Clone, Debug, Default)]
+pub struct Slurs {
     open: [Option<usize>; 4],
     joined: Vec<(usize, usize)>,
     read: usize,
@@ -144,21 +180,32 @@ impl Slurs {
 
     /// Stops, then starts, the slurs the marks name on the next note or
     /// chord, so one note can end a slur and begin the next of its number.
-    fn add(&mut self, marks: &str) {
+    /// Hands back the slurs it stops, each as the places of its first and
+    /// last notes among those added.
+    pub fn add(&mut self, marks: &str) -> Vec<(usize, usize)> {
         let at = self.read;
         self.read += 1;
+        let mut stopped = Vec::new();
         for mark in marks.chars() {
             if let Some(number) = Self::STOPS.iter().position(|stop| *stop == mark)
                 && let Some(start) = self.open[number].take()
             {
-                self.joined.push((start, at));
+                stopped.push((start, at));
             }
         }
+        self.joined.extend(stopped.iter().copied());
         for mark in marks.chars() {
             if let Some(number) = Self::STARTS.iter().position(|start| *start == mark) {
                 self.open[number] = Some(at);
             }
         }
+        stopped
+    }
+
+    /// The open slurs, by number from nought, each as the place of its first
+    /// note.
+    pub fn open(&self) -> &[Option<usize>; 4] {
+        &self.open
     }
 }
 
@@ -203,9 +250,11 @@ fn digits(text: &str) -> String {
 
 /// The stage of the encoding a part is written in: stage 2 has `$`
 /// attribute records and columns stage 1 lacks.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Stage {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    /// The older encoding, without attribute records.
     One,
+    /// The encoding with `$` attribute records.
     Two,
 }
 
@@ -1138,8 +1187,16 @@ impl Record<'_> {
     }
 }
 
-/// `_musedataBeamToBeams`.
-fn beams_of(written: &str) -> Beams {
+/// music21's `_musedataBeamToBeams`: the beams a record's beam column
+/// writes, `[` starting, `]` stopping, `=` continuing and `/` and `\\`
+/// partial to the right and left.
+///
+/// ```
+/// use music21::musedata::beams_of;
+///
+/// assert_eq!(beams_of("]/").len(), 2);
+/// ```
+pub fn beams_of(written: &str) -> Beams {
     let mut beams = Beams::default();
     for c in written.chars() {
         let (kind, direction) = match c {
@@ -1212,6 +1269,34 @@ fn note_or_chord(
         StreamElement::Chord(chord)
     };
     Ok((element, first.dynamics(), tie))
+}
+
+/// music21's `_musedataRecordListToNoteOrChord`, over the lines of the
+/// records: a note, or a chord of several, at `divisions` to the quarter,
+/// with the dynamics the first record carries and the tie it leaves.
+/// `previous` is the tie of the note before, where there is a note before.
+///
+/// # Errors
+///
+/// No records, a pitch or a length that cannot be read.
+pub fn record_note(
+    lines: &[String],
+    stage: Stage,
+    divisions: FloatType,
+    previous: Option<Option<TieType>>,
+) -> Result<(StreamElement, Vec<Dynamic>, Option<TieType>)> {
+    let records: Vec<Record<'_>> = lines
+        .iter()
+        .map(|line| Record {
+            line,
+            stage,
+            number: None,
+        })
+        .collect();
+    if records.is_empty() {
+        return Err(error("a note of no records"));
+    }
+    note_or_chord(&records, divisions, previous)
 }
 
 /// music21's `base40DeltaToInterval`, refused as a MuseData error.

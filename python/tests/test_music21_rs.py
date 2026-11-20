@@ -2973,6 +2973,17 @@ def test_musedata_is_read_from_one_file_or_several():
     assert len(m.from_musedata([MUSEDATA, MUSEDATA]).parts) == 2
 
 
+
+def test_a_musedata_slur_is_in_its_part():
+    # music21's `musedataPartToStreamPart` puts each slur in the part.
+    slurred = MUSEDATA.replace("C5     2        q     u", "C5     2        q     u        (")
+    slurred = slurred.replace("A4     4        h     u", "A4     4        h     u        )")
+    (part,) = m.from_musedata(slurred).parts
+    slurs = list(part.recurse().getElementsByClass("Slur"))
+    assert [[n.nameWithOctave for n in slur.getSpannedElements()] for slur in slurs] == [
+        ["C5", "A4"]
+    ]
+
 CAPELLA = (
     '<score xmlns="http://www.capella.de/CapXML/2.0"><systems><system><staves>'
     '<staff layout="S"><voices><voice><noteObjects>'
