@@ -12573,3 +12573,69 @@ def test_a_stream_is_indexed_by_a_class():
     assert [n.name for n in s[m.Note]] == ["C", "D"]
     assert len(s[m.Note, m.Rest]) == 3
 
+
+def test_provided_graph_works_out_its_data_without_matplotlib(tmp_path):
+    """Colours, ticks and the choice of plot are the crate's; a graph that
+    would draw refuses, as music21's does, without matplotlib."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import graph
+print(graph.utilities.getColor('Steel Blue'), graph.utilities.getColor([0.5, 0.5, 0.5]))
+print(graph.findPlot.getPlotsToMake('scatter', 'pc', 'offset'))
+ax = graph.axis.DynamicsAxis()
+ax.minValue, ax.maxValue = 3, 4
+print(ax.ticks())
+try:
+    graph.primitives.Graph()
+except graph.utilities.GraphException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "#4682b4 #808080",
+        "[<class 'music21.graph.plot.ScatterPitchClassOffset'>]",
+        "[(3, '$ppp$'), (4, '$pp$')]",
+        "could not find matplotlib, graphing is not allowed",
+    ]
+
+
+def test_provided_graph_plots_a_stream_with_matplotlib(tmp_path):
+    """A histogram's data, read off a stream, and its figure drawn."""
+    pytest.importorskip("matplotlib")
+    code = """
+import importlib.util
+if importlib.util.find_spec('music21') is not None:
+    print('skip')
+    raise SystemExit
+import music21_rs
+music21_rs.provide_music21()
+import matplotlib
+matplotlib.use('Agg')
+from music21 import graph, note, stream
+s = stream.Stream([note.Note('C4'), note.Note('E4'), note.Note('C4')])
+plot = graph.plot.HistogramPitchSpace(s, doneAction=None)
+plot.run()
+print(plot.data)
+print(plot.axis['x']['ticks'])
+print(type(plot.figure).__name__)
+"""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=tmp_path,
+        env=env,
+    )
+    assert done.returncode == 0, done.stderr
+    if done.stdout.strip() == "skip":
+        pytest.skip("music21 is installed beside this package")
+    assert done.stdout.splitlines() == [
+        "[(1, 2, {}), (2, 1, {})]",
+        "([1, 2], ['C4', 'E'])",
+        "Figure",
+    ]
