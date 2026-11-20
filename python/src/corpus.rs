@@ -35,13 +35,14 @@ const MODULE: &str = "music21_rs.corpus";
 const CORPUS_VARIABLE: &str = "MUSIC21_RS_CORPUS";
 
 /// The module's public names.
-const ALL: [&str; 6] = [
+const ALL: [&str; 7] = [
     "CorpusException",
     "getCorePaths",
     "getCorpusFilePath",
     "getPaths",
     "getWork",
     "parse",
+    "search",
 ];
 
 /// The extensions of the formats music21's corpus holds, in its order.
@@ -102,6 +103,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(paths)?;
         m.add_function(wrap_pyfunction!(get_work, &m)?)?;
         m.add_function(wrap_pyfunction!(parse, &m)?)?;
+        m.add_function(wrap_pyfunction!(crate::corpora::search, &m)?)?;
         m.add(
             "__getattr__",
             converter::exception_getattr(py, MODULE, &CORPUS_EXCEPTIONS)?,

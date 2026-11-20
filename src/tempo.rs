@@ -851,6 +851,15 @@ impl MetricModulation {
     }
 }
 
+/// A number as music21 keeps it, a whole one as an integer.
+fn python_number(number: FloatType) -> String {
+    if number.fract() == 0.0 {
+        format!("{}", number as i64)
+    } else {
+        crate::statistics::python_repr(number)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1155,14 +1164,5 @@ mod tests {
         modulation.set_old_referent(Duration::eighth(), None);
         modulation.update_from(Some(&MetronomeMark::new(90.0)));
         assert_eq!(modulation.old_metronome().unwrap().number(), Some(180.0));
-    }
-}
-
-/// A number as music21 keeps it, a whole one as an integer.
-fn python_number(number: FloatType) -> String {
-    if number.fract() == 0.0 {
-        format!("{}", number as i64)
-    } else {
-        crate::statistics::python_repr(number)
     }
 }

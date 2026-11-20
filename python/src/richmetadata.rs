@@ -88,11 +88,11 @@ pub(crate) fn length_object<'py>(py: Python<'py>, length: OffsetQL) -> PyResult<
 }
 
 fn length_value(object: &Bound<'_, PyAny>) -> PyResult<OffsetQL> {
-    if let Ok(value) = object.extract::<f64>() {
-        if !object.hasattr("denominator")? || object.getattr("denominator")?.extract::<i64>()? == 1
-        {
-            return Ok(OffsetQL::Float(value));
-        }
+    if let Ok(value) = object.extract::<f64>()
+        && (!object.hasattr("denominator")?
+            || object.getattr("denominator")?.extract::<i64>()? == 1)
+    {
+        return Ok(OffsetQL::Float(value));
     }
     Ok(OffsetQL::Fraction {
         numerator: object.getattr("numerator")?.extract()?,

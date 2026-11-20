@@ -156,6 +156,14 @@ pub struct MetadataCachingJob {
 
 #[pymethods]
 impl MetadataCachingJob {
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.filePathErrors)?;
+        visit.call(&self.results)
+    }
+
     #[new]
     #[pyo3(signature = (filePath, jobNumber = 0, parseUsingCorpus = true, corpusName = None))]
     fn new(

@@ -344,6 +344,11 @@ def test_duration_module_functions():
     assert m.convertTypeToNumber("eighth") == 8.0
 
 
+def test_a_complex_type_has_no_number():
+    with pytest.raises(m.DurationException, match="Could not determine durationNumber from complex"):
+        m.convertTypeToNumber("complex")
+
+
 def test_duration_infers_a_tuplet_no_tie_reaches():
     from fractions import Fraction
 
@@ -9970,7 +9975,7 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.ipython21', 'from music21 import lily'):
+for statement in ('import music21.ipython21', 'from music21.corpus import chorales'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
@@ -9981,7 +9986,7 @@ print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         "music21-rs does not provide music21.ipython21",
-        "music21-rs does not provide music21.lily",
+        "music21-rs does not provide music21.corpus.chorales",
         "False True",
     ]
 

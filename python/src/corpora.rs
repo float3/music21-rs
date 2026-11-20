@@ -38,6 +38,7 @@ pub(crate) fn corpora_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_class::<Corpus>()?;
         m.add_class::<CoreCorpus>()?;
         m.add_class::<LocalCorpus>()?;
+        m.add("CorpusException", crate::corpus::CORPUS_EXCEPTION.get(py)?)?;
         Ok::<_, PyErr>(m.unbind())
     })?;
     Ok(held.bind(py).clone())
@@ -56,6 +57,7 @@ pub(crate) fn manager_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(wrap_pyfunction!(list_local_names, &m)?)?;
         m.add_function(wrap_pyfunction!(list_search_fields, &m)?)?;
         m.add_function(wrap_pyfunction!(search, &m)?)?;
+        m.add("CorpusException", crate::corpus::CORPUS_EXCEPTION.get(py)?)?;
         Ok::<_, PyErr>(m.unbind())
     })?;
     Ok(held.bind(py).clone())
@@ -90,7 +92,7 @@ pub(crate) fn local_names(py: Python<'_>) -> PyResult<Vec<String>> {
         Some(settings) => settings,
         None => return Ok(Vec::new()),
     };
-    settings.call_method0("keys")?.extract()
+    settings.try_iter()?.map(|name| name?.extract()).collect()
 }
 
 /// One of music21's user settings, or nothing where it cannot be read.
@@ -547,7 +549,7 @@ fn list_search_fields(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
 /// they find.
 #[pyfunction]
 #[pyo3(signature = (query = None, field = None, *, corpusNames = None, fileExtensions = None, **keywords))]
-fn search<'py>(
+pub(crate) fn search<'py>(
     py: Python<'py>,
     query: Option<&Bound<'py, PyAny>>,
     field: Option<&Bound<'py, PyAny>>,

@@ -134,9 +134,14 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         exception.setattr("__module__", MODULE)?;
         m.add("LilyTranslateException", exception)?;
         m.add_function(wrap_pyfunction!(make_letters_only_id, &m)?)?;
+        m.add_function(wrap_pyfunction!(cached_corpus_file, &m)?)?;
         m.add(CONVERTER, converter_class(py)?)?;
         m.add("lyo", crate::lilyobjects::module(py)?)?;
         m.add("environLocal", environment(py)?)?;
+        m.add(
+            "SubConverter",
+            crate::subconverters::module(py)?.getattr("SubConverter")?,
+        )?;
         Ok::<_, PyErr>(m.unbind())
     })?;
     Ok(held.bind(py).clone())
@@ -159,6 +164,22 @@ fn environment(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
     crate::environment::module(py)?
         .getattr("Environment")?
         .call1(("lily.translate",))
+}
+
+/// A corpus work, parsed once: what music21's examples here read.
+#[pyfunction]
+#[pyo3(name = "_getCachedCorpusFile")]
+fn cached_corpus_file<'py>(py: Python<'py>, keyName: &str) -> PyResult<Bound<'py, PyAny>> {
+    static PARSED: PyOnceLock<Py<PyDict>> = PyOnceLock::new();
+    let parsed = PARSED
+        .get_or_try_init(py, || Ok::<_, PyErr>(PyDict::new(py).unbind()))?
+        .bind(py);
+    if let Some(found) = parsed.get_item(keyName)? {
+        return Ok(found);
+    }
+    let found = crate::corpus::module(py)?.call_method1("parse", (keyName,))?;
+    parsed.set_item(keyName, &found)?;
+    Ok(found)
 }
 
 /// An id made of letters alone: each other character becomes the letter
@@ -1176,8 +1197,8 @@ fn append_object(slf: &Bound<'_, PyAny>, thisObject: &Bound<'_, PyAny>) -> PyRes
             .extract::<String>()?
             == "complex"
     {
-        for part in thisObject.call_method0("splitAtDurations")?.try_iter()? {
-            slf.call_method1("appendM21ObjectToContext", (part?,))?;
+        for part in split_at_durations(thisObject)? {
+            slf.call_method1("appendM21ObjectToContext", (part,))?;
         }
         return Ok(());
     }
@@ -1234,6 +1255,48 @@ fn append_object(slf: &Bound<'_, PyAny>, thisObject: &Bound<'_, PyAny>) -> PyRes
         contents.call_method1("append", (scm(py, TRANSPARENCY_STOP)?,))?;
     }
     Ok(())
+}
+
+/// An object of a complex duration as one copy per written value, notes
+/// tied across them: music21's `splitAtDurations`, where the object has
+/// none of its own.
+fn split_at_durations<'py>(object: &Bound<'py, PyAny>) -> PyResult<Vec<Bound<'py, PyAny>>> {
+    if object.hasattr("splitAtDurations")? {
+        return object
+            .call_method0("splitAtDurations")?
+            .try_iter()?
+            .collect();
+    }
+    let py = object.py();
+    let deepcopy = py.import("copy")?.getattr("deepcopy")?;
+    let duration_class = py.import("music21.duration")?.getattr("Duration")?;
+    let tie_class = py.import("music21.tie")?.getattr("Tie")?;
+    let components: Vec<Bound<'py, PyAny>> = object
+        .getattr("duration")?
+        .getattr("components")?
+        .try_iter()?
+        .collect::<PyResult<_>>()?;
+    let last = components.len().saturating_sub(1);
+    let mut pieces = Vec::new();
+    for (at, component) in components.iter().enumerate() {
+        let piece = deepcopy.call1((object,))?;
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("type", component.getattr("type")?)?;
+        kwargs.set_item("dots", component.getattr("dots")?)?;
+        piece.setattr("duration", duration_class.call((), Some(&kwargs))?)?;
+
+        // Each piece of a note but the last is tied to the next.
+        if is_a(object, "NotRest")? && last > 0 {
+            let kind = match at {
+                0 => "start",
+                _ if at == last => "stop",
+                _ => "continue",
+            };
+            piece.setattr("tie", tie_class.call1((kind,))?)?;
+        }
+        pieces.push(piece);
+    }
+    Ok(pieces)
 }
 
 #[pyfunction]

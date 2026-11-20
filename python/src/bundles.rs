@@ -148,10 +148,11 @@ impl MetadataEntry {
     /// The score, read from the corpus.
     fn parse<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let path = path_object(py, &self.inner.source_path)?;
-        let number = match &self.inner.number {
-            Some(number) => Some(PyString::new(py, number).into_any()),
-            None => None,
-        };
+        let number = self
+            .inner
+            .number
+            .as_ref()
+            .map(|number| PyString::new(py, number).into_any());
         crate::corpus::parse(py, &path, None, number.as_ref(), None, None, None)
     }
 
@@ -280,6 +281,17 @@ impl MetadataBundle {
 
 #[pymethods]
 impl MetadataBundle {
+    fn __traverse__(
+        &self,
+        visit: pyo3::pyclass::PyVisit<'_>,
+    ) -> Result<(), pyo3::pyclass::PyTraverseError> {
+        visit.call(&self.corpus)
+    }
+
+    fn __clear__(&mut self) {
+        self.corpus = None;
+    }
+
     #[new]
     #[pyo3(signature = (expr = None))]
     pub(crate) fn new(expr: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {

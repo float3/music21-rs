@@ -534,7 +534,11 @@ impl<'a> Reader<'a> {
     }
 
     fn set_items(&mut self, target: ValueId, flat: Vec<ValueId>) -> Result<()> {
-        let pairs = flat.chunks_exact(2).map(|pair| (pair[0], pair[1]));
+        let pairs = flat
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| (pair[0], pair[1]));
         match &mut self.built.values[target] {
             PickleValue::Dict(items) => items.extend(pairs),
             PickleValue::Object { entries, .. } => entries.extend(pairs),
@@ -669,7 +673,9 @@ impl<'a> Reader<'a> {
             DICT => {
                 let flat = self.pop_mark()?;
                 let items = flat
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|pair| (pair[0], pair[1]))
                     .collect();
                 self.push(PickleValue::Dict(items));
