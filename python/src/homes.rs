@@ -441,6 +441,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "GatherSpanners",
         "StaffType",
     ]),
+    ("music21.mei.base", &[
+        "Element",
+    ]),
     ("music21.metadata", &[
         "Contributor",
         "Copyright",

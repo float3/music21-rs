@@ -9967,17 +9967,17 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.mei', 'from music21 import lily'):
+for statement in ('import music21.ipython21', 'from music21 import lily'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.mei",
+        "music21-rs does not provide music21.ipython21",
         "music21-rs does not provide music21.lily",
         "False True",
     ]
@@ -10905,6 +10905,52 @@ print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
         "b'\\xcfG'",
         "music21.midi.base cannot putVariableLengthNumber() when number is negative: -1",
         "True",
+    ]
+
+
+def test_provided_mei_reads_a_score_through_its_steps(tmp_path):
+    """Provided, `mei.MeiToM21Converter` reads a score, and each step
+    calls the others through the module, so a step replaced on it is the
+    one called, as music21's tests replace them."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from unittest import mock
+from xml.etree import ElementTree as ET
+from music21 import mei
+from music21.mei import base
+document = ('<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>'
+            '<scoreDef meter.count="2" meter.unit="4"><staffGrp>'
+            '<staffDef n="1" clef.shape="G" clef.line="2"/></staffGrp></scoreDef>'
+            '<section><measure n="1"><staff n="1"><layer n="1">'
+            '<note pname="c" oct="4" dur="4" xml:id="a"/>'
+            '<note pname="e" oct="4" dur="4" xml:id="b"/>'
+            '</layer></staff><slur startid="#a" endid="#b"/></measure></section>'
+            '</score></music></mei>')
+score = mei.MeiToM21Converter(document).run()
+print([n.nameWithOctave for n in score.recurse().notes])
+print(len(score.spanners))
+print(base.instrument.__name__, base._accidentalFromAttr('s'))
+chord = ET.fromstring('<chord xmlns="http://www.music-encoding.org/ns/mei" dur="4">'
+                      '<note pname="c" oct="4"/></chord>')
+with mock.patch('music21.mei.base.noteFromElement') as replaced:
+    replaced.return_value = 'a note'
+    with mock.patch('music21.chord.Chord') as made:
+        base.chordFromElement(chord)
+        print(made.call_args)
+try:
+    base._attrTranslator('9', 'dur', base._DUR_ATTR_DICT)
+except base.MeiValueError as error:
+    print(type(error).__module__, error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['C4', 'E4']",
+        "1",
+        "music21.instrument #",
+        "call(notes=['a note'])",
+        'music21.mei.base Unexpected value for "dur" attribute: 9',
     ]
 
 

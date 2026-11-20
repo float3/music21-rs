@@ -201,8 +201,10 @@ impl Music21Object {
     }
 }
 
-/// music21's `GeneralNote`: a note, a rest or a chord.
-#[pyclass(name = "GeneralNote", module = "music21.note", extends = Music21Object, subclass)]
+/// music21's `GeneralNote`: a note, a rest or a chord. It takes
+/// attributes of a caller's own, as music21's does: its MEI reader marks
+/// notes with them while it reads.
+#[pyclass(name = "GeneralNote", module = "music21.note", extends = Music21Object, subclass, dict)]
 #[derive(Default)]
 pub struct GeneralNote;
 

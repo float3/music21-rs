@@ -4548,6 +4548,19 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `coreAppend`: `append`, which here keeps the stream in
+    /// order as it goes, so nothing waits for `coreElementsChanged`.
+    #[pyo3(signature = (element, *, setActiveSite = true))]
+    fn coreAppend(
+        slf: &Bound<'_, Self>,
+        element: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
+    ) -> PyResult<()> {
+        let _ = setActiveSite;
+        slf.call_method1("append", (element,))?;
+        Ok(())
+    }
+
     /// music21's `coreElementsChanged`. A stream here is up to date after
     /// every change, so there is nothing to do; music21's keywords are
     /// accepted for that.
