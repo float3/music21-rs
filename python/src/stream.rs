@@ -3115,10 +3115,10 @@ impl Stream {
         Ok(())
     }
 
-    /// The measures this stream holds, gathered by the offset each stands
-    /// at: music21's `measureOffsetMap`, whose answer a score builds out of
-    /// its parts, so measures standing together in different parts are
-    /// listed together.
+    /// The measures this stream holds, in an `OrderedDict` by the offset
+    /// each stands at: music21's `measureOffsetMap`, whose answer a score
+    /// builds out of its parts, so measures standing together in different
+    /// parts are listed together.
     ///
     /// Only `Measure` is taken as a class to gather by: music21's other
     /// classes are found by asking an element which measure holds it,
@@ -3127,7 +3127,7 @@ impl Stream {
     fn measureOffsetMap<'py>(
         slf: &Bound<'py, Self>,
         classFilterList: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if let Some(asked) = classFilterList.filter(|list| !list.is_none()) {
             let names = class_names(asked)?;
@@ -3154,8 +3154,8 @@ impl Stream {
             if is_of_class(object, &part)? {
                 parts = true;
                 let inner = Self::measureOffsetMap(object.cast::<Stream>()?, None)?;
-                for (offset, measures) in inner.iter() {
-                    let offset: f64 = offset.extract()?;
+                for item in inner.call_method0("items")?.try_iter()? {
+                    let (offset, measures): (f64, Bound<'py, PyAny>) = item?.extract()?;
                     for held in measures.try_iter()? {
                         gathered.push((offset, held?));
                     }
@@ -3177,7 +3177,7 @@ impl Stream {
             }
         }
         offsets.sort_by(f64::total_cmp);
-        let out = PyDict::new(py);
+        let out = py.import("collections")?.getattr("OrderedDict")?.call0()?;
         for offset in offsets {
             let standing: Vec<&Bound<'py, PyAny>> = gathered
                 .iter()

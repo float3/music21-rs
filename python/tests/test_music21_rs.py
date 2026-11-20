@@ -7,6 +7,7 @@ that the classes carry music21's reprs and module strings, and that the
 handful of behaviours a caller reaches for first are right.
 """
 
+import collections
 import gc
 import os
 import pickle
@@ -4413,6 +4414,8 @@ def test_the_measures_of_a_score_are_gathered_by_offset():
     # in the two parts are listed together.
     assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
     assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # An OrderedDict, as music21's, which its repr shows.
+    assert type(whole.measureOffsetMap()) is collections.OrderedDict
     # The measures are the parts' own objects.
     assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
     # Gathering by another class is refused rather than answered without
