@@ -320,8 +320,10 @@ two rules, set 2026-09-12, that most of the open work now serves:
     needs `PYTHONPATH` set to find the wheel there.
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
-    music21-suite`'s provided side at 0.21.0: 2621 of 5276 passing tests,
-    191 of 217 modules importing. Left: `mei` (233), `metadata.bundles`
+    music21-suite`'s provided side at 0.21.0: 2931 of 5276 passing tests,
+    198 of 217 modules importing. A measure's `len()` and indexing leave
+    out its barlines, which music21 counts (4 `mei.test_base` tests).
+    Left: `metadata.bundles`
     (102, corpus cache), `lily` (77), `abcFormat` (128), `graph` (86),
     `musedata.translate` (46), `humdrum.testFiles` (41), `Sites.add`
     (13); xmlToM21's last docstrings (multi-measure rests, metric

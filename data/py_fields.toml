@@ -351,6 +351,10 @@ reason = "a corrector's slice of a score"
 kind = "facade-only"
 reason = "an analysis over a stream"
 
+[MeiToM21Converter]
+kind = "facade-only"
+reason = "music21's document root, attributes to add and slur bundle; the steps read and write them as music21's do, with no crate value behind them"
+
 [MetricModulation]
 kind = "facade-only"
 reason = "two marks and how the change is drawn"

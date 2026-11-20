@@ -51,6 +51,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
     ]),
     ("music21.base", &[
         "_SplitTuple",
+        "_missingImport",
     ]),
     ("music21.braille.basic", &[
         "barlineToBraille",
@@ -424,6 +425,24 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "Possibility",
     ]),
+    ("music21.graph.axis", &[
+        "GraphException",
+        "accidentalLabelToUnicode",
+    ]),
+    ("music21.graph.plot", &[
+        "GraphException",
+        "PlotStreamException",
+    ]),
+    ("music21.graph.primitives", &[
+        "GraphException",
+        "SubConverter",
+        "accidentalLabelToUnicode",
+        "getColor",
+        "getExtendedModules",
+    ]),
+    ("music21.graph.utilities", &[
+        "_missingImport",
+    ]),
     ("music21.humdrum.spineParser", &[
         "GraceDuration",
         "OffsetQL",
@@ -440,6 +459,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
     ("music21.layout", &[
         "GatherSpanners",
         "StaffType",
+    ]),
+    ("music21.mei.base", &[
+        "Element",
     ]),
     ("music21.metadata", &[
         "Contributor",

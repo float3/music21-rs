@@ -66,6 +66,15 @@
 - **music21's `tree` package is ported** to Rust (`music21::tree::core`):
   AVL trees, ElementTree, OffsetTree, TimespanTree, verticalities holding
   their own timespans, `tree.fromStream`, `tree.toStream`.
+- **music21's `mei` is provided:** `MeiToM21Converter` and every
+  per-element step of `mei.base` under music21's names, over the crate's
+  new `mei::step`; steps call each other through the module, so replacing
+  one there takes effect. Notes, rests and chords take attributes of a
+  caller's own; streams have `coreAppend`.
+- **music21's `graph` is provided:** axes, plot data and `findPlot` in
+  Rust, drawn through matplotlib where it is installed, as music21 draws;
+  `base._missingImport`, `measureOffsetMap` as an `OrderedDict`, a stream
+  indexed by a class.
 - **`freezeThaw`** over stream pickling; music21's abstract scale classes
   and `WeightedHexatonicBlues`; **`noteworthy` in full** (translator,
   `NWCConverter`, `NWCStaff`, `NWCObject`), its placing one implementation
@@ -92,6 +101,10 @@
   `recurse().notes` from 4.2x to 16x, `makeMeasures` from 5.4x to 10.7x.
 - An extreme NoteWorthy staff position no longer overflows (found by the
   fuzzer).
+- Installed, a score music21 itself had cached reads back with its lyrics
+  and pitches: music21's pickled state goes through the installed classes'
+  properties. Provided, temporary files go under `music21-rs` in music21's
+  temporary directory, so music21 never reads the package's pickles.
 - A pickle names `_thawed` and the new `_groups` by the package, so a
   score cached by the wheel thaws where the crate is linked in, and a
   standalone wheel stream pickles at all.
@@ -108,8 +121,8 @@
 - The provided gate rewrites `0x` addresses in expected doctest output, as
   music21's runner does.
 
-Gate (`xtask music21-suite`, provided side): 2621 of music21's 5276
-passing tests pass, up from 1298; 191 of 217 modules import, up from 151.
+Gate (`xtask music21-suite`, provided side): 2931 of music21's 5276
+passing tests pass, up from 1298; 198 of 217 modules import, up from 151.
 
 # music21-rs 0.20.1
 
