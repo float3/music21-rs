@@ -112,6 +112,7 @@ pub mod filters;
 pub mod fixer;
 pub mod formats;
 mod freezethaw;
+pub(crate) mod graph;
 pub mod harmonicfunction;
 pub mod harmony;
 pub mod harmparser;
@@ -127,6 +128,7 @@ pub mod key;
 pub mod layout;
 mod m21toxml;
 pub mod makenotation;
+mod meibase;
 pub mod metadata;
 mod metadataproperties;
 pub mod meter;
@@ -975,11 +977,9 @@ where
                 .map(|(written, carried)| (written, carried, py.None()))
         });
     let Ok((written, carried, extra)) = read else {
-        // Not one of ours. music21 freezes its own half as a plain dictionary
-        // of attributes and hands it straight back, so that is what this is.
-        if let Ok(own) = slf.as_any().getattr("__dict__") {
-            own.call_method1("update", (state,))?;
-        }
+        // Not one of ours: music21 freezes its own state as a plain
+        // dictionary of attributes, which is what this is.
+        music21_state(slf.as_any(), state)?;
         return Ok((None, None));
     };
     if !carried.is_none(py)
@@ -989,6 +989,47 @@ where
     }
     let extra = (!extra.is_none(py)).then_some(extra);
     read_state(&written).map(|value| (Some(value), extra))
+}
+
+/// music21's own pickled state put on an installed object: each attribute
+/// the class keeps behind a property of its name, or of its name without
+/// music21's leading underscore (`_duration` for `duration`), goes through
+/// that property, so the value reaches the Rust side; the rest goes in
+/// `__dict__`, as music21 keeps it.
+fn music21_state(object: &Bound<'_, PyAny>, state: &Bound<'_, PyAny>) -> PyResult<()> {
+    let Ok(state) = state.cast::<pyo3::types::PyDict>() else {
+        return Ok(());
+    };
+    let own = object.getattr("__dict__").ok();
+    let class = object.get_type();
+    for (key, value) in state.iter() {
+        let name: String = key.extract()?;
+        let through = [name.as_str(), name.trim_start_matches('_')]
+            .into_iter()
+            .find(|candidate| is_data_property(&class, candidate));
+        if let Some(through) = through
+            && object.setattr(through, &value).is_ok()
+        {
+            continue;
+        }
+        if let Some(own) = &own {
+            own.set_item(&key, &value)?;
+        }
+    }
+    Ok(())
+}
+
+/// Whether `class` has a property of this name that can be set: a data
+/// descriptor, such as a pyo3 getter and setter or a Python `property`.
+fn is_data_property(class: &Bound<'_, pyo3::types::PyType>, name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    let Ok(found) = class.getattr(name) else {
+        return false;
+    };
+    let kind = found.get_type();
+    kind.hasattr("__set__").unwrap_or(false) && !found.is_callable()
 }
 
 /// A new facade object, as the class music21 now has under that name.
@@ -2437,7 +2478,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 42] = [
+const BUILT_MODULES: [&str; 50] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2477,6 +2518,14 @@ const BUILT_MODULES: [&str; 42] = [
     "music21.musicxml.xmlSoundParser",
     "music21.metadata.properties",
     "music21.musicxml.xmlToM21",
+    "music21.mei",
+    "music21.mei.base",
+    "music21.graph",
+    "music21.graph.utilities",
+    "music21.graph.primitives",
+    "music21.graph.axis",
+    "music21.graph.plot",
+    "music21.graph.findPlot",
     "music21.abcFormat",
     "music21.abcFormat.translate",
     "music21.musedata.translate",
@@ -2523,10 +2572,13 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.xmlSoundParser" => xmlsoundparser::module(py),
         "music21.metadata.properties" => metadataproperties::module(py),
         "music21.musicxml.xmlToM21" => xmltom21::module(py),
+        "music21.mei" => meibase::package(py),
+        "music21.mei.base" => meibase::module(py),
         "music21.abcFormat" => abcformat::module(py),
         "music21.abcFormat.translate" => abctranslate::module(py),
         "music21.musedata.translate" => musedatatranslate::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
+        _ if name.starts_with("music21.graph") => graph::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),
     }
 }

@@ -383,23 +383,6 @@ fn sort_order(object: &Bound<'_, PyAny>) -> i64 {
         .unwrap_or(20)
 }
 
-/// Whether a key indexing a stream is a class, or a list or tuple of
-/// classes, as music21's `Stream.__getitem__` searches for.
-fn is_class_query(key: &Bound<'_, PyAny>) -> PyResult<bool> {
-    if key.is_instance_of::<pyo3::types::PyType>() {
-        return Ok(true);
-    }
-    if !key.is_instance_of::<PyList>() && !key.is_instance_of::<PyTuple>() {
-        return Ok(false);
-    }
-    for each in key.try_iter()? {
-        if !each?.is_instance_of::<pyo3::types::PyType>() {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 /// [`sort_order`], for the context search.
 pub(crate) fn sort_order_of(object: &Bound<'_, PyAny>) -> i64 {
     sort_order(object)
@@ -3132,10 +3115,10 @@ impl Stream {
         Ok(())
     }
 
-    /// The measures this stream holds, gathered by the offset each stands
-    /// at: music21's `measureOffsetMap`, whose answer a score builds out of
-    /// its parts, so measures standing together in different parts are
-    /// listed together.
+    /// The measures this stream holds, in an `OrderedDict` by the offset
+    /// each stands at: music21's `measureOffsetMap`, whose answer a score
+    /// builds out of its parts, so measures standing together in different
+    /// parts are listed together.
     ///
     /// Only `Measure` is taken as a class to gather by: music21's other
     /// classes are found by asking an element which measure holds it,
@@ -3144,7 +3127,7 @@ impl Stream {
     fn measureOffsetMap<'py>(
         slf: &Bound<'py, Self>,
         classFilterList: Option<&Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyDict>> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         if let Some(asked) = classFilterList.filter(|list| !list.is_none()) {
             let names = class_names(asked)?;
@@ -3171,8 +3154,8 @@ impl Stream {
             if is_of_class(object, &part)? {
                 parts = true;
                 let inner = Self::measureOffsetMap(object.cast::<Stream>()?, None)?;
-                for (offset, measures) in inner.iter() {
-                    let offset: f64 = offset.extract()?;
+                for item in inner.call_method0("items")?.try_iter()? {
+                    let (offset, measures): (f64, Bound<'py, PyAny>) = item?.extract()?;
                     for held in measures.try_iter()? {
                         gathered.push((offset, held?));
                     }
@@ -3194,7 +3177,7 @@ impl Stream {
             }
         }
         offsets.sort_by(f64::total_cmp);
-        let out = PyDict::new(py);
+        let out = py.import("collections")?.getattr("OrderedDict")?.call0()?;
         for offset in offsets {
             let standing: Vec<&Bound<'py, PyAny>> = gathered
                 .iter()
@@ -4565,6 +4548,19 @@ impl Stream {
         Ok(())
     }
 
+    /// music21's `coreAppend`: `append`, which here keeps the stream in
+    /// order as it goes, so nothing waits for `coreElementsChanged`.
+    #[pyo3(signature = (element, *, setActiveSite = true))]
+    fn coreAppend(
+        slf: &Bound<'_, Self>,
+        element: &Bound<'_, PyAny>,
+        #[pyo3(from_py_with = crate::truthy)] setActiveSite: bool,
+    ) -> PyResult<()> {
+        let _ = setActiveSite;
+        slf.call_method1("append", (element,))?;
+        Ok(())
+    }
+
     /// music21's `coreElementsChanged`. A stream here is up to date after
     /// every change, so there is nothing to do; music21's keywords are
     /// accepted for that.
@@ -4613,18 +4609,17 @@ impl Stream {
         if let Ok(query) = key.cast::<PyString>() {
             return Self::queried(slf, query.to_str()?);
         }
+
+        // A class, or several, is looked for all through the stream.
+        if is_class_key(key)? {
+            return slf
+                .call_method0("recurse")?
+                .call_method1("getElementsByClass", (key,));
+        }
         let me = slf.borrow();
         let elements = me.elements(py)?;
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
-        }
-
-        // A class, or a list of classes, is looked for anywhere inside.
-        if is_class_query(key)? {
-            drop(me);
-            return slf
-                .call_method0("recurse")?
-                .call_method1("getElementsByClass", (key,));
         }
         let index: isize = key.extract().map_err(|_| {
             let given = key.get_type().repr().map(|shown| shown.to_string());
@@ -5906,6 +5901,23 @@ fn meters_of(stream: &Bound<'_, PyAny>) -> PyResult<Vec<(f64, music21::meter::Ti
 pub(crate) fn read_with_leaves(stream: &Bound<'_, PyAny>) -> PyResult<(RsStream, Vec<Py<PyAny>>)> {
     let read = read_values(stream)?;
     Ok((read.stream, read.leaves))
+}
+
+/// Whether a stream's key is a class, or a tuple or list of classes:
+/// music21 looks those up all through the stream.
+fn is_class_key(key: &Bound<'_, PyAny>) -> PyResult<bool> {
+    if key.is_instance_of::<pyo3::types::PyType>() {
+        return Ok(true);
+    }
+    if !key.is_instance_of::<PyTuple>() && !key.is_instance_of::<PyList>() {
+        return Ok(false);
+    }
+    for item in key.try_iter()? {
+        if !item?.is_instance_of::<pyo3::types::PyType>() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// One element -- music21's own object or this package's -- read as the

@@ -15,7 +15,7 @@ use crate::chord::Chord;
 use crate::clef::{Clef, ClefKind};
 use crate::defaults::{FloatType, IntegerType};
 use crate::duration::{Duration, DurationType, Tuplet, TupletType};
-use crate::error::{Error, FormatErrorKind, Result};
+use crate::error::{FormatErrorKind, Result};
 use crate::expressions::{Expression, Ornament, OrnamentKind};
 use crate::instrument::{Instrument, SearchLanguage};
 use crate::interval::Interval;
@@ -23,7 +23,7 @@ use crate::key::{Key, KeySignature};
 use crate::makenotation::op_frac;
 use crate::metadata::Metadata;
 use crate::meter::TimeSignature;
-use crate::notation::{BeamType, Lyric, Syllabic, Tie, TieType};
+use crate::notation::{BeamType, Lyric, Tie};
 use crate::note::Note;
 use crate::pitch::{Accidental, Pitch, PitchOptions};
 use crate::rest::Rest;
@@ -31,9 +31,9 @@ use crate::spanner::{Spanner, SpannerKind};
 use crate::stream::{Stream, StreamElement, StreamEvent, StreamKind};
 use crate::xml::Xml;
 
-fn mei_error(message: impl Into<String>) -> Error {
-    Error::mei(message.into())
-}
+pub mod step;
+
+use step::{fresh_uuid, mei_error, without_hash};
 
 /// A tag with any namespace prefix taken off.
 fn local(tag: &str) -> &str {
@@ -62,37 +62,6 @@ fn descendants<'a>(element: &'a Xml, tag: &str, out: &mut Vec<&'a Xml>) {
         }
         descendants(held, tag, out);
     }
-}
-
-/// A random version-4 UUID, as music21 names a slur written apart from its
-/// notes with `uuid4()`; `count` keeps two in one read apart.
-fn fresh_uuid(count: usize) -> String {
-    use std::hash::{BuildHasher, Hasher};
-
-    // std seeds each `RandomState` afresh, which is all the randomness
-    // a name needs.
-    let random = std::collections::hash_map::RandomState::new();
-    let mut halves = [0_u64; 2];
-    for (half, made) in halves.iter_mut().enumerate() {
-        let mut hasher = random.build_hasher();
-        hasher.write_usize(count);
-        hasher.write_usize(half);
-        *made = hasher.finish();
-    }
-    let high = (halves[0] & !0xF000) | 0x4000;
-    let low = (halves[1] & 0x3FFF_FFFF_FFFF_FFFF) | 0x8000_0000_0000_0000;
-    format!(
-        "{:08x}-{:04x}-{:04x}-{:04x}-{:012x}",
-        high >> 32,
-        (high >> 16) & 0xFFFF,
-        high & 0xFFFF,
-        low >> 48,
-        low & 0xFFFF_FFFF_FFFF
-    )
-}
-
-fn without_hash(id: &str) -> &str {
-    id.strip_prefix('#').unwrap_or(id)
 }
 
 /// A tuplet a `<tupletSpan>` runs from one note to another, waiting for
@@ -178,85 +147,6 @@ struct Reader {
     next_slur: usize,
 }
 
-const DURATIONS: [(&str, FloatType); 14] = [
-    ("long", 16.0),
-    ("breve", 8.0),
-    ("1", 4.0),
-    ("2", 2.0),
-    ("4", 1.0),
-    ("8", 0.5),
-    ("16", 0.25),
-    ("32", 0.125),
-    ("64", 0.0625),
-    ("128", 0.03125),
-    ("256", 0.015625),
-    ("512", 0.0078125),
-    ("1024", 0.00390625),
-    ("2048", 0.001953125),
-];
-
-/// The length a `<mRest>` with no `dur` is given until its measure says
-/// how long it is.
-const NO_DURATION: FloatType = 0.00390625;
-
-fn accidental_of(attribute: Option<&str>) -> Result<Option<&'static str>> {
-    let Some(attribute) = attribute else {
-        return Ok(None);
-    };
-    Ok(Some(match attribute {
-        "s" | "ns" => "#",
-        "f" | "nf" => "-",
-        "ss" | "x" => "##",
-        "ff" => "--",
-        "xs" | "ts" => "###",
-        "tf" => "---",
-        "n" => "n",
-        "su" => "#~",
-        "sd" | "nu" => "~",
-        "fu" | "nd" => "`",
-        "fd" => "-`",
-        other => {
-            return Err(mei_error(format!(
-                "Unexpected value for \"accid\" attribute: {other}"
-            )));
-        }
-    }))
-}
-
-fn gestural_accidental_of(attribute: &str) -> Result<&'static str> {
-    Ok(match attribute {
-        "s" => "#",
-        "f" => "-",
-        "ss" => "##",
-        "ff" => "--",
-        "n" => "n",
-        "su" => "#~",
-        "sd" => "~",
-        "fu" => "`",
-        "fd" => "-`",
-        other => {
-            return Err(mei_error(format!(
-                "Unexpected value for \"accid.ges\" attribute: {other}"
-            )));
-        }
-    })
-}
-
-fn length_of(attribute: Option<&str>) -> Result<FloatType> {
-    let Some(attribute) = attribute else {
-        return Ok(NO_DURATION);
-    };
-    DURATIONS
-        .iter()
-        .find(|(name, _)| *name == attribute)
-        .map(|(_, length)| *length)
-        .ok_or_else(|| {
-            mei_error(format!(
-                "Unexpected value for \"dur\" attribute: {attribute}"
-            ))
-        })
-}
-
 /// music21's `makeDuration`: a length, then its dots.
 fn duration_of(base: FloatType, dots: u32) -> Result<Duration> {
     let plain = Duration::new(base)?;
@@ -279,37 +169,7 @@ fn dots_of(element: &Xml) -> Result<u32> {
 fn articulations_of(attribute: &str) -> Result<Vec<Articulation>> {
     let mut marks = Vec::new();
     for name in attribute.split(' ') {
-        let classes: &[&str] = match name {
-            "marc-stacc" => &["StrongAccent", "Staccato"],
-            "ten-stacc" => &["Tenuto", "Staccato"],
-            "acc" => &["Accent"],
-            "stacc" => &["Staccato"],
-            "ten" => &["Tenuto"],
-            "stacciss" => &["Staccatissimo"],
-            "marc" => &["StrongAccent"],
-            "spicc" => &["Spiccato"],
-            "doit" => &["Doit"],
-            "plop" => &["Plop"],
-            "fall" => &["Falloff"],
-            "dnbow" => &["DownBow"],
-            "upbow" => &["UpBow"],
-            "harm" => &["Harmonic"],
-            "snap" => &["SnapPizzicato"],
-            "stop" => &["Stopped"],
-            "open" => &["OpenString"],
-            "dbltongue" => &["DoubleTongue"],
-            "toe" => &["OrganToe"],
-            "trpltongue" => &["TripleTongue"],
-            "heel" => &["OrganHeel"],
-            "tap" | "lhpizz" | "dot" | "stroke" | "rip" | "bend" | "flip" | "smear"
-            | "fingernail" | "damp" | "dampall" => &["Articulation"],
-            other => {
-                return Err(mei_error(format!(
-                    "Unexpected value for \"artic\" attribute: {other}"
-                )));
-            }
-        };
-        for class in classes {
+        for class in step::articulation_classes(name)? {
             let kind = ArticulationKind::from_class_name(class)
                 .ok_or_else(|| mei_error(format!("no articulation called {class}")))?;
             marks.push(Articulation::of_kind(kind));
@@ -327,35 +187,18 @@ fn barline_of(attribute: &str) -> Result<(Barline, Option<Barline>)> {
             Some(Barline::repeat(RepeatDirection::Start, None)),
         ),
         "rptend" => (Barline::repeat(RepeatDirection::End, Some(2)), None),
-        other if other.starts_with("rpt") => (Barline::repeat(RepeatDirection::Start, None), None),
+        other if other.starts_with(step::REPEAT_PREFIX) => {
+            (Barline::repeat(RepeatDirection::Start, None), None)
+        }
         other => {
-            let kind = match other {
-                "dashed" => BarlineType::Dashed,
-                "dotted" => BarlineType::Dotted,
-                "dbl" => BarlineType::Double,
-                "end" => BarlineType::Final,
-                "invis" => BarlineType::None,
-                "single" => BarlineType::Regular,
-                other => {
-                    return Err(mei_error(format!(
-                        "Unexpected value for \"right\" attribute: {other}"
-                    )));
-                }
-            };
-            (Barline::new(kind), None)
+            let style = step::translate(&step::BARLINES, other, "right")?;
+            (Barline::new(BarlineType::from_name(style)?), None)
         }
     })
 }
 
 fn tie_of(attribute: &str) -> Tie {
-    let has = |mark: char| attribute.contains(mark);
-    Tie::new(if has('m') || (has('t') && has('i')) {
-        TieType::Continue
-    } else if has('i') {
-        TieType::Start
-    } else {
-        TieType::Stop
-    })
+    Tie::new(step::tie_type(attribute))
 }
 
 fn meter_of(element: &Xml) -> Result<TimeSignature> {
@@ -372,28 +215,14 @@ fn key_of(element: &Xml) -> Result<Key> {
     if let Some(step) = element.get("key.pname") {
         let tonic = format!(
             "{step}{}",
-            accidental_of(element.get("key.accid"))?.unwrap_or("")
+            step::written_accidental(element.get("key.accid"))?.unwrap_or("")
         );
         return Key::from_tonic_mode(
             &tonic,
             element.get("key.mode").filter(|mode| !mode.is_empty()),
         );
     }
-    let signature = element.get("key.sig").unwrap_or("0");
-    let count = || -> Result<IntegerType> {
-        signature
-            .get(..1)
-            .unwrap_or_default()
-            .parse()
-            .map_err(|_| mei_error(format!("the key signature {signature:?} has no number")))
-    };
-    let sharps = if signature.starts_with('0') {
-        0
-    } else if signature.ends_with('s') {
-        count()?
-    } else {
-        -count()?
-    };
+    let sharps = step::sharps_of(element.get("key.sig").unwrap_or("0"))?;
     Ok(KeySignature::new(sharps).as_key(element.get("key.mode").unwrap_or("major")))
 }
 
@@ -408,22 +237,8 @@ fn transposition_of(element: &Xml) -> Result<Interval> {
                 .map_err(|_| mei_error(format!("{name} is no number: {text:?}"))),
         }
     };
-    // Reckoned in i64, where the least i32 has a positive.
-    let mut diatonic = i64::from(read("trans.diat")?);
-    let semitones = read("trans.semi")?;
-    let wide = i64::from(semitones);
-    // A transposition of more than an octave written with its steps inside
-    // one has the octaves put back.
-    if (wide - diatonic).abs() > 5 * (wide.abs() / 12 + 1) {
-        if wide < 0 {
-            diatonic -= 7 * (wide.abs() / 12);
-        } else if wide > 0 {
-            diatonic += 7 * (wide.abs() / 12);
-        }
-    }
-    diatonic += diatonic.signum();
-    let diatonic = IntegerType::try_from(diatonic)
-        .map_err(|_| mei_error(format!("a transposition of {diatonic} steps is too far")))?;
+    let (diatonic, semitones) =
+        step::transposition_steps(read("trans.diat")?.into(), read("trans.semi")?.into())?;
     Interval::from_generic_and_chromatic(diatonic, semitones)
 }
 
@@ -437,20 +252,7 @@ fn clef_of(
         Some("perc") => Ok(Clef::of_kind(ClefKind::PercussionClef)),
         Some("TAB") => Ok(Clef::of_kind(ClefKind::TabClef)),
         _ => {
-            let octaves = match displaced {
-                None => 0,
-                Some("8") => 1,
-                Some("15") => 2,
-                Some("22") => 3,
-                Some(other) => {
-                    return Err(mei_error(format!("a clef displaced by {other}")));
-                }
-            };
-            let shift = if place == Some("below") {
-                -octaves
-            } else {
-                octaves
-            };
+            let shift = step::octave_shift(displaced, place)?;
             let (Some(shape), Some(line)) = (shape, line) else {
                 return Err(mei_error("a clef with no shape or no line"));
             };
@@ -760,10 +562,10 @@ impl Reader {
             }
             options.build()?
         };
-        if let Some(accidental) = accidental_of(element.get("accid"))? {
+        if let Some(accidental) = step::written_accidental(element.get("accid"))? {
             pitch.set_written_accidental(Some(Accidental::new(accidental)?));
         }
-        let length = length_of(element.get("dur"))?;
+        let length = step::quarter_length(element.get("dur"))?;
         let mut note =
             Note::from_pitch(pitch).with_duration(duration_of(length, dots_of(element)?)?);
 
@@ -778,8 +580,8 @@ impl Reader {
                 }
                 "accid" => {
                     let accidental = match held.get("accid.ges") {
-                        Some(gestural) => Some(gestural_accidental_of(gestural)?),
-                        None => accidental_of(held.get("accid"))?,
+                        Some(gestural) => Some(step::gestural_accidental(gestural)?),
+                        None => step::written_accidental(held.get("accid"))?,
                     };
                     if let Some(accidental) = accidental {
                         let mut pitch = note.pitch().clone();
@@ -793,7 +595,9 @@ impl Reader {
         }
         if let Some(gestural) = element.get("accid.ges") {
             let mut pitch = note.pitch().clone();
-            pitch.set_written_accidental(Some(Accidental::new(gestural_accidental_of(gestural)?)?));
+            pitch.set_written_accidental(Some(Accidental::new(step::gestural_accidental(
+                gestural,
+            )?)?));
             note.set_pitch(pitch);
         }
         let uid = self.uid();
@@ -870,7 +674,7 @@ impl Reader {
             }
         }
         let mut chord = Chord::new(notes)?.with_duration(duration_of(
-            length_of(element.get("dur"))?,
+            step::quarter_length(element.get("dur"))?,
             dots_of(element)?,
         )?);
         for held in children(element, "artic") {
@@ -919,7 +723,7 @@ impl Reader {
     /// where it is only space.
     fn rest(&mut self, element: &Xml, hidden: bool, whole_measure: bool) -> Result<Thing> {
         let mut rest = Rest::new(duration_of(
-            length_of(element.get("dur"))?,
+            step::quarter_length(element.get("dur"))?,
             dots_of(element)?,
         )?);
         rest.set_hidden(hidden);
@@ -1210,7 +1014,7 @@ impl Reader {
         // where no staff says.
         let target = match (longest, meter) {
             (Some(longest), Some(meter))
-                if longest == NO_DURATION && longest != meter.bar_quarter_length() =>
+                if longest == step::NO_DURATION && longest != meter.bar_quarter_length() =>
             {
                 Some(meter.bar_quarter_length())
             }
@@ -1396,24 +1200,7 @@ fn syllable_of(element: &Xml) -> Result<Lyric> {
     let text = element
         .text()
         .ok_or_else(|| mei_error("a <syl> with no text"))?;
-    let joiner = match element.get("con") {
-        Some("s") => " ",
-        Some("d") | None => "-",
-        Some("t") => "~",
-        Some("u") => "_",
-        Some(other) => {
-            return Err(mei_error(format!("a syllable joined by {other:?}")));
-        }
-    };
-    let (text, syllabic) = match element.get("wordpos") {
-        Some("i") => (format!("{text}{joiner}"), Some(Syllabic::Begin)),
-        Some("m") => (format!("{joiner}{text}{joiner}"), Some(Syllabic::Middle)),
-        Some("t") => (format!("{joiner}{text}"), Some(Syllabic::End)),
-        None => (text.to_string(), None),
-        Some(other) => {
-            return Err(mei_error(format!("a syllable placed at {other:?}")));
-        }
-    };
+    let (text, syllabic) = step::syllable(text, element.get("wordpos"), element.get("con"))?;
     Ok(match syllabic {
         Some(syllabic) => {
             let mut lyric = Lyric::new(text);
@@ -1685,6 +1472,7 @@ pub fn from_mei(document: &str) -> Result<Stream> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::notation::TieType;
 
     fn document(body: &str) -> String {
         format!(

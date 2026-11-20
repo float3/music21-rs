@@ -61,6 +61,11 @@ const EXCEPTIONS21_NAMES: [&str; 10] = [
     "TimeSignatureException",
 ];
 
+/// The name under which a built module lists the modules of music21's it
+/// imports by name, as `from music21 import note` does; the provider
+/// imports them into the module and drops the list.
+const MUSIC21_IMPORTS: &str = "_MUSIC21_IMPORTS";
+
 /// What every module object has of its own, which a built module's names
 /// must not put over the provided module's.
 const MODULE_SPECIALS: [&str; 5] = [
@@ -805,6 +810,7 @@ impl Provider {
             }
         };
         module.setattr("__all__", listed)?;
+        import_music21(py, module, &names)?;
         if fullname == "music21" {
             stand_in(module)?;
         }
@@ -812,6 +818,25 @@ impl Provider {
         module.setattr("__dir__", Self::listing(slf, &fullname, &names)?)?;
         Ok(())
     }
+}
+
+/// The modules of music21's a built module imports by name, imported
+/// into it.
+fn import_music21(
+    py: Python<'_>,
+    module: &Bound<'_, PyAny>,
+    names: &Bound<'_, PyDict>,
+) -> PyResult<()> {
+    let Some(imports) = names.get_item(MUSIC21_IMPORTS)? else {
+        return Ok(());
+    };
+    module.delattr(MUSIC21_IMPORTS)?;
+    for name in imports.try_iter()? {
+        let name: String = name?.extract()?;
+        let imported = py.import(format!("music21.{name}"))?;
+        module.setattr(name.as_str(), imported)?;
+    }
+    Ok(())
 }
 
 /// The provided `music21` package's version and its mark.

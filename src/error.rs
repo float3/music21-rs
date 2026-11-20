@@ -132,6 +132,10 @@ pub enum Error {
     /// whose values are all nought: music21's `FeatureException`.
     #[error("Feature error: {0}")]
     Feature(String),
+    /// A graph that cannot be drawn as asked, or a colour no graph can be
+    /// drawn in: music21's `GraphException`.
+    #[error("Graph error: {0}")]
+    Graph(String),
     /// Text that cannot be worked on as asked: an article looked for in a
     /// language music21 knows none of.
     #[error("Text error: {0}")]

@@ -7,6 +7,7 @@ that the classes carry music21's reprs and module strings, and that the
 handful of behaviours a caller reaches for first are right.
 """
 
+import collections
 import gc
 import os
 import pickle
@@ -3222,16 +3223,6 @@ def _flat_notes(stream):
     ]
 
 
-def test_a_stream_indexed_by_a_class_finds_it_anywhere_inside():
-    # music21's `Stream.__getitem__`: a class, or classes, search recursively.
-    part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 r4 e1")
-    assert [n.nameWithOctave for n in part[m.Note]] == ["C4", "D4", "E4"]
-    assert len(part[[m.Note, m.Rest]]) == 4
-    assert len(part[m.TimeSignature]) == 1
-    with pytest.raises(TypeError):
-        part[0.5]
-
-
 def test_streams_are_sliced_scaled_and_inverted_as_music21_does():
     # Each answer read off music21 11.0.0b12.
     part = m.from_tiny_notation("tinyNotation: 4/4 c2 d4 e4 f1")
@@ -4434,6 +4425,8 @@ def test_the_measures_of_a_score_are_gathered_by_offset():
     # in the two parts are listed together.
     assert shown(whole.measureOffsetMap()) == {0.0: [1, 1], 4.0: [2, 2]}
     assert list(whole.measureOffsetMap()) == [0.0, 4.0]
+    # An OrderedDict, as music21's, which its repr shows.
+    assert type(whole.measureOffsetMap()) is collections.OrderedDict
     # The measures are the parts' own objects.
     assert whole.measureOffsetMap()[0.0][0] is first.getElementsByClass("Measure")[0]
     # Gathering by another class is refused rather than answered without
@@ -9988,17 +9981,17 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.mei', 'from music21 import lily'):
+for statement in ('import music21.ipython21', 'from music21 import lily'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
         print(str(error).split(';')[0])
-print(hasattr(music21, 'mei'), 'chord' in music21.__dir__())
+print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
 """
     done = _run_without_music21(code, tmp_path)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
-        "music21-rs does not provide music21.mei",
+        "music21-rs does not provide music21.ipython21",
         "music21-rs does not provide music21.lily",
         "False True",
     ]
@@ -10926,6 +10919,52 @@ print(issubclass(midi.MidiException, music21_rs._provide.Music21Exception))
         "b'\\xcfG'",
         "music21.midi.base cannot putVariableLengthNumber() when number is negative: -1",
         "True",
+    ]
+
+
+def test_provided_mei_reads_a_score_through_its_steps(tmp_path):
+    """Provided, `mei.MeiToM21Converter` reads a score, and each step
+    calls the others through the module, so a step replaced on it is the
+    one called, as music21's tests replace them."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from unittest import mock
+from xml.etree import ElementTree as ET
+from music21 import mei
+from music21.mei import base
+document = ('<mei xmlns="http://www.music-encoding.org/ns/mei"><music><score>'
+            '<scoreDef meter.count="2" meter.unit="4"><staffGrp>'
+            '<staffDef n="1" clef.shape="G" clef.line="2"/></staffGrp></scoreDef>'
+            '<section><measure n="1"><staff n="1"><layer n="1">'
+            '<note pname="c" oct="4" dur="4" xml:id="a"/>'
+            '<note pname="e" oct="4" dur="4" xml:id="b"/>'
+            '</layer></staff><slur startid="#a" endid="#b"/></measure></section>'
+            '</score></music></mei>')
+score = mei.MeiToM21Converter(document).run()
+print([n.nameWithOctave for n in score.recurse().notes])
+print(len(score.spanners))
+print(base.instrument.__name__, base._accidentalFromAttr('s'))
+chord = ET.fromstring('<chord xmlns="http://www.music-encoding.org/ns/mei" dur="4">'
+                      '<note pname="c" oct="4"/></chord>')
+with mock.patch('music21.mei.base.noteFromElement') as replaced:
+    replaced.return_value = 'a note'
+    with mock.patch('music21.chord.Chord') as made:
+        base.chordFromElement(chord)
+        print(made.call_args)
+try:
+    base._attrTranslator('9', 'dur', base._DUR_ATTR_DICT)
+except base.MeiValueError as error:
+    print(type(error).__module__, error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "['C4', 'E4']",
+        "1",
+        "music21.instrument #",
+        "call(notes=['a note'])",
+        'music21.mei.base Unexpected value for "dur" attribute: 9',
     ]
 
 
@@ -12577,3 +12616,124 @@ print(pp.activeMultiMeasureRestSpanner, list(pp.stream))
         "<music21.percussion.PercussionChord [unpitched[A3] unpitched[B3]]>",
         "None [<music21.spanner.MultiMeasureRest 2 measures>]",
     ]
+
+
+def test_a_stream_is_indexed_by_a_class():
+    """A class, or several, finds those elements all through the stream, as
+    music21's `s[note.Note]` does."""
+    s = m.Stream()
+    s.append(m.Note("C4"))
+    s.append(m.Rest())
+    voice = m.Voice()
+    voice.insert(0.0, m.Note("D4"))
+    s.insert(2.0, voice)
+    assert [n.name for n in s[m.Note]] == ["C", "D"]
+    assert len(s[m.Note, m.Rest]) == 3
+
+
+def test_provided_graph_works_out_its_data_without_matplotlib(tmp_path):
+    """Colours, ticks and the choice of plot are the crate's; a graph that
+    would draw refuses, as music21's does, without matplotlib."""
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import graph
+print(graph.utilities.getColor('Steel Blue'), graph.utilities.getColor([0.5, 0.5, 0.5]))
+print(graph.findPlot.getPlotsToMake('scatter', 'pc', 'offset'))
+ax = graph.axis.DynamicsAxis()
+ax.minValue, ax.maxValue = 3, 4
+print(ax.ticks())
+try:
+    graph.primitives.Graph()
+except graph.utilities.GraphException as error:
+    print(error)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "#4682b4 #808080",
+        "[<class 'music21.graph.plot.ScatterPitchClassOffset'>]",
+        "[(3, '$ppp$'), (4, '$pp$')]",
+        "could not find matplotlib, graphing is not allowed",
+    ]
+
+
+def test_provided_graph_plots_a_stream_with_matplotlib(tmp_path):
+    """A histogram's data, read off a stream, and its figure drawn."""
+    pytest.importorskip("matplotlib")
+    code = """
+import importlib.util
+if importlib.util.find_spec('music21') is not None:
+    print('skip')
+    raise SystemExit
+import music21_rs
+music21_rs.provide_music21()
+import matplotlib
+matplotlib.use('Agg')
+from music21 import graph, note, stream
+s = stream.Stream([note.Note('C4'), note.Note('E4'), note.Note('C4')])
+plot = graph.plot.HistogramPitchSpace(s, doneAction=None)
+plot.run()
+print(plot.data)
+print(plot.axis['x']['ticks'])
+print(type(plot.figure).__name__)
+"""
+    package_root = pathlib.Path(m.__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONPATH=str(package_root), PYTHONIOENCODING="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        cwd=tmp_path,
+        env=env,
+    )
+    assert done.returncode == 0, done.stderr
+    if done.stdout.strip() == "skip":
+        pytest.skip("music21 is installed beside this package")
+    assert done.stdout.splitlines() == [
+        "[(1, 2, {}), (2, 1, {})]",
+        "([1, 2], ['C4', 'E'])",
+        "Figure",
+    ]
+
+
+def test_provided_music21_keeps_its_cache_apart(tmp_path):
+    """Provided, music21's temporary files, its parsed-score pickles among
+    them, go in a directory of the package's own, so music21 itself never
+    reads a pickle the package wrote under the same name."""
+    code = """
+import tempfile, pathlib
+import music21_rs
+music21_rs.provide_music21()
+from music21 import environment
+root = pathlib.Path(environment.Environment().getRootTempDir())
+print(root.name, root.parent == pathlib.Path(tempfile.gettempdir()) / 'music21')
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.split() == ["music21-rs", "True"]
+
+
+def test_an_installed_wheel_reads_music21s_own_cached_scores(tmp_path):
+    """A score music21 itself parsed and cached reads back whole once the
+    wheel is installed: its notes keep their lyrics and pitches. music21
+    pickles its own state as a plain dictionary, which has to reach the
+    installed classes' properties."""
+    pytest.importorskip("music21.stream")
+    count = (
+        "import tempfile, sys\n"
+        f"tempfile.tempdir = {str(tmp_path)!r}\n"
+        "import music21_rs\n"
+        "if sys.argv[1] == 'install':\n"
+        "    music21_rs.install_into_music21()\n"
+        "from music21 import corpus\n"
+        "s = corpus.parse('handel/rinaldo/lascia_chio_pianga')\n"
+        "notes = list(s.recurse().notes)\n"
+        "print(len([n for n in notes if n.lyrics]), notes[0].pitches[0].nameWithOctave)\n"
+    )
+    plain = subprocess.run([sys.executable, "-c", count, "plain"], capture_output=True, text=True)
+    assert plain.returncode == 0, plain.stderr
+    installed = subprocess.run([sys.executable, "-c", count, "install"], capture_output=True, text=True)
+    assert installed.returncode == 0, installed.stderr
+    assert installed.stdout.split() == plain.stdout.split()

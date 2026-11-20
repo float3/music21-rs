@@ -94,6 +94,8 @@ pub mod features;
 pub mod figuredbass;
 #[doc = include_str!("guide.md")]
 pub mod guide {}
+/// Graphs of a score's data: what music21's `graph` plots.
+pub mod graph;
 /// Humdrum `**kern` scores.
 pub mod humdrum;
 /// Instruments: music21's `instrument` module.
