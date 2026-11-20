@@ -4621,9 +4621,14 @@ impl Stream {
         if key.is_instance_of::<PySlice>() {
             return elements.as_any().get_item(key);
         }
-        let index: isize = key
-            .extract()
-            .map_err(|_| PyTypeError::new_err("a stream is indexed by a number or a slice"))?;
+        let index: isize = key.extract().map_err(|_| {
+            let given = key.get_type().repr().map(|shown| shown.to_string());
+            PyTypeError::new_err(format!(
+                "Streams can get items by int, slice, class, class iterable, or string query; \
+                 got {}",
+                given.unwrap_or_default()
+            ))
+        })?;
         let length = elements.len() as isize;
         let at = if index < 0 { index + length } else { index };
         if at < 0 || at >= length {

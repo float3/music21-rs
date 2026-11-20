@@ -162,7 +162,7 @@ fn tuplets_written(element: &StreamElement, object: &Bound<'_, PyAny>) -> PyResu
 }
 
 /// The beams of one note, as music21 holds them.
-fn beams_object(py: Python<'_>, beams: RsBeams) -> PyResult<Py<PyAny>> {
+pub(crate) fn beams_object(py: Python<'_>, beams: RsBeams) -> PyResult<Py<PyAny>> {
     Ok(crate::installed_new(
         py,
         "music21.beam",

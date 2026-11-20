@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use super::read::class_sort_order;
+use super::translate::class_sort_order;
 use crate::articulations::{Articulation, ArticulationKind, Finger};
 use crate::bar::{Barline, BarlineType, Ending, RepeatDirection};
 use crate::chord::Chord;

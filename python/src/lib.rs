@@ -64,6 +64,8 @@ macro_rules! middle_class {
     };
 }
 
+mod abcformat;
+mod abctranslate;
 pub mod abstractscale;
 pub mod aligner;
 pub mod alphasearch;
@@ -134,6 +136,7 @@ mod metertools;
 pub mod midibase;
 pub mod midipercussion;
 pub mod miditranslate;
+mod musedatatranslate;
 mod musicxml;
 pub mod naturallanguage;
 pub mod neoriemannian;
@@ -2475,7 +2478,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 47] = [
+const BUILT_MODULES: [&str; 50] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2523,6 +2526,9 @@ const BUILT_MODULES: [&str; 47] = [
     "music21.graph.axis",
     "music21.graph.plot",
     "music21.graph.findPlot",
+    "music21.abcFormat",
+    "music21.abcFormat.translate",
+    "music21.musedata.translate",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2568,6 +2574,9 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.xmlToM21" => xmltom21::module(py),
         "music21.mei" => meibase::package(py),
         "music21.mei.base" => meibase::module(py),
+        "music21.abcFormat" => abcformat::module(py),
+        "music21.abcFormat.translate" => abctranslate::module(py),
+        "music21.musedata.translate" => musedatatranslate::module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ if name.starts_with("music21.graph") => graph::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),

@@ -2974,6 +2974,17 @@ def test_musedata_is_read_from_one_file_or_several():
     assert len(m.from_musedata([MUSEDATA, MUSEDATA]).parts) == 2
 
 
+
+def test_a_musedata_slur_is_in_its_part():
+    # music21's `musedataPartToStreamPart` puts each slur in the part.
+    slurred = MUSEDATA.replace("C5     2        q     u", "C5     2        q     u        (")
+    slurred = slurred.replace("A4     4        h     u", "A4     4        h     u        )")
+    (part,) = m.from_musedata(slurred).parts
+    slurs = list(part.recurse().getElementsByClass("Slur"))
+    assert [[n.nameWithOctave for n in slur.getSpannedElements()] for slur in slurs] == [
+        ["C5", "A4"]
+    ]
+
 CAPELLA = (
     '<score xmlns="http://www.capella.de/CapXML/2.0"><systems><system><staves>'
     '<staff layout="S"><voices><voice><noteObjects>'
@@ -9951,6 +9962,37 @@ print(music21.__version__ == music21_rs.__version__, music21.__music21_rs__)
         "2 1.0 major triad",
         "True",
         "True True",
+    ]
+
+
+def test_provided_abc_format_reads_tokens_and_handlers_as_music21(tmp_path):
+    code = """
+import copy
+import music21_rs
+music21_rs.provide_music21()
+from music21 import abcFormat, key
+from music21.abcFormat import translate
+from music21.musedata import translate as museTranslate
+ah = abcFormat.ABCHandler()
+ah.process('X:1\\nM:6/8\\nL:1/8\\nK:G\\n(B3 A3) | G6 | B3 A3 | G6 ||')
+print(len(ah), ah.tokens[5], ah.tokens[5].pitchName, ah.tokens[5].applicableSpanners)
+bars = abcFormat.mergeLeadingMetaData(ah.splitByMeasure())
+print(len(bars), bars[-1].rightBarToken)
+an = abcFormat.ABCNote('B')
+an.activeKeySignature = key.KeySignature(-3)
+print(an.getPitchName('B'), copy.deepcopy(an) == an)
+s = translate.abcToStreamScore(ah)
+print(s.metadata.number, len(s.parts[0].getElementsByClass('Measure')))
+print(museTranslate._musedataBeamToBeams(']/'))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "16 <music21.abcFormat.ABCNote 'B3'> B4 [<music21.spanner.Slur>]",
+        "4 <music21.abcFormat.ABCBar '||'>",
+        "('B-4', False) True",
+        "1 4",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>/<music21.beam.Beam 2/partial/right>>",
     ]
 
 

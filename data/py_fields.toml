@@ -447,6 +447,10 @@ reason = "a member put on the element classes, holding the function it binds"
 kind = "facade-only"
 reason = "the element whose sites it reads, kept in the sites table"
 
+[SlurCollector]
+kind = "facade-only"
+reason = "the notes it was handed and the slurs it made of them, which the crate's Slurs names by place"
+
 [SpannerStorage]
 kind = "facade-only"
 reason = "the spanner it is the storage of"
