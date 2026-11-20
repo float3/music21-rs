@@ -436,12 +436,28 @@ fn grace_of(duration: &Duration) -> Duration {
     duration.grace_duration()
 }
 
+/// An ending a part opens and never closes: music21 leaves its
+/// `RepeatBracket` in the spanner bundle, for the part after.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OpenEnding {
+    /// The ending's number.
+    pub number: u32,
+    /// The measures it spans so far, by their place among the part's.
+    pub measures: Vec<usize>,
+}
+
+/// A voice read by [`part_of`]: the part, the numbers its leaves carry,
+/// the spanners it started and the endings it left open.
+struct VoiceRead {
+    stream: Stream,
+    uids: Vec<Option<usize>>,
+    spanners: Vec<Spanning>,
+    open_endings: Vec<OpenEnding>,
+}
+
 /// music21's `abcToStreamPart`: one voice as a part, with the spanners it
 /// holds, each naming its notes by the numbers the part's leaves carry.
-fn part_of(
-    tokens: &[Token],
-    spanners: &[Spanning],
-) -> Result<(Stream, Vec<Option<usize>>, Vec<Spanning>)> {
+fn part_of(tokens: &[Token], spanners: &[Spanning]) -> Result<VoiceRead> {
     let handler = Handler {
         tokens: tokens.to_vec(),
         ..Handler::new(DEFAULT_VERSION)
@@ -654,7 +670,16 @@ fn part_of(
 
     // Endings, from the brackets over the measures.
     let mut endings: Vec<Option<Ending>> = vec![None; measures.len()];
-    // An ending never closed is left out, as music21 leaves it.
+    // An ending never closed is left out of the measures, as music21 leaves
+    // it, and handed back.
+    let open_endings = brackets
+        .iter()
+        .filter(|bracket| !bracket.complete)
+        .map(|bracket| OpenEnding {
+            number: bracket.number,
+            measures: bracket.measures.clone(),
+        })
+        .collect();
     for bracket in brackets.iter().filter(|bracket| bracket.complete) {
         for (place, index) in bracket.measures.iter().enumerate() {
             if let Some(slot) = endings.get_mut(*index)
@@ -776,7 +801,12 @@ fn part_of(
             held
         })
         .collect();
-    Ok((stream, uids, held))
+    Ok(VoiceRead {
+        stream,
+        uids,
+        spanners: held,
+        open_endings,
+    })
 }
 
 /// Words sung to notes of measures already closed as well as this one.
@@ -1005,18 +1035,36 @@ fn place_spanners(
     }
 }
 
+/// A part read by [`part_stream`], and the endings it left open.
+#[derive(Clone, Debug)]
+pub struct ReadPart {
+    /// The part, holding its spanners and closed endings.
+    pub stream: Stream,
+    /// The endings it opened and never closed.
+    pub open_endings: Vec<OpenEnding>,
+}
+
 /// music21's `abcToStreamPart`: the tokens of one voice, header included,
-/// as a part holding the spanners it starts. `spanners` are those
-/// [`Handler::process`] handed back.
-pub fn part_stream(tokens: &[Token], spanners: &[Spanning]) -> Result<Stream> {
-    let (mut part, uids, held) = part_of(tokens, spanners)?;
-    let uids: Vec<Option<(usize, usize)>> = uids
+/// as a part holding the spanners it starts, and the endings it leaves
+/// open. `spanners` are those [`Handler::process`] handed back.
+pub fn part_stream(tokens: &[Token], spanners: &[Spanning]) -> Result<ReadPart> {
+    let read = part_of(tokens, spanners)?;
+    let mut part = read.stream;
+    let uids: Vec<Option<(usize, usize)>> = read
+        .uids
         .into_iter()
         .map(|uid| uid.map(|uid| (0, uid)))
         .collect();
-    let held = held.into_iter().map(|spanner| (0, spanner)).collect();
+    let held = read
+        .spanners
+        .into_iter()
+        .map(|spanner| (0, spanner))
+        .collect();
     place_spanners(&mut part, &uids, held);
-    Ok(part)
+    Ok(ReadPart {
+        stream: part,
+        open_endings: read.open_endings,
+    })
 }
 
 /// The metadata of a tune's header: music21's `abcToStreamScore` reading
@@ -1094,7 +1142,8 @@ pub fn score_of(handler: &Handler, spanners: &[Spanning]) -> Result<Stream> {
     let mut uids: Vec<Option<(usize, usize)>> = Vec::new();
     let mut held: Vec<(usize, Spanning)> = Vec::new();
     for (index, tokens) in voice_tokens(handler).iter().enumerate() {
-        let (part, part_uids, part_spanners) = part_of(tokens, spanners)?;
+        let read = part_of(tokens, spanners)?;
+        let (part, part_uids, part_spanners) = (read.stream, read.uids, read.spanners);
         uids.extend(part_uids.into_iter().map(|uid| uid.map(|uid| (index, uid))));
         held.extend(part_spanners.into_iter().map(|spanner| (index, spanner)));
         events.push(StreamEvent::new(0.0, part));
@@ -1163,26 +1212,59 @@ pub fn note_of(token: &AbcNote) -> Result<(Option<ChordSymbol>, Option<StreamEle
     Ok((symbol, made.map(|(element, _)| element)))
 }
 
+/// A part cut by [`re_bar_part`], and where each of its leaves came from.
+#[derive(Clone, Debug)]
+pub struct ReBarred {
+    /// The part, its measures cut.
+    pub stream: Stream,
+    /// For each of the part's leaves in order, the leaf of the part read it
+    /// was, where it was one: music21 cuts measures in place, so a note
+    /// kept, or the first half of one cut, is the object it was.
+    pub origins: Vec<Option<usize>>,
+}
+
+/// How many leaves an element is: a stream's, or one.
+fn leaf_count(element: &StreamElement) -> usize {
+    match element.as_stream() {
+        Some(stream) => stream.leaves().len(),
+        None => 1,
+    }
+}
+
+/// The origins of an element's leaves: `start` onwards for one read,
+/// nothing for one made.
+fn origins_of(element: &StreamElement, start: Option<usize>) -> Vec<Option<usize>> {
+    let count = leaf_count(element);
+    match start {
+        Some(start) => (start..start + count).map(Some).collect(),
+        None => vec![None; count],
+    }
+}
+
 /// music21's `reBar` over a part: each measure holding more than its bar
 /// cut in two, as in reading a tune. The part's other elements are kept;
-/// its spanners are not.
+/// its spanners are left to the caller, which knows its notes by
+/// [`ReBarred::origins`].
 ///
 /// # Errors
 ///
 /// A part whose first measure states no meter.
-pub fn re_bar_part(part: &Stream) -> Result<Stream> {
+pub fn re_bar_part(part: &Stream) -> Result<ReBarred> {
     let mut measures: Vec<MeasureIr> = Vec::new();
     let mut endings: Vec<Ending> = Vec::new();
     let mut brackets: Vec<Bracket> = Vec::new();
-    let mut others: Vec<StreamEvent> = Vec::new();
+    // Each top element with the origins of its leaves.
+    let mut tops: Vec<(StreamEvent, Vec<Option<usize>>)> = Vec::new();
     let mut start: Option<FloatType> = None;
+    let mut read = 0usize;
     for event in part.events() {
         let Some(measure) = event
             .element()
             .as_stream()
             .filter(|stream| stream.kind() == StreamKind::Measure)
         else {
-            others.push(event.clone());
+            tops.push((event.clone(), origins_of(event.element(), Some(read))));
+            read += leaf_count(event.element());
             continue;
         };
         start.get_or_insert(event.offset());
@@ -1194,7 +1276,7 @@ pub fn re_bar_part(part: &Stream) -> Result<Stream> {
             });
             endings.push(ending.clone());
         }
-        measures.push(measure_ir(measure));
+        measures.push(measure_ir(measure, &mut read));
     }
     if measures
         .first()
@@ -1218,30 +1300,45 @@ pub fn re_bar_part(part: &Stream) -> Result<Stream> {
     let mut offset = start.unwrap_or(0.0);
     for (measure, ending) in measures.into_iter().zip(placed_endings) {
         let length = measure.line.end;
+        let origins: Vec<Option<usize>> = measure
+            .line
+            .sorted()
+            .into_iter()
+            .flat_map(|item| origins_of(&item.element, item.uid))
+            .collect();
         let mut stream = measure_stream(&measure.line);
         stream.set_number(measure.number);
         stream.set_left_barline(measure.left);
         stream.set_right_barline(measure.right);
         stream.set_ending(ending);
         stream.set_padding_left(measure.padding_left);
-        others.push(StreamEvent::new(offset, stream));
+        tops.push((StreamEvent::new(offset, stream), origins));
         offset = op_frac(offset + length);
     }
-    let mut made = Stream::from_events(others);
+
+    // In the order the part keeps them, which sorts by offset alone.
+    tops.sort_by(|left, right| left.0.offset().total_cmp(&right.0.offset()));
+    let origins = tops.iter().flat_map(|(_, held)| held.clone()).collect();
+    let mut made = Stream::from_events(tops.into_iter().map(|(event, _)| event));
     made.set_kind(part.kind());
-    Ok(made)
+    Ok(ReBarred {
+        stream: made,
+        origins,
+    })
 }
 
-/// A measure as the lines `re_bar` cuts.
-fn measure_ir(measure: &Stream) -> MeasureIr {
+/// A measure as the lines `re_bar` cuts, each item knowing the first leaf
+/// it was among the part's, counted on from `read`.
+fn measure_ir(measure: &Stream, read: &mut usize) -> MeasureIr {
     let mut line = Line::default();
     for event in measure.events() {
         line.items.push(Item {
             offset: event.offset(),
             seq: line.seq,
-            uid: None,
+            uid: Some(*read),
             element: event.element().clone(),
         });
+        *read += leaf_count(event.element());
         line.seq += 1;
         line.end = line.end.max(op_frac(event.end_offset()));
     }
@@ -1422,5 +1519,29 @@ CDEF|GAB4|CDEF|
             ties,
             [(2.0, Some(TieType::Start)), (2.0, Some(TieType::Stop))]
         );
+    }
+
+    #[test]
+    fn an_ending_never_closed_is_handed_back_open() {
+        let (handler, spanners) =
+            handler_of("M:2/4\nL:1/4\nK:C\nc d | e f |[1 g a | b c |").unwrap();
+        let read = part_stream(&handler.tokens, &spanners).unwrap();
+        assert_eq!(
+            read.open_endings,
+            [OpenEnding {
+                number: 1,
+                measures: vec![2]
+            }]
+        );
+    }
+
+    #[test]
+    fn a_rebarred_part_knows_where_each_leaf_came_from() {
+        let score = from_abc("X:1\nM:2/4\nL:1/4\nK:C\nc d | e f g a | b c |\n").unwrap();
+        let part = score.parts()[0].clone();
+        let cut = re_bar_part(&part).unwrap();
+        assert_eq!(cut.stream.leaves().len(), cut.origins.len());
+        // Nothing overflows, as the reader cut already: every leaf is one read.
+        assert!(cut.origins.iter().all(Option::is_some));
     }
 }
