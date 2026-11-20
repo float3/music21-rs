@@ -1,3 +1,7 @@
+# music21-rs 0.22.0
+
+`harte` 0.15.0 depends on this release.
+
 # music21-rs 0.21.0
 
 `harte` 0.14.0 depends on this release.
