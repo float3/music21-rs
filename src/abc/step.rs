@@ -812,7 +812,9 @@ impl AbcNote {
                             .iter()
                             .find(|pitch| pitch.step().as_char().to_string() == name)
                     {
-                        name = pitch.name();
+                        // music21 writes a flat `-`.
+                        let modifier = pitch.accidental().modifier().replace('b', "-");
+                        name = format!("{}{modifier}", pitch.step().as_char());
                     }
                     Some(false)
                 }
@@ -2277,6 +2279,12 @@ mod tests {
         assert_eq!(
             note.pitch_name("C,,", None).unwrap(),
             (Some("C2".to_string()), Some(false))
+        );
+        // A flat in the key is spelled as music21 spells it.
+        let flats = KeySignature::new(-3);
+        assert_eq!(
+            note.pitch_name("B", Some(&flats)).unwrap(),
+            (Some("B-4".to_string()), Some(false))
         );
         assert_eq!(
             note.pitch_name("x", None).unwrap_err().to_string(),
