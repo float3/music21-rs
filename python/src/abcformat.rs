@@ -226,7 +226,7 @@ fn key_value(key: &Bound<'_, PyAny>) -> PyResult<Option<music21::KeySignature>> 
         return Ok(None);
     }
     let sharps: i32 = key.getattr("sharps")?.extract()?;
-    Ok(Some(music21::KeySignature::new(sharps.into())))
+    Ok(Some(music21::KeySignature::new(sharps)))
 }
 
 /// A music21 `Tuplet`, as the crate's.

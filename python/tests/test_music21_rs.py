@@ -9965,6 +9965,37 @@ print(music21.__version__ == music21_rs.__version__, music21.__music21_rs__)
     ]
 
 
+def test_provided_abc_format_reads_tokens_and_handlers_as_music21(tmp_path):
+    code = """
+import copy
+import music21_rs
+music21_rs.provide_music21()
+from music21 import abcFormat, key
+from music21.abcFormat import translate
+from music21.musedata import translate as museTranslate
+ah = abcFormat.ABCHandler()
+ah.process('X:1\\nM:6/8\\nL:1/8\\nK:G\\n(B3 A3) | G6 | B3 A3 | G6 ||')
+print(len(ah), ah.tokens[5], ah.tokens[5].pitchName, ah.tokens[5].applicableSpanners)
+bars = abcFormat.mergeLeadingMetaData(ah.splitByMeasure())
+print(len(bars), bars[-1].rightBarToken)
+an = abcFormat.ABCNote('B')
+an.activeKeySignature = key.KeySignature(-3)
+print(an.getPitchName('B'), copy.deepcopy(an) == an)
+s = translate.abcToStreamScore(ah)
+print(s.metadata.number, len(s.parts[0].getElementsByClass('Measure')))
+print(museTranslate._musedataBeamToBeams(']/'))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "16 <music21.abcFormat.ABCNote 'B3'> B4 [<music21.spanner.Slur>]",
+        "4 <music21.abcFormat.ABCBar '||'>",
+        "('B-4', False) True",
+        "1 4",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>/<music21.beam.Beam 2/partial/right>>",
+    ]
+
+
 def test_provide_music21_is_switched_on_by_the_environment(tmp_path):
     code = "import music21_rs, music21; print(music21.note.Note('D'))"
     done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")
