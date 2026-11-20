@@ -17,24 +17,13 @@ use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyList, PyModule, PyTuple};
 
+use crate::musedatapkg::{MuseDataException, refusal};
 use crate::subconverters::music21_name;
 
 /// The module music21 keeps these in.
 const MODULE: &str = "music21.musedata.translate";
 
 static BUILT: PyOnceLock<Py<PyModule>> = PyOnceLock::new();
-
-// music21's `musedata.MuseDataException`, which its translate raises.
-pyo3::create_exception!(
-    music21_rs_facade,
-    MuseDataException,
-    crate::Music21Exception
-);
-
-/// A crate refusal as an exception.
-fn refusal(error: &music21::Error) -> PyErr {
-    MuseDataException::new_err(crate::pitch::message(error))
-}
 
 /// A part's lines, as music21's `MuseDataPart.src` holds them.
 fn lines_of(part: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
@@ -306,8 +295,6 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(wrap_pyfunction!(musedataPartToStreamPart, &m)?)?;
         m.add_function(wrap_pyfunction!(museDataWorkToStreamScore, &m)?)?;
         m.add_class::<SlurCollector>()?;
-        py.get_type::<MuseDataException>()
-            .setattr("__module__", "music21.musedata")?;
         m.add(
             "environLocal",
             crate::environment::module(py)?
