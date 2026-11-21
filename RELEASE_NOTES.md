@@ -2,6 +2,27 @@
 
 `harte` 0.15.0 depends on this release.
 
+## added
+
+- `provide_music21` provides `music21.lily` (`lilyObjects` and `translate`'s
+  `LilypondConverter`), `music21.metadata.bundles`, `music21.metadata.caching`,
+  `music21.corpus.corpora` and `music21.corpus.manager`. Corpus metadata
+  bundles read and write music21's gzipped pickle caches.
+- `music21_rs.corpus.search`; `CoreCorpus.manualCoreCorpusPath`.
+- The crate's `metadata::bundles`, rich metadata and a pickle reader and
+  writer (`common::pickle`); `MetronomeMark::music21_repr` and
+  `TempoText::music21_repr`.
+
+## fixed
+
+- XML read from a decoded `.mxl` member that kept its byte order mark (some
+  UTF-16 corpus files) is read instead of refused.
+- `duration.convertTypeToNumber('complex')` raises music21's
+  `Could not determine durationNumber from complex`.
+- `converter.parse` takes a `MetadataEntry`.
+- `MetadataException` reports its module as `music21.exceptions21`, as
+  music21's does.
+
 # music21-rs 0.21.0
 
 `harte` 0.14.0 depends on this release.

@@ -1196,6 +1196,13 @@ fn parse<'py>(
     format: Option<&Bound<'py, PyAny>>,
     keywords: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // A metadata entry is the score at its source path, in the corpus
+    // where that is relative.
+    if let Ok(entry) = value.cast::<crate::bundles::MetadataEntry>() {
+        let path = entry.borrow().absolute_path(py)?;
+        let path = py.import("pathlib")?.getattr("Path")?.call1((path,))?;
+        return parse(py, &path, forceSource, number, format, keywords);
+    }
     let pure_path = py.import("pathlib")?.getattr("PurePath")?;
     let is_bytes = bytes_of(value).is_some();
     let is_str = value.is_instance_of::<PyString>();

@@ -125,6 +125,13 @@ style = { kind = "identity", sync = "synced" }
 [RehearsalMark]
 content = { kind = "identity", sync = "set_content", why = "the content as given, a number or text; the setter writes its text into the value" }
 
+[MetadataBundle]
+corpus = { kind = "identity", sync = "read live", why = "the corpus a bundle was made from, read for its name and cache path each time" }
+
+[MetadataCachingJob]
+filePathErrors = { kind = "identity", sync = "read live", why = "the paths a run could not read, appended to; the crate keeps nothing of it" }
+results = { kind = "identity", sync = "read live", why = "the entries a run made, appended to; the crate keeps nothing of it" }
+
 [MeterSequence]
 parts = { kind = "identity", sync = "read live", why = "a sequence cannot change, so its parts are the objects it was made of, standing for the spans it holds" }
 

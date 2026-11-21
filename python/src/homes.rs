@@ -393,6 +393,8 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "DataSetException",
         "FeatureException",
         "FeatureExtractor",
+        "MetadataBundle",
+        "MetadataEntry",
         "StreamType",
         "allFeaturesAsList",
         "extractorById",
@@ -402,6 +404,8 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "vectorById",
     ]),
     ("music21.features.base", &[
+        "MetadataBundle",
+        "MetadataEntry",
         "StreamType",
         "safeToParallize",
     ]),
@@ -481,6 +485,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "PropertyDescription",
         "Text",
         "ValueType",
+    ]),
+    ("music21.metadata.bundles", &[
+        "readPickleGzip",
     ]),
     ("music21.metadata.primitives", &[
         "ValueType",

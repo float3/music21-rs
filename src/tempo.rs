@@ -281,6 +281,34 @@ impl MetronomeMark {
         self.text.as_deref()
     }
 
+    /// The mark as music21's `repr` writes it: the word, the referent and
+    /// the number, or the sounding number marked as playback only where
+    /// none is written.
+    ///
+    /// ```
+    /// use music21::tempo::MetronomeMark;
+    ///
+    /// let mut mark = MetronomeMark::new(40.0);
+    /// mark.set_text("slow");
+    /// assert_eq!(mark.music21_repr(), "<music21.tempo.MetronomeMark slow Quarter=40>");
+    /// ```
+    pub fn music21_repr(&self) -> String {
+        let mut sounding = "";
+        let mut number = self.number();
+        if number.is_none() && self.number_sounding().is_some() {
+            sounding = " (playback only)";
+            number = self.number_sounding();
+        }
+        let number = number.map_or_else(|| "None".to_string(), python_number);
+        let referent = self.referent().full_name();
+        match self.text() {
+            Some(text) => {
+                format!("<music21.tempo.MetronomeMark {text} {referent}={number}{sounding}>")
+            }
+            None => format!("<music21.tempo.MetronomeMark {referent}={number}{sounding}>"),
+        }
+    }
+
     /// The tempo word as something a score would carry: music21's
     /// `getTextExpression`. A word only implied from the number is not
     /// answered unless `return_implicit` asks for it.
@@ -512,6 +540,20 @@ impl TempoText {
     /// Says which side of the staff it is written on.
     pub fn set_placement(&mut self, placement: Option<Placement>) {
         self.placement.0 = placement;
+    }
+
+    /// The text as music21's `repr` writes it.
+    ///
+    /// ```
+    /// use music21::tempo::TempoText;
+    ///
+    /// assert_eq!(TempoText::new("Allegro").music21_repr(), "<music21.tempo.TempoText 'Allegro'>");
+    /// ```
+    pub fn music21_repr(&self) -> String {
+        format!(
+            "<music21.tempo.TempoText {}>",
+            crate::common::stringtools::python_str_repr(self.text())
+        )
     }
 
     /// The words the tempo is said in.
@@ -806,6 +848,15 @@ impl MetricModulation {
     /// Sets whether the equation is written in parentheses.
     pub fn set_parentheses(&mut self, parentheses: bool) {
         self.parentheses = parentheses;
+    }
+}
+
+/// A number as music21 keeps it, a whole one as an integer.
+fn python_number(number: FloatType) -> String {
+    if number.fract() == 0.0 {
+        format!("{}", number as i64)
+    } else {
+        crate::statistics::python_repr(number)
     }
 }
 
