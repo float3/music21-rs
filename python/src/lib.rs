@@ -64,6 +64,8 @@ macro_rules! middle_class {
     };
 }
 
+mod abcformat;
+mod abctranslate;
 pub mod abstractscale;
 pub mod aligner;
 pub mod alphasearch;
@@ -80,6 +82,9 @@ pub mod brailleobjects;
 pub mod braillesegment;
 pub mod brailletext;
 pub mod brailletranslate;
+mod bundles;
+mod caching;
+mod chorales;
 pub mod chord;
 pub mod chordtables;
 mod chordtools;
@@ -89,7 +94,9 @@ mod common;
 pub mod commontest;
 mod converter;
 pub mod converters;
+mod corpora;
 mod corpus;
+mod corpuswork;
 pub mod correlate;
 pub mod defaults;
 pub mod derivation;
@@ -124,6 +131,8 @@ pub mod interval;
 pub mod intervalnetwork;
 pub mod key;
 pub mod layout;
+mod lilyobjects;
+mod lilytranslate;
 mod m21toxml;
 pub mod makenotation;
 mod meibase;
@@ -134,6 +143,9 @@ mod metertools;
 pub mod midibase;
 pub mod midipercussion;
 pub mod miditranslate;
+mod musedatapkg;
+mod musedatatranslate;
+mod musescore;
 mod musicxml;
 pub mod naturallanguage;
 pub mod neoriemannian;
@@ -154,11 +166,13 @@ pub mod primitives;
 mod provide;
 pub mod realizer;
 pub mod realizerscale;
+mod recording;
 pub mod reducechords;
 pub mod reduction;
 pub mod repeat;
 pub mod resolution;
 pub mod rest;
+mod richmetadata;
 pub mod roman;
 pub mod rtobjects;
 pub mod scala;
@@ -184,11 +198,13 @@ pub mod subconverters;
 pub mod tablature;
 pub mod tempo;
 pub mod text;
+mod transcriber;
 pub mod transposition;
 pub mod tree;
 pub mod tsvconverter;
 pub mod unpitched;
 pub mod variant;
+mod virtualcorpus;
 pub mod voiceleading;
 pub mod windowed;
 mod xmlsoundparser;
@@ -2178,7 +2194,7 @@ exceptions![
     (
         "MetadataException",
         metadata::MetadataException,
-        Some("music21.metadata")
+        Some("music21.exceptions21")
     ),
     (
         "DiscreteAnalysisException",
@@ -2399,6 +2415,7 @@ pub fn register_all(m: &Bound<'_, PyModule>) -> PyResult<()> {
     editorial::register(m)?;
     spanner::register(m)?;
     metadata::register(m)?;
+    richmetadata::register(m)?;
     tempo::register(m)?;
     voiceleading::register(m)?;
     serial::register(m)?;
@@ -2475,7 +2492,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 47] = [
+const BUILT_MODULES: [&str; 65] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2523,6 +2540,24 @@ const BUILT_MODULES: [&str; 47] = [
     "music21.graph.axis",
     "music21.graph.plot",
     "music21.graph.findPlot",
+    "music21.abcFormat",
+    "music21.abcFormat.translate",
+    "music21.musedata.translate",
+    "music21.musedata",
+    "music21.metadata.bundles",
+    "music21.metadata.caching",
+    "music21.corpus.corpora",
+    "music21.corpus.manager",
+    "music21.corpus.work",
+    "music21.corpus.chorales",
+    "music21.lily",
+    "music21.lily.lilyObjects",
+    "music21.lily.translate",
+    "music21.converter.museScore",
+    "music21.audioSearch.recording",
+    "music21.audioSearch.transcriber",
+    "music21.corpus.virtual",
+    "music21.scale.scala.scl",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2568,6 +2603,24 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.musicxml.xmlToM21" => xmltom21::module(py),
         "music21.mei" => meibase::package(py),
         "music21.mei.base" => meibase::module(py),
+        "music21.abcFormat" => abcformat::module(py),
+        "music21.abcFormat.translate" => abctranslate::module(py),
+        "music21.musedata.translate" => musedatatranslate::module(py),
+        "music21.musedata" => musedatapkg::package(py),
+        "music21.metadata.bundles" => bundles::module(py),
+        "music21.metadata.caching" => caching::module(py),
+        "music21.corpus.corpora" => corpora::corpora_module(py),
+        "music21.corpus.manager" => corpora::manager_module(py),
+        "music21.corpus.work" => corpuswork::module(py),
+        "music21.corpus.chorales" => chorales::module(py),
+        "music21.lily" => lilytranslate::package(py),
+        "music21.lily.lilyObjects" => lilyobjects::module(py),
+        "music21.lily.translate" => lilytranslate::module(py),
+        "music21.converter.museScore" => musescore::module(py),
+        "music21.audioSearch.recording" => recording::module(py),
+        "music21.audioSearch.transcriber" => transcriber::module(py),
+        "music21.corpus.virtual" => virtualcorpus::module(py),
+        "music21.scale.scala.scl" => scala::scl_module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ if name.starts_with("music21.graph") => graph::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),

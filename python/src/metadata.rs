@@ -102,7 +102,7 @@ impl Metadata {
     /// having no version of anybody else's to write.
     #[new]
     #[pyo3(signature = (**keywords))]
-    fn new(
+    pub(crate) fn new(
         py: Python<'_>,
         keywords: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<PyClassInitializer<Self>> {
@@ -242,7 +242,7 @@ impl Metadata {
 
     /// Whether the vocabulary knows a name, by its unique name or its
     /// namespaced one: music21's `isStandardName`.
-    fn isStandardName(&self, name: &str) -> bool {
+    pub(crate) fn isStandardName(&self, name: &str) -> bool {
         music21::metadata::is_standard_name(name)
     }
 
@@ -282,7 +282,11 @@ impl Metadata {
     /// classes' included. Without that an installed class could not even
     /// be built -- music21's `Music21Object.__init__` writes `_id`
     /// through here.
-    fn __setattr__(slf: &Bound<'_, Self>, name: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    pub(crate) fn __setattr__(
+        slf: &Bound<'_, Self>,
+        name: &str,
+        value: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
         // music21 keeps `bestTitle` as a property with no setter of its own.
         if name == "bestTitle" {
             return Err(PyAttributeError::new_err(

@@ -296,13 +296,13 @@ mod tests {
         };
         // The note at nought is still sounding at 1, but it does not
         // begin in the span, which music21 asks for by default.
-        assert_eq!(offsets(&OffsetSpan::at(1.0)), []);
+        assert_eq!(offsets(&OffsetSpan::at(1.0)), [0.0; 0]);
         let mut sounding = OffsetSpan::at(1.0);
         sounding.must_begin_in_span = false;
         assert_eq!(offsets(&sounding), [0.0]);
 
         assert_eq!(offsets(&OffsetSpan::at(3.0)), [3.0]);
-        assert_eq!(offsets(&OffsetSpan::at(4.0)), []);
+        assert_eq!(offsets(&OffsetSpan::at(4.0)), [0.0; 0]);
 
         // Reaching back at the offset where the first note ends does not
         // find it: a span of no length refuses an element ending exactly

@@ -83,9 +83,70 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
     for text in files {
         parts.extend(split_parts(text)?);
     }
+    score_of(&parts, Header::Read)
+}
+
+/// Whether [`from_musedata_parts`] reads the work's title, number and
+/// movement into the score's metadata.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Header {
+    /// Read, as music21's `museDataWorkToStreamScore` reads it.
+    Read,
+    /// Left out, as music21's `musedataPartToStreamPart` leaves it.
+    Skipped,
+}
+
+/// Reads parts already split from their files, each the lines of one part
+/// as music21's `MuseDataPart.src` holds them, into a score: music21's
+/// `museDataWorkToStreamScore`, or with [`Header::Skipped`] its
+/// `musedataPartToStreamPart` for each.
+///
+/// # Errors
+///
+/// As [`from_musedata`], and a part of one line or none.
+pub fn from_musedata_parts(parts: &[Vec<String>], header: Header) -> Result<Stream> {
+    let mut read = Vec::new();
+    for lines in parts {
+        let numbers = (1..=lines.len()).collect();
+        read.push(Part::new(lines.clone(), numbers)?);
+    }
+    score_of(&read, header)
+}
+
+/// The score of a work's parts, each holding its slurs.
+fn score_of(parts: &[Part], header: Header) -> Result<Stream> {
     let first = parts
         .first()
         .ok_or_else(|| error("a MuseData work with no parts"))?;
+    let mut score = Stream::with_kind(StreamKind::Score);
+    if header == Header::Read {
+        score.set_metadata(Some(work_metadata(first)));
+    }
+    for part in parts {
+        let (mut made, joined) = part.to_part()?;
+        // Each slur goes in its part, naming its notes by their places
+        // among the part's notes and chords in the order they were read.
+        let read: Vec<usize> = made
+            .leaves()
+            .into_iter()
+            .enumerate()
+            .filter(|(_, (_, element))| {
+                matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
+            })
+            .map(|(position, _)| position)
+            .collect();
+        for (start, stop) in joined {
+            if let (Some(first), Some(last)) = (read.get(start), read.get(stop)) {
+                made.add_spanner(Spanner::slur(vec![*first, *last]));
+            }
+        }
+        score.insert(0.0, made);
+    }
+    Ok(score)
+}
+
+/// The work's title, number and movement, as the first part names them.
+fn work_metadata(first: &Part) -> Metadata {
     let mut metadata = Metadata::new();
     if let Some(title) = first.work_title() {
         metadata.add_text("title", title);
@@ -99,40 +160,15 @@ pub fn from_musedata(files: &[&str]) -> Result<Stream> {
     if let Some(number) = first.work_number() {
         metadata.add_text("number", number);
     }
-    let mut score = Stream::with_kind(StreamKind::Score);
-    score.set_metadata(Some(metadata));
-    let mut slurs = Vec::new();
-    for part in &parts {
-        let (made, joined) = part.to_part()?;
-        score.insert(0.0, made);
-        slurs.push(joined);
-    }
-    // Each part's notes and chords in the order they were read, as places
-    // among the score's leaves.
-    let mut places: Vec<Vec<usize>> = vec![Vec::new(); slurs.len()];
-    for (position, (top, _, element)) in score.leaves_under_top().into_iter().enumerate() {
-        if matches!(element, StreamElement::Note(_) | StreamElement::Chord(_))
-            && let Some(read) = places.get_mut(top)
-        {
-            read.push(position);
-        }
-    }
-    for (joined, read) in slurs.iter().zip(&places) {
-        for (start, stop) in joined {
-            if let (Some(first), Some(last)) = (read.get(*start), read.get(*stop)) {
-                score.add_spanner(Spanner::slur(vec![*first, *last]));
-            }
-        }
-    }
-    Ok(score)
+    metadata
 }
 
 /// The slurs of one part, as music21's `_SlurCollector` builds them: the
 /// marks ( ) [ ] { } and z x start and stop slurs 1 to 4, a stop closing the
 /// open slur of its number. Notes and chords are counted in the order they
 /// are read.
-#[derive(Default)]
-struct Slurs {
+#[derive(Clone, Debug, Default)]
+pub struct Slurs {
     open: [Option<usize>; 4],
     joined: Vec<(usize, usize)>,
     read: usize,
@@ -144,27 +180,42 @@ impl Slurs {
 
     /// Stops, then starts, the slurs the marks name on the next note or
     /// chord, so one note can end a slur and begin the next of its number.
-    fn add(&mut self, marks: &str) {
+    /// Hands back the slurs it stops, each as the places of its first and
+    /// last notes among those added.
+    pub fn add(&mut self, marks: &str) -> Vec<(usize, usize)> {
         let at = self.read;
         self.read += 1;
+        let mut stopped = Vec::new();
         for mark in marks.chars() {
             if let Some(number) = Self::STOPS.iter().position(|stop| *stop == mark)
                 && let Some(start) = self.open[number].take()
             {
-                self.joined.push((start, at));
+                stopped.push((start, at));
             }
         }
+        self.joined.extend(stopped.iter().copied());
         for mark in marks.chars() {
             if let Some(number) = Self::STARTS.iter().position(|start| *start == mark) {
                 self.open[number] = Some(at);
             }
         }
+        stopped
+    }
+
+    /// The open slurs, by number from nought, each as the place of its first
+    /// note.
+    pub fn open(&self) -> &[Option<usize>; 4] {
+        &self.open
     }
 }
 
 /// music21's `MuseDataFile.readstr`: the parts of one file, comments and
 /// `@` lines left out, read the same with Windows line endings.
-fn split_parts(text: &str) -> Result<Vec<Part>> {
+///
+/// # Errors
+///
+/// A stage-1 part of one line.
+pub fn split_parts(text: &str) -> Result<Vec<Part>> {
     let mut parts = Vec::new();
     let mut lines: Vec<String> = Vec::new();
     // The line of the file each of them is, counted from one.
@@ -201,16 +252,38 @@ fn digits(text: &str) -> String {
     text.chars().filter(char::is_ascii_digit).collect()
 }
 
+/// Whether [`Part::letters_after`] keeps the spaces it passes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Spaces {
+    /// Passed over.
+    Dropped,
+    /// Kept.
+    Kept,
+}
+
+/// Whether [`Part::letters_after`] reads the line as written.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Case {
+    /// As written.
+    Kept,
+    /// Lowered, tag and line alike.
+    Lowered,
+}
+
 /// The stage of the encoding a part is written in: stage 2 has `$`
 /// attribute records and columns stage 1 lacks.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Stage {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stage {
+    /// The older encoding, without attribute records.
     One,
+    /// The encoding with `$` attribute records.
     Two,
 }
 
-/// A part's lines and the stage they are written in.
-struct Part {
+/// A part's lines and the stage they are written in: music21's
+/// `MuseDataPart`.
+#[derive(Clone, Debug)]
+pub struct Part {
     lines: Vec<String>,
     /// The line of its file each line is, counted from one.
     numbers: Vec<usize>,
@@ -218,6 +291,54 @@ struct Part {
 }
 
 impl Part {
+    /// A part of `lines` already read, in `stage`: music21's
+    /// `MuseDataPart(src, stage)` for a source it keeps as it is.
+    pub fn with_stage(lines: Vec<String>, stage: Stage) -> Self {
+        let numbers = (1..=lines.len()).collect();
+        Self {
+            lines,
+            numbers,
+            stage,
+        }
+    }
+
+    /// music21's `_determineStage`: stage 2 where any line is an attribute
+    /// record.
+    pub fn stage_of(lines: &[String]) -> Stage {
+        if lines.iter().any(|line| line.starts_with('$')) {
+            Stage::Two
+        } else {
+            Stage::One
+        }
+    }
+
+    /// music21's `_scrubStage1`: the lines without the blank ones they open
+    /// with.
+    ///
+    /// # Errors
+    ///
+    /// Lines of one or none.
+    pub fn scrubbed(lines: &[String]) -> Result<Vec<String>> {
+        if lines.len() <= 1 {
+            return Err(error("cannot scrub empty source"));
+        }
+        Ok(lines
+            .iter()
+            .skip_while(|line| line.trim().is_empty())
+            .cloned()
+            .collect())
+    }
+
+    /// The part's lines, a stage-1 part's leading blank lines dropped.
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+
+    /// The stage the part is written in.
+    pub fn stage(&self) -> Stage {
+        self.stage
+    }
+
     /// music21's `MuseDataPart`: stage 2 where any line is an attribute
     /// record, stage 1 otherwise, whose leading blank lines are dropped.
     fn new(lines: Vec<String>, numbers: Vec<usize>) -> Result<Self> {
@@ -280,9 +401,15 @@ impl Part {
             .ok_or_else(|| error("a header shorter than MuseData's"))
     }
 
-    /// `_getDigitsFollowingTag`: the digits after a tag, spaces passed
-    /// over, `-` and `/` kept, anything else ending it.
-    fn digits_after(line: &str, tag: &str) -> String {
+    /// music21's `_getDigitsFollowingTag`: the digits after a tag, spaces
+    /// passed over, `-` and `/` kept, anything else ending it.
+    ///
+    /// ```
+    /// use music21::musedata::Part;
+    ///
+    /// assert_eq!(Part::digits_after("$ K:-3   Q:4   T:3/4   C:22", "T:"), "3/4");
+    /// ```
+    pub fn digits_after(line: &str, tag: &str) -> String {
         let Some(at) = line.find(tag) else {
             return String::new();
         };
@@ -300,16 +427,114 @@ impl Part {
     /// `_getAlphasFollowingTag` with `keepSpace` and `keepCase`: the letters,
     /// spaces and commas after a tag.
     fn words_after(line: &str, tag: &str) -> String {
-        let Some(at) = line.find(tag) else {
+        Self::letters_after(line, tag, Spaces::Kept, Case::Kept)
+    }
+
+    /// music21's `_getAlphasFollowingTag`: the letters and commas after a
+    /// tag, spaces passed over or kept, anything else ending it; with
+    /// [`Case::Lowered`] line and tag are lowered first.
+    ///
+    /// ```
+    /// use music21::musedata::{Case, Part, Spaces};
+    ///
+    /// let line = "Group memberships: sound, score";
+    /// let read = Part::letters_after(line, "Group memberships:", Spaces::Dropped, Case::Lowered);
+    /// assert_eq!(read, "sound,score");
+    /// ```
+    pub fn letters_after(line: &str, tag: &str, spaces: Spaces, case: Case) -> String {
+        let (line, tag) = match case {
+            Case::Kept => (line.to_string(), tag.to_string()),
+            Case::Lowered => (line.to_lowercase(), tag.to_lowercase()),
+        };
+        let Some(at) = line.find(&tag) else {
             return String::new();
         };
-        line[at + tag.len()..]
-            .chars()
-            .take_while(|c| c.is_alphabetic() || c.is_whitespace() || *c == ',')
+        let mut out = String::new();
+        for c in line[at + tag.len()..].chars() {
+            if c.is_alphabetic() || c == ',' {
+                out.push(c);
+            } else if c.is_whitespace() {
+                if spaces == Spaces::Kept {
+                    out.push(c);
+                }
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
+    /// music21's `getSource`: where the encoding was taken from.
+    pub fn source(&self) -> Option<String> {
+        if self.stage == Stage::Two {
+            return self.lines.get(5).cloned();
+        }
+        let mut joined = String::new();
+        for index in 2..=4 {
+            joined.push_str(self.lines.get(index)?.trim());
+        }
+        Some(joined)
+    }
+
+    /// music21's `getGroupMemberships`: the groups the part belongs to.
+    pub fn group_memberships(&self) -> Vec<String> {
+        if self.stage == Stage::One {
+            return Vec::new();
+        }
+        let Some(line) = self.lines.get(10) else {
+            return Vec::new();
+        };
+        Self::letters_after(line, "group memberships:", Spaces::Dropped, Case::Lowered)
+            .split(',')
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .map(str::to_string)
             .collect()
     }
 
-    fn work_number(&self) -> Option<String> {
+    /// The `membership:` line among those before the attribute record, and
+    /// the digits after `tag` in it.
+    fn membership_digits(&self, membership: &str, tag: &str) -> Option<String> {
+        self.lines
+            .iter()
+            .skip(11)
+            .take_while(|line| !line.starts_with('$'))
+            .find(|line| line.starts_with(membership))
+            .map(|line| Self::digits_after(line, tag))
+    }
+
+    /// music21's `getGroupMembershipsTotal`: how many parts the group has.
+    ///
+    /// # Errors
+    ///
+    /// A count that is no number.
+    pub fn group_total(&self, membership: &str) -> Result<Option<IntegerType>> {
+        if self.stage == Stage::One {
+            let line = self.line(5)?;
+            return Self::integer(line.split(' ').next().unwrap_or("")).map(Some);
+        }
+        self.membership_digits(membership, "of")
+            .map(|raw| Self::integer(&raw))
+            .transpose()
+    }
+
+    /// music21's `getGroupMembershipNumber`: the part's place in the group,
+    /// as written. music21 hands stage 1's back as text, stage 2's as a
+    /// number.
+    ///
+    /// # Errors
+    ///
+    /// A stage-1 header too short.
+    pub fn group_number(&self, membership: &str) -> Result<Option<String>> {
+        if self.stage == Stage::One {
+            let line = self.line(5)?;
+            return Ok(line.split(' ').nth(1).map(str::to_string));
+        }
+        Ok(self.membership_digits(membership, "part"))
+    }
+
+    /// music21's `getWorkNumber`: the opus number, as written.
+    pub fn work_number(&self) -> Option<String> {
         if self.stage == Stage::One {
             let data: String = self.lines.get(1)?.chars().take(6).collect();
             let data = data.trim();
@@ -323,7 +548,8 @@ impl Part {
         }
     }
 
-    fn movement_number(&self) -> Option<String> {
+    /// music21's `getMovementNumber`, as written.
+    pub fn movement_number(&self) -> Option<String> {
         if self.stage == Stage::One {
             Some(
                 self.lines
@@ -339,7 +565,8 @@ impl Part {
         }
     }
 
-    fn work_title(&self) -> Option<String> {
+    /// music21's `getWorkTitle`: for stage 1, the catalogue number.
+    pub fn work_title(&self) -> Option<String> {
         if self.stage == Stage::One {
             Some(self.lines.first()?.trim().to_string())
         } else {
@@ -347,7 +574,8 @@ impl Part {
         }
     }
 
-    fn movement_title(&self) -> Option<String> {
+    /// music21's `getMovementTitle`; none for stage 1.
+    pub fn movement_title(&self) -> Option<String> {
         if self.stage == Stage::One {
             None
         } else {
@@ -355,7 +583,8 @@ impl Part {
         }
     }
 
-    fn part_name(&self) -> Option<String> {
+    /// music21's `getPartName`; none for stage 1.
+    pub fn part_name(&self) -> Option<String> {
         if self.stage == Stage::One {
             None
         } else {
@@ -363,8 +592,13 @@ impl Part {
         }
     }
 
-    /// `_getAttributesRecord`.
-    fn attributes(&self) -> Result<String> {
+    /// music21's `_getAttributesRecord`: the first line opening with `$`,
+    /// or stage 1's two attribute lines joined.
+    ///
+    /// # Errors
+    ///
+    /// A part with no attribute record.
+    pub fn attributes(&self) -> Result<String> {
         if self.stage == Stage::One {
             return Ok(format!("{} {}", self.line(6)?.trim(), self.line(7)?.trim()));
         }
@@ -391,16 +625,44 @@ impl Part {
             .map_err(|_| error(format!("{text:?} is not a number")))
     }
 
-    fn key_signature(&self) -> Result<KeySignature> {
-        let sharps = if self.stage == Stage::One {
-            Self::integer(&self.stage_one_field(1)?)?
-        } else {
-            Self::integer(&Self::digits_after(&self.attributes()?, "K:"))?
-        };
-        Ok(KeySignature::new(sharps))
+    /// music21's `getKeyParameters`: the signature's sharps, flats below
+    /// nought.
+    ///
+    /// # Errors
+    ///
+    /// A key that is no number.
+    pub fn key_parameters(&self) -> Result<IntegerType> {
+        if self.stage == Stage::One {
+            return Self::integer(&self.stage_one_field(1)?);
+        }
+        Self::integer(&Self::digits_after(&self.attributes()?, "K:"))
     }
 
-    fn time_signature(&self) -> Result<TimeSignature> {
+    /// music21's `getKeySignature`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Part::key_parameters`].
+    pub fn key_signature(&self) -> Result<KeySignature> {
+        Ok(KeySignature::new(self.key_parameters()?))
+    }
+
+    /// music21's `getTimeSignatureObject`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Part::time_signature_parameters`].
+    pub fn time_signature(&self) -> Result<TimeSignature> {
+        TimeSignature::from_ratio_string(&self.time_signature_parameters()?)
+    }
+
+    /// music21's `getTimeSignatureParameters`: the meter as `3/4`, a meter
+    /// of `1/1` or over nought as `4/4`.
+    ///
+    /// # Errors
+    ///
+    /// A meter that is not two numbers.
+    pub fn time_signature_parameters(&self) -> Result<String> {
         let (numerator, denominator) = if self.stage == Stage::One {
             (
                 Self::integer(&self.stage_one_field(4)?)?,
@@ -414,30 +676,71 @@ impl Part {
                 .ok_or_else(|| error(format!("no meter in {written:?}")))?;
             (Self::integer(numerator)?, Self::integer(denominator)?)
         };
-        let ratio = if (numerator == 1 && denominator == 1) || denominator == 0 {
-            "4/4".to_string()
-        } else {
-            format!("{numerator}/{denominator}")
-        };
-        TimeSignature::from_ratio_string(&ratio)
+        if (numerator == 1 && denominator == 1) || denominator == 0 {
+            return Ok("4/4".to_string());
+        }
+        Ok(format!("{numerator}/{denominator}"))
+    }
+
+    /// music21's `_getNumberOfStaves`: `S:`, one where unwritten.
+    ///
+    /// # Errors
+    ///
+    /// A count that is no number.
+    pub fn staff_count(&self) -> Result<IntegerType> {
+        if self.stage == Stage::One {
+            return Ok(1);
+        }
+        match Self::digits_after(&self.attributes()?, "S:").as_str() {
+            "" => Ok(1),
+            raw => Self::integer(raw),
+        }
+    }
+
+    /// music21's `_getClefParameters`: `C:`, or each staff's `Cn:`, as
+    /// written; stage 1's ninth attribute field.
+    ///
+    /// # Errors
+    ///
+    /// A part with no attribute record.
+    pub fn clef_parameters(&self) -> Result<Vec<String>> {
+        if self.stage == Stage::One {
+            return Ok(vec![self.stage_one_field(8)?]);
+        }
+        let line = self.attributes()?;
+        let written = Self::digits_after(&line, "C:");
+        if !written.is_empty() {
+            return Ok(vec![written]);
+        }
+        let mut found = Vec::new();
+        for staff in 1..=self.staff_count()? {
+            let raw = Self::digits_after(&line, &format!("C{staff}:"));
+            if !raw.is_empty() {
+                found.push(raw);
+            }
+        }
+        Ok(found)
     }
 
     fn clef(&self) -> Result<Option<Clef>> {
+        self.clef_for(1)
+    }
+
+    /// music21's `getClefObject`: the clef of staff `voice`, counted from
+    /// one; none for stage 1.
+    ///
+    /// # Errors
+    ///
+    /// No clef for the staff, or a code music21 does not know.
+    pub fn clef_for(&self, voice: usize) -> Result<Option<Clef>> {
         if self.stage == Stage::One {
             return Ok(None);
         }
-        let line = self.attributes()?;
-        let mut written = Self::digits_after(&line, "C:");
-        if written.is_empty() {
-            let staves = match Self::digits_after(&line, "S:").as_str() {
-                "" => 1,
-                raw => Self::integer(raw)?,
-            };
-            written = (1..=staves)
-                .map(|staff| Self::digits_after(&line, &format!("C{staff}:")))
-                .find(|raw| !raw.is_empty())
-                .ok_or_else(|| error("a part with no clef"))?;
-        }
+        let written = self
+            .clef_parameters()?
+            .get(voice.saturating_sub(1))
+            .cloned()
+            .ok_or_else(|| error("a part with no clef"))?;
         let kind = match Self::integer(&written)?.to_string().as_str() {
             "5" => ClefKind::FrenchViolinClef,
             "4" => ClefKind::TrebleClef,
@@ -458,7 +761,12 @@ impl Part {
         Ok(Some(Clef::of_kind(kind)))
     }
 
-    fn directive(&self) -> Result<Option<String>> {
+    /// music21's `getDirective`: `D:`, usually a tempo word.
+    ///
+    /// # Errors
+    ///
+    /// A part with no attribute record.
+    pub fn directive(&self) -> Result<Option<String>> {
         if self.stage == Stage::One {
             return Ok(None);
         }
@@ -466,20 +774,36 @@ impl Part {
         Ok((!words.is_empty()).then(|| words.trim().to_string()))
     }
 
-    /// The interval a transposing part is written at, in base 40 (`X:`).
-    fn transposition(&self) -> Result<Option<Interval>> {
+    /// music21's `getTranspositionIntervalObject`: the interval a
+    /// transposing part is written at.
+    ///
+    /// # Errors
+    ///
+    /// A transposition with no interval.
+    pub fn transposition(&self) -> Result<Option<Interval>> {
+        self.transposition_parameters()?
+            .map(base40_interval)
+            .transpose()
+    }
+
+    /// music21's `_getTranspositionParameters`: `X:`, in base 40.
+    ///
+    /// # Errors
+    ///
+    /// A transposition that is no number.
+    pub fn transposition_parameters(&self) -> Result<Option<IntegerType>> {
         if self.stage == Stage::One {
             return Ok(None);
         }
         match Self::digits_after(&self.attributes()?, "X:").as_str() {
             "" => Ok(None),
-            raw => base40_interval(Self::integer(raw)?).map(Some),
+            raw => Self::integer(raw).map(Some),
         }
     }
 
     /// Divisions of a quarter note: `Q:`, or in stage 1 the divisions of a
     /// bar over the bar's length in quarters.
-    fn divisions(&self) -> Result<FloatType> {
+    pub fn divisions(&self) -> Result<FloatType> {
         if self.stage == Stage::One {
             let bar = Self::integer(&self.stage_one_field(2)?)?;
             Ok(FloatType::from(bar) / self.time_signature()?.bar_duration().quarter_length())
@@ -493,7 +817,7 @@ impl Part {
 
     /// `_getMeasureBoundaryIndices`: the lines of each measure, from its
     /// first up to the one after its last.
-    fn measure_bounds(&self) -> Result<Vec<(usize, usize)>> {
+    pub fn measure_bounds(&self) -> Result<Vec<(usize, usize)>> {
         let lines = &self.lines;
         let end = lines.len();
         let mut marks = Vec::new();
@@ -798,13 +1122,68 @@ fn append_at(stream: &mut Stream, offset: FloatType, element: StreamElement) {
     stream.insert_sorted(vec![StreamEvent::new(offset, element)]);
 }
 
-/// `MuseDataMeasure.hasNotes`.
-fn has_notes(lines: &[String]) -> bool {
+/// music21's `MuseDataMeasure.hasNotes`: whether a record of the measure
+/// is a note, rest, cue or grace note.
+pub fn has_notes(lines: &[String]) -> bool {
     lines.iter().any(|line| {
         line.chars()
             .next()
             .is_some_and(|c| "ABCDEFGrgc".contains(c))
     })
+}
+
+/// music21's `MuseDataMeasure.hasVoices`: whether a record of the measure
+/// is a `back`.
+pub fn has_voices(lines: &[String]) -> bool {
+    lines.iter().any(|line| line.starts_with("back"))
+}
+
+/// music21's `MuseDataDirectory.isMusedataFile`: whether a path names a
+/// MuseData file, by its name alone.
+///
+/// ```
+/// use music21::musedata::is_musedata_file;
+///
+/// assert!(is_musedata_file("test01/01.md"));
+/// assert!(!is_musedata_file("test01/mchan1"));
+/// ```
+pub fn is_musedata_file(path: &str) -> bool {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    if path.ends_with(".md") {
+        return true;
+    }
+    if name.starts_with("mchan") {
+        return false;
+    }
+    let skipped = path.ends_with(".py")
+        || path.ends_with('/')
+        || path.ends_with(std::path::MAIN_SEPARATOR)
+        || name.starts_with('.')
+        || path.ends_with(".svn-base");
+    !skipped
+}
+
+/// music21's `MuseDataDirectory._prepareGroups`: the paths of a work's
+/// parts, MuseData files with a digit in the name, the score file left
+/// out where there are parts, sorted.
+pub fn part_paths(paths: &[String]) -> Vec<String> {
+    let name_of = |path: &str| path.rsplit(['/', '\\']).next().unwrap_or(path).to_string();
+    let mut found: Vec<String> = paths
+        .iter()
+        .filter(|path| is_musedata_file(path) && !digits(&name_of(path)).is_empty())
+        .cloned()
+        .collect();
+    if found.len() > 1 {
+        found.retain(|path| {
+            let letters: String = name_of(path)
+                .chars()
+                .filter(|c| !c.is_ascii_digit())
+                .collect();
+            !letters.starts_with('s')
+        });
+    }
+    found.sort();
+    found
 }
 
 /// The record opening a measure, as music21 reads it: its own line where it
@@ -822,8 +1201,13 @@ fn measure_line(lines: &[String]) -> Result<String> {
     })
 }
 
-/// `MuseDataMeasure.getBarObject`.
-fn bar_object(lines: &[String]) -> Result<Barline> {
+/// music21's `MuseDataMeasure.getBarObject`: the barline the measure's
+/// record draws.
+///
+/// # Errors
+///
+/// No records, or a barline music21 does not know.
+pub fn bar_object(lines: &[String]) -> Result<Barline> {
     let line = measure_line(lines)?;
     let kind: String = line.chars().skip(1).take(6).collect();
     let bar_type = match kind.as_str() {
@@ -879,7 +1263,11 @@ fn measure_number(lines: &[String]) -> Result<String> {
 
 /// `MuseDataMeasure.getMeasureObject`: a measure numbered as its record
 /// says, opening with its barline.
-fn measure_object(lines: &[String]) -> Result<Stream> {
+///
+/// # Errors
+///
+/// As [`bar_object`].
+pub fn measure_object(lines: &[String]) -> Result<Stream> {
     let number = measure_number(lines)?;
     let mut measure = Stream::with_kind(StreamKind::Measure);
     measure.set_left_barline(Some(bar_object(lines)?));
@@ -893,13 +1281,24 @@ fn measure_object(lines: &[String]) -> Result<Stream> {
     Ok(measure)
 }
 
-/// One line of a measure: `MuseDataRecord`.
-#[derive(Clone, Copy)]
-struct Record<'a> {
+/// One line of a measure: music21's `MuseDataRecord`.
+#[derive(Clone, Copy, Debug)]
+pub struct Record<'a> {
     line: &'a str,
     stage: Stage,
     /// The line of the file it is, counted from one.
     number: Option<usize>,
+}
+
+impl<'a> Record<'a> {
+    /// A record of `line`, written in `stage`.
+    pub fn new(line: &'a str, stage: Stage) -> Self {
+        Self {
+            line,
+            stage,
+            number: None,
+        }
+    }
 }
 
 impl Record<'_> {
@@ -929,33 +1328,52 @@ impl Record<'_> {
             .collect()
     }
 
-    fn is_rest(&self) -> bool {
+    /// music21's `isRest`.
+    pub fn is_rest(&self) -> bool {
         self.first() == Some('r')
     }
 
-    fn is_note(&self) -> bool {
+    /// music21's `isNote`.
+    pub fn is_note(&self) -> bool {
         self.first().is_some_and(|c| "ABCDEFG".contains(c))
     }
 
-    fn is_chord(&self) -> bool {
+    /// music21's `isChord`: a further pitch of the note before.
+    pub fn is_chord(&self) -> bool {
         self.first() == Some(' ') && self.at(1).is_some_and(|c| "ABCDEFG".contains(c))
     }
 
-    fn is_back(&self) -> bool {
+    /// music21's `isBack`.
+    pub fn is_back(&self) -> bool {
         self.line.starts_with("back")
     }
 
-    fn is_tied(&self) -> bool {
+    /// music21's `isTied`.
+    pub fn is_tied(&self) -> bool {
         let column = if self.stage == Stage::One { 7 } else { 8 };
         self.at(column) == Some('-')
     }
 
-    /// `_getPitchParameters` and `getPitchObject`.
-    fn pitch(&self) -> Result<Pitch> {
+    /// music21's `isCueOrGrace`.
+    pub fn is_cue_or_grace(&self) -> bool {
+        self.first().is_some_and(|c| c == 'c' || c == 'g')
+    }
+
+    /// music21's `_getPitchParameters`: the pitch's name as music21 writes
+    /// it, `E-4`.
+    ///
+    /// # Errors
+    ///
+    /// A record that is no note, chord tone, cue or grace note.
+    pub fn pitch_parameters(&self) -> Result<String> {
         let token = if self.is_note() {
             self.line
-        } else {
+        } else if self.is_cue_or_grace() || self.is_chord() {
             self.line.get(1..).unwrap_or("")
+        } else {
+            return Err(error(
+                "cannot get pitch parameters from this kind of record",
+            ));
         };
         let data = token.split_whitespace().next().unwrap_or("");
         let step = data
@@ -970,7 +1388,17 @@ impl Record<'_> {
         } else {
             ""
         };
-        let mut pitch = Pitch::from_name(format!("{step}{accidental}{}", digits(data)))?;
+        Ok(format!("{step}{accidental}{}", digits(data)))
+    }
+
+    /// music21's `getPitchObject`: the pitch, with the accidental column 19
+    /// shows.
+    ///
+    /// # Errors
+    ///
+    /// As [`Record::pitch_parameters`].
+    pub fn pitch(&self) -> Result<Pitch> {
+        let mut pitch = Pitch::from_name(self.pitch_parameters()?)?;
         if self.stage == Stage::One {
             return Ok(pitch);
         }
@@ -984,9 +1412,7 @@ impl Record<'_> {
                 accidental.set_display_status(Some(true));
             }
         }
-        if self
-            .notations()
-            .is_some_and(|notations| notations.contains('+'))
+        if self.has_cautionary_accidental()
             && let Some(accidental) = pitch.written_accidental_mut()
         {
             accidental.set_display_status(Some(true));
@@ -994,8 +1420,30 @@ impl Record<'_> {
         Ok(pitch)
     }
 
-    /// `_getAccidentalObject`: the accidental column 19 shows.
-    fn shown_accidental(&self) -> Result<Option<Accidental>> {
+    /// music21's `hasCautionaryAccidental`: a `+` among the notations.
+    pub fn has_cautionary_accidental(&self) -> bool {
+        self.notations()
+            .is_some_and(|notations| notations.contains('+'))
+    }
+
+    /// music21's `getDots`: none for stage 1.
+    pub fn dots(&self) -> Option<u8> {
+        if self.stage == Stage::One {
+            return None;
+        }
+        Some(match self.at(17) {
+            Some('.') => 1,
+            Some(':') => 2,
+            _ => 0,
+        })
+    }
+
+    /// music21's `_getAccidentalObject`: the accidental column 19 shows.
+    ///
+    /// # Errors
+    ///
+    /// None in practice: each name is one the crate knows.
+    pub fn shown_accidental(&self) -> Result<Option<Accidental>> {
         if self.line.chars().count() <= 18 {
             return Ok(None);
         }
@@ -1010,8 +1458,12 @@ impl Record<'_> {
         Accidental::new(name).map(Some)
     }
 
-    /// `getQuarterLength`.
-    fn quarter_length(&self, divisions: FloatType) -> Result<FloatType> {
+    /// music21's `getQuarterLength`, at `divisions` to the quarter.
+    ///
+    /// # Errors
+    ///
+    /// A length that is no number.
+    pub fn quarter_length(&self, divisions: FloatType) -> Result<FloatType> {
         let mut count = if self.stage == Stage::One {
             Part::integer(&self.columns(5, 7))?
         } else {
@@ -1031,7 +1483,8 @@ impl Record<'_> {
         Ok(op_frac(FloatType::from(count) / divisions))
     }
 
-    fn lyrics(&self) -> Option<Vec<String>> {
+    /// music21's `getLyrics`: each verse's syllable.
+    pub fn lyrics(&self) -> Option<Vec<String>> {
         if self.stage == Stage::One || self.line.chars().count() < 44 {
             return None;
         }
@@ -1046,7 +1499,8 @@ impl Record<'_> {
         )
     }
 
-    fn beams(&self) -> Option<String> {
+    /// music21's `getBeams`: the beam column, trailing spaces taken off.
+    pub fn beams(&self) -> Option<String> {
         if self.stage == Stage::One {
             return None;
         }
@@ -1056,7 +1510,7 @@ impl Record<'_> {
 
     /// `getSlurSymbols`: the slur marks among the notations, in the order
     /// they are written; a stage-1 record has none.
-    fn slur_marks(&self) -> String {
+    pub fn slur_marks(&self) -> String {
         if self.stage == Stage::One {
             return String::new();
         }
@@ -1067,15 +1521,16 @@ impl Record<'_> {
             .collect()
     }
 
-    /// `_getAdditionalNotations`: columns 32 to 43.
-    fn notations(&self) -> Option<String> {
+    /// music21's `_getAdditionalNotations`: columns 32 to 43.
+    pub fn notations(&self) -> Option<String> {
         if self.line.chars().count() < 31 {
             return None;
         }
         Some(self.columns(31, 43).trim().to_string())
     }
 
-    fn articulations(&self) -> Vec<Articulation> {
+    /// music21's `getArticulationObjects`.
+    pub fn articulations(&self) -> Vec<Articulation> {
         let Some(notations) = self.notations() else {
             return Vec::new();
         };
@@ -1097,7 +1552,8 @@ impl Record<'_> {
             .collect()
     }
 
-    fn expressions(&self) -> Vec<Expression> {
+    /// music21's `getExpressionObjects`.
+    pub fn expressions(&self) -> Vec<Expression> {
         let Some(notations) = self.notations() else {
             return Vec::new();
         };
@@ -1115,7 +1571,7 @@ impl Record<'_> {
 
     /// `getDynamicObjects`: each mark found once, in music21's order of
     /// looking, and taken out of what is left to look in.
-    fn dynamics(&self) -> Vec<Dynamic> {
+    pub fn dynamics(&self) -> Vec<Dynamic> {
         let Some(mut data) = self.notations() else {
             return Vec::new();
         };
@@ -1138,8 +1594,16 @@ impl Record<'_> {
     }
 }
 
-/// `_musedataBeamToBeams`.
-fn beams_of(written: &str) -> Beams {
+/// music21's `_musedataBeamToBeams`: the beams a record's beam column
+/// writes, `[` starting, `]` stopping, `=` continuing and `/` and `\\`
+/// partial to the right and left.
+///
+/// ```
+/// use music21::musedata::beams_of;
+///
+/// assert_eq!(beams_of("]/").len(), 2);
+/// ```
+pub fn beams_of(written: &str) -> Beams {
     let mut beams = Beams::default();
     for c in written.chars() {
         let (kind, direction) = match c {
@@ -1212,6 +1676,34 @@ fn note_or_chord(
         StreamElement::Chord(chord)
     };
     Ok((element, first.dynamics(), tie))
+}
+
+/// music21's `_musedataRecordListToNoteOrChord`, over the lines of the
+/// records: a note, or a chord of several, at `divisions` to the quarter,
+/// with the dynamics the first record carries and the tie it leaves.
+/// `previous` is the tie of the note before, where there is a note before.
+///
+/// # Errors
+///
+/// No records, a pitch or a length that cannot be read.
+pub fn record_note(
+    lines: &[String],
+    stage: Stage,
+    divisions: FloatType,
+    previous: Option<Option<TieType>>,
+) -> Result<(StreamElement, Vec<Dynamic>, Option<TieType>)> {
+    let records: Vec<Record<'_>> = lines
+        .iter()
+        .map(|line| Record {
+            line,
+            stage,
+            number: None,
+        })
+        .collect();
+    if records.is_empty() {
+        return Err(error("a note of no records"));
+    }
+    note_or_chord(&records, divisions, previous)
 }
 
 /// music21's `base40DeltaToInterval`, refused as a MuseData error.
@@ -1334,5 +1826,82 @@ mod tests {
                 .flatten()
                 .all(|line| !line.contains('\r'))
         );
+    }
+
+    /// A stage-2 header as music21's test files write one.
+    fn header_part() -> Part {
+        let lines: Vec<String> = [
+            "",
+            "",
+            "",
+            "",
+            "WK#:1         MV#:2",
+            "Synthetic",
+            "Air",
+            "Second",
+            "Upper",
+            "",
+            "Group memberships: sound, score",
+            "sound: part 1 of 2",
+            "score: part 1 of 2",
+            "$  K:-1   Q:4   T:3/4   C:4   D:Andante",
+            "measure 1",
+            "C4     4        q     u",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+        Part::with_stage(lines, Stage::Two)
+    }
+
+    #[test]
+    fn a_part_answers_music21_s_header_questions() {
+        let part = header_part();
+        assert_eq!(part.work_number().as_deref(), Some("1"));
+        assert_eq!(part.source().as_deref(), Some("Synthetic"));
+        assert_eq!(part.group_memberships(), ["sound", "score"]);
+        assert_eq!(part.group_total("score").unwrap(), Some(2));
+        assert_eq!(part.group_number("sound").unwrap().as_deref(), Some("1"));
+        assert_eq!(part.key_parameters().unwrap(), -1);
+        assert_eq!(part.time_signature_parameters().unwrap(), "3/4");
+        assert_eq!(part.clef_parameters().unwrap(), ["4"]);
+        assert_eq!(part.directive().unwrap().as_deref(), Some("Andante"));
+        assert_eq!(part.transposition_parameters().unwrap(), None);
+        // music21's `_getMeasureBoundaryIndices` docstring, ends exclusive.
+        let lines: Vec<String> = ["$", "m", "B", "C", "m", "D", "E", "m", "F", "D"]
+            .iter()
+            .map(|line| line.to_string())
+            .collect();
+        let bounds = Part::with_stage(lines, Stage::Two)
+            .measure_bounds()
+            .unwrap();
+        assert_eq!(bounds, [(1, 4), (4, 7), (7, 10)]);
+    }
+
+    #[test]
+    fn a_record_answers_music21_s_questions() {
+        let record = Record::new("F#4    1        s #   d  ==", Stage::Two);
+        assert_eq!(record.pitch_parameters().unwrap(), "F#4");
+        assert!(record.shown_accidental().unwrap().is_some());
+        assert_eq!(record.dots(), Some(0));
+        let marked = Record::new("F5     3        t n   d  ==[   (+", Stage::Two);
+        assert!(marked.has_cautionary_accidental());
+        assert!(Record::new("back   4", Stage::Two).is_back());
+        assert!(
+            Record::new("back   4", Stage::Two)
+                .pitch_parameters()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_directory_keeps_its_part_files() {
+        let names: Vec<String> = [
+            "w/02.md", "w/s01", "w/01.md", "w/mchan1", "w/.svn", "w/notes",
+        ]
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+        assert_eq!(part_paths(&names), ["w/01.md", "w/02.md"]);
     }
 }

@@ -504,26 +504,6 @@ fn can_load(path: &Bound<'_, PyAny>) -> PyResult<bool> {
     }
 }
 
-/// Whether `text` holds a character Python reads as a digit.
-fn has_digit(py: Python<'_>, text: &str) -> PyResult<bool> {
-    for character in text.chars() {
-        if is_digit(py, character)? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-/// `str.isdigit` of one character.
-fn is_digit(py: Python<'_>, character: char) -> PyResult<bool> {
-    if character.is_ascii() {
-        return Ok(character.is_ascii_digit());
-    }
-    PyString::new(py, &character.to_string())
-        .call_method0("isdigit")?
-        .is_truthy()
-}
-
 /// Whether music21's `Note` is the wheel's: the wheel has then been
 /// installed into music21.
 pub(crate) fn installed(py: Python<'_>) -> PyResult<bool> {
@@ -975,56 +955,6 @@ fn posix_suffix(name: &str) -> &str {
     }
 }
 
-/// The last part of a path in a directory or a zip, whichever its
-/// separator.
-fn base_name(name: &str) -> String {
-    let name = name.replace('\\', "/");
-    let name = name.trim_end_matches('/');
-    name.rsplit('/').next().unwrap_or("").to_owned()
-}
-
-/// Whether a file in a directory or a zip is one of a MuseData work's
-/// parts, as music21's `MuseDataDirectory` tells one.
-fn is_musedata_name(py: Python<'_>, name: &str) -> PyResult<bool> {
-    let stem = base_name(name);
-    if !name.ends_with(".md") {
-        let skipped = name.ends_with('/') || name.ends_with(".py") || name.ends_with(".svn-base");
-        if stem.starts_with("mchan") || skipped || stem.starts_with('.') {
-            return Ok(false);
-        }
-    }
-    has_digit(py, &stem)
-}
-
-/// The parts of a MuseData work among `names`, without the score file
-/// where there are parts, sorted, as music21's `MuseDataDirectory` finds
-/// them.
-fn musedata_parts(py: Python<'_>, names: Vec<String>) -> PyResult<Vec<String>> {
-    let mut parts = Vec::new();
-    for name in names {
-        if is_musedata_name(py, &name)? {
-            parts.push(name);
-        }
-    }
-    if parts.len() > 1 {
-        let mut kept = Vec::new();
-        for name in parts {
-            let mut letters = String::new();
-            for character in base_name(&name).chars() {
-                if !is_digit(py, character)? {
-                    letters.push(character);
-                }
-            }
-            if !letters.starts_with('s') {
-                kept.push(name);
-            }
-        }
-        parts = kept;
-    }
-    parts.sort();
-    Ok(parts)
-}
-
 /// What the reader of `found` reads out of the file at `path`.
 fn file_data<'py>(path: &Bound<'py, PyAny>, found: &Format) -> PyResult<Bound<'py, PyAny>> {
     if found.reader == Reader::MuseData {
@@ -1052,7 +982,7 @@ fn musedata_data<'py>(path: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
             names.push(path.div(name)?.str()?.to_string());
         }
         let mut texts = Vec::new();
-        for name in musedata_parts(py, names)? {
+        for name in music21::musedata::part_paths(&names) {
             texts.push(text(&path_of(py, name)?.call_method0("read_bytes")?)?);
         }
         return Ok(PyList::new(py, texts)?.into_any());
@@ -1068,7 +998,7 @@ fn musedata_data<'py>(path: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     if zipped {
         let texts = with_zip(path, |archive| {
             let mut texts = Vec::new();
-            for name in musedata_parts(py, zip_names(archive)?)? {
+            for name in music21::musedata::part_paths(&zip_names(archive)?) {
                 texts.push(text(&archive.call_method1("read", (name,))?)?);
             }
             Ok(texts)
@@ -1266,6 +1196,13 @@ fn parse<'py>(
     format: Option<&Bound<'py, PyAny>>,
     keywords: Option<&Bound<'py, PyDict>>,
 ) -> PyResult<Bound<'py, PyAny>> {
+    // A metadata entry is the score at its source path, in the corpus
+    // where that is relative.
+    if let Ok(entry) = value.cast::<crate::bundles::MetadataEntry>() {
+        let path = entry.borrow().absolute_path(py)?;
+        let path = py.import("pathlib")?.getattr("Path")?.call1((path,))?;
+        return parse(py, &path, forceSource, number, format, keywords);
+    }
     let pure_path = py.import("pathlib")?.getattr("PurePath")?;
     let is_bytes = bytes_of(value).is_some();
     let is_str = value.is_instance_of::<PyString>();
@@ -1558,7 +1495,7 @@ pub(crate) fn parse_path<'py>(
 
 #[cfg(test)]
 mod tests {
-    use super::{base_name, declared_encoding, posix_suffix};
+    use super::{declared_encoding, posix_suffix};
 
     #[test]
     fn an_encoding_is_read_only_where_the_document_starts_with_it() {
@@ -1576,11 +1513,5 @@ mod tests {
         assert_eq!(posix_suffix(".xml"), "");
         assert_eq!(posix_suffix("a/b."), "");
         assert_eq!(posix_suffix("a/b.mxl/"), ".mxl");
-    }
-
-    #[test]
-    fn a_base_name_takes_either_separator() {
-        assert_eq!(base_name("work\\01.md"), "01.md");
-        assert_eq!(base_name("work/parts/"), "parts");
     }
 }

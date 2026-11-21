@@ -1,3 +1,77 @@
+# music21-rs 0.22.0
+
+`harte` 0.15.0 depends on this release.
+
+## breaking changes
+
+- A wheel measure holds its barlines among its elements, as music21's does:
+  `len`, indexing, iteration, `elements`, `index` and `pop` count its left
+  barline (at nought) and what `storeAtEnd` keeps, the right barline among
+  it. Code that indexed a measure past its left barline shifts by one.
+- `storeAtEnd` keeps whatever music21 keeps, not only a barline.
+- `FretBoard` and the instrument fret boards are Python classes over the
+  crate's board, not extension types.
+- The barline setters set `location`, and a right `Repeat` that starts is
+  made to end, as in music21.
+
+## added
+
+- `provide_music21` provides `music21.lily` (`lilyObjects` and `translate`'s
+  `LilypondConverter`), `music21.metadata.bundles`, `music21.metadata.caching`,
+  `music21.corpus.corpora` and `music21.corpus.manager`. Corpus metadata
+  bundles read and write music21's gzipped pickle caches.
+- `provide_music21` provides `music21.corpus.work` and
+  `music21.corpus.chorales` (`ChoraleList`, `ChoraleListRKBWV`, `Iterator`,
+  `getByTitle`); corpora gain `getComposer`, `directoryInformation` and
+  `getWorkReferences`, and `music21_rs.corpus` gains `getComposer`.
+- The crate's `corpus::chorales` (the chorale catalogues and
+  `bwv_sort_key`), `corpus::work` (the core corpus's directories,
+  `composer_paths`, `find_works`) and `common::stringtools::title_case`.
+- `provide_music21` provides `music21.abcFormat`, `abcFormat.translate`,
+  `music21.musedata` and `musedata.translate` over the crate's readers.
+- The crate's ABC reading steps (`abc::step`, `abc::translate`) and
+  MuseData parts, records and measure functions are public.
+- A wheel `Stream` is indexed by a class or a list of classes,
+  `s[note.Note]`, as music21's is.
+- `music21_rs.corpus.search`; `CoreCorpus.manualCoreCorpusPath`.
+- The crate's `metadata::bundles`, rich metadata and a pickle reader and
+  writer (`common::pickle`); `MetronomeMark::music21_repr` and
+  `TempoText::music21_repr`.
+- `provide_music21` provides `music21.converter.museScore`,
+  `music21.audioSearch.recording` and `audioSearch.transcriber`,
+  `music21.corpus.virtual` and `music21.scale.scala.scl` (music21's Scala
+  files, where its source is there). Recording from a microphone raises
+  `ModuleNotFoundError` naming `pyaudio`, as music21 does without it.
+- `metadata.primitives.Imprint`, `stream.iterator.RecursiveIterator` (what
+  `recurse` now hands back), `audioSearch.getFrequenciesFromAudioFile`,
+  `audioSearch.audioChunkLength` and `recordSampleRate`, and
+  `corpus.noCorpus`.
+- The crate's `musescore::locate` (finding MuseScore and the numbered PNG
+  pages it writes, without running it), `corpus::virtual_corpus` and
+  `audiosearch::RECORD_CHANNELS`.
+
+## fixed
+
+- `CoreCorpus.getPaths` takes `fileExtensions` as its first positional
+  argument, as music21's does.
+- MuseData slurs go in their part, not on the score.
+- A note flattened by an ABC key signature is named `B-4`, as music21 names
+  it, not `Bb4`.
+- `abcToStreamPart` keeps an ending a part opened and never closed;
+  `reBar` keeps the notes the part's spanners hold.
+- XML read from a decoded `.mxl` member that kept its byte order mark (some
+  UTF-16 corpus files) is read instead of refused.
+- `duration.convertTypeToNumber('complex')` raises music21's
+  `Could not determine durationNumber from complex`.
+- `converter.parse` takes a `MetadataEntry`.
+- `MetadataException` reports its module as `music21.exceptions21`, as
+  music21's does.
+- A class built on `ProtoM21Object` and `dict`, as music21's
+  `editorial.Editorial` is, can be made: `ProtoM21Object` keeps nothing in
+  its layout. `FretBoard` and the instrument boards are Python classes with
+  Rust members, keeping the board in the instance's `__dict__`, so that
+  `ChordWithFretBoard` stays a `ChordSymbol` and a `FretBoard`.
+
 # music21-rs 0.21.0
 
 `harte` 0.14.0 depends on this release.

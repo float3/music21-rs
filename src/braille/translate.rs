@@ -162,7 +162,11 @@ pub fn metadata_to_string(metadata: &Metadata, braille: bool) -> Result<String> 
             continue;
         }
         let words = split_camel_case(unique_name);
-        let mut line = format!("{}: {}", title_case(&words.join(" ")), value.text());
+        let mut line = format!(
+            "{}: {}",
+            crate::common::stringtools::title_case(&words.join(" ")),
+            value.text()
+        );
         if braille {
             let written: Vec<String> = line
                 .split_whitespace()
@@ -200,27 +204,6 @@ fn split_camel_case(name: &str) -> Vec<String> {
         }
     }
     words
-}
-
-/// Text in title case as Python's `str.title` writes it: each run of
-/// letters capitalised.
-fn title_case(text: &str) -> String {
-    let mut out = String::new();
-    let mut previous_letter = false;
-    for character in text.chars() {
-        if character.is_alphabetic() {
-            if previous_letter {
-                out.extend(character.to_lowercase());
-            } else {
-                out.extend(character.to_uppercase());
-            }
-            previous_letter = true;
-        } else {
-            out.push(character);
-            previous_letter = false;
-        }
-    }
-    out
 }
 
 /// A copy of a part with the notation it leaves unsaid made, as music21's

@@ -449,6 +449,10 @@ struct Suite {
     /// mark, so its count is kept out of any total of tests passing.
     #[serde(default)]
     comparison: bool,
+    /// The tests that failed, by name, where the suite's output names them:
+    /// a failure CI alone sees is then named in the pull request's comment.
+    #[serde(default)]
+    failures: Vec<String>,
 }
 
 impl Suite {
@@ -466,6 +470,7 @@ impl Suite {
             expected_failures: 0,
             subject: Subject::Crate,
             comparison: false,
+            failures: Vec::new(),
         }
     }
 }
@@ -1406,6 +1411,21 @@ class Plain:
             (17, 2)
         );
         assert_eq!(pytest_counts("collected 0 items\n"), (0, 0));
+    }
+
+    #[test]
+    fn pytest_failures_name_each_failed_test() {
+        let text = "F.\n=== short test summary info ===\n\
+                    FAILED python/tests/test_a.py::test_one - AssertionError: x\n\
+                    FAILED python/tests/test_a.py::test_two\n\
+                    1 failed, 1 passed in 0.1s\n";
+        assert_eq!(
+            pytest_failures(text),
+            [
+                "python/tests/test_a.py::test_one",
+                "python/tests/test_a.py::test_two"
+            ]
+        );
     }
 
     #[test]

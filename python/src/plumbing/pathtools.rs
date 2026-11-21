@@ -88,10 +88,9 @@ pub(crate) fn getCorpusFilePath(py: Python<'_>) -> PyResult<PathBuf> {
             .getattr("CoreCorpus")?
             .call0()?
             .getattr("manualCoreCorpusPath")?;
-        if manual.is_none() {
-            return Ok(getSourceFilePath(py)?.join("corpus"));
+        if !manual.is_none() {
+            return manual.extract();
         }
-        return manual.extract();
     }
     // The package's own `corpus`, which reads music21's from where it is.
     if let Ok(found) = corpus.call_method0("getCorpusFilePath") {

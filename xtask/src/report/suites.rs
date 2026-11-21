@@ -661,6 +661,7 @@ pub(super) fn wheel_suites(workspace_root: &Path) -> (Suite, Suite) {
                     Suite {
                         passed,
                         failed,
+                        failures: pytest_failures(&text),
                         ..Suite::new(
                             TESTS,
                             command,
@@ -756,6 +757,15 @@ fn uncoloured(text: &str) -> String {
 
 /// Reads pytest's one-line summary, `19 passed in 0.07s` or
 /// `2 failed, 17 passed in 0.11s`.
+/// The tests pytest's short summary names as failed, `FAILED path::test -
+/// reason`, without their reasons.
+pub(super) fn pytest_failures(text: &str) -> Vec<String> {
+    text.lines()
+        .filter_map(|line| line.strip_prefix("FAILED "))
+        .map(|rest| rest.split(" - ").next().unwrap_or(rest).trim().to_string())
+        .collect()
+}
+
 pub(super) fn pytest_counts(text: &str) -> (usize, usize) {
     for line in text.lines().rev() {
         let words: Vec<&str> = line.split_whitespace().collect();
