@@ -10212,8 +10212,10 @@ from music21.audioSearch import recording, transcriber
 from music21.corpus import virtual
 from music21.scale.scala import scl
 from music21.stream.iterator import RecursiveIterator, StreamIterator
-from music21 import stream, note
+from music21 import common, stream, note
 print(Imprint(publisher='x').keywords)
+# Bare program names are what MuseScore is called off macOS and Windows.
+common.getPlatform = lambda: 'nix'
 with tempfile.TemporaryDirectory() as tmp:
     root = pathlib.Path(tmp)
     for name in ('mscore', 'mscore3'):
