@@ -2,11 +2,9 @@
 //!
 //! A barline is how a measure is closed and, where it is a repeat sign,
 //! which way the music goes back. A measure answers one as its
-//! `leftBarline` or `rightBarline`. music21 also holds these among the
-//! measure's elements, the left at nought and the right stored at the end;
-//! this package keeps them beside the elements and lists them only where a
-//! stream is asked what it holds by class, flattened or walked. A barline
-//! standing inside a measure is an element like any other in both.
+//! `leftBarline` or `rightBarline`, held among the measure's elements as
+//! music21 holds them: the left at nought and the right stored at the end.
+//! A barline standing inside a measure is an element like any other.
 //!
 //! **Nothing is installed over music21's own `bar`.** A barline there
 //! carries a `pause`, which is a `Fermata` or a `Rest` and so an object of
