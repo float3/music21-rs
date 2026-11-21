@@ -203,11 +203,6 @@ two rules, set 2026-09-12, that most of the open work now serves:
    music21 too, but music21 already behaved this way at 7e77707, so they
    were never followed rather than left behind:
 
-   - standalone, a wheel measure is listed as music21 lists it only where a
-     stream is asked by class, flattened or walked: `len`, indexing and
-     plain iteration leave its barlines out (DECISIONS.md, "a measure's
-     barlines are listed, not held"), and `storeAtEnd` keeps only a
-     barline.
    - a wheel measure's repr is `<music21.stream.Measure 1>` where
      music21's is `<music21.stream.Measure 1 offset=4.0>`: the offset is
      the measure's in its part, which the wheel's streams answer through
@@ -321,8 +316,7 @@ two rules, set 2026-09-12, that most of the open work now serves:
 
 20. **what blocks music21's suite on music21-rs alone.** `xtask
     music21-suite`'s provided side at 0.21.0: 2931 of 5276 passing tests,
-    198 of 217 modules importing. A measure's `len()` and indexing leave
-    out its barlines, which music21 counts (4 `mei.test_base` tests).
+    198 of 217 modules importing.
     Left: `metadata.bundles`
     (102, corpus cache), `lily` (77), `abcFormat` (128), `graph` (86),
     `musedata.translate` (46), `humdrum.testFiles` (41), `Sites.add`

@@ -417,6 +417,8 @@ courtesy clef or a second barline appears only in its examples, and a
 general box of end elements would cost every walk and writer. *costs:*
 `s.storeAtEnd(clef.TrebleClef())` is refused as not ported where music21
 accepts it.
+*reversed 2026-11-21 for 0.22.0,* with the barlines above: `storeAtEnd`
+keeps whatever music21 keeps, among the stream's elements, last.
 
 **a flag is read for its truth; a string is refused.** music21 asks
 `if inPlace:`, so `inPlace=1` and a forwarded `None` work there, and every

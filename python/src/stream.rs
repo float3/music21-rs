@@ -1647,6 +1647,15 @@ impl Stream {
             me.status = unbound(get("streamStatus")?);
         }
 
+        // 0.21 kept a measure's barlines under their own keys; a score it
+        // cached holds them among its elements once read back.
+        if let Some(left) = get("leftBarline")? {
+            Self::set_leftBarline(slf, Some(&left))?;
+        }
+        if let Some(right) = get("rightBarline")? {
+            Self::set_rightBarline(slf, Some(&right))?;
+        }
+
         let any = slf.as_any();
         if let Some(groups) = get("groups")? {
             any.setattr("groups", groups)?;

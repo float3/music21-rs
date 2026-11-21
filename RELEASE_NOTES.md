@@ -2,6 +2,16 @@
 
 `harte` 0.15.0 depends on this release.
 
+## breaking changes
+
+- A wheel measure holds its barlines among its elements, as music21's does:
+  `len`, indexing, iteration, `elements`, `index` and `pop` count its left
+  barline (at nought) and what `storeAtEnd` keeps, the right barline among
+  it. Code that indexed a measure past its left barline shifts by one.
+- `storeAtEnd` keeps whatever music21 keeps, not only a barline.
+- The barline setters set `location`, and a right `Repeat` that starts is
+  made to end, as in music21.
+
 ## added
 
 - `provide_music21` provides `music21.lily` (`lilyObjects` and `translate`'s

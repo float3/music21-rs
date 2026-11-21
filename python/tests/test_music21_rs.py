@@ -997,6 +997,23 @@ def test_a_measures_barlines_are_in_its_listings():
     assert len(part.recurse().getElementsByClass("Barline")) == 2
 
 
+def test_a_measure_pickled_by_0_21_keeps_its_barlines():
+    """0.21 pickled a measure's barlines under their own keys, not among
+    what it held; a score cached then keeps them when read back."""
+    bar = m.Measure()
+    bar.append(m.Note("C4"))
+    state = bar.__getstate__()
+    left, right = m.Barline("heavy-light"), m.Barline("final")
+    state["leftBarline"] = left
+    state["rightBarline"] = right
+
+    thawed = m.Measure()
+    thawed.__setstate__(state)
+    assert thawed.leftBarline is left
+    assert thawed.rightBarline is right
+    assert len(thawed) == 3
+
+
 def test_a_measure_holds_its_barlines():
     """A measure holds its left barline at nought and its right one at the
     end among its elements, as music21's does: `len`, indexing, iteration
