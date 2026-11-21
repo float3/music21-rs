@@ -9,6 +9,8 @@
   barline (at nought) and what `storeAtEnd` keeps, the right barline among
   it. Code that indexed a measure past its left barline shifts by one.
 - `storeAtEnd` keeps whatever music21 keeps, not only a barline.
+- `FretBoard` and the instrument fret boards are Python classes over the
+  crate's board, not extension types.
 - The barline setters set `location`, and a right `Repeat` that starts is
   made to end, as in music21.
 
