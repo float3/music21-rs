@@ -18,6 +18,13 @@
   `LilypondConverter`), `music21.metadata.bundles`, `music21.metadata.caching`,
   `music21.corpus.corpora` and `music21.corpus.manager`. Corpus metadata
   bundles read and write music21's gzipped pickle caches.
+- `provide_music21` provides `music21.corpus.work` and
+  `music21.corpus.chorales` (`ChoraleList`, `ChoraleListRKBWV`, `Iterator`,
+  `getByTitle`); corpora gain `getComposer`, `directoryInformation` and
+  `getWorkReferences`, and `music21_rs.corpus` gains `getComposer`.
+- The crate's `corpus::chorales` (the chorale catalogues and
+  `bwv_sort_key`), `corpus::work` (the core corpus's directories,
+  `composer_paths`, `find_works`) and `common::stringtools::title_case`.
 - `provide_music21` provides `music21.abcFormat`, `abcFormat.translate`,
   `music21.musedata` and `musedata.translate` over the crate's readers.
 - The crate's ABC reading steps (`abc::step`, `abc::translate`) and
@@ -31,6 +38,8 @@
 
 ## fixed
 
+- `CoreCorpus.getPaths` takes `fileExtensions` as its first positional
+  argument, as music21's does.
 - MuseData slurs go in their part, not on the score.
 - A note flattened by an ABC key signature is named `B-4`, as music21 names
   it, not `Bb4`.

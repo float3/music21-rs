@@ -10182,7 +10182,7 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.ipython21', 'from music21.corpus import chorales'):
+for statement in ('import music21.ipython21', 'from music21.corpus import virtual'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
@@ -10193,7 +10193,7 @@ print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         "music21-rs does not provide music21.ipython21",
-        "music21-rs does not provide music21.corpus.chorales",
+        "music21-rs does not provide music21.corpus.virtual",
         "False True",
     ]
 

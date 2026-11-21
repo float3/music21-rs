@@ -84,6 +84,7 @@ pub mod brailletext;
 pub mod brailletranslate;
 mod bundles;
 mod caching;
+mod chorales;
 pub mod chord;
 pub mod chordtables;
 mod chordtools;
@@ -95,6 +96,7 @@ mod converter;
 pub mod converters;
 mod corpora;
 mod corpus;
+mod corpuswork;
 pub mod correlate;
 pub mod defaults;
 pub mod derivation;
@@ -2486,7 +2488,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 58] = [
+const BUILT_MODULES: [&str; 60] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2542,6 +2544,8 @@ const BUILT_MODULES: [&str; 58] = [
     "music21.metadata.caching",
     "music21.corpus.corpora",
     "music21.corpus.manager",
+    "music21.corpus.work",
+    "music21.corpus.chorales",
     "music21.lily",
     "music21.lily.lilyObjects",
     "music21.lily.translate",
@@ -2598,6 +2602,8 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.metadata.caching" => caching::module(py),
         "music21.corpus.corpora" => corpora::corpora_module(py),
         "music21.corpus.manager" => corpora::manager_module(py),
+        "music21.corpus.work" => corpuswork::module(py),
+        "music21.corpus.chorales" => chorales::module(py),
         "music21.lily" => lilytranslate::package(py),
         "music21.lily.lilyObjects" => lilyobjects::module(py),
         "music21.lily.translate" => lilytranslate::module(py),

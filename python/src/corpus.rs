@@ -35,8 +35,9 @@ const MODULE: &str = "music21_rs.corpus";
 const CORPUS_VARIABLE: &str = "MUSIC21_RS_CORPUS";
 
 /// The module's public names.
-const ALL: [&str; 7] = [
+const ALL: [&str; 8] = [
     "CorpusException",
+    "getComposer",
     "getCorePaths",
     "getCorpusFilePath",
     "getPaths",
@@ -104,6 +105,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(wrap_pyfunction!(get_work, &m)?)?;
         m.add_function(wrap_pyfunction!(parse, &m)?)?;
         m.add_function(wrap_pyfunction!(crate::corpora::search, &m)?)?;
+        m.add_function(wrap_pyfunction!(get_composer, &m)?)?;
         m.add(
             "__getattr__",
             converter::exception_getattr(py, MODULE, &CORPUS_EXCEPTIONS)?,
@@ -426,6 +428,22 @@ fn movements(results: Vec<PathBuf>, movement: &Bound<'_, PyAny>) -> PyResult<Vec
         }
     }
     Ok(found)
+}
+
+/// The paths of the core corpus's works that belong to a composer or a
+/// collection, sorted.
+#[pyfunction]
+#[pyo3(name = "getComposer", signature = (composerName, *, fileExtensions = None))]
+#[allow(non_snake_case)]
+fn get_composer<'py>(
+    py: Python<'py>,
+    composerName: &str,
+    fileExtensions: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyList>> {
+    let core = crate::corpora::corpora_module(py)?
+        .getattr("CoreCorpus")?
+        .call0()?;
+    crate::corpuswork::composer_paths(&core, composerName, fileExtensions)
 }
 
 /// The path of the work whose path holds `workName`, or a list of the

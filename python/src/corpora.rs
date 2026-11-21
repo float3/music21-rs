@@ -186,6 +186,32 @@ impl Corpus {
             .call_method("search", (query,), Some(&kwargs))
     }
 
+    /// The paths of the corpus's works that belong to a composer or a
+    /// collection, sorted.
+    #[pyo3(signature = (composerName, *, fileExtensions = None))]
+    fn getComposer<'py>(
+        slf: &Bound<'py, Self>,
+        composerName: &str,
+        fileExtensions: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyList>> {
+        crate::corpuswork::composer_paths(slf.as_any(), composerName, fileExtensions)
+    }
+
+    /// Each of the corpus's directories with its works: the core corpus's
+    /// directories, and none for a local corpus.
+    #[getter]
+    fn directoryInformation<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
+        if slf.is_instance_of::<CoreCorpus>() {
+            return crate::corpuswork::core_directories(slf.as_any());
+        }
+        Ok(PyTuple::empty(slf.py()))
+    }
+
+    /// The directories with their works, as a list.
+    fn getWorkReferences<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyList>> {
+        PyList::new(slf.py(), Self::directoryInformation(slf)?)
+    }
+
     /// The corpus's metadata bundle, read once and kept.
     #[getter]
     fn metadataBundle<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -268,7 +294,7 @@ impl CoreCorpus {
     }
 
     /// The corpus's works in the formats asked for, sorted.
-    #[pyo3(signature = (*, fileExtensions = None, expandExtensions = true))]
+    #[pyo3(signature = (fileExtensions = None, *, expandExtensions = true))]
     fn getPaths<'py>(
         &self,
         py: Python<'py>,

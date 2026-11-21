@@ -523,6 +523,34 @@ pub(crate) fn python_str_repr(text: &str) -> String {
     out
 }
 
+/// Text in title case as Python's `str.title` writes it: each run of
+/// letters capitalised.
+///
+/// ```
+/// use music21::common::stringtools::title_case;
+///
+/// assert_eq!(title_case("opus 19 no2"), "Opus 19 No2");
+/// assert_eq!(title_case("h186"), "H186");
+/// ```
+pub fn title_case(text: &str) -> String {
+    let mut out = String::new();
+    let mut previous_letter = false;
+    for character in text.chars() {
+        if character.is_alphabetic() {
+            if previous_letter {
+                out.extend(character.to_lowercase());
+            } else {
+                out.extend(character.to_uppercase());
+            }
+            previous_letter = true;
+        } else {
+            out.push(character);
+            previous_letter = false;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
