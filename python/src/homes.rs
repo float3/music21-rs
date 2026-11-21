@@ -35,6 +35,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
         "pitchAttributeCount",
     ]),
     ("music21.audioSearch", &[
+        "audioChunkLength",
         "autocorrelationFunction",
         "decisionProcess",
         "detectPitchFrequencies",
@@ -48,6 +49,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
         "prepareThresholds",
         "quantizeDuration",
         "quarterLengthEstimation",
+        "recordSampleRate",
         "smoothFrequencies",
     ]),
     ("music21.base", &[

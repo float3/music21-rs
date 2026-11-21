@@ -66,6 +66,8 @@ pub const NAMES: &[&str] = &[
     "notesAndDurationsToStream",
     "decisionProcess",
     "getFrequenciesFromAudioFile",
+    "audioChunkLength",
+    "recordSampleRate",
 ];
 
 pyo3::create_exception!(
@@ -538,6 +540,14 @@ fn frequencies_from_file_py(waveFilename: Option<std::path::PathBuf>) -> PyResul
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // How many frames each frequency is found from, and the rate every
+    // recording is taken to be sampled at, which music21 writes as a whole
+    // number.
+    m.add("audioChunkLength", music21::audiosearch::AUDIO_CHUNK_LENGTH)?;
+    m.add(
+        "recordSampleRate",
+        music21::audiosearch::RECORD_SAMPLE_RATE as u32,
+    )?;
     m.add_function(wrap_pyfunction!(frequencies_from_file_py, m)?)?;
     m.add_function(wrap_pyfunction!(histogram_py, m)?)?;
     m.add_function(wrap_pyfunction!(autocorrelation_py, m)?)?;

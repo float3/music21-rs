@@ -35,13 +35,14 @@ const MODULE: &str = "music21_rs.corpus";
 const CORPUS_VARIABLE: &str = "MUSIC21_RS_CORPUS";
 
 /// The module's public names.
-const ALL: [&str; 8] = [
+const ALL: [&str; 9] = [
     "CorpusException",
     "getComposer",
     "getCorePaths",
     "getCorpusFilePath",
     "getPaths",
     "getWork",
+    "noCorpus",
     "parse",
     "search",
 ];
@@ -106,6 +107,7 @@ pub(crate) fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         m.add_function(wrap_pyfunction!(parse, &m)?)?;
         m.add_function(wrap_pyfunction!(crate::corpora::search, &m)?)?;
         m.add_function(wrap_pyfunction!(get_composer, &m)?)?;
+        m.add_function(wrap_pyfunction!(no_corpus, &m)?)?;
         m.add(
             "__getattr__",
             converter::exception_getattr(py, MODULE, &CORPUS_EXCEPTIONS)?,
@@ -428,6 +430,14 @@ fn movements(results: Vec<PathBuf>, movement: &Bound<'_, PyAny>) -> PyResult<Vec
         }
     }
     Ok(found)
+}
+
+/// Whether there is no corpus to read: music21's `noCorpus`, which asks
+/// the core corpus.
+#[pyfunction]
+#[pyo3(name = "noCorpus")]
+fn no_corpus(py: Python<'_>) -> bool {
+    corpus_directory(py).is_none()
 }
 
 /// The paths of the core corpus's works that belong to a composer or a

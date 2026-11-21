@@ -41,7 +41,9 @@
   files, where its source is there). Recording from a microphone raises
   `ModuleNotFoundError` naming `pyaudio`, as music21 does without it.
 - `metadata.primitives.Imprint`, `stream.iterator.RecursiveIterator` (what
-  `recurse` now hands back) and `audioSearch.getFrequenciesFromAudioFile`.
+  `recurse` now hands back), `audioSearch.getFrequenciesFromAudioFile`,
+  `audioSearch.audioChunkLength` and `recordSampleRate`, and
+  `corpus.noCorpus`.
 - The crate's `musescore::locate` (finding MuseScore and the numbered PNG
   pages it writes, without running it), `corpus::virtual_corpus` and
   `audiosearch::RECORD_CHANNELS`.

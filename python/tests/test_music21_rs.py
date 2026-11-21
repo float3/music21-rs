@@ -10277,6 +10277,19 @@ def test_a_fret_board_is_a_second_base_and_copies_and_pickles():
     assert board.displayFrets == 4
 
 
+def test_provided_corpus_and_audio_search_carry_music21s_module_names(tmp_path):
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import audioSearch, corpus
+print(audioSearch.audioChunkLength, audioSearch.recordSampleRate)
+print(corpus.noCorpus() is corpus.corpora.CoreCorpus().noCorpus)
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["1024 44100", "True"]
+
+
 def test_a_provided_module_names_a_missing_attribute_as_python_does(tmp_path):
     """The message quotes the module and the name as Python's own does,
     which is what music21's suite reads a blocker out of."""
