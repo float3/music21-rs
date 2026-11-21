@@ -12835,7 +12835,10 @@ def test_a_stream_is_indexed_by_a_class():
 def test_provided_graph_works_out_its_data_without_matplotlib(tmp_path):
     """Colours, ticks and the choice of plot are the crate's; a graph that
     would draw refuses, as music21's does, without matplotlib."""
+    # Where the wheel is installed, matplotlib may sit beside it; hide it.
     code = """
+import sys
+sys.modules['matplotlib'] = None
 import music21_rs
 music21_rs.provide_music21()
 from music21 import graph
