@@ -635,7 +635,7 @@ impl ABCToken {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
         let _ = (args, kwargs);
-        PyClassInitializer::from(crate::prebase::ProtoM21Object::default()).add_subclass(Self)
+        PyClassInitializer::from(crate::prebase::ProtoM21Object).add_subclass(Self)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
@@ -1680,7 +1680,7 @@ impl ABCFile {
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
         let _ = (args, kwargs);
-        PyClassInitializer::from(crate::prebase::ProtoM21Object::default()).add_subclass(Self)
+        PyClassInitializer::from(crate::prebase::ProtoM21Object).add_subclass(Self)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {

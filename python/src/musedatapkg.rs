@@ -84,7 +84,7 @@ fn pitch_object(py: Python<'_>, pitch: music21::Pitch) -> PyResult<Bound<'_, PyA
 
 /// A new object of this module's, built on music21's `ProtoM21Object`.
 fn base() -> PyClassInitializer<ProtoM21Object> {
-    PyClassInitializer::from(ProtoM21Object::default())
+    PyClassInitializer::from(ProtoM21Object)
 }
 
 // ---------------------------------------------------------------- records

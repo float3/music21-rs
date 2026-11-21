@@ -35,6 +35,18 @@
 - The crate's `metadata::bundles`, rich metadata and a pickle reader and
   writer (`common::pickle`); `MetronomeMark::music21_repr` and
   `TempoText::music21_repr`.
+- `provide_music21` provides `music21.converter.museScore`,
+  `music21.audioSearch.recording` and `audioSearch.transcriber`,
+  `music21.corpus.virtual` and `music21.scale.scala.scl` (music21's Scala
+  files, where its source is there). Recording from a microphone raises
+  `ModuleNotFoundError` naming `pyaudio`, as music21 does without it.
+- `metadata.primitives.Imprint`, `stream.iterator.RecursiveIterator` (what
+  `recurse` now hands back), `audioSearch.getFrequenciesFromAudioFile`,
+  `audioSearch.audioChunkLength` and `recordSampleRate`, and
+  `corpus.noCorpus`.
+- The crate's `musescore::locate` (finding MuseScore and the numbered PNG
+  pages it writes, without running it), `corpus::virtual_corpus` and
+  `audiosearch::RECORD_CHANNELS`.
 
 ## fixed
 
@@ -52,6 +64,11 @@
 - `converter.parse` takes a `MetadataEntry`.
 - `MetadataException` reports its module as `music21.exceptions21`, as
   music21's does.
+- A class built on `ProtoM21Object` and `dict`, as music21's
+  `editorial.Editorial` is, can be made: `ProtoM21Object` keeps nothing in
+  its layout. `FretBoard` and the instrument boards are Python classes with
+  Rust members, keeping the board in the instance's `__dict__`, so that
+  `ChordWithFretBoard` stays a `ChordSymbol` and a `FretBoard`.
 
 # music21-rs 0.21.0
 

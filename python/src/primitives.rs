@@ -43,6 +43,7 @@ pub const NAMES: &[&str] = &[
     "Copyright",
     "Contributor",
     "Creator",
+    "Imprint",
 ];
 
 use crate::metadata::MetadataException;
@@ -1539,7 +1540,35 @@ impl Creator {
     }
 }
 
+/// music21's `Imprint`: a publication, held as the keywords it was made
+/// with. music21 reads nothing out of it, so neither does the crate.
+#[pyclass(
+    name = "Imprint",
+    module = "music21.metadata.primitives",
+    extends = crate::prebase::ProtoM21Object,
+    subclass,
+    dict
+)]
+pub struct Imprint;
+
+#[pymethods]
+impl Imprint {
+    /// music21's `Imprint(**keywords)`.
+    #[new]
+    #[pyo3(signature = (**_keywords))]
+    fn new(_keywords: Option<&Bound<'_, PyDict>>) -> PyClassInitializer<Self> {
+        crate::base::built(Imprint)
+    }
+
+    #[pyo3(signature = (**keywords))]
+    fn __init__(slf: &Bound<'_, Self>, keywords: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        let held = keywords.map_or_else(|| PyDict::new(slf.py()), Clone::clone);
+        slf.setattr("keywords", held)
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Imprint>()?;
     m.add_class::<Date>()?;
     m.add_class::<DatePrimitive>()?;
     m.add_class::<DateSingle>()?;

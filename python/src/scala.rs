@@ -367,6 +367,24 @@ pub fn search(target: &str) -> PyResult<Vec<String>> {
         .collect())
 }
 
+/// music21's `scale.scala.scl`: the package holding its Scala files, which
+/// is a directory and no code. Its `__path__` is that directory in
+/// music21's source where the source is there, and empty where it is not.
+pub(crate) fn scl_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
+    static BUILT: pyo3::sync::PyOnceLock<Py<PyModule>> = pyo3::sync::PyOnceLock::new();
+    let held = BUILT.get_or_try_init(py, || {
+        let m = PyModule::new(py, "music21.scale.scala.scl")?;
+        let directory = crate::plumbing::pathtools::getSourceFilePath(py)
+            .ok()
+            .map(|source| source.join("scale").join("scala").join("scl"))
+            .filter(|directory| directory.is_dir())
+            .map(|directory| directory.to_string_lossy().into_owned());
+        m.add("__path__", PyList::new(py, directory)?)?;
+        Ok::<_, PyErr>(m.unbind())
+    })?;
+    Ok(held.bind(py).clone())
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ScalaPitch>()?;
     m.add_class::<ScalaData>()?;

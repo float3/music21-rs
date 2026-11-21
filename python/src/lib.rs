@@ -145,6 +145,7 @@ pub mod midipercussion;
 pub mod miditranslate;
 mod musedatapkg;
 mod musedatatranslate;
+mod musescore;
 mod musicxml;
 pub mod naturallanguage;
 pub mod neoriemannian;
@@ -165,6 +166,7 @@ pub mod primitives;
 mod provide;
 pub mod realizer;
 pub mod realizerscale;
+mod recording;
 pub mod reducechords;
 pub mod reduction;
 pub mod repeat;
@@ -196,11 +198,13 @@ pub mod subconverters;
 pub mod tablature;
 pub mod tempo;
 pub mod text;
+mod transcriber;
 pub mod transposition;
 pub mod tree;
 pub mod tsvconverter;
 pub mod unpitched;
 pub mod variant;
+mod virtualcorpus;
 pub mod voiceleading;
 pub mod windowed;
 mod xmlsoundparser;
@@ -2488,7 +2492,7 @@ fn built_modules() -> Vec<String> {
 /// modules: what they hold (`set`, `get`, `keys`) would shadow Python's
 /// own in a flat namespace, and their exceptions must wait for music21's
 /// `Music21Exception`. Each is built on first asking, and once.
-const BUILT_MODULES: [&str; 60] = [
+const BUILT_MODULES: [&str; 65] = [
     "music21.environment",
     "music21.defaults",
     "music21._version",
@@ -2549,6 +2553,11 @@ const BUILT_MODULES: [&str; 60] = [
     "music21.lily",
     "music21.lily.lilyObjects",
     "music21.lily.translate",
+    "music21.converter.museScore",
+    "music21.audioSearch.recording",
+    "music21.audioSearch.transcriber",
+    "music21.corpus.virtual",
+    "music21.scale.scala.scl",
 ];
 
 /// The module of music21's named, built on first asking: one of
@@ -2607,6 +2616,11 @@ fn music21_module<'py>(py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyMod
         "music21.lily" => lilytranslate::package(py),
         "music21.lily.lilyObjects" => lilyobjects::module(py),
         "music21.lily.translate" => lilytranslate::module(py),
+        "music21.converter.museScore" => musescore::module(py),
+        "music21.audioSearch.recording" => recording::module(py),
+        "music21.audioSearch.transcriber" => transcriber::module(py),
+        "music21.corpus.virtual" => virtualcorpus::module(py),
+        "music21.scale.scala.scl" => scala::scl_module(py),
         _ if name.starts_with("music21.common") => common::module(py, name),
         _ if name.starts_with("music21.graph") => graph::module(py, name),
         _ => Err(pyo3::exceptions::PyKeyError::new_err(name.to_owned())),

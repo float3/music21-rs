@@ -4604,7 +4604,7 @@ impl Stream {
         let walked = Walked::of(found, slf.borrow().kind)
             .held_by(holders)
             .walking(slf.as_any());
-        Bound::new(py, walked)
+        RecursiveWalked::walk(py, walked)
     }
 
     /// The notes and chords this stream holds directly, as music21's
@@ -10447,9 +10447,69 @@ impl OffsetWalked {
     }
 }
 
+/// music21's `RecursiveIterator`: what `recurse` hands back, every element
+/// at every depth in the order the walk meets them.
+#[pyclass(name = "RecursiveIterator", module = "music21.stream.iterator", extends = Walked, subclass)]
+pub struct RecursiveWalked;
+
+impl RecursiveWalked {
+    /// What a walk found, as one of these.
+    fn walk(py: Python<'_>, walked: Walked) -> PyResult<Bound<'_, Walked>> {
+        let made = Bound::new(py, PyClassInitializer::from(walked).add_subclass(Self))?;
+        Ok(made.into_super())
+    }
+}
+
+#[pymethods]
+impl RecursiveWalked {
+    /// Every element of `srcStream` at every depth, or its streams alone
+    /// with `streamsOnly`, filtered by each of `filterList` in turn. The
+    /// other keywords are music21's, and change nothing here.
+    #[new]
+    #[pyo3(signature = (srcStream, *, filterList = None, restoreActiveSites = true, activeInformation = None, streamsOnly = false, includeSelf = false, ignoreSorting = false))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        srcStream: &Bound<'_, PyAny>,
+        filterList: Option<&Bound<'_, PyAny>>,
+        restoreActiveSites: bool,
+        activeInformation: Option<&Bound<'_, PyAny>>,
+        #[pyo3(from_py_with = crate::truthy)] streamsOnly: bool,
+        #[pyo3(from_py_with = crate::truthy)] includeSelf: bool,
+        ignoreSorting: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
+        let _ = (restoreActiveSites, activeInformation, ignoreSorting);
+        if includeSelf {
+            return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "a RecursiveIterator here does not include the stream it walks",
+            ));
+        }
+        let py = srcStream.py();
+        let mut walked = srcStream.call_method0("recurse")?;
+        if streamsOnly {
+            walked = walked.call_method1("getElementsByClass", ("Stream",))?;
+        }
+        let mut walked = walked.cast::<Walked>()?.clone();
+        if let Some(filters) = filterList.filter(|filters| !filters.is_none()) {
+            for filter in filters.try_iter()? {
+                walked = Walked::addFilter(&walked, &filter?, true)?;
+            }
+        }
+        let own = walked.borrow().duplicate(py);
+        Ok(PyClassInitializer::from(own).add_subclass(Self))
+    }
+
+    fn __repr__(slf: PyRef<'_, Self>) -> String {
+        format!(
+            "<music21.stream.iterator.RecursiveIterator for {}>",
+            slf.as_super().kind
+        )
+    }
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<StreamCore>()?;
     m.add_class::<OffsetWalked>()?;
+    m.add_class::<RecursiveWalked>()?;
     m.add_class::<Stream>()?;
     // A stream is drawn with music21's `StreamStyle`.
     m.getattr("Stream")?.setattr(

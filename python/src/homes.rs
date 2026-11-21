@@ -35,9 +35,11 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
         "pitchAttributeCount",
     ]),
     ("music21.audioSearch", &[
+        "audioChunkLength",
         "autocorrelationFunction",
         "decisionProcess",
         "detectPitchFrequencies",
+        "getFrequenciesFromAudioFile",
         "histogram",
         "interpolation",
         "joinConsecutiveIdenticalPitches",
@@ -47,6 +49,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
         "prepareThresholds",
         "quantizeDuration",
         "quarterLengthEstimation",
+        "recordSampleRate",
         "smoothFrequencies",
     ]),
     ("music21.base", &[
@@ -306,6 +309,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "tempAttribute",
     ]),
+    ("music21.audioSearch.recording", &[
+        "DocOrder",
+    ]),
     ("music21.base", &[
         "Derivation",
         "Duration",
@@ -481,6 +487,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "DateSelection",
         "DateSingle",
         "DocOrder",
+        "Imprint",
         "OffsetQL",
         "PropertyDescription",
         "Text",
@@ -681,6 +688,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "OffsetQLSpecial",
         "OffsetSpecial",
+        "RecursiveIterator",
         "StreamException",
         "StreamIterator",
         "opFrac",
@@ -766,6 +774,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
 #[rustfmt::skip]
 pub(crate) const NO_HOME: &[&str] = &[
     "Placed",
+    "_FretBoardValue",
     "_HarteLabel",
     "_groups",
     "_music21_module",
