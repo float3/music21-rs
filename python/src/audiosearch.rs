@@ -40,7 +40,7 @@ use pyo3::types::{PyList, PyTuple};
 
 use music21::audiosearch::{
     REST_FREQUENCY, autocorrelation_frequency, decision_process, detect_pitch_frequencies,
-    histogram, interpolation, joined_pitches, normalize_input_frequency,
+    frequencies_from_wav, histogram, interpolation, joined_pitches, normalize_input_frequency,
     pitch_frequencies_to_objects, prepare_thresholds, quantize_duration, quarter_length_estimation,
     smooth_frequencies, transcribed_notes,
 };
@@ -65,6 +65,7 @@ pub const NAMES: &[&str] = &[
     "quarterLengthEstimation",
     "notesAndDurationsToStream",
     "decisionProcess",
+    "getFrequenciesFromAudioFile",
 ];
 
 pyo3::create_exception!(
@@ -518,7 +519,26 @@ pub fn decision_process_py<'py>(
     )
 }
 
+/// The file music21 reads where no file is named.
+const DEFAULT_WAVE: &str = "xmas.wav";
+
+/// The frequency of each whole chunk of `audioChunkLength` frames of a
+/// WAV file: music21's `getFrequenciesFromAudioFile`.
+#[pyfunction]
+#[pyo3(name = "getFrequenciesFromAudioFile", signature = (waveFilename = None))]
+fn frequencies_from_file_py(waveFilename: Option<std::path::PathBuf>) -> PyResult<Vec<FloatType>> {
+    let path = waveFilename.unwrap_or_else(|| DEFAULT_WAVE.into());
+    let bytes = std::fs::read(&path).map_err(|_| {
+        AudioSearchException::new_err(format!(
+            "Cannot open {} for reading, does not exist",
+            path.display()
+        ))
+    })?;
+    frequencies_from_wav(&bytes).map_err(audio_error)
+}
+
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(frequencies_from_file_py, m)?)?;
     m.add_function(wrap_pyfunction!(histogram_py, m)?)?;
     m.add_function(wrap_pyfunction!(autocorrelation_py, m)?)?;
     m.add_function(wrap_pyfunction!(prepare_thresholds_py, m)?)?;

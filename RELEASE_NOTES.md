@@ -35,6 +35,16 @@
 - The crate's `metadata::bundles`, rich metadata and a pickle reader and
   writer (`common::pickle`); `MetronomeMark::music21_repr` and
   `TempoText::music21_repr`.
+- `provide_music21` provides `music21.converter.museScore`,
+  `music21.audioSearch.recording` and `audioSearch.transcriber`,
+  `music21.corpus.virtual` and `music21.scale.scala.scl` (music21's Scala
+  files, where its source is there). Recording from a microphone raises
+  `ModuleNotFoundError` naming `pyaudio`, as music21 does without it.
+- `metadata.primitives.Imprint`, `stream.iterator.RecursiveIterator` (what
+  `recurse` now hands back) and `audioSearch.getFrequenciesFromAudioFile`.
+- The crate's `musescore::locate` (finding MuseScore and the numbered PNG
+  pages it writes, without running it), `corpus::virtual_corpus` and
+  `audiosearch::RECORD_CHANNELS`.
 
 ## fixed
 

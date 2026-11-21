@@ -38,6 +38,7 @@ pub(crate) const HOMES: &[(&str, &[&str])] = &[
         "autocorrelationFunction",
         "decisionProcess",
         "detectPitchFrequencies",
+        "getFrequenciesFromAudioFile",
         "histogram",
         "interpolation",
         "joinConsecutiveIdenticalPitches",
@@ -306,6 +307,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "tempAttribute",
     ]),
+    ("music21.audioSearch.recording", &[
+        "DocOrder",
+    ]),
     ("music21.base", &[
         "Derivation",
         "Duration",
@@ -481,6 +485,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "DateSelection",
         "DateSingle",
         "DocOrder",
+        "Imprint",
         "OffsetQL",
         "PropertyDescription",
         "Text",
@@ -681,6 +686,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "OffsetQL",
         "OffsetQLSpecial",
         "OffsetSpecial",
+        "RecursiveIterator",
         "StreamException",
         "StreamIterator",
         "opFrac",

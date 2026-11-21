@@ -35,6 +35,10 @@ pub const AUDIO_CHUNK_LENGTH: usize = 1024;
 /// `recordSampleRate`.
 pub const RECORD_SAMPLE_RATE: FloatType = 44100.0;
 
+/// How many channels music21 records from a microphone:
+/// `recording.default_recordChannels`.
+pub const RECORD_CHANNELS: usize = 1;
+
 /// The frequency standing for a rest.
 pub const REST_FREQUENCY: FloatType = 10.0;
 

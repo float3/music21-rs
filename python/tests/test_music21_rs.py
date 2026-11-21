@@ -5880,12 +5880,13 @@ def test_a_pitch_is_read_from_its_name_in_another_language():
 
 
 def test_a_walk_answers_what_music21_s_walk_answers():
-    """music21's `recurse` answers a StreamIterator, which its own code
-    filters again; a list could not be filtered and a stream would sort
-    what the walk met in order."""
+    """music21's `recurse` answers a RecursiveIterator, a StreamIterator,
+    which its own code filters again; a list could not be filtered and a
+    stream would sort what the walk met in order."""
     score = m.from_tiny_notation("4/4 c4 d8 e8 f2 g1")
     walked = score.recurse()
-    assert type(walked).__name__ == "StreamIterator"
+    assert type(walked).__name__ == "RecursiveIterator"
+    assert isinstance(walked, m.StreamIterator)
     # The walk's order: each measure before what it holds.
     assert [type(e).__name__ for e in walked][:3] == ["Measure", "TrebleClef", "TimeSignature"]
     assert len(walked) == len([e for e in walked])
@@ -10182,7 +10183,7 @@ def test_provided_music21_refuses_what_it_does_not_have(tmp_path):
 import music21_rs
 music21_rs.provide_music21()
 import music21
-for statement in ('import music21.ipython21', 'from music21.corpus import virtual'):
+for statement in ('import music21.ipython21', 'from music21.test import testRunner'):
     try:
         exec(statement)
     except ModuleNotFoundError as error:
@@ -10193,8 +10194,57 @@ print(hasattr(music21, 'ipython21'), 'chord' in music21.__dir__())
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         "music21-rs does not provide music21.ipython21",
-        "music21-rs does not provide music21.corpus.virtual",
+        "music21-rs does not provide music21.test.testRunner",
         "False True",
+    ]
+
+
+def test_provided_music21_has_the_modules_its_suite_imports(tmp_path):
+    """Each module music21's own modules import by name is there, and
+    each refuses what needs hardware or a program at call time."""
+    code = """
+import pathlib, tempfile
+import music21_rs
+music21_rs.provide_music21()
+from music21.metadata.primitives import Imprint
+from music21.converter import museScore
+from music21.audioSearch import recording, transcriber
+from music21.corpus import virtual
+from music21.scale.scala import scl
+from music21.stream.iterator import RecursiveIterator, StreamIterator
+from music21 import stream, note
+print(Imprint(publisher='x').keywords)
+with tempfile.TemporaryDirectory() as tmp:
+    root = pathlib.Path(tmp)
+    for name in ('mscore', 'mscore3'):
+        (root / name).touch()
+    print(museScore.findMuseScore([root]).name)
+    (root / 'a-01.png').touch()
+    (root / 'a-07.png').touch()
+    first = museScore.findNumberedPNGPath(root / 'a.png')
+    print(first.name, museScore.findLastPNGPath(first).name, museScore.findPNGRange(first))
+try:
+    recording.samplesFromRecording(seconds=1)
+except ModuleNotFoundError as error:
+    print(error.name)
+print(virtual.BachBWV1007Prelude().getUrlByExt('.krn')[0].endswith('f=kern'))
+print(isinstance(scl.__path__, list))
+s = stream.Stream([note.Note('C'), note.Note('D')])
+walked = s.recurse()
+print(type(walked).__name__, isinstance(walked, StreamIterator))
+print(len(RecursiveIterator(s)))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "{'publisher': 'x'}",
+        "mscore3",
+        "a-01.png a-07.png (7, 2)",
+        "pyaudio",
+        "True",
+        "True",
+        "RecursiveIterator True",
+        "2",
     ]
 
 
