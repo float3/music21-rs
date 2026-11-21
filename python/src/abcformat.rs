@@ -154,29 +154,6 @@ fn version_of(object: &Bound<'_, PyAny>) -> PyResult<(u32, u32, u32)> {
     Ok((at(0), at(1), at(2)))
 }
 
-/// A copy of `object`: a blank of its class holding its attributes, each
-/// copied deeply where `memo` is given, as `copy.deepcopy` asks.
-fn copied<'py>(
-    object: &Bound<'py, PyAny>,
-    memo: Option<&Bound<'py, PyAny>>,
-) -> PyResult<Bound<'py, PyAny>> {
-    let py = object.py();
-    let class = object.get_type();
-    let made = class.call_method1("__new__", (&class,))?;
-    let attributes = object.getattr("__dict__")?;
-    let attributes = match memo {
-        Some(memo) => {
-            memo.set_item(py.import("builtins")?.call_method1("id", (object,))?, &made)?;
-            py.import("copy")?
-                .call_method1("deepcopy", (attributes, memo))?
-        }
-        None => attributes,
-    };
-    made.getattr("__dict__")?
-        .call_method1("update", (attributes,))?;
-    Ok(made)
-}
-
 // ----------------------------------------------------------- conversions
 
 /// The spanners of a run of tokens, each Python object beside the crate's
@@ -640,27 +617,36 @@ fn write_tuplet<'py>(token: &Bound<'py, PyAny>, tuplet: &AbcTuplet) -> PyResult<
 // ---------------------------------------------------------------- tokens
 
 /// music21's `ABCToken`: what every token has, its source text.
-#[pyclass(name = "ABCToken", module = "music21.abcFormat", subclass, dict)]
+#[pyclass(
+    name = "ABCToken",
+    module = "music21.abcFormat",
+    extends = crate::prebase::ProtoM21Object,
+    subclass,
+    dict
+)]
 pub struct ABCToken;
 
 #[pymethods]
 impl ABCToken {
     #[new]
     #[pyo3(signature = (*args, **kwargs))]
-    fn new(args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>) -> Self {
+    fn new(
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
         let _ = (args, kwargs);
-        Self
+        PyClassInitializer::from(crate::prebase::ProtoM21Object::default()).add_subclass(Self)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), None)
+        crate::prebase::copied(slf.as_any(), None)
     }
 
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), Some(memo))
+        crate::prebase::copied(slf.as_any(), Some(memo))
     }
 
     #[pyo3(signature = (src = ""))]
@@ -671,11 +657,6 @@ impl ABCToken {
     /// music21's `_reprInternal`: the source text's repr.
     fn _reprInternal(slf: &Bound<'_, Self>) -> PyResult<String> {
         Ok(slf.getattr("src")?.repr()?.to_string())
-    }
-
-    /// `<music21.abcFormat.ABCNote 'c'>`, as music21's `ProtoM21Object`.
-    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
-        proto_repr(slf.as_any())
     }
 
     /// music21's `EqualSlottedObjectMixin`: the same class, holding the same.
@@ -700,18 +681,6 @@ impl ABCToken {
     fn parse(&self) {}
 }
 
-/// `<module.Class internal>`, as music21's `ProtoM21Object` writes it.
-fn proto_repr(object: &Bound<'_, PyAny>) -> PyResult<String> {
-    let class = object.get_type();
-    let module: String = class.getattr("__module__")?.extract()?;
-    let name: String = class.getattr("__qualname__")?.extract()?;
-    let internal: String = object.call_method0("_reprInternal")?.extract()?;
-    if internal.is_empty() {
-        return Ok(format!("<{module}.{name}>"));
-    }
-    Ok(format!("<{module}.{name} {internal}>"))
-}
-
 /// A token class with nothing of its own beyond `src`.
 macro_rules! plain_token {
     ($name:ident, $doc:literal) => {
@@ -727,7 +696,7 @@ macro_rules! plain_token {
                 args: &Bound<'_, PyTuple>,
                 kwargs: Option<&Bound<'_, PyDict>>,
             ) -> PyClassInitializer<Self> {
-                PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+                ABCToken::new(args, kwargs).add_subclass(Self)
             }
         }
     };
@@ -773,7 +742,7 @@ macro_rules! holding_token {
                 args: &Bound<'_, PyTuple>,
                 kwargs: Option<&Bound<'_, PyDict>>,
             ) -> PyClassInitializer<Self> {
-                PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+                ABCToken::new(args, kwargs).add_subclass(Self)
             }
 
             #[pyo3(signature = (src = ""))]
@@ -822,7 +791,7 @@ impl ABCBrokenRhythmMarker {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+        ABCToken::new(args, kwargs).add_subclass(Self)
     }
 
     #[pyo3(signature = (src = ""))]
@@ -865,7 +834,7 @@ impl ABCMetadata {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+        ABCToken::new(args, kwargs).add_subclass(Self)
     }
 
     #[pyo3(signature = (src = ""))]
@@ -1011,7 +980,7 @@ impl ABCBar {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+        ABCToken::new(args, kwargs).add_subclass(Self)
     }
 
     #[pyo3(signature = (src = ""))]
@@ -1070,7 +1039,7 @@ impl ABCTuplet {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+        ABCToken::new(args, kwargs).add_subclass(Self)
     }
 
     #[pyo3(signature = (src = ""))]
@@ -1160,7 +1129,7 @@ impl ABCNote {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyClassInitializer<Self> {
-        PyClassInitializer::from(ABCToken::new(args, kwargs)).add_subclass(Self)
+        ABCToken::new(args, kwargs).add_subclass(Self)
     }
 
     #[pyo3(signature = (src = "", carriedAccidental = ""))]
@@ -1335,14 +1304,14 @@ impl ABCHandler {
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), None)
+        crate::prebase::copied(slf.as_any(), None)
     }
 
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), Some(memo))
+        crate::prebase::copied(slf.as_any(), Some(memo))
     }
 
     #[pyo3(signature = (abcVersion = None, lineBreaksDefinePhrases = false))]
@@ -1694,27 +1663,35 @@ fn mergeLeadingMetaData<'py>(
 // ------------------------------------------------------------------ file
 
 /// music21's `ABCFile`: ABC read from a file or a string.
-#[pyclass(module = "music21.abcFormat", subclass, dict)]
+#[pyclass(
+    module = "music21.abcFormat",
+    extends = crate::prebase::ProtoM21Object,
+    subclass,
+    dict
+)]
 pub struct ABCFile;
 
 #[pymethods]
 impl ABCFile {
     #[new]
     #[pyo3(signature = (*args, **kwargs))]
-    fn new(args: &Bound<'_, PyTuple>, kwargs: Option<&Bound<'_, PyDict>>) -> Self {
+    fn new(
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyClassInitializer<Self> {
         let _ = (args, kwargs);
-        Self
+        PyClassInitializer::from(crate::prebase::ProtoM21Object::default()).add_subclass(Self)
     }
 
     fn __copy__<'py>(slf: &Bound<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), None)
+        crate::prebase::copied(slf.as_any(), None)
     }
 
     fn __deepcopy__<'py>(
         slf: &Bound<'py, Self>,
         memo: &Bound<'py, PyAny>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        copied(slf.as_any(), Some(memo))
+        crate::prebase::copied(slf.as_any(), Some(memo))
     }
 
     #[pyo3(signature = (abcVersion = None))]
@@ -1758,10 +1735,6 @@ impl ABCFile {
             return Ok("<filelike-object>".to_owned());
         }
         Ok(String::new())
-    }
-
-    fn __repr__(slf: &Bound<'_, Self>) -> PyResult<String> {
-        proto_repr(slf.as_any())
     }
 
     /// music21's `close`.

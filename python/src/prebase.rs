@@ -110,6 +110,29 @@ impl ProtoM21Object {
     }
 }
 
+/// A copy of `object`: a blank of its class holding its attributes, each
+/// copied deeply where `memo` is given, as `copy.deepcopy` asks.
+pub(crate) fn copied<'py>(
+    object: &Bound<'py, PyAny>,
+    memo: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = object.py();
+    let class = object.get_type();
+    let made = class.call_method1("__new__", (&class,))?;
+    let attributes = object.getattr("__dict__")?;
+    let attributes = match memo {
+        Some(memo) => {
+            memo.set_item(py.import("builtins")?.call_method1("id", (object,))?, &made)?;
+            py.import("copy")?
+                .call_method1("deepcopy", (attributes, memo))?
+        }
+        None => attributes,
+    };
+    made.getattr("__dict__")?
+        .call_method1("update", (attributes,))?;
+    Ok(made)
+}
+
 /// The names along a class's method resolution order, worked out once a
 /// class.
 pub(crate) fn class_names<'py>(class: &Bound<'py, PyType>) -> PyResult<Bound<'py, PyAny>> {

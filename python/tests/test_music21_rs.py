@@ -9996,6 +9996,54 @@ print(museTranslate._musedataBeamToBeams(']/'))
     ]
 
 
+def test_provided_abc_part_leaves_an_open_ending_in_the_bundle(tmp_path):
+    # music21's `abcToStreamPart` keeps an ending never closed in the
+    # spanner bundle it is handed, for the part after.
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import abcFormat, spanner
+from music21.abcFormat import translate
+ah = abcFormat.ABCHandler()
+ah.process('M:2/4\\nL:1/4\\nK:C\\nc d | e f |[1 g a | b c |')
+bundle = spanner.SpannerBundle()
+part = translate.abcToStreamPart(ah, spannerBundle=bundle)
+print([(rb.number, rb.completeStatus, [m.number for m in rb.getSpannedElements()])
+       for rb in bundle])
+print(len(part[spanner.RepeatBracket]))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["[('1', False, [2])]", "0"]
+
+
+def test_provided_rebar_keeps_the_notes_a_spanner_holds(tmp_path):
+    # music21's `reBar` cuts measures in place: notes not cut stay the
+    # objects the part's spanners hold.
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import stream, note, meter, spanner
+from music21.abcFormat import translate
+p = stream.Part()
+m = stream.Measure(number=1)
+m.append(meter.TimeSignature('2/4'))
+notes = [note.Note(n) for n in 'C D E F'.split()]
+for n in notes:
+    m.append(n)
+p.append(m)
+p.insert(0, spanner.Slur(notes[0], notes[3]))
+translate.reBar(p, inPlace=True)
+slur = p[spanner.Slur].first()
+held = list(p.recurse().notes)
+print(len(p.getElementsByClass(stream.Measure)), [n.name for n in held],
+      any(n is slur.getFirst() for n in held), any(n is slur.getLast() for n in held))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "2 ['C', 'D', 'E', 'F'] True True"
+
+
 def test_provide_music21_is_switched_on_by_the_environment(tmp_path):
     code = "import music21_rs, music21; print(music21.note.Note('D'))"
     done = _run_without_music21(code, tmp_path, MUSIC21_RS_PROVIDE_MUSIC21="1")

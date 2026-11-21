@@ -6207,6 +6207,20 @@ pub(crate) fn from_crate_as<'py>(
     Ok(built.made)
 }
 
+/// What each of a crate stream's leaves became, in its order.
+pub(crate) type Leaves = Vec<Option<Py<PyAny>>>;
+
+/// [`from_crate`], beside what each of the crate's leaves became, in its
+/// order: `None` for one this package has no class for.
+pub(crate) fn from_crate_with_leaves<'py>(
+    py: Python<'py>,
+    stream: &RsStream,
+) -> PyResult<(Bound<'py, PyAny>, Leaves)> {
+    let built = build_as(py, stream, Whose::Wheel)?;
+    insert_brackets(&built.brackets)?;
+    Ok((built.made, built.leaves))
+}
+
 /// What a crate stream became, and what each of its leaves became, in the
 /// order the crate counts them: `None` for one this package has no class
 /// for and leaves out. Spanners name their notes by that order, so a leaf
@@ -7099,7 +7113,7 @@ fn carry_notation(
 /// An expression on a note as music21's reader makes it: an ornament as
 /// the class installed over music21's, a fermata and an arpeggio as
 /// music21's own. A kind added to the crate since is left out.
-fn music21_expression<'py>(
+pub(crate) fn music21_expression<'py>(
     py: Python<'py>,
     expression: &music21::expressions::Expression,
 ) -> PyResult<Option<Bound<'py, PyAny>>> {

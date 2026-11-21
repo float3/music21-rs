@@ -11,7 +11,6 @@
 #![allow(non_snake_case)]
 
 use music21::abc::translate as rs;
-use music21::stream::StreamKind;
 use pyo3::prelude::*;
 use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyDict, PyModule};
@@ -56,8 +55,9 @@ fn filled<'py>(
 }
 
 /// music21's `abcToStreamPart`: one voice's handler, header included, as a
-/// part. A part handed in is filled; the spanner bundle music21 threads
-/// through is not needed, each spanner going into the part it ends in.
+/// part. A part handed in is filled. Each ending the part opens and never
+/// closes goes into `spannerBundle` as an incomplete `RepeatBracket`, as
+/// music21 leaves it there for the part after.
 #[pyfunction]
 #[pyo3(signature = (abcHandler, inputM21 = None, spannerBundle = None))]
 fn abcToStreamPart<'py>(
@@ -65,11 +65,30 @@ fn abcToStreamPart<'py>(
     inputM21: Option<&Bound<'py, PyAny>>,
     spannerBundle: Option<&Bound<'py, PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let _ = spannerBundle;
     let py = abcHandler.py();
     let (handler, spanners) = processed_value(abcHandler)?;
-    let part = rs::part_stream(&handler.tokens, &spanners).map_err(|error| refusal(&error))?;
-    filled(stream_object(py, &part)?, inputM21)
+    let read = rs::part_stream(&handler.tokens, &spanners).map_err(|error| refusal(&error))?;
+    let part = stream_object(py, &read.stream)?;
+    if let Some(bundle) = spannerBundle.filter(|given| !given.is_none()) {
+        let measure = crate::subconverters::music21_name(py, "music21.stream", "Measure")?;
+        let measures: Vec<Bound<'py, PyAny>> = part
+            .call_method1("getElementsByClass", (measure,))?
+            .try_iter()?
+            .collect::<PyResult<_>>()?;
+        let bracket = crate::subconverters::music21_name(py, "music21.spanner", "RepeatBracket")?;
+        for ending in &read.open_endings {
+            let spanned: Vec<&Bound<'py, PyAny>> = ending
+                .measures
+                .iter()
+                .filter_map(|at| measures.get(*at))
+                .collect();
+            let made = bracket.call1((spanned,))?;
+            made.setattr("number", ending.number)?;
+            made.setattr("completeStatus", false)?;
+            bundle.call_method1("append", (made,))?;
+        }
+    }
+    filled(part, inputM21)
 }
 
 /// music21's `abcToStreamScore`: a tune's handler as a score of a part per
@@ -262,8 +281,10 @@ fn metadataToM21Object(
 }
 
 /// music21's `reBar`: each measure of a part holding more than its last
-/// meter's bar cut in two, the measures after numbered on. In place, the
-/// part's measures are replaced; otherwise a copy is.
+/// meter's bar cut in two, the measures after numbered on. The measures are
+/// remade, but each note kept, or cut and kept as its first half, is the
+/// object it was, so the part's spanners still hold it. In place, the part
+/// is changed; otherwise a copy is.
 #[pyfunction]
 #[pyo3(signature = (music21Part, *, inPlace = false))]
 fn reBar<'py>(
@@ -277,9 +298,36 @@ fn reBar<'py>(
         py.import("copy")?
             .call_method1("deepcopy", (music21Part,))?
     };
-    let read = crate::stream::crate_stream(&part)?;
+    let (read, leaves) = crate::stream::crate_stream_with_leaves(&part)?;
     let cut = rs::re_bar_part(&read)
         .map_err(|error| ABCTranslateException::new_err(crate::pitch::message(&error)))?;
+    let (made, made_leaves) = crate::stream::from_crate_with_leaves(py, &cut.stream)?;
+
+    // Each leaf read back as the object it was, its length and tie the cut's.
+    for (made_leaf, origin) in made_leaves.iter().zip(&cut.origins) {
+        let (Some(made_leaf), Some(origin)) = (made_leaf, origin) else {
+            continue;
+        };
+        let Some(original) = leaves.get(*origin) else {
+            continue;
+        };
+        let (made_leaf, original) = (made_leaf.bind(py), original.bind(py));
+        // A meter or a clef has no length to change.
+        let lengths = (
+            made_leaf.getattr("quarterLength"),
+            original.getattr("quarterLength"),
+        );
+        if let (Ok(made_length), Ok(original_length)) = lengths
+            && !made_length.eq(original_length)?
+        {
+            original.setattr("duration", made_leaf.getattr("duration")?)?;
+            original.setattr("tie", made_leaf.getattr("tie")?)?;
+        }
+        let site = made_leaf.getattr("activeSite")?;
+        if !site.is_none() {
+            site.call_method1("replace", (made_leaf, original))?;
+        }
+    }
 
     // The measures put back in place of the old ones.
     let measure = crate::subconverters::music21_name(py, "music21.stream", "Measure")?;
@@ -290,15 +338,14 @@ fn reBar<'py>(
     {
         part.call_method1("remove", (old?,))?;
     }
-    for event in cut.events() {
-        let Some(stream) = event.element().as_stream() else {
-            continue;
-        };
-        if stream.kind() != StreamKind::Measure {
-            continue;
-        }
-        let made = stream_object(py, stream)?;
-        part.call_method1("insert", (event.offset(), made))?;
+    for new in made
+        .call_method1("getElementsByClass", (&measure,))?
+        .call_method0("stream")?
+        .try_iter()?
+    {
+        let new = new?;
+        let offset = made.call_method1("elementOffset", (&new,))?;
+        part.call_method1("insert", (offset, new))?;
     }
     if inPlace {
         return Ok(None);
