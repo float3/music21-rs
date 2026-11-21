@@ -970,9 +970,9 @@ def test_a_stream_shows_itself_as_text(capsys):
 
 
 def test_a_measures_barlines_are_in_its_listings():
-    """A measure keeps its barlines as `leftBarline` and `rightBarline`, and
-    the listings that ask what it holds by class, flattened or walked list
-    them as music21 does: the left first, the right last at the end."""
+    """The listings that ask what a measure holds by class, flattened or
+    walked list its barlines as music21 does: the left first, the right
+    last at the end."""
     bar = m.Measure()
     bar.append([m.TrebleClef(), m.TimeSignature("2/4"), m.Note("C4"), m.Note("D4")])
     bar.leftBarline = "heavy-light"
@@ -997,6 +997,126 @@ def test_a_measures_barlines_are_in_its_listings():
     assert len(part.recurse().getElementsByClass("Barline")) == 2
 
 
+def test_a_measure_pickled_by_0_21_keeps_its_barlines():
+    """0.21 pickled a measure's barlines under their own keys, not among
+    what it held; a score cached then keeps them when read back."""
+    bar = m.Measure()
+    bar.append(m.Note("C4"))
+    state = bar.__getstate__()
+    left, right = m.Barline("heavy-light"), m.Barline("final")
+    state["leftBarline"] = left
+    state["rightBarline"] = right
+
+    thawed = m.Measure()
+    thawed.__setstate__(state)
+    assert thawed.leftBarline is left
+    assert thawed.rightBarline is right
+    assert len(thawed) == 3
+
+
+def test_a_measure_holds_its_barlines():
+    """A measure holds its left barline at nought and its right one at the
+    end among its elements, as music21's does: `len`, indexing, iteration
+    and `elements` count them, and the setters replace them."""
+    bar = m.Measure()
+    notes = [m.Note("C4"), m.Note("D4")]
+    bar.append(notes)
+    left, right = m.Barline("heavy-light"), m.Barline("final")
+    bar.leftBarline = left
+    bar.rightBarline = right
+
+    assert len(bar) == 4
+    assert bar[0] is left
+    assert bar[1] is notes[0]
+    assert bar[-1] is right
+    assert list(bar) == [left, notes[0], notes[1], right]
+    assert bar.elements == (left, notes[0], notes[1], right)
+    assert bar._elements == [left, notes[0], notes[1]]
+    assert bar._endElements == [right]
+    assert (left.location, right.location) == ("left", "right")
+    assert bar.isAtEnd(right)
+    assert not bar.isAtEnd(left)
+    assert (bar.index(left), bar.index(right)) == (0, 3)
+    # A shallow copy holds the same barlines where they stood.
+    copied = copy.copy(bar)
+    assert copied.elements == bar.elements
+    assert copied.isAtEnd(right)
+
+    # A new barline takes the old one's place; `None` takes it away.
+    double = m.Barline("double")
+    bar.rightBarline = double
+    assert bar.elements == (left, notes[0], notes[1], double)
+    bar.leftBarline = None
+    assert bar.leftBarline is None
+    assert bar.elements == (notes[0], notes[1], double)
+    bar.leftBarline = "heavy"
+    assert bar.leftBarline is bar[0]
+    assert bar.leftBarline.type == "heavy"
+
+    # Taken out by `pop`, as music21's own setters take the old one out.
+    assert bar.pop(0).type == "heavy"
+    assert bar.leftBarline is None
+
+
+def test_store_at_end_counts_what_it_keeps():
+    """What `storeAtEnd` keeps is among the elements, last, as music21's
+    `_endElements` are."""
+    line = m.Stream()
+    first = m.Note("C")
+    line.append(first)
+    clef = m.TrebleClef()
+    line.storeAtEnd(clef)
+    closing = m.Barline("final")
+    line.storeAtEnd(closing)
+    assert len(line) == 3
+    assert list(line) == [first, closing, clef]
+    assert line.rightBarline is closing
+
+
+def test_a_spanner_keeps_its_notes_beside_held_barlines():
+    """A measure holding barlines shifts where its notes stand among what
+    it holds; a slur still joins the same notes, written, read back and
+    walked."""
+    bars = []
+    notes = []
+    for name in ("C4", "E4"):
+        bar = m.Measure()
+        bar.leftBarline = m.Repeat(direction="start")
+        played = [m.Note(name, quarterLength=2.0), m.Note("G4", quarterLength=2.0)]
+        bar.append(played)
+        bar.rightBarline = m.Repeat(direction="end")
+        notes.extend(played)
+        bars.append(bar)
+    part = m.Part()
+    part.insert(0.0, m.TimeSignature("4/4"))
+    part.append(bars)
+    part.insert(0.0, m.Slur(notes[1], notes[2]))
+    whole = m.Score()
+    whole.insert(0.0, part)
+
+    written = m.to_musicxml(whole)
+    # The slur starts on the first measure's second note and stops on the
+    # second measure's first.
+    slurred = [
+        [re.findall(r'<slur [^>]*type="(\w+)"', note) for note in each.split("<note>")[1:]]
+        for each in written.split("<measure ")[1:]
+    ]
+    assert slurred == [[[], ["start"]], [["stop"], []]]
+
+    read = m.from_musicxml(written)
+    slur = list(read.spannerBundle)[0]
+    read_notes = [e for e in read.recurse() if getattr(e, "isNote", False)]
+    assert slur.getSpannedElements() == [read_notes[1], read_notes[2]]
+    first_bar = read.parts[0].getElementsByClass("Measure")[0]
+    assert len(first_bar) == 4
+    assert first_bar[1] is read_notes[0]
+
+    # The walks the crate answers by position carry their answers back
+    # to the very notes.
+    placed = [p.element for p in whole.placed() if getattr(p.element, "isNote", False)]
+    assert placed == notes
+
+
 def test_a_flattened_parts_barlines_stand_nowhere_again():
     """Flattening lists a measure's barlines, as music21's does; read back
     out of a flat stream they are no barline inside a measure, so music21's
@@ -1010,8 +1130,8 @@ def test_a_flattened_parts_barlines_stand_nowhere_again():
     flat = part.flatten()
 
     remade = flat.makeMeasures().getElementsByClass("Measure")
-    # music21 counts [3, 2]: its `len` holds the closing barline.
-    assert [len(each) for each in remade] == [3, 1]
+    # The closing barline is held, as music21 holds it.
+    assert [len(each) for each in remade] == [3, 2]
     assert [str(each.rightBarline) for each in remade] == [
         "None",
         "<music21.bar.Barline type=final>",
@@ -1442,7 +1562,7 @@ except AttributeError as error:
 
 def test_store_at_end_keeps_a_barline_as_the_right_one():
     """music21's `storeAtEnd` and `isAtEnd`: a barline stored at the end is
-    the stream's right barline, listed last and left out of `len`."""
+    the stream's right barline, listed last and counted by `len`."""
     line = m.Stream()
     first = m.Note("C")
     line.append(first)
@@ -1452,7 +1572,7 @@ def test_store_at_end_keeps_a_barline_as_the_right_one():
     assert line.isAtEnd(closing)
     assert not line.isAtEnd(first)
     assert closing in line
-    assert len(line) == 1
+    assert len(line) == 2
     assert float(line.elementOffset(closing)) == 1.0
     assert list(line.getElementsByClass("Barline")) == [closing]
     with pytest.raises(m.StreamException):
@@ -2903,9 +3023,9 @@ def test_midi_is_read_from_bytes_into_measures_of_notes_and_chords():
     assert pitches_of(keys) == ["C4", "D4", "E4", "F4", "C4", "E4"]
     assert type(list(second)[1]).__name__ == "Chord"
     # A stroke with no pitch has no class here; its measure keeps the rest
-    # after it.
+    # after it, then its closing barline.
     (drum_measure,) = measures_of(strokes)
-    assert [type(element).__name__ for element in drum_measure][-1] == "Rest"
+    assert [type(element).__name__ for element in drum_measure][-2:] == ["Rest", "Barline"]
     assert pitches_of(strokes) == []
 
 
@@ -2978,6 +3098,17 @@ def test_musedata_is_read_from_one_file_or_several():
     assert pitches_of(part) == ["C5", "B-4", "A4"]
     assert len(m.from_musedata([MUSEDATA, MUSEDATA]).parts) == 2
 
+
+
+def test_a_musedata_slur_is_in_its_part():
+    # music21's `musedataPartToStreamPart` puts each slur in the part.
+    slurred = MUSEDATA.replace("C5     2        q     u", "C5     2        q     u        (")
+    slurred = slurred.replace("A4     4        h     u", "A4     4        h     u        )")
+    (part,) = m.from_musedata(slurred).parts
+    slurs = list(part.recurse().getElementsByClass("Slur"))
+    assert [[n.nameWithOctave for n in slur.getSpannedElements()] for slur in slurs] == [
+        ["C5", "A4"]
+    ]
 
 CAPELLA = (
     '<score xmlns="http://www.capella.de/CapXML/2.0"><systems><system><staves>'
@@ -6090,11 +6221,8 @@ def test_a_figured_bass_line_is_written_out():
     score.insert(0.0, written)
     assert outline_of(score) == [
         "m1[BassClef KeySignature TimeSignature "
-        "Note(B2,1.0) Note(C#3,1.0) Note(D#3,1.0)]"
+        "Note(B2,1.0) Note(C#3,1.0) Note(D#3,1.0) Barline]"
     ]
-    # The crate keeps a barline on the measure rather than among its
-    # elements, which is why the outline above shows none; music21's own
-    # measure holds a Barline there, and says the same thing.
     assert [
         str(bar.rightBarline) for bar in written.getElementsByClass("Measure")
     ] == ["<music21.bar.Barline type=final>"]
@@ -6144,9 +6272,9 @@ def test_a_figured_bass_line_is_realized():
     score = realization.generateRealizationFromPossibilityProgression(progressions[0])
     assert outline_of(score) == [
         "m1[TrebleClef KeySignature TimeSignature "
-        "Chord(G3+E3+C3,2.0) Chord(B3+F3+D3,2.0)] m2[Chord(C4+E3+C3,4.0)]",
+        "Chord(G3+E3+C3,2.0) Chord(B3+F3+D3,2.0)] m2[Chord(C4+E3+C3,4.0) Barline]",
         "m1[BassClef KeySignature TimeSignature Note(C3,2.0) Note(G2,2.0)] "
-        "m2[Note(C3,4.0)]",
+        "m2[Note(C3,4.0) Barline]",
     ]
     realization.keyboardStyleOutput = False
     chorale = realization.generateRealizationFromPossibilityProgression(progressions[0])
@@ -6245,9 +6373,9 @@ def test_a_part_laid_over_a_figured_bass_line():
     )
     assert outline_of(score) == [
         "m1[TrebleClef KeySignature TimeSignature "
-        "Chord(E5+C5+G4,1.0) Chord(F5+B4+B4,1.0) Chord(G5+C5+G4,2.0)]",
+        "Chord(E5+C5+G4,1.0) Chord(F5+B4+B4,1.0) Chord(G5+C5+G4,2.0) Barline]",
         "m1[BassClef KeySignature TimeSignature "
-        "Note(C3,1.0) Note(D3,1.0) Note(E3,2.0)] m2[Note(E3,2.0)]",
+        "Note(C3,1.0) Note(D3,1.0) Note(E3,2.0)] m2[Note(E3,2.0) Barline]",
     ]
 
 
@@ -9957,6 +10085,85 @@ print(music21.__version__ == music21_rs.__version__, music21.__music21_rs__)
         "True",
         "True True",
     ]
+
+
+def test_provided_abc_format_reads_tokens_and_handlers_as_music21(tmp_path):
+    code = """
+import copy
+import music21_rs
+music21_rs.provide_music21()
+from music21 import abcFormat, key
+from music21.abcFormat import translate
+from music21.musedata import translate as museTranslate
+ah = abcFormat.ABCHandler()
+ah.process('X:1\\nM:6/8\\nL:1/8\\nK:G\\n(B3 A3) | G6 | B3 A3 | G6 ||')
+print(len(ah), ah.tokens[5], ah.tokens[5].pitchName, ah.tokens[5].applicableSpanners)
+bars = abcFormat.mergeLeadingMetaData(ah.splitByMeasure())
+print(len(bars), bars[-1].rightBarToken)
+an = abcFormat.ABCNote('B')
+an.activeKeySignature = key.KeySignature(-3)
+print(an.getPitchName('B'), copy.deepcopy(an) == an)
+s = translate.abcToStreamScore(ah)
+print(s.metadata.number, len(s.parts[0].getElementsByClass('Measure')))
+print(museTranslate._musedataBeamToBeams(']/'))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        "16 <music21.abcFormat.ABCNote 'B3'> B4 [<music21.spanner.Slur>]",
+        "4 <music21.abcFormat.ABCBar '||'>",
+        "('B-4', False) True",
+        "1 4",
+        "<music21.beam.Beams <music21.beam.Beam 1/stop>/<music21.beam.Beam 2/partial/right>>",
+    ]
+
+
+def test_provided_abc_part_leaves_an_open_ending_in_the_bundle(tmp_path):
+    # music21's `abcToStreamPart` keeps an ending never closed in the
+    # spanner bundle it is handed, for the part after.
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import abcFormat, spanner
+from music21.abcFormat import translate
+ah = abcFormat.ABCHandler()
+ah.process('M:2/4\\nL:1/4\\nK:C\\nc d | e f |[1 g a | b c |')
+bundle = spanner.SpannerBundle()
+part = translate.abcToStreamPart(ah, spannerBundle=bundle)
+print([(rb.number, rb.completeStatus, [m.number for m in rb.getSpannedElements()])
+       for rb in bundle])
+print(len(part[spanner.RepeatBracket]))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == ["[('1', False, [2])]", "0"]
+
+
+def test_provided_rebar_keeps_the_notes_a_spanner_holds(tmp_path):
+    # music21's `reBar` cuts measures in place: notes not cut stay the
+    # objects the part's spanners hold.
+    code = """
+import music21_rs
+music21_rs.provide_music21()
+from music21 import stream, note, meter, spanner
+from music21.abcFormat import translate
+p = stream.Part()
+m = stream.Measure(number=1)
+m.append(meter.TimeSignature('2/4'))
+notes = [note.Note(n) for n in 'C D E F'.split()]
+for n in notes:
+    m.append(n)
+p.append(m)
+p.insert(0, spanner.Slur(notes[0], notes[3]))
+translate.reBar(p, inPlace=True)
+slur = p[spanner.Slur].first()
+held = list(p.recurse().notes)
+print(len(p.getElementsByClass(stream.Measure)), [n.name for n in held],
+      any(n is slur.getFirst() for n in held), any(n is slur.getLast() for n in held))
+"""
+    done = _run_without_music21(code, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "2 ['C', 'D', 'E', 'F'] True True"
 
 
 def test_provide_music21_is_switched_on_by_the_environment(tmp_path):

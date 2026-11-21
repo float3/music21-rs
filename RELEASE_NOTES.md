@@ -1,11 +1,29 @@
 # music21-rs 0.22.0
 
+`harte` 0.15.0 depends on this release.
+
+## breaking changes
+
+- A wheel measure holds its barlines among its elements, as music21's does:
+  `len`, indexing, iteration, `elements`, `index` and `pop` count its left
+  barline (at nought) and what `storeAtEnd` keeps, the right barline among
+  it. Code that indexed a measure past its left barline shifts by one.
+- `storeAtEnd` keeps whatever music21 keeps, not only a barline.
+- The barline setters set `location`, and a right `Repeat` that starts is
+  made to end, as in music21.
+
 ## added
 
 - `provide_music21` provides `music21.lily` (`lilyObjects` and `translate`'s
   `LilypondConverter`), `music21.metadata.bundles`, `music21.metadata.caching`,
   `music21.corpus.corpora` and `music21.corpus.manager`. Corpus metadata
   bundles read and write music21's gzipped pickle caches.
+- `provide_music21` provides `music21.abcFormat`, `abcFormat.translate`,
+  `music21.musedata` and `musedata.translate` over the crate's readers.
+- The crate's ABC reading steps (`abc::step`, `abc::translate`) and
+  MuseData parts, records and measure functions are public.
+- A wheel `Stream` is indexed by a class or a list of classes,
+  `s[note.Note]`, as music21's is.
 - `music21_rs.corpus.search`; `CoreCorpus.manualCoreCorpusPath`.
 - The crate's `metadata::bundles`, rich metadata and a pickle reader and
   writer (`common::pickle`); `MetronomeMark::music21_repr` and
@@ -13,6 +31,11 @@
 
 ## fixed
 
+- MuseData slurs go in their part, not on the score.
+- A note flattened by an ABC key signature is named `B-4`, as music21 names
+  it, not `Bb4`.
+- `abcToStreamPart` keeps an ending a part opened and never closed;
+  `reBar` keeps the notes the part's spanners hold.
 - XML read from a decoded `.mxl` member that kept its byte order mark (some
   UTF-16 corpus files) is read instead of refused.
 - `duration.convertTypeToNumber('complex')` raises music21's

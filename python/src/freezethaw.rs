@@ -295,15 +295,9 @@ impl StreamFreezer {
             return Ok(());
         }
 
-        // A measure's left barline is the stream's own field, which its
-        // pickle carries, so it stays.
-        let left = streamObj.getattr("leftBarline").ok();
         let stored = PyList::empty(py);
         for element in streamObj.getattr("_elements")?.try_iter()? {
             let element = element?;
-            if left.as_ref().is_some_and(|bar| bar.is(&element)) {
-                continue;
-            }
             let offset = streamObj.call_method1("elementOffset", (&element,))?;
             stored.append((&element, offset))?;
             if is_stream(&element) {

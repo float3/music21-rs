@@ -279,6 +279,9 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
         "Music21ObjectException",
         "SitesException",
     ]),
+    ("music21.abcFormat", &[
+        "OffsetQL",
+    ]),
     ("music21.alpha.analysis.ornamentRecognizer", &[
         "OffsetQL",
         "opFrac",

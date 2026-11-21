@@ -405,7 +405,10 @@ last. *debated 2026-10-30.* holding them would shift the places spanners name
 their notes by, silently, across forty sites that touch what a stream holds,
 for a pattern music21's own code barely uses; listing them closes what callers
 see. *costs:* `len(measure)`, indexing and plain iteration leave them out
-where music21's count them.
+where music21's count them. *reversed 2026-11-20 by the maintainer, for
+0.22.0:* a measure holds its barlines as music21's does, so `len`, indexing
+and iteration count them; code written for music21 indexing a measure sees
+the same positions.
 
 *debated 2026-10-31.* `storeAtEnd` keeps one barline, as the stream's right
 barline, and `isAtEnd` asks whether something is that barline. every
@@ -414,6 +417,8 @@ courtesy clef or a second barline appears only in its examples, and a
 general box of end elements would cost every walk and writer. *costs:*
 `s.storeAtEnd(clef.TrebleClef())` is refused as not ported where music21
 accepts it.
+*reversed 2026-11-21 for 0.22.0,* with the barlines above: `storeAtEnd`
+keeps whatever music21 keeps, among the stream's elements, last.
 
 **a flag is read for its truth; a string is refused.** music21 asks
 `if inPlace:`, so `inPlace=1` and a forwarded `None` work there, and every

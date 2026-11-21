@@ -1054,7 +1054,10 @@ mod tests {
 
     #[test]
     fn keys_read_strings_and_paths_as_music21_does() {
-        let text = KeySource::Text("/music21/corpus/bach/bwv1007/prelude");
+        // music21 strips only the platform's own separator after "corpus".
+        let sep = std::path::MAIN_SEPARATOR;
+        let written = format!("{sep}music21{sep}corpus{sep}bach{sep}bwv1007{sep}prelude");
+        let text = KeySource::Text(&written);
         assert_eq!(corpus_path_to_key(text, None), "bach_bwv1007_prelude");
         let path = KeySource::Path {
             path: Path::new("/m21/corpus/bach/bwv66.6.mxl"),
