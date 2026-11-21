@@ -772,6 +772,7 @@ pub(crate) const ALSO: &[(&str, &[&str])] = &[
 #[rustfmt::skip]
 pub(crate) const NO_HOME: &[&str] = &[
     "Placed",
+    "_FretBoardValue",
     "_HarteLabel",
     "_groups",
     "_music21_module",

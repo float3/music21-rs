@@ -62,6 +62,11 @@
 - `converter.parse` takes a `MetadataEntry`.
 - `MetadataException` reports its module as `music21.exceptions21`, as
   music21's does.
+- A class built on `ProtoM21Object` and `dict`, as music21's
+  `editorial.Editorial` is, can be made: `ProtoM21Object` keeps nothing in
+  its layout. `FretBoard` and the instrument boards are Python classes with
+  Rust members, keeping the board in the instance's `__dict__`, so that
+  `ChordWithFretBoard` stays a `ChordSymbol` and a `FretBoard`.
 
 # music21-rs 0.21.0
 

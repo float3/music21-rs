@@ -10248,6 +10248,35 @@ print(len(RecursiveIterator(s)))
     ]
 
 
+def test_a_class_on_proto_m21_object_and_dict_can_be_made():
+    """music21's `editorial.Editorial` is a `ProtoM21Object` and a `dict`;
+    Python refuses that where the first keeps values in a layout."""
+
+    class Editorial(m.ProtoM21Object, dict):
+        pass
+
+    made = Editorial()
+    made["ficta"] = None
+    assert made == {"ficta": None} and isinstance(made, m.ProtoM21Object)
+
+
+def test_a_fret_board_is_a_second_base_and_copies_and_pickles():
+    import copy
+    import pickle
+
+    chord = m.ChordWithFretBoard("DM", numStrings=6, fretNotes=[m.FretNote(1, 2, 2)])
+    assert isinstance(chord, m.FretBoard) and isinstance(chord, m.ChordSymbol)
+    assert chord.numStrings == 6 and chord.fretNotes[0].fret == 2
+    board = m.GuitarFretBoard(fretNotes=[m.FretNote(3, 2, 1)])
+    # A pickle comes back as what it is, not necessarily the very class:
+    # where music21 is there, as the class music21's streams hold.
+    for copied in (copy.deepcopy(board), pickle.loads(pickle.dumps(board))):
+        assert isinstance(copied, m.GuitarFretBoard)
+        assert repr(copied) == "<music21.tablature.GuitarFretBoard 6 strings, 1 notes, 4 frets>"
+    copied.displayFrets = 5
+    assert board.displayFrets == 4
+
+
 def test_a_provided_module_names_a_missing_attribute_as_python_does(tmp_path):
     """The message quotes the module and the name as Python's own does,
     which is what music21's suite reads a blocker out of."""

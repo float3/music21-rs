@@ -27,16 +27,13 @@ fn cache<'py>(py: Python<'py>, held: &pyo3::sync::PyOnceLock<Py<PyDict>>) -> Bou
 /// music21's `ProtoM21Object`: how an object names its classes and shows
 /// itself.
 ///
-/// It also keeps a fret board's value for `tablature.FretBoard`, which
-/// keeps nothing in its own layout so that it can be a second base --
-/// `ChordWithFretBoard` is a `ChordSymbol` and a `FretBoard`, as music21's
-/// is -- and both reach the value here, the one ancestor they share.
-#[pyclass(name = "ProtoM21Object", module = "music21.prebase", subclass)]
+/// It keeps nothing, so that its instances are laid out as `object`'s:
+/// music21 builds classes on it and a base of Python's own with a layout of
+/// its own, `editorial.Editorial` on it and `dict`, which Python refuses
+/// where both keep values.
+#[pyclass(name = "ProtoM21Object", module = "music21.prebase", subclass, frozen)]
 #[derive(Default)]
-pub struct ProtoM21Object {
-    /// The board a `FretBoard` reads and writes; none for anything else.
-    pub(crate) fret_board: Option<Box<music21::tablature::FretBoard>>,
-}
+pub struct ProtoM21Object;
 
 #[pymethods]
 impl ProtoM21Object {
@@ -44,7 +41,7 @@ impl ProtoM21Object {
     #[new]
     #[pyo3(signature = (*_arguments, **_keywords))]
     fn new(_arguments: &Bound<'_, PyTuple>, _keywords: Option<&Bound<'_, PyDict>>) -> Self {
-        Self::default()
+        Self
     }
 
     #[classattr]
