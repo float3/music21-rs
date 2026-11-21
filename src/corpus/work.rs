@@ -197,10 +197,8 @@ pub fn find_works(directory: &str, paths: &[PathBuf]) -> Vec<CorpusWork> {
             }
         };
         works[at].files.push(CorpusFile {
-            path: Path::new(directory)
-                .join(stub)
-                .to_string_lossy()
-                .into_owned(),
+            // A corpus path, written with '/' on every platform.
+            path: format!("{directory}/{}", components.join("/")),
             title: titled(&filename.replace(ext, "")),
             filename: filename.to_string(),
             format,
