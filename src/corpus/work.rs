@@ -173,8 +173,10 @@ pub fn find_works(directory: &str, paths: &[PathBuf]) -> Vec<CorpusWork> {
         let Some((_, stub)) = text.split_once(directory) else {
             continue;
         };
-        let stub = stub.strip_prefix(std::path::MAIN_SEPARATOR).unwrap_or(stub);
-        let components: Vec<&str> = stub.split(std::path::MAIN_SEPARATOR).collect();
+        // Windows takes either separator, and a path can mix them.
+        let separators = ['/', std::path::MAIN_SEPARATOR];
+        let stub = stub.strip_prefix(separators).unwrap_or(stub);
+        let components: Vec<&str> = stub.split(separators).collect();
         let filename = components.last().copied().unwrap_or_default();
         let ext = suffix(filename);
         let Some(format) = find_format(ext).0 else {
