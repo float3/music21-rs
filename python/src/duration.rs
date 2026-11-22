@@ -3107,7 +3107,12 @@ fn convertTypeToQuarterLength<'py>(
 #[pyfunction]
 #[pyo3(name = "convertTypeToNumber")]
 fn convertTypeToNumber(dType: String) -> PyResult<f64> {
-    Ok(duration_type_named(&dType)?.type_number().unwrap_or(0.0))
+    let Some(kind) = RsDurationType::from_music21_name(&dType) else {
+        return Err(DurationException::new_err(format!(
+            "Could not determine durationNumber from {dType}"
+        )));
+    };
+    Ok(kind.type_number().unwrap_or(0.0))
 }
 
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {

@@ -13,6 +13,7 @@
 //! and is left out of a wasm build.
 
 mod beams;
+pub mod locate;
 mod read;
 
 pub use read::from_mscx;

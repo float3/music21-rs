@@ -125,6 +125,13 @@ style = { kind = "identity", sync = "synced" }
 [RehearsalMark]
 content = { kind = "identity", sync = "set_content", why = "the content as given, a number or text; the setter writes its text into the value" }
 
+[MetadataBundle]
+corpus = { kind = "identity", sync = "read live", why = "the corpus a bundle was made from, read for its name and cache path each time" }
+
+[MetadataCachingJob]
+filePathErrors = { kind = "identity", sync = "read live", why = "the paths a run could not read, appended to; the crate keeps nothing of it" }
+results = { kind = "identity", sync = "read live", why = "the entries a run made, appended to; the crate keeps nothing of it" }
+
 [MeterSequence]
 parts = { kind = "identity", sync = "read live", why = "a sequence cannot change, so its parts are the objects it was made of, standing for the spans it holds" }
 
@@ -335,6 +342,22 @@ reason = "an analysis over a stream; its profile is a setting, not a value"
 kind = "facade-only"
 reason = "the text music21 keeps and reads nothing of, and the trigrams of the excerpts built into the wheel"
 
+[ChoraleList]
+kind = "facade-only"
+reason = "music21's dictionaries of the crate's chorale catalogue, filled once"
+
+[ChoraleListRKBWV]
+kind = "facade-only"
+reason = "music21's dictionaries of the crate's corpus chorale catalogue, filled once"
+
+[DirectoryInformation]
+kind = "facade-only"
+reason = "a corpus and the works the crate finds in one of its directories, found again by findWorks"
+
+[Iterator]
+kind = "facade-only"
+reason = "the numbers walked and the two catalogues, read each step"
+
 [LyricSearcher]
 kind = "facade-only"
 reason = "a search over a stream"
@@ -446,6 +469,10 @@ reason = "a member put on the element classes, holding the function it binds"
 [Sites]
 kind = "facade-only"
 reason = "the element whose sites it reads, kept in the sites table"
+
+[SlurCollector]
+kind = "facade-only"
+reason = "the notes it was handed and the slurs it made of them, which the crate's Slurs names by place"
 
 [SpannerStorage]
 kind = "facade-only"

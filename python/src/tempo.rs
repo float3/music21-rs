@@ -609,25 +609,7 @@ impl MetronomeMark {
     }
 
     fn __repr__(&self, py: Python<'_>) -> String {
-        let mark = self.current(py);
-        let mut sounding = "";
-        let mut number = mark.number();
-        if mark.number().is_none() && mark.number_sounding().is_some() {
-            sounding = " (playback only)";
-            number = mark.number_sounding();
-        }
-        let written = match number {
-            Some(number) if number.fract() == 0.0 => format!("{}", number as i64),
-            Some(number) => format!("{number}"),
-            None => "None".to_string(),
-        };
-        let full = mark.referent().full_name();
-        match mark.text() {
-            Some(text) => {
-                format!("<music21.tempo.MetronomeMark {text} {full}={written}{sounding}>")
-            }
-            None => format!("<music21.tempo.MetronomeMark {full}={written}{sounding}>"),
-        }
+        self.current(py).music21_repr()
     }
 
     fn __eq__(&self, other: &Bound<'_, PyAny>) -> bool {

@@ -595,32 +595,6 @@ fn stand_in(length: f64) -> PyResult<StreamElement> {
     Ok(StreamElement::Rest(music21::Rest::new(duration)))
 }
 
-/// A measure's own barlines among its elements, where music21 keeps them:
-/// the left one first, the right one at the end, where the measure ends.
-/// This package's measures hold them beside their elements.
-fn add_barlines<'py>(
-    stream: &Bound<'py, PyAny>,
-    placed: &mut Vec<(f64, Bound<'py, PyAny>)>,
-) -> PyResult<()> {
-    let barline = |name: &str| {
-        stream
-            .getattr(name)
-            .ok()
-            .filter(|barline| !barline.is_none())
-            .filter(|barline| !placed.iter().any(|(_, held)| held.is(barline)))
-    };
-    let left = barline("leftBarline");
-    let right = barline("rightBarline");
-    if let Some(left) = left {
-        placed.insert(0, (0.0, left));
-    }
-    if let Some(right) = right {
-        let end: f64 = stream.getattr("highestTime")?.extract()?;
-        placed.push((end, right));
-    }
-    Ok(())
-}
-
 /// Which of music21's stream classes a stream is.
 fn kind_of(stream: &Bound<'_, PyAny>) -> PyResult<StreamKind> {
     for kind in [
@@ -660,7 +634,6 @@ impl Asked<'_, '_> {
             placed.push((offset, element));
         }
         placed.sort_by(|left, right| left.0.total_cmp(&right.0));
-        add_barlines(stream, &mut placed)?;
         let mut events: Vec<(StreamEvent, Read)> = Vec::new();
         for (offset, element) in placed {
             events.push(self.event(offset, element)?);

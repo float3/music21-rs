@@ -265,6 +265,21 @@ fn comment(head: &Report, base: Option<&Report>) -> String {
         out.push(format!("| {} | — | | gone | |", gone.name));
     }
     out.push(String::new());
+
+    // Name what failed, so a failure CI alone sees can be found.
+    for suite in head
+        .suites
+        .iter()
+        .filter(|suite| !suite.failures.is_empty())
+    {
+        let names: Vec<String> = suite
+            .failures
+            .iter()
+            .map(|name| format!("`{name}`"))
+            .collect();
+        out.push(format!("Failing in {}: {}", suite.name, names.join(", ")));
+        out.push(String::new());
+    }
     out.join("\n")
 }
 
@@ -349,6 +364,19 @@ mod tests {
         let text = comment(&head, None);
         assert!(
             text.contains("| Geometric mean speedup over music21 | 8.00× |"),
+            "{text}"
+        );
+    }
+
+    /// A failure only CI sees is named, so it can be found without the
+    /// report's artifact.
+    #[test]
+    fn a_failing_test_is_named() {
+        let mut head = report("head", 100, 9);
+        head.suites[0].failures = vec!["tests/test_a.py::test_one".to_string()];
+        let text = comment(&head, None);
+        assert!(
+            text.contains("Failing in parity: `tests/test_a.py::test_one`"),
             "{text}"
         );
     }

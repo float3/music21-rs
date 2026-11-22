@@ -11,6 +11,7 @@ pub mod numbertools;
 pub mod objects;
 pub mod parallel;
 pub mod pathtools;
+pub mod pickle;
 pub mod stringtools;
 
 /// music21's `common.DEBUG_OFF`: no debugging output.

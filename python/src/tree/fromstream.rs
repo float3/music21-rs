@@ -8,10 +8,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyFloat, PyList, PyModule, PyString, PyTuple};
 
 use super::trees::{ElementTree, OffsetTree};
-use super::{
-    ElementTimespan, PitchedTimespan, TimespanTree, add_barlines, as_timespans, is_of_any,
-    is_stream,
-};
+use super::{ElementTimespan, PitchedTimespan, TimespanTree, as_timespans, is_of_any, is_stream};
 use crate::duration::op_frac;
 
 /// Which tree a stream is put into.
@@ -64,8 +61,7 @@ impl Flattening {
     }
 }
 
-/// A stream's elements with their offsets in it, its barlines where
-/// music21 keeps them.
+/// A stream's elements with their offsets in it.
 fn held<'py>(stream: &Bound<'py, PyAny>) -> PyResult<Vec<(Bound<'py, PyAny>, Bound<'py, PyAny>)>> {
     let py = stream.py();
     let mut placed: Vec<(f64, Bound<'py, PyAny>)> = Vec::new();
@@ -76,7 +72,6 @@ fn held<'py>(stream: &Bound<'py, PyAny>) -> PyResult<Vec<(Bound<'py, PyAny>, Bou
             .extract()?;
         placed.push((offset, element));
     }
-    add_barlines(stream, &mut placed)?;
     placed
         .into_iter()
         .map(|(offset, element)| Ok((op_frac(py, offset)?, element)))

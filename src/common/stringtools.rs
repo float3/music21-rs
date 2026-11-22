@@ -493,6 +493,64 @@ pub fn format_str<S: AsRef<str>>(parts: &[S]) -> String {
     format!("{}\n", joined.join(" "))
 }
 
+/// A text as Python's `repr` writes it, in single quotes unless it holds
+/// one.
+pub(crate) fn python_str_repr(text: &str) -> String {
+    let quote = if text.contains('\'') && !text.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::new();
+    out.push(quote);
+    for character in text.chars() {
+        match character {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
+                out.push_str(&format!("\\x{:02x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
+/// Text in title case as Python's `str.title` writes it: each run of
+/// letters capitalised.
+///
+/// ```
+/// use music21::common::stringtools::title_case;
+///
+/// assert_eq!(title_case("opus 19 no2"), "Opus 19 No2");
+/// assert_eq!(title_case("h186"), "H186");
+/// ```
+pub fn title_case(text: &str) -> String {
+    let mut out = String::new();
+    let mut previous_letter = false;
+    for character in text.chars() {
+        if character.is_alphabetic() {
+            if previous_letter {
+                out.extend(character.to_lowercase());
+            } else {
+                out.extend(character.to_uppercase());
+            }
+            previous_letter = true;
+        } else {
+            out.push(character);
+            previous_letter = false;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -74,6 +74,7 @@ pub mod clef;
 /// music21's `common`: the plumbing its modules share, which knows no
 /// music.
 pub mod common;
+pub mod corpus;
 pub(crate) mod defaults;
 pub(crate) mod display;
 /// Rhythmic duration primitives.
